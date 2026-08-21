@@ -457,32 +457,6 @@ class Theme
     }
 
     /**
-     * Save the current state of a scope as a named preset.
-     */
-    public static function savePreset(string $name, string $scope): string
-    {
-        $slug = self::slugify($name);
-        $dir  = self::presetsDir();
-
-        if (!is_dir($dir)) {
-            mkdir($dir, 0775, true);
-        }
-
-        $data = [
-            'name'        => $name,
-            'scope'       => $scope,
-            'colors'      => self::all($scope),
-            'layout'      => self::allLayout($scope),
-            'title_image' => self::titleImage($scope),
-            'created_at'  => date('Y-m-d H:i:s'),
-        ];
-
-        file_put_contents($dir . '/' . $slug . '.json', json_encode($data, JSON_PRETTY_PRINT));
-
-        return $slug;
-    }
-
-    /**
      * Load a saved preset by slug. Returns the full data array or null.
      */
     public static function loadPreset(string $slug): ?array

@@ -251,20 +251,6 @@ class Subscription
     }
 
     /**
-     * Count of currently active (non-expired) subscriptions, for the admin
-     * dashboard stat.
-     */
-    public static function countActive(): int
-    {
-        return (int) Database::run(
-            'SELECT COUNT(*)
-             FROM subscriptions
-             WHERE status = ? AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)',
-            ['active']
-        )->fetchColumn();
-    }
-
-    /**
      * Human-readable label for a subscription status.
      */
     public static function statusLabel(string $status): string

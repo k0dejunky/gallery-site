@@ -128,28 +128,6 @@ class User
     }
 
     /**
-     * Update a user's stored card details (token-based — never store full numbers).
-     */
-    public static function updatePayment(int $id, ?string $customerId, ?string $lastFour, ?string $brand, ?int $expMonth, ?int $expYear): void
-    {
-        Database::run(
-            'UPDATE users SET payment_customer_id = ?, card_last_four = ?, card_brand = ?, card_exp_month = ?, card_exp_year = ? WHERE id = ?',
-            [$customerId ?: null, $lastFour ?: null, $brand ?: null, $expMonth, $expYear, $id]
-        );
-    }
-
-    /**
-     * Mark a user's age as verified by an admin.
-     */
-    public static function markAgeVerified(int $id): void
-    {
-        Database::run(
-            'UPDATE users SET age_verified = 1, age_verified_at = CURRENT_TIMESTAMP WHERE id = ?',
-            [$id]
-        );
-    }
-
-    /**
      * Count admin accounts, so the app can prevent deleting the last admin.
      */
     public static function countAdmins(): int
