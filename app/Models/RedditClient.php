@@ -61,18 +61,23 @@ class RedditClient
     }
 
     /**
-     * Submit a link or text post to a subreddit. Returns the created post URL
-     * on success.
+     * Submit a link, text or image post to a subreddit. $media is an optional
+     * uploaded file array (keys: tmp_name, name, type) used for image posts.
+     * Reddit supports one image per image post.
      *
      * @return array{ok:bool, url?:string, error?:string}
      */
-    public function submit(string $subreddit, string $title, string $content, string $type = 'link', ?string $url = null): array
+    public function submit(string $subreddit, string $title, string $content, string $type = 'link', ?string $url = null, ?array $media = null): array
     {
         if (!$this->isConfigured()) {
             return ['ok' => false, 'error' => 'Reddit is not configured.'];
         }
 
-        if ($type !== 'self' && empty($url)) {
+        if (!empty($media) && strpos($media['type'] ?? '', 'video/') === 0) {
+            return ['ok' => false, 'error' => 'Reddit image posts do not support video uploads.'];
+        }
+
+        if ($type !== 'self' && empty($url) && empty($media)) {
             return ['ok' => false, 'error' => 'A link post requires a URL.'];
         }
 
@@ -82,13 +87,23 @@ class RedditClient
         }
 
         $form = [
-            'sr'      => trim($subreddit, '/'),
-            'title'   => $title,
-            'resubmit' => 'true',
-            'api_type' => 'json',
+            'sr'        => trim($subreddit, '/'),
+            'title'     => $title,
+            'resubmit'  => 'true',
+            'api_type'  => 'json',
         ];
 
-        if ($type === 'self') {
+        if (!empty($media)) {
+            // Image post: upload the image to Reddit's media asset, then submit
+            // as an image post with the returned asset id.
+            $asset = $this->uploadImage($t['token'], $media);
+            if (!$asset['ok']) {
+                return $asset;
+            }
+            $form['kind']   = 'image';
+            $form['asset_id'] = $asset['asset_id'];
+            $form['url']      = $asset['url'];
+        } elseif ($type === 'self') {
             $form['kind'] = 'self';
             $form['text'] = $content;
         } else {
@@ -118,6 +133,88 @@ class RedditClient
         return [
             'ok'  => true,
             'url' => 'https://www.reddit.com/r/' . $sub . '/comments/' . $postId,
+        ];
+    }
+
+    /**
+     * Upload an image to Reddit's media asset endpoint and return the asset
+     * id + public URL for use in an image post.
+     *
+     * @return array{ok:bool, asset_id?:string, url?:string, error?:string}
+     */
+    private function uploadImage(string $token, array $media): array
+    {
+        $path = $media['tmp_name'] ?? '';
+        if (!is_file($path)) {
+            return ['ok' => false, 'error' => 'Image file not found.'];
+        }
+
+        $filepath = $media['name'] ?? basename($path);
+        $mimetype = $media['type'] ?? (mime_content_type($path) ?: 'image/jpeg');
+
+        // Request an asset upload lease.
+        [$leaseStatus, , $leaseBody] = Http::request(self::API_URL . '/api/media/asset', [
+            'method'  => 'POST',
+            'headers' => [
+                'Authorization' => 'Bearer ' . $token,
+                'User-Agent'    => $this->userAgent(),
+            ],
+            'form'    => [
+                'filepath'   => $filepath,
+                'mimetype'   => $mimetype,
+                'asset_type' => 'img',
+            ],
+        ]);
+
+        $lease = json_decode($leaseBody, true);
+
+        if ($leaseStatus !== 200 || empty($lease['args']) || empty($lease['asset']['asset_id'])) {
+            return ['ok' => false, 'error' => 'Reddit could not start the image upload (HTTP ' . $leaseStatus . ').'];
+        }
+
+        $assetId = $lease['asset']['asset_id'];
+        $fields  = $lease['args']['fields'] ?? [];
+
+        // POST the image to the lease's upload URL.
+        $uploadUrl = $lease['args']['action'] ?? '';
+        $multipart = [];
+        foreach ($fields as $f) {
+            $name  = $f['name'] ?? '';
+            $value = $f['value'] ?? '';
+            if ($name === 'file') {
+                $multipart['file'] = ['file' => $path, 'name' => $filepath, 'type' => $mimetype];
+            } else {
+                $multipart[$name] = $value;
+            }
+        }
+        if (!isset($multipart['file'])) {
+            $multipart['file'] = ['file' => $path, 'name' => $filepath, 'type' => $mimetype];
+        }
+
+        $uploadResult = Http::request($uploadUrl, [
+            'method'    => 'POST',
+            'headers'   => ['User-Agent' => $this->userAgent()],
+            'multipart' => $multipart,
+        ]);
+
+        // Confirm the upload is complete.
+        [, , $confirmBody] = Http::request(self::API_URL . '/api/media/asset/upload', [
+            'method'  => 'POST',
+            'headers' => [
+                'Authorization' => 'Bearer ' . $token,
+                'User-Agent'    => $this->userAgent(),
+            ],
+            'json'    => [
+                'asset_id' => $assetId,
+            ],
+        ]);
+
+        $confirm = json_decode($confirmBody, true);
+
+        return [
+            'ok'       => true,
+            'asset_id' => $confirm['asset']['asset_id'] ?? $assetId,
+            'url'      => $confirm['asset']['websocket_url'] ?? $confirm['asset']['asset_id'] ?? '',
         ];
     }
 

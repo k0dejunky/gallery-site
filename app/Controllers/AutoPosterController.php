@@ -64,7 +64,7 @@ class AutoPosterController extends Controller
     }
 
     /**
-     * Submit a post to Reddit (any subreddit, link or text).
+     * Submit a post to Reddit (any subreddit, link, text or image).
      */
     public function postReddit(): void
     {
@@ -76,6 +76,7 @@ class AutoPosterController extends Controller
         $type      = $this->request->post('reddit_type', 'link') === 'self' ? 'self' : 'link';
         $url       = trim((string) $this->request->post('reddit_url', ''));
         $text      = trim((string) $this->request->post('reddit_text', ''));
+        $media     = $this->request->file('reddit_media');
 
         if ($subreddit === '' || $title === '') {
             $this->flash('error', 'Subreddit and title are required.');
@@ -83,7 +84,14 @@ class AutoPosterController extends Controller
             return;
         }
 
-        $result = $reddit->submit($subreddit, $title, $text, $type, $url);
+        // Reddit supports one image per image post. If a file was uploaded,
+        // use it as an image post (ignoring the link URL / text content).
+        $mediaFile = $this->firstUploadedFile($media);
+        if ($mediaFile !== null) {
+            $result = $reddit->submit($subreddit, $title, '', 'image', null, $mediaFile);
+        } else {
+            $result = $reddit->submit($subreddit, $title, $text, $type, $url);
+        }
 
         AutoPosterConfig::log(
             'reddit',
@@ -100,16 +108,19 @@ class AutoPosterController extends Controller
     }
 
     /**
-     * Post to X (formerly Twitter).
+     * Post to X (formerly Twitter), optionally with one or more images/video.
      */
     public function postTwitter(): void
     {
         $config  = AutoPosterConfig::all();
         $twitter = new TwitterClient($config['twitter']);
 
-        $text = trim((string) $this->request->post('twitter_text', ''));
+        $text  = trim((string) $this->request->post('twitter_text', ''));
+        $media = $this->request->file('twitter_media');
 
-        $result = $twitter->post($text);
+        $files = $this->uploadedFiles($media);
+
+        $result = $twitter->post($text, $files);
 
         AutoPosterConfig::log(
             'twitter',
@@ -123,6 +134,65 @@ class AutoPosterController extends Controller
             ? 'Posted to X: ' . ($result['url'] ?? '')
             : 'X error: ' . ($result['error'] ?? 'Unknown error'));
         $this->redirect('/admin/auto-poster');
+    }
+
+    /**
+     * Return the first successfully uploaded file from a $_FILES entry, or
+     * null when none was provided. Normalizes single- and multi-file arrays.
+     */
+    private function firstUploadedFile($file): ?array
+    {
+        $files = $this->uploadedFiles($file);
+
+        return $files[0] ?? null;
+    }
+
+    /**
+     * Normalize a $_FILES entry into a flat list of uploaded file arrays, each
+     * with 'tmp_name', 'name', 'type' and 'size'. Files with no data are skipped.
+     */
+    private function uploadedFiles($file): array
+    {
+        if ($file === null || !is_array($file)) {
+            return [];
+        }
+
+        $out = [];
+
+        // Single file: ['name'=>, 'tmp_name'=>, 'type'=>, 'size'=>, 'error'=>]
+        if (isset($file['tmp_name']) && is_string($file['tmp_name'])) {
+            if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK && is_file($file['tmp_name'])) {
+                $out[] = [
+                    'tmp_name' => $file['tmp_name'],
+                    'name'     => $file['name'] ?? basename($file['tmp_name']),
+                    'type'     => $file['type'] ?? '',
+                    'size'     => (int) ($file['size'] ?? filesize($file['tmp_name']) ?: 0),
+                ];
+            }
+
+            return $out;
+        }
+
+        // Multi-file: ['name'=>[], 'tmp_name'=>[], 'type'=>[], 'size'=>[], 'error'=>[]]
+        if (isset($file['name']) && is_array($file['name'])) {
+            $count = count($file['name']);
+            for ($i = 0; $i < $count; $i++) {
+                if (($file['error'][$i] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                    continue;
+                }
+                if (!isset($file['tmp_name'][$i]) || !is_file($file['tmp_name'][$i])) {
+                    continue;
+                }
+                $out[] = [
+                    'tmp_name' => $file['tmp_name'][$i],
+                    'name'     => $file['name'][$i] ?? basename($file['tmp_name'][$i]),
+                    'type'     => $file['type'][$i] ?? '',
+                    'size'     => (int) ($file['size'][$i] ?? filesize($file['tmp_name'][$i]) ?: 0),
+                ];
+            }
+        }
+
+        return $out;
     }
 
     /**

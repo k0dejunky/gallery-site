@@ -60,18 +60,23 @@ $maskSecret = static function (string $v): string {
     <?php // ----- Reddit post ----- ?>
     <div class="stats-panel">
         <h2>Post to Reddit</h2>
-        <form method="post" action="<?= url('/admin/auto-poster/post/reddit') ?>">
+        <form method="post" action="<?= url('/admin/auto-poster/post/reddit') ?>" enctype="multipart/form-data">
             <?= csrf_field() ?>
             <p>
                 <label for="reddit_subreddit">Subreddit</label><br>
-                <input type="text" name="reddit_subreddit" id="reddit_subreddit" placeholder="e.g. pics or pics" required style="width:100%;box-sizing:border-box;">
+                <input type="text" name="reddit_subreddit" id="reddit_subreddit" placeholder="e.g. pics" required style="width:100%;box-sizing:border-box;">
             </p>
             <p>
                 <label for="reddit_title">Title</label><br>
                 <input type="text" name="reddit_title" id="reddit_title" required style="width:100%;box-sizing:border-box;">
             </p>
             <p>
-                <label>Type</label><br>
+                <label for="reddit_media">Image (optional — one image per post)</label><br>
+                <input type="file" name="reddit_media" id="reddit_media" accept="image/*" style="width:100%;box-sizing:border-box;">
+                <span class="muted" style="font-size:0.8rem;">Uploading an image posts it as an image post.</span>
+            </p>
+            <p>
+                <label>Type (when no image)</label><br>
                 <label class="chip"><input type="radio" name="reddit_type" value="link" checked> Link</label>
                 <label class="chip"><input type="radio" name="reddit_type" value="self"> Text</label>
             </p>
@@ -90,12 +95,19 @@ $maskSecret = static function (string $v): string {
     <?php // ----- X post ----- ?>
     <div class="stats-panel">
         <h2>Post to X (Twitter)</h2>
-        <form method="post" action="<?= url('/admin/auto-poster/post/twitter') ?>">
+        <form method="post" action="<?= url('/admin/auto-poster/post/twitter') ?>" enctype="multipart/form-data">
             <?= csrf_field() ?>
             <p>
                 <label for="twitter_text">Text</label><br>
                 <textarea name="twitter_text" id="twitter_text" rows="5" maxlength="280" placeholder="Post content (max 280 characters)..." style="width:100%;box-sizing:border-box;"></textarea>
                 <span class="muted" style="font-size:0.8rem;"><span id="twitter-count">0</span>/280</span>
+            </p>
+            <p>
+                <label for="twitter_media">Images / video (optional)</label><br>
+                <input type="file" name="twitter_media[]" id="twitter_media" accept="image/*,video/*" multiple style="width:100%;box-sizing:border-box;">
+                <span class="muted" style="font-size:0.8rem;">
+                    Up to 4 images, or 1 video. Images ≤5 MB; video ≤512 MB.
+                </span>
             </p>
             <button type="submit" class="btn">Post to X</button>
         </form>

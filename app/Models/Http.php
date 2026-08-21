@@ -16,6 +16,8 @@ class Http
      *   - form:     associative array sent as application/x-www-form-urlencoded
      *   - json:     array/associative sent as application/json
      *   - body:     raw string body (overrides form/json)
+     *   - multipart: array of form fields + files sent as multipart/form-data.
+     *                Fields: ['field' => 'value'] ; Files: ['field' => ['file'=>path,'name'=>string,'type'=>mime]]
      *   - timeout:  seconds (default 30)
      * Returns [status:int, headers:array, body:string].
      */
@@ -43,7 +45,36 @@ class Http
             curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         }
 
-        if (isset($options['form'])) {
+        if (isset($options['multipart'])) {
+            // Build a multipart/form-data payload so file uploads can be sent
+            // with their original filename and content type.
+            $boundary = '----galleryAutoPoster' . bin2hex(random_bytes(12));
+            $body     = '';
+
+            foreach ($options['multipart'] as $name => $value) {
+                if (is_array($value) && isset($value['file'])) {
+                    if (!is_file($value['file'])) {
+                        continue;
+                    }
+                    $fileName = $value['name'] ?? basename($value['file']);
+                    $fileType = $value['type'] ?? mime_content_type($value['file']) ?: 'application/octet-stream';
+                    $contents = (string) file_get_contents($value['file']);
+                    $body .= "--$boundary\r\n";
+                    $body .= "Content-Disposition: form-data; name=\"$name\"; filename=\"$fileName\"\r\n";
+                    $body .= "Content-Type: $fileType\r\n\r\n";
+                    $body .= $contents . "\r\n";
+                } else {
+                    $body .= "--$boundary\r\n";
+                    $body .= "Content-Disposition: form-data; name=\"$name\"\r\n\r\n";
+                    $body .= (string) $value . "\r\n";
+                }
+            }
+
+            $body .= "--$boundary--\r\n";
+            $headers[] = 'Content-Type: multipart/form-data; boundary=' . $boundary;
+            $headers[] = 'Content-Length: ' . strlen($body);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        } elseif (isset($options['form'])) {
             $body         = http_build_query($options['form']);
             $headers[]    = 'Content-Type: application/x-www-form-urlencoded';
             $headers[]    = 'Content-Length: ' . strlen($body);
