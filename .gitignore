@@ -1,0 +1,26 @@
+# Environment / secrets
+/.env
+
+# User data (never commit uploads)
+/storage/uploads/*
+!/storage/uploads/.gitignore
+/storage/gallery.sqlite
+
+# Regenerable runtime config (app rebuilds these from defaults)
+/storage/theme.json
+/storage/admin-theme.json
+/storage/site-layout.json
+/storage/admin-layout.json
+
+# Node modules & build output for the video editor
+/frontend/video-editor/node_modules/
+/frontend/video-editor/dist/*.map
+
+# Misplaced view copies (dead code — real views live in views/)
+/app/Controllers/category.php
+/app/Controllers/layout.php
+/app/Controllers/login.php
+
+# Editor / OS junk
+.DS_Store
+*.swp
