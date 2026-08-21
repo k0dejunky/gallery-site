@@ -30,6 +30,79 @@ class AutoPosterController extends Controller
     }
 
     /**
+     * Redirect the user to Reddit's authorization page so the app can post on
+     * their behalf. Stores a state token in the session for CSRF protection.
+     */
+    public function authorizeReddit(): void
+    {
+        $config = AutoPosterConfig::all();
+        $reddit = new RedditClient($config['reddit']);
+
+        if (!$reddit->isConfigured()) {
+            $this->flash('error', 'Save your Reddit client credentials first.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        $state = bin2hex(random_bytes(16));
+        $_SESSION['reddit_oauth_state'] = $state;
+
+        $redirectUri = url('/admin/auto-poster/reddit/callback');
+
+        header('Location: ' . $reddit->authorizationUrl($state, $redirectUri));
+        exit;
+    }
+
+    /**
+     * Handle Reddit's OAuth callback. Verifies the state token, exchanges the
+     * authorization code for a refresh token and stores it.
+     */
+    public function callbackReddit(): void
+    {
+        $code  = trim((string) $this->request->query('code', ''));
+        $state = trim((string) $this->request->query('state', ''));
+        $error = trim((string) $this->request->query('error', ''));
+
+        if ($error !== '') {
+            $this->flash('error', 'Reddit authorization was cancelled or failed: ' . $error);
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        $expected = $_SESSION['reddit_oauth_state'] ?? '';
+        unset($_SESSION['reddit_oauth_state']);
+
+        if ($state === '' || !hash_equals($expected, $state)) {
+            $this->flash('error', 'Reddit authorization state mismatch. Please try again.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        if ($code === '') {
+            $this->flash('error', 'Reddit did not return an authorization code.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        $config = AutoPosterConfig::all();
+        $reddit = new RedditClient($config['reddit']);
+        $redirectUri = url('/admin/auto-poster/reddit/callback');
+
+        $result = $reddit->exchangeCode($code, $redirectUri);
+
+        if (!$result['ok']) {
+            $this->flash('error', $result['error'] ?? 'Reddit authorization failed.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        AutoPosterConfig::saveRedditToken($result['refresh_token'], $result['access_token'] ?? '');
+
+        $this->flash('success', 'Reddit authorized successfully. You can now post to subreddits.');
+        $this->redirect('/admin/auto-poster');
+    }
+
+    /**
      * Save the Reddit and X/Twitter API credentials.
      */
     public function saveSettings(): void

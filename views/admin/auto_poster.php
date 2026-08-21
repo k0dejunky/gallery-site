@@ -36,6 +36,14 @@ $maskSecret = static function (string $v): string {
             </p>
             <button type="submit" class="btn">Save Reddit Settings</button>
         </form>
+        <p style="margin-top:0.75rem;">
+            <?php if (!empty($reddit['refresh_token'])): ?>
+                <span style="color:var(--success,#2e7d32);font-weight:600;">&#10003; Authorized — you can post to subreddits.</span>
+            <?php else: ?>
+                <span class="muted" style="display:block;margin-bottom:0.5rem;">Not authorized yet. Complete the flow below to enable posting.</span>
+                <a class="btn" href="<?= url('/admin/auto-poster/reddit/authorize') ?>">Authorize Reddit</a>
+            <?php endif; ?>
+        </p>
     </div>
 
     <?php // ----- X / Twitter credentials ----- ?>

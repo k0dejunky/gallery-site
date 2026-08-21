@@ -66,6 +66,22 @@ class AutoPosterConfig
     }
 
     /**
+     * Persist the Reddit refresh token (and optionally access token) obtained
+     * from the user-authorization callback, preserving all other config.
+     */
+    public static function saveRedditToken(string $refreshToken, string $accessToken = ''): void
+    {
+        $config = self::all();
+
+        $config['reddit']['refresh_token'] = $refreshToken;
+        if ($accessToken !== '') {
+            $config['reddit']['access_token'] = $accessToken;
+        }
+
+        self::save($config['reddit'], $config['twitter']);
+    }
+
+    /**
      * Append a row to the auto-poster log and return the new log id.
      */
     public static function log(string $platform, string $target, string $status, string $message, ?int $userId = null): int

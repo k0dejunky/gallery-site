@@ -130,6 +130,8 @@ return [
     // Auto poster (admin only)
     ['GET', '/admin/auto-poster', 'AutoPosterController@index'],
     ['POST', '/admin/auto-poster/settings', 'AutoPosterController@saveSettings'],
+    ['GET', '/admin/auto-poster/reddit/authorize', 'AutoPosterController@authorizeReddit'],
+    ['GET', '/admin/auto-poster/reddit/callback', 'AutoPosterController@callbackReddit'],
     ['POST', '/admin/auto-poster/post/reddit', 'AutoPosterController@postReddit'],
     ['POST', '/admin/auto-poster/post/twitter', 'AutoPosterController@postTwitter'],
     ['POST', '/admin/auto-poster/clear-log', 'AutoPosterController@clearLog'],
