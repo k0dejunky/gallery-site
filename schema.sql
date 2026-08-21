@@ -217,6 +217,20 @@ CREATE TABLE IF NOT EXISTS video_export_jobs (
     INDEX idx_video_export_status (status)
 );
 
+-- Visual site editor templates. Created here so fresh installs include the
+-- table; the app seeds default rows at runtime via SiteTemplate::seedDefaults().
+CREATE TABLE IF NOT EXISTS site_templates (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    scope       ENUM('user','admin') NOT NULL DEFAULT 'user',
+    config_json MEDIUMTEXT NOT NULL,
+    is_active   TINYINT(1) NOT NULL DEFAULT 0,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_site_templates_scope (scope)
+);
+
 INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, level, active) VALUES
     ('Silver', 'silver', 5.00, 'monthly', 'Full access for one month.', 1, 1, 1),
     ('Gold', 'gold', 10.00, 'monthly', 'Full access for one month.', 2, 2, 1),
