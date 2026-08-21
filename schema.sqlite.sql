@@ -214,6 +214,17 @@ CREATE TABLE IF NOT EXISTS video_export_jobs (
     FOREIGN KEY (project_id) REFERENCES video_projects(id) ON DELETE CASCADE
 );
 
+-- Auto poster posting history.
+CREATE TABLE IF NOT EXISTS auto_poster_log (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    platform   VARCHAR(20) NOT NULL,
+    target     VARCHAR(255) NOT NULL DEFAULT '',
+    status     VARCHAR(20) NOT NULL,
+    message    TEXT,
+    user_id    INTEGER,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 INSERT OR IGNORE INTO plans (name, slug, price, billing_cycle, description, sort_order, level, active) VALUES
     ('Silver', 'silver', 5.00, 'monthly', 'Full access for one month.', 1, 1, 1),
     ('Gold', 'gold', 10.00, 'monthly', 'Full access for one month.', 2, 2, 1),

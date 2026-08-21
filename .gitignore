@@ -12,6 +12,9 @@
 /storage/site-layout.json
 /storage/admin-layout.json
 
+# Auto Poster API credentials (never commit)
+/storage/autoposter.json
+
 # Node modules & build output for the video editor
 /frontend/video-editor/node_modules/
 /frontend/video-editor/dist/*.map

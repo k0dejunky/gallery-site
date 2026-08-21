@@ -227,6 +227,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             <a class="nav-item <?= $navActive('/admin/trends') ?>" href="<?= url('/admin/trends') ?>">Trends</a>
             <a class="nav-item <?= $navActive('/admin/galleries/create') ?>" href="<?= url('/admin/galleries/create') ?>">New Gallery</a>
             <a class="nav-item <?= $navActive('/admin/video-projects') ?>" href="<?= url('/admin/video-projects') ?>">Video Projects</a>
+            <a class="nav-item <?= $navActive('/admin/auto-poster') ?>" href="<?= url('/admin/auto-poster') ?>">Auto Poster</a>
             <a class="nav-item <?= $navActive('/admin/categories') ?>" href="<?= url('/admin/categories') ?>">Categories</a>
             <a class="nav-item <?= $navActive('/admin/users') ?>" href="<?= url('/admin/users') ?>">Users</a>
             <a class="nav-item <?= $navActive('/admin/plans') ?>" href="<?= url('/admin/plans') ?>">Membership</a>

@@ -126,4 +126,11 @@ return [
     ['POST', '/admin/subscriptions/{id}/approve', 'SubscriptionController@approve'],
     ['POST', '/admin/subscriptions/{id}/cancel', 'SubscriptionController@cancel'],
     ['POST', '/admin/subscriptions/{id}/delete', 'SubscriptionController@destroy'],
+
+    // Auto poster (admin only)
+    ['GET', '/admin/auto-poster', 'AutoPosterController@index'],
+    ['POST', '/admin/auto-poster/settings', 'AutoPosterController@saveSettings'],
+    ['POST', '/admin/auto-poster/post/reddit', 'AutoPosterController@postReddit'],
+    ['POST', '/admin/auto-poster/post/twitter', 'AutoPosterController@postTwitter'],
+    ['POST', '/admin/auto-poster/clear-log', 'AutoPosterController@clearLog'],
 ];

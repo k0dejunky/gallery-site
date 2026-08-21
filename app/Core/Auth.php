@@ -15,7 +15,7 @@ class Auth
     public const ADMIN_ROLES = ['super_admin', 'admin', 'editor', 'moderator', 'viewer'];
     public const PERMISSIONS = [
         'super_admin' => ['*'],
-        'admin'      => ['dashboard', 'trends', 'galleries', 'videos', 'categories', 'users', 'membership', 'theme', 'site_editor', 'logs', 'documentation'],
+        'admin'      => ['dashboard', 'trends', 'galleries', 'videos', 'categories', 'users', 'membership', 'theme', 'site_editor', 'logs', 'documentation', 'autoposter'],
         'editor'     => ['dashboard', 'trends', 'galleries', 'videos', 'categories', 'documentation'],
         'moderator'  => ['dashboard', 'users', 'membership', 'logs', 'documentation'],
         'viewer'     => ['dashboard', 'trends', 'documentation'],

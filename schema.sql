@@ -231,6 +231,19 @@ CREATE TABLE IF NOT EXISTS site_templates (
     INDEX idx_site_templates_scope (scope)
 );
 
+-- Auto poster posting history.
+CREATE TABLE IF NOT EXISTS auto_poster_log (
+    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    platform   VARCHAR(20) NOT NULL,
+    target     VARCHAR(255) NOT NULL DEFAULT '',
+    status     VARCHAR(20) NOT NULL,
+    message    TEXT NULL,
+    user_id    INT UNSIGNED NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_auto_poster_platform (platform),
+    INDEX idx_auto_poster_created (created_at)
+);
+
 INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, level, active) VALUES
     ('Silver', 'silver', 5.00, 'monthly', 'Full access for one month.', 1, 1, 1),
     ('Gold', 'gold', 10.00, 'monthly', 'Full access for one month.', 2, 2, 1),
