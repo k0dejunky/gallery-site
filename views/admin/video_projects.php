@@ -47,6 +47,11 @@ $formatBytes = static function (?int $bytes): string {
                             <?= csrf_field() ?><button class="btn small" type="submit" style="background:#b42318;color:#fff">Delete</button>
                         </form>
                         <?php endif; ?>
+                        <?php if (!empty($ex['gallery_exists'])): ?>
+                        <form method="post" action="<?= url('/admin/video-exports/' . (int) $ex['id'] . '/purge') ?>" style="display:inline" onsubmit="return confirm('Purge this exported file? The file and thumbnail will be kept for the gallery and the export record removed.');">
+                            <?= csrf_field() ?><button class="btn small" type="submit" style="background:#7c3aed;color:#fff" title="Purge export after gallery created">Purge</button>
+                        </form>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; endif; ?>

@@ -58,6 +58,7 @@ return [
     ['GET', '/admin/video-exports/{id}/stream', 'VideoEditorController@stream'],
     ['GET', '/admin/video-exports/{id}/download', 'VideoEditorController@download'],
     ['POST', '/admin/video-exports/{id}/delete', 'VideoEditorController@deleteExport'],
+    ['POST', '/admin/video-exports/{id}/purge', 'VideoEditorController@purgeExport'],
     ['GET', '/admin/video-exports/{id}/create-gallery', 'VideoEditorController@createGalleryFromExport'],
     ['POST', '/admin/video-exports/{id}/create-gallery', 'VideoEditorController@createGalleryFromExport'],
 

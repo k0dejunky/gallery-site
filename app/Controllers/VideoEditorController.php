@@ -71,6 +71,7 @@ class VideoEditorController extends Controller
             $ex['file_exists'] = 0;
             $ex['file_size'] = null;
             $ex['file_url'] = null;
+            $ex['gallery_exists'] = 0;
             if (!empty($ex['output_file'])) {
                 $base = basename($ex['output_file']);
                 $candidates = [$uploadsDir . '/exports/' . $base, $uploadsDir . '/' . $base];
@@ -80,6 +81,20 @@ class VideoEditorController extends Controller
                         $ex['file_size'] = filesize($c);
                         break;
                     }
+                }
+
+                // A gallery has been created from this export when a photo whose
+                // filename matches the exported file is attached to a gallery.
+                // Force the photos column collation so the comparison works even
+                // when the export column uses a different utf8mb4 collation.
+                $photo = Database::run(
+                    'SELECT p.id FROM photos p
+                     JOIN gallery_photo gp ON gp.photo_id = p.id
+                     WHERE p.filename = ? COLLATE utf8mb4_unicode_ci LIMIT 1',
+                    [$base]
+                )->fetch();
+                if ($photo !== false) {
+                    $ex['gallery_exists'] = 1;
                 }
             }
         }
@@ -268,6 +283,83 @@ class VideoEditorController extends Controller
             }
         }
         Database::run('DELETE FROM video_export_jobs WHERE id = ?', [$id]);
+        $this->redirect('/admin/video-projects');
+    }
+
+    /**
+     * Purge an exported file that has already been turned into a gallery.
+     *
+     * Before removing the export job, this verifies that the exported file has
+     * been placed in the uploads root under the correct filename and that its
+     * thumbnail has been generated at the correct location. Once those are in
+     * place the export's temporary copy (in uploads/exports/) and its database
+     * record are removed, since the gallery now owns the file.
+     */
+    public function purgeExport(int $id): void
+    {
+        $job = VideoProject::exportJob($id, (int) Auth::user()['id']);
+        if ($job === null || $job['status'] !== 'completed' || empty($job['output_file'])) {
+            $this->flash('error', 'Export not found or not completed.');
+            $this->redirect('/admin/video-projects');
+            return;
+        }
+
+        $uploadsDir = config('app.uploads')['dir'];
+        $base       = basename($job['output_file']);
+        $exportPath = $uploadsDir . '/exports/' . $base;
+        $rootPath   = $uploadsDir . '/' . $base;
+        $thumbPath  = $uploadsDir . '/thumb_' . $base;
+
+        // The exported file must exist somewhere (exports staging or uploads root).
+        $filePath = null;
+        foreach ([$rootPath, $exportPath] as $candidate) {
+            if (is_file($candidate)) { $filePath = $candidate; break; }
+        }
+        if ($filePath === null) {
+            $this->flash('error', 'Exported file not found on disk; nothing to purge.');
+            $this->redirect('/admin/video-projects');
+            return;
+        }
+
+        // Ensure the gallery's own copy lives in the uploads root under the
+        // correct filename (the photo's filename), so purging the staging copy
+        // cannot break the gallery.
+        if (!is_file($rootPath)) {
+            if (!copy($filePath, $rootPath)) {
+                $this->flash('error', 'Could not copy the exported file into the uploads root.');
+                $this->redirect('/admin/video-projects');
+                return;
+            }
+            @chmod($rootPath, 0664);
+        }
+
+        // Ensure the thumbnail exists at the correct location/name.
+        if (!is_file($thumbPath)) {
+            $ok = create_video_thumbnail(
+                $rootPath,
+                $thumbPath,
+                config('app.uploads')['thumb_width'],
+                config('app.uploads')['thumb_height']
+            );
+            if (!$ok) {
+                $this->flash('error', 'Could not generate the thumbnail for this export.');
+                $this->redirect('/admin/video-projects');
+                return;
+            }
+        }
+
+        // Everything is in place under the correct names. Remove the staging
+        // copy (if it differs from the root copy) and the export job record.
+        if (is_file($exportPath) && $exportPath !== $rootPath) {
+            @unlink($exportPath);
+        }
+        Database::run('DELETE FROM video_export_jobs WHERE id = ?', [$id]);
+
+        AuditLog::record((int) Auth::user()['id'], 'delete', 'export', $id, 'Purged exported file "' . $base . '"', null, [
+            'filename' => $base,
+        ]);
+
+        $this->flash('success', 'Export purged. File and thumbnail are in place for the gallery.');
         $this->redirect('/admin/video-projects');
     }
 
