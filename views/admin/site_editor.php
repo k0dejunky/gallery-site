@@ -174,6 +174,10 @@ function moveMeta(el){
   return{key:key,origin:origin};
 }
 function captureVisualStyle(el){
+  // Sidebar items are styled entirely by the active theme's CSS variables.
+  // Capturing computed styles here would freeze transient states (like the
+  // :hover background at drag time) into saved templates.
+  if(el.closest && el.closest('.admin-nav'))return{};
   var cs=iDoc.defaultView.getComputedStyle(el),props=['padding','font','font-size','font-family','font-weight','line-height','letter-spacing','color','background','background-color','background-image','border','border-radius','box-shadow','text-align','text-decoration','text-shadow','fill','stroke','outline','opacity'];
   var out={};props.forEach(function(p){out[p]=cs.getPropertyValue(p);});
   for(var i=0;i<cs.length;i++){var name=cs[i];if(name.indexOf('--')===0)out[name]=cs.getPropertyValue(name);}
