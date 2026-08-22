@@ -305,16 +305,13 @@ class GalleryController extends Controller
             }
 
             if ($isImage) {
-                create_thumbnail(
-                    $dir . '/' . $filename,
-                    $dir . '/thumb_' . $filename,
-                    $config['thumb_width'],
-                    $config['thumb_height']
-                );
-                create_web_image(
+                create_image_variants(
                     $dir . '/' . $filename,
                     $dir . '/web_' . $filename,
-                    $config['web_max_width']
+                    $dir . '/thumb_' . $filename,
+                    $config['web_max_width'],
+                    $config['thumb_width'],
+                    $config['thumb_height']
                 );
             } else {
                 create_video_thumbnail(
@@ -372,16 +369,13 @@ class GalleryController extends Controller
             return;
         }
 
-        create_thumbnail(
-            $path,
-            $dir . '/thumb_' . $filename,
-            $config['thumb_width'],
-            $config['thumb_height']
-        );
-        create_web_image(
+        create_image_variants(
             $path,
             $dir . '/web_' . $filename,
-            $config['web_max_width']
+            $dir . '/thumb_' . $filename,
+            $config['web_max_width'],
+            $config['thumb_width'],
+            $config['thumb_height']
         );
 
         $this->jsonReply(['ok' => true, 'files' => $this->pendingListMeta()]);
