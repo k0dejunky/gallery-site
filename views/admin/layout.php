@@ -44,10 +44,12 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
          .admin-nav .nav-logout button { width: 100%; background: var(--btn-danger-bg); color: var(--btn-danger-color); border: var(--input-border-width) solid var(--btn-danger-border); padding: var(--spacing-xs) var(--spacing-sm); font-size: var(--font-size-sm); }
          .admin-nav .nav-logout button:hover { background: var(--btn-danger-hover-bg); }
          .nav-top-content { margin-bottom: var(--spacing-xs); }
-         .nav-top-content .theme-tabs { display: inline-flex; gap: var(--spacing-xs); background: var(--pink-100); border: var(--input-border-width) solid var(--pink-300); border-radius: var(--border-radius); padding: var(--spacing-xs); width: 100%; }
-         .nav-top-content .theme-tab { flex: 1; padding: var(--spacing-sm) var(--spacing-md); border: none; border-radius: var(--border-radius); background: transparent; color: var(--purple-700); cursor: pointer; font-weight: bold; text-align: center; }
-         .nav-top-content .theme-tab:hover { background: var(--pink-300); }
-         .nav-top-content .theme-tab.active { background: var(--purple-300); border: var(--input-border-width) solid var(--purple-400); color: var(--purple-900); }
+        /* Theme scope tabs follow the sidebar palette so they always match the
+           active theme, regardless of where the block sits in the menu. */
+        .admin-nav .theme-tabs { display: inline-flex; gap: var(--spacing-xs); background: var(--sidebar-link-bg); border: var(--input-border-width) solid var(--sidebar-link-border); border-radius: var(--border-radius); padding: var(--spacing-xs); width: 100%; }
+        .admin-nav .theme-tab { flex: 1; padding: var(--spacing-sm) var(--spacing-md); border: none; border-radius: var(--border-radius); background: transparent; color: var(--sidebar-link-color); cursor: pointer; font-weight: bold; text-align: center; }
+        .admin-nav .theme-tab:hover { background: var(--sidebar-link-hover); }
+        .admin-nav .theme-tab.active { background: var(--sidebar-active-bg); border: var(--input-border-width) solid var(--sidebar-active-border); color: var(--sidebar-active-color); }
         .admin-nav .btn { text-align: left; }
         .admin-main { flex: 1; min-width: 0; }
         .btn { display: inline-block; padding: var(--btn-padding); background: var(--btn-bg); color: var(--btn-color); text-decoration: none; border-radius: var(--btn-radius); border: none; cursor: pointer; font-size: var(--btn-font-size); text-align: center; }
