@@ -14,7 +14,7 @@ use App\Core\Database;
 class PaymentProcessor
 {
     /** Provider identifiers the UI recognises; unknown providers are allowed. */
-    public const PROVIDERS = ['stripe', 'paypal', 'coinbase', 'square', 'venmo', 'cashapp', 'bitcoin'];
+    public const PROVIDERS = ['stripe', 'paypal', 'ccbill', 'epoch', 'segpay', 'coinbase', 'square', 'venmo', 'cashapp', 'bitcoin'];
 
     /**
      * Every configured processor, newest first, with the number of
@@ -153,6 +153,9 @@ class PaymentProcessor
         $labels = [
             'stripe'  => 'Stripe',
             'paypal'  => 'PayPal',
+            'ccbill'  => 'CCBill',
+            'epoch'   => 'Epoch',
+            'segpay'  => 'SegPay',
             'coinbase'=> 'Coinbase',
             'square'  => 'Square',
             'venmo'   => 'Venmo',
