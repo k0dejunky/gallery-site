@@ -225,6 +225,7 @@ fi
 # intentionally excluded from version control / source.
 log "Creating storage directories..."
 mkdir -p "$INSTALL_DIR/storage/uploads/exports"
+mkdir -p "$INSTALL_DIR/storage/uploads/pending"
 mkdir -p "$INSTALL_DIR/storage/themes"
 # Optionally copy the built-in theme presets if provided in source.
 if [[ -d "$SOURCE_DIR/storage/themes" ]]; then
@@ -421,6 +422,8 @@ cat <<EOF
  Admin password : ${ADMIN_PASS:-<unchanged; schema default - CHANGE AFTER LOGIN>}
 --------------------------------------------------------------------------
  Video exports   : runs via PHP exec() -> /usr/bin/ffmpeg
+ Image variants  : web + thumbnail generated in one ffmpeg pass (GD fallback)
+ Payments        : admin "Payments" tab; Stripe/PayPal seeded disabled
  Upload limit    : 10 GiB (set in the PHP-FPM pool, not .htaccess)
  Media serving   : streamed by Apache via mod_xsendfile
  PHP runtime     : PHP-FPM + Apache mpm_event (not mod_php)

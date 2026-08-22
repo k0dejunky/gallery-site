@@ -208,6 +208,12 @@ CREATE TABLE IF NOT EXISTS payment_processors (
     INDEX idx_payment_processors_enabled (enabled)
 );
 
+-- Seed the two standard gateways (disabled until an admin adds keys and
+-- enables them, mirroring how production was configured).
+INSERT INTO payment_processors (provider, name, mode, currency, is_default, enabled) VALUES
+    ('stripe', 'Stripe', 'test', 'USD', 0, 0),
+    ('paypal', 'PayPal', 'test', 'USD', 0, 0);
+
 CREATE TABLE IF NOT EXISTS video_projects (
     id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     source_photo_id  INT UNSIGNED NOT NULL,
