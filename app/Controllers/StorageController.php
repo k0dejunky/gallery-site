@@ -58,58 +58,13 @@ class StorageController extends Controller
         header('Accept-Ranges: bytes');
         header('Cache-Control: public, max-age=86400');
 
-        $range = (string) ($_SERVER['HTTP_RANGE'] ?? '');
+        // Offload file streaming to Apache via X-SendFile (mod_xsendfile).
+        // Apache natively supports HTTP Range requests, so browsers can seek
+        // in large video files without streaming the bytes through PHP.
+        // XSendFilePath is configured in the Apache vhost.
+        header('X-Sendfile: ' . $path);
 
-        if (preg_match('/^bytes=(\d*)-(\d*)$/', $range, $m)) {
-            $start = $m[1] !== '' ? (int) $m[1] : null;
-            $end   = $m[2] !== '' ? (int) $m[2] : null;
-
-            if ($start === null) {
-                $start = max(0, $len - $end);
-                $end   = $len - 1;
-            } elseif ($end === null || $end >= $len) {
-                $end = $len - 1;
-            }
-
-            if ($start > $end || $start >= $len) {
-                header('HTTP/1.1 416 Range Not Satisfiable');
-                header('Content-Range: bytes */' . $len);
-                return;
-            }
-
-            $length = $end - $start + 1;
-
-            header('HTTP/1.1 206 Partial Content');
-            header('Content-Range: bytes ' . $start . '-' . $end . '/' . $len);
-            header('Content-Length: ' . $length);
-
-            $fp = fopen($path, 'rb');
-
-            if ($fp === false) {
-                return;
-            }
-
-            fseek($fp, $start);
-            $remaining = $length;
-
-            while ($remaining > 0 && !feof($fp)) {
-                $chunk = fread($fp, (int) min(8192, $remaining));
-
-                if ($chunk === false || $chunk === '') {
-                    break;
-                }
-
-                echo $chunk;
-                $remaining -= strlen($chunk);
-            }
-
-            fclose($fp);
-
-            return;
-        }
-
-        header('Content-Length: ' . $len);
-        readfile($path);
+        return;
     }
 
     /**

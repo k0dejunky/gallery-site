@@ -198,6 +198,43 @@ function _load_image(string $src)
     }
 
     $type = $info[2];
+
+    // Huge photos (e.g. 60+ megapixel camera captures) are extremely slow and
+    // memory-heavy to decode and resample with GD alone. When the source is
+    // larger than a working cap, pre-scale it with ffmpeg (which uses fast,
+    // optimized resampling) into a temporary file, then load that smaller file
+    // with GD. This makes uploads of very large images complete quickly.
+    $maxWorking = 4000;
+    $prescaled = null;
+
+    if (max($info[0], $info[1]) > $maxWorking
+        && in_array($type, [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)) {
+        $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
+        $prescaled = tempnam(sys_get_temp_dir(), 'imgload');
+
+        if ($prescaled !== false) {
+            $scale = $maxWorking / max($info[0], $info[1]);
+            $destW  = max(1, (int) round($info[0] * $scale));
+            $destH  = max(1, (int) round($info[1] * $scale));
+
+            $cmd = escapeshellarg($ffmpeg) . ' -y -hide_banner -loglevel error -i '
+                . escapeshellarg($src)
+                . ' -vf scale=' . (int) $destW . ':' . (int) $destH
+                . ' -frames:v 1 ' . escapeshellarg($prescaled) . ' 2>/dev/null';
+
+            exec($cmd, $out, $rc);
+
+            if ($rc !== 0 || !is_file($prescaled)) {
+                @unlink($prescaled);
+                $prescaled = null;
+            } else {
+                $src = $prescaled;
+            }
+        } else {
+            $prescaled = null;
+        }
+    }
+
     $image = false;
 
     if ($type === IMAGETYPE_JPEG) {
@@ -208,6 +245,14 @@ function _load_image(string $src)
         $image = @imagecreatefromgif($src);
     } elseif ($type === IMAGETYPE_WEBP && function_exists('imagecreatefromwebp')) {
         $image = @imagecreatefromwebp($src);
+    }
+
+    if ($prescaled !== null) {
+        @unlink($prescaled);
+    }
+
+    if ($image === false) {
+        return [false, 0];
     }
 
     return [$image, $type];

@@ -140,6 +140,50 @@ class Gallery
     }
 
     /**
+     * Galleries belonging to any of the given categories, returned as a map
+     * of [category_id => [gallery, ...]]. A gallery appears under every
+     * category it belongs to; callers deduplicate across categories. This
+     * replaces the N+1 pattern of calling inCategory() once per category.
+     */
+    public static function inCategories(array $categoryIds, string $type = ''): array
+    {
+        $result = [];
+
+        $ids = array_values(array_filter(
+            array_map('intval', $categoryIds),
+            static fn (int $id): bool => $id > 0
+        ));
+
+        if (!$ids) {
+            return $result;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        $typeCondition = '';
+        if (in_array($type, ['images', 'videos'], true)) {
+            $typeCondition = ' AND ' . self::mediaTypeCondition($type);
+        }
+
+        $rows = Database::run(
+            'SELECT g.*, gc.category_id, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
+             FROM galleries g
+             INNER JOIN gallery_category gc ON gc.gallery_id = g.id
+             LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
+             WHERE gc.category_id IN (' . $placeholders . ') AND g.deleted_at IS NULL' . $typeCondition . '
+             GROUP BY g.id, gc.category_id
+             ORDER BY g.created_at DESC',
+            $ids
+        )->fetchAll();
+
+        foreach ($rows as $row) {
+            $result[(int) $row['category_id']][] = $row;
+        }
+
+        return $result;
+    }
+
+    /**
      * Categories a gallery is tagged with.
      */
     public static function categories(int $galleryId): array

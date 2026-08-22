@@ -1,9 +1,7 @@
 RewriteEngine On
 
-# Allow a single upload up to 10 GiB. Multipart overhead is included in the
-# request limit so PHP does not reject a file at the exact configured ceiling.
-php_value upload_max_filesize 10G
-php_value post_max_size 11G
+# Upload limits are now set in the PHP-FPM pool (www.conf) and apply to
+# all sizes; removing php_value here since FPM ignores/halts on them.
 
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d

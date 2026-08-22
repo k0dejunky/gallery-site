@@ -107,15 +107,21 @@ class LogsController extends Controller
                 if (!is_string($file) || !is_readable($file)) continue;
                 $lines = @file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
                 if (!is_array($lines)) continue;
-                foreach (array_slice($lines, -100) as $line) {
+                foreach (array_reverse(array_slice($lines, -100)) as $line) {
+                    $line = substr((string) $line, 0, 4000);
                     $errors[] = [
                         'source' => $label . ' (' . basename($file) . ')',
-                        'time' => '',
-                        'message' => substr((string) $line, 0, 4000),
+                        'time' => self::logTimestamp($line),
+                        'message' => $line,
                     ];
                 }
             }
         }
+        foreach ($errors as $i => &$error) {
+            $error['__i'] = $i;
+        }
+        unset($error);
+
         usort($errors, static function (array $a, array $b): int {
             $ta = (string) ($a['time'] ?? '');
             $tb = (string) ($b['time'] ?? '');
@@ -125,8 +131,8 @@ class LogsController extends Controller
             }
             if ($ta !== '') return -1; // a has time, b doesn't -> a first
             if ($tb !== '') return 1;  // b has time, a doesn't -> b first
-            // Both have no timestamp: keep original order (stable-ish)
-            return 0;
+            // Both have no timestamp: keep original (newest-first) order.
+            return $b['__i'] <=> $a['__i'];
         });
 
         $total = count($errors);
@@ -145,6 +151,41 @@ class LogsController extends Controller
                 'perPage' => $perPage,
             ],
         ]);
+    }
+
+/**
+     * Pull a sortable timestamp out of a raw log line so the error log can
+     * be ordered newest-first even for files whose lines have no parsed time
+     * field. Supports ISO-8601 (Apache/MySQL) and Apache's [day Mon d HH:MM:SS]
+     * bracket format. Returns an empty string when no timestamp is found.
+     */
+    private static function logTimestamp(string $line): string
+    {
+        $line = trim($line);
+
+        if (preg_match('/(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/', $line, $m)) {
+            return $m[1] . ' ' . $m[2];
+        }
+
+        if (preg_match('/^\[[A-Z][a-z]{2} ([A-Z][a-z]{2}) +(\d{1,2}) (\d{2}:\d{2}:\d{2})\.\d+ (\d{4})\]/', $line, $m)) {
+            // Apache default error log: [Fri Aug 21 16:36:52.445756 2026]
+            $month = ['Jan' => '01', 'Feb' => '02', 'Mar' => '03', 'Apr' => '04', 'May' => '05', 'Jun' => '06',
+                      'Jul' => '07', 'Aug' => '08', 'Sep' => '09', 'Oct' => '10', 'Nov' => '11', 'Dec' => '12'][$m[1]] ?? '';
+            if ($month !== '') {
+                return $m[4] . '-' . $month . '-' . str_pad($m[2], 2, '0', STR_PAD_LEFT) . ' ' . $m[3];
+            }
+        }
+
+        if (preg_match('/^\[(\d{1,2})-([A-Z][a-z]{2})-(\d{4}) (\d{2}:\d{2}:\d{2})\]/', $line, $m)) {
+            // PHP-FPM default: [21-Aug-2026 20:22:49]
+            $month = ['Jan' => '01', 'Feb' => '02', 'Mar' => '03', 'Apr' => '04', 'May' => '05', 'Jun' => '06',
+                      'Jul' => '07', 'Aug' => '08', 'Sep' => '09', 'Oct' => '10', 'Nov' => '11', 'Dec' => '12'][$m[2]] ?? '';
+            if ($month !== '') {
+                return $m[3] . '-' . $month . '-' . str_pad($m[1], 2, '0', STR_PAD_LEFT) . ' ' . $m[4];
+            }
+        }
+
+        return '';
     }
 
     public function rollback(int $id): void

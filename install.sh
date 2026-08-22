@@ -93,7 +93,7 @@ fi
 # ---------------------------------------------------------------------------
 # Install system packages
 # ---------------------------------------------------------------------------
-log "Installing system packages (apache2, php, gd, mysql, ffmpeg)..."
+log "Installing system packages (apache2, php-fpm, gd, mysql, ffmpeg, xsendfile)..."
 export DEBIAN_FRONTEND=noninteractive
 APT_QUIET=""
 [[ $UNATTENDED -eq 1 ]] && APT_QUIET="-q"
@@ -101,11 +101,13 @@ apt-get update -y $APT_QUIET
 apt-get install -y $APT_QUIET \
     apache2 \
     php \
+    php-fpm \
     php-mysql \
     php-gd \
     php-mbstring \
     php-xml \
     php-curl \
+    libapache2-mod-xsendfile \
     mysql-server \
     ffmpeg \
     curl
@@ -125,15 +127,74 @@ if command -v phpenmod >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-# Enable Apache modules
+# Enable Apache modules: use mpm_event + PHP-FPM (not mod_php/prefork) and
+# mod_xsendfile so large media is streamed by Apache instead of PHP.
 # ---------------------------------------------------------------------------
-log "Enabling Apache modules (rewrite, alias, php)..."
+log "Enabling Apache modules (rewrite, alias, proxy_fcgi, setenvif, xsendfile, mpm_event)..."
+
+# Detect the installed PHP minor version (used for FPM paths/service name).
+PHP_VERSION="$(php -r 'echo PHP_MAJOR_VERSION;' 2>/dev/null).$(php -r 'echo PHP_MINOR_VERSION;' 2>/dev/null)"
+PHP_VERSION="${PHP_VERSION:-7.4}"
+
 a2enmod rewrite alias 2>/dev/null || true
-if have phpenmod && apache2ctl -M 2>/dev/null | grep -q php; then
-    : # php module already loaded
-else
-    warn "PHP apache module not detected; ensure mod_php (libapache2-mod-php) is installed."
+a2dismod mpm_prefork 2>/dev/null || true
+a2dismod php 2>/dev/null || true
+a2enmod mpm_event 2>/dev/null || true
+a2enmod proxy_fcgi setenvif 2>/dev/null || true
+a2enmod xsendfile 2>/dev/null || true
+a2enmod deflate headers expires 2>/dev/null || true
+a2enconf "php${PHP_VERSION}-fpm" 2>/dev/null || true
+
+# Tune the PHP-FPM pool: dynamic workers plus the 10 GiB upload ceiling.
+# (FPM does not honour php_value in .htaccess, so limits live here.)
+POOL="/etc/php/${PHP_VERSION}/fpm/pool.d/www.conf"
+if [[ -f "$POOL" ]]; then
+    cat > "$POOL" <<POOLCONF
+[www]
+user = www-data
+group = www-data
+listen = /run/php/php${PHP_VERSION}-fpm.sock
+listen.owner = www-data
+listen.group = www-data
+listen.mode = 0660
+
+pm = dynamic
+pm.max_children = 15
+pm.start_servers = 4
+pm.min_spare_servers = 2
+pm.max_spare_servers = 6
+pm.max_requests = 500
+
+request_terminate_timeout = 300
+
+php_admin_value[upload_max_filesize] = 10G
+php_admin_value[post_max_size] = 11G
+php_value[memory_limit] = 512M
+php_value[max_execution_time] = 300
+php_value[max_input_time] = 300
+POOLCONF
+    ok "PHP-FPM pool configured with 10 GiB upload ceiling."
 fi
+
+# Enable OPcache for the web SAPI with timestamp revalidation so the Site
+# Editor's runtime template edits are picked up without a manual reset.
+OPCACHE_INI="/etc/php/${PHP_VERSION}/mods-available/opcache.ini"
+if [[ -f "$OPCACHE_INI" ]] && command -v phpenmod >/dev/null 2>&1; then
+    sed -i 's/^opcache.enable=[01]/opcache.enable=1/' "$OPCACHE_INI" 2>/dev/null || true
+    sed -i 's/^opcache.validate_timestamps=[01]/opcache.validate_timestamps=1/' "$OPCACHE_INI" 2>/dev/null || true
+    sed -i 's/^opcache.revalidate_freq=.*/opcache.revalidate_freq=2/' "$OPCACHE_INI" 2>/dev/null || true
+    phpenmod -v ALL opcache 2>/dev/null || true
+    ok "OPcache enabled for PHP-FPM."
+fi
+
+# Start PHP-FPM now (needed before Apache can proxy to it). The service is
+# versioned on Ubuntu/Debian (e.g. php7.4-fpm); try the versioned name first.
+FPM_SVC="php${PHP_VERSION}-fpm"
+systemctl enable "$FPM_SVC" 2>/dev/null || true
+systemctl restart "$FPM_SVC" 2>/dev/null \
+    || systemctl restart php-fpm 2>/dev/null \
+    || service "$FPM_SVC" restart 2>/dev/null \
+    || service php-fpm restart 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
 # Copy site code
@@ -189,7 +250,24 @@ Alias /gallery "$INSTALL_DIR/public"
     Options FollowSymLinks
     AllowOverride All
     Require all granted
+
+    # Offload large media streaming from PHP-FPM to Apache (auth handled in PHP).
+    XSendFile On
+    XSendFilePath $INSTALL_DIR/storage/uploads
+    XSendFilePath $INSTALL_DIR/storage
 </Directory>
+
+# Long-lived cache headers for static assets.
+<LocationMatch "^/gallery/(assets|favicon)">
+    ExpiresActive On
+    ExpiresByType image/png "access plus 30 days"
+    ExpiresByType image/jpeg "access plus 30 days"
+    ExpiresByType image/webp "access plus 30 days"
+    ExpiresByType image/gif "access plus 30 days"
+    ExpiresByType text/css "access plus 7 days"
+    ExpiresByType application/javascript "access plus 7 days"
+    Header append Cache-Control "public"
+</LocationMatch>
 EOF
 a2enconf gallery.conf >/dev/null 2>&1 || true
 
@@ -233,6 +311,48 @@ SQL
 fi
 
 # ---------------------------------------------------------------------------
+# Tune MySQL for the gallery workload
+# ---------------------------------------------------------------------------
+log "Writing MySQL tuning config (99-gallery-tuning.cnf)..."
+mkdir -p /etc/mysql/mysql.conf.d
+cat > /etc/mysql/mysql.conf.d/99-gallery-tuning.cnf <<MYCNF
+[mysqld]
+# Tuned for a small gallery install: fits the database in memory, keeps
+# per-connection buffers modest, and enables the slow-query log.
+innodb_buffer_pool_size = 256M
+innodb_log_file_size = 64M
+innodb_flush_log_at_trx_commit = 2
+innodb_flush_method = O_DIRECT
+innodb_buffer_pool_instances = 1
+
+tmp_table_size = 32M
+max_heap_table_size = 32M
+
+thread_cache_size = 16
+max_connections = 100
+max_connect_errors = 1000
+
+sort_buffer_size = 1M
+join_buffer_size = 1M
+read_buffer_size = 512K
+read_rnd_buffer_size = 512K
+key_buffer_size = 8M
+
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/mysql-slow.log
+long_query_time = 2
+MYCNF
+
+# Validate the config and apply it.
+if command -v mysqld >/dev/null 2>&1; then
+    mysqld --validate-config 2>/dev/null \
+        && systemctl restart mysql 2>/dev/null || service mysql restart 2>/dev/null || true
+    ok "MySQL tuning applied."
+else
+    warn "mysqld not found; MySQL tuning file written but not applied (apply on next restart)."
+fi
+
+# ---------------------------------------------------------------------------
 # Create .env
 # ---------------------------------------------------------------------------
 log "Writing .env..."
@@ -251,7 +371,8 @@ log "Setting permissions..."
 chown -R www-data:www-data "$INSTALL_DIR"
 chmod -R 755 "$INSTALL_DIR"
 chmod -R 775 "$INSTALL_DIR/storage"
-# .htaccess sets the 10 GiB upload ceiling; ensure php_value is honored.
+# The 10 GiB upload ceiling lives in the PHP-FPM pool; .htaccess only holds the
+# rewrite rules. Keep it readable by www-data.
 chmod 644 "$INSTALL_DIR/public/.htaccess"
 
 # ---------------------------------------------------------------------------
@@ -300,8 +421,11 @@ cat <<EOF
  Admin password : ${ADMIN_PASS:-<unchanged; schema default - CHANGE AFTER LOGIN>}
 --------------------------------------------------------------------------
  Video exports   : runs via PHP exec() -> /usr/bin/ffmpeg
- Upload limit    : 10 GiB (set in public/.htaccess)
+ Upload limit    : 10 GiB (set in the PHP-FPM pool, not .htaccess)
+ Media serving   : streamed by Apache via mod_xsendfile
+ PHP runtime     : PHP-FPM + Apache mpm_event (not mod_php)
  Apache config   : /etc/apache2/conf-available/gallery.conf
+ MySQL tuning    : /etc/mysql/mysql.conf.d/99-gallery-tuning.cnf
 --------------------------------------------------------------------------
 EOF
 

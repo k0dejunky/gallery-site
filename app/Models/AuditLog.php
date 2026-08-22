@@ -181,7 +181,13 @@ class AuditLog
     private static function label($value): string
     {
         if (is_array($value)) {
-            $value = implode(', ', $value);
+            $parts = [];
+
+            foreach ($value as $k => $v) {
+                $parts[] = is_array($v) ? self::label($v) : (string) $v;
+            }
+
+            $value = implode(', ', $parts);
         }
 
         $value = trim((string) $value);

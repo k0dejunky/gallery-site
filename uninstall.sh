@@ -90,6 +90,36 @@ if [[ -f /etc/apache2/conf-available/gallery.conf ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# 1b. Remove app-tuned config files created by install.sh
+# ---------------------------------------------------------------------------
+if [[ -f /etc/mysql/mysql.conf.d/99-gallery-tuning.cnf ]]; then
+    log "Removing MySQL tuning config..."
+    rm -f /etc/mysql/mysql.conf.d/99-gallery-tuning.cnf
+    ok "MySQL tuning config removed."
+fi
+
+# Restore the default PHP-FPM pool (install.sh overwrites www.conf). We do not
+# delete the pool outright since PHP-FPM needs it; we just replace the pool with
+# a stock copy if a default template exists, or remove our overrides.
+PHP_VERSION="$(php -r 'echo PHP_MAJOR_VERSION;' 2>/dev/null).$(php -r 'echo PHP_MINOR_VERSION;' 2>/dev/null)"
+PHP_VERSION="${PHP_VERSION:-7.4}"
+POOL="/etc/php/${PHP_VERSION}/fpm/pool.d/www.conf"
+if [[ -f "$POOL" ]] \
+   && grep -q "php_admin_value\[upload_max_filesize\]" "$POOL" 2>/dev/null; then
+    log "Resetting PHP-FPM pool to default (removing 10 GiB upload overrides)..."
+    rm -f "$POOL"
+    if [[ -f "$POOL.dist" ]]; then
+        cp "$POOL.dist" "$POOL"
+    fi
+    FPM_SVC="php${PHP_VERSION}-fpm"
+    systemctl restart "$FPM_SVC" 2>/dev/null \
+        || systemctl restart php-fpm 2>/dev/null \
+        || service "$FPM_SVC" restart 2>/dev/null \
+        || service php-fpm restart 2>/dev/null || true
+    ok "PHP-FPM pool reset."
+fi
+
+# ---------------------------------------------------------------------------
 # 2. Remove site files
 # ---------------------------------------------------------------------------
 if [[ -d "$INSTALL_DIR" ]]; then
@@ -132,17 +162,19 @@ if [[ $PURGE_PACKAGES -eq 1 ]]; then
     log "Purging system packages..."
     export DEBIAN_FRONTEND=noninteractive
     apt-get purge -y \
+        php-fpm \
         libapache2-mod-php \
         php-mysql \
         php-gd \
         php-mbstring \
         php-xml \
         php-curl \
+        libapache2-mod-xsendfile \
         ffmpeg \
         mysql-server \
         apache2 2>/dev/null || true
     apt-get autoremove -y 2>/dev/null || true
-    ok "System packages purged (apache2/php/ffmpeg/mysql)."
+    ok "System packages purged (apache2/php-fpm/ffmpeg/mysql/xsendfile)."
 fi
 
 # ---------------------------------------------------------------------------

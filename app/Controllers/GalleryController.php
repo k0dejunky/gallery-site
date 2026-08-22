@@ -56,10 +56,17 @@ class GalleryController extends Controller
         $sections = [];
         $seen     = [];
 
-        foreach ($favorites as $favorite) {
-            $galleries = [];
+        // Bulk-load every favourite category's galleries in a single query
+        // (avoids an N+1 query per favourite) and group them by category.
+        $favoriteIds     = array_column($favorites, 'id');
+        $byCategory      = Gallery::inCategories($favoriteIds, $type);
+        $favoriteOrder   = array_fill_keys(array_map('intval', $favoriteIds), []);
 
-            foreach (Gallery::inCategory((int) $favorite['id'], $type) as $gallery) {
+        foreach ($favorites as $favorite) {
+            $favoriteId = (int) $favorite['id'];
+            $galleries  = [];
+
+            foreach (($byCategory[$favoriteId] ?? []) as $gallery) {
                 if (isset($seen[(int) $gallery['id']])) {
                     continue;
                 }
