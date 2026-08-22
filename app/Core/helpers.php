@@ -403,6 +403,175 @@ function save_image($image, string $dest, int $type, int $quality = 85): bool
 }
 
 /**
+ * Map an EXIF orientation value to the ffmpeg transpose chain that bakes the
+ * rotation into the pixels. ffmpeg ignores EXIF rotation metadata, so photos
+ * from phones would come out sideways unless corrected here.
+ */
+function _exif_transpose_chain(int $orientation): string
+{
+    switch ($orientation) {
+        case 2:
+            return 'hflip';
+        case 3:
+            return 'transpose=1,transpose=1';
+        case 4:
+            return 'vflip';
+        case 5:
+            return 'transpose=0';
+        case 6:
+            return 'transpose=1';
+        case 7:
+            return 'transpose=3';
+        case 8:
+            return 'transpose=2';
+    }
+
+    return '';
+}
+
+/**
+ * Generate the web variant and thumbnail from one source image in a single
+ * ffmpeg pass: one decode feeds both output sizes through a filter_complex
+ * split. This replaces the old double GD pipeline (thumbnail + web image
+ * each loaded and decoded the full source separately), which made large
+ * photo uploads take 15-30+ seconds; the single pass cuts that to ~2-5s.
+ *
+ * JPEGs take the ffmpeg route (the dominant, slowest upload type). Palette
+ * and alpha formats keep the exact GD path. If ffmpeg is missing or fails,
+ * the GD fallback still produces both variants so uploads never break.
+ */
+function create_image_variants(string $src, string $webDest, string $thumbDest, int $maxDim, int $thumbWidth, int $thumbHeight): bool
+{
+    if (!function_exists('imagecreatetruecolor')) {
+        return false;
+    }
+
+    $info = @getimagesize($src);
+
+    if ($info === false) {
+        return false;
+    }
+
+    [$srcW, $srcH, $type] = $info;
+
+    if ($type === IMAGETYPE_JPEG && is_executable('/usr/bin/ffmpeg')) {
+        $orientation = exif_orientation_of($src);
+
+        // Orientations 5-8 swap width/height relative to the stored pixels.
+        $swap = $orientation >= 5;
+        $effW = $swap ? $srcH : $srcW;
+        $effH = $swap ? $srcW : $srcH;
+
+        // Sources already within the display cap are passed through untouched
+        // (no generation loss); anything needing rotation must be re-encoded
+        // so the upright pixels land in the file itself.
+        if ($effW <= $maxDim && $effH <= $maxDim && $orientation === 1) {
+            $webChain = '[a]copy[w]';
+        } else {
+            $scale = min(1.0, $maxDim / max($effW, $effH));
+            $webW  = max(1, (int) round($effW * $scale));
+            $webH  = max(1, (int) round($effH * $scale));
+            $webChain = "[a]scale={$webW}:{$webH}[w]";
+        }
+
+        $pre       = _exif_transpose_chain($orientation);
+        $filters   = ($pre !== '' ? $pre . ',' : '') . 'split=2[a][b]'
+            . ';' . $webChain
+            . ";[b]scale={$thumbWidth}:{$thumbHeight}:force_original_aspect_ratio=increase,crop={$thumbWidth}:{$thumbHeight}[t]";
+
+        $cmd = escapeshellarg('/usr/bin/ffmpeg')
+            . ' -y -hide_banner -loglevel error -i ' . escapeshellarg($src)
+            . ' -filter_complex "' . $filters . '"'
+            . ' -map "[w]" -frames:v 1 -q:v 4 ' . escapeshellarg($webDest)
+            . ' -map "[t]" -frames:v 1 -q:v 5 ' . escapeshellarg($thumbDest)
+            . ' 2>/dev/null';
+
+        exec($cmd, $out, $rc);
+
+        if ($rc === 0 && is_file($webDest) && is_file($thumbDest)) {
+            return true;
+        }
+
+        @unlink($webDest);
+        @unlink($thumbDest);
+    }
+
+    return _variants_gd($src, $webDest, $thumbDest, $maxDim, $thumbWidth, $thumbHeight);
+}
+
+/**
+ * Single-decode GD fallback for create_image_variants: loads the source once
+ * (with the usual huge-image pre-scale), writes the web variant, then derives
+ * the thumbnail from the web-sized copy instead of re-loading the original.
+ */
+function _variants_gd(string $src, string $webDest, string $thumbDest, int $maxDim, int $thumbWidth, int $thumbHeight): bool
+{
+    [$source, $type] = _load_image($src);
+
+    if ($source === false) {
+        return false;
+    }
+
+    $orientation = $type === IMAGETYPE_JPEG ? exif_orientation_of($src) : 1;
+    $source = apply_exif_orientation($source, $orientation);
+
+    if ($source === false) {
+        return false;
+    }
+
+    if (!imageistruecolor($source)) {
+        imagepalettetotruecolor($source);
+    }
+
+    $srcW = imagesx($source);
+    $srcH = imagesy($source);
+
+    if ($srcW <= $maxDim && $srcH <= $maxDim) {
+        $web = $source;
+    } else {
+        $scale = min(1.0, $maxDim / max($srcW, $srcH));
+        $dstW  = max(1, (int) round($srcW * $scale));
+        $dstH  = max(1, (int) round($srcH * $scale));
+
+        $web = imagecreatetruecolor($dstW, $dstH);
+
+        if ($type === IMAGETYPE_PNG || $type === IMAGETYPE_WEBP) {
+            imagealphablending($web, false);
+            imagesavealpha($web, true);
+        }
+
+        imagecopyresampled($web, $source, 0, 0, 0, 0, $dstW, $dstH, $srcW, $srcH);
+        imagedestroy($source);
+    }
+
+    save_image($web, $webDest, $type, 82);
+
+    $wW = imagesx($web);
+    $wH = imagesy($web);
+
+    $scale = min($wW / $thumbWidth, $wH / $thumbHeight);
+    $cropW = (int) min($wW, $thumbWidth * $scale);
+    $cropH = (int) min($wH, $thumbHeight * $scale);
+    $srcX  = (int) (($wW - $cropW) / 2);
+    $srcY  = (int) (($wH - $cropH) / 2);
+
+    $thumb = imagecreatetruecolor($thumbWidth, $thumbHeight);
+
+    if ($type === IMAGETYPE_PNG || $type === IMAGETYPE_WEBP) {
+        imagealphablending($thumb, false);
+        imagesavealpha($thumb, true);
+    }
+
+    imagecopyresampled($thumb, $web, 0, 0, $srcX, $srcY, $thumbWidth, $thumbHeight, $cropW, $cropH);
+    $saved = save_image($thumb, $thumbDest, $type, 85);
+
+    imagedestroy($thumb);
+    imagedestroy($web);
+
+    return $saved;
+}
+
+/**
  * Grab a still frame from a video with ffmpeg and scale/crop it to a
  * thumbnail. Tries the 1-second mark first and falls back to 0 seconds for
  * clips that do not have a frame at that offset.

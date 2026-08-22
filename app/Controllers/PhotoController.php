@@ -422,14 +422,11 @@ class PhotoController extends Controller
     {
         $path = $config['dir'] . '/' . $photo['filename'];
 
-        create_web_image(
+        create_image_variants(
             $path,
             $config['dir'] . '/web_' . $photo['filename'],
-            $config['web_max_width']
-        );
-        create_thumbnail(
-            $path,
             $config['dir'] . '/thumb_' . $photo['filename'],
+            $config['web_max_width'],
             $config['thumb_width'],
             $config['thumb_height']
         );
@@ -694,16 +691,13 @@ class PhotoController extends Controller
             }
 
             if ($isImage) {
-                create_thumbnail(
-                    $dest,
-                    $config['dir'] . '/thumb_' . $filename,
-                    $config['thumb_width'],
-                    $config['thumb_height']
-                );
-                create_web_image(
+                create_image_variants(
                     $dest,
                     $config['dir'] . '/web_' . $filename,
-                    $config['web_max_width']
+                    $config['dir'] . '/thumb_' . $filename,
+                    $config['web_max_width'],
+                    $config['thumb_width'],
+                    $config['thumb_height']
                 );
             } elseif (is_video($filename)) {
                 create_video_thumbnail(
