@@ -127,6 +127,13 @@ return [
     ['POST', '/admin/subscriptions/{id}/cancel', 'SubscriptionController@cancel'],
     ['POST', '/admin/subscriptions/{id}/delete', 'SubscriptionController@destroy'],
 
+    // Payment processors (admin only)
+    ['GET', '/admin/payment-processors', 'PaymentProcessorsController@index'],
+    ['POST', '/admin/payment-processors', 'PaymentProcessorsController@store'],
+    ['POST', '/admin/payment-processors/{id}', 'PaymentProcessorsController@update'],
+    ['POST', '/admin/payment-processors/{id}/toggle', 'PaymentProcessorsController@toggle'],
+    ['POST', '/admin/payment-processors/{id}/delete', 'PaymentProcessorsController@destroy'],
+
     // Auto poster (admin only)
     ['GET', '/admin/auto-poster', 'AutoPosterController@index'],
     ['POST', '/admin/auto-poster/settings', 'AutoPosterController@saveSettings'],

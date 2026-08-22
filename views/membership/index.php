@@ -170,7 +170,19 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
                         <form method="post" action="<?= url('/membership/subscribe') ?>" style="order:2;">
                             <?= csrf_field() ?>
                             <input type="hidden" name="plan_id" value="<?= (int) $plan['id'] ?>">
-                            <button type="submit" class="btn">Subscribe</button>
+                            <?php if (!empty($paymentProcessors)): ?>
+                                <div style="margin-bottom:.6rem;">
+                                    <label for="pay_<?= (int) $plan['id'] ?>" class="muted" style="display:block;margin-bottom:.25rem;font-size:var(--font-size-sm);">Payment method</label>
+                                    <select name="payment_processor" id="pay_<?= (int) $plan['id'] ?>" style="width:100%;box-sizing:border-box;">
+                                        <?php foreach ($paymentProcessors as $pp): ?>
+                                            <option value="<?= (int) $pp['id'] ?>">
+                                                <?= e(\App\Models\PaymentProcessor::providerLabel((string) $pp['provider'])) ?> — <?= e((string) $pp['name']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            <?php endif; ?>
+                            <button type="submit" class="btn" style="width:100%;">Subscribe</button>
                         </form>
                     <?php endif; ?>
                 </div>

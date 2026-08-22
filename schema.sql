@@ -152,12 +152,15 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     sale_code_id INT UNSIGNED NULL,
     price_paid  DECIMAL(10,2) NULL,
     access_level INT NULL,
+    payment_processor_id INT UNSIGNED NULL,
+    transaction_ref VARCHAR(255) NULL,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_subscriptions_user (user_id),
     INDEX idx_subscriptions_status (status),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE
+    FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE,
+    FOREIGN KEY (payment_processor_id) REFERENCES payment_processors(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS sales (
@@ -187,6 +190,22 @@ CREATE TABLE IF NOT EXISTS sale_codes (
     target_level INT NOT NULL DEFAULT 1,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS payment_processors (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    provider      VARCHAR(40) NOT NULL,
+    name          VARCHAR(120) NOT NULL,
+    mode          VARCHAR(10) NOT NULL DEFAULT 'test',
+    api_key       TEXT NULL,
+    secret_key    TEXT NULL,
+    webhook_secret TEXT NULL,
+    currency      VARCHAR(8) NOT NULL DEFAULT 'USD',
+    is_default    TINYINT(1) NOT NULL DEFAULT 0,
+    enabled       TINYINT(1) NOT NULL DEFAULT 1,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_payment_processors_enabled (enabled)
 );
 
 CREATE TABLE IF NOT EXISTS video_projects (

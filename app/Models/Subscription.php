@@ -61,11 +61,13 @@ class Subscription
     {
         return Database::run(
             'SELECT s.*, p.name AS plan_name, p.billing_cycle AS billing_cycle,
-                    s.price_paid, sa.name AS sale_name, sc.code AS sale_code
+                    s.price_paid, sa.name AS sale_name, sc.code AS sale_code,
+                    pp.name AS payment_name, pp.provider AS payment_provider
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
              LEFT JOIN sales sa ON sa.id = s.sale_id
              LEFT JOIN sale_codes sc ON sc.id = s.sale_code_id
+             LEFT JOIN payment_processors pp ON pp.id = s.payment_processor_id
              WHERE s.user_id = ?
              ORDER BY s.id DESC',
             [$userId]
@@ -99,12 +101,14 @@ class Subscription
     {
         return Database::run(
             'SELECT s.*, u.email AS user_email, p.name AS plan_name, p.billing_cycle AS billing_cycle,
-                    s.price_paid, sa.name AS sale_name, sc.code AS sale_code
+                    s.price_paid, sa.name AS sale_name, sc.code AS sale_code,
+                    pp.name AS payment_name, pp.provider AS payment_provider
              FROM subscriptions s
              JOIN users u ON u.id = s.user_id
              JOIN plans p ON p.id = s.plan_id
              LEFT JOIN sales sa ON sa.id = s.sale_id
              LEFT JOIN sale_codes sc ON sc.id = s.sale_code_id
+             LEFT JOIN payment_processors pp ON pp.id = s.payment_processor_id
              ORDER BY s.id DESC'
         )->fetchAll();
     }
@@ -124,9 +128,11 @@ class Subscription
 
     /**
      * Create a subscription request. Payments are manual/placeholder, so new
-     * subscriptions start as "pending" until an admin approves them.
+     * subscriptions start as "pending" until an admin approves them. When a
+     * payment processor was selected at checkout, its id and a transaction
+     * reference are recorded on the subscription for the admin's reference.
      */
-    public static function create(int $userId, int $planId, ?string $code = null, bool $applySale = true): int
+    public static function create(int $userId, int $planId, ?string $code = null, bool $applySale = true, ?int $paymentProcessorId = null, ?string $transactionRef = null): int
     {
         $plan = Plan::find($planId);
         if ($plan === null) {
@@ -165,9 +171,9 @@ class Subscription
                 $accessLevel = max($accessLevel, (int) ($saleCode['upgrade_level'] ?? 0));
             }
             Database::run(
-                'INSERT INTO subscriptions (user_id, plan_id, status, sale_id, sale_code_id, price_paid, access_level, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
-                [$userId, $planId, 'pending', $sale['id'] ?? null, $saleCode['id'] ?? null, $price, $accessLevel]
+                'INSERT INTO subscriptions (user_id, plan_id, status, sale_id, sale_code_id, price_paid, access_level, payment_processor_id, transaction_ref, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+                [$userId, $planId, 'pending', $sale['id'] ?? null, $saleCode['id'] ?? null, $price, $accessLevel, $paymentProcessorId, $transactionRef !== null && $transactionRef !== '' ? $transactionRef : null]
             );
 
             if ($saleCode !== null) {

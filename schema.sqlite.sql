@@ -153,10 +153,13 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     sale_code_id INTEGER,
     price_paid DECIMAL(10,2),
     access_level INTEGER,
+    payment_processor_id INTEGER,
+    transaction_ref VARCHAR(255),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE
+    FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE,
+    FOREIGN KEY (payment_processor_id) REFERENCES payment_processors(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS sales (
@@ -185,6 +188,21 @@ CREATE TABLE IF NOT EXISTS sale_codes (
     target_level INTEGER NOT NULL DEFAULT 1,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS payment_processors (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider       VARCHAR(40) NOT NULL,
+    name           VARCHAR(120) NOT NULL,
+    mode           VARCHAR(10) NOT NULL DEFAULT 'test',
+    api_key        TEXT,
+    secret_key     TEXT,
+    webhook_secret TEXT,
+    currency       VARCHAR(8) NOT NULL DEFAULT 'USD',
+    is_default     INTEGER NOT NULL DEFAULT 0,
+    enabled        INTEGER NOT NULL DEFAULT 1,
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS video_projects (

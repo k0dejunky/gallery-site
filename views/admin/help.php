@@ -311,8 +311,18 @@ The site root <code>/</code> routes to <code>AuthController::loginForm()</code>,
     <li><code>category_views</code> — category page view events: id, category_id, user_id, created_at.</li>
     <li><code>search_stats</code> — missed search terms: id, term, user_id, created_at.</li>
     <li><code>plans</code> — membership plans: id, name, slug, price, billing_cycle (monthly/yearly/lifetime), description, sort_order, level (1&ndash;4), active, created_at.</li>
-    <li><code>subscriptions</code> — user subscriptions: id, user_id, plan_id, status (pending/active/cancelled/expired), starts_at, expires_at, created_at, updated_at.</li>
+    <li><code>subscriptions</code> — user subscriptions: id, user_id, plan_id, status (pending/active/cancelled/expired), starts_at, expires_at, payment_processor_id (FK), transaction_ref, created_at, updated_at.</li>
+    <li><code>payment_processors</code> — configured gateways: id, name, provider (stripe/paypal/coinbase/square/venmo/cashapp/bitcoin), api_key, secret_key, webhook_secret, mode (test/live), currency, enabled, is_default, created_at, updated_at.</li>
     <li><code>login_attempts</code> — brute-force tracking: id, email, ip, attempted_at.</li>
+</ul>
+
+<h2 class="section-title">Payment processors</h2>
+<ul>
+    <li>The <strong>Payments</strong> tab (<code>/admin/payment-processors</code>, admin sidebar) manages the gateways visitors can pick when subscribing. Each processor has a name, provider, API key / secret key / optional webhook secret (stored as-is; always displayed masked via <code>PaymentProcessor::maskSecret()</code>), mode (test/live), currency, and an enabled switch.</li>
+    <li>Exactly one processor can be <strong>default</strong> — enabling "Set as default" clears the flag on all others; it is pre-selected on the membership checkout form.</li>
+    <li>Supported providers: Stripe, PayPal, Coinbase Commerce, Square, Venmo, Cash App, Bitcoin. Deleting a processor is blocked while subscriptions still reference it.</li>
+    <li>Subscribing stores the chosen gateway in <code>subscriptions.payment_processor_id</code> plus a placeholder <code>transaction_ref</code> (<code>PENDING-&lt;random&gt;</code>). The admin Subscriptions page shows a Payment column; the member's My Membership page shows the gateway name next to each subscription.</li>
+    <li>This is gateway <em>record-keeping only</em> — no money moves until real provider SDK/webhook integration is added.</li>
 </ul>
 
 <h2 class="section-title">Uploads &amp; storage</h2>

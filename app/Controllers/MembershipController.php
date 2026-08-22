@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\Controller;
 use App\Models\AuditLog;
+use App\Models\PaymentProcessor;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\Sale;
@@ -30,7 +31,10 @@ class MembershipController extends Controller
         }
         unset($plan);
 
-        $data = ['plans' => $plans];
+        $data = [
+            'plans' => $plans,
+            'paymentProcessors' => PaymentProcessor::enabled(),
+        ];
 
         if ($user === null) {
             $data += [
@@ -94,18 +98,38 @@ class MembershipController extends Controller
         $userId = (int) Auth::user()['id'];
         $saleCode = trim((string) $this->request->post('sale_code', ''));
 
+        // Optional payment processor chosen at checkout. An explicit selection
+        // of "none" (manual/offline) leaves the processor null; otherwise the
+        // submitted processor must exist and be enabled.
+        $paymentProcessorId = null;
+        $paymentChoice = (int) $this->request->post('payment_processor', 0);
+        if ($paymentChoice > 0) {
+            $processor = \App\Models\PaymentProcessor::find($paymentChoice);
+            if ($processor === null || (int) $processor['enabled'] !== 1) {
+                $this->flash('error', 'That payment method is not available.');
+                $this->redirect('/membership');
+            }
+            $paymentProcessorId = (int) $processor['id'];
+        }
+
         if (Subscription::isActive($userId) || Subscription::pendingFor($userId) !== null) {
             $this->flash('error', 'You already have a membership or a pending request.');
             $this->redirect('/membership');
         }
 
+        // Placeholder transaction reference: in a real gateway integration this
+        // would be the charge/payment-intent id returned by the processor.
+        $transactionRef = $paymentProcessorId !== null
+            ? 'PENDING-' . strtoupper(substr(md5(uniqid((string) $userId, true)), 0, 12))
+            : null;
+
         try {
-            $subscriptionId = Subscription::create($userId, $planId, $saleCode !== '' ? $saleCode : null);
+            $subscriptionId = Subscription::create($userId, $planId, $saleCode !== '' ? $saleCode : null, true, $paymentProcessorId, $transactionRef);
         } catch (\RuntimeException $e) {
             $this->flash('error', $e->getMessage());
             $this->redirect('/membership');
         }
-        AuditLog::record($userId, 'create', 'subscription', $subscriptionId, 'Requested "' . $plan['name'] . '" membership', null, ['plan_id' => $planId, 'sale_code' => $saleCode ?: null]);
+        AuditLog::record($userId, 'create', 'subscription', $subscriptionId, 'Requested "' . $plan['name'] . '" membership', null, ['plan_id' => $planId, 'sale_code' => $saleCode ?: null, 'payment_processor_id' => $paymentProcessorId, 'transaction_ref' => $transactionRef]);
 
         $this->flash('success', 'Membership requested for "' . $plan['name'] . '". We will review it shortly.');
         $this->redirect('/membership/my');

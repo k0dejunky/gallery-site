@@ -233,6 +233,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             <a class="nav-item <?= $navActive('/admin/plans') ?>" href="<?= url('/admin/plans') ?>">Membership</a>
             <?php if (\App\Core\Auth::can('membership')): ?>
                 <a class="nav-item <?= $navActive('/admin/subscriptions') ?>" href="<?= url('/admin/subscriptions') ?>">Subscriptions</a>
+                <a class="nav-item <?= $navActive('/admin/payment-processors') ?>" href="<?= url('/admin/payment-processors') ?>">Payments</a>
             <?php endif; ?>
             <a class="nav-item <?= $navActive('/admin/theme') ?>" href="<?= url('/admin/theme') ?>">Theme</a>
             <?php if (\App\Core\Auth::can('site_editor')): ?>

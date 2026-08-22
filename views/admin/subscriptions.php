@@ -29,6 +29,7 @@
                 <th>Plan</th>
                 <th>Price</th>
                 <th>Sale</th>
+                <th>Payment</th>
                 <th>Status</th>
                 <th>Started</th>
                 <th>Expires</th>
@@ -43,6 +44,10 @@
                     <td><?= e($sub['plan_name']) ?></td>
                     <td><?= $sub['price_paid'] !== null ? '$' . number_format((float) $sub['price_paid'], 2) : '&mdash;' ?></td>
                     <td><?= !empty($sub['sale_name']) ? e($sub['sale_name']) . (!empty($sub['sale_code']) ? ' (' . e($sub['sale_code']) . ')' : '') : '&mdash;' ?></td>
+                    <td>
+                        <?= !empty($sub['payment_name']) ? e($sub['payment_name']) : '&mdash;' ?>
+                        <?php if (!empty($sub['transaction_ref'])): ?><br><span class="muted" style="font-size:var(--font-size-xs);"><?= e($sub['transaction_ref']) ?></span><?php endif; ?>
+                    </td>
                     <td><?= e(\App\Models\Subscription::statusLabel($sub['status'])) ?></td>
                     <td><?= !empty($sub['starts_at']) ? e($sub['starts_at']) : '&mdash;' ?></td>
                     <td><?= !empty($sub['expires_at']) ? e($sub['expires_at']) : '&mdash;' ?></td>
