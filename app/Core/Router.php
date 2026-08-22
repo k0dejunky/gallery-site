@@ -22,7 +22,12 @@ class Router
      */
     public function dispatch(Request $request): void
     {
-        if ($request->isPost() && !Csrf::verify($request->post('_token'))) {
+        // Biller postback endpoints are server-to-server calls with no
+        // session and no CSRF token; they verify authenticity with their own
+        // shared-secret digests instead.
+        if ($request->isPost()
+            && strpos($request->uri(), '/webhooks/') !== 0
+            && !Csrf::verify($request->post('_token'))) {
             $this->error(419, 'CSRF token mismatch. Please go back and try again.');
             return;
         }

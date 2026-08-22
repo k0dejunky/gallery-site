@@ -131,6 +131,25 @@ class MembershipController extends Controller
         }
         AuditLog::record($userId, 'create', 'subscription', $subscriptionId, 'Requested "' . $plan['name'] . '" membership', null, ['plan_id' => $planId, 'sale_code' => $saleCode ?: null, 'payment_processor_id' => $paymentProcessorId, 'transaction_ref' => $transactionRef]);
 
+        // Hosted-checkout billers (CCBill/Epoch/SegPay) take over from here:
+        // send the visitor to the biller's signup page; its postback will
+        // activate this pending subscription when payment clears.
+        $processorRow = $paymentProcessorId !== null ? \App\Models\PaymentProcessor::find($paymentProcessorId) : null;
+
+        if ($processorRow !== null) {
+            $periodDays = ['monthly' => 30, 'yearly' => 365][$plan['billing_cycle'] ?? ''] ?? 3650;
+            $checkout   = \App\Models\PaymentProcessor::checkoutUrl(
+                $processorRow,
+                (float) ($plan['price'] ?? 0),
+                $periodDays,
+                (string) $transactionRef
+            );
+
+            if ($checkout !== null) {
+                $this->redirect($checkout);
+            }
+        }
+
         $this->flash('success', 'Membership requested for "' . $plan['name'] . '". We will review it shortly.');
         $this->redirect('/membership/my');
     }

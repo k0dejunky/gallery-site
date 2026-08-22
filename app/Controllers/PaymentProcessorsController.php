@@ -21,8 +21,11 @@ class PaymentProcessorsController extends Controller
      */
     public function index(): void
     {
+        $editId = (int) $this->request->query('edit', 0);
+
         $this->viewAdmin('payment_processors', [
             'processors' => PaymentProcessor::all(),
+            'edit'       => $editId > 0 ? PaymentProcessor::find($editId) : null,
         ]);
     }
 
@@ -45,12 +48,25 @@ class PaymentProcessorsController extends Controller
             $this->flash('error', 'Choose a payment provider and enter a display name.');
             $this->redirect('/admin/payment-processors');
         }
-        if ($secretKey === '' && $provider !== 'bitcoin') {
+        // Hosted billers (CCBill/Epoch/SegPay) keep credentials in their
+        // provider-specific config fields, so secret_key isn't required there.
+        if ($secretKey === '' && $provider !== 'bitcoin' && !in_array($provider, PaymentProcessor::HOSTED_PROVIDERS, true)) {
             $this->flash('error', 'A secret key is required for this provider.');
             $this->redirect('/admin/payment-processors');
         }
 
-        $id = PaymentProcessor::create($provider, $name, $mode, $apiKey !== '' ? $apiKey : null, $secretKey !== '' ? $secretKey : null, $webhook !== '' ? $webhook : null, $currency, $isDefault, $enabled);
+        $id = PaymentProcessor::create(
+            $provider,
+            $name,
+            $mode,
+            $apiKey !== '' ? $apiKey : null,
+            $secretKey !== '' ? $secretKey : null,
+            $webhook !== '' ? $webhook : null,
+            $currency,
+            $isDefault,
+            $enabled,
+            PaymentProcessor::buildConfig($provider, $_POST, null)
+        );
 
         AuditLog::record((int) Auth::user()['id'], 'create', 'payment_processor', $id, 'Configured ' . PaymentProcessor::providerLabel($provider) . ' ("' . $name . '")', null, ['provider' => $provider, 'name' => $name, 'mode' => $mode, 'currency' => $currency, 'is_default' => $isDefault, 'enabled' => $enabled]);
 
@@ -90,7 +106,19 @@ class PaymentProcessorsController extends Controller
         if ($secretKey === '')  { $secretKey = (string) ($processor['secret_key'] ?? ''); }
         if ($webhook === '')    { $webhook = (string) ($processor['webhook_secret'] ?? ''); }
 
-        PaymentProcessor::update($id, $provider, $name, $mode, $apiKey, $secretKey, $webhook, $currency, $isDefault, $enabled);
+        PaymentProcessor::update(
+            $id,
+            $provider,
+            $name,
+            $mode,
+            $apiKey,
+            $secretKey,
+            $webhook,
+            $currency,
+            $isDefault,
+            $enabled,
+            PaymentProcessor::buildConfig($provider, $_POST, $processor)
+        );
 
         AuditLog::record((int) Auth::user()['id'], 'update', 'payment_processor', $id, 'Updated ' . PaymentProcessor::providerLabel($provider) . ' ("' . $name . '")', null, ['provider' => $provider, 'name' => $name, 'mode' => $mode, 'currency' => $currency, 'is_default' => $isDefault, 'enabled' => $enabled]);
 

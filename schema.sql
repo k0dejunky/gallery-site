@@ -200,6 +200,7 @@ CREATE TABLE IF NOT EXISTS payment_processors (
     api_key       TEXT NULL,
     secret_key    TEXT NULL,
     webhook_secret TEXT NULL,
+    config_json   TEXT NULL,
     currency      VARCHAR(8) NOT NULL DEFAULT 'USD',
     is_default    TINYINT(1) NOT NULL DEFAULT 0,
     enabled       TINYINT(1) NOT NULL DEFAULT 1,

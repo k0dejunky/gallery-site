@@ -13,6 +13,10 @@ return [
     ['GET', '/videos/{id}', 'VideoController@show'],
     ['GET', '/files/{file}', 'StorageController@serve'],
 
+    // Biller postbacks (server-to-server; no session, no CSRF — see Router)
+    ['GET', '/webhooks/{provider}', 'WebhookController@handle'],
+    ['POST', '/webhooks/{provider}', 'WebhookController@handle'],
+
     // Auth
     ['GET', '/login', 'AuthController@loginForm'],
     ['POST', '/login', 'AuthController@login'],

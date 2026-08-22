@@ -227,6 +227,21 @@ class Subscription
     }
 
     /**
+     * Activate a pending subscription after its biller's postback confirmed
+     * payment: approve it (status/expiry per billing cycle) and replace the
+     * placeholder PENDING-… reference with the biller's transaction id.
+     */
+    public static function activateWithTransaction(int $id, string $billerRef): void
+    {
+        self::approve($id);
+
+        Database::run(
+            'UPDATE subscriptions SET transaction_ref = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [$billerRef, $id]
+        );
+    }
+
+    /**
      * Cancel a subscription. Access stops at the current expiry (or
      * immediately for lifetime plans, which have no expiry date).
      */

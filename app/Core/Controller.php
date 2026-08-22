@@ -88,6 +88,13 @@ class Controller
      */
     protected function redirect(string $path): void
     {
+        // Absolute URLs (e.g. hosted biller checkouts) are passed through
+        // untouched; everything else is prefixed with the app's base path.
+        if (preg_match('#^https?://#i', $path)) {
+            header('Location: ' . $path);
+            exit;
+        }
+
         header('Location: ' . url($path));
         exit;
     }

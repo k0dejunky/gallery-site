@@ -17,6 +17,185 @@ class PaymentProcessor
     public const PROVIDERS = ['stripe', 'paypal', 'ccbill', 'epoch', 'segpay', 'coinbase', 'square', 'venmo', 'cashapp', 'bitcoin'];
 
     /**
+     * Providers whose checkout happens on the biller's own hosted page. The
+     * site builds a signed signup URL, the biller collects payment, and its
+     * server confirms the purchase via our /webhooks/{provider} postback.
+     */
+    public const HOSTED_PROVIDERS = ['ccbill', 'epoch', 'segpay'];
+
+    /**
+     * Per-provider credential fields stored in config_json. Labels are shown
+     * on the Payments page form; every field is optional until the processor
+     * is actually used for live checkout.
+     */
+    public const CONFIG_FIELDS = [
+        'ccbill' => [
+            'client_accnum' => 'Client account number',
+            'client_subacc' => 'Client subaccount',
+            'form_name'     => 'FlexForm name',
+            'dynamic_salt'  => 'Dynamic pricing salt',
+            'currency_code' => 'CCBill currency code (840=USD)',
+        ],
+        'epoch' => [
+            'co'     => 'Epoch company ID (co)',
+            'pi'     => 'Product ID (pi)',
+            'secret' => 'Postback shared secret',
+        ],
+        'segpay' => [
+            'auth_key' => 'Auth key (x-authkey)',
+            'api_user' => 'Merchant API username',
+            'api_pass' => 'Merchant API hash secret',
+        ],
+    ];
+
+    /** ISO currency -> CCBill numeric currency code (CCBill docs). */
+    public const CCBILL_CURRENCIES = [
+        'USD' => '840', 'EUR' => '978', 'GBP' => '826', 'CAD' => '124', 'AUD' => '036', 'JPY' => '392',
+    ];
+
+    /**
+     * Credential field definitions for a provider ([key => label]).
+     */
+    public static function configFields(string $provider): array
+    {
+        return self::CONFIG_FIELDS[strtolower($provider)] ?? [];
+    }
+
+    /**
+     * Decode a processor row's config_json into an associative array.
+     */
+    public static function decodeConfig(array $processor): array
+    {
+        $json = $processor['config_json'] ?? null;
+
+        if (!is_string($json) || $json === '') {
+            return [];
+        }
+
+        $decoded = json_decode($json, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Merge posted provider-specific fields into a config JSON string for
+     * storage. Blank values keep whatever was saved before so editing one
+     * credential never wipes the others.
+     */
+    public static function buildConfig(string $provider, array $post, ?array $existingProcessor): ?string
+    {
+        $fields = self::configFields($provider);
+
+        if ($fields === []) {
+            return null;
+        }
+
+        $current = $existingProcessor !== null ? self::decodeConfig($existingProcessor) : [];
+        $merged  = [];
+
+        foreach ($fields as $key => $label) {
+            $value = trim((string) ($post[$key] ?? ''));
+
+            if ($value === '') {
+                $merged[$key] = $current[$key] ?? '';
+                continue;
+            }
+
+            // Never overwrite a stored secret with the masked placeholder.
+            if (strpos($value, '**') !== false && ($current[$key] ?? '') !== '') {
+                $merged[$key] = $current[$key];
+                continue;
+            }
+
+            $merged[$key] = $value;
+        }
+
+        return json_encode($merged, JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * Build the biller's hosted checkout URL for a subscription attempt, or
+     * null when the provider does not use hosted checkout or lacks the
+     * credentials it needs.
+     *
+     * - CCBill FlexForms: signup.cgi with dynamic pricing digest
+     *   MD5(price(2dp) . periodDays . currencyCode . salt), uppercase hex.
+     * - Epoch: WNU Transactor link with company + product IDs.
+     * - SegPay: POS billing page keyed by the price point auth key.
+     *
+     * Each URL carries our pending subscription reference so the biller's
+     * postback can be reconciled back to this exact signup.
+     */
+    public static function checkoutUrl(array $processor, float $amount, int $periodDays, string $ref): ?string
+    {
+        $provider = strtolower((string) $processor['provider']);
+
+        if (!in_array($provider, self::HOSTED_PROVIDERS, true)) {
+            return null;
+        }
+
+        $cfg  = self::decodeConfig($processor);
+        $mode = strtolower((string) $processor['mode']) === 'live' ? 'live' : 'test';
+
+        if ($provider === 'ccbill') {
+            if ((string) ($cfg['client_accnum'] ?? '') === '' || (string) ($cfg['form_name'] ?? '') === '') {
+                return null;
+            }
+
+            $currencyCode = (string) ($cfg['currency_code'] ?? '');
+            if ($currencyCode === '') {
+                $currencyCode = self::CCBILL_CURRENCIES[strtoupper((string) $processor['currency'])] ?? '840';
+            }
+
+            // Test accounts use CCBill's sandbox host; live uses production.
+            $host = $mode === 'live' ? 'https://bill.ccbill.com' : 'https://sandbox.bill.ccbill.com';
+
+            $params = [
+                'clientAccnum' => (string) $cfg['client_accnum'],
+                'clientSubacc' => (string) ($cfg['client_subacc'] ?? '0000'),
+                'formName'     => (string) $cfg['form_name'],
+                'currencyCode' => $currencyCode,
+            ];
+
+            $salt = (string) ($cfg['dynamic_salt'] ?? '');
+
+            if ($salt !== '') {
+                $price              = sprintf('%.2f', $amount);
+                $params['formPrice']  = $price;
+                $params['formPeriod'] = (string) $periodDays;
+                $params['formDigest'] = strtoupper(md5($price . $periodDays . $currencyCode . $salt));
+            }
+
+            $params['X-ref'] = $ref;
+
+            return $host . '/jpost/signup.cgi?' . http_build_query($params);
+        }
+
+        if ($provider === 'epoch') {
+            if ((string) ($cfg['co'] ?? '') === '' || (string) ($cfg['pi'] ?? '') === '') {
+                return null;
+            }
+
+            $params = [
+                'co'  => (string) $cfg['co'],
+                'pi'  => (string) $cfg['pi'],
+                'ref' => $ref,
+            ];
+
+            return 'https://wnu.com/secure/services/?' . http_build_query($params);
+        }
+
+        // segpay
+        if ((string) ($cfg['auth_key'] ?? '') === '') {
+            return null;
+        }
+
+        $params = ['x-authkey' => (string) $cfg['auth_key'], 'x-ref' => $ref];
+
+        return 'https://secure.segpay.com/billing/pos-billing.php?' . http_build_query($params);
+    }
+
+    /**
      * Every configured processor, newest first, with the number of
      * subscriptions that used it (for the admin list).
      */
@@ -75,16 +254,16 @@ class PaymentProcessor
      * Create a processor and return its id. Only one processor may be the
      * default at a time, so setting one clears the others.
      */
-    public static function create(string $provider, string $name, string $mode, ?string $apiKey, ?string $secretKey, ?string $webhookSecret, string $currency, bool $isDefault, bool $enabled): int
+    public static function create(string $provider, string $name, string $mode, ?string $apiKey, ?string $secretKey, ?string $webhookSecret, string $currency, bool $isDefault, bool $enabled, ?string $configJson = null): int
     {
         if ($isDefault) {
             Database::run('UPDATE payment_processors SET is_default = 0');
         }
 
         Database::run(
-            'INSERT INTO payment_processors (provider, name, mode, api_key, secret_key, webhook_secret, currency, is_default, enabled, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
-            [$provider, $name, $mode, $apiKey, $secretKey, $webhookSecret, strtoupper($currency), $isDefault ? 1 : 0, $enabled ? 1 : 0]
+            'INSERT INTO payment_processors (provider, name, mode, api_key, secret_key, webhook_secret, config_json, currency, is_default, enabled, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+            [$provider, $name, $mode, $apiKey, $secretKey, $webhookSecret, $configJson, strtoupper($currency), $isDefault ? 1 : 0, $enabled ? 1 : 0]
         );
 
         return (int) Database::connection()->lastInsertId();
@@ -95,7 +274,7 @@ class PaymentProcessor
      * masked secret that is not re-entered does not wipe the saved value).
      * Only one processor may be the default.
      */
-    public static function update(int $id, string $provider, string $name, string $mode, ?string $apiKey, ?string $secretKey, ?string $webhookSecret, string $currency, bool $isDefault, bool $enabled): void
+    public static function update(int $id, string $provider, string $name, string $mode, ?string $apiKey, ?string $secretKey, ?string $webhookSecret, string $currency, bool $isDefault, bool $enabled, ?string $configJson = null): void
     {
         if ($isDefault) {
             Database::run('UPDATE payment_processors SET is_default = 0 WHERE id <> ?', [$id]);
@@ -113,6 +292,13 @@ class PaymentProcessor
                 $fields[] = "$col = ?";
                 $params[] = $val;
             }
+        }
+
+        // Provider-specific credentials live in config_json; only overwrite
+        // when the provider supplies fields so other JSON stays intact.
+        if ($configJson !== null) {
+            $fields[] = 'config_json = ?';
+            $params[] = $configJson;
         }
         $fields[] = 'currency = ?';
         $params[] = strtoupper($currency);
