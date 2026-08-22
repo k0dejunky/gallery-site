@@ -47,7 +47,7 @@ class AutoPosterController extends Controller
         $state = bin2hex(random_bytes(16));
         $_SESSION['reddit_oauth_state'] = $state;
 
-        $redirectUri = url('/admin/auto-poster/reddit/callback');
+        $redirectUri = $this->absoluteUrl('/admin/auto-poster/reddit/callback');
 
         header('Location: ' . $reddit->authorizationUrl($state, $redirectUri));
         exit;
@@ -86,7 +86,7 @@ class AutoPosterController extends Controller
 
         $config = AutoPosterConfig::all();
         $reddit = new RedditClient($config['reddit']);
-        $redirectUri = url('/admin/auto-poster/reddit/callback');
+        $redirectUri = $this->absoluteUrl('/admin/auto-poster/reddit/callback');
 
         $result = $reddit->exchangeCode($code, $redirectUri);
 
@@ -213,6 +213,19 @@ class AutoPosterController extends Controller
      * Return the first successfully uploaded file from a $_FILES entry, or
      * null when none was provided. Normalizes single- and multi-file arrays.
      */
+    /**
+     * Build an absolute URL (scheme + host + path) for a route. Reddit's
+     * OAuth redirect_uri must be absolute, which the relative url() helper
+     * does not produce.
+     */
+    private function absoluteUrl(string $path): string
+    {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+
+        return $scheme . '://' . $host . url($path);
+    }
+
     private function firstUploadedFile($file): ?array
     {
         $files = $this->uploadedFiles($file);

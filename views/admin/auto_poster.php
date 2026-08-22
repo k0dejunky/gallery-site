@@ -16,7 +16,10 @@ $maskSecret = static function (string $v): string {
         <form method="post" action="<?= url('/admin/auto-poster/settings') ?>">
             <?= csrf_field() ?>
             <p class="muted" style="font-size:0.85rem;">
-                Create a Reddit "script" app at <a href="https://www.reddit.com/prefs/apps" target="_blank" rel="noopener">reddit.com/prefs/apps</a> and enter its credentials.
+                Create a Reddit <strong>"web app"</strong> (not a script app) at
+                <a href="https://www.reddit.com/prefs/apps" target="_blank" rel="noopener">reddit.com/prefs/apps</a>,
+                set its redirect URI to <code><?= e((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . url('/admin/auto-poster/reddit/callback')) ?></code>,
+                then enter its client ID, secret and username below.
             </p>
             <p>
                 <label for="reddit_client_id">Client ID</label><br>
