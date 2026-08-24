@@ -7,6 +7,7 @@
   .ud-kv span:first-child { color: var(--muted-text-color); }
   .badge-active { background: var(--success-bg); color: var(--success-text); padding: .15rem .5rem; border-radius: 999px; font-size: .75rem; font-weight: 700; }
   .badge-suspended { background: var(--danger-bg); color: var(--danger-text); padding: .15rem .5rem; border-radius: 999px; font-size: .75rem; font-weight: 700; }
+  .badge-flag { background: #fef3c7; color: #92400e; padding: .15rem .5rem; border-radius: 999px; font-size: .75rem; font-weight: 700; border: 1px solid #f59e0b; }
   .ud-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
   .ud-actions form { margin: 0; }
   .temp-pass { background: #fffbeb; border: 1px solid #f59e0b; color: #92400e; padding: .75rem 1rem; border-radius: var(--border-radius, 8px); margin-bottom: 1rem; font-size: .95rem; }
@@ -21,6 +22,9 @@
             <span class="role-badge <?= e($user['role']) ?>"><?= e(str_replace('_', ' ', $user['role'])) ?></span>
             <?php if (!empty($user['status'])): ?>
                 <span class="badge-<?= e($user['status']) ?>"><?= e($user['status']) ?></span>
+            <?php endif; ?>
+            <?php if (!empty($user['flag'])): ?>
+                <span class="badge-flag"><?= e($user['flag']) ?></span>
             <?php endif; ?>
         </p>
     </div>
@@ -76,6 +80,23 @@
                 <?= csrf_field() ?><button class="btn btn-sm" type="submit">Log out everywhere</button>
             </form>
         </div>
+    <div class="ud-card">
+        <h3>Flag</h3>
+        <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/flag') ?>" style="display:flex;gap:.4rem;flex-wrap:wrap;">
+            <?= csrf_field() ?>
+            <select name="flag" style="flex:1;min-width:8rem;">
+                <?php foreach (['', 'chargeback', 'vip', 'watch', 'abuser', 'comped'] as $opt): ?>
+                    <option value="<?= e($opt) ?>"<?= ($user['flag'] ?? '') === $opt ? ' selected' : '' ?>>
+                        <?= $opt === '' ? 'no flag' : e($opt) ?>
+                    </option>
+                <?php endforeach; ?>
+                <?php if (!empty($user['flag']) && !in_array($user['flag'], ['', 'chargeback', 'vip', 'watch', 'abuser', 'comped'], true)): ?>
+                    <option value="<?= e($user['flag']) ?>" selected><?= e($user['flag']) ?> (custom)</option>
+                <?php endif; ?>
+            </select>
+            <button class="btn btn-sm" type="submit">Set</button>
+        </form>
+        <p class="muted" style="margin:.5rem 0 0;font-size:.8rem;">Flagged accounts are filterable in the users list.</p>
     </div>
 </div>
 
@@ -126,3 +147,25 @@
     <?php if (!$activity): ?><tr><td colspan="4" class="muted">Nothing recorded yet.</td></tr><?php endif; ?>
     </tbody>
 </table></div>
+
+<h2 class="section-title">Internal notes</h2>
+<div class="users-table-wrap" style="max-width:720px;">
+    <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/notes') ?>" style="display:flex;gap:.5rem;margin-bottom:.75rem;">
+        <?= csrf_field() ?>
+        <textarea name="body" rows="2" required placeholder="Add an internal note (never shown to the member)…" style="flex:1;"></textarea>
+        <button class="btn btn-sm" type="submit">Add note</button>
+    </form>
+    <table class="users-table">
+    <thead><tr><th>When</th><th>By</th><th>Note</th></tr></thead>
+    <tbody>
+    <?php foreach ($notes as $note): ?>
+        <tr>
+            <td class="user-date" style="white-space:nowrap;"><?= e((string) $note['created_at']) ?></td>
+            <td><?= e((string) ($note['author'] ?? 'system')) ?></td>
+            <td style="white-space:pre-wrap;"><?= e((string) $note['body']) ?></td>
+        </tr>
+    <?php endforeach; ?>
+    <?php if (!$notes): ?><tr><td colspan="3" class="muted">No notes yet.</td></tr><?php endif; ?>
+    </tbody>
+    </table>
+</div>

@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\Database;
+use App\Core\Housekeeping;
 use App\Models\AuditLog;
 
 /**
@@ -39,13 +40,51 @@ class SystemController extends Controller
             'orphans'     => $this->orphanFiles(),
             'backups'     => $this->backups(),
             'backupRunning' => file_exists($this->backupDir . '/.running'),
+            'backupFailure' => Housekeeping::consumeBackupFailure(),
+            'lastSync'    => $this->lastSyncStatus(),
             'variants'    => $this->variantStats(),
             'dbTables'    => $this->tableSizes(),
             'maintenance' => is_file($this->storage . '/maintenance.flag'),
             'cronKeySet'  => self::cronKey() !== '',
+            'cronAgeMin'  => $this->cronLastRunMinutes(),
+            'security'    => \App\Models\Stats::security(),
+            'storageTrend' => \App\Models\Stats::storageTrend(),
+            'retention'   => (int) env_value('HOUSEKEEPING_KEEP_BACKUPS', '10'),
             'schemaDiff'  => $this->schemaDiff(),
             'diskFree'    => @disk_free_space($this->storage),
         ]);
+    }
+
+    /**
+     * Decode storage/backups/.last_sync written by the backup runner:
+     * archive verification result + offsite copy result.
+     */
+    private function lastSyncStatus(): ?array
+    {
+        $file = $this->backupDir . '/.last_sync';
+
+        if (!is_file($file)) {
+            return null;
+        }
+
+        $data = json_decode((string) @file_get_contents($file), true);
+
+        return is_array($data) ? $data : null;
+    }
+
+    /**
+     * Minutes since the last housekeeping cron entry; null when the cron
+     * has never run (fresh install or key not configured).
+     */
+    private function cronLastRunMinutes(): ?int
+    {
+        $log = $this->storage . '/logs/cron.log';
+
+        if (!is_file($log)) {
+            return null;
+        }
+
+        return (int) round((time() - (int) filemtime($log)) / 60);
     }
 
     // ------------------------------------------------------------------
@@ -226,7 +265,7 @@ PHP;
 
     public function housekeepingRun(): void
     {
-        $summary = \App\Core\Housekeeping::run(10);
+        $summary = \App\Core\Housekeeping::run();
         AuditLog::record(Auth::user()['id'] ?? null, 'delete', 'system_housekeeping', null,
             'Manual housekeeping: ' . json_encode($summary));
         $this->flash('success', sprintf(
@@ -412,7 +451,9 @@ PHP;
         $body = <<<BASH
 #!/bin/bash
 set -e
-trap 'rm -f {BACKUPDIR}/.running' EXIT
+cd {ROOT}
+trap 'rm -f {BACKUPDIR}/.running; if [ ! -f {BACKUPDIR}/.last_ok ]; then echo "\$(date "+%F %T") backup aborted (dump/tar/verify failed)" >> {BACKUPDIR}/.failed; fi' EXIT
+rm -f {BACKUPDIR}/.failed {BACKUPDIR}/.last_ok
 DUMP=\$(mktemp /tmp/gallery-dump-XXXXXX.sql)
 {MYSQLDUMP} > "\$DUMP"
 TARGET={BACKUPDIR}/gallery-backup-{STAMP}.tar.gz
@@ -420,11 +461,20 @@ tar czf "\$TARGET" --warning=no-file-changed --ignore-failed-read -C {ROOT} stor
 test \$? -le 1
 tar rzf "\$TARGET" --warning=no-file-changed -C "\$(dirname "\$DUMP")" "\$(basename "\$DUMP")"
 rm -f "\$DUMP"
+gzip -t "\$TARGET" || { echo "\$(date "+%F %T") archive verification failed: \$TARGET" >> {BACKUPDIR}/.failed; exit 1; }
+SYNC_RC=0
+if [ -n "{SYNCCMD}" ]; then
+  {SYNCCMD} || SYNC_RC=\$?
+fi
+printf '{"ok":true,"at":"%s","file":"%s","sync_rc":%s}\n' "\$(date +%FT%T)" "\$(basename "\$TARGET")" "\$SYNC_RC" > {BACKUPDIR}/.last_sync
+touch {BACKUPDIR}/.last_ok
 rm -f {BACKUPDIR}/.running
+trap - EXIT
 BASH;
+        $syncCmd = trim((string) env_value('BACKUP_SYNC_CMD', ''));
         $body = str_replace(
-            ['{MYSQLDUMP}', '{BACKUPDIR}', '{STAMP}', '{ROOT}'],
-            [$mysqldump, escapeshellarg($this->backupDir), $stamp, escapeshellarg($this->root)],
+            ['{MYSQLDUMP}', '{BACKUPDIR}', '{STAMP}', '{ROOT}', '{SYNCCMD}'],
+            [$mysqldump, escapeshellarg($this->backupDir), $stamp, escapeshellarg($this->root), $syncCmd],
             $body
         );
         file_put_contents($script, $body);

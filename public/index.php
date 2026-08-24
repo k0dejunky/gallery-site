@@ -37,7 +37,7 @@ if (is_file($maintenanceFlag)) {
     $request = new Request();
     $path    = rtrim((string) $request->uri(), '/');
 
-    $allowedPrefixes = ['/admin', '/login', '/files', '/cron', '/assets'];
+    $allowedPrefixes = ['/admin', '/login', '/files', '/cron', '/assets', '/webhooks'];
     $allowed = false;
 
     foreach ($allowedPrefixes as $prefix) {

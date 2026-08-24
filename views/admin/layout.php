@@ -235,6 +235,10 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
                 <div class="nav-sep"></div>
             <?php endif; ?>
             <a class="nav-brand" href="<?= url('/admin') ?>">Admin</a>
+            <form style="margin:0 0 var(--spacing-sm);" method="get" action="<?= url('/admin/search') ?>">
+                <input type="search" name="q" placeholder="Search users, galleries…" value=""
+                       style="width:100%;font-size:var(--font-size-sm);" aria-label="Global admin search">
+            </form>
             <a class="nav-item <?= $navActive('/admin', true) ?>" href="<?= url('/admin') ?>">Dashboard</a>
             <a class="nav-item <?= $navActive('/admin/trends') ?>" href="<?= url('/admin/trends') ?>">Trends</a>
             <a class="nav-item <?= $navActive('/admin/galleries/create') ?>" href="<?= url('/admin/galleries/create') ?>">New Gallery</a>

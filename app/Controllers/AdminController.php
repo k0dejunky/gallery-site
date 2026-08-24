@@ -19,11 +19,47 @@ class AdminController extends Controller
 
         $page = (int) $this->request->query('page', 1);
 
+        // Operational alerts: failed background backup, silent cron, brute-
+        // force spikes. Email versions go out throttled via Mailer.
+        $backupFailure = \App\Core\Housekeeping::consumeBackupFailure();
+        $security      = \App\Models\Stats::security();
+
+        if ($security['fails_hour'] >= 25) {
+            \App\Core\Mailer::adminAlert(
+                'login-spike',
+                'Login failure spike',
+                sprintf("%d failed logins in the last hour. Review /admin/system for offending IPs.", $security['fails_hour']),
+                1800
+            );
+        }
+
+        $root = dirname(__DIR__, 2);
+        $cronAge = null;
+
+        if (is_file($root . '/storage/logs/cron.log')) {
+            $cronAge = (int) round((time() - filemtime($root . '/storage/logs/cron.log')) / 60);
+        }
+
+        if ($cronAge !== null && $cronAge > 45) {
+            \App\Core\Mailer::adminAlert(
+                'cron-stale',
+                'Housekeeping cron may be down',
+                "Last housekeeping run was {$cronAge} minutes ago (expected every ~15).\nCheck /etc/cron.d/gallery-housekeeping on the server.",
+                14400
+            );
+        }
+
         $this->viewAdmin('dashboard', [
             'paginator' => Gallery::paginate($page, 10),
             'summary'   => Stats::summary(),
             'growth'    => Stats::growth(),
             'categories' => Category::all(),
+            'finance'   => \App\Models\Stats::finance(),
+            'feed'      => \App\Models\Stats::feed(),
+            'storageTrend' => \App\Models\Stats::storageTrend(),
+            'security'  => $security,
+            'backupFailure' => $backupFailure,
+            'cronAgeMin' => $cronAge,
         ]);
     }
 

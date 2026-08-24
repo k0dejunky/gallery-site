@@ -11,6 +11,7 @@
   .status-badge{background:var(--success-bg);color:var(--success-text)}
   .status-badge.pending{background:var(--warning-bg);color:var(--warning-text)}
   .status-badge.cancelled,.status-badge.expired{background:var(--danger-bg);color:var(--danger-text)}
+  .badge-flag { background: #fef3c7; color: #92400e; padding: .1rem .45rem; border-radius: 999px; font-size: .7rem; font-weight: 700; border: 1px solid #f59e0b; }
   .user-actions{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}.user-actions form{margin:0}
   .users-footer{margin-top:1rem;display:flex;justify-content:flex-end}
   @media(max-width:760px){.users-hero{display:block}.users-table{font-size:.82rem}.users-table th,.users-table td{padding:.45rem .35rem}.user-actions .btn{padding:.35rem .45rem}.users-footer{justify-content:stretch}.users-footer .btn{width:100%;text-align:center}}
@@ -22,6 +23,20 @@
 </div>
 
 <h2 class="section-title">Users</h2>
+<form method="get" action="<?= url('/admin/users') ?>" style="display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem;flex-wrap:wrap;">
+    <label class="muted" for="flag-filter">Show:</label>
+    <select id="flag-filter" name="flag" onchange="this.form.submit();">
+        <option value="">All users</option>
+        <option value="flagged"<?= ($flag ?? '') === 'flagged' ? ' selected' : '' ?>>Flagged only</option>
+        <?php foreach (['chargeback', 'vip', 'watch', 'abuser', 'comped'] as $preset): ?>
+            <option value="<?= e($preset) ?>"<?= ($flag ?? '') === $preset ? ' selected' : '' ?>>Flag: <?= e($preset) ?></option>
+        <?php endforeach; ?>
+    </select>
+    <noscript><button class="btn btn-sm" type="submit">Apply</button></noscript>
+</form>
+<?php if (($flag ?? '') !== ''): ?>
+    <p class="muted">Filtered by flag: <b><?= e($flag) ?></b> — <a href="<?= url('/admin/users') ?>">clear</a></p>
+<?php endif; ?>
 <?php if (empty($users)): ?>
     <p>No users yet.</p>
 <?php else: ?>
@@ -60,7 +75,9 @@
             <?php foreach ($users as $user): ?>
                 <tr>
                     <td><?php if ((int) $user['id'] !== (int) \App\Core\Auth::user()['id']): ?><input type="checkbox" name="ids[]" value="<?= (int) $user['id'] ?>" class="user-check"><?php endif; ?></td>
-                    <td class="user-email"><?= e($user['email']) ?></td>
+                    <td class="user-email"><?= e($user['email']) ?>
+                        <?php if (!empty($user['flag'])): ?><span class="badge-flag"><?= e($user['flag']) ?></span><?php endif; ?>
+                    </td>
                     <td><span class="role-badge <?= e($user['role']) ?>"><?= e(str_replace('_', ' ', $user['role'])) ?></span></td>
                     <td>
                         <?php if (($user['status'] ?? 'active') === 'suspended'): ?>

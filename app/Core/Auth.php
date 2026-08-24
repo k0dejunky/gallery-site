@@ -2,6 +2,7 @@
 
 namespace App\Core;
 
+use App\Core\Database;
 use App\Models\LoginAttempt;
 use App\Models\Subscription;
 use App\Models\User;
@@ -336,12 +337,29 @@ class Auth
      * Rate-limit brute-force login attempts: true when the number of recent
      * failures for this email or IP has reached the configured maximum.
      */
+    /**
+     * Lockout rules within the configured window:
+     *  - the same email+ip pair after login_max_attempts failures,
+     *  - one IP hammering many accounts: 3x that threshold for the IP alone,
+     *  - a distributed attack on one account: 3x threshold per email alone.
+     */
     private static function tooManyAttempts(string $email, string $ip): bool
     {
         $config   = require __DIR__ . '/../../config/app.php';
         $cutoff   = date('Y-m-d H:i:s', time() - $config['auth']['login_window_seconds']);
-        $attempts = LoginAttempt::recentCount($email, $ip, $cutoff);
+        $max      = (int) $config['auth']['login_max_attempts'];
 
-        return $attempts >= $config['auth']['login_max_attempts'];
+        if (LoginAttempt::recentCount($email, $ip, $cutoff) >= $max) {
+            return true;
+        }
+
+        return (int) Database::run(
+            'SELECT COUNT(*) FROM login_attempts WHERE ip = ? AND attempted_at >= ?',
+            [$ip, $cutoff]
+        )->fetchColumn() >= $max * 3
+            || (int) Database::run(
+                'SELECT COUNT(*) FROM login_attempts WHERE email = ? AND attempted_at >= ?',
+                [$email, $cutoff]
+            )->fetchColumn() >= $max * 3;
     }
 }

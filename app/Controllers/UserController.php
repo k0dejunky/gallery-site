@@ -36,14 +36,27 @@ class UserController extends Controller
     public function index(): void
     {
         $search = trim($this->request->input('q') ?? '');
+        $flag   = trim((string) ($this->request->query('flag') ?? ''));
 
-        $users = $search !== ''
-            ? User::search($search)
-            : User::all();
+        if ($flag === 'flagged') {
+            $users = Database::run(
+                'SELECT * FROM users WHERE flag IS NOT NULL ORDER BY id DESC'
+            )->fetchAll();
+        } elseif ($flag !== '') {
+            $users = Database::run(
+                'SELECT * FROM users WHERE flag = ? ORDER BY id DESC',
+                [$flag]
+            )->fetchAll();
+        } else {
+            $users = $search !== ''
+                ? User::search($search)
+                : User::all();
+        }
 
         $this->viewAdmin('users', [
             'users'  => $users,
             'search' => $search,
+            'flag'   => $flag,
             'roles'  => Auth::ADMIN_ROLES,
         ]);
     }
@@ -198,7 +211,56 @@ class UserController extends Controller
             [$user['email']]
         )->fetchAll();
 
-        return [$subscriptions, $activity, $logins];
+        $notes = Database::run(
+            'SELECT n.id, n.body, n.created_at, a.email AS author
+             FROM user_notes n LEFT JOIN users a ON a.id = n.author_id
+             WHERE n.user_id = ? ORDER BY n.id DESC LIMIT 50',
+            [$id]
+        )->fetchAll();
+
+        return [$subscriptions, $activity, $logins, $notes];
+    }
+
+    /**
+     * Append an internal note to the account. Notes are admin-only context
+     * (chargeback history, support threads) and never shown to the member.
+     */
+    public function addNote(int $id): void
+    {
+        Auth::requirePermission('users');
+
+        $body = trim((string) $this->request->post('body', ''));
+
+        if ($body !== '') {
+            Database::run(
+                'INSERT INTO user_notes (user_id, author_id, body, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)',
+                [$id, Auth::user()['id'] ?? null, mb_substr($body, 0, 5000)]
+            );
+            AuditLog::record(Auth::user()['id'] ?? null, 'create', 'user_note', $id,
+                'Added internal note to user #' . $id);
+            $this->flash('success', 'Note added.');
+        }
+
+        $this->redirect('/admin/users/' . $id);
+    }
+
+    /**
+     * Set or clear the account flag (chargeback, vip, watch, …). Free-form
+     * but the UI offers presets; flagged accounts are filterable in the list.
+     */
+    public function setFlag(int $id): void
+    {
+        Auth::requirePermission('users');
+
+        $flag = trim((string) $this->request->post('flag', ''));
+        $flag = mb_substr($flag, 0, 32);
+
+        Database::run('UPDATE users SET flag = ? WHERE id = ?', [$flag !== '' ? $flag : null, $id]);
+        AuditLog::record(Auth::user()['id'] ?? null, 'update', 'user_flag', $id,
+            'Flag for user #' . $id . ' set to: ' . ($flag !== '' ? $flag : '(cleared)'));
+
+        $this->flash('success', $flag !== '' ? 'Flag set.' : 'Flag cleared.');
+        $this->redirect('/admin/users/' . $id);
     }
 
     /**
@@ -217,13 +279,14 @@ class UserController extends Controller
             $this->redirect('/admin/users');
         }
 
-        [$subscriptions, $activity, $logins] = $this->userContext($id);
+        [$subscriptions, $activity, $logins, $notes] = $this->userContext($id);
 
         $this->viewAdmin('user_show', [
             'user'          => $user,
             'subscriptions' => $subscriptions,
             'activity'      => $activity,
             'logins'        => $logins,
+            'notes'         => $notes,
         ]);
     }
 

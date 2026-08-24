@@ -122,6 +122,242 @@ class Stats
     }
 
     /**
+     * Finance series for the dashboard charts: per-month revenue (paid
+     * activations), new paid subscriptions and cancellations/expiries over
+     * the trailing N months, plus current ARPU. Pending placeholder rows
+     * (PENDING-… references) never count as revenue.
+     */
+    public static function finance(int $months = 6): array
+    {
+        $since = date('Y-m-01 00:00:00', strtotime('-' . ($months - 1) . ' months'));
+
+        $revRows = Database::run(
+            "SELECT DATE_FORMAT(COALESCE(s.starts_at, s.created_at), '%b') AS label,
+                    DATE_FORMAT(COALESCE(s.starts_at, s.created_at), '%Y-%m') AS ym,
+                    SUM(COALESCE(NULLIF(s.price_paid, 0), p.price)) AS revenue,
+                    COUNT(*) AS paid
+             FROM subscriptions s
+             JOIN plans p ON p.id = s.plan_id
+             WHERE s.transaction_ref NOT LIKE 'PENDING-%'
+               AND COALESCE(s.starts_at, s.created_at) >= ?
+             GROUP BY label, ym ORDER BY ym",
+            [$since]
+        )->fetchAll();
+
+        $cancelRows = Database::run(
+            "SELECT DATE_FORMAT(updated_at, '%b') AS label,
+                    DATE_FORMAT(updated_at, '%Y-%m') AS ym,
+                    COUNT(*) AS churn
+             FROM subscriptions
+             WHERE status IN ('cancelled', 'expired')
+               AND updated_at >= ?
+             GROUP BY label, ym ORDER BY ym",
+            [$since]
+        )->fetchAll();
+
+        // Build a continuous month axis so gaps render as zero bars.
+        $axis  = [];
+        $rev   = [];
+        $new   = [];
+        $churn = [];
+
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $key         = date('Y-m', strtotime("-$i months"));
+            $axis[$key]  = date('M', strtotime("-$i months"));
+            $rev[$key]   = 0.0;
+            $new[$key]   = 0;
+            $churn[$key] = 0;
+        }
+
+        foreach ($revRows as $r) {
+            if (isset($rev[$r['ym']])) {
+                $rev[$r['ym']]   = (float) $r['revenue'];
+                $new[$r['ym']]   = (int) $r['paid'];
+            }
+        }
+
+        foreach ($cancelRows as $r) {
+            if (isset($churn[$r['ym']])) {
+                $churn[$r['ym']] = (int) $r['churn'];
+            }
+        }
+
+        // Current month-to-date revenue vs the same point last month.
+        $mtd = (float) Database::run(
+            "SELECT COALESCE(SUM(COALESCE(NULLIF(s.price_paid, 0), p.price)), 0)
+             FROM subscriptions s
+             JOIN plans p ON p.id = s.plan_id
+             WHERE s.transaction_ref NOT LIKE 'PENDING-%'
+               AND COALESCE(s.starts_at, s.created_at) >= ?",
+            [date('Y-m-01 00:00:00')]
+        )->fetchColumn();
+
+        return [
+            'labels' => array_values($axis),
+            'revenue' => array_values($rev),
+            'new_paid' => array_values($new),
+            'churn' => array_values($churn),
+            'mtd_revenue' => $mtd,
+            'total_12mo' => (float) Database::run(
+                "SELECT COALESCE(SUM(COALESCE(NULLIF(s.price_paid, 0), p.price)), 0)
+                 FROM subscriptions s JOIN plans p ON p.id = s.plan_id
+                 WHERE s.transaction_ref NOT LIKE 'PENDING-%'
+                   AND COALESCE(s.starts_at, s.created_at) >= ?",
+                [date('Y-m-d 00:00:00', strtotime('-12 months'))]
+            )->fetchColumn(),
+        ];
+    }
+
+    /**
+     * Mixed recent-activity feed for the dashboard: signups, completed
+     * payments, failed logins and admin actions merged into one timeline.
+     */
+    public static function feed(int $limit = 14): array
+    {
+        $items = [];
+
+        foreach (Database::run(
+            "SELECT id, email, role, created_at FROM users ORDER BY id DESC LIMIT 5"
+        )->fetchAll() as $u) {
+            $items[] = [
+                'type' => 'signup',
+                'text' => 'New signup: ' . $u['email'] . ' (' . $u['role'] . ')',
+                'at'   => $u['created_at'],
+                'link' => '/admin/users/' . (int) $u['id'],
+            ];
+        }
+
+        foreach (Database::run(
+            "SELECT s.id, s.user_id, s.transaction_ref, s.updated_at, u.email, p.name AS plan
+             FROM subscriptions s
+             LEFT JOIN users u ON u.id = s.user_id
+             LEFT JOIN plans p ON p.id = s.plan_id
+             WHERE s.status = 'active' AND s.transaction_ref NOT LIKE 'PENDING-%'
+             ORDER BY s.updated_at DESC LIMIT 5"
+        )->fetchAll() as $s) {
+            $items[] = [
+                'type' => 'payment',
+                'text' => 'Payment: ' . ($s['email'] ?? 'user#' . $s['user_id']) . ' — ' . $s['plan'],
+                'at'   => $s['updated_at'],
+                'link' => '/admin/users/' . (int) $s['user_id'],
+            ];
+        }
+
+        $fails = Database::run(
+            "SELECT COUNT(*) AS c, MAX(attempted_at) AS last FROM login_attempts WHERE attempted_at >= ?",
+            [date('Y-m-d H:i:s', time() - 3600)]
+        )->fetch();
+
+        if ((int) ($fails['c'] ?? 0) > 0) {
+            $items[] = [
+                'type' => 'failed_login',
+                'text' => sprintf('%d failed login(s) in the last hour', (int) $fails['c']),
+                'at'   => $fails['last'],
+                'link' => '/admin/system#security',
+            ];
+        }
+
+        foreach (Database::run(
+            "SELECT l.action, l.entity_type, l.entity_id, l.description, l.created_at, u.email AS actor
+             FROM admin_logs l LEFT JOIN users u ON u.id = l.user_id
+             ORDER BY l.id DESC LIMIT 5"
+        )->fetchAll() as $l) {
+            $items[] = [
+                'type' => 'admin',
+                'text' => trim(($l['actor'] ?? 'admin') . ': ' . $l['description']),
+                'at'   => $l['created_at'],
+                'link' => '',
+            ];
+        }
+
+        usort($items, fn (array $a, array $b): int => strcmp((string) $b['at'], (string) $a['at']));
+
+        return array_slice($items, 0, $limit);
+    }
+
+    /**
+     * Login-security snapshot: failures per hour (spike detection), the
+     * most aggressive IPs/emails of the last 24h, and everything currently
+     * locked out under Auth's thresholds.
+     */
+    public static function security(): array
+    {
+        $config = require dirname(__DIR__, 2) . '/config/app.php';
+        $maxAttempts = (int) ($config['auth']['login_max_attempts'] ?? 5);
+        $window      = (int) ($config['auth']['login_window_seconds'] ?? 900);
+        $cutoffPair  = date('Y-m-d H:i:s', time() - $window);
+        $cutoffDay   = date('Y-m-d H:i:s', time() - 86400);
+
+        $failsHour = (int) Database::run(
+            'SELECT COUNT(*) FROM login_attempts WHERE attempted_at >= ?',
+            [date('Y-m-d H:i:s', time() - 3600)]
+        )->fetchColumn();
+
+        $topIps = Database::run(
+            'SELECT ip, COUNT(*) AS c, MIN(attempted_at) AS first, MAX(attempted_at) AS last,
+                    GROUP_CONCAT(DISTINCT email ORDER BY email SEPARATOR ", ") AS emails
+             FROM login_attempts WHERE attempted_at >= ?
+             GROUP BY ip ORDER BY c DESC LIMIT 5',
+            [$cutoffDay]
+        )->fetchAll();
+
+        $topEmails = Database::run(
+            'SELECT email, COUNT(*) AS c, MAX(attempted_at) AS last
+             FROM login_attempts WHERE attempted_at >= ?
+             GROUP BY email ORDER BY c DESC LIMIT 5',
+            [$cutoffDay]
+        )->fetchAll();
+
+        $lockedPairs = Database::run(
+            'SELECT email, ip, COUNT(*) AS c FROM login_attempts
+             WHERE attempted_at >= ? GROUP BY email, ip HAVING COUNT(*) >= ? ORDER BY c DESC LIMIT 10',
+            [$cutoffPair, $maxAttempts]
+        )->fetchAll();
+
+        $lockedIps = Database::run(
+            'SELECT ip, COUNT(*) AS c FROM login_attempts
+             WHERE attempted_at >= ? GROUP BY ip HAVING COUNT(*) >= ? ORDER BY c DESC LIMIT 10',
+            [$cutoffPair, $maxAttempts * 3]
+        )->fetchAll();
+
+        return [
+            'fails_hour'  => $failsHour,
+            'max_pair'    => $maxAttempts,
+            'max_ip'      => $maxAttempts * 3,
+            'window_min'  => (int) round($window / 60),
+            'top_ips'     => $topIps,
+            'top_emails'  => $topEmails,
+            'locked_pairs' => $lockedPairs,
+            'locked_ips'  => $lockedIps,
+        ];
+    }
+
+    /**
+     * Daily storage usage for the last N days from the housekeeping
+     * snapshots (peak bytes per day). Returns labels + GB values.
+     */
+    public static function storageTrend(int $days = 14): array
+    {
+        $rows = Database::run(
+            "SELECT DATE(captured_at) AS d, MAX(uploads_bytes) AS b
+             FROM storage_snapshots
+             WHERE captured_at >= ?
+             GROUP BY d ORDER BY d",
+            [date('Y-m-d 00:00:00', strtotime('-' . ($days - 1) . ' days'))]
+        )->fetchAll();
+
+        $labels = [];
+        $gbs    = [];
+
+        foreach ($rows as $r) {
+            $labels[] = date('n/j', strtotime((string) $r['d']));
+            $gbs[]    = round(((int) $r['b']) / 1073741824, 2);
+        }
+
+        return ['labels' => $labels, 'gb' => $gbs];
+    }
+
+    /**
      * Record a category selection: every time a logged-in user opens a
      * category page it counts as one view of that category.
      */

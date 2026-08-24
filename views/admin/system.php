@@ -34,9 +34,14 @@
         <?php endif; ?>
 
         <h2 style="margin-top:1rem;">Scheduled housekeeping</h2>
+        <?php $cronState = ($cronAgeMin === null) ? 'never run'
+            : (($cronAgeMin > 45) ? '<b style="color:#b45309;">last run ' . (int) $cronAgeMin . ' min ago</b>'
+                                  : 'last run ' . (int) $cronAgeMin . ' min ago'); ?>
         <p class="muted" style="font-size:.85rem;">
-            Expires overdue subscriptions, removes staging folders idle 72h+, keeps the 10 newest backups.
-            Cron endpoint: <b><?= $cronKeySet ? 'configured ✓' : 'GALLERY_CRON_KEY missing in .env' ?></b>
+            Expires overdue subscriptions, removes staging folders idle 72h+, keeps the
+            <?= (int) $retention ?> newest backups (HOUSEKEEPING_KEEP_BACKUPS), snapshots storage usage.
+            Cron endpoint: <b><?= $cronKeySet ? 'configured ✓' : 'GALLERY_CRON_KEY missing in .env' ?></b> ·
+            <?= $cronState ?>
         </p>
         <form class="sys-actions" method="post" action="<?= url('/admin/system/housekeeping') ?>">
             <?= csrf_field() ?>
@@ -60,6 +65,14 @@
             <?= csrf_field() ?>
             <button class="btn" type="submit"<?= !empty($variants['running']) ? ' disabled' : '' ?>>Regenerate missing</button>
         </form>
+        <?php if (!empty($storageTrend['gb'])): ?>
+            <h2 style="margin-top:1rem;">Storage growth (GB)</h2>
+            <?= \App\Core\Charts::sparkline($storageTrend['gb'], 300, 48, '#0ea5e9') ?>
+            <p class="muted" style="margin:.25rem 0 0;font-size:.8rem;">
+                <?= e((string) reset($storageTrend['gb'])) ?> GB → <b><?= e((string) end($storageTrend['gb'])) ?> GB</b>
+                over last <?= count($storageTrend['gb']) ?> day(s)
+            </p>
+        <?php endif; ?>
     </div>
     <!-- Pending upload staging folders -->
     <div class="sys-card">
@@ -114,6 +127,24 @@
     <!-- Backups -->
     <div class="sys-card">
         <h2>Backups</h2>
+        <?php if (!empty($backupFailure)): ?>
+            <p style="background:#fee2e2;border:1px solid #ef4444;color:#991b1b;padding:.4rem .6rem;border-radius:var(--border-radius);font-size:.85rem;">
+                <b>Last run failed:</b> <?= e((string) $backupFailure) ?>
+            </p>
+        <?php endif; ?>
+        <?php if (!empty($lastSync)): ?>
+            <p style="font-size:.85rem;margin:.25rem 0 .5rem;">
+                Last archive: <code><?= e((string) $lastSync['file'] ?? '') ?></code>
+                at <?= e((string) $lastSync['at'] ?? '') ?>
+                — verify ✓, offsite copy
+                <?php if ((int) ($lastSync['sync_rc'] ?? -1) === 0): ?>
+                    <b style="color:var(--success-text,#15803d);">synced ✓</b>
+                <?php else: ?>
+                    <b style="color:#b45309;">not configured / rc=<?= (int) $lastSync['sync_rc'] ?></b>
+                <?php endif; ?>
+                (BACKUP_SYNC_CMD)
+            </p>
+        <?php endif; ?>
         <form class="sys-actions" method="post" action="<?= url('/admin/system/backup') ?>">
             <?= csrf_field() ?>
             <button class="btn" type="submit"<?= !empty($backupRunning) ? ' disabled' : '' ?>>Create backup now</button>
@@ -206,5 +237,53 @@
             <a class="btn" href="<?= url('/admin/export/users') ?>">Users CSV</a>
             <a class="btn" href="<?= url('/admin/export/subscriptions') ?>">Subscriptions CSV</a>
         </div>
+    </div>
+
+    <!-- Login security -->
+    <div class="sys-card" id="security">
+        <h2>Login security</h2>
+        <p style="margin:.25rem 0 .5rem;">
+            Failed logins last hour:
+            <b style="font-size:1.1rem;" class="<?= $security['fails_hour'] >= 25 ? 'sys-bad' : 'sys-ok' ?>">
+                <?= number_format((int) $security['fails_hour']) ?>
+            </b>
+            <span class="muted">(lockout: <?= (int) $security['max_pair'] ?> per account+IP,
+                <?= (int) $security['max_ip'] ?> per IP, <?= (int) $security['max_ip'] ?> per account —
+                <?= (int) $security['window_min'] ?> min window)</span>
+        </p>
+
+        <table style="margin-top:.5rem;">
+            <tr><th>Top IPs (24h)</th><th>Fails</th><th>Targeting</th></tr>
+            <?php foreach ($security['top_ips'] as $row): ?>
+                <tr>
+                    <td><code><?= e((string) $row['ip']) ?></code></td>
+                    <td><?= number_format((int) $row['c']) ?></td>
+                    <td class="muted" style="max-width:16rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= e((string) $row['emails']) ?></td>
+                </tr>
+            <?php endforeach; ?>
+            <?php if (!$security['top_ips']): ?><tr><td colspan="3" class="muted">No failures in the last 24h.</td></tr><?php endif; ?>
+        </table>
+
+        <table style="margin-top:.75rem;">
+            <tr><th>Targeted accounts (24h)</th><th>Fails</th></tr>
+            <?php foreach ($security['top_emails'] as $row): ?>
+                <tr><td><?= e((string) $row['email']) ?></td><td><?= number_format((int) $row['c']) ?></td></tr>
+            <?php endforeach; ?>
+            <?php if (!$security['top_emails']): ?><tr><td colspan="2" class="muted">None.</td></tr><?php endif; ?>
+        </table>
+
+        <?php if ($security['locked_pairs'] || $security['locked_ips']): ?>
+            <p style="margin-top:.75rem;font-size:.85rem;"><b>Currently locked out:</b></p>
+            <ul style="margin:.25rem 0 0;padding-left:1.25rem;font-size:.85rem;">
+                <?php foreach ($security['locked_ips'] as $row): ?>
+                    <li>IP <code><?= e((string) $row['ip']) ?></code> — <?= (int) $row['c'] ?> fails</li>
+                <?php endforeach; ?>
+                <?php foreach ($security['locked_pairs'] as $row): ?>
+                    <li><?= e((string) $row['email']) ?> from <code><?= e((string) $row['ip']) ?></code> — <?= (int) $row['c'] ?> fails</li>
+                <?php endforeach; ?>
+            </ul>
+        <?php else: ?>
+            <p class="muted" style="margin-top:.5rem;">Nothing currently locked out.</p>
+        <?php endif; ?>
     </div>
 </div>

@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Core\Database;
+use App\Core\Mailer;
 use App\Core\Request;
 use App\Models\PaymentProcessor;
 use App\Models\Subscription;
@@ -66,6 +67,28 @@ class WebhookController extends Controller
             (string) $this->payload('ref', ''),
         ]);
 
+        // Cancellation / rebill-decline postbacks reference an EXISTING
+        // subscription by its biller id; kill that membership immediately
+        // instead of only touching the pending signup row.
+        if ($this->looksLikeCancellation()) {
+            $cancelled = $this->cancelByTransactionPrefix(
+                'CCBILL-',
+                [(string) $this->payload('subscription_id', ''), (string) $this->payload('transaction_id', '')]
+            );
+
+            if ($cancelled > 0) {
+                echo 'cancelled';
+                return;
+            }
+
+            if ($responseCode !== '1' && $subscription !== null) {
+                Subscription::cancel((int) $subscription['id']);
+            }
+
+            echo 'declined';
+            return;
+        }
+
         if ($responseCode !== '1') {
             if ($subscription !== null) {
                 Subscription::cancel((int) $subscription['id']);
@@ -81,12 +104,14 @@ class WebhookController extends Controller
         }
 
         $txn = (string) ($this->payload('subscription_id', '') ?: $this->payload('transaction_id', ''));
+        $ref = $txn !== '' ? 'CCBILL-' . $txn : (string) $subscription['transaction_ref'];
 
         Subscription::activateWithTransaction(
             (int) $subscription['id'],
-            $txn !== '' ? 'CCBILL-' . $txn : (string) $subscription['transaction_ref']
+            $ref
         );
 
+        $this->notifyPayment('CCBill', (int) $subscription['id'], $ref);
         echo 'ok';
     }
 
@@ -148,11 +173,18 @@ class WebhookController extends Controller
             return;
         }
 
+        if ($this->looksLikeCancellation()) {
+            $this->cancelByTransactionPrefix('EPOCH-', [$transId]);
+            echo 'cancelled';
+            return;
+        }
+
         Subscription::activateWithTransaction(
             (int) $subscription['id'],
             $transId !== '' ? 'EPOCH-' . $transId : (string) $subscription['transaction_ref']
         );
 
+        $this->notifyPayment('Epoch', (int) $subscription['id'], (string) $subscription['transaction_ref']);
         echo 'ok';
     }
 
@@ -229,17 +261,115 @@ class WebhookController extends Controller
             return;
         }
 
+        if ($this->looksLikeCancellation()) {
+            $this->cancelByTransactionPrefix('SEG-', [$txn]);
+            echo 'cancelled';
+            return;
+        }
+
+        $ref = $txn !== '' ? 'SEG-' . $txn : (string) $subscription['transaction_ref'];
+
         Subscription::activateWithTransaction(
             (int) $subscription['id'],
-            $txn !== '' ? 'SEG-' . $txn : (string) $subscription['transaction_ref']
+            $ref
         );
 
+        $this->notifyPayment('SegPay', (int) $subscription['id'], $ref);
         echo 'ok';
     }
 
     // ------------------------------------------------------------------
     // Shared helpers
     // ------------------------------------------------------------------
+
+    /**
+     * Heuristic for "this postback tells us a member cancelled": explicit
+     * flags some billers send, or a decline-style responseCode arriving
+     * together with an existing-subscription reference (rebill declines are
+     * de-facto cancellations).
+     */
+    private function looksLikeCancellation(): bool
+    {
+        foreach (['action', 'event', 'type', 'status', 'notification'] as $key) {
+            $v = strtolower($this->payload($key, ''));
+
+            if (in_array($v, ['cancel', 'cancelled', 'canceled', 'cancellation'], true)) {
+                return true;
+            }
+        }
+
+        if ($this->payload('cancellation', '') !== '' || $this->payload('cancel', '') !== ''
+            || strtolower($this->payload('responseCode', '')) === '2') {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Cancel every ACTIVE subscription whose transaction_ref equals
+     * <prefix><billerId> for one of the given biller ids. Returns how many
+     * memberships were terminated.
+     */
+    private function cancelByTransactionPrefix(string $prefix, array $billerIds): int
+    {
+        $n = 0;
+
+        foreach (array_unique(array_filter(array_map('trim', $billerIds))) as $id) {
+            $stmt = Database::run(
+                "UPDATE subscriptions
+                 SET status = 'cancelled',
+                     expires_at = LEAST(COALESCE(expires_at, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP),
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE status = 'active' AND transaction_ref = ?",
+                [$prefix . $id]
+            );
+
+            if ($stmt) {
+                $n += $stmt->rowCount();
+            }
+        }
+
+        return $n;
+    }
+
+    /**
+     * Best-effort admin email after an automated (webhook) payment: who,
+     * which plan, how much, which reference. Never blocks the postback.
+     */
+    private function notifyPayment(string $provider, int $subscriptionId, string $ref): void
+    {
+        try {
+            $row = Database::run(
+                'SELECT s.price_paid, p.name AS plan, p.billing_cycle, u.email
+                 FROM subscriptions s
+                 LEFT JOIN plans p ON p.id = s.plan_id
+                 LEFT JOIN users u ON u.id = s.user_id
+                 WHERE s.id = ?',
+                [$subscriptionId]
+            )->fetch();
+
+            Mailer::adminAlert(
+                'payment-' . $ref,
+                sprintf('New %s payment: %s (%s)',
+                    $provider,
+                    number_format((float) ($row['price_paid'] ?? 0), 2),
+                    $row['email'] ?? 'unknown user'),
+                sprintf(
+                    "%s just paid %s via %s for the \"%s\" plan (%s).\nReference: %s",
+                    $row['email'] ?? 'unknown user',
+                    number_format((float) ($row['price_paid'] ?? 0), 2),
+                    $provider,
+                    $row['plan'] ?? '?',
+                    $row['billing_cycle'] ?? '?',
+                    $ref
+                ),
+                604800
+            );
+        } catch (\Throwable $e) {
+            error_log('[webhooks] payment notification failed: ' . $e->getMessage());
+        }
+    }
 
     /**
      * POST value with GET fallback (some billers send status pings via GET).

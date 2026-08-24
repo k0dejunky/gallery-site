@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
     role          ENUM('super_admin', 'admin', 'editor', 'moderator', 'viewer', 'user') NOT NULL DEFAULT 'user',
     status        ENUM('active', 'suspended') NOT NULL DEFAULT 'active',
     session_version INT UNSIGNED NOT NULL DEFAULT 0,
+    flag          VARCHAR(32) NULL DEFAULT NULL,
     theme_preset  VARCHAR(120) NULL,
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -51,6 +52,24 @@ CREATE TABLE IF NOT EXISTS login_attempts (
     attempted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_email_ip_time (email, ip, attempted_at)
 );
+
+CREATE TABLE IF NOT EXISTS user_notes (
+    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id    INT UNSIGNED NOT NULL,
+    author_id  INT UNSIGNED NULL,
+    body       TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_notes_user (user_id)
+);
+
+CREATE TABLE IF NOT EXISTS storage_snapshots (
+    id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    captured_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    uploads_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    photos_count INT UNSIGNED NOT NULL DEFAULT 0,
+    INDEX idx_storage_snapshots_at (captured_at)
+);
+
 
 CREATE TABLE IF NOT EXISTS categories (
     id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

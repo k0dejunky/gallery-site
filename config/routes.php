@@ -30,6 +30,7 @@ return [
     // Admin
     ['GET', '/admin', 'AdminController@dashboard'],
     ['POST', '/admin', 'AdminController@login'],
+    ['GET', '/admin/search', 'SearchController@index'],
     ['GET', '/admin/categories', 'CategoryController@index'],
     ['POST', '/admin/categories', 'CategoryController@store'],
     ['GET', '/admin/categories/{id}/edit', 'CategoryController@edit'],
@@ -76,6 +77,8 @@ return [
     ['POST', '/admin/users/{id}/status', 'UserController@setStatus'],
     ['POST', '/admin/users/{id}/reset-password', 'UserController@resetPassword'],
     ['POST', '/admin/users/{id}/logout-everywhere', 'UserController@logoutEverywhere'],
+    ['POST', '/admin/users/{id}/notes', 'UserController@addNote'],
+    ['POST', '/admin/users/{id}/flag', 'UserController@setFlag'],
     ['GET', '/admin/users/{id}/edit', 'UserController@edit'],
     ['POST', '/admin/users/{id}', 'UserController@update'],
     ['POST', '/admin/users/{id}/delete', 'UserController@destroy'],

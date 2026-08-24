@@ -10,17 +10,24 @@ namespace App\Core;
 class Housekeeping
 {
     /**
-     * Run every task and return a summary array. $pruneBackups keeps the N
-     * newest archives when greater than zero.
+     * Run every task and return a summary array. $backupKeep keeps the N
+     * newest archives when greater than zero; when null it falls back to
+     * the HOUSEKEEPING_KEEP_BACKUPS .env value (default 10).
      */
-    public static function run(int $backupKeep = 10): array
+    public static function run(?int $backupKeep = null): array
     {
         $root = dirname(__DIR__, 2);
+
+        if ($backupKeep === null) {
+            $backupKeep = (int) env_value('HOUSEKEEPING_KEEP_BACKUPS', '10');
+        }
+
         $out  = [
             'at'            => date('Y-m-d H:i:s'),
             'expired_subs'  => 0,
             'pending_dirs'  => 0,
             'backups_pruned' => 0,
+            'disk_free_gb'  => null,
         ];
 
         // Subscriptions whose expiry passed while nobody was watching.
@@ -55,6 +62,34 @@ class Housekeeping
             }
         }
 
+        // Storage snapshot for the trending chart + low-disk alert.
+        [$bytes, $photos] = self::uploadsUsage($root . '/storage/uploads');
+        Database::run(
+            'INSERT INTO storage_snapshots (captured_at, uploads_bytes, photos_count) VALUES (CURRENT_TIMESTAMP, ?, ?)',
+            [$bytes, $photos]
+        );
+        Database::run(
+            'DELETE FROM storage_snapshots WHERE captured_at < ?',
+            [date('Y-m-d H:i:s', time() - 90 * 86400)]
+        );
+
+        $free = @disk_free_space($root);
+
+        if ($free !== false) {
+            $freeGb            = round($free / 1073741824, 1);
+            $out['disk_free_gb'] = $freeGb;
+
+            if ($freeGb <= (float) env_value('DISK_MIN_FREE_GB', '10')) {
+                Mailer::adminAlert(
+                    'disk-low',
+                    'Low disk space',
+                    sprintf("Only %s GB free on the gallery server (threshold %s GB).\nClean up or extend the volume soon.",
+                        $freeGb, env_value('DISK_MIN_FREE_GB', '10')),
+                    43200
+                );
+            }
+        }
+
         @file_put_contents(
             $root . '/storage/logs/cron.log',
             implode(' | ', array_map(fn ($k, $v) => "$k=$v", array_keys($out), $out)) . "\n",
@@ -62,6 +97,55 @@ class Housekeeping
         );
 
         return $out;
+    }
+
+    /**
+     * Detect a failed background backup (the runner leaves .failed behind
+     * when it exits without success). First caller gets the message and the
+     * marker is renamed to .failed.seen so admins are alerted once.
+     */
+    public static function consumeBackupFailure(): ?string
+    {
+        $root  = dirname(__DIR__, 2);
+        $file  = $root . '/storage/backups/.failed';
+
+        if (!is_file($file)) {
+            return null;
+        }
+
+        $msg = trim((string) @file_get_contents($file));
+        @rename($file, $file . '.seen');
+        Mailer::adminAlert('backup-failed', 'Backup failed', "The scheduled/backup job reported failure:\n" . ($msg ?: '(no detail)'), 600);
+
+        return $msg !== '' ? $msg : 'backup failed';
+    }
+
+    /**
+     * Total size of the uploads tree + photo-file count, walking with the
+     * SPL iterators (no shell out).
+     *
+     * @return array{0: int, 1: int} [bytes, fileCount]
+     */
+    private static function uploadsUsage(string $dir): array
+    {
+        if (!is_dir($dir)) {
+            return [0, 0];
+        }
+
+        $bytes = 0;
+        $count = 0;
+
+        foreach (new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::LEAVES_ONLY
+        ) as $item) {
+            if ($item->isFile()) {
+                $bytes += $item->getSize();
+                $count++;
+            }
+        }
+
+        return [$bytes, $count];
     }
 
     private static function rrmdir(string $dir): void
