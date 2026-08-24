@@ -615,7 +615,14 @@ BASH;
         }
 
         $wanted = [];
-        preg_match_all('/CREATE TABLE[^(]*`?([A-Za-z0-9_]+)`?\s*\((.*?)\)\s*(?:ENGINE|DEFAULT|;)/is', $sql, $tables, PREG_SET_ORDER);
+        // Name capture must not be greedy or it backtracks down to a single
+        // letter of the table name; body runs to the last ')' before ';'.
+        preg_match_all(
+            '/CREATE TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+`?([A-Za-z0-9_]+)`?\s*\(([^;]*)\)\s*[^;]*;/is',
+            $sql,
+            $tables,
+            PREG_SET_ORDER
+        );
 
         foreach ($tables as $table) {
             $name = $table[1];
@@ -623,7 +630,7 @@ BASH;
 
             foreach (explode("\n", $table[2]) as $line) {
                 $line = trim(trim($line), ",");
-                if ($line === '' || preg_match('/^(PRIMARY|UNIQUE|KEY|INDEX|CONSTRAINT|FULLTEXT|SPATIAL|CHECK)\b/i', $line)) {
+                if ($line === '' || preg_match('/^(PRIMARY|UNIQUE|KEY|INDEX|CONSTRAINT|FULLTEXT|SPATIAL|CHECK|FOREIGN)\b/i', $line)) {
                     continue;
                 }
                 if (preg_match('/^`?([A-Za-z0-9_]+)`?\s+/', $line, $m)) {

@@ -211,9 +211,12 @@ class GalleryController extends Controller
         }
         unset($_SESSION['pending_gallery_files']);
 
+        $page = (int) $this->request->query('page', 1);
+
         $this->viewAdmin('create', [
             'categories'  => Category::all(),
             'galleryType' => 'images',
+            'paginator'   => Gallery::paginate($page, 10),
         ]);
     }
 

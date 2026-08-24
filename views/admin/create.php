@@ -1,4 +1,4 @@
-<?php $title = 'New Gallery'; ?>
+<?php $title = 'Gallery Management'; ?>
 
 <style>
     .create-page { max-width: none; }
@@ -91,7 +91,7 @@
 </style>
 
 <div class="create-page">
-    <h1>New Gallery</h1>
+    <h1>Gallery Management</h1>
     <p class="page-sub muted">Upload files first — they appear as tiled previews. Then give the gallery a name and save.</p>
 
     <div class="create-grid">
@@ -394,3 +394,72 @@
     updateTypeHint();
 })();
 </script>
+
+<?php // Full gallery list, moved here from the dashboard. ?>
+<div class="sys-card" style="margin-top:var(--spacing-lg);">
+    <h2>All galleries</h2>
+    <?php if (empty($paginator['items'])): ?>
+        <p class="muted">No galleries yet.</p>
+    <?php else: ?>
+    <form method="post" action="<?= url('/admin/galleries/bulk') ?>">
+        <?= csrf_field() ?>
+        <div style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.75rem 0;">
+            <strong>With selected:</strong>
+            <select name="action" onchange="document.getElementById('bulk-cat').style.display = this.value === 'category' ? '' : 'none';">
+                <option value="delete">Delete</option>
+                <option value="category">Set category</option>
+            </select>
+            <select name="category_id" id="bulk-cat" style="display:none;">
+                <?php foreach ($categories as $category): ?>
+                    <option value="<?= (int) $category['id'] ?>"><?= e($category['name']) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <button type="submit" class="btn btn-sm" onclick="return confirm('Apply bulk action to all checked galleries?');">Apply</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th><input type="checkbox" id="gallery-check-all" title="Select all"></th>
+                    <th>Title</th>
+                    <th>Photos</th>
+                    <th>Total Views</th>
+                    <th>Unique Views</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($paginator['items'] as $gallery): ?>
+                    <tr>
+                        <td><input type="checkbox" name="ids[]" value="<?= (int) $gallery['id'] ?>" class="gallery-check"></td>
+                        <td><?= e($gallery['title']) ?></td>
+                        <td><?= (int) $gallery['photo_count'] ?></td>
+                        <td><?= number_format((int) $gallery['views']) ?></td>
+                        <td><?= number_format((int) $gallery['unique_views']) ?></td>
+                        <td><?= e($gallery['created_at']) ?></td>
+                        <td>
+                            <?php // Manage = photo controls; Delete = confirm + remove. ?>
+                            <a class="btn btn-sm" href="<?= url('/admin/galleries/' . (int) $gallery['id']) ?>">Manage</a>
+                            <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/delete') ?>"
+                                  onsubmit="return confirm('Delete this gallery and orphaned photos?');">
+                                <?= csrf_field() ?>
+                                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </form>
+    <script>
+    (function () {
+        var all = document.getElementById('gallery-check-all');
+        if (!all) return;
+        all.addEventListener('change', function () {
+            document.querySelectorAll('.gallery-check').forEach(function (c) { c.checked = all.checked; });
+        });
+    })();
+    </script>
+    <?php $baseUrl = url('/admin'); require __DIR__ . '/../partials/pagination.php'; ?>
+    <?php endif; ?>
+</div>

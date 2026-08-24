@@ -8,9 +8,26 @@ CREATE TABLE IF NOT EXISTS users (
     role          ENUM('super_admin', 'admin', 'editor', 'moderator', 'viewer', 'user') NOT NULL DEFAULT 'user',
     status        ENUM('active', 'suspended') NOT NULL DEFAULT 'active',
     session_version INT UNSIGNED NOT NULL DEFAULT 0,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_login_at DATETIME NULL DEFAULT NULL,
+    date_of_birth DATE NULL DEFAULT NULL,
+    age_verified  TINYINT(1) NOT NULL DEFAULT 0,
+    age_verified_at DATETIME NULL DEFAULT NULL,
+    billing_first_name VARCHAR(100) NULL DEFAULT NULL,
+    billing_last_name  VARCHAR(100) NULL DEFAULT NULL,
+    billing_address_line1 VARCHAR(255) NULL DEFAULT NULL,
+    billing_address_line2 VARCHAR(255) NULL DEFAULT NULL,
+    billing_city   VARCHAR(100) NULL DEFAULT NULL,
+    billing_state  VARCHAR(50) NULL DEFAULT NULL,
+    billing_zip    VARCHAR(20) NULL DEFAULT NULL,
+    billing_country VARCHAR(2) NULL DEFAULT NULL,
+    payment_customer_id VARCHAR(255) NULL DEFAULT NULL,
+    card_last_four CHAR(4) NULL DEFAULT NULL,
+    card_brand     VARCHAR(20) NULL DEFAULT NULL,
+    card_exp_month TINYINT NULL DEFAULT NULL,
+    card_exp_year  SMALLINT NULL DEFAULT NULL,
     flag          VARCHAR(32) NULL DEFAULT NULL,
-    theme_preset  VARCHAR(120) NULL,
-    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    theme_preset  VARCHAR(120) NULL
 );
 
 CREATE TABLE IF NOT EXISTS galleries (
@@ -18,6 +35,7 @@ CREATE TABLE IF NOT EXISTS galleries (
     title        VARCHAR(255) NOT NULL,
     description  TEXT,
     type         VARCHAR(10) NOT NULL DEFAULT 'images',
+    min_level    INT UNSIGNED NOT NULL DEFAULT 0,
     views        INT UNSIGNED NOT NULL DEFAULT 0,
     unique_views INT UNSIGNED NOT NULL DEFAULT 0,
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -28,6 +46,7 @@ CREATE TABLE IF NOT EXISTS galleries (
 CREATE TABLE IF NOT EXISTS photos (
     id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     filename     VARCHAR(255) NOT NULL,
+    is_video     TINYINT(1) NOT NULL DEFAULT 0,
     hash         CHAR(40) NOT NULL UNIQUE,
     caption      VARCHAR(255) NOT NULL DEFAULT '',
     link         VARCHAR(500) NOT NULL DEFAULT '',
@@ -159,7 +178,16 @@ CREATE TABLE IF NOT EXISTS plans (
     sort_order    INT NOT NULL DEFAULT 0,
     level         INT NOT NULL DEFAULT 1,
     active        TINYINT(1) NOT NULL DEFAULT 1,
-    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    can_view_galleries TINYINT(1) NOT NULL DEFAULT 1,
+    can_favorite       TINYINT(1) NOT NULL DEFAULT 0,
+    can_upload         TINYINT(1) NOT NULL DEFAULT 0,
+    can_custom_theme   TINYINT(1) NOT NULL DEFAULT 0,
+    can_download       TINYINT(1) NOT NULL DEFAULT 0,
+    can_comment        TINYINT(1) NOT NULL DEFAULT 0,
+    can_comment_guest  TINYINT(1) NOT NULL DEFAULT 0,
+    max_upload_size_mb INT UNSIGNED NOT NULL DEFAULT 100,
+    max_favorites      INT UNSIGNED NOT NULL DEFAULT 10
 );
 
 CREATE TABLE IF NOT EXISTS subscriptions (
@@ -260,6 +288,7 @@ CREATE TABLE IF NOT EXISTS video_export_jobs (
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     started_at   DATETIME NULL,
     finished_at  DATETIME NULL,
+    metadata_json TEXT NULL,
     FOREIGN KEY (project_id) REFERENCES video_projects(id) ON DELETE CASCADE,
     INDEX idx_video_export_status (status)
 );

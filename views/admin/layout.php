@@ -241,7 +241,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             </form>
             <a class="nav-item <?= $navActive('/admin', true) ?>" href="<?= url('/admin') ?>">Dashboard</a>
             <a class="nav-item <?= $navActive('/admin/trends') ?>" href="<?= url('/admin/trends') ?>">Trends</a>
-            <a class="nav-item <?= $navActive('/admin/galleries/create') ?>" href="<?= url('/admin/galleries/create') ?>">New Gallery</a>
+            <a class="nav-item <?= $navActive('/admin/galleries') ?>" href="<?= url('/admin/galleries/create') ?>">Gallery Management</a>
             <a class="nav-item <?= $navActive('/admin/video-projects') ?>" href="<?= url('/admin/video-projects') ?>">Video Projects</a>
             <a class="nav-item <?= $navActive('/admin/auto-poster') ?>" href="<?= url('/admin/auto-poster') ?>">Auto Poster</a>
             <a class="nav-item <?= $navActive('/admin/categories') ?>" href="<?= url('/admin/categories') ?>">Categories</a>
