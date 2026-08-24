@@ -135,6 +135,18 @@ class Auth
             }
 
             self::$userCache = $row;
+
+            // Presence tracking: refresh last_seen_at at most every 5
+            // minutes so the "Logged In Members" stat reflects currently
+            // active sessions instead of anyone who has ever logged in.
+            $seen = strtotime((string) ($row['last_seen_at'] ?? ''));
+            if ($seen === false || $seen < time() - 300) {
+                Database::run(
+                    'UPDATE users SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?',
+                    [(int) $row['id']]
+                );
+                self::$userCache['last_seen_at'] = date('Y-m-d H:i:s');
+            }
         }
 
         return self::$userCache;

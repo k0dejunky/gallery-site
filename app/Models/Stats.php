@@ -61,7 +61,7 @@ class Stats
                 (SELECT COUNT(*) FROM galleries g WHERE g.deleted_at IS NULL) AS galleries,
                 (SELECT COUNT(DISTINCT s.user_id) FROM subscriptions s JOIN plans p ON p.id = s.plan_id WHERE s.status = ? AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP) AND p.level >= 1) AS total_members,
                 (SELECT COUNT(*) FROM users WHERE role = ?) AS total_users,
-                (SELECT COUNT(DISTINCT s.user_id) FROM subscriptions s JOIN users u ON u.id = s.user_id WHERE s.status = ? AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP) AND u.last_login_at IS NOT NULL) AS logged_in_members',
+                (SELECT COUNT(DISTINCT s.user_id) FROM subscriptions s JOIN users u ON u.id = s.user_id WHERE s.status = ? AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP) AND u.last_seen_at >= DATE_SUB(NOW(), INTERVAL 30 MINUTE)) AS logged_in_members',
             ['active', 'user', 'active']
         )->fetch();
 
