@@ -79,17 +79,50 @@
     </div>
 </div>
 
-<?php // Storage growth trend (from housekeeping snapshots). ?>
+<?php // Storage growth trend (from housekeeping snapshots), selectable window. ?>
 <div class="sys-card" style="margin-top:var(--spacing-lg);">
-    <h2>Storage trend</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <h2 style="margin:0;">Storage trend</h2>
+        <div class="storage-periods" role="navigation" aria-label="Storage trend period">
+            <?php foreach (['day' => 'Day', 'week' => 'Week', 'month' => 'Month', 'year' => 'Year', 'all' => 'All time'] as $p => $label): ?>
+                <a class="btn btn-sm<?= $storagePeriod === $p ? ' storage-period-active' : '' ?>"
+                   href="<?= e(url('/admin?period=' . $p)) ?>"><?= e($label) ?></a>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <style>
+        .storage-periods { display: flex; gap: .35rem; flex-wrap: wrap; }
+        .storage-period-active { background: var(--sidebar-active-bg, #0ea5e9); color: var(--sidebar-active-color, #fff); border-color: transparent; }
+    </style>
     <?php if (empty($storageTrend['gb'])): ?>
         <p class="muted">No snapshots yet — the housekeeping cron records one every 15 minutes.</p>
     <?php else: ?>
-        <?= \App\Core\Charts::sparkline($storageTrend['gb'], 480, 60, '#0ea5e9') ?>
+        <?php
+            $cur   = (float) ($storageTrend['current_gb'] ?? 0);
+            $delta = (float) ($storageTrend['delta_gb'] ?? 0);
+            $photos = (int) ($storageTrend['current_photos'] ?? 0);
+            $granLabels = ['hour' => 'hourly points', 'day' => 'daily points', 'month' => 'monthly points'];
+            $winLabels  = ['day' => 'last 24 hours', 'week' => 'last 7 days', 'month' => 'last 30 days', 'year' => 'last 12 months', 'all' => 'all recorded history'];
+        ?>
+        <div class="stat-cards" style="margin:.75rem 0;">
+            <div class="stat-card">
+                <span class="muted">Current uploads storage</span>
+                <b style="font-size:1.3rem;"><?= number_format($cur, 2) ?> GB</b>
+                <span class="muted" style="font-size:.8rem;"><?= number_format($photos) ?> photos tracked</span>
+            </div>
+            <div class="stat-card">
+                <span class="muted">Change over <?= e($winLabels[$storagePeriod] ?? $storagePeriod) ?></span>
+                <b style="font-size:1.3rem;color:<?= $delta > 0 ? '#16a34a' : ($delta < 0 ? '#dc2626' : 'inherit') ?>;">
+                    <?= $delta > 0 ? '+' : '' ?><?= number_format($delta, 2) ?> GB
+                </b>
+                <span class="muted" style="font-size:.8rem;"><?= e((string) reset($storageTrend['gb'])) ?> GB → <?= e((string) end($storageTrend['gb'])) ?> GB</span>
+            </div>
+        </div>
+        <?= \App\Core\Charts::sparkline($storageTrend['gb'], 720, 90, '#0ea5e9') ?>
         <p class="muted" style="margin:.35rem 0 0;font-size:.85rem;">
-            Uploads over last <?= count($storageTrend['gb']) ?> day(s):
-            <?= e((string) reset($storageTrend['gb'])) ?> GB →
-            <b><?= e((string) end($storageTrend['gb'])) ?> GB</b>
+            <?= count($storageTrend['gb']) ?> <?= e($granLabels[$storageTrend['granularity']] ?? 'points') ?>
+            · snapshots every ~15 min<?php if (!empty($storageTrend['first_snapshot'])): ?>
+            · history begins <?= e(date('n/j/Y', strtotime($storageTrend['first_snapshot']))) ?><?php endif; ?>
         </p>
     <?php endif; ?>
 </div>

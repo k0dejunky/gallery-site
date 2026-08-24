@@ -333,28 +333,123 @@ class Stats
     }
 
     /**
-     * Daily storage usage for the last N days from the housekeeping
-     * snapshots (peak bytes per day). Returns labels + GB values.
+     * Storage usage over a selectable period, built from the housekeeping
+     * snapshots (peak bytes per bucket). Buckets with no snapshot carry the
+     * last known value forward (and leading gaps use the first known value)
+     * so the series is continuous even when the cron missed runs or history
+     * is shorter than the requested window.
+     *
+     * Periods: day (hourly), week / month (daily), year / all (monthly).
+     *
+     * Returns labels + GB values plus summary stats:
+     * current_gb, current_photos, delta_gb, points, granularity,
+     * first_snapshot (Y-m-d or null).
      */
-    public static function storageTrend(int $days = 14): array
+    public static function storageTrend(?string $period = null): array
     {
-        $rows = Database::run(
-            "SELECT DATE(captured_at) AS d, MAX(uploads_bytes) AS b
-             FROM storage_snapshots
-             WHERE captured_at >= ?
-             GROUP BY d ORDER BY d",
-            [date('Y-m-d 00:00:00', strtotime('-' . ($days - 1) . ' days'))]
-        )->fetchAll();
+        $periods = [
+            'day'   => ['since' => '-24 hours',  'bucket' => 'hour'],
+            'week'  => ['since' => '-6 days',    'bucket' => 'day'],
+            'month' => ['since' => '-29 days',   'bucket' => 'day'],
+            'year'  => ['since' => '-11 months', 'bucket' => 'month'],
+            'all'   => ['since' => null,         'bucket' => 'month'],
+        ];
+
+        $period = is_string($period) && isset($periods[$period]) ? $period : 'week';
+        $cfg    = $periods[$period];
+
+        if ($cfg['since'] === null) {
+            $rows = Database::run(
+                'SELECT captured_at, uploads_bytes, photos_count FROM storage_snapshots ORDER BY captured_at LIMIT 200000'
+            )->fetchAll();
+        } else {
+            $rows = Database::run(
+                'SELECT captured_at, uploads_bytes, photos_count FROM storage_snapshots
+                 WHERE captured_at >= ? ORDER BY captured_at LIMIT 200000',
+                [date('Y-m-d H:i:s', strtotime($cfg['since']))]
+            )->fetchAll();
+        }
+
+        // Peak bytes per bucket key, in chronological order.
+        $peaks    = [];
+        $firstRow = null;
+        $lastRow  = null;
+        foreach ($rows as $r) {
+            $ts   = strtotime((string) $r['captured_at']);
+            $key  = date($cfg['bucket'] === 'hour' ? 'Y-m-d H:00:00' : ($cfg['bucket'] === 'day' ? 'Y-m-d 00:00:00' : 'Y-m-01 00:00:00'), $ts);
+            $peak = (int) $r['uploads_bytes'];
+            if (!isset($peaks[$key]) || $peak > $peaks[$key]) {
+                $peaks[$key] = $peak;
+            }
+            $firstRow ??= ['at' => (string) $r['captured_at']];
+            $lastRow    = ['at' => (string) $r['captured_at'], 'bytes' => $peak, 'photos' => (int) $r['photos_count']];
+        }
+
+        // Full bucket list covering the requested window.
+        $now      = time();
+        $bucketTs = [];
+        if ($cfg['bucket'] === 'hour') {
+            for ($t = strtotime('-23 hours', $now); $t <= $now; $t += 3600) {
+                $bucketTs[] = strtotime(date('Y-m-d H:00:00', $t));
+            }
+        } elseif ($cfg['bucket'] === 'day') {
+            $start = strtotime(date('Y-m-d 00:00:00', strtotime($cfg['since'], $now)));
+            $today = strtotime(date('Y-m-d 00:00:00', $now));
+            for ($t = $start; $t <= $today; $t += 86400) {
+                $bucketTs[] = $t;
+            }
+        } else { // month
+            $start = $period === 'year'
+                ? strtotime(date('Y-m-01 00:00:00', strtotime('-11 months', $now)))
+                : ($rows ? strtotime(date('Y-m-01 00:00:00', strtotime((string) $rows[0]['captured_at']))) : strtotime(date('Y-m-01 00:00:00')));
+            for ($t = $start; $t <= $now; $t = strtotime('+1 month', $t)) {
+                $bucketTs[] = strtotime(date('Y-m-01 00:00:00', $t));
+            }
+        }
+
+        // Carry-forward fill so the line is continuous; buckets recorded
+        // before the first snapshot take the first known value.
+        $firstKnownKey = null;
+        foreach ($bucketTs as $ts) {
+            $key = date('Y-m-d H:00:00', $ts);
+            if (array_key_exists($key, $peaks)) {
+                $firstKnownKey = $key;
+                break;
+            }
+        }
 
         $labels = [];
         $gbs    = [];
-
-        foreach ($rows as $r) {
-            $labels[] = date('n/j', strtotime((string) $r['d']));
-            $gbs[]    = round(((int) $r['b']) / 1073741824, 2);
+        $carry  = null;
+        foreach ($bucketTs as $ts) {
+            $key = date('Y-m-d H:00:00', $ts);
+            if (array_key_exists($key, $peaks)) {
+                $carry = $peaks[$key];
+            } elseif ($carry === null && $firstKnownKey !== null) {
+                $carry = $peaks[$firstKnownKey];
+            }
+            if ($carry !== null) {
+                if ($cfg['bucket'] === 'hour') {
+                    $labels[] = date('G:00', $ts);
+                } elseif ($cfg['bucket'] === 'day') {
+                    $labels[] = date('n/j', $ts);
+                } else {
+                    $labels[] = date('M y', $ts);
+                }
+                $gbs[] = round($carry / 1073741824, 2);
+            }
         }
 
-        return ['labels' => $labels, 'gb' => $gbs];
+        return [
+            'labels'         => $labels,
+            'gb'             => $gbs,
+            'current_gb'     => $lastRow !== null ? round($lastRow['bytes'] / 1073741824, 2) : null,
+            'current_photos' => $lastRow !== null ? $lastRow['photos'] : null,
+            'delta_gb'       => count($gbs) > 1 ? round(end($gbs) - reset($gbs), 2) : ($gbs ? 0.0 : null),
+            'points'         => count($gbs),
+            'granularity'    => $cfg['bucket'],
+            'first_snapshot' => $firstRow !== null ? substr($firstRow['at'], 0, 10) : null,
+        ];
     }
 
     /**

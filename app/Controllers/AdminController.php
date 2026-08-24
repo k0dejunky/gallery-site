@@ -49,6 +49,11 @@ class AdminController extends Controller
             );
         }
 
+        $storagePeriod = (string) ($_GET['period'] ?? 'week');
+        if (!in_array($storagePeriod, ['day', 'week', 'month', 'year', 'all'], true)) {
+            $storagePeriod = 'week';
+        }
+
         $this->viewAdmin('dashboard', [
             'paginator' => Gallery::paginate($page, 10),
             'summary'   => Stats::summary(),
@@ -56,7 +61,8 @@ class AdminController extends Controller
             'categories' => Category::all(),
             'finance'   => \App\Models\Stats::finance(),
             'feed'      => \App\Models\Stats::feed(),
-            'storageTrend' => \App\Models\Stats::storageTrend(),
+            'storageTrend' => \App\Models\Stats::storageTrend($storagePeriod),
+            'storagePeriod' => $storagePeriod,
             'security'  => $security,
             'backupFailure' => $backupFailure,
             'cronAgeMin' => $cronAge,
