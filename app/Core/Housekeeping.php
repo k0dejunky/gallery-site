@@ -30,6 +30,9 @@ class Housekeeping
             'disk_free_gb'  => null,
         ];
 
+        self::watchBackupSync($root);
+        self::watchRestoreDrill($root);
+
         // Subscriptions whose expiry passed while nobody was watching.
         $stmt = Database::run(
             "UPDATE subscriptions SET status = 'expired'
@@ -146,6 +149,71 @@ class Housekeeping
      *
      * @return array{0: int, 1: int} [bytes, fileCount]
      */
+    /**
+     * Alert when the offsite backup sync looks unhealthy: the .last_sync
+     * status file reports a failure, or no successful sync for over 26 h.
+     */
+    private static function watchBackupSync(string $root): void
+    {
+        $file = $root . '/storage/backups/.last_sync';
+        if (!is_file($file)) {
+            return; // sync feature not configured
+        }
+
+        $data  = json_decode((string) @file_get_contents($file), true);
+        $ok    = is_array($data) && !empty($data['ok']) && (int) ($data['sync_rc'] ?? 1) === 0;
+        $ageH  = is_array($data) && !empty($data['at']) ? (time() - strtotime((string) $data['at'])) / 3600 : null;
+
+        if ($ok && $ageH !== null && $ageH <= 26) {
+            return;
+        }
+
+        $why = !$ok ? 'last sync reported failure (sync_rc=' . ($data['sync_rc'] ?? '?') . ')'
+                    : 'no successful sync for ' . round((float) $ageH) . ' hours';
+        Mailer::adminAlert(
+            'backup-sync',
+            'Backup sync unhealthy',
+            "Offsite backup sync problem: {$why}.\nCheck storage/backups/.last_sync and the rclone logs on the server.",
+            43200
+        );
+    }
+
+    /**
+     * Alert when the weekly restore drill has not passed recently — the
+     * proof that backups are actually restorable.
+     */
+    private static function watchRestoreDrill(string $root): void
+    {
+        $file = $root . '/storage/backups/.last_drill';
+
+        if (!is_file($file)) {
+            Mailer::adminAlert(
+                'restore-drill',
+                'Restore drill never run',
+                "No backup restore drill has been recorded yet.\nRun scripts/restore-drill.sh from cron to verify restorability.",
+                604800
+            );
+            return;
+        }
+
+        $data = json_decode((string) @file_get_contents($file), true);
+        $ageD = is_array($data) && !empty($data['at']) ? (time() - strtotime((string) $data['at'])) / 86400 : null;
+
+        if (is_array($data) && !empty($data['ok']) && $ageD !== null && $ageD <= 8) {
+            return;
+        }
+
+        $why = !is_array($data) || empty($data['ok'])
+            ? 'last drill FAILED: ' . ($data['note'] ?? 'unknown error')
+            : 'last successful drill was ' . round((float) $ageD) . ' days ago';
+        Mailer::adminAlert(
+            'restore-drill',
+            'Restore drill stale or failed',
+            "Backup restore drill problem: {$why}\nCheck storage/backups/.last_drill on the server.",
+            604800
+        );
+    }
+
     private static function uploadsBytes(string $dir): int
     {
         if (!is_dir($dir)) {

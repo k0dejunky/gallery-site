@@ -26,6 +26,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') . ' Admin' : e(config('app.site_name')) . ' Admin' ?></title>
+    <link rel="stylesheet" href="<?= e(url('/assets/admin-shared.css')) ?>">
     <style>
 <?= \App\Models\Theme::css(\App\Models\Theme::SCOPE_ADMIN) ?>
 <?= \App\Models\Theme::cssLayout(\App\Models\Theme::SCOPE_ADMIN) ?>
