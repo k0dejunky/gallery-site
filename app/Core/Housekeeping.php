@@ -49,9 +49,13 @@ class Housekeeping
             }
         }
 
-        // Keep only the newest backup archives so the disk never fills up.
+        // Keep only the newest backup archives (media + db dumps share one
+        // retention pool) so the disk never fills up.
         $backupDir = $root . '/storage/backups';
-        $archives  = glob($backupDir . '/*.tar.gz') ?: [];
+        $archives  = array_merge(
+            glob($backupDir . '/*.tar.gz') ?: [],
+            glob($backupDir . '/*.sql.gz') ?: []
+        );
 
         if ($backupKeep > 0 && count($archives) > $backupKeep) {
             usort($archives, fn (string $a, string $b): int => filemtime($b) <=> filemtime($a));

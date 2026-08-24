@@ -412,7 +412,10 @@ PHP;
     {
         $out = [];
 
-        foreach (glob($this->backupDir . '/*.tar.gz') ?: [] as $file) {
+        foreach (array_merge(
+            glob($this->backupDir . '/*.tar.gz') ?: [],
+            glob($this->backupDir . '/*.sql.gz') ?: []
+        ) as $file) {
             $out[] = [
                 'name' => basename($file),
                 'size' => (int) filesize($file),
@@ -448,6 +451,8 @@ PHP;
             . ' ' . escapeshellarg((string) ($db['database'] ?? ''));
 
         $script = sys_get_temp_dir() . '/gallery-backup.sh';
+        // NOTE: GNU tar cannot append to a compressed archive, so the SQL
+        // dump ships as its own .sql.gz next to the media .tar.gz.
         $body = <<<BASH
 #!/bin/bash
 set -e
@@ -457,24 +462,27 @@ rm -f {BACKUPDIR}/.failed {BACKUPDIR}/.last_ok
 DUMP=\$(mktemp /tmp/gallery-dump-XXXXXX.sql)
 {MYSQLDUMP} > "\$DUMP"
 TARGET={BACKUPDIR}/gallery-backup-{STAMP}.tar.gz
+SQLT={BACKUPDIR}/gallery-db-{STAMP}.sql.gz
 tar czf "\$TARGET" --warning=no-file-changed --ignore-failed-read -C {ROOT} storage/uploads
 test \$? -le 1
-tar rzf "\$TARGET" --warning=no-file-changed -C "\$(dirname "\$DUMP")" "\$(basename "\$DUMP")"
+gzip -c "\$DUMP" > "\$SQLT"
 rm -f "\$DUMP"
-gzip -t "\$TARGET" || { echo "\$(date "+%F %T") archive verification failed: \$TARGET" >> {BACKUPDIR}/.failed; exit 1; }
+gzip -t "\$TARGET" || { echo "\$(date "+%F %T") media archive verification failed: \$TARGET" >> {BACKUPDIR}/.failed; exit 1; }
+gzip -t "\$SQLT" || { echo "\$(date "+%F %T") db dump verification failed: \$SQLT" >> {BACKUPDIR}/.failed; exit 1; }
 SYNC_RC=0
-if [ -n "{SYNCCMD}" ]; then
-  {SYNCCMD} || SYNC_RC=\$?
-fi
-printf '{"ok":true,"at":"%s","file":"%s","sync_rc":%s}\n' "\$(date +%FT%T)" "\$(basename "\$TARGET")" "\$SYNC_RC" > {BACKUPDIR}/.last_sync
+{SYNCBLOCK}
+printf '{"ok":true,"at":"%s","file":"%s","db":"%s","sync_rc":%s}\\n' "\$(date +%FT%T)" "\$(basename "\$TARGET")" "\$(basename "\$SQLT")" "\$SYNC_RC" > {BACKUPDIR}/.last_sync
 touch {BACKUPDIR}/.last_ok
 rm -f {BACKUPDIR}/.running
 trap - EXIT
 BASH;
         $syncCmd = trim((string) env_value('BACKUP_SYNC_CMD', ''));
+        $syncBlock = $syncCmd !== ''
+            ? 'if [ -n "{SYNCCMD}" ]; then' . "\n" . '  {SYNCCMD} || SYNC_RC=$?' . "\n" . 'fi'
+            : ':';
         $body = str_replace(
-            ['{MYSQLDUMP}', '{BACKUPDIR}', '{STAMP}', '{ROOT}', '{SYNCCMD}'],
-            [$mysqldump, escapeshellarg($this->backupDir), $stamp, escapeshellarg($this->root), $syncCmd],
+            ['{MYSQLDUMP}', '{BACKUPDIR}', '{STAMP}', '{ROOT}', '{SYNCBLOCK}', '{SYNCCMD}'],
+            [$mysqldump, escapeshellarg($this->backupDir), $stamp, escapeshellarg($this->root), $syncBlock, $syncCmd],
             $body
         );
         file_put_contents($script, $body);
