@@ -184,6 +184,28 @@ class Gallery
     }
 
     /**
+     * Galleries tagged with no category at all (shown in the catch-all
+     * "Uncategorized" section of the full listing).
+     */
+    public static function withoutCategory(string $type = ''): array
+    {
+        $typeCondition = '';
+        if (in_array($type, ['images', 'videos'], true)) {
+            $typeCondition = ' AND ' . self::mediaTypeCondition($type);
+        }
+
+        return Database::run(
+            'SELECT g.*, NULL AS category_id, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
+             FROM galleries g
+             LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
+             WHERE g.deleted_at IS NULL
+               AND NOT EXISTS (SELECT 1 FROM gallery_category gc WHERE gc.gallery_id = g.id)' . $typeCondition . '
+             GROUP BY g.id
+             ORDER BY g.created_at DESC'
+        )->fetchAll();
+    }
+
+    /**
      * Categories a gallery is tagged with.
      */
     public static function categories(int $galleryId): array

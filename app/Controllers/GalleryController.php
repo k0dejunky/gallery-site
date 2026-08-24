@@ -40,10 +40,45 @@ class GalleryController extends Controller
         $isMember  = Auth::hasActiveSubscription();
         $favorites = $user !== null && $isMember ? FavoriteCategory::forUser((int) $user['id']) : [];
 
-        // The landing page always browses ALL galleries — favourite
-        // categories are never pre-applied here. Members reach a favourite
-        // category by clicking it in the left navigation, which opens its
-        // own listing at /galleries/category/{slug}.
+        // Full listing: every gallery grouped under its category — never
+        // restricted to favourites and never paginated. A gallery appears
+        // once, under its first category (alphabetical order); untagged
+        // galleries land in a catch-all "Uncategorized" section. Search
+        // still uses the paginated results grid below.
+        $sections   = [];
+        $seen       = [];
+        $categories = Category::all();
+
+        if ($q === '') {
+            $byCategory = Gallery::inCategories(array_column($categories, 'id'), $type);
+
+            foreach ($categories as $cat) {
+                $galleries = [];
+
+                foreach (($byCategory[(int) $cat['id']] ?? []) as $gallery) {
+                    if (isset($seen[(int) $gallery['id']])) {
+                        continue;
+                    }
+
+                    $seen[(int) $gallery['id']] = true;
+                    $galleries[]                = $gallery;
+                }
+
+                if ($galleries !== []) {
+                    $sections[] = ['category' => $cat, 'galleries' => $galleries];
+                }
+            }
+
+            $uncategorized = array_values(array_filter(
+                Gallery::withoutCategory($type),
+                static fn (array $gallery): bool => !isset($seen[(int) $gallery['id']])
+            ));
+
+            if ($uncategorized !== []) {
+                $sections[] = ['category' => ['id' => 0, 'name' => 'Uncategorized', 'slug' => ''], 'galleries' => $uncategorized];
+            }
+        }
+
         $filters = ['q' => $q];
         if ($catId > 0) {
             $filters['category'] = $catId;
@@ -60,17 +95,18 @@ class GalleryController extends Controller
         }
 
         $this->view('gallery/index', [
-            'paginator'     => $paginator,
-            'categories'    => Category::all(),
+            'paginator'     => $q !== '' ? $paginator : null,
+            'categories'    => $categories,
             'favorites'     => $favorites,
             'navCategories' => $favorites,
+            'sections'      => $sections,
             'q'             => $q,
             'categoryId'    => $catId,
             'type'          => $type,
             'currentUser'   => $user,
             'hasActive'     => $isMember,
             'sidebarNav'    => true,
-            'cardCovers'    => $this->preloadCardData([], $paginator),
+            'cardCovers'    => $this->preloadCardData($sections, $q !== '' ? $paginator : null),
         ]);
     }
 
