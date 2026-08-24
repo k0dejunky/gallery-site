@@ -13,6 +13,21 @@
   .temp-pass { background: #fffbeb; border: 1px solid #f59e0b; color: #92400e; padding: .75rem 1rem; border-radius: var(--border-radius, 8px); margin-bottom: 1rem; font-size: .95rem; }
   .temp-pass code { font-size: 1.05rem; font-weight: 700; user-select: all; }
   table { width: 100%; }
+  /* Shared list styling (kept in sync with users.php) */
+  .users-hero { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; margin-bottom: 1.25rem; }
+  .users-hero h1 { margin-bottom: .25rem; }
+  .users-hero p { margin: 0; color: var(--muted-text-color); }
+  .users-table-wrap { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--card-radius); overflow: auto; box-shadow: var(--shadow); margin-bottom: 1.25rem; }
+  .users-table { margin: 0; width: 100%; }
+  .users-table th { white-space: nowrap; text-align: left; }
+  .users-table td { vertical-align: middle; overflow-wrap: anywhere; padding: .5rem .6rem; border-bottom: 1px solid var(--table-border); font-size: .92rem; }
+  .user-date { white-space: nowrap; color: var(--muted-text-color); font-size: .85rem; }
+  .role-badge, .status-badge { display: inline-block; padding: .2rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 700; text-transform: capitalize; }
+  .role-badge { background: var(--filter-bg); color: var(--filter-text); border: 1px solid var(--filter-border); }
+  .role-badge.admin, .role-badge.super_admin { background: var(--sidebar-active-bg); color: var(--sidebar-active-color); }
+  .status-badge { background: var(--success-bg); color: var(--success-text); }
+  .status-badge.pending { background: var(--warning-bg); color: var(--warning-text); }
+  .status-badge.cancelled, .status-badge.expired { background: var(--danger-bg); color: var(--danger-text); }
 </style>
 
 <div class="users-hero">
@@ -80,6 +95,7 @@
                 <?= csrf_field() ?><button class="btn btn-sm" type="submit">Log out everywhere</button>
             </form>
         </div>
+    </div>
     <div class="ud-card">
         <h3>Flag</h3>
         <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/flag') ?>" style="display:flex;gap:.4rem;flex-wrap:wrap;">
