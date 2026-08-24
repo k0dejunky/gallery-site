@@ -801,6 +801,60 @@ class GalleryController extends Controller
     }
 
     /**
+     * Bulk actions from the dashboard list: multi-select soft-delete or
+     * re-assign every checked gallery to a single category.
+     */
+    public function bulk(): void
+    {
+        Auth::requirePermission('galleries');
+
+        $ids = array_values(array_filter(array_map('intval', (array) ($this->request->post('ids') ?? []))));
+        $action = (string) $this->request->post('action', '');
+
+        if ($ids === [] || !in_array($action, ['delete', 'category'], true)) {
+            $this->flash('error', 'Nothing to do — select galleries and an action first.');
+            $this->redirect('/admin');
+        }
+
+        $categoryId = (int) $this->request->post('category_id', 0);
+        if ($action === 'category' && $categoryId <= 0) {
+            $this->flash('error', 'Pick a category to assign.');
+            $this->redirect('/admin');
+        }
+
+        $adminId = (int) Auth::user()['id'];
+        $done = 0;
+
+        foreach ($ids as $id) {
+            $gallery = Gallery::findIncludingDeleted($id);
+
+            if ($gallery === null) {
+                continue;
+            }
+
+            if ($action === 'delete') {
+                if ($gallery['deleted_at'] === null) {
+                    AuditLog::record($adminId, 'delete', 'gallery', $id,
+                        'Bulk-deleted gallery "' . $gallery['title'] . '"',
+                        ['title' => $gallery['title'] ?? '', 'categories' => array_column(Gallery::categories($id), 'id')]);
+                    Gallery::softDelete($id);
+                }
+                $done++;
+            } else {
+                Gallery::setCategories($id, [$categoryId]);
+                AuditLog::record($adminId, 'update', 'gallery', $id,
+                    'Bulk-recategorized gallery "' . $gallery['title'] . '"',
+                    ['categories' => array_column(Gallery::categories($id), 'id')],
+                    ['categories' => [$categoryId]]);
+                $done++;
+            }
+        }
+
+        $this->flash('success', ucfirst($action === 'delete' ? 'Deleted' : 'Recategorized') . " {$done} gallery(ies).");
+        $this->redirect('/admin');
+    }
+
+    /**
      * Bulk-load cover photos and categories for all galleries that will be
      * rendered as cards, eliminating N+1 queries.
      */

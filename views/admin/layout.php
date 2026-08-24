@@ -215,6 +215,16 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
 </head>
 <body class="admin-theme">
 <?php $isSiteEditor = strpos($_SERVER['REQUEST_URI'] ?? '', '/admin/site-editor') !== false; ?>
+<?php if (!empty($_SESSION['impersonator_id'])): ?>
+    <div style="background:#7f1d1d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;justify-content:center;border-radius:var(--border-radius);margin-bottom:var(--spacing-md);">
+        <b>Impersonating — viewing the site as a member.</b>
+        <form method="post" action="<?= url('/admin/impersonate/exit') ?>" style="display:inline;">
+            <?= csrf_field() ?>
+            <button type="submit" class="btn btn-sm" style="background:#fff;color:#7f1d1d;">Return to admin</button>
+        </form>
+    </div>
+    <style>.impersonating .title-header { display: none; }</style>
+<?php endif; ?>
     <header class="title-header"<?= $isSiteEditor ? ' style="display:none"' : '' ?>>
             <img src="<?= e(\App\Models\Theme::titleImageUrl(\App\Models\Theme::SCOPE_ADMIN)) ?>" alt="<?= e(config('app.site_name')) ?> Admin">
     </header>
@@ -243,6 +253,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             <?php endif; ?>
             <a class="nav-item <?= $navActive('/admin/logs') ?>" href="<?= url('/admin/logs') ?>">Logs</a>
             <a class="nav-item <?= $navActive('/admin/error-logs') ?>" href="<?= url('/admin/error-logs') ?>">Error Logs</a>
+            <a class="nav-item <?= $navActive('/admin/system') ?>" href="<?= url('/admin/system') ?>">System</a>
             <a class="nav-item <?= $navActive('/admin/help') ?>" href="<?= url('/admin/help') ?>">Documentation</a>
             <div class="nav-sep"></div>
             <a class="nav-item" href="<?= url('/galleries') ?>">View Site</a>

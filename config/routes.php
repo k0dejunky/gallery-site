@@ -44,6 +44,7 @@ return [
     ['POST', '/admin/galleries', 'GalleryController@store'],
     ['GET', '/admin/galleries/{id}', 'AdminController@manageGallery'],
     ['GET', '/admin/galleries/{id}/edit', 'GalleryController@edit'],
+    ['POST', '/admin/galleries/bulk', 'GalleryController@bulk'],
     ['POST', '/admin/galleries/{id}', 'GalleryController@update'],
     ['POST', '/admin/galleries/{id}/delete', 'GalleryController@destroy'],
     ['POST', '/admin/galleries/{galleryId}/photos', 'PhotoController@upload'],
@@ -70,9 +71,20 @@ return [
     ['GET', '/admin/users', 'UserController@index'],
     ['GET', '/admin/users/create', 'UserController@create'],
     ['POST', '/admin/users', 'UserController@store'],
+    ['POST', '/admin/users/bulk', 'UserController@bulk'],
+    ['POST', '/admin/users/{id}/impersonate', 'UserController@impersonate'],
     ['GET', '/admin/users/{id}/edit', 'UserController@edit'],
     ['POST', '/admin/users/{id}', 'UserController@update'],
     ['POST', '/admin/users/{id}/delete', 'UserController@destroy'],
+    ['POST', '/admin/impersonate/exit', 'UserController@exitImpersonation'],
+
+    // System maintenance (admin only)
+    ['GET', '/admin/system', 'SystemController@index'],
+    ['POST', '/admin/system/cleanup/pending', 'SystemController@cleanupPending'],
+    ['POST', '/admin/system/cleanup/orphans', 'SystemController@cleanupOrphans'],
+    ['POST', '/admin/system/backup', 'SystemController@backupCreate'],
+    ['GET', '/admin/system/backups/{file}', 'SystemController@backupDownload'],
+    ['POST', '/admin/system/backups/{file}/delete', 'SystemController@backupDelete'],
 
     // Theme + docs (admin only)
     ['GET', '/admin/theme', 'ThemeController@index'],

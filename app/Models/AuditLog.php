@@ -36,6 +36,62 @@ class AuditLog
         return compact('items', 'total', 'page', 'pages', 'perPage');
     }
 
+    /**
+     * Paginated log listing with optional filters: free-text search across
+     * description/admin email, exact action, and entity type.
+     */
+    public static function search(int $page = 1, int $perPage = 30, string $q = '', string $action = '', string $entityType = ''): array
+    {
+        $page = max(1, $page);
+        $where = [];
+        $params = [];
+
+        if ($q !== '') {
+            $where[] = '(l.description LIKE ? OR u.email LIKE ? OR l.entity_type LIKE ?)';
+            $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
+            array_push($params, $like, $like, $like);
+        }
+        if ($action !== '') {
+            $where[] = 'l.action = ?';
+            $params[] = $action;
+        }
+        if ($entityType !== '') {
+            $where[] = 'l.entity_type = ?';
+            $params[] = $entityType;
+        }
+
+        $whereSql = $where === [] ? '' : (' WHERE ' . implode(' AND ', $where));
+
+        $total = (int) Database::run(
+            'SELECT COUNT(*) FROM admin_logs l LEFT JOIN users u ON u.id = l.user_id' . $whereSql,
+            $params
+        )->fetchColumn();
+        $pages = max(1, (int) ceil($total / $perPage));
+        $offset = ($page - 1) * $perPage;
+        $items = Database::run(
+            'SELECT l.*, u.email AS admin_email, r.email AS rollback_email
+             FROM admin_logs l
+             LEFT JOIN users u ON u.id = l.user_id
+             LEFT JOIN users r ON r.id = l.rollback_by'
+            . $whereSql .
+            ' ORDER BY l.created_at DESC, l.id DESC LIMIT ' . $perPage . ' OFFSET ' . $offset,
+            $params
+        )->fetchAll();
+
+        return compact('items', 'total', 'page', 'pages', 'perPage');
+    }
+
+    /**
+     * Distinct values for building the filter dropdowns.
+     */
+    public static function facets(): array
+    {
+        return [
+            'actions' => Database::run('SELECT DISTINCT action FROM admin_logs ORDER BY action')->fetchAll(\PDO::FETCH_COLUMN),
+            'entities' => Database::run('SELECT DISTINCT entity_type FROM admin_logs ORDER BY entity_type')->fetchAll(\PDO::FETCH_COLUMN),
+        ];
+    }
+
     public static function find(int $id): ?array
     {
         $row = Database::run('SELECT * FROM admin_logs WHERE id = ?', [$id])->fetch();

@@ -167,6 +167,16 @@ $isAuthPage = $isLoginPage
      </style>
 </head>
 <body>
+<?php if (!empty($_SESSION['impersonator_id'])): ?>
+    <div style="background:#7f1d1d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;justify-content:center;border-radius:var(--border-radius);margin-bottom:1rem;">
+        <b>Impersonating — viewing the site as a member.</b>
+        <form method="post" action="<?= url('/admin/impersonate/exit') ?>" style="display:inline;">
+            <?= csrf_field() ?>
+            <button type="submit" class="btn btn-sm" style="background:#fff;color:#7f1d1d;">Return to admin</button>
+        </form>
+    </div>
+    <style>.title-header { display: none; }</style>
+<?php endif; ?>
     <header class="title-header">
             <img src="<?= e(url(\App\Models\Theme::userTheme($userThemePreset)['title_image'])) ?>" alt="<?= e(config('app.site_name')) ?>">
     </header>

@@ -77,6 +77,51 @@ class Stats
     }
 
     /**
+     * Membership growth figures for the admin dashboard: monthly-equivalent
+     * recurring revenue of active subscriptions, recent signups, and how
+     * active members are distributed across payment processors.
+     */
+    public static function growth(): array
+    {
+        $mrr = (float) Database::run(
+            'SELECT COALESCE(SUM(
+                CASE p.billing_cycle
+                    WHEN "monthly" THEN p.price
+                    WHEN "yearly" THEN p.price / 12
+                    ELSE p.price / 24
+                END), 0)
+             FROM subscriptions s
+             JOIN plans p ON p.id = s.plan_id
+             WHERE s.status = ? AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)',
+            ['active']
+        )->fetchColumn();
+
+        $signups = Database::run(
+            'SELECT
+                (SELECT COUNT(*) FROM users WHERE created_at >= CURDATE()) AS today,
+                (SELECT COUNT(*) FROM users WHERE created_at >= CURDATE() - INTERVAL 7 DAY) AS week'
+        )->fetch();
+
+        $byProcessor = Database::run(
+            'SELECT COALESCE(pp.name, "(none selected)") AS name, COUNT(DISTINCT s.user_id) AS members,
+                    COALESCE(SUM(CASE p.billing_cycle WHEN "monthly" THEN p.price WHEN "yearly" THEN p.price / 12 ELSE p.price / 24 END), 0) AS mrr
+             FROM subscriptions s
+             JOIN plans p ON p.id = s.plan_id
+             LEFT JOIN payment_processors pp ON pp.id = s.payment_processor_id
+             WHERE s.status = ? AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
+             GROUP BY pp.id, pp.name ORDER BY mrr DESC',
+            ['active']
+        )->fetchAll();
+
+        return [
+            'mrr'          => $mrr,
+            'new_today'    => (int) ($signups['today'] ?? 0),
+            'new_week'     => (int) ($signups['week'] ?? 0),
+            'by_processor' => $byProcessor,
+        ];
+    }
+
+    /**
      * Record a category selection: every time a logged-in user opens a
      * category page it counts as one view of that category.
      */

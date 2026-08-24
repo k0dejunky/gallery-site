@@ -25,7 +25,17 @@ class LogsController extends Controller
 
     public function index(): void
     {
-        $paginator = AuditLog::recent((int) $this->request->query('page', 1));
+        $q = trim((string) $this->request->query('q', ''));
+        $action = trim((string) $this->request->query('action', ''));
+        $entityType = trim((string) $this->request->query('entity', ''));
+
+        if ($q !== '' || $action !== '' || $entityType !== '') {
+            $paginator = AuditLog::search((int) $this->request->query('page', 1), 30, $q, $action, $entityType);
+            $facets = AuditLog::facets();
+        } else {
+            $paginator = AuditLog::recent((int) $this->request->query('page', 1));
+            $facets = AuditLog::facets();
+        }
         $categoryNames = [];
 
         foreach (Category::all() as $category) {
@@ -71,6 +81,10 @@ class LogsController extends Controller
             'pendingSubs'        => $pendingSubs,
             'pendingDeletes'     => $pendingDeletes,
             'pendingApprovals'   => $pendingApprovals,
+            'facets'             => $facets,
+            'filterQ'            => $q,
+            'filterAction'       => $action,
+            'filterEntity'       => $entityType,
         ]);
     }
 

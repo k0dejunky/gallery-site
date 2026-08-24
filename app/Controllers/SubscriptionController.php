@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\Database;
 use App\Core\Request;
 use App\Models\AuditLog;
 use App\Models\Plan;
@@ -25,13 +26,30 @@ class SubscriptionController extends Controller
     }
 
     /**
-     * Every subscription, newest first.
+     * Every subscription, newest first, plus a reconciliation panel of
+     * pending biller signups (PENDING-* refs) so stuck checkouts surface.
      */
     public function index(): void
     {
+        $pendingReconciliation = Database::run(
+            'SELECT s.id, s.user_id, s.transaction_ref, s.created_at,
+                    u.email AS user_email,
+                    p.name AS plan_name, p.price, p.billing_cycle,
+                    pp.name AS processor_name, pp.provider AS processor_provider,
+                    TIMESTAMPDIFF(HOUR, s.created_at, CURRENT_TIMESTAMP) AS age_hours
+             FROM subscriptions s
+             JOIN users u ON u.id = s.user_id
+             JOIN plans p ON p.id = s.plan_id
+             LEFT JOIN payment_processors pp ON pp.id = s.payment_processor_id
+             WHERE s.status = ? AND s.transaction_ref LIKE ?
+             ORDER BY s.created_at ASC',
+            ['pending', 'PENDING-%']
+        )->fetchAll();
+
         $this->viewAdmin('subscriptions', [
             'subscriptions' => Subscription::all(),
             'plans'         => Plan::active(),
+            'reconciliation'=> $pendingReconciliation,
         ]);
     }
 

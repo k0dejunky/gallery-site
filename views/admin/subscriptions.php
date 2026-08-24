@@ -2,6 +2,36 @@
 
 <h1>Subscriptions</h1>
 
+<?php if (!empty($reconciliation)): ?>
+<h2>Needs Attention — Pending Biller Signups</h2>
+<p class="muted">Checkouts that reached a payment processor but were never confirmed by its postback. Approve after verifying the payment in the biller's admin, or cancel to release the member.</p>
+<table>
+    <thead><tr><th>Age</th><th>User</th><th>Plan</th><th>Processor</th><th>Reference</th><th>Actions</th></tr></thead>
+    <tbody>
+    <?php foreach ($reconciliation as $rec): ?>
+        <?php $stale = (int) $rec['age_hours'] >= 24; ?>
+        <tr<?= $stale ? ' style="background:rgba(220,38,38,.08);"' : '' ?>>
+            <td title="<?= e((string) $rec['created_at']) ?>"><?= (int) $rec['age_hours'] ?>h<?= $stale ? ' ⚠' : '' ?></td>
+            <td><?= e((string) $rec['user_email']) ?></td>
+            <td><?= e((string) $rec['plan_name']) ?> ($<?= number_format((float) $rec['price'], 2) ?>)</td>
+            <td><?= !empty($rec['processor_name']) ? e($rec['processor_name']) : '—' ?></td>
+            <td><code><?= e((string) ($rec['transaction_ref'] ?? '')) ?></code></td>
+            <td style="white-space:nowrap;">
+                <form class="inline" method="post" action="<?= url('/admin/subscriptions/' . (int) $rec['id'] . '/approve') ?>"
+                      onsubmit="return confirm('Mark this signup as paid and activate the membership?');">
+                    <?= csrf_field() ?><button type="submit" class="btn btn-sm">Approve</button>
+                </form>
+                <form class="inline" method="post" action="<?= url('/admin/subscriptions/' . (int) $rec['id'] . '/cancel') ?>"
+                      onsubmit="return confirm('Cancel this pending signup?');">
+                    <?= csrf_field() ?><button type="submit" class="btn btn-sm btn-danger">Cancel</button>
+                </form>
+            </td>
+        </tr>
+    <?php endforeach; ?>
+    </tbody>
+</table>
+<?php endif; ?>
+
 <?php if (!empty($plans)): ?>
 <h2>Grant Membership</h2>
 <form method="post" action="<?= url('/admin/subscriptions') ?>">

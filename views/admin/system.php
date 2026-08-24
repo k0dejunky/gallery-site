@@ -1,0 +1,131 @@
+<?php $title = 'System'; ?>
+
+<style>
+    .sys-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .sys-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--border-radius); padding: 1rem; }
+    .sys-card h2 { margin: 0 0 .5rem; font-size: var(--font-size-lg); color: var(--card-title-color); }
+    .sys-card table { width: 100%; font-size: var(--font-size-sm); }
+    .sys-card td, .sys-card th { padding: .25rem .35rem; text-align: left; border-bottom: 1px solid var(--table-border); }
+    .sys-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+    .sys-ok { color: #15803d; font-weight: bold; }
+    .sys-bad { color: var(--btn-danger-color, #b91c1c); font-weight: bold; }
+</style>
+
+<h1 class="section-title">System</h1>
+<p class="muted">Disk free: <b><?= $diskFree !== false ? number_format((float) $diskFree / 1048576) . ' MB' : 'unknown' ?></b></p>
+
+<div class="sys-grid">
+    <!-- Pending upload staging folders -->
+    <div class="sys-card">
+        <h2>Pending uploads</h2>
+        <?php if (empty($pendingDirs)): ?>
+            <p class="muted">No staging folders. Nothing to clean.</p>
+        <?php else: ?>
+            <table>
+                <tr><th>Folder</th><th>Files</th><th>Size</th><th>Age</th><th></th></tr>
+                <?php foreach ($pendingDirs as $dir): ?>
+                    <tr>
+                        <td><code><?= e($dir['name']) ?></code></td>
+                        <td><?= (int) $dir['files'] ?></td>
+                        <td><?= number_format($dir['size'] / 1048576, 1) ?> MB</td>
+                        <td><?= (int) $dir['age_h'] ?>h</td>
+                        <td><form class="inline" method="post" action="<?= url('/admin/system/cleanup/pending') ?>"
+                                  onsubmit="return confirm('Delete this staging folder?');">
+                                <?= csrf_field() ?><input type="hidden" name="dir" value="<?= e($dir['name']) ?>">
+                                <button class="btn btn-sm btn-danger" type="submit">Delete</button></form></td>
+                    </tr>
+                <?php endforeach; ?>
+            </table>
+            <form class="sys-actions" method="post" action="<?= url('/admin/system/cleanup/pending') ?>"
+                  onsubmit="return confirm('Delete ALL <?= count($pendingDirs) ?> staging folders?');">
+                <?= csrf_field() ?><input type="hidden" name="dir" value="all">
+                <button class="btn btn-danger" type="submit">Delete all</button>
+            </form>
+        <?php endif; ?>
+    </div>
+
+    <!-- Orphaned files -->
+    <div class="sys-card">
+        <h2>Orphaned upload files</h2>
+        <?php if (empty($orphans)): ?>
+            <p class="muted">Every file in storage/uploads belongs to a photo record.</p>
+        <?php else: ?>
+            <p><?= count($orphans) ?> unreferenced file(s), <?= number_format(array_sum(array_column($orphans, 'size')) / 1048576, 1) ?> MB total.
+            Preview:</p>
+            <table>
+                <?php foreach (array_slice($orphans, 0, 8) as $orphan): ?>
+                    <tr><td><code><?= e($orphan['name']) ?></code></td><td><?= number_format($orphan['size'] / 1048576, 1) ?> MB</td></tr>
+                <?php endforeach; ?>
+            </table>
+            <form class="sys-actions" method="post" action="<?= url('/admin/system/cleanup/orphans') ?>"
+                  onsubmit="return confirm('Delete all <?= count($orphans) ?> orphaned files permanently?');">
+                <?= csrf_field() ?>
+                <button class="btn btn-danger" type="submit">Delete orphans</button>
+            </form>
+        <?php endif; ?>
+    </div>
+
+    <!-- Backups -->
+    <div class="sys-card">
+        <h2>Backups</h2>
+        <form class="sys-actions" method="post" action="<?= url('/admin/system/backup') ?>">
+            <?= csrf_field() ?>
+            <button class="btn" type="submit"<?= !empty($backupRunning) ? ' disabled' : '' ?>>Create backup now</button>
+            <?php if (!empty($backupRunning)): ?>
+                <b style="color:#b45309;">Backup in progress… refresh to update.</b>
+            <?php else: ?>
+                <span class="muted">Database + uploaded media (.tar.gz)</span>
+            <?php endif; ?>
+        </form>
+        <?php if (!empty($backups)): ?>
+            <table style="margin-top:.75rem;">
+                <tr><th>File</th><th>Size</th><th>Created</th><th></th></tr>
+                <?php foreach ($backups as $backup): ?>
+                    <tr>
+                        <td><code><?= e($backup['name']) ?></code></td>
+                        <td><?= number_format($backup['size'] / 1048576, 1) ?> MB</td>
+                        <td><?= date('Y-m-d H:i', $backup['time']) ?></td>
+                        <td style="white-space:nowrap;">
+                            <a class="btn btn-sm" href="<?= url('/admin/system/backups/' . rawurlencode($backup['name'])) ?>">Download</a>
+                            <form class="inline" method="post" action="<?= url('/admin/system/backups/' . rawurlencode($backup['name']) . '/delete') ?>"
+                                  onsubmit="return confirm('Delete this backup?');">
+                                <?= csrf_field() ?><button class="btn btn-sm btn-danger" type="submit">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </table>
+        <?php else: ?>
+            <p class="muted" style="margin-top:.5rem;">No backups yet.</p>
+        <?php endif; ?>
+    </div>
+
+    <!-- Schema health -->
+    <div class="sys-card">
+        <h2>Schema health</h2>
+        <?php if (empty($schemaDiff)): ?>
+            <p><span class="sys-ok">&#10003;</span> Live database matches <code>schema.sql</code>.</p>
+        <?php else: ?>
+            <p><span class="sys-bad">&#9888;</span> Drift detected between <code>schema.sql</code> and the live DB:</p>
+            <table>
+                <?php foreach ($schemaDiff as $table => $info): ?>
+                    <tr>
+                        <td><code><?= e((string) $table) ?></code></td>
+                        <td>
+                            <?php if (!empty($info['missing_table'])): ?>
+                                <span class="sys-bad">missing entirely</span>
+                            <?php else: ?>
+                                <?php if (!empty($info['missing_cols'])): ?>
+                                    missing: <span class="sys-bad"><?= e(implode(', ', $info['missing_cols'])) ?></span>
+                                <?php endif; ?>
+                                <?php if (!empty($info['extra_cols'])): ?>
+                                    <?= !empty($info['missing_cols']) ? ' · ' : '' ?>live-only: <?= e(implode(', ', $info['extra_cols'])) ?>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </table>
+        <?php endif; ?>
+    </div>
+</div>

@@ -78,6 +78,26 @@
 <h2>Activity Log</h2>
 <p class="muted">All admin actions are recorded. Create, update and delete actions can be rolled back where data allows. Passwords are never stored.</p>
 
+<form method="get" action="<?= url('/admin/logs') ?>" style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:end;margin-bottom:.75rem;">
+    <label>Search<br><input type="text" name="q" value="<?= e($filterQ) ?>" placeholder="description or admin email" size="28"></label>
+    <label>Action<br>
+        <select name="action">
+            <option value="">— any —</option>
+            <?php foreach (($facets['actions'] ?? []) as $a): ?>
+                <option value="<?= e((string) $a) ?>" <?= $filterAction === (string) $a ? 'selected' : '' ?>><?= e(ucfirst((string) $a)) ?></option>
+            <?php endforeach; ?>
+        </select></label>
+    <label>Entity<br>
+        <select name="entity">
+            <option value="">— any —</option>
+            <?php foreach (($facets['entities'] ?? []) as $en): ?>
+                <option value="<?= e((string) $en) ?>" <?= $filterEntity === (string) $en ? 'selected' : '' ?>><?= e(str_replace('_', ' ', (string) $en)) ?></option>
+            <?php endforeach; ?>
+        </select></label>
+    <button type="submit" class="btn btn-sm">Filter</button>
+    <?php if ($filterQ !== '' || $filterAction !== '' || $filterEntity !== ''): ?><a class="btn btn-sm" href="<?= url('/admin/logs') ?>">Clear</a><?php endif; ?>
+</form>
+
 <?php if (empty($paginator['items'])): ?>
     <p>No admin actions recorded yet.</p>
 <?php else: ?>

@@ -22,6 +22,8 @@ class AdminController extends Controller
         $this->viewAdmin('dashboard', [
             'paginator' => Gallery::paginate($page, 10),
             'summary'   => Stats::summary(),
+            'growth'    => Stats::growth(),
+            'categories' => Category::all(),
         ]);
     }
 

@@ -1,5 +1,15 @@
 <?php $title = 'Admin'; ?>
 
+<?php // Membership growth cards: recurring revenue + recent signups. ?>
+<div class="stat-cards">
+    <div class="stat-card"><b>$<?= number_format((float) $growth['mrr'], 2) ?></b><small>Recurring / month</small></div>
+    <div class="stat-card"><b><?= number_format($growth['new_today']) ?></b><small>Signups Today</small></div>
+    <div class="stat-card"><b><?= number_format($growth['new_week']) ?></b><small>Signups 7 Days</small></div>
+    <?php foreach (array_slice($growth['by_processor'], 0, 2) as $proc): ?>
+        <div class="stat-card"><b><?= number_format((int) $proc['members']) ?> · $<?= number_format((float) $proc['mrr'], 0) ?>/mo</b><small>via <?= e((string) $proc['name']) ?></small></div>
+    <?php endforeach; ?>
+</div>
+
 <?php // Headline stat cards: lifetime totals for the whole site. ?>
 <div class="stat-cards">
     <div class="stat-card"><b><?= number_format($summary['total_views']) ?></b><small>Total Views</small></div>
@@ -14,9 +24,25 @@
 <?php if (empty($paginator['items'])): ?>
     <p>No galleries yet.</p>
 <?php else: ?>
+<form method="post" action="<?= url('/admin/galleries/bulk') ?>">
+    <?= csrf_field() ?>
+    <div style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.75rem 0;">
+        <strong>With selected:</strong>
+        <select name="action" onchange="document.getElementById('bulk-cat').style.display = this.value === 'category' ? '' : 'none';">
+            <option value="delete">Delete</option>
+            <option value="category">Set category</option>
+        </select>
+        <select name="category_id" id="bulk-cat" style="display:none;">
+            <?php foreach ($categories as $category): ?>
+                <option value="<?= (int) $category['id'] ?>"><?= e($category['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+        <button type="submit" class="btn btn-sm" onclick="return confirm('Apply bulk action to all checked galleries?');">Apply</button>
+    </div>
     <table>
         <thead>
             <tr>
+                <th><input type="checkbox" id="gallery-check-all" title="Select all"></th>
                 <th>Title</th>
                 <th>Photos</th>
                 <th>Total Views</th>
@@ -28,6 +54,7 @@
         <tbody>
             <?php foreach ($paginator['items'] as $gallery): ?>
                 <tr>
+                    <td><input type="checkbox" name="ids[]" value="<?= (int) $gallery['id'] ?>" class="gallery-check"></td>
                     <td><?= e($gallery['title']) ?></td>
                     <td><?= (int) $gallery['photo_count'] ?></td>
                     <td><?= number_format((int) $gallery['views']) ?></td>
@@ -46,5 +73,15 @@
             <?php endforeach; ?>
         </tbody>
     </table>
-    <?php $baseUrl = url('/admin'); require __DIR__ . '/../partials/pagination.php'; ?>
+</form>
+<script>
+(function () {
+    var all = document.getElementById('gallery-check-all');
+    if (!all) return;
+    all.addEventListener('change', function () {
+        document.querySelectorAll('.gallery-check').forEach(function (c) { c.checked = all.checked; });
+    });
+})();
+</script>
+<?php $baseUrl = url('/admin'); require __DIR__ . '/../partials/pagination.php'; ?>
 <?php endif; ?>

@@ -25,9 +25,27 @@
 <?php if (empty($users)): ?>
     <p>No users yet.</p>
 <?php else: ?>
+<form method="post" action="<?= url('/admin/users/bulk') ?>" id="users-bulk-form">
+    <?= csrf_field() ?>
+    <div style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.5rem;">
+        <strong>With selected:</strong>
+        <select name="action" onchange="document.getElementById('bulk-role').style.display = this.value === 'role' ? '' : 'none';">
+            <option value="role">Set role</option>
+            <option value="delete">Delete</option>
+        </select>
+        <select name="role" id="bulk-role">
+            <?php foreach ($roles as $role): ?>
+                <option value="<?= e($role) ?>"><?= e(str_replace('_', ' ', $role)) ?></option>
+            <?php endforeach; ?>
+            <option value="user">user</option>
+        </select>
+        <button type="submit" class="btn btn-sm"
+                onclick="return confirm('Apply bulk action to all checked users?');">Apply</button>
+    </div>
     <div class="users-table-wrap"><table class="users-table">
         <thead>
             <tr>
+                <th><input type="checkbox" id="check-all" title="Select all"></th>
                 <th>Email</th>
                 <th>Role</th>
                 <th>Membership</th>
@@ -38,6 +56,7 @@
         <tbody>
             <?php foreach ($users as $user): ?>
                 <tr>
+                    <td><?php if ((int) $user['id'] !== (int) \App\Core\Auth::user()['id']): ?><input type="checkbox" name="ids[]" value="<?= (int) $user['id'] ?>" class="user-check"><?php endif; ?></td>
                     <td class="user-email"><?= e($user['email']) ?></td>
                     <td><span class="role-badge <?= e($user['role']) ?>"><?= e(str_replace('_', ' ', $user['role'])) ?></span></td>
                     <td>
@@ -50,6 +69,13 @@
                     <td class="user-date"><?= e($user['created_at']) ?></td>
                     <td class="user-actions">
                         <a class="btn btn-sm" href="<?= url('/admin/users/' . (int) $user['id'] . '/edit') ?>">Edit</a>
+                        <?php if ((int) $user['id'] !== (int) \App\Core\Auth::user()['id']): ?>
+                            <form class="inline" method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/impersonate') ?>"
+                                  onsubmit="return confirm('Sign in as <?= e($user['email']) ?>?');">
+                                <?= csrf_field() ?>
+                                <button type="submit" class="btn btn-sm">Login as</button>
+                            </form>
+                        <?php endif; ?>
                         <form class="inline" method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/delete') ?>"
                               onsubmit="return confirm('Delete user <?= e($user['email']) ?>?');">
                             <?= csrf_field() ?>
@@ -60,6 +86,16 @@
             <?php endforeach; ?>
         </tbody>
     </table></div>
+</form>
+<script>
+(function () {
+    var all = document.getElementById('check-all');
+    if (!all) return;
+    all.addEventListener('change', function () {
+        document.querySelectorAll('.user-check').forEach(function (c) { c.checked = all.checked; });
+    });
+})();
+</script>
 <?php endif; ?>
 <div class="users-footer">
     <a class="btn" href="<?= url('/admin/users/create') ?>">Add User</a>

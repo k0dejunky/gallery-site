@@ -44,7 +44,115 @@ class UserController extends Controller
         $this->viewAdmin('users', [
             'users'  => $users,
             'search' => $search,
+            'roles'  => Auth::ADMIN_ROLES,
         ]);
+    }
+
+    /**
+     * Bulk actions over the checked users: assign a role or delete.
+     */
+    public function bulk(): void
+    {
+        $ids = array_values(array_filter(array_map('intval', (array) ($this->request->post('ids') ?? []))));
+        $action = (string) $this->request->post('action', '');
+        $me = (int) Auth::user()['id'];
+
+        if ($ids === []) {
+            $this->flash('error', 'No users selected.');
+            $this->redirect('/admin/users');
+        }
+
+        if (!in_array($action, ['role', 'delete'], true)) {
+            $this->flash('error', 'Unknown bulk action.');
+            $this->redirect('/admin/users');
+        }
+
+        $role = (string) $this->request->post('role', '');
+
+        if ($action === 'role' && !in_array($role, Auth::ADMIN_ROLES, true) && $role !== 'user') {
+            $this->flash('error', 'Unknown role.');
+            $this->redirect('/admin/users');
+        }
+
+        $done = 0;
+
+        foreach ($ids as $id) {
+            if ($id === $me) {
+                continue;
+            }
+
+            $user = User::find($id);
+
+            if ($user === null) {
+                continue;
+            }
+
+            if ($action === 'delete') {
+                // Never delete the final admin, mirroring single-user delete.
+                if (in_array($user['role'], Auth::ADMIN_ROLES, true) && User::countAdmins() <= 1) {
+                    continue;
+                }
+                User::delete($id);
+                AuditLog::record($me, 'delete', 'user', $id, 'Bulk-deleted account "' . $user['email'] . '"', ['email' => $user['email'], 'role' => $user['role']]);
+                $done++;
+            } else {
+                Database::run('UPDATE users SET role = ? WHERE id = ?', [$role, $id]);
+                AuditLog::record($me, 'update', 'user', $id, 'Bulk role change "' . $user['email'] . '" → ' . $role, ['role' => $user['role']], ['role' => $role]);
+                $done++;
+            }
+        }
+
+        $this->flash('success', ucfirst($action === 'role' ? 'Role set' : 'Deleted') . " for {$done} user(s).");
+        $this->redirect('/admin/users');
+    }
+
+    /**
+     * Sign in as another account for support debugging. The original admin
+     * id is kept in the session so the bar in the layout can switch back;
+     * both directions are audit-logged.
+     */
+    public function impersonate(int $id): void
+    {
+        $target = User::find($id);
+        $me = Auth::user();
+
+        if ($target === null || $id === (int) $me['id']) {
+            $this->flash('error', 'Cannot impersonate that account.');
+            $this->redirect('/admin/users');
+        }
+
+        if ($target['role'] === 'super_admin' && $me['role'] !== 'super_admin') {
+            $this->flash('error', 'Only a super admin can impersonate a super admin.');
+            $this->redirect('/admin/users');
+        }
+
+        $_SESSION['impersonator_id'] = (int) $me['id'];
+        AuditLog::record((int) $me['id'], 'create', 'impersonation', $id,
+            'Started impersonating "' . $target['email'] . '"', null, ['impersonated_user_id' => $id]);
+
+        Auth::loginUser($id);
+        $this->flash('success', 'You are now browsing as "' . $target['email'] . '".');
+        $this->redirect('/galleries');
+    }
+
+    /**
+     * Leave impersonation and restore the original admin session.
+     */
+    public function exitImpersonation(): void
+    {
+        $adminId = (int) ($_SESSION['impersonator_id'] ?? 0);
+
+        if ($adminId <= 0) {
+            $this->redirect('/admin');
+        }
+
+        unset($_SESSION['impersonator_id']);
+        AuditLog::record($adminId, 'delete', 'impersonation', $adminId,
+            'Stopped impersonating and restored own admin session');
+
+        Auth::loginUser($adminId);
+        $this->flash('success', 'Welcome back, admin.');
+        $this->redirect('/admin');
     }
 
     /**
