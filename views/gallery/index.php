@@ -30,37 +30,8 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
     <a class="chip <?= $type === 'videos' ? 'active' : '' ?>" href="<?= e($vidUrl) ?>">&#9654; Video Galleries</a>
 </div>
 
-<?php if ($q === ''): ?>
-<?php // Home view: one "favourite category" section per category, only when that category has galleries. ?>
-<?php if (empty($favorites)): ?>
-    <p class="muted">You have no favorite categories yet. Pick some in <a href="<?= url('/settings') ?>">Settings</a>.</p>
-<?php elseif (empty($sections)): ?>
-    <p class="muted">No galleries in your favorite categories yet.</p>
-<?php else: ?>
-    <?php foreach ($sections as $section): ?>
-        <section class="fav-section">
-            <h2>
-                &starf; <?= e($section['category']['name']) ?>
-                <?php // "View all" keeps the current type filter applied. ?>
-                <a href="<?= url('/galleries/category/' . e($section['category']['slug']) . ($type !== '' ? '?type=' . $type : '')) ?>">View all &rarr;</a>
-            </h2>
-            <div class="grid">
-                <?php foreach ($section['galleries'] as $gallery): ?>
-                    <?php
-                    $gid = (int) $gallery['id'];
-                    $cover = $cardCovers['covers'][$gid] ?? null;
-                    $galleryCategories = $cardCovers['categories'][$gid] ?? [];
-                    require __DIR__ . '/../partials/gallery_card.php';
-                    ?>
-                <?php endforeach; ?>
-            </div>
-        </section>
-    <?php endforeach; ?>
-<?php endif; ?>
-<?php endif; ?>
-
-<?php if ($q !== ''): ?>
 <section>
+    <?php if ($q !== ''): ?>
     <h2 class="section-title">Search results</h2>
 
     <p class="muted">
@@ -74,6 +45,9 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
         <?php if ($type === 'videos'): ?>showing video galleries<?php endif; ?>
         <a href="<?= url('/galleries') ?>">(clear)</a>
     </p>
+    <?php else: ?>
+    <h2 class="section-title">All Galleries</h2>
+    <?php endif; ?>
 
     <?php if (empty($paginator['items'])): ?>
         <p>No galleries found.</p>
@@ -90,7 +64,10 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
         </div>
         <?php
         $baseUrl = url('/galleries');
-        $query   = ['q' => $q];
+        $query   = [];
+        if ($q !== '') {
+            $query['q'] = $q;
+        }
         if ($categoryId > 0) {
             $query['category'] = $categoryId;
         }
@@ -100,5 +77,4 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
         require __DIR__ . '/../partials/pagination.php';
         ?>
     <?php endif; ?>
-    </section>
-    <?php endif; ?>
+</section>

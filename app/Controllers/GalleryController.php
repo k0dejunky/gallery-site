@@ -40,12 +40,11 @@ class GalleryController extends Controller
         $isMember  = Auth::hasActiveSubscription();
         $favorites = $user !== null && $isMember ? FavoriteCategory::forUser((int) $user['id']) : [];
 
-        // The default home-page browse is restricted to favourite categories.
-        // Keyword searches should search all galleries instead.
+        // The landing page always browses ALL galleries — favourite
+        // categories are never pre-applied here. Members reach a favourite
+        // category by clicking it in the left navigation, which opens its
+        // own listing at /galleries/category/{slug}.
         $filters = ['q' => $q];
-        if ($isMember && $q === '') {
-            $filters['category_ids'] = array_column($favorites, 'id');
-        }
         if ($catId > 0) {
             $filters['category'] = $catId;
         }
@@ -53,57 +52,17 @@ class GalleryController extends Controller
             $filters['type'] = $type;
         }
 
-        $sections = [];
-        $seen     = [];
+        $paginator = Gallery::paginate($page, 6, $filters);
 
-        // Bulk-load every favourite category's galleries in a single query
-        // (avoids an N+1 query per favourite) and group them by category.
-        $favoriteIds     = array_column($favorites, 'id');
-        $byCategory      = Gallery::inCategories($favoriteIds, $type);
-        $favoriteOrder   = array_fill_keys(array_map('intval', $favoriteIds), []);
-
-        foreach ($favorites as $favorite) {
-            $favoriteId = (int) $favorite['id'];
-            $galleries  = [];
-
-            foreach (($byCategory[$favoriteId] ?? []) as $gallery) {
-                if (isset($seen[(int) $gallery['id']])) {
-                    continue;
-                }
-
-                $seen[(int) $gallery['id']] = true;
-                $galleries[]                = $gallery;
-            }
-
-            $sections[] = [
-                'category'  => $favorite,
-                'galleries' => $galleries,
-            ];
-        }
-
-        $sections = array_values(array_filter(
-            $sections,
-            static fn (array $section): bool => !empty($section['galleries'])
-        ));
-
-        $paginator = $q !== '' ? Gallery::paginate($page, 6, $filters) : null;
-
-        // A search that found nothing is tracked as a missed search — but only
-        // after confirming the term really does not exist anywhere in the
-        // database, so favourite-category restrictions never cause false misses.
-        if ($paginator !== null && (int) $paginator['total'] === 0 && $user !== null) {
-            $global = Gallery::paginate(1, 1, ['q' => $q]);
-
-            if ((int) $global['total'] === 0) {
-                Stats::recordMissedSearch($q, (int) $user['id']);
-            }
+        // A search that found nothing is tracked as a missed search.
+        if ($q !== '' && (int) $paginator['total'] === 0 && $user !== null) {
+            Stats::recordMissedSearch($q, (int) $user['id']);
         }
 
         $this->view('gallery/index', [
             'paginator'     => $paginator,
             'categories'    => Category::all(),
             'favorites'     => $favorites,
-            'sections'      => $sections,
             'navCategories' => $favorites,
             'q'             => $q,
             'categoryId'    => $catId,
@@ -111,7 +70,7 @@ class GalleryController extends Controller
             'currentUser'   => $user,
             'hasActive'     => $isMember,
             'sidebarNav'    => true,
-            'cardCovers'    => $this->preloadCardData($sections, $paginator),
+            'cardCovers'    => $this->preloadCardData([], $paginator),
         ]);
     }
 
