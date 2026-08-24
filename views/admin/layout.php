@@ -1,7 +1,9 @@
 <?php
 // Admin chrome: sidebar navigation + shared CSS + flash messages. Views are
 // injected as $content so each admin page keeps a single shared shell.
-$user = \App\Core\Auth::user();
+// NOTE: never assign $user here — viewAdmin() has already extracted the
+// page's own $user (e.g. the account being viewed) into this scope, and an
+// assignment here would silently replace it with the logged-in admin.
 $flash = \App\Core\Flash::all();
 \App\Core\Flash::clear();
 
