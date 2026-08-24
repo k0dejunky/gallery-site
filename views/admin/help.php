@@ -344,6 +344,18 @@ The site root <code>/</code> routes to <code>AuthController::loginForm()</code>,
     <li><strong>Database credentials</strong> — production credentials are kept in the non-public <code>.env</code> file at the project root and are loaded by <code>config/database.php</code>. Do not commit or copy <code>.env</code> into <code>public/</code>.</li>
 </ul>
 
+<h2 class="section-title">Backups &amp; offsite sync</h2>
+<ul>
+    <li><strong>What a backup contains</strong> — <em>Create backup now</em> (System page) dumps the database (<code>gallery-db-&lt;stamp&gt;.sql.gz</code>) and archives <code>storage/uploads</code> as <code>gallery-backup-&lt;stamp&gt;.tar.gz</code>. The archive is verified with <code>gzip -t</code>, then split into 4&nbsp;GB chunks (<code>.tar.gz.part-00</code>, <code>.part-01</code>, …) plus a <code>.sha256</code> checksum file, so the offsite sync can upload several chunks in parallel.</li>
+    <li><strong>Offsite sync</strong> — if <code>BACKUP_SYNC_CMD</code> is set in <code>.env</code>, every verified artifact is synced offsite after each backup (currently Google Drive via rclone, target <code>gdrive:gallery-site/backups</code>). The result code is recorded in <code>storage/backups/.last_sync</code>.</li>
+    <li><strong>Restore from parts</strong> — download all <code>.part-</code> files of one backup (the admin <em>Download</em> button streams them back as one file automatically), then verify and extract:
+        <pre>cat gallery-backup-&lt;stamp&gt;.tar.gz.part-* &gt; gallery-backup-&lt;stamp&gt;.tar.gz
+sha256sum -c gallery-backup-&lt;stamp&gt;.sha256
+mkdir -p storage/uploads &amp;&amp; tar -xzf gallery-backup-&lt;stamp&gt;.tar.gz -C /path/to/site
+gunzip &lt; gallery-db-&lt;stamp&gt;.sql.gz | mysql -u &lt;user&gt; -p &lt;database&gt;</pre>
+        All parts must be present before reassembling; the checksum file catches any truncated or corrupted chunk.</li>
+</ul>
+
 <h2 class="section-title">Server &amp; performance</h2>
 <ul>
     <li><strong>PHP is served by PHP-FPM, not mod_php</strong> — Apache runs the <code>mpm_event</code> MPM and forwards <code>.php</code> requests to the PHP-FPM pool socket via <code>mod_proxy_fcgi</code> (<code>/etc/apache2/conf-available/php7.4-fpm.conf</code>; pool at <code>/etc/php/7.4/fpm/pool.d/www.conf</code>). This keeps Apache workers tiny and pools PHP processes so memory use is far lower than the old <code>mod_php</code> + <code>mpm_prefork</code> setup.</li>

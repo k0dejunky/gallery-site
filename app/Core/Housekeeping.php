@@ -49,20 +49,33 @@ class Housekeeping
             }
         }
 
-        // Keep only the newest backup archives (media + db dumps share one
-        // retention pool) so the disk never fills up.
+        // Keep only the newest backup runs so the disk never fills up. A
+        // run groups everything sharing one timestamp: the split media
+        // archive (.part-NN), its .sha256 checksums and the SQL dump.
         $backupDir = $root . '/storage/backups';
-        $archives  = array_merge(
-            glob($backupDir . '/*.tar.gz') ?: [],
-            glob($backupDir . '/*.sql.gz') ?: []
-        );
+        $runs      = [];
 
-        if ($backupKeep > 0 && count($archives) > $backupKeep) {
-            usort($archives, fn (string $a, string $b): int => filemtime($b) <=> filemtime($a));
+        foreach (['*.tar.gz', '*.tar.gz.part-*', '*.tar.gz.sha256', '*.sql.gz'] as $pattern) {
+            foreach ((glob($backupDir . '/' . $pattern) ?: []) as $file) {
+                $key = 'misc';
 
-            foreach (array_slice($archives, $backupKeep) as $old) {
-                @unlink($old);
-                $out['backups_pruned']++;
+                if (preg_match('/-(\d{8}-\d{6})\./', basename($file), $m)) {
+                    $key = $m[1];
+                }
+
+                $runs[$key][] = $file;
+            }
+        }
+
+        if ($backupKeep > 0 && count($runs) > $backupKeep) {
+            $newest = fn (array $files): int => max(array_map(fn (string $f): int => (int) filemtime($f), $files));
+            uasort($runs, fn (array $a, array $b): int => $newest($b) <=> $newest($a));
+
+            foreach (array_slice($runs, $backupKeep, null, true) as $files) {
+                foreach ($files as $old) {
+                    @unlink($old);
+                    $out['backups_pruned']++;
+                }
             }
         }
 

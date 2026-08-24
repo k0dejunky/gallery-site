@@ -412,20 +412,44 @@ PHP;
     {
         $out = [];
 
-        foreach (array_merge(
-            glob($this->backupDir . '/*.tar.gz') ?: [],
-            glob($this->backupDir . '/*.sql.gz') ?: []
-        ) as $file) {
-            $out[] = [
-                'name' => basename($file),
-                'size' => (int) filesize($file),
-                'time' => (int) filemtime($file),
+        foreach ((glob($this->backupDir . '/*.tar.gz') ?: []) as $file) {
+            $name       = basename($file);
+            $out[$name] = [
+                'name'  => $name,
+                'size'  => (int) filesize($file),
+                'time'  => (int) filemtime($file),
+                'parts' => 0,
+            ];
+        }
+
+        // Media archives are stored as split .part-NN chunks; present each
+        // chunked set as a single logical archive.
+        foreach ((glob($this->backupDir . '/*.tar.gz.part-*') ?: []) as $file) {
+            $base = basename($file);
+            $name = substr($base, 0, strrpos($base, '.part-'));
+
+            if (!isset($out[$name])) {
+                $out[$name] = ['name' => $name, 'size' => 0, 'time' => 0, 'parts' => 0];
+            }
+
+            $out[$name]['size'] += (int) filesize($file);
+            $out[$name]['time']  = max($out[$name]['time'], (int) filemtime($file));
+            $out[$name]['parts']++;
+        }
+
+        foreach ((glob($this->backupDir . '/*.sql.gz') ?: []) as $file) {
+            $name       = basename($file);
+            $out[$name] = [
+                'name'  => $name,
+                'size'  => (int) filesize($file),
+                'time'  => (int) filemtime($file),
+                'parts' => 0,
             ];
         }
 
         usort($out, fn (array $a, array $b): int => $b['time'] <=> $a['time']);
 
-        return $out;
+        return array_values($out);
     }
 
     public function backupCreate(): void
@@ -469,9 +493,17 @@ gzip -c "\$DUMP" > "\$SQLT"
 rm -f "\$DUMP"
 gzip -t "\$TARGET" || { echo "\$(date "+%F %T") media archive verification failed: \$TARGET" >> {BACKUPDIR}/.failed; exit 1; }
 gzip -t "\$SQLT" || { echo "\$(date "+%F %T") db dump verification failed: \$SQLT" >> {BACKUPDIR}/.failed; exit 1; }
+# Split the media archive into 4 GiB parts so offsite sync can run
+# several streams at once. Reassemble with:
+#   cat <name>.tar.gz.part-* > <name>.tar.gz
+split -b 4G -d "\$TARGET" "\$TARGET.part-"
+PARTS=\$(ls -1 "\$TARGET".part-* | wc -l)
+test "\$PARTS" -ge 1 || { echo "\$(date "+%F %T") split failed for \$TARGET" >> {BACKUPDIR}/.failed; exit 1; }
+(cd {BACKUPDIR} && sha256sum \$(basename "\$TARGET").part-* > \$(basename "\$TARGET").sha256)
+rm -f "\$TARGET"
 SYNC_RC=0
 {SYNCBLOCK}
-printf '{"ok":true,"at":"%s","file":"%s","db":"%s","sync_rc":%s}\\n' "\$(date +%FT%T)" "\$(basename "\$TARGET")" "\$(basename "\$SQLT")" "\$SYNC_RC" > {BACKUPDIR}/.last_sync
+printf '{"ok":true,"at":"%s","file":"%s","parts":%d,"db":"%s","sync_rc":%s}\\n' "\$(date +%FT%T)" "\$(basename "\$TARGET")" "\$PARTS" "\$(basename "\$SQLT")" "\$SYNC_RC" > {BACKUPDIR}/.last_sync
 touch {BACKUPDIR}/.last_ok
 rm -f {BACKUPDIR}/.running
 trap - EXIT
@@ -500,9 +532,27 @@ BASH;
 
     public function backupDownload(string $file): void
     {
-        $path = $this->backupDir . '/' . basename($file);
+        $name = basename($file);
+        $path = $this->backupDir . '/' . $name;
 
         if (!is_file($path)) {
+            // A split archive: stream every part back as one continuous
+            // file so the browser saves a ready-to-extract tar.gz.
+            $parts = (glob($this->backupDir . '/' . $name . '.part-*') ?: []);
+            sort($parts);
+
+            if ($parts !== []) {
+                header('Content-Type: application/gzip');
+                header('Content-Disposition: attachment; filename="' . $name . '"');
+                header('Content-Length: ' . array_sum(array_map('filesize', $parts)));
+
+                foreach ($parts as $part) {
+                    readfile($part);
+                }
+
+                exit;
+            }
+
             $this->notFound();
             return;
         }
@@ -516,11 +566,30 @@ BASH;
 
     public function backupDelete(string $file): void
     {
-        $path = $this->backupDir . '/' . basename($file);
+        $name = basename($file);
+        $path = $this->backupDir . '/' . $name;
 
         if (is_file($path) && @unlink($path)) {
             AuditLog::record(Auth::user()['id'] ?? null, 'delete', 'system_backup', null,
-                'Deleted backup ' . basename($path));
+                'Deleted backup ' . $name);
+            $this->flash('success', 'Backup deleted.');
+
+            return;
+        }
+
+        // Split archive base name: remove every part plus its checksum file.
+        $related = array_merge(
+            (glob($this->backupDir . '/' . $name . '.part-*') ?: []),
+            (glob($this->backupDir . '/' . $name . '.sha256') ?: [])
+        );
+
+        if ($related !== []) {
+            foreach ($related as $relatedFile) {
+                @unlink($relatedFile);
+            }
+
+            AuditLog::record(Auth::user()['id'] ?? null, 'delete', 'system_backup', null,
+                'Deleted backup ' . $name . ' (' . count($related) . ' files)');
             $this->flash('success', 'Backup deleted.');
         } else {
             $this->flash('error', 'Could not delete that backup.');

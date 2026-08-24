@@ -9,6 +9,9 @@
     .sys-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
     .sys-ok { color: #15803d; font-weight: bold; }
     .sys-bad { color: var(--btn-danger-color, #b91c1c); font-weight: bold; }
+    /* Table-backed cards get their own full-width row below the compact ones */
+    .sys-stack { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
+    .sys-stack .sys-card { width: 100%; }
 </style>
 
 <h1 class="section-title">System</h1>
@@ -74,6 +77,20 @@
             </p>
         <?php endif; ?>
     </div>
+
+    <!-- CSV exports -->
+    <div class="sys-card">
+        <h2>Exports</h2>
+        <p class="muted" style="font-size:.85rem;">Download current data as CSV for spreadsheets and accounting.</p>
+        <div class="sys-actions">
+            <a class="btn" href="<?= url('/admin/export/users') ?>">Users CSV</a>
+            <a class="btn" href="<?= url('/admin/export/subscriptions') ?>">Subscriptions CSV</a>
+        </div>
+    </div>
+</div>
+
+<!-- Cards that contain tables: one per row, full width -->
+<div class="sys-stack">
     <!-- Pending upload staging folders -->
     <div class="sys-card">
         <h2>Pending uploads</h2>
@@ -151,7 +168,7 @@
             <?php if (!empty($backupRunning)): ?>
                 <b style="color:#b45309;">Backup in progress… refresh to update.</b>
             <?php else: ?>
-                <span class="muted">Database + uploaded media (.tar.gz)</span>
+                <span class="muted">Database + uploaded media (.tar.gz, split into 4 GB parts for parallel offsite sync)</span>
             <?php endif; ?>
         </form>
         <?php if (!empty($backups)): ?>
@@ -160,7 +177,7 @@
                 <?php foreach ($backups as $backup): ?>
                     <tr>
                         <td><code><?= e($backup['name']) ?></code></td>
-                        <td><?= number_format($backup['size'] / 1048576, 1) ?> MB</td>
+                        <td><?= number_format($backup['size'] / 1048576, 1) ?> MB<?= !empty($backup['parts']) ? ' <span class="muted">(' . (int) $backup['parts'] . ' parts)</span>' : '' ?></td>
                         <td><?= date('Y-m-d H:i', $backup['time']) ?></td>
                         <td style="white-space:nowrap;">
                             <a class="btn btn-sm" href="<?= url('/admin/system/backups/' . rawurlencode($backup['name'])) ?>">Download</a>
@@ -229,16 +246,6 @@
         </form>
     </div>
 
-    <!-- CSV exports -->
-    <div class="sys-card">
-        <h2>Exports</h2>
-        <p class="muted" style="font-size:.85rem;">Download current data as CSV for spreadsheets and accounting.</p>
-        <div class="sys-actions">
-            <a class="btn" href="<?= url('/admin/export/users') ?>">Users CSV</a>
-            <a class="btn" href="<?= url('/admin/export/subscriptions') ?>">Subscriptions CSV</a>
-        </div>
-    </div>
-
     <!-- Login security -->
     <div class="sys-card" id="security">
         <h2>Login security</h2>
@@ -258,7 +265,7 @@
                 <tr>
                     <td><code><?= e((string) $row['ip']) ?></code></td>
                     <td><?= number_format((int) $row['c']) ?></td>
-                    <td class="muted" style="max-width:16rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= e((string) $row['emails']) ?></td>
+                    <td class="muted"><?= e((string) $row['emails']) ?></td>
                 </tr>
             <?php endforeach; ?>
             <?php if (!$security['top_ips']): ?><tr><td colspan="3" class="muted">No failures in the last 24h.</td></tr><?php endif; ?>
