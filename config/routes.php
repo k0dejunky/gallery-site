@@ -73,9 +73,13 @@ return [
     ['POST', '/admin/users', 'UserController@store'],
     ['POST', '/admin/users/bulk', 'UserController@bulk'],
     ['POST', '/admin/users/{id}/impersonate', 'UserController@impersonate'],
+    ['POST', '/admin/users/{id}/status', 'UserController@setStatus'],
+    ['POST', '/admin/users/{id}/reset-password', 'UserController@resetPassword'],
+    ['POST', '/admin/users/{id}/logout-everywhere', 'UserController@logoutEverywhere'],
     ['GET', '/admin/users/{id}/edit', 'UserController@edit'],
     ['POST', '/admin/users/{id}', 'UserController@update'],
     ['POST', '/admin/users/{id}/delete', 'UserController@destroy'],
+    ['GET', '/admin/users/{id}', 'UserController@show'],
     ['POST', '/admin/impersonate/exit', 'UserController@exitImpersonation'],
 
     // System maintenance (admin only)
@@ -85,6 +89,15 @@ return [
     ['POST', '/admin/system/backup', 'SystemController@backupCreate'],
     ['GET', '/admin/system/backups/{file}', 'SystemController@backupDownload'],
     ['POST', '/admin/system/backups/{file}/delete', 'SystemController@backupDelete'],
+    ['POST', '/admin/system/variants', 'SystemController@variantsRegenerate'],
+    ['POST', '/admin/system/db/optimize', 'SystemController@dbOptimize'],
+    ['POST', '/admin/system/maintenance', 'SystemController@maintenanceToggle'],
+    ['POST', '/admin/system/housekeeping', 'SystemController@housekeepingRun'],
+    ['GET', '/admin/export/users', 'ExportController@users'],
+    ['GET', '/admin/export/subscriptions', 'ExportController@subscriptions'],
+
+    // Unattended cron (secret-key protected, no session)
+    ['GET', '/cron/housekeeping', 'CronController@run'],
 
     // Theme + docs (admin only)
     ['GET', '/admin/theme', 'ThemeController@index'],

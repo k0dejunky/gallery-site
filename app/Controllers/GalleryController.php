@@ -274,12 +274,16 @@ class GalleryController extends Controller
         $list   = $_SESSION['pending_gallery_files'] ?? [];
         $count  = count($files['name']);
         $added  = 0;
+        $skipped = [];
 
         for ($i = 0; $i < $count; $i++) {
             if ($files['error'][$i] === UPLOAD_ERR_NO_FILE) {
                 continue;
             }
             if ($files['error'][$i] !== UPLOAD_ERR_OK) {
+                // Never silently swallow a failed file — surface it so the
+                // admin knows something did not stage.
+                $skipped[] = (string) $files['name'][$i];
                 continue;
             }
 
@@ -333,7 +337,12 @@ class GalleryController extends Controller
 
         $_SESSION['pending_gallery_files'] = $list;
 
-        $this->jsonReply(['ok' => true, 'added' => $added, 'files' => $this->pendingListMeta()]);
+        $this->jsonReply([
+            'ok' => true,
+            'added' => $added,
+            'files' => $this->pendingListMeta(),
+            'skipped' => $skipped,
+        ]);
     }
 
     /**

@@ -13,6 +13,24 @@ function e(?string $value): string
  * Build an application URL prefixed with the configured base path so links
  * work regardless of where the site is installed (e.g. under /gallery).
  */
+/**
+ * Read a value from the project .env file, falling back to the process
+ * environment and then the default. Cached across calls.
+ */
+function env_value(string $key, string $default = ''): string
+{
+    static $env = null;
+
+    if ($env === null) {
+        $file = dirname(__DIR__, 2) . '/.env';
+        $env  = is_readable($file) ? (parse_ini_file($file, false, INI_SCANNER_RAW) ?: []) : [];
+    }
+
+    $value = $env[$key] ?? getenv($key);
+
+    return is_string($value) && $value !== '' ? $value : $default;
+}
+
 function url(string $path = ''): string
 {
     $base = rtrim((string) config('app.base_path'), '/');

@@ -29,8 +29,10 @@
     <?= csrf_field() ?>
     <div style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.5rem;">
         <strong>With selected:</strong>
-        <select name="action" onchange="document.getElementById('bulk-role').style.display = this.value === 'role' ? '' : 'none';">
+        <select name="action" onchange="document.getElementById('bulk-role').style.display = (this.value === 'role') ? '' : 'none';">
             <option value="role">Set role</option>
+            <option value="suspend">Suspend</option>
+            <option value="activate">Reactivate</option>
             <option value="delete">Delete</option>
         </select>
         <select name="role" id="bulk-role">
@@ -48,6 +50,7 @@
                 <th><input type="checkbox" id="check-all" title="Select all"></th>
                 <th>Email</th>
                 <th>Role</th>
+                <th>Status</th>
                 <th>Membership</th>
                 <th>Created</th>
                 <th>Actions</th>
@@ -60,6 +63,13 @@
                     <td class="user-email"><?= e($user['email']) ?></td>
                     <td><span class="role-badge <?= e($user['role']) ?>"><?= e(str_replace('_', ' ', $user['role'])) ?></span></td>
                     <td>
+                        <?php if (($user['status'] ?? 'active') === 'suspended'): ?>
+                            <span class="status-badge cancelled">suspended</span>
+                        <?php else: ?>
+                            <span class="status-badge">active</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
                         <?php if (!empty($user['sub_status'])): ?>
                             <?= e($user['sub_plan']) ?> <span class="status-badge <?= e($user['sub_status']) ?>"><?= e($user['sub_status']) ?></span>
                         <?php else: ?>
@@ -68,6 +78,7 @@
                     </td>
                     <td class="user-date"><?= e($user['created_at']) ?></td>
                     <td class="user-actions">
+                        <a class="btn btn-sm" href="<?= url('/admin/users/' . (int) $user['id']) ?>">View</a>
                         <a class="btn btn-sm" href="<?= url('/admin/users/' . (int) $user['id'] . '/edit') ?>">Edit</a>
                         <?php if ((int) $user['id'] !== (int) \App\Core\Auth::user()['id']): ?>
                             <form class="inline" method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/impersonate') ?>"

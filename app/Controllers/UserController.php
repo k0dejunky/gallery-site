@@ -62,7 +62,7 @@ class UserController extends Controller
             $this->redirect('/admin/users');
         }
 
-        if (!in_array($action, ['role', 'delete'], true)) {
+        if (!in_array($action, ['role', 'delete', 'suspend', 'activate'], true)) {
             $this->flash('error', 'Unknown bulk action.');
             $this->redirect('/admin/users');
         }
@@ -95,6 +95,16 @@ class UserController extends Controller
                 User::delete($id);
                 AuditLog::record($me, 'delete', 'user', $id, 'Bulk-deleted account "' . $user['email'] . '"', ['email' => $user['email'], 'role' => $user['role']]);
                 $done++;
+            } elseif ($action === 'suspend' || $action === 'activate') {
+                if ($id === $me) {
+                    continue;
+                }
+                $status = $action === 'suspend' ? 'suspended' : 'active';
+                Database::run('UPDATE users SET status = ?, session_version = session_version + 1 WHERE id = ?', [$status, $id]);
+                AuditLog::record($me, 'update', 'user', $id,
+                    'Bulk-' . $action . ' account "' . $user['email'] . '"',
+                    ['status' => $user['status'] ?? null], ['status' => $status]);
+                $done++;
             } else {
                 Database::run('UPDATE users SET role = ? WHERE id = ?', [$role, $id]);
                 AuditLog::record($me, 'update', 'user', $id, 'Bulk role change "' . $user['email'] . '" → ' . $role, ['role' => $user['role']], ['role' => $role]);
@@ -102,7 +112,8 @@ class UserController extends Controller
             }
         }
 
-        $this->flash('success', ucfirst($action === 'role' ? 'Role set' : 'Deleted') . " for {$done} user(s).");
+        $labels = ['role' => 'Role set', 'delete' => 'Deleted', 'suspend' => 'Suspended', 'activate' => 'Reactivated'];
+        $this->flash('success', ($labels[$action] ?? 'Done') . " for {$done} user(s).");
         $this->redirect('/admin/users');
     }
 
@@ -112,8 +123,7 @@ class UserController extends Controller
      * both directions are audit-logged.
      */
     public function impersonate(int $id): void
-    {
-        $target = User::find($id);
+    {        $target = User::find($id);
         $me = Auth::user();
 
         if ($target === null || $id === (int) $me['id']) {
@@ -153,6 +163,160 @@ class UserController extends Controller
         Auth::loginUser($adminId);
         $this->flash('success', 'Welcome back, admin.');
         $this->redirect('/admin');
+    }
+
+    /**
+     * Shared data for the user detail page: membership history, audit-trail
+     * mentions and recent sign-in attempts.
+     */
+    private function userContext(int $id): array
+    {
+        $user = User::find($id);
+
+        $subscriptions = Database::run(
+            'SELECT s.*, p.name AS plan_name, pp.name AS processor_name
+             FROM subscriptions s
+             LEFT JOIN plans p ON p.id = s.plan_id
+             LEFT JOIN payment_processors pp ON pp.id = s.payment_processor_id
+             WHERE s.user_id = ? ORDER BY s.created_at DESC LIMIT 25',
+            [$id]
+        )->fetchAll();
+
+        // Audit trail mentioning this account (role changes, suspensions,
+        // impersonation, password work) plus recent sign-in attempts.
+        $activity = Database::run(
+            'SELECT created_at, action, entity_type, entity_id, description
+             FROM admin_logs
+             WHERE entity_type IN (?, ?, ?) OR description LIKE ?
+             ORDER BY id DESC LIMIT 30',
+            ['user', 'user_password', 'user_sessions', '%"' . str_replace(['%', '_'], ['\%', '\_'], (string) $user['email']) . '"%']
+        )->fetchAll();
+
+        $logins = Database::run(
+            'SELECT attempted_at AS at, ip FROM login_attempts
+             WHERE email = ? ORDER BY id DESC LIMIT 15',
+            [$user['email']]
+        )->fetchAll();
+
+        return [$subscriptions, $activity, $logins];
+    }
+
+    /**
+     * Full account profile for admins: identity, membership history,
+     * galleries, and every audit-log mention — plus the account-control
+     * quick actions (suspend, password reset, log out everywhere).
+     */
+    public function show(int $id): void
+    {
+        Auth::requirePermission('users');
+
+        $user = User::find($id);
+
+        if ($user === null) {
+            $this->flash('error', 'User not found.');
+            $this->redirect('/admin/users');
+        }
+
+        [$subscriptions, $activity, $logins] = $this->userContext($id);
+
+        $this->viewAdmin('user_show', [
+            'user'          => $user,
+            'subscriptions' => $subscriptions,
+            'activity'      => $activity,
+            'logins'        => $logins,
+        ]);
+    }
+
+    /**
+     * Suspend or reactivate an account. Suspended users are logged out on
+     * their next request and cannot sign in again until reactivated.
+     */
+    public function setStatus(int $id): void
+    {
+        Auth::requirePermission('users');
+
+        $status = (string) $this->request->post('status', '');
+        $target = User::find($id);
+
+        if (!in_array($status, ['active', 'suspended'], true) || $target === null) {
+            $this->flash('error', 'Invalid status change.');
+            $this->redirect('/admin/users');
+        }
+
+        $me = Auth::user()['id'] ?? 0;
+
+        if ($id === (int) $me) {
+            $this->flash('error', 'You cannot suspend your own account.');
+            $this->redirect('/admin/users/' . $id);
+        }
+
+        Database::run('UPDATE users SET status = ?, session_version = session_version + 1 WHERE id = ?', [$status, $id]);
+
+        AuditLog::record((int) $me, 'update', 'user', $id,
+            ($status === 'suspended' ? 'Suspended' : 'Reactivated') . ' account "' . $target['email'] . '"',
+            ['status' => $target['status'] ?? null], ['status' => $status]);
+
+        $this->flash('success', 'Account ' . ($status === 'suspended' ? 'suspended.' : 'reactivated.'));
+        $this->redirect($this->request->post('return_to') ?: '/admin/users');
+    }
+
+    /**
+     * Generate a fresh temporary password for an account. The value is shown
+     * exactly once here; the user is advised to change it after signing in.
+     */
+    public function resetPassword(int $id): void
+    {
+        Auth::requirePermission('users');
+
+        $target = User::find($id);
+
+        if ($target === null) {
+            $this->notFound();
+            return;
+        }
+
+        $alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+        $temp = '';
+        for ($i = 0; $i < 12; $i++) {
+            $temp .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+        }
+
+        User::updatePassword($id, password_hash($temp, PASSWORD_DEFAULT));
+        Database::run('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [$id]);
+
+        AuditLog::record((int) (Auth::user()['id'] ?? 0), 'update', 'user_password', $id,
+            'Reset password for "' . $target['email'] . '"');
+
+        $this->viewAdmin('user_show', [
+            'user'          => $target,
+            'subscriptions' => [],
+            'activity'      => [],
+            'logins'        => [],
+            'tempPassword'  => $temp,
+        ]);
+    }
+
+    /**
+     * Bump the account's session version so every signed-in device is
+     * logged out on its next request.
+     */
+    public function logoutEverywhere(int $id): void
+    {
+        Auth::requirePermission('users');
+
+        $target = User::find($id);
+
+        if ($target === null) {
+            $this->notFound();
+            return;
+        }
+
+        Database::run('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [$id]);
+        AuditLog::record((int) (Auth::user()['id'] ?? 0), 'delete', 'user_sessions', $id,
+            'Logged out all devices for "' . $target['email'] . '"');
+
+        $this->flash('success', 'All devices for that account will be signed out.');
+        $this->redirect('/admin/users/' . $id);
     }
 
     /**

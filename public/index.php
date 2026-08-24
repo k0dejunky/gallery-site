@@ -27,5 +27,33 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 Auth::start();
+
+// Maintenance mode: when storage/maintenance.flag exists, everyone except
+// staff gets a downtime page. Admin area, login, cron and file serving stay
+// reachable so staff can still work and the login page keeps its art.
+$maintenanceFlag = dirname(__DIR__) . '/storage/maintenance.flag';
+
+if (is_file($maintenanceFlag)) {
+    $request = new Request();
+    $path    = rtrim((string) $request->uri(), '/');
+
+    $allowedPrefixes = ['/admin', '/login', '/files', '/cron', '/assets'];
+    $allowed = false;
+
+    foreach ($allowedPrefixes as $prefix) {
+        if ($path === $prefix || strpos($path . '/', $prefix . '/') === 0) {
+            $allowed = true;
+            break;
+        }
+    }
+
+    if (!$allowed && !Auth::isAdmin()) {
+        http_response_code(503);
+        header('Retry-After: 600');
+        require __DIR__ . '/../views/errors/503.php';
+        exit;
+    }
+}
+
 $routes = require __DIR__ . '/../config/routes.php';
 (new Router($routes))->dispatch(new Request());

@@ -45,6 +45,12 @@ class Auth
         $user = User::findByEmail($email);
 
         if ($user !== null && password_verify($password, $user['password_hash'])) {
+            if ((isset($user['status']) && $user['status'] !== 'active')) {
+                LoginAttempt::record($email, $ip);
+
+                return 'This account has been suspended.';
+            }
+
             self::loginUser((int) $user['id']);
             LoginAttempt::clear($email, $ip);
 
@@ -66,10 +72,27 @@ class Auth
         session_regenerate_id(true);
         $_SESSION['user_id'] = $userId;
 
+        $row = User::find($userId);
+        $_SESSION['session_version'] = (int) ($row['session_version'] ?? 0);
+
         \App\Core\Database::run(
             'UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?',
             [$userId]
         );
+    }
+
+    /**
+     * Kill the current session completely: used when an account is
+     * suspended, its session version bumped ("log out everywhere"), or the
+     * user signs out.
+     */
+    public static function revokeSession(): void
+    {
+        self::start();
+
+        unset($_SESSION['user_id'], $_SESSION['impersonator_id'], $_SESSION['session_version']);
+        self::$userCache = null;
+        session_regenerate_id(true);
     }
 
     /**
@@ -97,7 +120,20 @@ class Auth
         }
 
         if (self::$userCache === null) {
-            self::$userCache = User::find((int) $_SESSION['user_id']);
+            $row = User::find((int) $_SESSION['user_id']);
+
+            // Suspended accounts, and sessions issued before a "log out
+            // everywhere" bump, are logged out on their very next request.
+            if ($row === null
+                || (isset($row['status']) && $row['status'] !== 'active')
+                || !isset($_SESSION['session_version'])
+                || (int) $_SESSION['session_version'] !== (int) ($row['session_version'] ?? 0)) {
+                self::revokeSession();
+
+                return null;
+            }
+
+            self::$userCache = $row;
         }
 
         return self::$userCache;

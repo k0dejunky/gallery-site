@@ -39,9 +39,207 @@ class SystemController extends Controller
             'orphans'     => $this->orphanFiles(),
             'backups'     => $this->backups(),
             'backupRunning' => file_exists($this->backupDir . '/.running'),
+            'variants'    => $this->variantStats(),
+            'dbTables'    => $this->tableSizes(),
+            'maintenance' => is_file($this->storage . '/maintenance.flag'),
+            'cronKeySet'  => self::cronKey() !== '',
             'schemaDiff'  => $this->schemaDiff(),
             'diskFree'    => @disk_free_space($this->storage),
         ]);
+    }
+
+    // ------------------------------------------------------------------
+    // Media variants
+    // ------------------------------------------------------------------
+
+    private function variantStats(): array
+    {
+        $rows  = Database::run('SELECT filename, is_video FROM photos')->fetchAll();
+        $missingThumb = 0;
+        $missingWeb   = 0;
+        $broken       = 0;
+
+        foreach ($rows as $row) {
+            $src = $this->storage . '/uploads/' . $row['filename'];
+
+            if (!is_file($src)) {
+                $broken++;
+                continue;
+            }
+            if (!is_file($this->storage . '/uploads/thumb_' . $row['filename'])) {
+                $missingThumb++;
+            }
+            if (empty($row['is_video']) && !is_file($this->storage . '/uploads/web_' . $row['filename'])) {
+                $missingWeb++;
+            }
+        }
+
+        return [
+            'total'         => count($rows),
+            'missing_thumb' => $missingThumb,
+            'missing_web'   => $missingWeb,
+            'broken'        => $broken,
+            'running'       => file_exists($this->backupDir . '/.variants'),
+        ];
+    }
+
+    /**
+     * Rebuild every missing thumbnail/web variant in a detached background
+     * process (hundreds of ffmpeg/GD passes would outlive any request).
+     */
+    public function variantsRegenerate(): void
+    {
+        $marker = $this->backupDir . '/.variants';
+
+        if (file_exists($marker)) {
+            $this->flash('error', 'Variant regeneration is already running.');
+            $this->redirect('/admin/system');
+        }
+
+        @touch($marker);
+        @mkdir($this->storage . '/logs', 0775, true);
+
+        // The worker script lives in the project so admins can also run it
+        // by hand over SSH; a tiny bash runner clears the marker on exit.
+        $worker = $this->storage . '/scripts/regen_variants.php';
+        @mkdir(dirname($worker), 0775, true);
+        file_put_contents($worker, $this->regenScriptBody());
+        chmod($worker, 0644);
+
+        $script = sys_get_temp_dir() . '/gallery-variants.sh';
+        file_put_contents($script, '#!/bin/bash' . "\n"
+            . escapeshellarg(PHP_BINARY) . ' -d memory_limit=512M ' . escapeshellarg($worker) . "\n"
+            . 'rm -f ' . escapeshellarg($marker) . "\n");
+        chmod($script, 0700);
+
+        AuditLog::record(Auth::user()['id'] ?? null, 'create', 'system_variants', null,
+            'Started background media variant regeneration');
+        @shell_exec('setsid nohup bash ' . escapeshellarg($script)
+            . ' > ' . escapeshellarg($this->storage . '/logs/variants.log') . ' 2>&1 &');
+
+        $this->flash('success', 'Variant regeneration started — refresh this page for progress.');
+        $this->redirect('/admin/system');
+    }
+
+    /**
+     * Standalone worker: regenerate missing thumb_/web_ variants for every
+     * photo row. Safe to re-run; identical to the CLI repair script.
+     */
+    private function regenScriptBody(): string
+    {
+        return <<<'PHP'
+<?php
+declare(strict_types=1);
+$root = __DIR__ . '/../..';
+require $root . '/app/Core/helpers.php';
+$config = require $root . '/config/app.php';
+$uploadsDir = $config['uploads']['dir'];
+$env = parse_ini_file($root . '/.env');
+$pdo = new PDO(sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
+    $env['GALLERY_DB_HOST'], $env['GALLERY_DB_PORT'], $env['GALLERY_DB_NAME']),
+    $env['GALLERY_DB_USER'], $env['GALLERY_DB_PASSWORD'],
+    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$rows = $pdo->query('SELECT filename, is_video FROM photos')->fetchAll(PDO::FETCH_ASSOC);
+foreach ($rows as $row) {
+    $src = $uploadsDir . '/' . $row['filename'];
+    if (!is_file($src)) continue;
+    $thumb = $uploadsDir . '/thumb_' . $row['filename'];
+    $web   = $uploadsDir . '/web_' . $row['filename'];
+    if (!empty($row['is_video'])) {
+        if (!is_file($thumb)) create_video_thumbnail($src, $thumb, $config['uploads']['thumb_width'], $config['uploads']['thumb_height']);
+        continue;
+    }
+    if (!is_file($thumb) || !is_file($web)) {
+        create_image_variants($src, $web, $thumb, $config['uploads']['web_max_width'], $config['uploads']['thumb_width'], $config['uploads']['thumb_height']);
+        echo '.', flush();
+    }
+}
+echo "\nDONE\n";
+PHP;
+    }
+
+    // ------------------------------------------------------------------
+    // Database tools
+    // ------------------------------------------------------------------
+
+    private function tableSizes(): array
+    {
+        $db = config('database');
+
+        return Database::run(
+            'SELECT table_name AS name, table_rows AS `rows`,
+                    ROUND((data_length + index_length) / 1048576, 1) AS size_mb
+             FROM information_schema.tables
+             WHERE table_schema = ?
+             ORDER BY (data_length + index_length) DESC',
+            [$db['database'] ?? '']
+        )->fetchAll();
+    }
+
+    public function dbOptimize(): void
+    {
+        $allowed = array_flip(array_map('strtolower',
+            Database::run('SHOW TABLES')->fetchAll(\PDO::FETCH_COLUMN)));
+        $target = (string) $this->request->post('table', '');
+        $done   = [];
+
+        if ($target === '__all') {
+            foreach (array_keys($allowed) as $name) {
+                Database::run('OPTIMIZE TABLE `' . str_replace('`', '', $name) . '`');
+                $done[] = $name;
+            }
+        } elseif (isset($allowed[strtolower($target)])) {
+            Database::run('OPTIMIZE TABLE `' . str_replace('`', '', $target) . '`');
+            $done[] = $target;
+        } else {
+            $this->flash('error', 'Unknown table.');
+            $this->redirect('/admin/system');
+        }
+
+        AuditLog::record(Auth::user()['id'] ?? null, 'update', 'system_db', null,
+            'Optimized table(s): ' . implode(', ', $done));
+        $this->flash('success', 'Optimized ' . count($done) . ' table(s).');
+        $this->redirect('/admin/system');
+    }
+
+    // ------------------------------------------------------------------
+    // Maintenance mode & housekeeping
+    // ------------------------------------------------------------------
+
+    public function maintenanceToggle(): void
+    {
+        $flag = $this->storage . '/maintenance.flag';
+        $on   = (string) $this->request->post('mode', '');
+
+        if ($on === 'on') {
+            @touch($flag);
+            AuditLog::record(Auth::user()['id'] ?? null, 'update', 'system_maintenance', null, 'Maintenance mode ENABLED');
+            $this->flash('success', 'Maintenance mode is ON — only staff can browse the site.');
+        } else {
+            @unlink($flag);
+            AuditLog::record(Auth::user()['id'] ?? null, 'update', 'system_maintenance', null, 'Maintenance mode disabled');
+            $this->flash('success', 'Site back to normal.');
+        }
+
+        $this->redirect('/admin/system');
+    }
+
+    public function housekeepingRun(): void
+    {
+        $summary = \App\Core\Housekeeping::run(10);
+        AuditLog::record(Auth::user()['id'] ?? null, 'delete', 'system_housekeeping', null,
+            'Manual housekeeping: ' . json_encode($summary));
+        $this->flash('success', sprintf(
+            'Housekeeping done — %d sub(s) expired, %d stale staging dir(s) removed, %d old backup(s) pruned.',
+            $summary['expired_subs'], $summary['pending_dirs'], $summary['backups_pruned']
+        ));
+        $this->redirect('/admin/system');
+    }
+
+    /** The shared cron secret from .env (never displayed, only its presence). */
+    public static function cronKey(): string
+    {
+        return \env_value('GALLERY_CRON_KEY');
     }
 
     // ------------------------------------------------------------------
@@ -93,10 +291,16 @@ class SystemController extends Controller
         $orphans = [];
 
         foreach (scandir($uploads) ?: [] as $file) {
-            if ($file === '.' || $file === '..' || $file === 'pending') {
+            if ($file === '.' || $file === '..' || $file === 'pending' || $file === 'exports') {
                 continue;
             }
             if (is_dir($uploads . '/' . $file) || isset($known[$file])) {
+                continue;
+            }
+            // Generated variants (thumb_/web_ prefixes) are never orphans:
+            // they derive from a canonical name and are rebuilt on demand,
+            // so deleting them here would break every thumbnail sitewide.
+            if (strpos($file, 'thumb_') === 0 || strpos($file, 'web_') === 0) {
                 continue;
             }
             $orphans[] = ['name' => $file, 'size' => (int) filesize($uploads . '/' . $file)];
@@ -212,8 +416,9 @@ trap 'rm -f {BACKUPDIR}/.running' EXIT
 DUMP=\$(mktemp /tmp/gallery-dump-XXXXXX.sql)
 {MYSQLDUMP} > "\$DUMP"
 TARGET={BACKUPDIR}/gallery-backup-{STAMP}.tar.gz
-tar czf "\$TARGET" -C {ROOT} storage/uploads
-tar rzf "\$TARGET" -C "\$(dirname "\$DUMP")" "\$(basename "\$DUMP")"
+tar czf "\$TARGET" --warning=no-file-changed --ignore-failed-read -C {ROOT} storage/uploads
+test \$? -le 1
+tar rzf "\$TARGET" --warning=no-file-changed -C "\$(dirname "\$DUMP")" "\$(basename "\$DUMP")"
 rm -f "\$DUMP"
 rm -f {BACKUPDIR}/.running
 BASH;

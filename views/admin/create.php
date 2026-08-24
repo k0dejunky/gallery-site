@@ -187,6 +187,8 @@
     var countEl = document.getElementById('pending-count');
     var saveBtn = document.getElementById('save-btn');
     var pendingFiles = [];
+    var uploadQueue = [];
+    var uploading = false;
 
     function currentType() {
         var checked = typeInputs.find(function (i) { return i.checked; });
@@ -249,56 +251,94 @@
     }
 
     function uploadFiles(fileList) {
+        // Queue every selected file and upload them ONE per request.
+        // PHP silently truncates multi-file requests at max_file_uploads
+        // (default 20), so a single mega-request would drop everything past
+        // the 20th file. Per-file requests have no count limit, keep the
+        // exact same server-side validation rules for every file, and let
+        // one bad file fail without cancelling the rest of the batch.
         var type = currentType();
-        var data = new FormData();
-        var names = [];
         Array.prototype.forEach.call(fileList, function (file) {
-            data.append('photos[]', file);
-            names.push(file.name);
+            uploadQueue.push({ file: file, type: type });
         });
-        data.append('type', type);
-        data.append('_token', csrf);
+        processQueue();
+    }
 
+    function processQueue() {
+        if (uploading) return;
+        if (!uploadQueue.length) return;
+
+        uploading = true;
         saveBtn.disabled = true;
 
-        // Show the shared admin progress overlay with a real upload %
-        // (browser-provided via XHR upload.onprogress).
+        var totalBytes = uploadQueue.reduce(function (sum, item) { return sum + item.file.size; }, 0);
+        var sentBytes = 0;
+        var failures = [];
+
         if (window.AdminProgress) {
             window.AdminProgress.show('Uploading files…');
-            window.AdminProgress.progress(0, names.join(', '));
+            window.AdminProgress.progress(0, uploadQueue.length + ' file(s)');
         }
 
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '<?= url('/admin/galleries/pending/upload') ?>');
-        xhr.upload.addEventListener('progress', function (e) {
-            if (e.lengthComputable && window.AdminProgress) {
-                window.AdminProgress.progress((e.loaded / e.total) * 100, names.join(', '));
-            }
-        });
-        xhr.addEventListener('load', function () {
-            try {
-                var res = JSON.parse(xhr.responseText);
-                if (res.ok) {
-                    pendingFiles = res.files;
-                    render();
-                    if (window.AdminProgress) window.AdminProgress.hide();
-                } else {
-                    if (window.AdminProgress) window.AdminProgress.hide();
-                    alert(res.error || 'Upload failed.');
-                }
-            } catch (err) {
+        function next() {
+            if (!uploadQueue.length) {
+                uploading = false;
+                saveBtn.disabled = false;
+                fileInput.value = '';
                 if (window.AdminProgress) window.AdminProgress.hide();
-                alert('Upload failed.');
+                if (failures.length) {
+                    alert('Some files could not be uploaded:\n\n' + failures.join('\n'));
+                }
+                return;
             }
-            saveBtn.disabled = false;
-            fileInput.value = '';
-        });
-        xhr.addEventListener('error', function () {
-            if (window.AdminProgress) window.AdminProgress.hide();
-            saveBtn.disabled = false;
-            alert('Upload failed.');
-        });
-        xhr.send(data);
+
+            var item = uploadQueue[0];
+            var data = new FormData();
+            data.append('photos[]', item.file);
+            data.append('type', item.type);
+            data.append('_token', csrf);
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '<?= url('/admin/galleries/pending/upload') ?>');
+            xhr.upload.addEventListener('progress', function (e) {
+                if (e.lengthComputable && window.AdminProgress) {
+                    var pct = ((sentBytes + e.loaded) / Math.max(totalBytes, 1)) * 100;
+                    window.AdminProgress.progress(pct, (uploadQueue.length) + ' remaining — ' + item.file.name);
+                }
+            });
+            xhr.addEventListener('load', function () {
+                var ok = false;
+                var skipped = [];
+                try {
+                    var res = JSON.parse(xhr.responseText);
+                    ok = res.ok === true;
+                    skipped = res.skipped || [];
+                } catch (err) {}
+                if (!ok) failures.push(item.file.name + ': rejected by server');
+                for (var s = 0; s < skipped.length; s++) failures.push(skipped[s] + ': could not be saved');
+                next();
+            });
+            xhr.addEventListener('error', function () {
+                failures.push(item.file.name + ': network error');
+                next();
+            });
+            xhr.addEventListener('loadend', function () {
+                // Refresh tiles from whatever the session now holds; on a
+                // JSON parse failure fall back to leaving the list as-is.
+                try {
+                    var res = JSON.parse(xhr.responseText);
+                    if (res.ok) {
+                        pendingFiles = res.files;
+                        render();
+                        sentBytes += item.file.size;
+                    }
+                } catch (err) {}
+            });
+            uploadQueue.shift();
+            xhr.send(data);
+        }
+
+        next();
     }
 
     dropZone.addEventListener('click', function () { fileInput.click(); });

@@ -15,6 +15,52 @@
 <p class="muted">Disk free: <b><?= $diskFree !== false ? number_format((float) $diskFree / 1048576) . ' MB' : 'unknown' ?></b></p>
 
 <div class="sys-grid">
+    <!-- Maintenance mode + housekeeping -->
+    <div class="sys-card">
+        <h2>Site status</h2>
+        <?php if (!empty($maintenance)): ?>
+            <p><span class="sys-bad">MAINTENANCE MODE ON</span> — visitors see a downtime page; staff can still browse.</p>
+            <form class="sys-actions" method="post" action="<?= url('/admin/system/maintenance') ?>">
+                <?= csrf_field() ?><input type="hidden" name="mode" value="off">
+                <button class="btn" type="submit">Turn off maintenance mode</button>
+            </form>
+        <?php else: ?>
+            <p class="muted">Site is live for everyone.</p>
+            <form class="sys-actions" method="post" action="<?= url('/admin/system/maintenance') ?>"
+                  onsubmit="return confirm('Take the site down for everyone except staff?');">
+                <?= csrf_field() ?><input type="hidden" name="mode" value="on">
+                <button class="btn btn-danger" type="submit">Enable maintenance mode</button>
+            </form>
+        <?php endif; ?>
+
+        <h2 style="margin-top:1rem;">Scheduled housekeeping</h2>
+        <p class="muted" style="font-size:.85rem;">
+            Expires overdue subscriptions, removes staging folders idle 72h+, keeps the 10 newest backups.
+            Cron endpoint: <b><?= $cronKeySet ? 'configured ✓' : 'GALLERY_CRON_KEY missing in .env' ?></b>
+        </p>
+        <form class="sys-actions" method="post" action="<?= url('/admin/system/housekeeping') ?>">
+            <?= csrf_field() ?>
+            <button class="btn" type="submit">Run housekeeping now</button>
+        </form>
+    </div>
+
+    <!-- Media variants -->
+    <div class="sys-card">
+        <h2>Media thumbnails</h2>
+        <?php if ($variants['running']): ?>
+            <p><b style="color:#b45309;">Regeneration in progress… refresh to update.</b></p>
+        <?php endif; ?>
+        <p class="muted" style="font-size:.85rem;">
+            <?= (int) $variants['total'] ?> media items ·
+            missing thumbs: <b class="<?= $variants['missing_thumb'] ? 'sys-bad' : 'sys-ok' ?>"><?= (int) $variants['missing_thumb'] ?></b> ·
+            missing web copies: <b class="<?= $variants['missing_web'] ? 'sys-bad' : 'sys-ok' ?>"><?= (int) $variants['missing_web'] ?></b> ·
+            originals gone: <b class="<?= $variants['broken'] ? 'sys-bad' : 'sys-ok' ?>"><?= (int) $variants['broken'] ?></b>
+        </p>
+        <form class="sys-actions" method="post" action="<?= url('/admin/system/variants') ?>">
+            <?= csrf_field() ?>
+            <button class="btn" type="submit"<?= !empty($variants['running']) ? ' disabled' : '' ?>>Regenerate missing</button>
+        </form>
+    </div>
     <!-- Pending upload staging folders -->
     <div class="sys-card">
         <h2>Pending uploads</h2>
@@ -127,5 +173,38 @@
                 <?php endforeach; ?>
             </table>
         <?php endif; ?>
+    </div>
+
+    <!-- Database tables -->
+    <div class="sys-card">
+        <h2>Database</h2>
+        <table>
+            <tr><th>Table</th><th>Rows</th><th>Size</th><th></th></tr>
+            <?php foreach ($dbTables as $table): ?>
+                <tr>
+                    <td><code><?= e((string) $table['name']) ?></code></td>
+                    <td><?= number_format((float) $table['rows']) ?></td>
+                    <td><?= e((string) $table['size_mb']) ?> MB</td>
+                    <td><form class="inline" method="post" action="<?= url('/admin/system/db/optimize') ?>">
+                            <?= csrf_field() ?><input type="hidden" name="table" value="<?= e((string) $table['name']) ?>">
+                            <button class="btn btn-sm" type="submit">Optimize</button></form></td>
+                </tr>
+            <?php endforeach; ?>
+        </table>
+        <form class="sys-actions" method="post" action="<?= url('/admin/system/db/optimize') ?>"
+              onsubmit="return confirm('Optimize every table? May take a moment.');">
+            <?= csrf_field() ?><input type="hidden" name="table" value="__all">
+            <button class="btn" type="submit">Optimize all</button>
+        </form>
+    </div>
+
+    <!-- CSV exports -->
+    <div class="sys-card">
+        <h2>Exports</h2>
+        <p class="muted" style="font-size:.85rem;">Download current data as CSV for spreadsheets and accounting.</p>
+        <div class="sys-actions">
+            <a class="btn" href="<?= url('/admin/export/users') ?>">Users CSV</a>
+            <a class="btn" href="<?= url('/admin/export/subscriptions') ?>">Subscriptions CSV</a>
+        </div>
     </div>
 </div>

@@ -5,7 +5,9 @@ CREATE TABLE IF NOT EXISTS users (
     id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     email         VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    role          ENUM('admin', 'user') NOT NULL DEFAULT 'user',
+    role          ENUM('super_admin', 'admin', 'editor', 'moderator', 'viewer', 'user') NOT NULL DEFAULT 'user',
+    status        ENUM('active', 'suspended') NOT NULL DEFAULT 'active',
+    session_version INT UNSIGNED NOT NULL DEFAULT 0,
     theme_preset  VARCHAR(120) NULL,
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
