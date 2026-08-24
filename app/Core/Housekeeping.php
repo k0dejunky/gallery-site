@@ -80,10 +80,13 @@ class Housekeeping
         }
 
         // Storage snapshot for the trending chart + low-disk alert.
-        [$bytes, $photos] = self::uploadsUsage($root . '/storage/uploads');
+        // photos_count/video_count mirror the dashboard's Photos/Videos
+        // cards (attached, non-deleted media) so the numbers agree.
+        $bytes = self::uploadsBytes($root . '/storage/uploads');
+        [$photos, $videos] = self::mediaCounts();
         Database::run(
-            'INSERT INTO storage_snapshots (captured_at, uploads_bytes, photos_count) VALUES (CURRENT_TIMESTAMP, ?, ?)',
-            [$bytes, $photos]
+            'INSERT INTO storage_snapshots (captured_at, uploads_bytes, photos_count, video_count) VALUES (CURRENT_TIMESTAMP, ?, ?, ?)',
+            [$bytes, $photos, $videos]
         );
         Database::run(
             'DELETE FROM storage_snapshots WHERE captured_at < ?',
@@ -143,14 +146,13 @@ class Housekeeping
      *
      * @return array{0: int, 1: int} [bytes, fileCount]
      */
-    private static function uploadsUsage(string $dir): array
+    private static function uploadsBytes(string $dir): int
     {
         if (!is_dir($dir)) {
-            return [0, 0];
+            return 0;
         }
 
         $bytes = 0;
-        $count = 0;
 
         foreach (new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
@@ -158,11 +160,35 @@ class Housekeeping
         ) as $item) {
             if ($item->isFile()) {
                 $bytes += $item->getSize();
-                $count++;
             }
         }
 
-        return [$bytes, $count];
+        return $bytes;
+    }
+
+    /**
+     * Live media counts matching the dashboard's Photos and Videos cards:
+     * media attached to at least one non-deleted gallery.
+     *
+     * @return array{0: int, 1: int} [photos, videos]
+     */
+    private static function mediaCounts(): array
+    {
+        $photos = (int) Database::run(
+            'SELECT COUNT(DISTINCT gp.photo_id) AS c
+             FROM gallery_photo gp JOIN galleries g ON g.id = gp.gallery_id
+             WHERE g.deleted_at IS NULL'
+        )->fetch()['c'];
+
+        $videos = (int) Database::run(
+            'SELECT COUNT(DISTINCT gp.photo_id) AS c
+             FROM gallery_photo gp
+             JOIN galleries g ON g.id = gp.gallery_id
+             JOIN photos p ON p.id = gp.photo_id
+             WHERE g.deleted_at IS NULL AND p.is_video = 1'
+        )->fetch()['c'];
+
+        return [$photos, $videos];
     }
 
     private static function rrmdir(string $dir): void

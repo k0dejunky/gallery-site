@@ -98,9 +98,10 @@
         <p class="muted">No snapshots yet — the housekeeping cron records one every 15 minutes.</p>
     <?php else: ?>
         <?php
-            $cur   = (float) ($storageTrend['current_gb'] ?? 0);
-            $delta = (float) ($storageTrend['delta_gb'] ?? 0);
+            $cur    = (float) ($storageTrend['current_gb'] ?? 0);
+            $delta  = (float) ($storageTrend['delta_gb'] ?? 0);
             $photos = (int) ($storageTrend['current_photos'] ?? 0);
+            $videos = (int) ($storageTrend['current_videos'] ?? 0);
             $granLabels = ['hour' => 'hourly points', 'day' => 'daily points', 'month' => 'monthly points'];
             $winLabels  = ['day' => 'last 24 hours', 'week' => 'last 7 days', 'month' => 'last 30 days', 'year' => 'last 12 months', 'all' => 'all recorded history'];
         ?>
@@ -108,7 +109,7 @@
             <div class="stat-card">
                 <span class="muted">Current uploads storage</span>
                 <b style="font-size:1.3rem;"><?= number_format($cur, 2) ?> GB</b>
-                <span class="muted" style="font-size:.8rem;"><?= number_format($photos) ?> photos tracked</span>
+                <span class="muted" style="font-size:.8rem;"><?= number_format($photos) ?> photos · <?= number_format($videos) ?> videos tracked</span>
             </div>
             <div class="stat-card">
                 <span class="muted">Change over <?= e($winLabels[$storagePeriod] ?? $storagePeriod) ?></span>

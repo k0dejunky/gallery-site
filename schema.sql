@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS storage_snapshots (
     captured_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     uploads_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
     photos_count INT UNSIGNED NOT NULL DEFAULT 0,
+    video_count INT UNSIGNED NOT NULL DEFAULT 0,
     INDEX idx_storage_snapshots_at (captured_at)
 );
 

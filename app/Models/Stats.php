@@ -334,104 +334,109 @@ class Stats
 
     /**
      * Storage usage over a selectable period, built from the housekeeping
-     * snapshots (peak bytes per bucket). Buckets with no snapshot carry the
-     * last known value forward (and leading gaps use the first known value)
-     * so the series is continuous even when the cron missed runs or history
-     * is shorter than the requested window.
+     * snapshots (peak bytes per bucket).
      *
-     * Periods: day (hourly), week / month (daily), year / all (monthly).
+     * The bucket size adapts to how much history actually exists: hourly
+     * buckets for spans up to 10 days, daily up to ~8 months, monthly
+     * beyond that. A period whose window starts before the first snapshot
+     * is clamped to the first snapshot, so growth that "day" shows is never
+     * flattened away by empty leading buckets in wider windows — every
+     * window containing the growth displays it.
+     *
+     * Periods: day / week / month / year / all.
      *
      * Returns labels + GB values plus summary stats:
-     * current_gb, current_photos, delta_gb, points, granularity,
-     * first_snapshot (Y-m-d or null).
+     * current_gb, current_photos, current_videos, delta_gb, points,
+     * granularity, first_snapshot (Y-m-d or null).
      */
     public static function storageTrend(?string $period = null): array
     {
         $periods = [
-            'day'   => ['since' => '-24 hours',  'bucket' => 'hour'],
-            'week'  => ['since' => '-6 days',    'bucket' => 'day'],
-            'month' => ['since' => '-29 days',   'bucket' => 'day'],
-            'year'  => ['since' => '-11 months', 'bucket' => 'month'],
-            'all'   => ['since' => null,         'bucket' => 'month'],
+            'day'   => '-24 hours',
+            'week'  => '-6 days',
+            'month' => '-29 days',
+            'year'  => '-11 months',
+            'all'   => null,
         ];
 
         $period = is_string($period) && isset($periods[$period]) ? $period : 'week';
-        $cfg    = $periods[$period];
 
-        if ($cfg['since'] === null) {
-            $rows = Database::run(
-                'SELECT captured_at, uploads_bytes, photos_count FROM storage_snapshots ORDER BY captured_at LIMIT 200000'
-            )->fetchAll();
-        } else {
-            $rows = Database::run(
-                'SELECT captured_at, uploads_bytes, photos_count FROM storage_snapshots
-                 WHERE captured_at >= ? ORDER BY captured_at LIMIT 200000',
-                [date('Y-m-d H:i:s', strtotime($cfg['since']))]
-            )->fetchAll();
+        $rows = Database::run(
+            'SELECT captured_at, uploads_bytes, photos_count, video_count
+             FROM storage_snapshots ORDER BY captured_at LIMIT 200000'
+        )->fetchAll();
+
+        if (!$rows) {
+            return [
+                'labels' => [], 'gb' => [], 'current_gb' => null,
+                'current_photos' => null, 'current_videos' => null,
+                'delta_gb' => null, 'points' => 0, 'granularity' => 'day',
+                'first_snapshot' => null,
+            ];
         }
+
+        $now       = time();
+        $oldestTs  = strtotime((string) $rows[0]['captured_at']);
+        $windowRaw = $periods[$period] !== null ? strtotime($periods[$period], $now) : $oldestTs;
+
+        // Never show a flat leading stretch of unknown history: start the
+        // window at the first snapshot if it reaches back further.
+        $start = max($windowRaw, $oldestTs);
+
+        // Adaptive bucket size from the actual span: hour / day / month,
+        // keeping the point count manageable (~240 max).
+        $span    = max(3600, $now - $start);
+        $gran    = $span <= 240 * 3600 ? 'hour' : ($span <= 240 * 86400 ? 'day' : 'month');
+        $unitSec = $gran === 'hour' ? 3600 : ($gran === 'day' ? 86400 : 2635200);
+        $fmtKey  = $gran === 'hour' ? 'Y-m-d H:00:00' : ($gran === 'day' ? 'Y-m-d 00:00:00' : 'Y-m-01 00:00:00');
 
         // Peak bytes per bucket key, in chronological order.
         $peaks    = [];
-        $firstRow = null;
         $lastRow  = null;
         foreach ($rows as $r) {
             $ts   = strtotime((string) $r['captured_at']);
-            $key  = date($cfg['bucket'] === 'hour' ? 'Y-m-d H:00:00' : ($cfg['bucket'] === 'day' ? 'Y-m-d 00:00:00' : 'Y-m-01 00:00:00'), $ts);
             $peak = (int) $r['uploads_bytes'];
-            if (!isset($peaks[$key]) || $peak > $peaks[$key]) {
-                $peaks[$key] = $peak;
+            if ($ts >= $start) {
+                $key = date($fmtKey, $ts);
+                if (!isset($peaks[$key]) || $peak > $peaks[$key]) {
+                    $peaks[$key] = $peak;
+                }
             }
-            $firstRow ??= ['at' => (string) $r['captured_at']];
-            $lastRow    = ['at' => (string) $r['captured_at'], 'bytes' => $peak, 'photos' => (int) $r['photos_count']];
+            $lastRow = ['at' => (string) $r['captured_at'], 'bytes' => $peak,
+                        'photos' => (int) $r['photos_count'], 'videos' => (int) ($r['video_count'] ?? 0)];
         }
 
-        // Full bucket list covering the requested window.
-        $now      = time();
+        // Bucket frames from the clamped window start to now.
         $bucketTs = [];
-        if ($cfg['bucket'] === 'hour') {
-            for ($t = strtotime('-23 hours', $now); $t <= $now; $t += 3600) {
-                $bucketTs[] = strtotime(date('Y-m-d H:00:00', $t));
-            }
-        } elseif ($cfg['bucket'] === 'day') {
-            $start = strtotime(date('Y-m-d 00:00:00', strtotime($cfg['since'], $now)));
-            $today = strtotime(date('Y-m-d 00:00:00', $now));
-            for ($t = $start; $t <= $today; $t += 86400) {
-                $bucketTs[] = $t;
-            }
-        } else { // month
-            $start = $period === 'year'
-                ? strtotime(date('Y-m-01 00:00:00', strtotime('-11 months', $now)))
-                : ($rows ? strtotime(date('Y-m-01 00:00:00', strtotime((string) $rows[0]['captured_at']))) : strtotime(date('Y-m-01 00:00:00')));
-            for ($t = $start; $t <= $now; $t = strtotime('+1 month', $t)) {
+        $frameStart = strtotime(date($fmtKey, $start));
+        if ($gran === 'month') {
+            for ($t = $frameStart; $t <= $now; $t = strtotime('+1 month', $t)) {
                 $bucketTs[] = strtotime(date('Y-m-01 00:00:00', $t));
             }
-        }
-
-        // Carry-forward fill so the line is continuous; buckets recorded
-        // before the first snapshot take the first known value.
-        $firstKnownKey = null;
-        foreach ($bucketTs as $ts) {
-            $key = date('Y-m-d H:00:00', $ts);
-            if (array_key_exists($key, $peaks)) {
-                $firstKnownKey = $key;
-                break;
+        } else {
+            $step = $unitSec;
+            for ($t = $frameStart; $t <= $now; $t += $step) {
+                $bucketTs[] = strtotime(date($fmtKey, $t));
             }
         }
 
+        // Carry-forward fill so interior gaps stay continuous. Leading
+        // unknowns don't exist by construction (window starts at history).
         $labels = [];
         $gbs    = [];
         $carry  = null;
-        foreach ($bucketTs as $ts) {
-            $key = date('Y-m-d H:00:00', $ts);
+        foreach ($bucketTs as $i => $ts) {
+            $key = date($fmtKey, $ts);
             if (array_key_exists($key, $peaks)) {
                 $carry = $peaks[$key];
-            } elseif ($carry === null && $firstKnownKey !== null) {
-                $carry = $peaks[$firstKnownKey];
+            }
+            if ($carry === null && $i === count($bucketTs) - 1) {
+                break;
             }
             if ($carry !== null) {
-                if ($cfg['bucket'] === 'hour') {
-                    $labels[] = date('G:00', $ts);
-                } elseif ($cfg['bucket'] === 'day') {
+                if ($gran === 'hour') {
+                    $labels[] = date('n/j G:00', $ts);
+                } elseif ($gran === 'day') {
                     $labels[] = date('n/j', $ts);
                 } else {
                     $labels[] = date('M y', $ts);
@@ -439,16 +444,24 @@ class Stats
                 $gbs[] = round($carry / 1073741824, 2);
             }
         }
+        // Ensure the final bucket reflects "now" even if no snapshot yet in
+        // the newest bucket: repeat the last known value.
+        if ($gbs && end($bucketTs) > strtotime(date($fmtKey, strtotime((string) $lastRow['at'])))) {
+            $labels[] = $gran === 'hour' ? date('n/j G:00', end($bucketTs))
+                      : ($gran === 'day' ? date('n/j', end($bucketTs)) : date('M y', end($bucketTs)));
+            $gbs[] = round($lastRow['bytes'] / 1073741824, 2);
+        }
 
         return [
             'labels'         => $labels,
             'gb'             => $gbs,
-            'current_gb'     => $lastRow !== null ? round($lastRow['bytes'] / 1073741824, 2) : null,
-            'current_photos' => $lastRow !== null ? $lastRow['photos'] : null,
+            'current_gb'     => round($lastRow['bytes'] / 1073741824, 2),
+            'current_photos' => $lastRow['photos'],
+            'current_videos' => $lastRow['videos'],
             'delta_gb'       => count($gbs) > 1 ? round(end($gbs) - reset($gbs), 2) : ($gbs ? 0.0 : null),
             'points'         => count($gbs),
-            'granularity'    => $cfg['bucket'],
-            'first_snapshot' => $firstRow !== null ? substr($firstRow['at'], 0, 10) : null,
+            'granularity'    => $gran,
+            'first_snapshot' => substr((string) $rows[0]['captured_at'], 0, 10),
         ];
     }
 
