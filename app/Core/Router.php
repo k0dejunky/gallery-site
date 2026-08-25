@@ -49,6 +49,14 @@ class Router
                     ARRAY_FILTER_USE_KEY
                 );
 
+                // PHP 8.1+ enforces strict types on scalar parameters.
+                // Route captures arrive as strings; cast numeric ones to
+                // int so controller signatures (int $id) don't throw.
+                $params = array_map(
+                    fn ($v) => (ctype_digit($v) && $v !== '' && (int) $v >= 0) ? (int) $v : $v,
+                    $params
+                );
+
                 $instance = new $controller($request);
                 $instance->$action(...array_values($params));
                 return;
