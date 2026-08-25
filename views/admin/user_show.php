@@ -49,9 +49,6 @@
         <div class="ud-kv"><span>Created</span><b><?= e($user['created_at']) ?></b></div>
         <div class="ud-kv"><span>Last login</span><b><?= e($user['last_login_at'] ?? 'never') ?></b></div>
         <div class="ud-kv"><span>Status</span><b><?= e($user['status'] ?? 'active') ?></b></div>
-        <div class="ud-kv"><span>Galleries</span><b><?= number_format($mediaCounts['galleries']) ?></b></div>
-        <div class="ud-kv"><span>Photos</span><b><?= number_format($mediaCounts['photos']) ?></b></div>
-        <div class="ud-kv"><span>Videos</span><b><?= number_format($mediaCounts['videos']) ?></b></div>
     </div>
     <div class="ud-card">
         <h3>Billing on file</h3>

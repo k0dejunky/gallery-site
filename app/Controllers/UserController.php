@@ -385,7 +385,6 @@ class UserController extends Controller
 
         [$subscriptions, $activity, $logins, $notes] = $this->userContext($id);
 
-        $mediaCounts    = User::countMedia($id);
         $lifetimeRevenue = User::lifetimeRevenue($id);
 
         $this->viewAdmin('user_show', [
@@ -394,7 +393,6 @@ class UserController extends Controller
             'activity'        => $activity,
             'logins'          => $logins,
             'notes'           => $notes,
-            'mediaCounts'     => $mediaCounts,
             'lifetimeRevenue' => $lifetimeRevenue,
         ]);
     }
@@ -459,7 +457,6 @@ class UserController extends Controller
         AuditLog::record((int) (Auth::user()['id'] ?? 0), 'update', 'user_password', $id,
             'Reset password for "' . $target['email'] . '"');
 
-        $mediaCounts    = User::countMedia($id);
         $lifetimeRevenue = User::lifetimeRevenue($id);
 
         $this->viewAdmin('user_show', [
@@ -469,7 +466,6 @@ class UserController extends Controller
             'logins'          => [],
             'notes'           => [],
             'tempPassword'    => $temp,
-            'mediaCounts'     => $mediaCounts,
             'lifetimeRevenue' => $lifetimeRevenue,
         ]);
     }

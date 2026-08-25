@@ -222,34 +222,6 @@ class User
     }
 
     /**
-     * Media counts for a specific user: photos, videos, and galleries.
-     */
-    /**
-     * Total media counts across the site (galleries have no user_id column
-     * in this schema, so these are site-wide totals).
-     */
-    public static function countMedia(int $userId): array
-    {
-        $galleries = (int) Database::run(
-            'SELECT COUNT(*) FROM galleries WHERE deleted_at IS NULL'
-        )->fetchColumn();
-
-        $photos = (int) Database::run(
-            'SELECT COUNT(*) FROM gallery_photo gp
-             JOIN photos p ON p.id = gp.photo_id
-             WHERE p.is_video = 0'
-        )->fetchColumn();
-
-        $videos = (int) Database::run(
-            'SELECT COUNT(*) FROM gallery_photo gp
-             JOIN photos p ON p.id = gp.photo_id
-             WHERE p.is_video = 1'
-        )->fetchColumn();
-
-        return ['photos' => $photos, 'videos' => $videos, 'galleries' => $galleries];
-    }
-
-    /**
      * Lifetime revenue from all active, completed, or cancelled subscriptions.
      */
     public static function lifetimeRevenue(int $userId): float
