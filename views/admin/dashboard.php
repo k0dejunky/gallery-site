@@ -22,25 +22,6 @@
     </p>
 <?php endif; ?>
 
-<?php // Quick-links row: one-tap shortcuts to frequent admin pages. ?>
-<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:var(--spacing-lg);">
-    <a href="<?= url('/admin/trends') ?>" style="display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .7rem;background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius);text-decoration:none;color:inherit;font-size:.85rem;">
-        <span style="font-size:1rem;">📈</span> Trends
-    </a>
-    <a href="<?= url('/admin/subscriptions') ?>" style="display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .7rem;background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius);text-decoration:none;color:inherit;font-size:.85rem;">
-        <span style="font-size:1rem;">💳</span> Subscriptions
-    </a>
-    <a href="<?= url('/admin/categories') ?>" style="display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .7rem;background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius);text-decoration:none;color:inherit;font-size:.85rem;">
-        <span style="font-size:1rem;">🏷️</span> Categories
-    </a>
-    <a href="<?= url('/admin/error-logs') ?>" style="display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .7rem;background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius);text-decoration:none;color:inherit;font-size:.85rem;">
-        <span style="font-size:1rem;">⚠️</span> Error Logs
-    </a>
-    <a href="<?= url('/admin/theme') ?>" style="display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .7rem;background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius);text-decoration:none;color:inherit;font-size:.85rem;">
-        <span style="font-size:1rem;">🎨</span> Theme
-    </a>
-</div>
-
 <?php // Membership growth cards: recurring revenue + recent signups. ?>
 <div class="stat-cards">
     <div class="stat-card"><b>$<?= number_format((float) $growth['mrr'], 2) ?></b><small>Recurring / month</small></div>
