@@ -226,8 +226,8 @@ class UserController extends Controller
             'Started impersonating "' . $target['email'] . '"', null, ['impersonated_user_id' => $id]);
 
         Auth::loginUser($id);
-        $this->flash('success', 'You are now browsing as "' . $target['email'] . '".');
-        $this->redirect('/admin/users/' . $id);
+        $this->flash('success', 'You are now browsing as ' . $target['email'] . '.');
+        $this->redirect('/galleries');
     }
 
     /**
