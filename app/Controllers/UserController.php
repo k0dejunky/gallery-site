@@ -27,7 +27,11 @@ class UserController extends Controller
     public function __construct(Request $request)
     {
         parent::__construct($request);
-        Auth::requirePermission('users');
+        // exitImpersonation must be callable by impersonated (non-admin) users
+        // to restore the admin session, so skip the permission check for it.
+        if ($request->uri() !== '/admin/impersonate/exit') {
+            Auth::requirePermission('users');
+        }
     }
 
     /**
@@ -242,11 +246,23 @@ class UserController extends Controller
         }
 
         unset($_SESSION['impersonator_id']);
+
+        $admin = \App\Models\User::find($adminId);
+        $_SESSION['user_id'] = $adminId;
+        $_SESSION['session_version'] = (int) ($admin['session_version'] ?? 0);
+
+        \App\Core\Database::run(
+            'UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [$adminId]
+        );
+
         AuditLog::record($adminId, 'delete', 'impersonation', $adminId,
             'Stopped impersonating and restored own admin session');
 
-        Auth::loginUser($adminId);
         $this->flash('success', 'Welcome back, admin.');
+
+        session_commit();
+
         $this->redirect('/admin');
     }
 
