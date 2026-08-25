@@ -22,6 +22,25 @@
     </p>
 <?php endif; ?>
 
+<?php // Quick-links row: one-tap shortcuts to frequent admin pages. ?>
+<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:var(--spacing-lg);">
+    <a href="<?= url('/admin/trends') ?>" style="display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .7rem;background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius);text-decoration:none;color:inherit;font-size:.85rem;">
+        <span style="font-size:1rem;">📈</span> Trends
+    </a>
+    <a href="<?= url('/admin/subscriptions') ?>" style="display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .7rem;background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius);text-decoration:none;color:inherit;font-size:.85rem;">
+        <span style="font-size:1rem;">💳</span> Subscriptions
+    </a>
+    <a href="<?= url('/admin/categories') ?>" style="display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .7rem;background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius);text-decoration:none;color:inherit;font-size:.85rem;">
+        <span style="font-size:1rem;">🏷️</span> Categories
+    </a>
+    <a href="<?= url('/admin/error-logs') ?>" style="display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .7rem;background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius);text-decoration:none;color:inherit;font-size:.85rem;">
+        <span style="font-size:1rem;">⚠️</span> Error Logs
+    </a>
+    <a href="<?= url('/admin/theme') ?>" style="display:inline-flex;align-items:center;gap:.35rem;padding:.4rem .7rem;background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius);text-decoration:none;color:inherit;font-size:.85rem;">
+        <span style="font-size:1rem;">🎨</span> Theme
+    </a>
+</div>
+
 <?php // Membership growth cards: recurring revenue + recent signups. ?>
 <div class="stat-cards">
     <div class="stat-card"><b>$<?= number_format((float) $growth['mrr'], 2) ?></b><small>Recurring / month</small></div>
@@ -42,6 +61,80 @@
     <div class="stat-card"><b><?= number_format($summary['total_users']) ?></b><small>Users</small></div>
     <div class="stat-card"><b><?= number_format($summary['logged_in_members']) ?></b><small>Logged In Members</small></div>
 </div>
+
+<?php // System health: disk space + security summary. ?>
+<div class="stat-cards">
+    <?php if ($diskFreeGb !== null): ?>
+        <?php
+            $diskColor = $diskFreeGb > 20 ? '#16a34a' : ($diskFreeGb > 10 ? '#d97706' : '#dc2626');
+            $diskBg    = $diskFreeGb > 20 ? '#f0fdf4' : ($diskFreeGb > 10 ? '#fffbeb' : '#fef2f2');
+        ?>
+        <div class="stat-card" style="background:<?= $diskBg ?>;">
+            <b style="color:<?= $diskColor ?>;font-size:1.3rem;"><?= number_format($diskFreeGb, 1) ?> GB</b>
+            <small>Free disk space</small>
+        </div>
+    <?php endif; ?>
+    <?php if ((int) $security['locked_ips'] > 0 || (int) $security['locked_pairs'] > 0): ?>
+        <div class="stat-card" style="background:#fef2f2;">
+            <b style="color:#dc2626;font-size:1.3rem;"><?= count($security['locked_ips']) + count($security['locked_pairs']) ?></b>
+            <small>Active lockouts (last <?= (int) $security['window_min'] ?>m)</small>
+        </div>
+    <?php endif; ?>
+    <?php if (!empty($security['top_ips'])): ?>
+        <div class="stat-card">
+            <b><?= number_format((int) $security['top_ips'][0]['c']) ?></b>
+            <small>Top offender IPs (24h)</small>
+        </div>
+    <?php endif; ?>
+    <?php if ((int) $security['fails_hour'] > 0 && (int) $security['fails_hour'] < 25): ?>
+        <div class="stat-card">
+            <b><?= number_format((int) $security['fails_hour']) ?></b>
+            <small>Login fails (last hour)</small>
+        </div>
+    <?php endif; ?>
+</div>
+
+<?php if (!empty($security['locked_ips']) || !empty($security['locked_pairs'])): ?>
+<div class="sys-card" style="margin-top:var(--spacing-lg);">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <h2 style="margin:0;">Security — active lockouts</h2>
+        <a href="<?= url('/admin/system') ?>" class="btn btn-sm">System → Security</a>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:1.5rem;margin-top:.75rem;">
+        <?php if (!empty($security['locked_ips'])): ?>
+            <div style="flex:1 1 200px;">
+                <h3 style="margin:0 0 .35rem;font-size:.9rem;">Locked IPs</h3>
+                <table style="width:100%;">
+                    <tbody>
+                    <?php foreach (array_slice($security['locked_ips'], 0, 5) as $row): ?>
+                        <tr>
+                            <td class="muted" style="font-family:monospace;font-size:.85rem;"><?= e((string) $row['ip']) ?></td>
+                            <td style="text-align:right;white-space:nowrap;"><b><?= (int) $row['c'] ?></b> fails</td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+        <?php if (!empty($security['locked_pairs'])): ?>
+            <div style="flex:1 1 200px;">
+                <h3 style="margin:0 0 .35rem;font-size:.9rem;">Locked email + IP pairs</h3>
+                <table style="width:100%;">
+                    <tbody>
+                    <?php foreach (array_slice($security['locked_pairs'], 0, 5) as $row): ?>
+                        <tr>
+                            <td class="muted" style="font-size:.85rem;"><?= e((string) $row['email']) ?></td>
+                            <td class="muted" style="font-family:monospace;font-size:.85rem;"><?= e((string) $row['ip']) ?></td>
+                            <td style="text-align:right;white-space:nowrap;"><b><?= (int) $row['c'] ?></b></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php // Revenue & churn: monthly bars + trailing totals, all server-rendered SVG. ?>
 <div class="sys-card" style="margin-top:var(--spacing-lg);">
@@ -151,6 +244,4 @@
         </table>
     <?php endif; ?>
 </div>
-
-<?php // The gallery list lives on the Gallery Management tab now. ?>
 

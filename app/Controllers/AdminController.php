@@ -17,8 +17,6 @@ class AdminController extends Controller
             return;
         }
 
-        $page = (int) $this->request->query('page', 1);
-
         // Operational alerts: failed background backup, silent cron, brute-
         // force spikes. Email versions go out throttled via Mailer.
         $backupFailure = \App\Core\Housekeeping::consumeBackupFailure();
@@ -49,16 +47,20 @@ class AdminController extends Controller
             );
         }
 
+        $diskFreeGb = null;
+        $free = @disk_free_space($root);
+        if ($free !== false) {
+            $diskFreeGb = round($free / 1073741824, 1);
+        }
+
         $storagePeriod = (string) ($_GET['period'] ?? 'week');
         if (!in_array($storagePeriod, ['day', 'week', 'month', 'year', 'all'], true)) {
             $storagePeriod = 'week';
         }
 
         $this->viewAdmin('dashboard', [
-            'paginator' => Gallery::paginate($page, 10),
             'summary'   => Stats::summary(),
             'growth'    => Stats::growth(),
-            'categories' => Category::all(),
             'finance'   => \App\Models\Stats::finance(),
             'feed'      => \App\Models\Stats::feed(),
             'storageTrend' => \App\Models\Stats::storageTrend($storagePeriod),
@@ -66,6 +68,7 @@ class AdminController extends Controller
             'security'  => $security,
             'backupFailure' => $backupFailure,
             'cronAgeMin' => $cronAge,
+            'diskFreeGb' => $diskFreeGb,
         ]);
     }
 
