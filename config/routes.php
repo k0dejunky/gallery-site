@@ -79,6 +79,7 @@ return [
     ['POST', '/admin/users/{id}/logout-everywhere', 'UserController@logoutEverywhere'],
     ['POST', '/admin/users/{id}/notes', 'UserController@addNote'],
     ['POST', '/admin/users/{id}/flag', 'UserController@setFlag'],
+    ['POST', '/admin/users/{id}/role', 'UserController@updateRole'],
     ['GET', '/admin/users/{id}/edit', 'UserController@edit'],
     ['POST', '/admin/users/{id}', 'UserController@update'],
     ['POST', '/admin/users/{id}/delete', 'UserController@destroy'],

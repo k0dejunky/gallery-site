@@ -31,43 +31,115 @@ class UserController extends Controller
     }
 
     /**
-     * Admin: user accounts list with optional email search.
+     * Admin: user accounts list with optional search, filtering, sorting, pagination.
      */
     public function index(): void
     {
         $search = trim($this->request->input('q') ?? '');
         $flag   = trim((string) ($this->request->query('flag') ?? ''));
+        $status = trim((string) ($this->request->query('status') ?? ''));
+        $role   = trim((string) ($this->request->query('role') ?? ''));
 
-        if ($flag === 'flagged') {
-            $users = Database::run(
-                'SELECT * FROM users WHERE flag IS NOT NULL ORDER BY id DESC'
-            )->fetchAll();
-        } elseif ($flag !== '') {
-            $users = Database::run(
-                'SELECT * FROM users WHERE flag = ? ORDER BY id DESC',
-                [$flag]
-            )->fetchAll();
-        } else {
-            $users = $search !== ''
-                ? User::search($search)
-                : User::all();
+        $sortBy = (string) ($this->request->query('sort') ?? 'created_at');
+        $sortDir = (string) ($this->request->query('dir') ?? 'ASC');
+        $page   = max(1, (int) ($this->request->query('page') ?? 1));
+        $perPage = 50;
+
+        $allowedSort = ['email', 'created_at', 'role', 'status'];
+        if (!in_array($sortBy, $allowedSort, true)) {
+            $sortBy = 'created_at';
+        }
+        $sortDir = strtoupper($sortDir) === 'DESC' ? 'DESC' : 'ASC';
+
+        $offset = ($page - 1) * $perPage;
+
+        $users = User::all($search, $flag, $status, $role, $sortBy, $sortDir, $perPage, $offset);
+
+        // Count total matching users (without LIMIT/OFFSET) for pagination
+        $where  = [];
+        $params = [];
+
+        if ($search !== '') {
+            $where[]  = 'u.email LIKE ?';
+            $params[] = '%' . $search . '%';
+        }
+        if ($flag !== '') {
+            $where[]  = 'u.flag = ?';
+            $params[] = $flag;
+        }
+        if ($status !== '') {
+            $where[]  = 'u.status = ?';
+            $params[] = $status;
+        }
+        if ($role !== '') {
+            $where[]  = 'u.role = ?';
+            $params[] = $role;
         }
 
+        $countSql = 'SELECT COUNT(*) FROM users u';
+        if ($where !== []) {
+            $countSql .= ' WHERE ' . implode(' AND ', $where);
+        }
+        $totalUsers = (int) Database::run($countSql, $params)->fetchColumn();
+        $totalPages = max(1, (int) ceil($totalUsers / $perPage));
+
+        $activeCount    = User::countByStatus('active');
+        $suspendedCount = User::countByStatus('suspended');
+
         $this->viewAdmin('users', [
-            'users'  => $users,
-            'search' => $search,
-            'flag'   => $flag,
-            'roles'  => Auth::ADMIN_ROLES,
+            'users'          => $users,
+            'search'         => $search,
+            'flag'           => $flag,
+            'status'         => $status,
+            'role'           => $role,
+            'sortBy'         => $sortBy,
+            'sortDir'        => $sortDir,
+            'page'           => $page,
+            'totalPages'     => $totalPages,
+            'totalUsers'     => $totalUsers,
+            'activeCount'    => $activeCount,
+            'suspendedCount' => $suspendedCount,
+            'roles'          => Auth::ADMIN_ROLES,
         ]);
     }
 
     /**
      * Bulk actions over the checked users: assign a role or delete.
+     * GET with ?preview=1 shows a confirmation page first.
      */
     public function bulk(): void
     {
-        $ids = array_values(array_filter(array_map('intval', (array) ($this->request->post('ids') ?? []))));
+        $ids    = array_values(array_filter(array_map('intval', (array) ($this->request->post('ids') ?? []))));
         $action = (string) $this->request->post('action', '');
+
+        // Preview mode: GET request with ?preview=1
+        if ($this->request->isGet() && (string) ($this->request->query('preview') ?? '') !== '') {
+            $previewIds = array_values(array_filter(array_map('intval', (array) ($this->request->query('ids') ?? []))));
+            $previewAction = (string) ($this->request->query('action') ?? '');
+            $previewRole   = (string) ($this->request->query('role') ?? '');
+
+            if ($previewIds === []) {
+                $this->flash('error', 'No users selected.');
+                $this->redirect('/admin/users');
+            }
+
+            $previewUsers = [];
+            foreach ($previewIds as $pid) {
+                $u = User::find($pid);
+                if ($u !== null) {
+                    $previewUsers[] = $u;
+                }
+            }
+
+            $this->viewAdmin('user_bulk_preview', [
+                'previewUsers' => $previewUsers,
+                'previewAction' => $previewAction,
+                'previewRole'   => $previewRole,
+                'ids'           => $previewIds,
+            ]);
+            return;
+        }
+
         $me = (int) Auth::user()['id'];
 
         if ($ids === []) {
@@ -155,7 +227,7 @@ class UserController extends Controller
 
         Auth::loginUser($id);
         $this->flash('success', 'You are now browsing as "' . $target['email'] . '".');
-        $this->redirect('/galleries');
+        $this->redirect('/admin/users/' . $id);
     }
 
     /**
@@ -227,8 +299,6 @@ class UserController extends Controller
      */
     public function addNote(int $id): void
     {
-        Auth::requirePermission('users');
-
         $body = trim((string) $this->request->post('body', ''));
 
         if ($body !== '') {
@@ -245,13 +315,11 @@ class UserController extends Controller
     }
 
     /**
-     * Set or clear the account flag (chargeback, vip, watch, …). Free-form
+     * Set or clear the account flag (chargeback, vip, watch, ...). Free-form
      * but the UI offers presets; flagged accounts are filterable in the list.
      */
     public function setFlag(int $id): void
     {
-        Auth::requirePermission('users');
-
         $flag = trim((string) $this->request->post('flag', ''));
         $flag = mb_substr($flag, 0, 32);
 
@@ -264,8 +332,44 @@ class UserController extends Controller
     }
 
     /**
+     * Update a user's role from the inline dropdown on the users list.
+     */
+    public function updateRole(int $id): void
+    {
+        $role = (string) $this->request->post('role', '');
+        $allowed = ['user', 'editor', 'moderator', 'viewer'];
+        if (Auth::isAdmin()) $allowed[] = 'admin';
+        if (Auth::can('manage_roles')) $allowed[] = 'super_admin';
+
+        if (!in_array($role, $allowed, true)) {
+            $this->flash('error', 'Invalid role.');
+            $this->redirect('/admin/users');
+        }
+
+        $user = User::find($id);
+
+        if ($user === null) {
+            $this->flash('error', 'User not found.');
+            $this->redirect('/admin/users');
+        }
+
+        Database::run('UPDATE users SET role = ? WHERE id = ?', [$role, $id]);
+        AuditLog::record(
+            (int) (Auth::user()['id'] ?? 0),
+            'update',
+            'user',
+            $id,
+            'Role for "' . $user['email'] . '" changed to ' . $role,
+            ['role' => $user['role']],
+            ['role' => $role]
+        );
+
+        $this->redirect('/admin/users');
+    }
+
+    /**
      * Full account profile for admins: identity, membership history,
-     * galleries, and every audit-log mention — plus the account-control
+     * galleries, and every audit-log mention -- plus the account-control
      * quick actions (suspend, password reset, log out everywhere).
      */
     public function show(int $id): void
@@ -281,12 +385,17 @@ class UserController extends Controller
 
         [$subscriptions, $activity, $logins, $notes] = $this->userContext($id);
 
+        $mediaCounts    = User::countMedia($id);
+        $lifetimeRevenue = User::lifetimeRevenue($id);
+
         $this->viewAdmin('user_show', [
-            'user'          => $user,
-            'subscriptions' => $subscriptions,
-            'activity'      => $activity,
-            'logins'        => $logins,
-            'notes'         => $notes,
+            'user'            => $user,
+            'subscriptions'   => $subscriptions,
+            'activity'        => $activity,
+            'logins'          => $logins,
+            'notes'           => $notes,
+            'mediaCounts'     => $mediaCounts,
+            'lifetimeRevenue' => $lifetimeRevenue,
         ]);
     }
 
@@ -350,12 +459,18 @@ class UserController extends Controller
         AuditLog::record((int) (Auth::user()['id'] ?? 0), 'update', 'user_password', $id,
             'Reset password for "' . $target['email'] . '"');
 
+        $mediaCounts    = User::countMedia($id);
+        $lifetimeRevenue = User::lifetimeRevenue($id);
+
         $this->viewAdmin('user_show', [
-            'user'          => $target,
-            'subscriptions' => [],
-            'activity'      => [],
-            'logins'        => [],
-            'tempPassword'  => $temp,
+            'user'            => $target,
+            'subscriptions'   => [],
+            'activity'        => [],
+            'logins'          => [],
+            'notes'           => [],
+            'tempPassword'    => $temp,
+            'mediaCounts'     => $mediaCounts,
+            'lifetimeRevenue' => $lifetimeRevenue,
         ]);
     }
 

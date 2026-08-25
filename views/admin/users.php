@@ -8,19 +8,51 @@
 
 <h2 class="section-title">Users</h2>
 <form method="get" action="<?= url('/admin/users') ?>" style="display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem;flex-wrap:wrap;">
-    <label class="muted" for="flag-filter">Show:</label>
+    <input type="text" name="q" value="<?= e($search ?? '') ?>" placeholder="Search by email…" style="flex:1;min-width:200px;padding:.4rem .6rem;border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius);">
+    <label class="muted" for="flag-filter">Flag:</label>
     <select id="flag-filter" name="flag" onchange="this.form.submit();">
-        <option value="">All users</option>
+        <option value="">All flags</option>
         <option value="flagged"<?= ($flag ?? '') === 'flagged' ? ' selected' : '' ?>>Flagged only</option>
         <?php foreach (['chargeback', 'vip', 'watch', 'abuser', 'comped'] as $preset): ?>
             <option value="<?= e($preset) ?>"<?= ($flag ?? '') === $preset ? ' selected' : '' ?>>Flag: <?= e($preset) ?></option>
         <?php endforeach; ?>
     </select>
-    <noscript><button class="btn btn-sm" type="submit">Apply</button></noscript>
+    <label class="muted" for="status-filter">Status:</label>
+    <select id="status-filter" name="status" onchange="this.form.submit();">
+        <option value="">All statuses</option>
+        <option value="active"<?= ($status ?? '') === 'active' ? ' selected' : '' ?>>Active</option>
+        <option value="suspended"<?= ($status ?? '') === 'suspended' ? ' selected' : '' ?>>Suspended</option>
+    </select>
+    <label class="muted" for="role-filter">Role:</label>
+    <select id="role-filter" name="role" onchange="this.form.submit();">
+        <option value="">All roles</option>
+        <?php foreach ($roles as $r): ?>
+            <option value="<?= e($r) ?>"<?= ($role ?? '') === $r ? ' selected' : '' ?>><?= e(str_replace('_', ' ', $r)) ?></option>
+        <?php endforeach; ?>
+    </select>
+    <button class="btn btn-sm" type="submit">Search</button>
 </form>
-<?php if (($flag ?? '') !== ''): ?>
-    <p class="muted">Filtered by flag: <b><?= e($flag) ?></b> — <a href="<?= url('/admin/users') ?>">clear</a></p>
-<?php endif; ?>
+
+<p class="muted" style="margin-bottom:.5rem;">Showing <?= number_format(count($users)) ?> of <?= number_format($totalUsers) ?> users (<?= number_format($activeCount) ?> active, <?= number_format($suspendedCount) ?> suspended)</p>
+
+<?php
+    $baseParams = [];
+    if (($search ?? '') !== '') $baseParams['q'] = $search;
+    if (($flag ?? '') !== '')   $baseParams['flag'] = $flag;
+    if (($status ?? '') !== '') $baseParams['status'] = $status;
+    if (($role ?? '') !== '')   $baseParams['role'] = $role;
+
+    function _sortLink(string $col, string $label, string $sortBy, string $sortDir, array $baseParams): string {
+        $newDir = ($sortBy === $col && $sortDir === 'ASC') ? 'DESC' : 'ASC';
+        $params = array_merge($baseParams, ['sort' => $col, 'dir' => $newDir]);
+        $arrow = '';
+        if ($sortBy === $col) {
+            $arrow = $sortDir === 'ASC' ? ' ▲' : ' ▼';
+        }
+        return '<a href="?' . http_build_query($params) . '">' . e($label) . $arrow . '</a>';
+    }
+?>
+
 <?php if (empty($users)): ?>
     <p>No users yet.</p>
 <?php else: ?>
@@ -35,23 +67,26 @@
             <option value="delete">Delete</option>
         </select>
         <select name="role" id="bulk-role">
-            <?php foreach ($roles as $role): ?>
-                <option value="<?= e($role) ?>"><?= e(str_replace('_', ' ', $role)) ?></option>
+            <?php foreach ($roles as $r): ?>
+                <option value="<?= e($r) ?>"><?= e(str_replace('_', ' ', $r)) ?></option>
             <?php endforeach; ?>
-            <option value="user">user</option>
+            <?php if (!in_array('user', $roles, true)): ?>
+                <option value="user">user</option>
+            <?php endif; ?>
         </select>
         <button type="submit" class="btn btn-sm"
-                onclick="return confirm('Apply bulk action to all checked users?');">Apply</button>
+                onclick="var c=document.querySelectorAll('.user-check:checked').length; if(!c){alert('No users selected.');return false;} if(!confirm('Apply bulk action to '+c+' checked user(s)?'))return false;">Apply</button>
     </div>
     <div class="users-table-wrap"><table class="users-table">
         <thead>
             <tr>
                 <th><input type="checkbox" id="check-all" title="Select all"></th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Status</th>
+                <th><?= _sortLink('email', 'Email', $sortBy, $sortDir, $baseParams) ?></th>
+                <th><?= _sortLink('role', 'Role', $sortBy, $sortDir, $baseParams) ?></th>
+                <th><?= _sortLink('status', 'Status', $sortBy, $sortDir, $baseParams) ?></th>
+                <th>Last login</th>
                 <th>Membership</th>
-                <th>Created</th>
+                <th><?= _sortLink('created_at', 'Created', $sortBy, $sortDir, $baseParams) ?></th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -60,9 +95,34 @@
                 <tr>
                     <td><?php if ((int) $user['id'] !== (int) \App\Core\Auth::user()['id']): ?><input type="checkbox" name="ids[]" value="<?= (int) $user['id'] ?>" class="user-check"><?php endif; ?></td>
                     <td class="user-email"><?= e($user['email']) ?>
-                        <?php if (!empty($user['flag'])): ?><span class="badge-flag"><?= e($user['flag']) ?></span><?php endif; ?>
+                        <?php if (!empty($user['flag'])): ?>
+                            <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/flag') ?>" class="inline" style="display:inline;">
+                                <?= csrf_field() ?>
+                                <select name="flag" onchange="this.form.submit();" style="font-size:.75rem;padding:1px 3px;border:1px solid var(--border,#e5e7eb);border-radius:4px;background:transparent;cursor:pointer;">
+                                    <option value="">none</option>
+                                    <?php foreach (['chargeback', 'vip', 'watch', 'abuser', 'comped'] as $fp): ?>
+                                        <option value="<?= e($fp) ?>"<?= ($user['flag'] ?? '') === $fp ? ' selected' : '' ?>><?= e($fp) ?></option>
+                                    <?php endforeach; ?>
+                                    <?php if (!empty($user['flag']) && !in_array($user['flag'], ['', 'chargeback', 'vip', 'watch', 'abuser', 'comped'], true)): ?>
+                                        <option value="<?= e($user['flag']) ?>" selected><?= e($user['flag']) ?> (custom)</option>
+                                    <?php endif; ?>
+                                </select>
+                            </form>
+                        <?php endif; ?>
                     </td>
-                    <td><span class="role-badge <?= e($user['role']) ?>"><?= e(str_replace('_', ' ', $user['role'])) ?></span></td>
+                    <td>
+                        <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/role') ?>" class="inline" style="display:inline;">
+                            <?= csrf_field() ?>
+                            <select name="role" onchange="this.form.submit();" style="font-size:.75rem;padding:1px 3px;border:1px solid var(--border,#e5e7eb);border-radius:4px;background:transparent;cursor:pointer;" class="role-badge <?= e($user['role']) ?>">
+                                <?php foreach ($roles as $r): ?>
+                                    <option value="<?= e($r) ?>"<?= $user['role'] === $r ? ' selected' : '' ?>><?= e(str_replace('_', ' ', $r)) ?></option>
+                                <?php endforeach; ?>
+                                <?php if (!in_array('user', $roles, true)): ?>
+                                    <option value="user"<?= $user['role'] === 'user' ? ' selected' : '' ?>>user</option>
+                                <?php endif; ?>
+                            </select>
+                        </form>
+                    </td>
                     <td>
                         <?php if (($user['status'] ?? 'active') === 'suspended'): ?>
                             <span class="status-badge cancelled">suspended</span>
@@ -70,6 +130,7 @@
                             <span class="status-badge">active</span>
                         <?php endif; ?>
                     </td>
+                    <td class="user-date"><?= e($user['last_login_at'] ?? 'never') ?></td>
                     <td>
                         <?php if (!empty($user['sub_status'])): ?>
                             <?= e($user['sub_plan']) ?> <span class="status-badge <?= e($user['sub_status']) ?>"><?= e($user['sub_status']) ?></span>
@@ -109,6 +170,47 @@
 })();
 </script>
 <?php endif; ?>
+
+<?php if (($totalPages ?? 1) > 1): ?>
+<?php
+    $pgParams = $baseParams;
+    $currentPage = $page ?? 1;
+?>
+<div class="users-pagination" style="display:flex;align-items:center;gap:.5rem;margin:1rem 0;flex-wrap:wrap;">
+    <?php if ($currentPage > 1): ?>
+        <?php $pgParams['page'] = $currentPage - 1; ?>
+        <a href="?<?= http_build_query($pgParams) ?>" class="btn btn-sm">&larr; Prev</a>
+    <?php endif; ?>
+    <?php
+        $startPage = max(1, $currentPage - 2);
+        $endPage   = min($totalPages, $currentPage + 2);
+        if ($startPage > 1): ?>
+            <?php $pgParams['page'] = 1; ?>
+            <a href="?<?= http_build_query($pgParams) ?>" class="btn btn-sm">1</a>
+            <?php if ($startPage > 2): ?><span class="muted">…</span><?php endif; ?>
+        <?php endif;
+        for ($i = $startPage; $i <= $endPage; $i++):
+            $pgParams['page'] = $i;
+        ?>
+            <?php if ($i === $currentPage): ?>
+                <span class="btn btn-sm" style="opacity:1;font-weight:700;"><?= $i ?></span>
+            <?php else: ?>
+                <a href="?<?= http_build_query($pgParams) ?>" class="btn btn-sm"><?= $i ?></a>
+            <?php endif; ?>
+        <?php endfor;
+        if ($endPage < $totalPages): ?>
+            <?php if ($endPage < $totalPages - 1): ?><span class="muted">…</span><?php endif; ?>
+            <?php $pgParams['page'] = $totalPages; ?>
+            <a href="?<?= http_build_query($pgParams) ?>" class="btn btn-sm"><?= $totalPages ?></a>
+        <?php endif; ?>
+    <span class="muted">Page <?= $currentPage ?> of <?= $totalPages ?></span>
+    <?php if ($currentPage < $totalPages): ?>
+        <?php $pgParams['page'] = $currentPage + 1; ?>
+        <a href="?<?= http_build_query($pgParams) ?>" class="btn btn-sm">Next &rarr;</a>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+
 <div class="users-footer">
     <a class="btn" href="<?= url('/admin/users/create') ?>">Add User</a>
 </div>

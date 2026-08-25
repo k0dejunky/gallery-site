@@ -40,18 +40,57 @@ class User
      * Every account (without password hashes) for the admin user list, each
      * annotated with its latest membership status and plan.
      */
-    public static function all(): array
-    {
-        return Database::run(
-            'SELECT u.id, u.email, u.role, u.created_at,
-                    s.status AS sub_status, p.name AS sub_plan
-             FROM users u
-             LEFT JOIN subscriptions s ON s.id = (
-                 SELECT MAX(s2.id) FROM subscriptions s2 WHERE s2.user_id = u.id
-             )
-             LEFT JOIN plans p ON p.id = s.plan_id
-             ORDER BY u.role DESC, u.created_at ASC'
-        )->fetchAll();
+    public static function all(
+        string $search = '',
+        string $flag = '',
+        string $status = '',
+        string $role = '',
+        string $sortBy = 'created_at',
+        string $sortDir = 'ASC',
+        int $limit = 50,
+        int $offset = 0
+    ): array {
+        $whitelist = ['email', 'created_at', 'role', 'status'];
+        if (!in_array($sortBy, $whitelist, true)) {
+            $sortBy = 'created_at';
+        }
+        $sortDir = strtoupper($sortDir) === 'DESC' ? 'DESC' : 'ASC';
+
+        $where  = [];
+        $params = [];
+
+        if ($search !== '') {
+            $where[]  = 'u.email LIKE ?';
+            $params[] = '%' . $search . '%';
+        }
+        if ($flag !== '') {
+            $where[]  = 'u.flag = ?';
+            $params[] = $flag;
+        }
+        if ($status !== '') {
+            $where[]  = 'u.status = ?';
+            $params[] = $status;
+        }
+        if ($role !== '') {
+            $where[]  = 'u.role = ?';
+            $params[] = $role;
+        }
+
+        $sql = 'SELECT u.id, u.email, u.role, u.created_at, u.last_login_at, u.status,
+                       s.status AS sub_status, p.name AS sub_plan
+                FROM users u
+                LEFT JOIN subscriptions s ON s.id = (
+                    SELECT MAX(s2.id) FROM subscriptions s2 WHERE s2.user_id = u.id
+                )
+                LEFT JOIN plans p ON p.id = s.plan_id';
+
+        if ($where !== []) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
+        }
+        $sql .= ' ORDER BY u.' . $sortBy . ' ' . $sortDir;
+        $sql .= ' LIMIT ' . (int) $limit . ' OFFSET ' . (int) $offset;
+
+        return Database::run($sql, $params)->fetchAll();
     }
 
     /**
@@ -60,7 +99,7 @@ class User
     public static function search(string $query): array
     {
         return Database::run(
-            'SELECT u.id, u.email, u.role, u.created_at,
+            'SELECT u.id, u.email, u.role, u.created_at, u.last_login_at, u.status,
                     s.status AS sub_status, p.name AS sub_plan
              FROM users u
              LEFT JOIN subscriptions s ON s.id = (
@@ -158,5 +197,69 @@ class User
             'UPDATE users SET theme_preset = ? WHERE id = ?',
             [$slug ?: null, $id]
         );
+    }
+
+    /**
+     * Total number of user accounts.
+     */
+    public static function countTotal(): int
+    {
+        return (int) Database::run(
+            'SELECT COUNT(*) FROM users',
+            []
+        )->fetchColumn();
+    }
+
+    /**
+     * Number of users with a given status value.
+     */
+    public static function countByStatus(string $status): int
+    {
+        return (int) Database::run(
+            'SELECT COUNT(*) FROM users WHERE status = ?',
+            [$status]
+        )->fetchColumn();
+    }
+
+    /**
+     * Media counts for a specific user: photos, videos, and galleries.
+     */
+    /**
+     * Total media counts across the site (galleries have no user_id column
+     * in this schema, so these are site-wide totals).
+     */
+    public static function countMedia(int $userId): array
+    {
+        $galleries = (int) Database::run(
+            'SELECT COUNT(*) FROM galleries WHERE deleted_at IS NULL'
+        )->fetchColumn();
+
+        $photos = (int) Database::run(
+            'SELECT COUNT(*) FROM gallery_photo gp
+             JOIN photos p ON p.id = gp.photo_id
+             WHERE p.is_video = 0'
+        )->fetchColumn();
+
+        $videos = (int) Database::run(
+            'SELECT COUNT(*) FROM gallery_photo gp
+             JOIN photos p ON p.id = gp.photo_id
+             WHERE p.is_video = 1'
+        )->fetchColumn();
+
+        return ['photos' => $photos, 'videos' => $videos, 'galleries' => $galleries];
+    }
+
+    /**
+     * Lifetime revenue from all active, completed, or cancelled subscriptions.
+     */
+    public static function lifetimeRevenue(int $userId): float
+    {
+        return (float) Database::run(
+            'SELECT COALESCE(SUM(p.price), 0)
+             FROM subscriptions s
+             JOIN plans p ON p.id = s.plan_id
+             WHERE s.user_id = ? AND s.status IN (\'active\',\'completed\',\'cancelled\')',
+            [$userId]
+        )->fetchColumn();
     }
 }

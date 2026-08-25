@@ -12,6 +12,10 @@
   .ud-actions form { margin: 0; }
   .temp-pass { background: #fffbeb; border: 1px solid #f59e0b; color: #92400e; padding: .75rem 1rem; border-radius: var(--border-radius, 8px); margin-bottom: 1rem; font-size: .95rem; }
   .temp-pass code { font-size: 1.05rem; font-weight: 700; user-select: all; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::marker { display: none; content: ''; }
+  details > summary { list-style: none; }
+  details[open] > summary { margin-bottom: .5rem; }
 </style>
 
 <div class="users-hero">
@@ -45,12 +49,16 @@
         <div class="ud-kv"><span>Created</span><b><?= e($user['created_at']) ?></b></div>
         <div class="ud-kv"><span>Last login</span><b><?= e($user['last_login_at'] ?? 'never') ?></b></div>
         <div class="ud-kv"><span>Status</span><b><?= e($user['status'] ?? 'active') ?></b></div>
+        <div class="ud-kv"><span>Galleries</span><b><?= number_format($mediaCounts['galleries']) ?></b></div>
+        <div class="ud-kv"><span>Photos</span><b><?= number_format($mediaCounts['photos']) ?></b></div>
+        <div class="ud-kv"><span>Videos</span><b><?= number_format($mediaCounts['videos']) ?></b></div>
     </div>
     <div class="ud-card">
         <h3>Billing on file</h3>
         <div class="ud-kv"><span>Card</span><b><?= e(trim(($user['card_brand'] ?? '') . ' ··' . ($user['card_last_four'] ?? '')) ?: 'none') ?></b></div>
         <div class="ud-kv"><span>Expires</span><b><?= e(($user['card_exp_month'] ?? '') ? ((int) $user['card_exp_month'] . '/' . $user['card_exp_year']) : '—') ?></b></div>
         <div class="ud-kv"><span>Customer ID</span><b><?= e($user['payment_customer_id'] ?? '—') ?></b></div>
+        <div class="ud-kv"><span>Lifetime revenue</span><b>$<?= number_format($lifetimeRevenue, 2) ?></b></div>
     </div>
     <div class="ud-card">
         <h3>Quick actions</h3>
@@ -100,72 +108,100 @@
     </div>
 </div>
 
-<h2 class="section-title">Memberships</h2>
-<div class="users-table-wrap"><table class="users-table">
-    <thead><tr><th>Plan</th><th>Processor</th><th>Status</th><th>Reference</th><th>Created</th><th>Expires</th></tr></thead>
-    <tbody>
-    <?php foreach ($subscriptions as $sub): ?>
-        <tr>
-            <td><?= e((string) ($sub['plan_name'] ?? '?')) ?></td>
-            <td><?= e((string) ($sub['processor_name'] ?? '—')) ?></td>
-            <td><span class="status-badge <?= e((string) $sub['status']) ?>"><?= e((string) $sub['status']) ?></span></td>
-            <td><code><?= e((string) ($sub['transaction_ref'] ?? '')) ?></code></td>
-            <td class="user-date"><?= e((string) $sub['created_at']) ?></td>
-            <td class="user-date"><?= e((string) ($sub['expires_at'] ?? '—')) ?></td>
-        </tr>
-    <?php endforeach; ?>
-    <?php if (!$subscriptions): ?><tr><td colspan="6" class="muted">No membership history.</td></tr><?php endif; ?>
-    </tbody>
-</table></div>
+<details open>
+    <summary class="section-title" style="cursor:pointer;list-style:none;">
+        <span style="display:flex;align-items:center;gap:.5rem;">
+            Memberships
+            <small class="muted">(<?= count($subscriptions) ?>)</small>
+        </span>
+    </summary>
+    <div class="users-table-wrap"><table class="users-table">
+        <thead><tr><th>Plan</th><th>Processor</th><th>Status</th><th>Reference</th><th>Created</th><th>Expires</th></tr></thead>
+        <tbody>
+        <?php foreach ($subscriptions as $sub): ?>
+            <tr>
+                <td><?= e((string) ($sub['plan_name'] ?? '?')) ?></td>
+                <td><?= e((string) ($sub['processor_name'] ?? '—')) ?></td>
+                <td><span class="status-badge <?= e((string) $sub['status']) ?>"><?= e((string) $sub['status']) ?></span></td>
+                <td><code><?= e((string) ($sub['transaction_ref'] ?? '')) ?></code></td>
+                <td class="user-date"><?= e((string) $sub['created_at']) ?></td>
+                <td class="user-date"><?= e((string) ($sub['expires_at'] ?? '—')) ?></td>
+            </tr>
+        <?php endforeach; ?>
+        <?php if (!$subscriptions): ?><tr><td colspan="6" class="muted">No membership history.</td></tr><?php endif; ?>
+        </tbody>
+    </table></div>
+</details>
 
-<h2 class="section-title">Recent sign-in attempts</h2>
-<div class="users-table-wrap"><table class="users-table">
-    <thead><tr><th>When</th><th>IP</th></tr></thead>
-    <tbody>
-    <?php foreach ($logins as $attempt): ?>
-        <tr>
-            <td class="user-date"><?= e((string) $attempt['at']) ?></td>
-            <td><code><?= e((string) $attempt['ip']) ?></code></td>
-        </tr>
-    <?php endforeach; ?>
-    <?php if (!$logins): ?><tr><td colspan="2" class="muted">No recorded attempts.</td></tr><?php endif; ?>
-    </tbody>
-</table></div>
+<details>
+    <summary class="section-title" style="cursor:pointer;list-style:none;">
+        <span style="display:flex;align-items:center;gap:.5rem;">
+            Recent sign-in attempts
+            <small class="muted">(<?= count($logins) ?>)</small>
+        </span>
+    </summary>
+    <div class="users-table-wrap"><table class="users-table">
+        <thead><tr><th>When</th><th>IP</th></tr></thead>
+        <tbody>
+        <?php foreach ($logins as $attempt): ?>
+            <tr>
+                <td class="user-date"><?= e((string) $attempt['at']) ?></td>
+                <td><code><?= e((string) $attempt['ip']) ?></code></td>
+            </tr>
+        <?php endforeach; ?>
+        <?php if (!$logins): ?><tr><td colspan="2" class="muted">No recorded attempts.</td></tr><?php endif; ?>
+        </tbody>
+    </table></div>
+</details>
 
-<h2 class="section-title">Audit trail</h2>
-<div class="users-table-wrap"><table class="users-table">
-    <thead><tr><th>When</th><th>Action</th><th>Entity</th><th>Description</th></tr></thead>
-    <tbody>
-    <?php foreach ($activity as $entry): ?>
-        <tr>
-            <td class="user-date"><?= e((string) $entry['created_at']) ?></td>
-            <td><span class="role-badge"><?= e((string) $entry['action']) ?></span></td>
-            <td><?= e((string) $entry['entity_type']) ?>#<?= (int) $entry['entity_id'] ?></td>
-            <td><?= e((string) $entry['description']) ?></td>
-        </tr>
-    <?php endforeach; ?>
-    <?php if (!$activity): ?><tr><td colspan="4" class="muted">Nothing recorded yet.</td></tr><?php endif; ?>
-    </tbody>
-</table></div>
+<details>
+    <summary class="section-title" style="cursor:pointer;list-style:none;">
+        <span style="display:flex;align-items:center;gap:.5rem;">
+            Audit trail
+            <small class="muted">(<?= count($activity) ?>)</small>
+        </span>
+    </summary>
+    <div class="users-table-wrap"><table class="users-table">
+        <thead><tr><th>When</th><th>Action</th><th>Entity</th><th>Description</th></tr></thead>
+        <tbody>
+        <?php foreach ($activity as $entry): ?>
+            <tr>
+                <td class="user-date"><?= e((string) $entry['created_at']) ?></td>
+                <td><span class="role-badge"><?= e((string) $entry['action']) ?></span></td>
+                <td><?= e((string) $entry['entity_type']) ?>#<?= (int) $entry['entity_id'] ?></td>
+                <td><?= e((string) $entry['description']) ?></td>
+            </tr>
+        <?php endforeach; ?>
+        <?php if (!$activity): ?><tr><td colspan="4" class="muted">Nothing recorded yet.</td></tr><?php endif; ?>
+        </tbody>
+    </table></div>
+</details>
 
-<h2 class="section-title">Internal notes</h2>
-<div class="users-table-wrap" style="max-width:720px;">
-    <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/notes') ?>" style="display:flex;gap:.5rem;margin-bottom:.75rem;">
-        <?= csrf_field() ?>
-        <textarea name="body" rows="2" required placeholder="Add an internal note (never shown to the member)…" style="flex:1;"></textarea>
-        <button class="btn btn-sm" type="submit">Add note</button>
-    </form>
-    <table class="users-table">
-    <thead><tr><th>When</th><th>By</th><th>Note</th></tr></thead>
-    <tbody>
-    <?php foreach ($notes as $note): ?>
-        <tr>
-            <td class="user-date" style="white-space:nowrap;"><?= e((string) $note['created_at']) ?></td>
-            <td><?= e((string) ($note['author'] ?? 'system')) ?></td>
-            <td style="white-space:pre-wrap;"><?= e((string) $note['body']) ?></td>
-        </tr>
-    <?php endforeach; ?>
-    <?php if (!$notes): ?><tr><td colspan="3" class="muted">No notes yet.</td></tr><?php endif; ?>
-    </tbody>
-    </table>
-</div>
+<details open>
+    <summary class="section-title" style="cursor:pointer;list-style:none;">
+        <span style="display:flex;align-items:center;gap:.5rem;">
+            Internal notes
+            <small class="muted">(<?= count($notes) ?>)</small>
+        </span>
+    </summary>
+    <div class="users-table-wrap" style="max-width:720px;">
+        <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/notes') ?>" style="display:flex;gap:.5rem;margin-bottom:.75rem;">
+            <?= csrf_field() ?>
+            <textarea name="body" rows="2" required placeholder="Add an internal note (never shown to the member)…" style="flex:1;"></textarea>
+            <button class="btn btn-sm" type="submit">Add note</button>
+        </form>
+        <table class="users-table">
+        <thead><tr><th>When</th><th>By</th><th>Note</th></tr></thead>
+        <tbody>
+        <?php foreach ($notes as $note): ?>
+            <tr>
+                <td class="user-date" style="white-space:nowrap;"><?= e((string) $note['created_at']) ?></td>
+                <td><?= e((string) ($note['author'] ?? 'system')) ?></td>
+                <td style="white-space:pre-wrap;"><?= e((string) $note['body']) ?></td>
+            </tr>
+        <?php endforeach; ?>
+        <?php if (!$notes): ?><tr><td colspan="3" class="muted">No notes yet.</td></tr><?php endif; ?>
+        </tbody>
+        </table>
+    </div>
+</details>
