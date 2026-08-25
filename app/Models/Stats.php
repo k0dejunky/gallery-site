@@ -642,6 +642,119 @@ class Stats
     }
 
     /**
+     * Category trends across multiple periods simultaneously. Returns
+     * each category with per-period cur/prev/trend data, so the view
+     * can render a comparison table with daily/weekly/monthly columns.
+     *
+     * @return array<int, array{id: int, name: string, slug: string, gallery_count: int, periods: array<string, array{cur: int, prev: int|null, trend: array{label: string, pct: int}}}>
+     */
+    public static function categoryTrendsMulti(): array
+    {
+        $galleryCounts = [];
+        $gcRows = Database::run(
+            'SELECT gc2.category_id, COUNT(*) AS cnt
+             FROM gallery_category gc2
+             INNER JOIN galleries g2 ON g2.id = gc2.gallery_id
+             WHERE g2.deleted_at IS NULL
+             GROUP BY gc2.category_id'
+        )->fetchAll();
+        foreach ($gcRows as $r) {
+            $galleryCounts[(int) $r['category_id']] = (int) $r['cnt'];
+        }
+
+        $categories = Database::run(
+            'SELECT id, name, slug FROM categories ORDER BY name ASC'
+        )->fetchAll();
+
+        $periodKeys = ['daily', 'weekly', 'monthly'];
+        $allTrends = [];
+
+        foreach ($periodKeys as $periodKey) {
+            $days = self::PERIODS[$periodKey]['days'];
+            [$currentLow, $previousLow] = self::windows($days);
+
+            $rows = Database::run(
+                'SELECT c.id,
+                        COALESCE(SUM(CASE WHEN cv.created_at >= ? THEN 1 ELSE 0 END), 0) AS cur_count,
+                        COALESCE(SUM(CASE WHEN cv.created_at >= ? AND cv.created_at < ? THEN 1 ELSE 0 END), 0) AS prev_count
+                 FROM categories c
+                 LEFT JOIN category_views cv ON cv.category_id = c.id AND cv.created_at >= ?
+                 GROUP BY c.id',
+                [$currentLow, $previousLow, $currentLow, $previousLow]
+            )->fetchAll();
+
+            foreach ($rows as $row) {
+                $id = (int) $row['id'];
+                $cur = (int) $row['cur_count'];
+                $prev = (int) $row['prev_count'];
+                $allTrends[$id][$periodKey] = [
+                    'cur'  => $cur,
+                    'prev' => $prev,
+                    'trend' => self::trend($cur, $prev),
+                ];
+            }
+        }
+
+        $result = [];
+        foreach ($categories as $cat) {
+            $id = (int) $cat['id'];
+            $result[] = [
+                'id'            => $id,
+                'name'          => $cat['name'],
+                'slug'          => $cat['slug'],
+                'gallery_count' => $galleryCounts[$id] ?? 0,
+                'periods'       => $allTrends[$id] ?? [],
+            ];
+        }
+
+        usort($result, static function (array $a, array $b): int {
+            $sumA = array_sum(array_column($a['periods'], 'cur'));
+            $sumB = array_sum(array_column($b['periods'], 'cur'));
+            return $sumB <=> $sumA ?: strcmp($a['name'], $b['name']);
+        });
+
+        return $result;
+    }
+
+    /**
+     * Daily view counts for a single category over the last $days days.
+     * Returns an array of [date => count] for sparkline rendering.
+     *
+     * @return array<string, int> keyed by date (Y-m-d)
+     */
+    public static function categoryViewHistory(int $categoryId, int $days = 30): array
+    {
+        $since = date('Y-m-d H:i:s', time() - $days * 86400);
+
+        $rows = Database::run(
+            'SELECT DATE(created_at) AS dt, COUNT(*) AS cnt
+             FROM category_views
+             WHERE category_id = ? AND created_at >= ?
+             GROUP BY DATE(created_at)
+             ORDER BY dt ASC',
+            [$categoryId, $since]
+        )->fetchAll();
+
+        $result = [];
+        $start = new \DateTime('-' . $days . ' days');
+        $end = new \DateTime();
+        $end->modify('+1 day');
+        $period = new \DatePeriod($start, new \DateInterval('P1D'), $end);
+
+        $countsByDate = [];
+        foreach ($rows as $row) {
+            $countsByDate[(string) $row['dt']] = (int) $row['cnt'];
+        }
+
+        foreach ($period as $date) {
+            $key = $date->format('Y-m-d');
+            $result[$key] = $countsByDate[$key] ?? 0;
+        }
+
+        return $result;
+    }
+
+    /**
      * Attach a human/machine-readable trend to each row: "new" when there
      * was no previous activity, "up"/"down" with the percentage change, or
      * "flat" when counts match (including when there is no activity). For the

@@ -119,6 +119,7 @@ return [
     ['GET', '/admin/help', 'HelpController@index'],
     ['GET', '/admin/trends', 'TrendsController@index'],
     ['POST', '/admin/trends/promote', 'TrendsController@approvePromotion'],
+    ['POST', '/admin/trends/dismiss', 'TrendsController@dismissPromotion'],
     ['GET', '/admin/logs', 'LogsController@index'],
     ['GET', '/admin/error-logs', 'LogsController@errorIndex'],
     ['POST', '/admin/logs/{id}/rollback', 'LogsController@rollback'],

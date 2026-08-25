@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\Database;
 use App\Core\Request;
 use App\Models\AuditLog;
 use App\Models\Category;
@@ -35,6 +36,10 @@ class TrendsController extends Controller
     public function index(): void
     {
         $period = Stats::normalizePeriod((string) $this->request->query('period', 'weekly'));
+        $viewMode = (string) $this->request->query('view', 'single');
+        if (!in_array($viewMode, ['single', 'compare'], true)) {
+            $viewMode = 'single';
+        }
 
         $lifetimeCounts = Stats::missedSearchLifetimeCounts();
 
@@ -57,14 +62,27 @@ class TrendsController extends Controller
             static fn (array $row): bool => !isset($pending[$row['term_key']])
         ));
 
-        $this->viewAdmin('trends', [
+        $data = [
             'categoryTrends' => Stats::categoryTrends($period),
             'searchTrends'   => $searchTrends,
             'pendingApprovals' => Stats::pendingCategoryApprovals(self::PROMOTION_THRESHOLD),
             'periods'        => Stats::periods(),
             'currentPeriod'  => $period,
             'promotionThreshold' => self::PROMOTION_THRESHOLD,
-        ]);
+            'viewMode'       => $viewMode,
+        ];
+
+        if ($viewMode === 'compare') {
+            $multiTrends = Stats::categoryTrendsMulti();
+            $sparklines = [];
+            foreach (array_slice($multiTrends, 0, 15) as $cat) {
+                $sparklines[$cat['id']] = Stats::categoryViewHistory($cat['id'], 30);
+            }
+            $data['multiTrends'] = $multiTrends;
+            $data['sparklines'] = $sparklines;
+        }
+
+        $this->viewAdmin('trends', $data);
     }
 
     /**
@@ -110,6 +128,33 @@ class TrendsController extends Controller
         );
 
         $this->flash('success', 'Category "' . $term . '" created from a missed search.');
+        $this->redirect('/admin/trends');
+    }
+
+    /**
+     * Dismiss a pending category approval. Removes the search_stats rows
+     * for the term so it no longer appears in the pending list.
+     */
+    public function dismissPromotion(): void
+    {
+        $term = trim((string) $this->request->post('term', ''));
+
+        if ($term === '') {
+            $this->flash('error', 'No search term provided.');
+            $this->redirect('/admin/trends');
+        }
+
+        Database::run('DELETE FROM search_stats WHERE LOWER(term) = ?', [mb_strtolower($term)]);
+
+        AuditLog::record(
+            (int) Auth::user()['id'],
+            'delete',
+            'search_term',
+            0,
+            'Dismissed missed search "' . $term . '" from pending approvals'
+        );
+
+        $this->flash('success', 'Dismissed "' . $term . '".');
         $this->redirect('/admin/trends');
     }
 }
