@@ -14,7 +14,7 @@ use App\Core\Database;
 class PaymentProcessor
 {
     /** Provider identifiers the UI recognises; unknown providers are allowed. */
-    public const PROVIDERS = ['stripe', 'paypal', 'ccbill', 'epoch', 'segpay', 'coinbase', 'square', 'venmo', 'cashapp', 'bitcoin'];
+    public const PROVIDERS = ['stripe', 'paypal', 'braintree', 'ccbill', 'epoch', 'segpay', 'coinbase', 'square', 'venmo', 'cashapp', 'bitcoin'];
 
     /**
      * Providers whose checkout happens on the biller's own hosted page. The
@@ -45,6 +45,12 @@ class PaymentProcessor
             'auth_key' => 'Auth key (x-authkey)',
             'api_user' => 'Merchant API username',
             'api_pass' => 'Merchant API hash secret',
+        ],
+        'braintree' => [
+            'merchant_id' => 'Merchant ID',
+            'public_key'  => 'Public key',
+            'private_key' => 'Private key',
+            'plan_id'     => 'Braintree plan ID (for subscriptions)',
         ],
     ];
 
@@ -339,6 +345,7 @@ class PaymentProcessor
         $labels = [
             'stripe'  => 'Stripe',
             'paypal'  => 'PayPal',
+            'braintree' => 'Braintree',
             'ccbill'  => 'CCBill',
             'epoch'   => 'Epoch',
             'segpay'  => 'SegPay',

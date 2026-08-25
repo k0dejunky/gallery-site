@@ -167,15 +167,15 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
                     <?php if ($hasActive || $pendingSub !== null): ?>
                         <button type="button" class="btn btn-disabled" disabled style="order:2;">Unavailable</button>
                     <?php else: ?>
-                        <form method="post" action="<?= url('/membership/subscribe') ?>" style="order:2;">
+                        <form method="post" action="<?= url('/membership/subscribe') ?>" style="order:2;" id="subForm_<?= (int) $plan['id'] ?>">
                             <?= csrf_field() ?>
                             <input type="hidden" name="plan_id" value="<?= (int) $plan['id'] ?>">
                             <?php if (!empty($paymentProcessors)): ?>
                                 <div style="margin-bottom:.6rem;">
                                     <label for="pay_<?= (int) $plan['id'] ?>" class="muted" style="display:block;margin-bottom:.25rem;font-size:var(--font-size-sm);">Payment method</label>
-                                    <select name="payment_processor" id="pay_<?= (int) $plan['id'] ?>" style="width:100%;box-sizing:border-box;">
+                                    <select name="payment_processor" id="pay_<?= (int) $plan['id'] ?>" style="width:100%;box-sizing:border-box;" data-plan-id="<?= (int) $plan['id'] ?>" class="pp-select">
                                         <?php foreach ($paymentProcessors as $pp): ?>
-                                            <option value="<?= (int) $pp['id'] ?>">
+                                            <option value="<?= (int) $pp['id'] ?>" data-provider="<?= e((string) $pp['provider']) ?>">
                                                 <?= e(\App\Models\PaymentProcessor::providerLabel((string) $pp['provider'])) ?> — <?= e((string) $pp['name']) ?>
                                             </option>
                                         <?php endforeach; ?>
@@ -194,3 +194,18 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
         Subscriptions are approved manually. You will be able to browse immediately after approval.
     </p>
 </div>
+
+<script>
+(function(){
+    document.querySelectorAll('.pp-select').forEach(function(sel){
+        sel.closest('form').addEventListener('submit', function(e){
+            var opt = sel.options[sel.selectedIndex];
+            if (opt && opt.getAttribute('data-provider') === 'braintree') {
+                e.preventDefault();
+                var planId = sel.closest('form').querySelector('input[name="plan_id"]').value;
+                window.location.href = <?= json_encode(url('/membership/checkout')) ?> + '?plan_id=' + planId;
+            }
+        });
+    });
+})();
+</script>

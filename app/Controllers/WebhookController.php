@@ -8,6 +8,7 @@ use App\Core\Mailer;
 use App\Core\Request;
 use App\Models\PaymentProcessor;
 use App\Models\Subscription;
+use App\Models\AuditLog;
 
 /**
  * Server-to-server postback endpoints for the hosted-checkout billers
@@ -43,6 +44,9 @@ class WebhookController extends Controller
                 return;
             case 'segpay':
                 $this->segpay();
+                return;
+            case 'braintree':
+                $this->braintree();
                 return;
         }
 
@@ -276,6 +280,180 @@ class WebhookController extends Controller
 
         $this->notifyPayment('SegPay', (int) $subscription['id'], $ref);
         echo 'ok';
+    }
+
+    // ------------------------------------------------------------------
+    // Braintree
+    //
+    // Braintree posts XML notification payloads with a
+    // Braintree-Signature header containing timestamp|publicKey|signature.
+    // Verification uses HMAC-SHA1 with the merchant's private key.
+    // ------------------------------------------------------------------
+    private function braintree(): void
+    {
+        $signatureHeader = (string) ($_SERVER['HTTP_BRAINTREE_SIGNATURE'] ?? '');
+
+        if ($signatureHeader === '') {
+            $allHeaders = function_exists('getallheaders') ? getallheaders() : [];
+            $signatureHeader = (string) ($allHeaders['Braintree-Signature'] ?? $allHeaders['braintree-signature'] ?? '');
+        }
+
+        $rawBody = file_get_contents('php://input') ?: '';
+
+        if ($rawBody === '') {
+            http_response_code(400);
+            echo 'empty body';
+            return;
+        }
+
+        // Locate a Braintree processor's credentials for verification
+        $gateway = null;
+
+        foreach ($this->processorRows('braintree') as $row) {
+            $gateway = \App\Core\BraintreeGateway::fromConfig($row);
+
+            if ($gateway !== null) {
+                break;
+            }
+        }
+
+        if ($gateway === null) {
+            error_log('[webhooks/braintree] no configured Braintree processor found');
+            http_response_code(500);
+            echo 'no braintree config';
+            return;
+        }
+
+        // Verify signature and parse the notification
+        try {
+            $notification = $gateway->verifyWebhook($signatureHeader, $rawBody);
+        } catch (\Throwable $e) {
+            error_log('[webhooks/braintree] signature verification failed: ' . $e->getMessage());
+            http_response_code(400);
+            echo 'bad signature';
+            return;
+        }
+
+        $kind     = (string) $notification['kind'];
+        $btId     = (string) $notification['subscription_id'];
+        $btStatus = (string) $notification['status'];
+
+        error_log('[webhooks/braintree] kind=' . $kind . ' subscription=' . $btId . ' status=' . $btStatus);
+
+        if ($btId === '') {
+            echo 'no subscription id in notification';
+            return;
+        }
+
+        $subscription = Subscription::findByBraintreeId($btId);
+
+        if ($subscription === null) {
+            // Try without the BT- prefix (some notifications arrive without it)
+            $subscription = Database::run(
+                "SELECT s.*, p.billing_cycle AS billing_cycle
+                 FROM subscriptions s
+                 JOIN plans p ON p.id = s.plan_id
+                 WHERE s.transaction_ref = ? OR s.transaction_ref = ?
+                 ORDER BY s.id DESC LIMIT 1",
+                ['BT-' . $btId, $btId]
+            )->fetch();
+
+            if ($subscription === false) {
+                echo 'no matching subscription for BT-' . $btId;
+                return;
+            }
+        }
+
+        $subId = (int) $subscription['id'];
+
+        // Map Braintree notification kinds to actions
+        switch ($kind) {
+            case 'subscription_charged_successfully':
+            case 'subscription_charged':
+                // Payment succeeded — ensure the subscription is active
+                if ((string) $subscription['status'] !== 'active') {
+                    Subscription::activateWithTransaction($subId, 'BT-' . $btId);
+                    $this->notifyPayment('Braintree', $subId, 'BT-' . $btId);
+                }
+                echo 'ok';
+                return;
+
+            case 'subscription_canceled':
+            case 'subscription_cancelled':
+                Subscription::cancel($subId);
+                AuditLog::record(
+                    (int) $subscription['user_id'],
+                    'update',
+                    'subscription',
+                    $subId,
+                    'Braintree webhook: subscription canceled',
+                    null,
+                    ['bt_subscription_id' => $btId, 'kind' => $kind]
+                );
+                echo 'cancelled';
+                return;
+
+            case 'subscription_went_past_due':
+                // Flag but don't cancel — give a grace period
+                Database::run(
+                    "UPDATE subscriptions SET status = 'past_due', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'active'",
+                    [$subId]
+                );
+                AuditLog::record(
+                    (int) $subscription['user_id'],
+                    'update',
+                    'subscription',
+                    $subId,
+                    'Braintree webhook: subscription past due',
+                    null,
+                    ['bt_subscription_id' => $btId, 'kind' => $kind]
+                );
+                echo 'flagged';
+                return;
+
+            case 'subscription_expired':
+                Database::run(
+                    "UPDATE subscriptions SET status = 'expired', expires_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN ('active', 'past_due')",
+                    [$subId]
+                );
+                AuditLog::record(
+                    (int) $subscription['user_id'],
+                    'update',
+                    'subscription',
+                    $subId,
+                    'Braintree webhook: subscription expired',
+                    null,
+                    ['bt_subscription_id' => $btId, 'kind' => $kind]
+                );
+                echo 'expired';
+                return;
+
+            case 'subscription_charged_failed':
+            case 'subscription_failed':
+                AuditLog::record(
+                    (int) $subscription['user_id'],
+                    'update',
+                    'subscription',
+                    $subId,
+                    'Braintree webhook: payment failed',
+                    null,
+                    ['bt_subscription_id' => $btId, 'kind' => $kind]
+                );
+                error_log('[webhooks/braintree] payment failed for subscription ' . $subId . ' (BT-' . $btId . ')');
+                echo 'noted';
+                return;
+
+            case 'subscription_trial_ending':
+                // informational only — notify admin
+                $this->notifyPayment('Braintree (trial ending)', $subId, 'BT-' . $btId);
+                echo 'noted';
+                return;
+
+            default:
+                error_log('[webhooks/braintree] unhandled kind: ' . $kind);
+                echo 'unhandled: ' . $kind;
+                return;
+        }
     }
 
     // ------------------------------------------------------------------

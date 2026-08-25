@@ -279,10 +279,30 @@ class Subscription
         $labels = [
             'pending'   => 'Pending',
             'active'    => 'Active',
+            'past_due'  => 'Past Due',
             'cancelled' => 'Cancelled',
             'expired'   => 'Expired',
         ];
 
         return $labels[$status] ?? $status;
+    }
+
+    /**
+     * Find the subscription whose transaction_ref matches a Braintree
+     * subscription ID (stored as "BT-<braintree_id>").
+     */
+    public static function findByBraintreeId(string $btSubscriptionId): ?array
+    {
+        $row = Database::run(
+            'SELECT s.*, p.name AS plan_name, p.billing_cycle AS billing_cycle
+             FROM subscriptions s
+             JOIN plans p ON p.id = s.plan_id
+             WHERE s.transaction_ref = ?
+             ORDER BY s.id DESC
+             LIMIT 1',
+            ['BT-' . $btSubscriptionId]
+        )->fetch();
+
+        return $row ?: null;
     }
 }

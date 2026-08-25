@@ -136,6 +136,9 @@ return [
     ['GET', '/membership/my', 'MembershipController@my'],
     ['POST', '/membership/subscribe', 'MembershipController@subscribe'],
     ['POST', '/membership/cancel', 'MembershipController@cancel'],
+    ['GET', '/membership/checkout', 'MembershipController@braintreeCheckout'],
+    ['GET', '/membership/braintree-token', 'MembershipController@braintreeToken'],
+    ['POST', '/membership/braintree-token', 'MembershipController@braintreeToken'],
 
     // Plans (admin only)
     ['GET', '/admin/plans', 'PlanController@index'],
