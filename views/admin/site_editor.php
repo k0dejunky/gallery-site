@@ -683,7 +683,15 @@ function previewTemplate(tpl){
 function clearAllVisuals(){
   if(!iDoc)return;
   changes.forEach(function(c){
-    try{var el=iDoc.querySelector(c.selector);if(el){if(c.type==='hide'||c.type==='delete')el.style.removeProperty('display');else if(c.type==='move')el.style.removeProperty('transform');}}catch(e){}
+    try{
+      var el=iDoc.querySelector(c.selector);
+      if(!el&&c.key)el=iDoc.querySelector('[data-se-move-key="'+c.key+'"]');
+      if(!el)return;
+      if(c.type==='hide'||c.type==='delete')el.style.removeProperty('display');
+      else if(c.type==='move')el.style.removeProperty('transform');
+      else if(c.type==='restyle'&&c.styles){Object.keys(c.styles).forEach(function(k){el.style.removeProperty(k);});}
+      else if(c.type==='add'&&el.parentNode){el.parentNode.removeChild(el);}
+    }catch(e){}
   });
 }
 function updateActiveLabel(){

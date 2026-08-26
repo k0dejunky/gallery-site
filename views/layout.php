@@ -386,9 +386,9 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
     (function(){
         var changes=<?= $_tplJson ?>;
         function applyOrder(c){
-            if(c.parentKey==='body')return;
-            var p=c.parentKey==='body'?document.body:null;
-            if(c.parentOrigin){p=document.querySelector(c.parentOrigin)||p;if(p&&c.parentKey)p.setAttribute('data-se-move-key',c.parentKey);}
+            var p=null;
+            if(c.parentKey==='body')p=document.body;
+            if(!p&&c.parentOrigin){p=document.querySelector(c.parentOrigin);if(p&&c.parentKey)p.setAttribute('data-se-move-key',c.parentKey);}
             if(!p)return;
             (c.items||[]).map(function(item){var el=item.origin?document.querySelector(item.origin):null;if(!el)el=document.querySelector('[data-se-move-key="'+item.key+'"]');if(el&&item.key)el.setAttribute('data-se-move-key',item.key);if(el&&item.styles)Object.keys(item.styles).forEach(function(k){if(item.styles[k])el.style.setProperty(k,item.styles[k]);});return el;}).filter(Boolean).forEach(function(el){p.appendChild(el);});
         }

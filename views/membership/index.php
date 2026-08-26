@@ -5,55 +5,8 @@
 // plan first; everyone sees the available plans with a subscribe button.
 // Payments are manual/placeholder, so subscribing creates a request that an
 // admin approves.
+// Template changes are applied by layout.php — no duplicate script needed here.
 ?>
-
-<?php
-$_activeSiteTpl = \App\Models\SiteTemplate::active(\App\Models\SiteTemplate::SCOPE_USER);
-if ($_activeSiteTpl !== null):
-$_tplChanges = json_decode((string) $_activeSiteTpl['config_json'], true) ?: [];
-$_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
-?>
-<script>
-(function(){
-    var changes=<?= $_tplJson ?>;
-    function applyOrder(c){
-        if(c.parentKey==='body')return;
-        var p=c.parentKey==='body'?document.body:null;
-        if(c.parentOrigin){p=document.querySelector(c.parentOrigin)||p;if(p&&c.parentKey)p.setAttribute('data-se-move-key',c.parentKey);}
-        if(!p)return;
-        (c.items||[]).map(function(item){var el=item.origin?document.querySelector(item.origin):null;if(!el)el=document.querySelector('[data-se-move-key="'+item.key+'"]');if(el&&item.key)el.setAttribute('data-se-move-key',item.key);if(el&&item.styles)Object.keys(item.styles).forEach(function(k){if(item.styles[k])el.style.setProperty(k,item.styles[k]);});return el;}).filter(Boolean).forEach(function(el){p.appendChild(el);});
-    }
-    changes.forEach(function(c){
-        try{
-            if(c.type==='order'){applyOrder(c);return;}
-            var el=c.key?document.querySelector('[data-se-move-key="'+c.key+'"]'):null;
-            if(!el&&c.origin){el=document.querySelector(c.origin);if(el&&c.key)el.setAttribute('data-se-move-key',c.key);}
-            if(!el)el=document.querySelector(c.selector);
-            if(!el)return;
-            if(c.type==='hide'||c.type==='delete')el.style.display='none';
-            else if(c.type==='move'){
-                if(c.anchor||c.parent){var a=c.anchorKey?document.querySelector('[data-se-move-key="'+c.anchorKey+'"]'):null;if(!a&&c.anchorOrigin){a=document.querySelector(c.anchorOrigin);if(a&&c.anchorKey)a.setAttribute('data-se-move-key',c.anchorKey);}if(!a&&c.anchor)a=document.querySelector(c.anchor);var p=c.parent==='body'?document.body:document.querySelector(c.parent);if(a&&a!==el&&!el.contains(a)){if(c.position==='before')a.parentNode.insertBefore(el,a);else a.parentNode.insertBefore(el,a.nextSibling);}else if(p&&c.position==='append')p.appendChild(el);}
-                else {
-                var vw=document.documentElement.clientWidth||1,vh=document.documentElement.clientHeight||1;
-                var rect=el.getBoundingClientRect();
-                var mx=c.targetXRatio!=null?c.targetXRatio*vw-rect.left:(c.dxRatio!=null?c.dxRatio*vw:(c.dx||0));
-                var my=c.targetYRatio!=null?c.targetYRatio*vh-rect.top:(c.dyRatio!=null?c.dyRatio*vh:(c.dy||0));
-                el.style.setProperty('transform','translate('+mx+'px,'+my+'px)','important');
-                }
-            }
-            else if(c.type==='restyle')Object.keys(c.styles||{}).forEach(function(k){el.style[k]=c.styles[k]});
-            else if(c.type==='add'){
-                var t=c.parent?document.querySelector(c.parent):document.body;
-                if(t){var d=document.createElement(c.tag||'div');d.innerHTML=c.html||'';
-                if(c.styles)Object.keys(c.styles).forEach(function(k){d.style[k]=c.styles[k]});
-                if(c.position==='prepend')t.prepend(d);else if(c.position==='before')t.parentElement.insertBefore(d,t);
-                else if(c.position==='after')t.parentElement.insertBefore(d,t.nextSibling);else t.appendChild(d);}
-            }
-        }catch(e){}
-    });
-})();
-</script>
-<?php endif; ?>
 
     <div class="auth-panel" style="max-width: 720px; text-align:center; display:flex; flex-direction:column;">
     <h1 style="order:1;">Membership</h1>

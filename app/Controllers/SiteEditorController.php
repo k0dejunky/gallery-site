@@ -72,7 +72,7 @@ class SiteEditorController extends Controller
             $this->json(['error' => 'No active template to update. Enter a name to create one.'], 422);
             return;
         }
-        SiteTemplate::update((int) $active['id'], $active['name'], $active['description'], $config);
+        SiteTemplate::update((int) $active['id'], $active['name'], $description !== '' ? $description : $active['description'], $config);
         $this->json(['ok' => true, 'id' => (int) $active['id'], 'updated' => true]);
     }
 
