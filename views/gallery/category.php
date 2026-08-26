@@ -38,12 +38,15 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
     <a class="chip <?= $type === 'videos' ? 'active' : '' ?>" href="<?= e($vidUrl) ?>">&#9654; Video Galleries</a>
 </div>
 
-<?php
-// Display-options toolbar
-$baseUrl = $base;
-require __DIR__ . '/../partials/gallery_display_bar.php';
+<div class="sort-bar" style="justify-content:center">
+    <span class="label">Sort:</span>
+    <?php foreach (['' => 'Newest', 'views' => 'Most Viewed', 'title' => 'A-Z'] as $value => $label): ?>
+        <?php $sortQuery = $query; if ($value === '') unset($sortQuery['sort']); else $sortQuery['sort'] = $value; ?>
+        <a class="chip <?= ($sort ?? '') === $value ? 'active' : '' ?>" href="<?= e($base . ($sortQuery ? '?' . http_build_query($sortQuery) : '')) ?>"><?= e($label) ?></a>
+    <?php endforeach; ?>
+</div>
 
-// Pagination variables used below
+<?php
 $paginationQuery = $q !== '' ? ['q' => $q] : [];
 if ($type !== '') $paginationQuery['type'] = $type;
 if (($sort ?? '') !== '') $paginationQuery['sort'] = $sort;

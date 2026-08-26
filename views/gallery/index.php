@@ -33,7 +33,23 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
     <a class="chip <?= $type === 'videos' ? 'active' : '' ?>" href="<?= e($vidUrl) ?>">&#9654; Video Galleries</a>
 </div>
 
-<?php require __DIR__ . '/../partials/gallery_display_bar.php'; ?>
+<div class="sort-bar" style="justify-content:center">
+    <span class="label">Sort:</span>
+    <?php
+    $sortBase = url('/galleries');
+    $sortParams = [];
+    if ($q !== '') $sortParams['q'] = $q;
+    if ($categoryId > 0) $sortParams['category'] = $categoryId;
+    if ($type !== '') $sortParams['type'] = $type;
+    $sortOptions = ['' => 'Newest', 'views' => 'Most Viewed', 'title' => 'A–Z'];
+    foreach ($sortOptions as $val => $label):
+        $p = $sortParams;
+        if ($val !== '') $p['sort'] = $val;
+        $href = $p ? $sortBase . '?' . http_build_query($p) : $sortBase;
+    ?>
+        <a class="chip <?= ($sort ?? '') === $val ? 'active' : '' ?>" href="<?= e($href) ?>"><?= $label ?></a>
+    <?php endforeach; ?>
+</div>
 
 <?php if ($q === ''): ?>
 <?php // Full listing: every gallery grouped by category, unpaginated, never filtered by favourites. ?>

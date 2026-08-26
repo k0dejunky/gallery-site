@@ -3,6 +3,74 @@
 <?php $favIds = array_map('intval', array_column($favorites, 'id')); ?>
 
 <h1>Settings</h1>
+<p class="settings-back"><a class="btn btn-outline" href="<?= e(url('/account')) ?>">&larr; Back to dashboard</a></p>
+
+<section class="card settings-card">
+    <h2 class="section-title">Profile and billing details</h2>
+    <p class="muted">These details are used for your account and future billing. Your email and permissions are managed separately.</p>
+    <form method="post" action="<?= e(url('/settings/profile')) ?>" class="settings-form">
+        <?= csrf_field() ?>
+        <div class="settings-fields">
+        <?php foreach (['billing_first_name' => 'First name', 'billing_last_name' => 'Last name', 'billing_address_line1' => 'Address', 'billing_address_line2' => 'Address line 2', 'billing_city' => 'City', 'billing_state' => 'State / region', 'billing_zip' => 'Postal code', 'billing_country' => 'Country code (e.g. US)'] as $field => $label): ?>
+            <label><?= e($label) ?><input type="text" name="<?= e($field) ?>" value="<?= e($user[$field] ?? '') ?>" maxlength="255"></label>
+        <?php endforeach; ?>
+        </div>
+        <button type="submit" class="btn">Save profile details</button>
+    </form>
+</section>
+
+<section class="card settings-card">
+    <h2 class="section-title">Gallery display</h2>
+    <div class="settings-fields" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+        <label>View mode
+            <select id="gd-view" data-gd="view">
+                <option value="grid">Grid</option>
+                <option value="list">List</option>
+                <option value="compact">Compact</option>
+            </select>
+        </label>
+        <label>Thumbnail size
+            <select id="gd-size" data-gd="size">
+                <option value="sm">Small</option>
+                <option value="md">Medium</option>
+                <option value="lg">Large</option>
+            </select>
+        </label>
+        <label>Layout
+            <select id="gd-masonry" data-gd="masonry">
+                <option value="0">Standard grid</option>
+                <option value="1">Masonry</option>
+            </select>
+        </label>
+        <label>Per page
+            <select id="gd-perpage" data-gd="perpage">
+                <option value="12">12</option>
+                <option value="24">24</option>
+                <option value="48">48</option>
+                <option value="0">All</option>
+            </select>
+        </label>
+        <label>Default sort
+            <select id="gd-sort" data-gd="sort">
+                <option value="">Newest</option>
+                <option value="views">Most Viewed</option>
+                <option value="title">A–Z</option>
+            </select>
+        </label>
+    </div>
+    <p class="muted">These preferences are saved in this browser only and do not change your account data.</p>
+</section>
+
+<?php if (!empty($emailUnverified)): ?>
+    <section class="card" style="border-left:4px solid var(--purple-500);margin-bottom:var(--spacing-lg);">
+        <h2 style="text-align:left;margin-top:0;">Verify your email address</h2>
+        <p>Please verify your email to keep your account details current. Check your inbox for the verification link.</p>
+        <form method="post" action="<?= url('/verify-email/resend') ?>">
+            <?= csrf_field() ?>
+            <button type="submit" class="btn">Resend verification email</button>
+        </form>
+    </section>
+<?php endif; ?>
 
 <?php if (!empty($themeEligible)): ?>
 <h2 class="section-title">User theme</h2>
@@ -99,6 +167,15 @@
 <?php endif; ?>
 
 <h2 class="section-title">Change password</h2>
+<section class="card settings-card security-card">
+    <h2 class="section-title">Account security</h2>
+    <p><strong>Last login:</strong> <?= e($user['last_login_at'] ?? 'Not available') ?></p>
+    <p><strong>Last seen:</strong> <?= e($user['last_seen_at'] ?? 'Not available') ?></p>
+    <p class="muted">Use a unique password of at least 8 characters. Changing it does not automatically sign out other devices.</p>
+    <form method="post" action="<?= e(url('/settings/logout-everywhere')) ?>" onsubmit="return confirm('Sign out every device connected to your account?');">
+        <?= csrf_field() ?><button type="submit" class="btn btn-danger">Log out everywhere</button>
+    </form>
+</section>
 <form method="post" action="<?= url('/settings/password') ?>">
     <?= csrf_field() ?>
     <p>

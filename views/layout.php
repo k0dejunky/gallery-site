@@ -120,11 +120,21 @@ $isAuthPage = $isLoginPage
         .section-title { color: var(--purple-800); border-bottom: 2px solid var(--pink-300); padding-bottom: var(--spacing-xs); }
         .muted { color: var(--purple-800); opacity: 0.75; }
         .home-layout { display: flex; gap: var(--spacing-lg); align-items: flex-start; }
-         .home-nav-wrap { flex: 0 0 220px; display: flex; flex-direction: column; gap: var(--spacing-md); position: sticky; top: 0; }
+         .home-nav-wrap { flex: 0 0 230px; display: flex; flex-direction: column; gap: var(--spacing-md); position: sticky; top: 0; }
         .home-nav-actions, .home-nav { display: flex; flex-direction: column; gap: var(--spacing-xs); padding: var(--spacing-md); background: var(--sidebar-bg); border: var(--input-border-width) solid var(--sidebar-border); border-radius: var(--border-radius-lg); }
         .home-nav-actions { gap: var(--spacing-sm); }
         .home-nav-actions .btn { display: block; width: 100%; box-sizing: border-box; padding: var(--spacing-sm) var(--card-padding); border-radius: var(--border-radius); text-align: center; }
         .home-nav-actions form { margin: 0; }
+        .user-nav .nav-brand { font-weight: bold; font-size: var(--font-size-lg); color: var(--sidebar-heading); text-decoration: none; margin: 0 0 var(--spacing-sm); }
+        .user-nav .nav-item { display: block; padding: var(--spacing-sm) var(--card-padding); border-radius: var(--border-radius); color: var(--sidebar-link-color); text-decoration: none; background: var(--sidebar-link-bg); border: var(--input-border-width) solid var(--sidebar-link-border); }
+        .user-nav .nav-item:hover { background: var(--sidebar-link-hover); }
+        .user-nav .nav-item.active { background: var(--sidebar-active-bg); border-color: var(--sidebar-active-border); color: var(--sidebar-active-color); }
+        .user-nav .nav-sep { border-top: var(--input-border-width) solid var(--sidebar-border); margin: var(--spacing-sm) 0; }
+        .user-nav .nav-section-label { margin: 0 0 var(--spacing-xs); color: var(--sidebar-heading); font-size: var(--font-size-xs); font-weight: bold; text-transform: uppercase; letter-spacing: .05em; }
+        .user-nav .nav-empty { margin: 0; font-size: var(--font-size-sm); }
+        .user-nav .nav-media-item { display: flex; align-items: center; gap: .5rem; }
+        .user-nav .nav-media-item img { width: 40px; height: 30px; flex: 0 0 40px; object-fit: cover; border-radius: 4px; }
+        .user-nav .nav-logout { width: 100%; }
         .home-nav-actions h2 { margin: 0 0 var(--spacing-xs); font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--sidebar-heading); text-align: center; }
         .home-nav h2 { margin: 0 0 var(--spacing-sm); font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--sidebar-heading); text-align: center; }
         .home-nav-link { display: block; padding: var(--spacing-sm) var(--card-padding); border-radius: var(--border-radius); color: var(--sidebar-link-color); text-decoration: none; background: var(--sidebar-link-bg); border: var(--input-border-width) solid var(--sidebar-link-border); }
@@ -134,8 +144,8 @@ $isAuthPage = $isLoginPage
         .card-cats { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); margin-top: var(--spacing-sm); overflow: hidden; }
         .card-cats-toggle { display: block; margin-top: var(--spacing-sm); padding: var(--spacing-xs) 0; background: none; border: none; color: var(--card-cat-link-color); text-decoration: underline; cursor: pointer; font-size: var(--font-size-sm); }
         .card-cats-toggle[hidden] { display: none; }
-        .home-main { flex: 1; min-width: 0; }
-         @media (max-width: 768px) { .home-layout { flex-direction: column; } .home-nav-wrap { flex: none; width: 100%; padding-top: 0 !important; position: static; } }
+        .home-main { flex: 1 1 auto; width: 0; min-width: 0; }
+         @media (max-width: 768px) { .home-layout { flex-direction: column; } .home-nav-wrap { flex: none; width: 100%; padding-top: 0 !important; position: static; } .home-main { width: 100%; } }
         .recent-card { cursor: pointer; }
         .recent-strip { display: flex; flex-wrap: nowrap; gap: var(--spacing-md); margin-top: var(--spacing-md); overflow: hidden; justify-content: space-between; }
          .recent-strip .card { width: 220px; flex: 0 0 auto; box-sizing: border-box; }
@@ -164,7 +174,9 @@ $isAuthPage = $isLoginPage
          .theme-choice-preview button { padding: var(--btn-padding); background: var(--btn-bg); color: var(--btn-color); border: 0; border-radius: var(--btn-radius); cursor: pointer; font-size: var(--btn-font-size); }
          .theme-choice-preview button:hover { background: var(--btn-hover-bg); }
          @media (max-width: 768px) { .theme-choice-layout { grid-template-columns: 1fr; } }
+        .collapsible { overflow: hidden; transition: max-height .3s; }
      </style>
+    <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=4">
 </head>
 <body>
 <?php if (!empty($_SESSION['impersonator_id'])): ?>
@@ -182,7 +194,9 @@ $isAuthPage = $isLoginPage
     </header>
     <?php if (!$sidebarNav && !$isAuthPage): ?>
     <nav class="nav">
+        <button class="nav-toggle" type="button" aria-label="Menu" onclick="document.querySelector('.nav-links').classList.toggle('open')">&#9776;</button>
         <span class="spacer"></span>
+        <div class="nav-links">
         <?php if ($user !== null): ?>
             <a class="btn btn-sm btn-outline" href="<?= url('/settings') ?>">Settings</a>
             <form class="inline" method="post" action="<?= url('/logout') ?>">
@@ -190,12 +204,12 @@ $isAuthPage = $isLoginPage
                 <button type="submit" class="btn btn-sm btn-danger">Logout</button>
             </form>
         <?php else: ?>
-            <?php // Hide the Login button while on the login page itself. ?>
             <?php if (!$isLoginPage): ?>
                 <a class="btn btn-sm" href="<?= url('/login') ?>">Login</a>
             <?php endif; ?>
             <a class="btn btn-sm btn-outline" href="<?= url('/signup') ?>">Sign Up</a>
         <?php endif; ?>
+        </div>
     </nav>
     <?php endif; ?>
 
@@ -233,32 +247,60 @@ $isAuthPage = $isLoginPage
             }
         }
         ?>
-        <nav class="home-nav-actions" aria-label="Site menu">
-            <h2>Menu</h2>
-            <a class="btn btn-sm btn-outline" href="<?= url('/galleries') ?>">Galleries</a>
-            <a class="btn btn-sm btn-outline" href="<?= url('/membership') ?>">Membership</a>
-            <?php // The Admin button only appears for admin accounts. ?>
+        <nav class="home-nav-actions user-nav" aria-label="Site menu">
+            <a class="nav-brand" href="<?= url('/account') ?>">Dashboard</a>
+            <a class="nav-item<?= $currentPath === url('/account') ? ' active' : '' ?>" href="<?= url('/account') ?>">Dashboard</a>
+            <a class="nav-item<?= strpos($currentPath, url('/galleries')) === 0 ? ' active' : '' ?>" href="<?= url('/galleries') ?>">Galleries</a>
+            <a class="nav-item<?= strpos($currentPath, url('/favorites')) === 0 ? ' active' : '' ?>" href="<?= url('/favorites') ?>">Favorites</a>
+            <a class="nav-item<?= strpos($currentPath, url('/membership')) === 0 ? ' active' : '' ?>" href="<?= url('/membership') ?>">Membership</a>
+            <a class="nav-item<?= strpos($currentPath, url('/support')) === 0 ? ' active' : '' ?>" href="<?= url('/support') ?>">Support<?php if (!empty($supportUnreadCount)): ?> <span class="nav-unread" aria-label="<?= (int) $supportUnreadCount ?> unread replies"><?= (int) $supportUnreadCount ?></span><?php endif; ?></a>
             <?php if ($user !== null && \App\Core\Auth::isAdmin()): ?>
-                <a class="btn btn-sm btn-outline" href="<?= url('/admin') ?>">Admin</a>
+                <a class="nav-item" href="<?= url('/admin') ?>">Admin</a>
             <?php endif; ?>
-            <a class="btn btn-sm btn-outline" href="<?= url('/settings') ?>">Settings</a>
-            <form class="inline" method="post" action="<?= url('/logout') ?>">
-                <?= csrf_field() ?>
-                <button type="submit" class="btn btn-sm btn-danger">Logout</button>
-            </form>
-        </nav>
-        <aside class="home-nav">
-            <h2>Favorites</h2>
+            <a class="nav-item<?= strpos($currentPath, url('/settings')) === 0 ? ' active' : '' ?>" href="<?= url('/settings') ?>">Settings</a>
+            <div class="nav-sep"></div>
+            <div class="nav-section-label">Favorite categories</div>
             <?php if (empty($navCategories)): ?>
-                <p class="muted">No favorite categories yet.</p>
+                <p class="muted nav-empty">No favorite categories yet.</p>
             <?php else: ?>
                 <?php foreach ($navCategories as $cat): ?>
                     <?php // Keep the current type filter (images/videos) on the category link. ?>
                     <?php $isActive = (int) $cat['id'] === $activeCategoryId; ?>
-                    <a class="home-nav-link<?= $isActive ? ' active' : '' ?>" href="<?= url('/galleries/category/' . e($cat['slug']) . $typeSuffix) ?>"><?= e($cat['name']) ?></a>
+                    <a class="nav-item<?= $isActive ? ' active' : '' ?>" href="<?= url('/galleries/category/' . e($cat['slug']) . $typeSuffix) ?>"><?= e($cat['name']) ?></a>
                 <?php endforeach; ?>
             <?php endif; ?>
-        </aside>
+        <?php if (!empty($recentlyViewed)): ?>
+            <div class="nav-sep"></div>
+            <div class="nav-section-label">Recently viewed</div>
+            <?php foreach ($recentlyViewed as $rv): ?>
+                <?php
+                $rvCover = \App\Models\Gallery::firstPhoto((int) $rv['id']);
+                ?>
+                <a class="nav-item nav-media-item" href="<?= url('/galleries/' . (int) $rv['id']) ?>">
+                    <?php if ($rvCover !== null): ?>
+                        <img src="<?= e(file_url($rvCover['filename'], 'thumb')) ?>" alt="">
+                    <?php endif; ?>
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?= e($rv['title']) ?></span>
+                </a>
+            <?php endforeach; ?>
+        <?php endif; ?>
+        <?php if (!empty($favoriteGalleries)): ?>
+            <div class="nav-sep"></div>
+            <div class="nav-section-label">Favorite galleries</div>
+            <?php foreach ($favoriteGalleries as $favoriteGallery): ?>
+                <?php $favoriteCover = $favoriteGallery['first_photo'] ?? null; ?>
+                <a class="nav-item nav-media-item" href="<?= url('/galleries/' . (int) $favoriteGallery['id']) ?>">
+                    <?php if ($favoriteCover !== null): ?><img src="<?= e(file_url($favoriteCover['filename'], 'thumb')) ?>" alt=""><?php endif; ?>
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?= e($favoriteGallery['title']) ?></span>
+                </a>
+            <?php endforeach; ?>
+        <?php endif; ?>
+            <div class="nav-sep"></div>
+            <form class="nav-logout" method="post" action="<?= url('/logout') ?>">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-sm btn-danger">Logout</button>
+            </form>
+        </nav>
         </div>
         <main class="home-main">
             <?php require $content; ?>
@@ -266,6 +308,31 @@ $isAuthPage = $isLoginPage
     </div>
     <?php else: ?>
     <?php require $content; ?>
+    <?php endif; ?>
+    <?php if ($sidebarNav && $user !== null): ?>
+    <nav class="media-bottom-nav" aria-label="Mobile site menu">
+        <a href="<?= url('/account') ?>">Dashboard</a>
+        <a href="<?= url('/galleries') ?>">Galleries</a>
+        <a href="<?= url('/favorites') ?>">Favorites</a>
+        <a href="<?= url('/membership') ?>">Membership</a>
+         <a href="<?= url('/support') ?>">Support<?php if (!empty($supportUnreadCount)): ?> <span class="nav-unread"><?= (int) $supportUnreadCount ?></span><?php endif; ?></a>
+        <a href="<?= url('/settings') ?>">Settings</a>
+    </nav>
+    <?php endif; ?>
+    <?php if ($user !== null && !\App\Core\Auth::isAdmin()): ?>
+    <aside id="member-onboarding" class="member-onboarding" hidden role="dialog" aria-modal="true" aria-labelledby="member-onboarding-title">
+        <div class="member-onboarding-card">
+            <h2 id="member-onboarding-title">Welcome to your member area</h2>
+            <p>Use these shortcuts to get the most from your account:</p>
+            <ul>
+                <li><a href="<?= e(url('/account')) ?>"><strong>Dashboard</strong></a> for recently viewed galleries and uploads.</li>
+                <li><a href="<?= e(url('/galleries')) ?>"><strong>Galleries</strong></a> to browse and search the collection.</li>
+                <li><strong>Favorites</strong> to quickly return to galleries and categories you save.</li>
+                <li><a href="<?= e(url('/support')) ?>"><strong>Support</strong></a> for questions or help with media.</li>
+            </ul>
+            <button type="button" class="btn btn-sm" data-dismiss-onboarding>Got it</button>
+        </div>
+    </aside>
     <?php endif; ?>
     <script>
         // Gallery cards: if a card's category chips don't all fit on one row,
@@ -382,5 +449,7 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
     })();
     </script>
 <?php endif; ?>
+    <script>try{var p=JSON.parse(localStorage.getItem('galleryDisplayPrefs')||'{}');var v=p.view||'grid';var s=p.size||'md';document.documentElement.classList.add('g-view-'+v);document.documentElement.classList.add('g-size-'+s);if(p.masonry)document.documentElement.classList.add('g-masonry');}catch(e){document.documentElement.classList.add('g-view-grid');document.documentElement.classList.add('g-size-md');}</script>
+    <script src="<?= url('/assets/js/user.js') ?>?v=2" defer></script>
 </body>
 </html>

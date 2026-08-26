@@ -1,21 +1,5 @@
 /* Lightbox viewer */
 (function(){
-  document.addEventListener('DOMContentLoaded',function(){
-    var control=document.querySelector('[data-grid-density]');
-    if(!control)return;
-    var current=document.documentElement.classList.contains('grid-density-compact')?'compact':'comfortable';
-    control.value=current;
-    control.addEventListener('change',function(){
-      var value=control.value==='compact'?'compact':'comfortable';
-      document.documentElement.classList.remove('grid-density-compact','grid-density-comfortable');
-      document.documentElement.classList.add('grid-density-'+value);
-      try{localStorage.setItem('galleryGridDensity',value);}catch(e){}
-    });
-  });
-})();
-
-/* Lightbox viewer */
-(function(){
   var lb, lbImg, lbCaption, lbCounter, images=[], currentIdx=0;
   var touchStartX=0, touchStartY=0, touchStartDistance=0, touchScale=1;
   var touchMoved=false, pinchActive=false, suppressClickUntil=0, returnFocus=null;
@@ -209,18 +193,17 @@
   });
 })();
 
-/* Gallery display options toolbar */
+/* Gallery display options (settings page + gallery application) */
 (function(){
   var STORE_KEY='galleryDisplayPrefs';
-  var grid=null,defaults={view:'grid',size:'md',masonry:false,perpage:24};
+  var defaults={view:'grid',size:'md',masonry:false,perpage:24,sort:''};
 
   function load(){
     try{return Object.assign({},defaults,JSON.parse(localStorage.getItem(STORE_KEY)||'{}'))}catch(e){return Object.assign({},defaults)}
   }
-  function save(prefs){try{localStorage.setItem(STORE_KEY,JSON.stringify(prefs))}catch(e){}}
+  function save(prefs){try{localStorage.setItem(STORE_KEY,JSON.stringify(prefs))}catch(e){}
 
   function apply(prefs){
-    if(!grid)return;
     document.documentElement.classList.remove('g-view-grid','g-view-list','g-view-compact','g-size-sm','g-size-md','g-size-lg','g-masonry');
     if(prefs.view==='list')document.documentElement.classList.add('g-view-list');
     else if(prefs.view==='compact')document.documentElement.classList.add('g-view-compact');
@@ -229,58 +212,32 @@
     if(prefs.masonry)document.documentElement.classList.add('g-masonry');
   }
 
-  function syncButtons(prefs){
+  function bindSettings(){
     var bar=document.getElementById('gDisplayBar');
     if(!bar)return;
-    bar.querySelectorAll('.g-display-btn').forEach(function(btn){
-      var key=btn.getAttribute('data-gd'),val=btn.getAttribute('data-val');
-      if(!key||!val)return;
-      if(key==='view')btn.classList.toggle('active',val===prefs.view);
-      else if(key==='size')btn.classList.toggle('active',val===prefs.size);
-      else if(key==='masonry')btn.classList.toggle('active',!!prefs.masonry&&val==='1');
-      else if(key==='perpage')btn.classList.toggle('active',parseInt(val,10)===prefs.perpage);
-    });
-  }
-
-  function updateSortLinks(prefs){
-    var bar=document.getElementById('gDisplayBar');
-    if(!bar)return;
-    bar.querySelectorAll('.g-display-sort .g-display-btn').forEach(function(a){
-      var href=a.getAttribute('href');if(!href)return;
-      try{
-        var u=new URL(href,location.origin);
-        if(prefs.perpage>0)u.searchParams.set('per_page',prefs.perpage);
-        else u.searchParams.delete('per_page');
-        a.setAttribute('href',u.pathname+(u.search||''));
-      }catch(e){}
+    bar.querySelectorAll('select[data-gd]').forEach(function(sel){
+      var key=sel.getAttribute('data-gd');
+      var prefs=load();
+      if(key==='masonry')sel.value=prefs.masonry?'1':'0';
+      else if(key==='sort')sel.value=prefs.sort||'';
+      else if(prefs[key]!==undefined)sel.value=prefs[key];
+      sel.addEventListener('change',function(){
+        var p=load();
+        if(key==='masonry')p.masonry=sel.value==='1';
+        else if(key==='sort')p.sort=sel.value;
+        else p[key]=sel.value;
+        save(p);
+      });
     });
   }
 
   document.addEventListener('DOMContentLoaded',function(){
-    grid=document.querySelector('.grid');if(!grid)return;
     var prefs=load();
-    apply(prefs);syncButtons(prefs);updateSortLinks(prefs);
-
-    var bar=document.getElementById('gDisplayBar');
-    if(!bar)return;
-    bar.addEventListener('click',function(e){
-      var btn=e.target.closest('.g-display-btn[data-gd]');
-      if(!btn||btn.tagName==='A')return;
-      e.preventDefault();
-      var key=btn.getAttribute('data-gd'),val=btn.getAttribute('data-val');
-      var prefs=load();
-      if(key==='view'){prefs.view=val;}
-      else if(key==='size'){prefs.size=val;}
-      else if(key==='masonry'){prefs.masonry=!prefs.masonry;}
-      else if(key==='perpage'){
-        prefs.perpage=parseInt(val,10);
-        var u=new URL(location.href,location.origin);
-        if(prefs.perpage>0)u.searchParams.set('per_page',prefs.perpage);
-        else u.searchParams.delete('per_page');
-        save(prefs);location.href=u.pathname+(u.search||'');return;
-      }
-      save(prefs);apply(prefs);syncButtons(prefs);updateSortLinks(prefs);
-    });
+    // Settings page: bind selects
+    bindSettings();
+    // Gallery pages: apply prefs to document
+    var grid=document.querySelector('.grid');
+    if(grid)apply(prefs);
   });
 })();
 
