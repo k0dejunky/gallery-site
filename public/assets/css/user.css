@@ -84,8 +84,20 @@ img.is-loaded{animation:none;opacity:1;transition:opacity .2s ease}
 /* Viewed badge on gallery cards */
 .card .viewed-badge{position:absolute;top:.5rem;right:.5rem;width:12px;height:12px;background:var(--purple-500);border-radius:50%;border:2px solid var(--card-bg);z-index:2}
 .card-cover{position:relative}
-.favorite-toggle{margin:.5rem 0 0;padding:.25rem .55rem;border:1px solid var(--pink-400);border-radius:var(--btn-radius);background:var(--pink-100);color:var(--purple-700);font-size:var(--font-size-sm);cursor:pointer}
-.favorite-toggle:hover{background:var(--pink-200)}
+
+/* Compact gallery card */
+.card-compact{display:flex;flex-direction:column}
+.card-compact .card-link{display:block;text-decoration:none;color:inherit}
+.card-compact h2{margin:.4rem 0 0;font-size:var(--font-size-base);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-media-count{margin:.15rem 0 0;font-size:var(--font-size-sm)}
+.card-details{padding-top:.35rem;border-top:1px solid var(--card-border);margin-top:.35rem}
+.card-details .card-desc{margin:0 0 .25rem;font-size:var(--font-size-sm);color:var(--card-text-color)}
+.card-details .card-date{margin:0 0 .25rem;font-size:var(--font-size-xs)}
+.card-details .card-cats{margin-top:.25rem}
+.card-expand-btn{display:block;width:100%;margin:0;padding:.3rem 0;border:none;background:none;color:var(--purple-600);font-size:var(--font-size-sm);cursor:pointer;text-align:center}
+.card-expand-btn:hover{color:var(--purple-800);text-decoration:underline}
+.card-compact form{margin-top:auto;padding-top:.35rem;text-align:center}
+.card-compact .favorite-toggle{margin:0}
 
 /* Favorites and saved-search discovery */
 .favorites-hero{padding:var(--spacing-lg);margin-bottom:var(--spacing-lg);border-radius:var(--border-radius-lg);background:linear-gradient(135deg,var(--purple-900),var(--purple-700));color:#fff;box-shadow:var(--shadow)}

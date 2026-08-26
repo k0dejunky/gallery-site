@@ -193,6 +193,21 @@
   });
 })();
 
+/* Gallery card expand/collapse details */
+(function(){
+  document.addEventListener('DOMContentLoaded',function(){
+    document.querySelectorAll('.card-expand-btn').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        var details=btn.previousElementSibling;
+        if(!details||!details.classList.contains('card-details'))return;
+        var hidden=details.hidden;
+        details.hidden=!hidden;
+        btn.textContent=hidden?'Show less':'Show more';
+      });
+    });
+  });
+})();
+
 /* Gallery display options (settings page + gallery application) */
 (function(){
   var STORE_KEY='galleryDisplayPrefs';

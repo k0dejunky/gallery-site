@@ -269,21 +269,6 @@ $isAuthPage = $isLoginPage
                     <a class="nav-item<?= $isActive ? ' active' : '' ?>" href="<?= url('/galleries/category/' . e($cat['slug']) . $typeSuffix) ?>"><?= e($cat['name']) ?></a>
                 <?php endforeach; ?>
             <?php endif; ?>
-        <?php if (!empty($recentlyViewed)): ?>
-            <div class="nav-sep"></div>
-            <div class="nav-section-label">Recently viewed</div>
-            <?php foreach ($recentlyViewed as $rv): ?>
-                <?php
-                $rvCover = \App\Models\Gallery::firstPhoto((int) $rv['id']);
-                ?>
-                <a class="nav-item nav-media-item" href="<?= url('/galleries/' . (int) $rv['id']) ?>">
-                    <?php if ($rvCover !== null): ?>
-                        <img src="<?= e(file_url($rvCover['filename'], 'thumb')) ?>" alt="">
-                    <?php endif; ?>
-                    <span><?= e($rv['title']) ?></span>
-                </a>
-            <?php endforeach; ?>
-        <?php endif; ?>
         <?php if (!empty($favoriteGalleries)): ?>
             <div class="nav-sep"></div>
             <div class="nav-section-label">Favorite galleries</div>
