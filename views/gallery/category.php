@@ -1,4 +1,11 @@
 <?php $title = $category['name']; ?>
+<?php
+$breadcrumbItems = [
+    ['label' => 'Galleries', 'url' => url('/galleries')],
+    ['label' => $category['name']],
+];
+require __DIR__ . '/../partials/breadcrumbs.php';
+?>
 
 
 <h1 class="section-title">Category: <?= e($category['name']) ?></h1>
@@ -17,6 +24,9 @@
 // search so switching a chip never loses the query.
 $base = url('/galleries/category/' . e($category['slug']));
 $query = $q !== '' ? ['q' => $q] : [];
+if (($sort ?? '') !== '') {
+    $query['sort'] = $sort;
+}
 $allUrl = $query ? $base . '?' . http_build_query($query) : $base;
 $imgUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'images']));
 $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos']));
@@ -29,23 +39,30 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
 </div>
 
 <?php
-// The search query (if any) and the active type filter apply to the sections.
+// Display-options toolbar
+$baseUrl = $base;
+require __DIR__ . '/../partials/gallery_display_bar.php';
+
+// Pagination variables used below
 $paginationQuery = $q !== '' ? ['q' => $q] : [];
-if ($type !== '') {
-    $paginationQuery['type'] = $type;
-}
+if ($type !== '') $paginationQuery['type'] = $type;
+if (($sort ?? '') !== '') $paginationQuery['sort'] = $sort;
 $searchSuffix = $q !== '' ? ' match your search' : '';
-$sectionBaseUrl = url('/galleries/category/' . e($category['slug']));
-if ($paginationQuery) {
-    $sectionBaseUrl .= '?' . http_build_query($paginationQuery);
-}
+$sectionBaseUrl = $base . ($paginationQuery ? '?' . http_build_query($paginationQuery) : '');
 ?>
 
 <?php if ($type === '' || $type === 'images'): ?>
 <section class="fav-section">
     <h2>Image Galleries</h2>
     <?php if (empty($imagePaginator['items'])): ?>
-        <p class="muted">No image galleries in this category<?= $searchSuffix ?>.</p>
+        <div class="empty-state">
+            <p class="muted">No image galleries in this category<?= e($searchSuffix) ?>.</p>
+            <?php if ($q !== ''): ?>
+                <a class="btn btn-sm" href="<?= e(url('/galleries/category/' . $category['slug'])) ?>">Clear search</a>
+            <?php else: ?>
+                <a class="btn btn-sm" href="<?= e(url('/galleries')) ?>">Browse all galleries</a>
+            <?php endif; ?>
+        </div>
     <?php else: ?>
         <div class="grid">
             <?php foreach ($imagePaginator['items'] as $gallery): ?>
@@ -71,7 +88,14 @@ if ($paginationQuery) {
 <section class="fav-section">
     <h2>&#9654; Video Galleries</h2>
     <?php if (empty($videoPaginator['items'])): ?>
-        <p class="muted">No video galleries in this category<?= $searchSuffix ?>.</p>
+        <div class="empty-state">
+            <p class="muted">No video galleries in this category<?= e($searchSuffix) ?>.</p>
+            <?php if ($q !== ''): ?>
+                <a class="btn btn-sm" href="<?= e(url('/galleries/category/' . $category['slug'])) ?>">Clear search</a>
+            <?php else: ?>
+                <a class="btn btn-sm" href="<?= e(url('/galleries')) ?>">Browse all galleries</a>
+            <?php endif; ?>
+        </div>
     <?php else: ?>
         <div class="grid">
             <?php foreach ($videoPaginator['items'] as $gallery): ?>

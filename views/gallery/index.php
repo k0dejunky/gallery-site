@@ -12,6 +12,9 @@ if ($q !== '') {
 if ($categoryId > 0) {
     $query['category'] = $categoryId;
 }
+if (($sort ?? '') !== '') {
+    $query['sort'] = $sort;
+}
 $allUrl = $query ? $base . '?' . http_build_query($query) : $base;
 $imgUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'images']));
 $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos']));
@@ -30,10 +33,15 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
     <a class="chip <?= $type === 'videos' ? 'active' : '' ?>" href="<?= e($vidUrl) ?>">&#9654; Video Galleries</a>
 </div>
 
+<?php require __DIR__ . '/../partials/gallery_display_bar.php'; ?>
+
 <?php if ($q === ''): ?>
 <?php // Full listing: every gallery grouped by category, unpaginated, never filtered by favourites. ?>
 <?php if (empty($sections)): ?>
-    <p class="muted">No galleries yet.</p>
+    <div class="empty-state">
+        <p class="muted">No galleries yet.</p>
+        <a class="btn btn-sm" href="<?= e(url('/support')) ?>">Contact support</a>
+    </div>
 <?php else: ?>
     <?php foreach ($sections as $section): ?>
         <section class="fav-section">
@@ -71,9 +79,21 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
         <?php if ($type === 'videos'): ?>showing video galleries<?php endif; ?>
         <a href="<?= url('/galleries') ?>">(clear)</a>
     </p>
+    <form class="save-search" method="post" action="<?= e(url('/saved-searches')) ?>">
+        <?= csrf_field() ?>
+        <input type="hidden" name="q" value="<?= e($q) ?>">
+        <input type="hidden" name="category" value="<?= $categoryId > 0 ? (int) $categoryId : 0 ?>">
+        <input type="hidden" name="type" value="<?= e($type) ?>">
+        <input type="hidden" name="sort" value="<?= e($sort) ?>">
+        <input type="hidden" name="return_to" value="<?= e($_SERVER['REQUEST_URI'] ?? url('/galleries')) ?>">
+        <button class="btn btn-sm btn-outline" type="submit">Save this search</button>
+    </form>
 
     <?php if (empty($paginator['items'])): ?>
-        <p>No galleries found.</p>
+        <div class="empty-state">
+            <p>No galleries found.</p>
+            <a class="btn btn-sm" href="<?= e(url('/galleries')) ?>">Browse all galleries</a>
+        </div>
     <?php else: ?>
         <div class="grid">
             <?php foreach ($paginator['items'] as $gallery): ?>
@@ -88,11 +108,17 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
         <?php
         $baseUrl = url('/galleries');
         $query   = [];
+        if ($q !== '') {
+            $query['q'] = $q;
+        }
         if ($categoryId > 0) {
             $query['category'] = $categoryId;
         }
         if ($type !== '') {
             $query['type'] = $type;
+        }
+        if ($sort !== '') {
+            $query['sort'] = $sort;
         }
         require __DIR__ . '/../partials/pagination.php';
         ?>
