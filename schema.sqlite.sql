@@ -7,8 +7,15 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     role          VARCHAR(20) NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
     theme_preset  VARCHAR(120),
-    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_login_at DATETIME,
+    last_seen_at DATETIME,
+    session_version INTEGER NOT NULL DEFAULT 0,
+    billing_first_name VARCHAR(100), billing_last_name VARCHAR(100), billing_address_line1 VARCHAR(255), billing_address_line2 VARCHAR(255), billing_city VARCHAR(100), billing_state VARCHAR(50), billing_zip VARCHAR(20), billing_country VARCHAR(2)
 );
+
+CREATE TABLE IF NOT EXISTS support_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, email VARCHAR(255) NOT NULL, subject VARCHAR(255) NOT NULL, message TEXT NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'new', created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, user_read_at DATETIME, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL);
+CREATE TABLE IF NOT EXISTS support_replies (id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER NOT NULL, user_id INTEGER, author_role VARCHAR(10) NOT NULL, message TEXT NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (ticket_id) REFERENCES support_messages(id) ON DELETE CASCADE);
 
 CREATE TABLE IF NOT EXISTS galleries (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,6 +31,7 @@ CREATE TABLE IF NOT EXISTS galleries (
 CREATE TABLE IF NOT EXISTS photos (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     filename     VARCHAR(255) NOT NULL,
+    is_video     INTEGER NOT NULL DEFAULT 0,
     hash         CHAR(40) NOT NULL UNIQUE,
     caption      VARCHAR(255) NOT NULL DEFAULT '',
     link         VARCHAR(500) NOT NULL DEFAULT '',
@@ -74,6 +82,15 @@ CREATE TABLE IF NOT EXISTS user_favorite_categories (
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS gallery_favorites (
+    user_id    INTEGER NOT NULL,
+    gallery_id INTEGER NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, gallery_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS gallery_viewers (
     user_id    INTEGER NOT NULL,
     gallery_id INTEGER NOT NULL,
@@ -89,6 +106,19 @@ CREATE TABLE IF NOT EXISTS photo_viewers (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS saved_searches (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL,
+    query      VARCHAR(255) NOT NULL,
+    type       VARCHAR(10) NOT NULL DEFAULT '',
+    sort       VARCHAR(20) NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, query, type, sort),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_saved_searches_user_created ON saved_searches (user_id, created_at);
 
 CREATE TABLE IF NOT EXISTS admin_logs (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -143,6 +173,7 @@ CREATE TABLE IF NOT EXISTS plans (
 
 CREATE TABLE IF NOT EXISTS subscriptions (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    membership_number TEXT,
     user_id    INTEGER NOT NULL,
     plan_id    INTEGER NOT NULL,
     status     VARCHAR(20) NOT NULL DEFAULT 'pending'
@@ -229,6 +260,7 @@ CREATE TABLE IF NOT EXISTS video_export_jobs (
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     started_at   DATETIME,
     finished_at  DATETIME,
+    attempts     INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (project_id) REFERENCES video_projects(id) ON DELETE CASCADE
 );
 

@@ -126,6 +126,50 @@ class User
     }
 
     /**
+     * Generate and store a new email verification token. The raw token is
+     * returned only to the caller so it can be placed in the email link.
+     */
+    public static function createVerificationToken(int $id): string
+    {
+        $token = bin2hex(random_bytes(32));
+        Database::run(
+            'UPDATE users SET email_verification_token = ?, email_verified_at = NULL WHERE id = ?',
+            [$token, $id]
+        );
+
+        return $token;
+    }
+
+    /**
+     * Find an unverified user by token. Used tokens are removed by
+     * markEmailVerified(); legacy accounts have no token and are unaffected.
+     */
+    public static function findByVerificationToken(string $token): ?array
+    {
+        if (!preg_match('/\A[a-f0-9]{64}\z/', $token)) {
+            return null;
+        }
+
+        $user = Database::run(
+            'SELECT * FROM users WHERE email_verification_token = ? AND email_verified_at IS NULL LIMIT 1',
+            [$token]
+        )->fetch();
+
+        return $user ?: null;
+    }
+
+    /**
+     * Consume a verification token and record the verification time.
+     */
+    public static function markEmailVerified(int $id): void
+    {
+        Database::run(
+            'UPDATE users SET email_verified_at = CURRENT_TIMESTAMP, email_verification_token = NULL WHERE id = ?',
+            [$id]
+        );
+    }
+
+    /**
      * Delete an account.
      */
     public static function delete(int $id): void
@@ -196,6 +240,15 @@ class User
         Database::run(
             'UPDATE users SET theme_preset = ? WHERE id = ?',
             [$slug ?: null, $id]
+        );
+    }
+
+    /** Update only member-editable billing/name details. */
+    public static function updateBillingProfile(int $id, ?string $firstName, ?string $lastName, ?string $address1, ?string $address2, ?string $city, ?string $state, ?string $zip, ?string $country): void
+    {
+        Database::run(
+            'UPDATE users SET billing_first_name = ?, billing_last_name = ?, billing_address_line1 = ?, billing_address_line2 = ?, billing_city = ?, billing_state = ?, billing_zip = ?, billing_country = ? WHERE id = ?',
+            [$firstName ?: null, $lastName ?: null, $address1 ?: null, $address2 ?: null, $city ?: null, $state ?: null, $zip ?: null, $country ?: null, $id]
         );
     }
 

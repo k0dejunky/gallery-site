@@ -27,6 +27,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') . ' Admin' : e(config('app.site_name')) . ' Admin' ?></title>
     <link rel="stylesheet" href="<?= e(url('/assets/admin-shared.css')) ?>">
+    <link rel="stylesheet" href="<?= e(url('/assets/css/user.css')) ?>?v=3">
     <style>
 <?= \App\Models\Theme::css(\App\Models\Theme::SCOPE_ADMIN) ?>
 <?= \App\Models\Theme::cssLayout(\App\Models\Theme::SCOPE_ADMIN) ?>
@@ -64,6 +65,9 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
         .btn-outline:hover { background: var(--pink-200); }
         form.inline { display: inline; }
         .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+        .bulk-photo-toolbar { display: flex; align-items: center; gap: var(--spacing-sm); flex-wrap: wrap; margin: 0 0 var(--spacing-sm); padding: var(--spacing-sm); background: var(--sidebar-bg); border: 1px solid var(--sidebar-border); border-radius: var(--border-radius); }
+        .bulk-photo-toolbar label { display: inline-flex; align-items: center; gap: .35rem; font-size: var(--font-size-sm); }
+        .bulk-photo-toolbar .btn:disabled { opacity: .5; cursor: not-allowed; }
         .admin-form { max-width: 480px; margin: 0 auto; }
         .admin-form input[type="text"], .admin-form textarea, .admin-form select { width: 100%; box-sizing: border-box; }
         .admin-form .type-row { text-align: center; margin-bottom: 1rem; }
@@ -262,6 +266,9 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             <a class="nav-item <?= $navActive('/admin/error-logs') ?>" href="<?= url('/admin/error-logs') ?>">Error Logs</a>
             <a class="nav-item <?= $navActive('/admin/system') ?>" href="<?= url('/admin/system') ?>">System</a>
             <a class="nav-item <?= $navActive('/admin/help') ?>" href="<?= url('/admin/help') ?>">Documentation</a>
+            <?php if (\App\Core\Auth::can('support')): ?>
+                <a class="nav-item <?= $navActive('/admin/support') ?>" href="<?= url('/admin/support') ?>">Support</a>
+            <?php endif; ?>
             <div class="nav-sep"></div>
             <a class="nav-item" href="<?= url('/galleries') ?>">View Site</a>
             <a class="nav-item <?= $navActive('/settings') ?>" href="<?= url('/settings') ?>">Settings</a>

@@ -100,6 +100,16 @@ class FavoriteController extends Controller
         );
 
         $favorited = Gallery::toggleFavorite((int) $_SESSION['user_id'], $galleryId);
+
+        $isAjax = $this->request->header('X-Requested-With') === 'XMLHttpRequest'
+            || str_contains((string) $this->request->header('Accept'), 'application/json');
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => true, 'favorited' => $favorited]);
+            return;
+        }
+
         $this->flash('success', ($favorited ? 'Added "' : 'Removed "') . $gallery['title'] . '" ' . ($favorited ? 'to' : 'from') . ' your favorite galleries.');
 
         $returnTo = (string) $this->request->query('return_to', $this->request->input('return_to', ''));

@@ -96,8 +96,7 @@ img.is-loaded{animation:none;opacity:1;transition:opacity .2s ease}
 .card-details .card-cats{margin-top:.25rem}
 .card-expand-btn{display:block;width:100%;margin:0;padding:.3rem 0;border:none;background:none;color:var(--purple-600);font-size:var(--font-size-sm);cursor:pointer;text-align:center}
 .card-expand-btn:hover{color:var(--purple-800);text-decoration:underline}
-.card-compact form{margin-top:auto;padding-top:.35rem;text-align:center}
-.card-compact .favorite-toggle{margin:0}
+.card-compact .favorite-toggle{margin-top:auto;padding-top:.35rem;text-align:center}
 
 /* Favorites and saved-search discovery */
 .favorites-hero{padding:var(--spacing-lg);margin-bottom:var(--spacing-lg);border-radius:var(--border-radius-lg);background:linear-gradient(135deg,var(--purple-900),var(--purple-700));color:#fff;box-shadow:var(--shadow)}

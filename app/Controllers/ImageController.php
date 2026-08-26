@@ -46,6 +46,18 @@ class ImageController extends Controller
             ? Photo::galleryNeighbors($galleryId, $id)
             : [null, null];
 
+        $mediaItems = $galleryId !== null ? Gallery::photos($galleryId) : [$photo];
+        $currentIndex = 0;
+        foreach ($mediaItems as $index => $item) {
+            if ((int) $item['id'] === $id) {
+                $currentIndex = $index;
+                break;
+            }
+        }
+
+        $returnTo = $this->safeReturnTo($this->request->query('return_to', ''))
+            ?? ($galleryId !== null ? url('/galleries/' . $galleryId) : url('/galleries'));
+
         $view = $requireVideo ? 'video/player' : 'gallery/image_full';
 
         $this->view($view, [
@@ -53,6 +65,29 @@ class ImageController extends Controller
             'gallery' => $gallery,
             'prev'    => $prev,
             'next'    => $next,
+            'mediaItems' => $mediaItems,
+            'currentIndex' => $currentIndex,
+            'returnTo' => $returnTo,
         ]);
+    }
+
+    /** Accept only relative URLs belonging to this installation. */
+    private function safeReturnTo($value): ?string
+    {
+        if (!is_string($value) || $value === '' || strpos($value, '//') === 0) {
+            return null;
+        }
+
+        $parts = parse_url($value);
+        if ($parts === false || isset($parts['scheme']) || isset($parts['host']) || empty($parts['path'])) {
+            return null;
+        }
+
+        $base = rtrim((string) config('app.base_path'), '/');
+        if ($base !== '' && strpos($parts['path'], $base . '/') !== 0 && $parts['path'] !== $base) {
+            return null;
+        }
+
+        return $value;
     }
 }

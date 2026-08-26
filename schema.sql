@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
     date_of_birth DATE NULL DEFAULT NULL,
     age_verified  TINYINT(1) NOT NULL DEFAULT 0,
     age_verified_at DATETIME NULL DEFAULT NULL,
+    email_verified_at DATETIME NULL DEFAULT NULL,
+    email_verification_token CHAR(64) NULL DEFAULT NULL,
     billing_first_name VARCHAR(100) NULL DEFAULT NULL,
     billing_last_name  VARCHAR(100) NULL DEFAULT NULL,
     billing_address_line1 VARCHAR(255) NULL DEFAULT NULL,
@@ -28,7 +30,48 @@ CREATE TABLE IF NOT EXISTS users (
     card_exp_month TINYINT NULL DEFAULT NULL,
     card_exp_year  SMALLINT NULL DEFAULT NULL,
     flag          VARCHAR(32) NULL DEFAULT NULL,
-    theme_preset  VARCHAR(120) NULL
+    theme_preset  VARCHAR(120) NULL,
+    INDEX idx_users_email_verification_token (email_verification_token)
+);
+
+CREATE TABLE IF NOT EXISTS support_messages (
+    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id    INT UNSIGNED NULL,
+    email      VARCHAR(255) NOT NULL,
+    subject    VARCHAR(255) NOT NULL,
+    message    TEXT NOT NULL,
+    status     ENUM('new', 'read', 'postponed', 'resolved', 'ignored') NOT NULL DEFAULT 'new',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    user_read_at DATETIME NULL DEFAULT NULL,
+    INDEX idx_support_messages_user (user_id),
+    INDEX idx_support_messages_status (status),
+    INDEX idx_support_messages_created (created_at),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS support_replies (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    ticket_id   BIGINT UNSIGNED NOT NULL,
+    user_id     INT UNSIGNED NULL,
+    author_role ENUM('user', 'admin') NOT NULL,
+    message     TEXT NOT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_support_replies_ticket_date (ticket_id, created_at),
+    FOREIGN KEY (ticket_id) REFERENCES support_messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS saved_searches (
+    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id    INT UNSIGNED NOT NULL,
+    query      VARCHAR(255) NOT NULL,
+    type       VARCHAR(10) NOT NULL DEFAULT '',
+    sort       VARCHAR(20) NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_saved_search (user_id, query, type, sort),
+    INDEX idx_saved_searches_user_created (user_id, created_at),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS galleries (
@@ -117,9 +160,19 @@ CREATE TABLE IF NOT EXISTS user_favorite_categories (
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS gallery_favorites (
+    user_id    INT UNSIGNED NOT NULL,
+    gallery_id INT UNSIGNED NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, gallery_id),
+    FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE,
+    FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS gallery_viewers (
     user_id    INT UNSIGNED NOT NULL,
     gallery_id INT UNSIGNED NOT NULL,
+    viewed_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, gallery_id),
     FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE,
     FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE
@@ -194,6 +247,7 @@ CREATE TABLE IF NOT EXISTS plans (
 
 CREATE TABLE IF NOT EXISTS subscriptions (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    membership_number VARCHAR(20) NULL UNIQUE,
     user_id     INT UNSIGNED NOT NULL,
     plan_id     INT UNSIGNED NOT NULL,
     status      ENUM('pending', 'active', 'cancelled', 'expired') NOT NULL DEFAULT 'pending',
@@ -291,6 +345,7 @@ CREATE TABLE IF NOT EXISTS video_export_jobs (
     started_at   DATETIME NULL,
     finished_at  DATETIME NULL,
     metadata_json TEXT NULL,
+    attempts     TINYINT UNSIGNED NOT NULL DEFAULT 0,
     FOREIGN KEY (project_id) REFERENCES video_projects(id) ON DELETE CASCADE,
     INDEX idx_video_export_status (status)
 );
@@ -335,3 +390,12 @@ ON DUPLICATE KEY UPDATE name = VALUES(name);
 INSERT INTO users (email, password_hash, role)
 VALUES ('admin@example.com', '$2y$10$uNmLZcHOdbU1ClIdYBshduRC5MV6kNjkvhr20NZaWDRbyLFI4kX0m', 'admin')
 ON DUPLICATE KEY UPDATE email = email;
+
+CREATE TABLE IF NOT EXISTS password_resets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    token VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_token (token),
+    INDEX idx_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

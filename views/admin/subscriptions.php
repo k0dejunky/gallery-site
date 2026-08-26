@@ -6,11 +6,12 @@
 <h2>Needs Attention — Pending Biller Signups</h2>
 <p class="muted">Checkouts that reached a payment processor but were never confirmed by its postback. Approve after verifying the payment in the biller's admin, or cancel to release the member.</p>
 <table>
-    <thead><tr><th>Age</th><th>User</th><th>Plan</th><th>Processor</th><th>Reference</th><th>Actions</th></tr></thead>
+    <thead><tr><th>Membership ID</th><th>Age</th><th>User</th><th>Plan</th><th>Processor</th><th>Reference</th><th>Actions</th></tr></thead>
     <tbody>
     <?php foreach ($reconciliation as $rec): ?>
         <?php $stale = (int) $rec['age_hours'] >= 24; ?>
         <tr<?= $stale ? ' style="background:rgba(220,38,38,.08);"' : '' ?>>
+            <td><code>#<?= e((string) ($rec['membership_number'] ?? sprintf('%05d', (int) $rec['id']))) ?></code></td>
             <td title="<?= e((string) $rec['created_at']) ?>"><?= (int) $rec['age_hours'] ?>h<?= $stale ? ' ⚠' : '' ?></td>
             <td><?= e((string) $rec['user_email']) ?></td>
             <td><?= e((string) $rec['plan_name']) ?> ($<?= number_format((float) $rec['price'], 2) ?>)</td>
@@ -55,6 +56,7 @@
     <table>
         <thead>
             <tr>
+                <th>Membership ID</th>
                 <th>User</th>
                 <th>Plan</th>
                 <th>Price</th>
@@ -70,6 +72,7 @@
         <tbody>
             <?php foreach ($subscriptions as $sub): ?>
                 <tr>
+                    <td><code>#<?= e((string) ($sub['membership_number'] ?? sprintf('%05d', (int) $sub['id']))) ?></code></td>
                     <td><?= e($sub['user_email']) ?></td>
                     <td><?= e($sub['plan_name']) ?></td>
                     <td><?= $sub['price_paid'] !== null ? '$' . number_format((float) $sub['price_paid'], 2) : '&mdash;' ?></td>

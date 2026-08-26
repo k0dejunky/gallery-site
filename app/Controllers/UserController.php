@@ -660,6 +660,8 @@ class UserController extends Controller
                 $this->redirect('/admin/users/' . $id . '/edit');
             }
             User::updatePassword($id, password_hash($password, PASSWORD_DEFAULT));
+            Database::run('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [$id]);
+            AuditLog::record((int) Auth::user()['id'], 'update', 'user_password', $id, 'Changed password for account "' . $user['email'] . '"');
         }
 
         $dob   = $this->request->input('date_of_birth') ?: null;
@@ -675,18 +677,22 @@ class UserController extends Controller
 
         User::updateProfile($id, $email, $role, $dob, $av, $bFn, $bLn, $bA1, $bA2, $bCity, $bSt, $bZip, $bCo);
 
-        $planId    = (int) $this->request->input('plan_id');
-        $currentSub = Subscription::activeFor($id);
-        $currentPlanId = $currentSub ? (int) $currentSub['plan_id'] : 0;
+        // The normal user-edit form does not include membership controls.
+        // Never interpret an omitted plan_id as a request to cancel access.
+        if (array_key_exists('plan_id', $_POST)) {
+            $planId = (int) $this->request->input('plan_id');
+            $currentSub = Subscription::activeFor($id);
+            $currentPlanId = $currentSub ? (int) $currentSub['plan_id'] : 0;
 
-        if ($planId !== $currentPlanId) {
-            if ($currentSub) {
-                Subscription::cancel((int) $currentSub['id']);
-            }
-            if ($planId > 0) {
-                Subscription::create($id, $planId);
-                $newSubId = (int) Database::connection()->lastInsertId();
-                Subscription::approve($newSubId);
+            if ($planId !== $currentPlanId) {
+                if ($currentSub) {
+                    Subscription::cancel((int) $currentSub['id']);
+                }
+                if ($planId > 0) {
+                    Subscription::create($id, $planId);
+                    $newSubId = (int) Database::connection()->lastInsertId();
+                    Subscription::approve($newSubId);
+                }
             }
         }
 
@@ -699,6 +705,18 @@ class UserController extends Controller
             ['email' => $user['email'], 'role' => $user['role']],
             ['email' => $email, 'role' => $role, 'age_verified' => $av]
         );
+
+        if (strcasecmp((string) $user['email'], $email) !== 0) {
+            AuditLog::record(
+                (int) Auth::user()['id'],
+                'update',
+                'user_email',
+                $id,
+                'Changed account email address',
+                ['email' => $user['email']],
+                ['email' => $email]
+            );
+        }
 
         $this->flash('success', 'User "' . $email . '" updated.');
         $this->redirect('/admin/users');

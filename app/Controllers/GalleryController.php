@@ -35,6 +35,9 @@ class GalleryController extends Controller
         $type  = in_array($this->request->query('type', ''), ['images', 'videos'], true)
             ? (string) $this->request->query('type')
             : '';
+        $sort  = in_array($this->request->query('sort', ''), ['newest', 'views', 'title'], true)
+            ? (string) $this->request->query('sort')
+            : '';
 
         $user      = Auth::user();
         $isMember  = Auth::hasActiveSubscription();
@@ -77,6 +80,24 @@ class GalleryController extends Controller
             if ($uncategorized !== []) {
                 $sections[] = ['category' => ['id' => 0, 'name' => 'Uncategorized', 'slug' => ''], 'galleries' => $uncategorized];
             }
+
+            if ($sort !== '') {
+                foreach ($sections as &$section) {
+                    usort($section['galleries'], static function (array $a, array $b) use ($sort): int {
+                        if ($sort === 'title') {
+                            return strcasecmp((string) $a['title'], (string) $b['title']);
+                        }
+
+                        if ($sort === 'views') {
+                            return ((int) ($b['unique_views'] ?? 0) <=> (int) ($a['unique_views'] ?? 0))
+                                ?: ((int) ($b['views'] ?? 0) <=> (int) ($a['views'] ?? 0));
+                        }
+
+                        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+                    });
+                }
+                unset($section);
+            }
         }
 
         $filters = ['q' => $q];
@@ -86,12 +107,40 @@ class GalleryController extends Controller
         if ($type !== '') {
             $filters['type'] = $type;
         }
+        if ($sort !== '') {
+            $filters['sort'] = $sort;
+        }
 
         $paginator = Gallery::paginate($page, 6, $filters);
 
         // A search that found nothing is tracked as a missed search.
         if ($q !== '' && (int) $paginator['total'] === 0 && $user !== null) {
             Stats::recordMissedSearch($q, (int) $user['id']);
+        }
+
+        $viewedIds = [];
+        $recentlyViewed = [];
+        $favoriteGalleryIds = [];
+        $favoriteGalleries = [];
+        if ($user !== null && $isMember) {
+            $allGalleryIds = [];
+            foreach ($sections as $section) {
+                foreach ($section['galleries'] as $g) {
+                    $allGalleryIds[] = (int) $g['id'];
+                }
+            }
+            if ($q !== '') {
+                foreach ($paginator['items'] as $g) {
+                    $allGalleryIds[] = (int) $g['id'];
+                }
+            }
+            $allGalleryIds = array_unique($allGalleryIds);
+            if ($allGalleryIds) {
+                $viewedIds = Gallery::viewedByIds((int) $user['id'], $allGalleryIds);
+            }
+            $recentlyViewed = Gallery::recentlyViewed((int) $user['id'], 8);
+            $favoriteGalleryIds = Gallery::favoriteIds((int) $user['id'], $allGalleryIds);
+            $favoriteGalleries = Gallery::favoriteGalleries((int) $user['id'], 8);
         }
 
         $this->view('gallery/index', [
@@ -107,6 +156,11 @@ class GalleryController extends Controller
             'hasActive'     => $isMember,
             'sidebarNav'    => true,
             'cardCovers'    => $this->preloadCardData($sections, $q !== '' ? $paginator : null),
+            'sort'          => $sort,
+            'viewedIds'     => $viewedIds,
+            'recentlyViewed' => $recentlyViewed,
+            'favoriteGalleryIds' => $favoriteGalleryIds,
+            'favoriteGalleries' => $favoriteGalleries,
         ]);
     }
 
@@ -139,8 +193,14 @@ class GalleryController extends Controller
         $type = in_array($this->request->query('type', ''), ['images', 'videos'], true)
             ? (string) $this->request->query('type')
             : '';
+        $sort = in_array($this->request->query('sort', ''), ['newest', 'views', 'title'], true)
+            ? (string) $this->request->query('sort')
+            : '';
 
         $filters       = ['q' => $q, 'category' => (int) $category['id']];
+        if ($sort !== '') {
+            $filters['sort'] = $sort;
+        }
         $imagePaginator = [];
         $videoPaginator = [];
 
@@ -158,8 +218,27 @@ class GalleryController extends Controller
             'videoPaginator' => $videoPaginator,
             'q'              => $q,
             'type'           => $type,
+            'sort'           => $sort,
             'currentUser'    => $user,
+            'hasActive'      => Auth::hasActiveSubscription(),
             'cardCovers'     => $this->preloadCardData([], $imagePaginator, $videoPaginator),
+            'viewedIds'      => $user !== null ? Gallery::viewedByIds(
+                (int) $user['id'],
+                array_merge(
+                    array_map('intval', array_column($imagePaginator['items'] ?? [], 'id')),
+                    array_map('intval', array_column($videoPaginator['items'] ?? [], 'id'))
+                )
+            ) : [],
+            'recentlyViewed' => $user !== null ? Gallery::recentlyViewed((int) $user['id'], 8) : [],
+            'favoriteGalleryIds' => ($user !== null && Auth::hasActiveSubscription())
+                ? Gallery::favoriteIds((int) $user['id'], array_merge(
+                    array_column($imagePaginator['items'] ?? [], 'id'),
+                    array_column($videoPaginator['items'] ?? [], 'id')
+                )) : [],
+            'favoriteGalleries' => ($user !== null && Auth::hasActiveSubscription())
+                ? Gallery::favoriteGalleries((int) $user['id'], 8) : [],
+            'sidebarNav'     => true,
+            'navCategories'  => FavoriteCategory::forUser((int) ($user['id'] ?? 0)),
         ]);
     }
 
@@ -183,11 +262,16 @@ class GalleryController extends Controller
             Gallery::recordView($id, (int) $user['id']);
         }
 
+        $photos = Gallery::photos($id);
+        $photoCount = count($photos);
+
         $this->view('gallery/show', [
-            'gallery'  => $gallery,
-            'photos'   => Gallery::photos($id),
+            'gallery'    => $gallery,
+            'photos'     => $photos,
             'categories' => Gallery::categories($id),
             'currentUser' => Auth::user(),
+            'photoCount' => $photoCount,
+            'returnTo'   => url('/galleries/' . $id),
         ]);
     }
 

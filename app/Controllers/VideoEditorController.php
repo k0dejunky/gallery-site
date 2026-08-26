@@ -171,10 +171,6 @@ class VideoEditorController extends Controller
         $exportStart = max(0, (float) ($this->request->post('export_start', 0)));
         $exportEnd = max(0, (float) ($this->request->post('export_end', 0)));
         $jobId = VideoProject::createExport($id, $saveOverOriginal, $exportStart, $exportEnd);
-        $worker = dirname(__DIR__, 2) . '/bin/video_export_worker.php';
-        $phpCli = is_executable('/usr/bin/php') ? '/usr/bin/php' : PHP_BINARY;
-        $command = 'nohup ' . escapeshellarg($phpCli) . ' ' . escapeshellarg($worker) . ' ' . (int) $jobId . ' >/dev/null 2>&1 &';
-        exec($command);
         $this->json(['ok' => true, 'job_id' => $jobId]);
     }
 

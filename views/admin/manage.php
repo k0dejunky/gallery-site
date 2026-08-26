@@ -76,9 +76,18 @@
 <?php if (empty($photos)): ?>
     <p>No photos yet.</p>
 <?php else: ?>
+    <form method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/bulk-rotate') ?>" class="bulk-photo-form">
+        <?= csrf_field() ?>
+        <div class="bulk-photo-toolbar">
+            <label><input type="checkbox" id="select-all-images"> Select all images</label>
+            <span class="muted" id="selected-image-count">0 selected</span>
+            <button type="submit" name="direction" value="left" class="btn btn-sm" disabled data-bulk-rotate>&larr; Rotate left</button>
+            <button type="submit" name="direction" value="right" class="btn btn-sm" disabled data-bulk-rotate>Rotate right &rarr;</button>
+        </div>
     <table>
         <thead>
             <tr>
+                <th aria-label="Select"></th>
                 <th>Preview</th>
                 <th>Caption / Link</th>
                 <th>Views</th>
@@ -89,6 +98,11 @@
         <tbody>
             <?php foreach ($photos as $photo): ?>
                 <tr>
+                    <td>
+                        <?php if (!is_video($photo['filename'])): ?>
+                            <input type="checkbox" name="photo_ids[]" value="<?= (int) $photo['id'] ?>" data-image-select aria-label="Select image <?= (int) $photo['id'] ?>">
+                        <?php endif; ?>
+                    </td>
                     <td>
                         <?php if (is_video($photo['filename'])): ?>
                             <video src="<?= e(file_url($photo['filename'])) ?>" width="120" muted preload="metadata"></video>
@@ -147,4 +161,25 @@
             <?php endforeach; ?>
         </tbody>
     </table>
+    </form>
+    <script>
+    (function () {
+        var all = document.getElementById('select-all-images');
+        var boxes = Array.prototype.slice.call(document.querySelectorAll('[data-image-select]'));
+        var buttons = Array.prototype.slice.call(document.querySelectorAll('[data-bulk-rotate]'));
+        var count = document.getElementById('selected-image-count');
+        function update() {
+            var selected = boxes.filter(function (box) { return box.checked; }).length;
+            count.textContent = selected + ' selected';
+            buttons.forEach(function (button) { button.disabled = selected === 0; });
+            if (all) all.checked = boxes.length > 0 && selected === boxes.length;
+        }
+        if (all) all.addEventListener('change', function () {
+            boxes.forEach(function (box) { box.checked = all.checked; });
+            update();
+        });
+        boxes.forEach(function (box) { box.addEventListener('change', update); });
+        update();
+    }());
+    </script>
 <?php endif; ?>

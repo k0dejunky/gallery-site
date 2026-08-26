@@ -1,0 +1,1 @@
+-- Baseline marker: the current production schema was bootstrapped by schema.sql.

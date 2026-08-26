@@ -435,6 +435,6 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
     </script>
 <?php endif; ?>
     <script>try{var p=JSON.parse(localStorage.getItem('galleryDisplayPrefs')||'{}');var v=p.view||'grid';var s=p.size||'md';document.documentElement.classList.add('g-view-'+v);document.documentElement.classList.add('g-size-'+s);if(p.masonry)document.documentElement.classList.add('g-masonry');}catch(e){document.documentElement.classList.add('g-view-grid');document.documentElement.classList.add('g-size-md');}</script>
-    <script src="<?= url('/assets/js/user.js') ?>?v=2" defer></script>
+    <script src="<?= url('/assets/js/user.js') ?>?v=3" defer></script>
 </body>
 </html>

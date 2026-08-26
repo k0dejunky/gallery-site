@@ -89,6 +89,9 @@ By default it removes only the site files and the Apache `/gallery` alias config
 - **Uploads:** stored in `storage/uploads/` (gitignored)
 - **Themes / layout:** regenerated from defaults in `storage/` if missing
 - **MySQL tuning:** `/etc/mysql/mysql.conf.d/99-gallery-tuning.cnf` (buffer pool, slow-query log)
+- **Optional hardening:** set `APP_ENV=production` and keep `APP_DEBUG=false`; `APP_URL` and
+  `PAYPAL_CLIENT_SECRET` are optional. Authenticated sessions expire after 12 hours idle by
+  default, and password recovery/email verification requests are rate limited.
 
 ## Server stack & performance
 
@@ -111,9 +114,78 @@ By default it removes only the site files and the Apache `/gallery` alias config
 - Video editor frontend: `frontend/video-editor/` (Vite + React). Rebuild with
   `npm ci && npm run build` inside that directory; the output goes to `dist/`.
 
+## Background jobs
+
+Video exports are stored in `video_export_jobs` and processed by the supervised
+`bin/video_export_queue.php` worker. The worker claims jobs transactionally,
+retries failed exports up to three times, and leaves progress in the database
+for the existing status endpoint and admin screens.
+
+On systemd hosts, install and enable the service with:
+
+```bash
+sudo cp config/gallery-video-export.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now gallery-video-export.service
+sudo systemctl status gallery-video-export.service
+```
+
+Apply the queue migration before starting the worker with `php scripts/migrate.php`.
+
+## Migrations and deployment
+
+The installer bootstraps the current schema from `schema.sql`. Subsequent
+schema changes belong in numbered files under `database/migrations/` and are
+applied once with PDO:
+
+```bash
+php scripts/migrate.php --status
+php scripts/migrate.php
+```
+
+To deploy selected files, run from the repository root. The script lints the
+local PHP tree, stages and snapshots remote files, lints the installed PHP,
+and restores the snapshot if installation or an optional health check fails:
+
+```bash
+scripts/deploy.sh app/Models/User.php public/index.php
+DEPLOY_HEALTH_URL=http://127.0.0.1/gallery/ scripts/deploy.sh public/index.php
+DEPLOY_NO_RELOAD=1 scripts/deploy.sh config/routes.php
+```
+
+Use `DEPLOY_HOST`, `DEPLOY_PASS`, `DEPLOY_ROOT`, and `DEPLOY_SNAP_DIR` to
+override deployment settings without changing the script.
+
 ## Security
 
 - Never commit a real `.env` (it's gitignored).
 - Change the seeded admin password after first login.
 - The seed password is a known default; pass `--admin-pass` at install time to
   set a fresh one, or reset it from the admin Users page.
+
+## Gmail SMTP app password
+
+The site uses a Gmail App Password for outbound email (support replies,
+verification links, password resets). If the password stops working:
+
+1. Go to [Google App Passwords](https://myaccount.google.com/apppasswords)
+   while logged into the admin Gmail account.
+2. Select app: **Mail**, device: **Other (Custom name)** → enter `Gallery SMTP`.
+3. Click **Generate** — Google shows a 16-character password once.
+4. Update `.env` on the server:
+   ```bash
+   sudo nano /var/www/gallery/.env
+   ```
+   Replace the `MAIL_PASSWORD=` value with the new password.
+5. Reload PHP-FPM:
+   ```bash
+   sudo systemctl reload php8.3-fpm
+   ```
+6. Test from the admin **System** page — click the **Test SMTP** button.
+   Or verify from the command line:
+   ```bash
+   sudo -u www-data php /var/www/gallery/bin/smtp_test.php
+   ```
+
+App passwords don't expire unless you revoke them or change your Google
+account password. The admin **System** page shows whether SMTP is configured.

@@ -4,7 +4,10 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\Mailer;
+use App\Core\RateLimiter;
 use App\Models\Photo;
+use App\Models\PasswordReset;
 use App\Models\User;
 
 class AuthController extends Controller
@@ -98,8 +101,36 @@ class AuthController extends Controller
             $this->redirect('/login');
         }
 
+        if ($dob === null || $dob === '') {
+            $this->flash('error', 'Date of birth is required.');
+            $this->redirect('/signup');
+        }
+
+        $dobDate = date_create($dob);
+        if ($dobDate === false) {
+            $this->flash('error', 'Invalid date of birth.');
+            $this->redirect('/signup');
+        }
+
+        $age = (new \DateTime())->diff($dobDate)->y;
+        if ($age < 18) {
+            $this->flash('error', 'You must be at least 18 years old to create an account.');
+            $this->redirect('/signup');
+        }
+
         User::create($email, $password, 'user', $dob);
         $userId = (int) User::findByEmail($email)['id'];
+        $verificationToken = User::createVerificationToken($userId);
+        $verificationUrl = rtrim(env_value('APP_URL', url('/')), '/')
+            . '/verify-email?token=' . rawurlencode($verificationToken);
+        $mailSent = Mailer::send(
+            $email,
+            'Verify your ' . config('app.site_name') . ' email address',
+            "Thanks for creating an account with " . config('app.site_name') . ".\n\n"
+            . "Please verify your email address by opening this link:\n"
+            . $verificationUrl . "\n\n"
+            . "If you did not create this account, you can ignore this email."
+        );
 
         $bFn   = $this->request->input('billing_first_name');
         $bLn   = $this->request->input('billing_last_name');
@@ -116,8 +147,70 @@ class AuthController extends Controller
 
         Auth::loginUser($userId);
 
-        $this->flash('success', 'Account created. Welcome to ' . config('app.site_name') . '!');
-        $this->redirect('/membership' . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
+         $this->flash('success', $mailSent
+             ? 'Account created. Welcome! Check your email to verify your address.'
+             : 'Account created. We could not send the verification email yet. You can resend it from your account settings.');
+         $this->redirect('/membership' . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
+    }
+
+    /**
+     * Consume a valid email verification link.
+     */
+    public function verifyEmail(): void
+    {
+        $token = trim((string) $this->request->query('token', ''));
+        $user = User::findByVerificationToken($token);
+
+        if ($user === null) {
+            $this->flash('error', 'That email verification link is invalid or has already been used.');
+            $this->redirect(Auth::check() ? Auth::homePath() : '/login');
+        }
+
+        User::markEmailVerified((int) $user['id']);
+        $this->flash('success', 'Your email address has been verified.');
+        $this->redirect(Auth::check() ? Auth::homePath() : '/login');
+    }
+
+    /**
+     * Send a replacement verification link to the current unverified user.
+     */
+    public function resendVerification(): void
+    {
+        Auth::requireLogin();
+        $user = Auth::user();
+
+        $limit = (int) config('app.auth.verification_rate_limit', 5);
+        $window = (int) config('app.auth.recovery_rate_window_seconds', 3600);
+        $account = $user === null ? 'unknown' : (string) $user['id'];
+        $allowed = RateLimiter::allow([
+            'verification-ip:' . $this->request->ip(),
+            'verification-account:' . $account,
+        ], $limit, $window);
+
+        $now = time();
+        $lastSent = (int) ($_SESSION['email_verification_sent_at'] ?? 0);
+        if (!$allowed || $now - $lastSent < 60
+            || $user === null
+            || in_array($user['role'] ?? '', Auth::ADMIN_ROLES, true)
+            || !empty($user['email_verified_at'])) {
+            // Do not disclose whether the account needs a message or is rate limited.
+            $this->flash('success', 'If verification is required, a new email will be sent shortly.');
+            $this->redirect('/settings');
+        }
+
+        $token = User::createVerificationToken((int) $user['id']);
+        $verificationUrl = rtrim(env_value('APP_URL', url('/')), '/')
+            . '/verify-email?token=' . rawurlencode($token);
+        $sent = Mailer::send(
+            (string) $user['email'],
+            'Verify your ' . config('app.site_name') . ' email address',
+            "Please verify your email address by opening this link:\n"
+            . $verificationUrl . "\n\nIf you did not request this, you can ignore this email."
+        );
+        $_SESSION['email_verification_sent_at'] = $now;
+
+        $this->flash('success', 'If verification is required, a new email will be sent shortly.');
+        $this->redirect('/settings');
     }
 
     /**
@@ -127,5 +220,97 @@ class AuthController extends Controller
     {
         Auth::logout();
         $this->redirect('/login' . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
+    }
+
+    public function forgotForm(): void
+    {
+        $this->view('auth/forgot_password');
+    }
+
+    public function forgot(): void
+    {
+        $email = trim($this->request->input('email'));
+        $limit = (int) config('app.auth.reset_rate_limit', 5);
+        $window = (int) config('app.auth.recovery_rate_window_seconds', 3600);
+        $allowed = RateLimiter::allow([
+            'reset-ip:' . $this->request->ip(),
+            'reset-account:' . strtolower($email),
+        ], $limit, $window);
+
+        $user = $allowed && filter_var($email, FILTER_VALIDATE_EMAIL) ? User::findByEmail($email) : null;
+        if ($user !== null) {
+            $token = bin2hex(random_bytes(32));
+            \App\Models\PasswordReset::create($email, $token);
+            $resetUrl = rtrim(env_value('APP_URL', url('/')), '/')
+                . '/reset-password?token=' . rawurlencode($token);
+            $sent = Mailer::send(
+                $email,
+                'Reset your ' . config('app.site_name') . ' password',
+                "A password reset was requested for your account.\n\n"
+                . "Open this link within one hour to choose a new password:\n"
+                . $resetUrl . "\n\nIf you did not request this, you can ignore this email."
+            );
+
+            if (!$sent) {
+                error_log('[PASSWORD RESET] Could not send reset email to ' . $email);
+            }
+        }
+
+        \App\Models\PasswordReset::cleanup();
+        // Always show the same message to prevent email enumeration.
+        $this->flash('success', 'If an account exists with that email, you will receive a password reset link shortly.');
+        $this->redirect('/login');
+    }
+
+    public function resetForm(): void
+    {
+        $token = $this->request->query('token', '');
+        $record = \App\Models\PasswordReset::findByToken($token);
+
+        if ($record === null) {
+            $this->flash('error', 'Invalid or expired reset token.');
+            $this->redirect('/login');
+        }
+
+        $this->view('auth/reset_password', ['token' => $token]);
+    }
+
+    public function reset(): void
+    {
+        $token    = $this->request->input('token');
+        $password = (string) $this->request->post('password', '');
+        $confirm  = (string) $this->request->post('password_confirm', '');
+
+        $record = \App\Models\PasswordReset::findByToken($token);
+        if ($record === null) {
+            $this->flash('error', 'Invalid or expired reset token.');
+            $this->redirect('/login');
+        }
+
+        if (strlen($password) < 8) {
+            $this->flash('error', 'Password must be at least 8 characters.');
+            $this->redirect('/reset-password?token=' . urlencode($token));
+        }
+
+        if ($password !== $confirm) {
+            $this->flash('error', 'Passwords do not match.');
+            $this->redirect('/reset-password?token=' . urlencode($token));
+        }
+
+        $user = \App\Models\User::findByEmail($record['email']);
+        if ($user !== null) {
+            \App\Models\User::updatePassword((int) $user['id'], password_hash($password, PASSWORD_DEFAULT));
+            Auth::logoutEverywhere((int) $user['id']);
+            try {
+                \App\Models\AuditLog::record(null, 'update', 'user_password', (int) $user['id'], 'Reset account password');
+            } catch (\Throwable $exception) {
+                error_log('[auth] password audit failed: ' . $exception->getMessage());
+            }
+        }
+
+        \App\Models\PasswordReset::deleteByToken($token);
+
+        $this->flash('success', 'Your password has been reset. You can now log in.');
+        $this->redirect('/login');
     }
 }

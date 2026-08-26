@@ -197,12 +197,48 @@
 (function(){
   document.addEventListener('DOMContentLoaded',function(){
     document.querySelectorAll('.card-expand-btn').forEach(function(btn){
-      btn.addEventListener('click',function(){
-        var details=btn.previousElementSibling;
+      btn.addEventListener('click',function(e){
+        e.preventDefault();
+        var targetId=btn.getAttribute('data-target');
+        var details=targetId?document.getElementById(targetId):btn.previousElementSibling;
         if(!details||!details.classList.contains('card-details'))return;
         var hidden=details.hidden;
         details.hidden=!hidden;
         btn.textContent=hidden?'Show less':'Show more';
+      });
+    });
+  });
+})();
+
+/* Gallery card favorite toggle (AJAX) */
+(function(){
+  document.addEventListener('DOMContentLoaded',function(){
+    document.querySelectorAll('.favorite-toggle').forEach(function(btn){
+      btn.addEventListener('click',function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        var galleryId=btn.getAttribute('data-gallery-id');
+        var csrf=btn.getAttribute('data-csrf');
+        if(!galleryId||!csrf)return;
+        btn.disabled=true;
+        var fd=new FormData();
+        fd.append('_token',csrf);
+        fetch('/gallery/favorites/galleries/'+galleryId+'/toggle',{
+          method:'POST',
+          headers:{'X-Requested-With':'XMLHttpRequest'},
+          body:fd
+        }).then(function(r){return r.json()}).then(function(data){
+          if(data.ok){
+            if(data.favorited){
+              btn.classList.add('is-favorite');
+              btn.innerHTML='&#9733; Unfavorite';
+            }else{
+              btn.classList.remove('is-favorite');
+              btn.innerHTML='&#9734; Favorite';
+            }
+          }
+          btn.disabled=false;
+        }).catch(function(){btn.disabled=false});
       });
     });
   });
@@ -216,7 +252,7 @@
   function load(){
     try{return Object.assign({},defaults,JSON.parse(localStorage.getItem(STORE_KEY)||'{}'))}catch(e){return Object.assign({},defaults)}
   }
-  function save(prefs){try{localStorage.setItem(STORE_KEY,JSON.stringify(prefs))}catch(e){}
+  function save(prefs){try{localStorage.setItem(STORE_KEY,JSON.stringify(prefs))}catch(e){}}
 
   function apply(prefs){
     document.documentElement.classList.remove('g-view-grid','g-view-list','g-view-compact','g-size-sm','g-size-md','g-size-lg','g-masonry');

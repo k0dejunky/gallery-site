@@ -5,6 +5,7 @@
 
 return [
     // Public (guests can reach these)
+    ['GET', '/health', 'HealthController@show'],
     ['GET', '/', 'AuthController@loginForm'],
     ['GET', '/galleries', 'GalleryController@index'],
     ['GET', '/galleries/category/{slug}', 'GalleryController@category'],
@@ -22,10 +23,29 @@ return [
     ['POST', '/login', 'AuthController@login'],
     ['GET', '/signup', 'AuthController@signupForm'],
     ['POST', '/signup', 'AuthController@signup'],
+    ['GET', '/verify-email', 'AuthController@verifyEmail'],
+    ['POST', '/verify-email/resend', 'AuthController@resendVerification'],
     ['POST', '/logout', 'AuthController@logout'],
+    ['GET', '/forgot-password', 'AuthController@forgotForm'],
+    ['POST', '/forgot-password', 'AuthController@forgot'],
+    ['GET', '/reset-password', 'AuthController@resetForm'],
+    ['POST', '/reset-password', 'AuthController@reset'],
 
     // Favorites (logged in)
+    ['GET', '/favorites', 'FavoriteController@index'],
     ['POST', '/favorites/categories/{categoryId}/toggle', 'FavoriteController@toggle'],
+    ['POST', '/favorites/galleries/{galleryId}/toggle', 'FavoriteController@toggleGallery'],
+
+    // Saved searches (active members)
+    ['GET', '/saved-searches', 'SavedSearchController@index'],
+    ['POST', '/saved-searches', 'SavedSearchController@store'],
+    ['POST', '/saved-searches/{id}/delete', 'SavedSearchController@destroy'],
+
+    // Support (logged in)
+    ['GET', '/support', 'SupportController@form'],
+    ['POST', '/support', 'SupportController@submit'],
+    ['GET', '/support/{id}', 'SupportController@show'],
+    ['POST', '/support/{id}/reply', 'SupportController@reply'],
 
     // Admin
     ['GET', '/admin', 'AdminController@dashboard'],
@@ -53,6 +73,7 @@ return [
     ['POST', '/admin/galleries/{galleryId}/photos/{photoId}/delete', 'PhotoController@destroy'],
     ['POST', '/admin/galleries/{galleryId}/photos/{photoId}/move', 'PhotoController@move'],
     ['POST', '/admin/galleries/{galleryId}/photos/{photoId}/rotate', 'PhotoController@rotate'],
+    ['POST', '/admin/galleries/{galleryId}/photos/bulk-rotate', 'PhotoController@bulkRotate'],
     ['GET', '/admin/photos/{id}/edit', 'PhotoController@edit'],
     ['POST', '/admin/photos/{id}/edit', 'PhotoController@applyEdit'],
     ['GET', '/admin/videos/{id}/edit', 'VideoEditorController@edit'],
@@ -97,6 +118,7 @@ return [
     ['POST', '/admin/system/db/optimize', 'SystemController@dbOptimize'],
     ['POST', '/admin/system/maintenance', 'SystemController@maintenanceToggle'],
     ['POST', '/admin/system/housekeeping', 'SystemController@housekeepingRun'],
+    ['POST', '/admin/system/smtp-test', 'SystemController@smtpTest'],
     ['GET', '/admin/export/users', 'ExportController@users'],
     ['GET', '/admin/export/subscriptions', 'ExportController@subscriptions'],
 
@@ -117,6 +139,11 @@ return [
     ['POST', '/admin/site-editor/activate/{id}', 'SiteEditorController@activate'],
     ['POST', '/admin/site-editor/deactivate', 'SiteEditorController@deactivate'],
     ['GET', '/admin/help', 'HelpController@index'],
+    ['GET', '/admin/support', 'SupportController@index'],
+    ['GET', '/admin/support/{id}', 'SupportController@adminShow'],
+    ['POST', '/admin/support/{id}/reply', 'SupportController@adminReply'],
+    ['POST', '/admin/support/{id}/status', 'SupportController@status'],
+    ['POST', '/admin/support/{id}/delete', 'SupportController@delete'],
     ['GET', '/admin/trends', 'TrendsController@index'],
     ['POST', '/admin/trends/promote', 'TrendsController@approvePromotion'],
     ['POST', '/admin/trends/dismiss', 'TrendsController@dismissPromotion'],
@@ -128,14 +155,18 @@ return [
     // Settings (logged in)
     ['GET', '/settings', 'SettingsController@show'],
     ['POST', '/settings/password', 'SettingsController@updatePassword'],
+    ['POST', '/settings/profile', 'SettingsController@updateProfile'],
+    ['POST', '/settings/logout-everywhere', 'SettingsController@logoutEverywhere'],
     ['POST', '/settings/favorites', 'SettingsController@updateFavorites'],
     ['POST', '/settings/theme', 'SettingsController@updateTheme'],
 
     // Membership (logged in)
+    ['GET', '/account', 'MembershipController@dashboard'],
     ['GET', '/membership', 'MembershipController@index'],
     ['GET', '/membership/my', 'MembershipController@my'],
     ['POST', '/membership/subscribe', 'MembershipController@subscribe'],
     ['POST', '/membership/cancel', 'MembershipController@cancel'],
+    ['POST', '/membership/paypal-approve', 'MembershipController@paypalApprove'],
     ['GET', '/membership/checkout', 'MembershipController@braintreeCheckout'],
     ['GET', '/membership/braintree-token', 'MembershipController@braintreeToken'],
     ['POST', '/membership/braintree-token', 'MembershipController@braintreeToken'],

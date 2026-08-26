@@ -15,6 +15,15 @@ spl_autoload_register(function (string $class): void {
     if (is_file($path)) require $path;
 });
 
+$configurationValid = (require __DIR__ . '/../config/validate.php')();
+if (!$configurationValid) {
+    if (PHP_SAPI === 'cli') exit(1);
+    http_response_code(503);
+    header('Retry-After: 600');
+    require __DIR__ . '/../views/errors/503.php';
+    exit;
+}
+
 if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'lifetime' => 0,
@@ -37,7 +46,7 @@ if (is_file($maintenanceFlag)) {
     $request = new Request();
     $path    = rtrim((string) $request->uri(), '/');
 
-    $allowedPrefixes = ['/admin', '/login', '/files', '/cron', '/assets', '/webhooks'];
+    $allowedPrefixes = ['/admin', '/health', '/login', '/files', '/cron', '/assets', '/webhooks', '/verify-email'];
     $allowed = false;
 
     foreach ($allowedPrefixes as $prefix) {

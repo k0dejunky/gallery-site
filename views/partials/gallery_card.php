@@ -14,8 +14,9 @@ $hasDetails = ($gallery['description'] ?? '') !== '' || $createdAt !== false || 
 $placeholder = 'data:image/svg+xml;utf8,' . rawurlencode(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" fill="#ffd9e8"/><rect x="130" y="102" width="140" height="96" rx="12" fill="none" stroke="#f472b6" stroke-width="8"/><circle cx="185" cy="145" r="14" fill="#ec4899"/><path d="M130 196l42-42 32 30 44-52 52 64" fill="none" stroke="#9333ea" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 );
+$cardId = 'card-' . (int) $gallery['id'];
 ?>
-<div class="card card-compact">
+<div class="card card-compact" id="<?= e($cardId) ?>">
     <a class="card-link" href="<?= e($galleryUrl) ?>">
         <?php if ($cover === null): ?>
             <div class="card-cover">
@@ -45,7 +46,7 @@ $placeholder = 'data:image/svg+xml;utf8,' . rawurlencode(
         </p>
     </a>
     <?php if ($hasDetails): ?>
-    <div class="card-details" hidden>
+    <div class="card-details" id="<?= e($cardId) ?>-details" hidden>
         <?php if (($gallery['description'] ?? '') !== ''): ?>
             <p class="card-desc"><?= e($gallery['description']) ?></p>
         <?php endif; ?>
@@ -58,15 +59,14 @@ $placeholder = 'data:image/svg+xml;utf8,' . rawurlencode(
             <?php endforeach; ?>
         </div>
     </div>
-    <button class="card-expand-btn" type="button">Show more</button>
+    <button class="card-expand-btn" type="button" data-target="<?= e($cardId) ?>-details">Show more</button>
     <?php endif; ?>
     <?php if (!empty($currentUser) && !empty($hasActive)): ?>
-        <form method="post" action="<?= url('/favorites/galleries/' . (int) $gallery['id'] . '/toggle') ?>">
-            <?= csrf_field() ?>
-            <input type="hidden" name="return_to" value="<?= e($_SERVER['REQUEST_URI'] ?? '/galleries') ?>">
-            <button type="submit" class="btn btn-sm btn-outline favorite-toggle" aria-label="<?= $isFavorite ? 'Unfavorite' : 'Favorite' ?> gallery">
-                <?= $isFavorite ? '&#9733; Unfavorite' : '&#9734; Favorite' ?>
-            </button>
-        </form>
+        <button type="button" class="btn btn-sm btn-outline favorite-toggle<?= $isFavorite ? ' is-favorite' : '' ?>"
+                data-gallery-id="<?= (int) $gallery['id'] ?>"
+                data-csrf="<?= e(\App\Core\Csrf::token()) ?>"
+                aria-label="<?= $isFavorite ? 'Unfavorite' : 'Favorite' ?> gallery">
+            <?= $isFavorite ? '&#9733; Unfavorite' : '&#9734; Favorite' ?>
+        </button>
     <?php endif; ?>
 </div>

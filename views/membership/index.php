@@ -139,6 +139,7 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
     <?php if (empty($plans)): ?>
         <p class="muted" style="text-align:center; order:7;">No plans are available right now. Please check back soon.</p>
     <?php else: ?>
+        <?php $silverPlanId = 0; foreach ($plans as $candidatePlan) { if (strtolower((string) ($candidatePlan['slug'] ?? $candidatePlan['name'])) === 'silver') { $silverPlanId = (int) $candidatePlan['id']; break; } } ?>
         <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); order:7;">
             <?php foreach ($plans as $plan): ?>
                 <div class="card" style="display:flex; flex-direction:column; justify-content:space-between; text-align:center; margin:0;">
@@ -166,6 +167,11 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
                     </div>
                     <?php if ($hasActive || $pendingSub !== null): ?>
                         <button type="button" class="btn btn-disabled" disabled style="order:2;">Unavailable</button>
+                    <?php elseif (strtolower((string) ($plan['slug'] ?? $plan['name'])) === 'silver'): ?>
+                        <div style="order:2;">
+                            <div id="paypal-button-container-P-2EE95782UN3086035NKHSZ4A"></div>
+                            <input type="hidden" name="_token" value="<?= e(\App\Core\Csrf::token()) ?>" data-paypal-csrf>
+                        </div>
                     <?php else: ?>
                         <form method="post" action="<?= url('/membership/subscribe') ?>" style="order:2;" id="subForm_<?= (int) $plan['id'] ?>">
                             <?= csrf_field() ?>
@@ -194,6 +200,36 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
         Subscriptions are approved manually. You will be able to browse immediately after approval.
     </p>
 </div>
+
+<?php if (!$hasActive && $pendingSub === null): ?>
+<script src="https://www.paypal.com/sdk/js?client-id=BAAulxhXtOW_C1MbdQ9ieSDNNQYJhjbXAknX4UujE8n02reztiOBMnqH8cw0r-ZyKT9aIU0zZslsm3hyZc&vault=true&intent=subscription" data-sdk-integration-source="button-factory"></script>
+<script>
+(function () {
+    if (!window.paypal) return;
+    paypal.Buttons({
+        style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe' },
+        createSubscription: function (data, actions) {
+            return actions.subscription.create({ plan_id: 'P-2EE95782UN3086035NKHSZ4A' });
+        },
+        onApprove: function (data) {
+            var token = document.querySelector('[data-paypal-csrf]');
+            var body = new URLSearchParams({
+                _token: token ? token.value : '',
+                plan_id: '<?= $silverPlanId ?>',
+                paypal_subscription_id: data.subscriptionID || ''
+            });
+            fetch('<?= url('/membership/paypal-approve') ?>', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: body })
+                .then(function (response) { return response.json(); })
+                .then(function (result) {
+                    if (result.ok) window.location.href = '<?= url('/membership/my') ?>';
+                    else alert(result.error || 'We could not record your subscription. Please contact support.');
+                })
+                .catch(function () { alert('We could not record your subscription. Please contact support.'); });
+        }
+    }).render('#paypal-button-container-P-2EE95782UN3086035NKHSZ4A');
+}());
+</script>
+<?php endif; ?>
 
 <script>
 (function(){

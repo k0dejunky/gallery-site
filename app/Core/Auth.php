@@ -16,7 +16,7 @@ class Auth
     public const ADMIN_ROLES = ['super_admin', 'admin', 'editor', 'moderator', 'viewer'];
     public const PERMISSIONS = [
         'super_admin' => ['*'],
-        'admin'      => ['dashboard', 'trends', 'galleries', 'videos', 'categories', 'users', 'membership', 'payments', 'theme', 'site_editor', 'logs', 'documentation', 'autoposter'],
+        'admin'      => ['dashboard', 'trends', 'galleries', 'videos', 'categories', 'users', 'membership', 'payments', 'theme', 'site_editor', 'logs', 'documentation', 'autoposter', 'support'],
         'editor'     => ['dashboard', 'trends', 'galleries', 'videos', 'categories', 'documentation'],
         'moderator'  => ['dashboard', 'users', 'membership', 'logs', 'documentation'],
         'viewer'     => ['dashboard', 'trends', 'documentation'],
@@ -29,6 +29,16 @@ class Auth
     {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
+        }
+
+        if (isset($_SESSION['user_id'])) {
+            $timeout = max(300, (int) config('app.auth.session_idle_seconds', 43200));
+            $lastActivity = (int) ($_SESSION['last_activity_at'] ?? 0);
+            if ($lastActivity > 0 && $lastActivity + $timeout < time()) {
+                self::revokeSession();
+                return;
+            }
+            $_SESSION['last_activity_at'] = time();
         }
     }
 
@@ -72,6 +82,7 @@ class Auth
         self::start();
         session_regenerate_id(true);
         $_SESSION['user_id'] = $userId;
+        $_SESSION['last_activity_at'] = time();
 
         $row = User::find($userId);
         $_SESSION['session_version'] = (int) ($row['session_version'] ?? 0);
@@ -89,9 +100,11 @@ class Auth
      */
     public static function revokeSession(): void
     {
-        self::start();
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
 
-        unset($_SESSION['user_id'], $_SESSION['impersonator_id'], $_SESSION['session_version']);
+        unset($_SESSION['user_id'], $_SESSION['impersonator_id'], $_SESSION['session_version'], $_SESSION['last_activity_at']);
         self::$userCache = null;
         session_regenerate_id(true);
     }
@@ -331,6 +344,14 @@ class Auth
         }
 
         User::updatePassword($userId, password_hash($new, PASSWORD_DEFAULT));
+        self::logoutEverywhere($userId);
+        $_SESSION['session_version'] = (int) (User::find($userId)['session_version'] ?? 0);
+
+        try {
+            \App\Models\AuditLog::record($userId, 'update', 'user_password', $userId, 'Changed account password');
+        } catch (\Throwable $exception) {
+            error_log('[auth] password audit failed: ' . $exception->getMessage());
+        }
 
         return null;
     }
@@ -343,6 +364,12 @@ class Auth
         self::start();
         $_SESSION = [];
         session_destroy();
+    }
+
+    /** Invalidate every session for one account, including the current one. */
+    public static function logoutEverywhere(int $userId): void
+    {
+        Database::run('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [$userId]);
     }
 
     /**

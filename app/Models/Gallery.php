@@ -89,6 +89,15 @@ class Gallery
             $where[] = self::mediaTypeCondition($filters['type']);
         }
 
+        $orderBy = 'g.created_at DESC';
+        if (!empty($filters['sort'])) {
+            match ($filters['sort']) {
+                'views' => $orderBy = 'g.unique_views DESC, g.views DESC',
+                'title' => $orderBy = 'g.title ASC',
+                default => $orderBy = 'g.created_at DESC',
+            };
+        }
+
         $where[] = 'g.deleted_at IS NULL';
         $whereSql = ' WHERE ' . implode(' AND ', $where);
 
@@ -106,7 +115,7 @@ class Gallery
              LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id'
              . $whereSql . '
              GROUP BY g.id
-             ORDER BY g.created_at DESC
+             ORDER BY ' . $orderBy . '
              LIMIT ' . (int) $perPage . ' OFFSET ' . (int) $offset,
             $params
         )->fetchAll();
@@ -367,7 +376,7 @@ class Gallery
 
         if ($already === 0) {
             Database::run(
-                'INSERT INTO gallery_viewers (user_id, gallery_id) VALUES (?, ?)',
+                'INSERT INTO gallery_viewers (user_id, gallery_id, viewed_at) VALUES (?, ?, CURRENT_TIMESTAMP)',
                 [$userId, $galleryId]
             );
             Database::run(
@@ -377,6 +386,10 @@ class Gallery
             return;
         }
 
+        Database::run(
+            'UPDATE gallery_viewers SET viewed_at = CURRENT_TIMESTAMP WHERE user_id = ? AND gallery_id = ?',
+            [$userId, $galleryId]
+        );
         Database::run(
             'UPDATE galleries SET views = views + 1 WHERE id = ?',
             [$galleryId]
@@ -603,5 +616,125 @@ class Gallery
             'UPDATE gallery_photo SET position = ? WHERE gallery_id = ? AND photo_id = ?',
             [$current, $galleryId, (int) $neighbor['photo_id']]
         );
+    }
+
+    /**
+     * Return the subset of gallery IDs the user has already viewed.
+     */
+    public static function viewedByIds(int $userId, array $galleryIds): array
+    {
+        if (empty($galleryIds) || $userId <= 0) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($galleryIds), '?'));
+
+        $rows = Database::run(
+            "SELECT gallery_id FROM gallery_viewers
+             WHERE user_id = ? AND gallery_id IN ($placeholders)",
+            array_merge([$userId], $galleryIds)
+        )->fetchAll();
+
+        return array_map('intval', array_column($rows, 'gallery_id'));
+    }
+
+    /**
+     * Return the user's most recently viewed galleries (newest first).
+     */
+    public static function recentlyViewed(int $userId, int $limit = 10): array
+    {
+        if ($userId <= 0) {
+            return [];
+        }
+
+        return Database::run(
+            'SELECT g.*, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
+             FROM gallery_viewers gv
+             INNER JOIN galleries g ON g.id = gv.gallery_id
+             LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
+             WHERE gv.user_id = ? AND g.deleted_at IS NULL
+             GROUP BY g.id
+             ORDER BY gv.viewed_at DESC
+             LIMIT ' . (int) $limit,
+            [$userId]
+        )->fetchAll();
+    }
+
+    /**
+     * Return the subset of gallery IDs the user has favourited.
+     */
+    public static function favoriteIds(int $userId, array $galleryIds): array
+    {
+        $ids = array_values(array_unique(array_filter(
+            array_map('intval', $galleryIds),
+            static fn (int $id): bool => $id > 0
+        )));
+
+        if ($userId <= 0 || $ids === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $rows = Database::run(
+            "SELECT gallery_id FROM gallery_favorites
+             WHERE user_id = ? AND gallery_id IN ($placeholders)",
+            array_merge([$userId], $ids)
+        )->fetchAll();
+
+        return array_map('intval', array_column($rows, 'gallery_id'));
+    }
+
+    /**
+     * Toggle a gallery favourite and return its new state.
+     */
+    public static function toggleFavorite(int $userId, int $galleryId): bool
+    {
+        $deleted = Database::run(
+            'DELETE FROM gallery_favorites WHERE user_id = ? AND gallery_id = ?',
+            [$userId, $galleryId]
+        );
+
+        if ($deleted->rowCount() > 0) {
+            return false;
+        }
+
+        Database::run(
+            'INSERT INTO gallery_favorites (user_id, gallery_id, created_at)
+             VALUES (?, ?, CURRENT_TIMESTAMP)',
+            [$userId, $galleryId]
+        );
+
+        return true;
+    }
+
+    /**
+     * Fetch a user's newest favourite galleries with media counts and covers.
+     * Covers are bulk-loaded to avoid one query per sidebar item.
+     */
+    public static function favoriteGalleries(int $userId, int $limit = 8): array
+    {
+        if ($userId <= 0) {
+            return [];
+        }
+
+        $galleries = Database::run(
+            'SELECT g.*, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
+             FROM gallery_favorites gf
+             INNER JOIN galleries g ON g.id = gf.gallery_id
+             LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
+             WHERE gf.user_id = ? AND g.deleted_at IS NULL
+             GROUP BY g.id, gf.created_at
+             ORDER BY gf.created_at DESC
+             LIMIT ' . max(1, (int) $limit),
+            [$userId]
+        )->fetchAll();
+
+        $covers = self::firstPhotos(array_map('intval', array_column($galleries, 'id')));
+        foreach ($galleries as &$gallery) {
+            $gallery['first_photo'] = $covers[(int) $gallery['id']] ?? null;
+        }
+        unset($gallery);
+
+        return $galleries;
     }
 }

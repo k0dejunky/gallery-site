@@ -18,6 +18,36 @@
 <p class="muted">Disk free: <b><?= $diskFree !== false ? number_format((float) $diskFree / 1048576) . ' MB' : 'unknown' ?></b></p>
 
 <div class="sys-grid">
+    <!-- Operational diagnostics -->
+    <div class="sys-card">
+        <h2>Operational diagnostics</h2>
+        <table>
+            <tr><th>Database</th><td class="<?= $diagnostics['db'] ? 'sys-ok' : 'sys-bad' ?>"><?= $diagnostics['db'] ? 'connected' : 'unavailable' ?></td></tr>
+            <tr><th>Storage writable</th><td class="<?= $diagnostics['storage'] ? 'sys-ok' : 'sys-bad' ?>"><?= $diagnostics['storage'] ? 'yes' : 'no' ?></td></tr>
+            <tr><th>SMTP configured</th><td><?= $diagnostics['smtp'] ? 'yes' : 'no' ?></td></tr>
+            <tr><th>PayPal</th><td><?= $diagnostics['paypal']['configured'] ? 'configured' : 'not configured' ?><?= $diagnostics['paypal']['enabled'] ? ' / enabled' : '' ?></td></tr>
+            <tr><th>Migrations</th><td><?= $diagnostics['migrations']['table'] ? (int) $diagnostics['migrations']['applied'] . ' applied, ' . (int) $diagnostics['migrations']['pending'] . ' pending' : 'table unavailable' ?></td></tr>
+        </table>
+        <form class="sys-actions" method="post" action="<?= url('/admin/system/smtp-test') ?>">
+            <?= csrf_field() ?>
+            <button class="btn" type="submit">Test SMTP</button>
+            <span class="muted">Send a test email to <?= e(\App\Core\Mailer::adminEmail() ?: '(no admin email)') ?></span>
+        </form>
+    </div>
+
+    <!-- Video export queue -->
+    <div class="sys-card">
+        <h2>Background jobs</h2>
+        <table>
+            <tr><th>Export worker</th><td class="<?= $exportQueue['service_active'] ? 'sys-ok' : 'sys-bad' ?>"><?= $exportQueue['service_active'] ? 'installed' : 'not installed' ?></td></tr>
+            <tr><th>Queued</th><td class="<?= $exportQueue['queued'] ? 'sys-bad' : 'sys-ok' ?>"><?= (int) $exportQueue['queued'] ?></td></tr>
+            <tr><th>Running</th><td class="<?= $exportQueue['running'] ? '' : 'sys-ok' ?>"><?= (int) $exportQueue['running'] ?><?= $exportQueue['stale'] ? ' <span class="sys-bad">(' . (int) $exportQueue['stale'] . ' stale)</span>' : '' ?></td></tr>
+            <tr><th>Completed</th><td><?= (int) $exportQueue['completed'] ?></td></tr>
+            <tr><th>Failed</th><td class="<?= $exportQueue['failed'] ? 'sys-bad' : 'sys-ok' ?>"><?= (int) $exportQueue['failed'] ?></td></tr>
+            <tr><th>Last export</th><td class="muted"><?= $exportQueue['latest'] ? e((string) $exportQueue['latest']) : 'never' ?></td></tr>
+        </table>
+    </div>
+
     <!-- Maintenance mode + housekeeping -->
     <div class="sys-card">
         <h2>Site status</h2>

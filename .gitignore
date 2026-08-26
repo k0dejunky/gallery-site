@@ -14,6 +14,7 @@
 
 # Auto Poster API credentials (never commit)
 /storage/autoposter.json
+/storage/security-rate-limit.json
 
 # Node modules & build output for the video editor
 /frontend/video-editor/node_modules/

@@ -52,7 +52,106 @@ class SystemController extends Controller
             'retention'   => (int) env_value('HOUSEKEEPING_KEEP_BACKUPS', '10'),
             'schemaDiff'  => $this->schemaDiff(),
             'diskFree'    => @disk_free_space($this->storage),
+            'diagnostics' => $this->operationalDiagnostics(),
+            'exportQueue' => $this->videoExportQueue(),
         ]);
+    }
+
+    /** Status values shown only on the existing admin system page. */
+    private function operationalDiagnostics(): array
+    {
+        $diagnostics = [
+            'db' => false,
+            'storage' => false,
+            'smtp' => env_value('MAIL_HOST') !== '' && env_value('MAIL_USERNAME') !== '' && env_value('MAIL_PASSWORD') !== '',
+            'paypal' => ['configured' => false, 'enabled' => false],
+            'migrations' => ['table' => false, 'applied' => 0, 'pending' => 0],
+        ];
+
+        try {
+            Database::run('SELECT 1')->fetchColumn();
+            $diagnostics['db'] = true;
+        } catch (\Throwable $error) {
+            return $diagnostics;
+        }
+
+        $uploads = (string) config('app.uploads.dir');
+        $directories = [$this->storage, $uploads, $uploads . '/pending', $uploads . '/exports'];
+        $diagnostics['storage'] = count(array_filter($directories, static function (string $directory): bool {
+            return is_dir($directory) && is_readable($directory) && is_writable($directory);
+        })) === count($directories);
+
+        try {
+            $paypalRows = Database::run(
+                "SELECT api_key, secret_key, enabled FROM payment_processors WHERE LOWER(provider) = 'paypal'"
+            )->fetchAll();
+            foreach ($paypalRows as $row) {
+                $configured = trim((string) ($row['api_key'] ?? '')) !== '' && trim((string) ($row['secret_key'] ?? '')) !== '';
+                $diagnostics['paypal']['configured'] = $diagnostics['paypal']['configured'] || $configured;
+                $diagnostics['paypal']['enabled'] = $diagnostics['paypal']['enabled'] || ($configured && (int) $row['enabled'] === 1);
+            }
+        } catch (\Throwable $error) {
+            // Older installations may not have the payment processor table yet.
+        }
+
+        try {
+            $hasTable = (bool) Database::run("SHOW TABLES LIKE 'schema_migrations'")->fetchColumn();
+            $diagnostics['migrations']['table'] = $hasTable;
+            if ($hasTable) {
+                $applied = Database::run('SELECT filename FROM schema_migrations')->fetchAll(\PDO::FETCH_COLUMN);
+                $files = array_map('basename', glob($this->root . '/database/migrations/*.sql') ?: []);
+                $diagnostics['migrations']['applied'] = count($applied);
+                $diagnostics['migrations']['pending'] = count(array_diff($files, $applied));
+            }
+        } catch (\Throwable $error) {
+            // Keep diagnostics useful when migration metadata is unavailable.
+        }
+
+        return $diagnostics;
+    }
+
+    /**
+     * Video export queue summary: counts by status, stale-running recovery
+     * candidate, and the most recent export timestamp.
+     */
+    private function videoExportQueue(): array
+    {
+        $summary = [
+            'service_active' => false,
+            'queued'   => 0,
+            'running'  => 0,
+            'completed' => 0,
+            'failed'   => 0,
+            'stale'    => 0,
+            'latest'   => null,
+        ];
+
+        try {
+            $rows = Database::run(
+                "SELECT status, COUNT(*) AS c FROM video_export_jobs GROUP BY status"
+            )->fetchAll();
+            foreach ($rows as $row) {
+                $summary[(string) $row['status']] = (int) $row['c'];
+            }
+
+            $summary['stale'] = (int) Database::run(
+                "SELECT COUNT(*) FROM video_export_jobs WHERE status = 'running' AND started_at < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 6 HOUR)"
+            )->fetchColumn();
+
+            $latest = Database::run(
+                "SELECT finished_at, created_at FROM video_export_jobs ORDER BY COALESCE(finished_at, created_at) DESC LIMIT 1"
+            )->fetch();
+            if ($latest) {
+                $summary['latest'] = $latest['finished_at'] ?? $latest['created_at'];
+            }
+        } catch (\Throwable $e) {
+            // Older installations without the table yet.
+        }
+
+        $summary['service_active'] = (bool) @file_exists('/etc/systemd/system/gallery-video-export.service')
+            && @filesize('/etc/systemd/system/gallery-video-export.service') > 0;
+
+        return $summary;
     }
 
     /**
@@ -272,6 +371,45 @@ PHP;
             'Housekeeping done — %d sub(s) expired, %d stale staging dir(s) removed, %d old backup(s) pruned.',
             $summary['expired_subs'], $summary['pending_dirs'], $summary['backups_pruned']
         ));
+        $this->redirect('/admin/system');
+    }
+
+    /**
+     * Send a test email via the configured SMTP server and report the result.
+     */
+    public function smtpTest(): void
+    {
+        $to = \App\Core\Mailer::adminEmail();
+
+        if ($to === '') {
+            $this->flash('error', 'No admin email configured — set ADMIN_EMAIL in .env first.');
+            $this->redirect('/admin/system');
+            return;
+        }
+
+        $subject = '[gallery] SMTP test — ' . date('Y-m-d H:i:s');
+        $body    = "This is a test email sent from the gallery admin panel.\n\n"
+            . "Server: " . gethostname() . "\n"
+            . "Time: " . date('Y-m-d H:i:s e') . "\n"
+            . "Mail host: " . env_value('MAIL_HOST', '(not set)') . "\n"
+            . "Mail user: " . env_value('MAIL_USERNAME', '(not set)') . "\n";
+
+        $ok = \App\Core\Mailer::send($to, $subject, $body);
+
+        AuditLog::record(
+            Auth::user()['id'] ?? null,
+            'update',
+            'system_smtp_test',
+            null,
+            'SMTP test email to ' . $to . ': ' . ($ok ? 'sent' : 'failed')
+        );
+
+        if ($ok) {
+            $this->flash('success', 'Test email sent to ' . $to . ' — check your inbox (and spam folder).');
+        } else {
+            $this->flash('error', 'SMTP test failed. Check MAIL_HOST, MAIL_USERNAME, MAIL_PASSWORD in .env and that the server can reach the SMTP host.');
+        }
+
         $this->redirect('/admin/system');
     }
 

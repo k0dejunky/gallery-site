@@ -11,21 +11,23 @@ if ($next !== null) {
     $nextUrl = url('/' . (is_video($next['filename']) ? 'videos' : 'images') . '/' . (int) $next['id']);
 }
 $backUrl   = $gallery !== null ? url('/galleries/' . (int) $gallery['id']) : url('/galleries');
+$returnTo  = isset($returnTo) && is_string($returnTo) ? $returnTo : $backUrl;
+$returnQuery = http_build_query(['return_to' => $returnTo]);
 $backLabel = $gallery !== null
     ? '&larr; Back to &ldquo;' . e($gallery['title']) . '&rdquo;'
     : '&larr; Back to galleries';
 ?>
 <div class="media-nav">
     <?php if ($prevUrl !== null): ?>
-        <a class="btn" href="<?= e($prevUrl) ?>">&larr; Previous</a>
+        <a class="btn" href="<?= e($prevUrl . '?' . $returnQuery) ?>">&larr; Previous</a>
     <?php else: ?>
         <span class="btn btn-disabled" aria-disabled="true">&larr; Previous</span>
     <?php endif; ?>
 
-    <a class="btn btn-outline" href="<?= e($backUrl) ?>"><?= $backLabel ?></a>
+    <a class="btn btn-outline" href="<?= e($returnTo) ?>"><?= $backLabel ?></a>
 
     <?php if ($nextUrl !== null): ?>
-        <a class="btn" href="<?= e($nextUrl) ?>">Next &rarr;</a>
+        <a class="btn" href="<?= e($nextUrl . '?' . $returnQuery) ?>">Next &rarr;</a>
     <?php else: ?>
         <span class="btn btn-disabled" aria-disabled="true">Next &rarr;</span>
     <?php endif; ?>

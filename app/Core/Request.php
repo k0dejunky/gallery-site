@@ -83,4 +83,20 @@ class Request
 
         return is_string($value) ? trim($value) : $default;
     }
+
+    /**
+     * Read a request header by name (case-insensitive). Returns the value
+     * or null when the header is not present.
+     */
+    public function header(string $name): ?string
+    {
+        $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+        $value = $_SERVER[$key] ?? null;
+
+        if ($value === null && strtoupper($name) === 'CONTENT-TYPE') {
+            $value = $_SERVER['CONTENT_TYPE'] ?? null;
+        }
+
+        return is_string($value) ? $value : null;
+    }
 }

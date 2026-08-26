@@ -30,5 +30,9 @@ return [
         // within the window before the user is temporarily locked out.
         'login_max_attempts'   => 5,
         'login_window_seconds' => 900,
+        'session_idle_seconds' => 43200,
+        'reset_rate_limit'     => 5,
+        'verification_rate_limit' => 5,
+        'recovery_rate_window_seconds' => 3600,
     ],
 ];

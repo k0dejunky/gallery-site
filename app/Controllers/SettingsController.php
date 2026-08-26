@@ -18,13 +18,21 @@ class SettingsController extends Controller
     {
         return in_array($this->request->query('se', ''), ['1', 'user'], true) ? '/settings?se=user' : '/settings';
     }
+
+    private function siteEditorPreview(): bool
+    {
+        return $this->request->query('se', '') === 'user';
+    }
+
     /**
-     * Settings require an authenticated user.
+     * Settings require an authenticated user (unless previewing in site editor).
      */
     public function __construct(Request $request)
     {
         parent::__construct($request);
-        Auth::requireLogin();
+        if (!$this->siteEditorPreview()) {
+            Auth::requireLogin();
+        }
     }
 
     /**
@@ -33,9 +41,10 @@ class SettingsController extends Controller
      */
     public function show(): void
     {
-        $user = Auth::user();
-        $active = Subscription::activeFor((int) $user['id']);
-        $themeEligible = Auth::canUseCustomTheme();
+        $isPreview = $this->siteEditorPreview();
+        $user = $isPreview ? ['id' => 0, 'email' => '', 'theme_preset' => '', 'billing_first_name' => ''] : Auth::user();
+        $active = $isPreview ? null : Subscription::activeFor((int) $user['id']);
+        $themeEligible = $isPreview ? false : Auth::canUseCustomTheme();
         $themePresets = [];
 
         if ($themeEligible) {
@@ -57,9 +66,9 @@ class SettingsController extends Controller
         }
 
         $data = [
-            'categories'      => Category::all(),
-            'favorites'       => FavoriteCategory::forUser((int) $user['id']),
-            'favoritesLocked' => !Auth::hasMembershipLevel(Plan::SILVER_LEVEL),
+            'categories'      => $isPreview ? [] : Category::all(),
+            'favorites'       => $isPreview ? [] : FavoriteCategory::forUser((int) $user['id']),
+            'favoritesLocked' => $isPreview ? true : !Auth::hasMembershipLevel(Plan::SILVER_LEVEL),
             'themeEligible'   => $themeEligible,
             'themePresets'    => $themePresets,
             'themeSelected'   => $user['theme_preset'] ?? '',
@@ -68,10 +77,12 @@ class SettingsController extends Controller
                 $theme['title_image_url'] = url($theme['title_image']);
                 return $theme;
             })(),
+            'emailUnverified' => false,
+            'user'            => $user,
+            'siteEditorPreview' => $isPreview,
         ];
 
-        $userPreview = in_array($this->request->query('se', ''), ['1', 'user'], true);
-        if (Auth::isAdmin() && !$userPreview) {
+        if (Auth::isAdmin() && !$isPreview) {
             $this->viewAdmin('settings', $data);
             return;
         }
@@ -146,5 +157,36 @@ class SettingsController extends Controller
 
         $this->flash('success', 'Favorite categories updated.');
         $this->redirect($this->settingsPath());
+    }
+
+    public function updateProfile(): void
+    {
+        $user = Auth::user();
+        $fields = ['billing_first_name', 'billing_last_name', 'billing_address_line1', 'billing_address_line2', 'billing_city', 'billing_state', 'billing_zip', 'billing_country'];
+        $values = [];
+        foreach ($fields as $field) {
+            $value = trim((string) $this->request->post($field, ''));
+            if (mb_strlen($value) > ($field === 'billing_address_line1' || $field === 'billing_address_line2' ? 255 : 100)) {
+                $this->flash('error', 'Please keep profile fields within their allowed length.');
+                $this->redirect($this->settingsPath());
+            }
+            $values[$field] = $value;
+        }
+        if ($values['billing_country'] !== '' && !preg_match('/\A[A-Za-z]{2}\z/', $values['billing_country'])) {
+            $this->flash('error', 'Country must be a two-letter code.');
+            $this->redirect($this->settingsPath());
+        }
+        User::updateBillingProfile((int) $user['id'], ...array_values($values));
+        $this->flash('success', 'Profile details updated.');
+        $this->redirect($this->settingsPath());
+    }
+
+    public function logoutEverywhere(): void
+    {
+        $user = Auth::user();
+        Auth::logoutEverywhere((int) $user['id']);
+        Auth::logout();
+        header('Location: ' . url('/login'));
+        exit;
     }
 }

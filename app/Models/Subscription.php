@@ -175,6 +175,11 @@ class Subscription
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
                 [$userId, $planId, 'pending', $sale['id'] ?? null, $saleCode['id'] ?? null, $price, $accessLevel, $paymentProcessorId, $transactionRef !== null && $transactionRef !== '' ? $transactionRef : null]
             );
+            $id = (int) $db->lastInsertId();
+            Database::run(
+                "UPDATE subscriptions SET membership_number = LPAD(CAST(id AS CHAR), 5, '0') WHERE id = ?",
+                [$id]
+            );
 
             if ($saleCode !== null) {
                 if (!SaleCode::redeem((int) $saleCode['id'])) {
@@ -182,7 +187,6 @@ class Subscription
                 }
             }
 
-            $id = (int) $db->lastInsertId();
             $db->commit();
             return $id;
         } catch (\Throwable $e) {

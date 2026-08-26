@@ -76,4 +76,47 @@ class VideoProject
             [$status, $progress, $output, $error, $status, $status, $id]
         );
     }
+
+    /** Claim the oldest queued export for the supervised worker. */
+    public static function claimNextExport(): ?int
+    {
+        $db = Database::connection();
+        $db->beginTransaction();
+        try {
+            $driver = (string) (require __DIR__ . '/../../config/database.php')['driver'];
+            $lock = $driver === 'mysql' ? ' FOR UPDATE' : '';
+            $job = Database::run(
+                "SELECT id FROM video_export_jobs WHERE status = 'queued' ORDER BY created_at ASC, id ASC LIMIT 1" . $lock
+            )->fetch();
+            if (!$job) {
+                $db->commit();
+                return null;
+            }
+            $id = (int) $job['id'];
+            Database::run(
+                "UPDATE video_export_jobs SET status = 'running', progress = 1, attempts = attempts + 1, started_at = CURRENT_TIMESTAMP, error = NULL WHERE id = ? AND status = 'queued'",
+                [$id]
+            );
+            $db->commit();
+            return $id;
+        } catch (\Throwable $error) {
+            if ($db->inTransaction()) $db->rollBack();
+            throw $error;
+        }
+    }
+
+    public static function requeueExport(int $id): void
+    {
+        Database::run(
+            "UPDATE video_export_jobs SET status = 'queued', progress = 0, finished_at = NULL WHERE id = ? AND status = 'failed' AND attempts < 3",
+            [$id]
+        );
+    }
+
+    public static function recoverStaleExports(): void
+    {
+        Database::run(
+            "UPDATE video_export_jobs SET status = 'queued', progress = 0, finished_at = NULL WHERE status = 'running' AND started_at < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 6 HOUR) AND attempts < 3"
+        );
+    }
 }

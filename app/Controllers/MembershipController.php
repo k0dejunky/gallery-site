@@ -13,6 +13,8 @@ use App\Models\PaymentProcessor;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\Sale;
+use App\Models\Gallery;
+use App\Models\Photo;
 
 /**
  * Membership flows for regular users: the pricing page, the user's own
@@ -23,6 +25,33 @@ use App\Models\Sale;
  */
 class MembershipController extends Controller
 {
+    /**
+     * The signed-in member's home dashboard.
+     */
+    public function dashboard(): void
+    {
+        $siteEditorPreview = $this->request->query('se', '') === 'user';
+        if (!$siteEditorPreview) {
+            Auth::requireLogin();
+        }
+
+        $user   = $siteEditorPreview ? ['id' => 0, 'email' => '', 'billing_first_name' => ''] : Auth::user();
+        $userId = (int) $user['id'];
+
+        $this->view('membership/dashboard', [
+            'user'           => $user,
+            'emailUnverified' => false,
+            'activeSub'      => $siteEditorPreview ? null : Subscription::activeFor($userId),
+            'pendingSub'     => $siteEditorPreview ? null : Subscription::pendingFor($userId),
+            'latestSub'      => $siteEditorPreview ? null : (Subscription::forUser($userId)[0] ?? null),
+            'recentlyViewed' => $siteEditorPreview ? [] : Gallery::recentlyViewed($userId, 4),
+            'recentImages'   => $siteEditorPreview ? [] : Photo::recentImages(4),
+            'recentVideos'   => $siteEditorPreview ? [] : Photo::recentVideos(4),
+            'sidebarNav'     => true,
+            'siteEditorPreview' => $siteEditorPreview,
+        ]);
+    }
+
     /**
      * The pricing page is public; the account-facing actions require login.
      */
@@ -80,6 +109,7 @@ class MembershipController extends Controller
             'subscriptions' => Subscription::forUser($userId),
             'hasActive'     => $activeSub !== null,
             'activeSub'     => $activeSub,
+            'pendingSub'    => Subscription::pendingFor($userId),
         ]);
     }
 
@@ -297,6 +327,63 @@ class MembershipController extends Controller
         $this->redirect('/membership/my');
     }
 
+    /**
+     * Record a PayPal-approved Silver subscription for admin reconciliation.
+     * The PayPal webhook remains the source of truth for final activation.
+     */
+    public function paypalApprove(): void
+    {
+        Auth::requireLogin();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $plan = Plan::find((int) $this->request->post('plan_id', 0));
+        $paypalId = trim((string) $this->request->post('paypal_subscription_id', ''));
+
+        if ($plan === null || strtolower((string) ($plan['slug'] ?? $plan['name'])) !== 'silver'
+            || !preg_match('/\A[A-Za-z0-9_-]{6,100}\z/', $paypalId)) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'error' => 'Invalid PayPal subscription.']);
+            return;
+        }
+
+        $userId = (int) Auth::user()['id'];
+        if (Subscription::isActive($userId) || Subscription::pendingFor($userId) !== null) {
+            http_response_code(409);
+            echo json_encode(['ok' => false, 'error' => 'You already have a membership or pending request.']);
+            return;
+        }
+
+        $processor = null;
+        foreach (PaymentProcessor::enabled() as $candidate) {
+            if (strtolower((string) $candidate['provider']) === 'paypal') {
+                $processor = $candidate;
+                break;
+            }
+        }
+
+        try {
+            $subscriptionId = Subscription::create(
+                $userId,
+                (int) $plan['id'],
+                null,
+                false,
+                $processor !== null ? (int) $processor['id'] : null,
+                'PAYPAL-' . $paypalId
+            );
+            AuditLog::record($userId, 'create', 'subscription', $subscriptionId, 'PayPal Silver subscription pending verification', null, [
+                'plan_id' => (int) $plan['id'],
+                'paypal_subscription_id' => $paypalId,
+            ]);
+        } catch (\Throwable $exception) {
+            error_log('[membership/paypal-approve] user=' . $userId . ' ' . $exception->getMessage());
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'error' => 'Could not record the PayPal subscription.']);
+            return;
+        }
+
+        echo json_encode(['ok' => true]);
+    }
+
     // ------------------------------------------------------------------
     // Braintree helpers
     // ------------------------------------------------------------------
@@ -389,7 +476,8 @@ class MembershipController extends Controller
                 [$userId, (int) $plan['id'], 'active', $saleId, $saleCodeId, $price, (int) ($plan['level'] ?? 1), (int) $processorRow['id'], $transactionRef]
             );
 
-            $subscriptionId = (int) Database::connection()->lastInsertId();
+             $subscriptionId = (int) Database::connection()->lastInsertId();
+             Database::run("UPDATE subscriptions SET membership_number = LPAD(CAST(id AS CHAR), 5, '0') WHERE id = ?", [$subscriptionId]);
 
             // Set expiry based on billing cycle
             $expires = null;

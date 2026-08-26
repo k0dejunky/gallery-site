@@ -43,6 +43,7 @@ foreach ($recentVideos as $photo) {
         <p>
             <label for="password">Password</label><br>
             <input type="password" name="password" id="password" required>
+            <a href="<?= url('/forgot-password') ?>" style="font-size:0.85rem;margin-left:0.5rem;">Forgot password?</a>
         </p>
         <p>
             <button type="submit" class="btn">Login</button>

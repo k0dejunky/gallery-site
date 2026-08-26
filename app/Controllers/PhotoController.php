@@ -177,6 +177,73 @@ class PhotoController extends Controller
     }
 
     /**
+     * Rotate selected images in one gallery and regenerate each pair of
+     * display variants. Videos and photos from other galleries are ignored.
+     */
+    public function bulkRotate(int $galleryId): void
+    {
+        $gallery = Gallery::find($galleryId);
+        if ($gallery === null) {
+            $this->notFound();
+            return;
+        }
+
+        $direction = in_array($this->request->input('direction', 'right'), ['left', 'right'], true)
+            ? (string) $this->request->input('direction')
+            : 'right';
+        $selected = array_values(array_unique(array_filter(
+            array_map('intval', (array) $this->request->post('photo_ids', [])),
+            static fn (int $id): bool => $id > 0
+        )));
+
+        if ($selected === []) {
+            $this->flash('error', 'Select at least one image to rotate.');
+            $this->redirect('/admin/galleries/' . $galleryId);
+        }
+
+        $galleryPhotos = [];
+        foreach (Gallery::photos($galleryId) as $photo) {
+            $galleryPhotos[(int) $photo['id']] = $photo;
+        }
+
+        $config = config('app.uploads');
+        $rotated = 0;
+        $failed = 0;
+
+        foreach ($selected as $photoId) {
+            $photo = $galleryPhotos[$photoId] ?? null;
+            if ($photo === null || is_video($photo['filename'])) {
+                $failed++;
+                continue;
+            }
+
+            $path = $config['dir'] . '/' . $photo['filename'];
+            if (!is_file($path) || !ImageEditor::rotate($path, $direction)) {
+                $failed++;
+                continue;
+            }
+
+            $this->regenerateVariants($photo, $config);
+            AuditLog::record(
+                (int) Auth::user()['id'],
+                'update',
+                'photo',
+                $photoId,
+                'Bulk-rotated image',
+                ['filename' => $photo['filename'], 'direction' => $direction]
+            );
+            $rotated++;
+        }
+
+        $message = $rotated . ' image' . ($rotated === 1 ? '' : 's') . ' rotated.';
+        if ($failed > 0) {
+            $message .= ' ' . $failed . ' item' . ($failed === 1 ? '' : 's') . ' skipped.';
+        }
+        $this->flash($rotated > 0 ? 'success' : 'error', $message);
+        $this->redirect('/admin/galleries/' . $galleryId);
+    }
+
+    /**
      * Admin photo editor: show the current media and every available edit
      * tool. Images get the full toolset (blur, sharpen, resize, rotate, crop,
      * text, watermark, thumbnail), videos get thumbnail selection (upload,

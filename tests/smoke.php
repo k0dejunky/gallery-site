@@ -32,9 +32,27 @@ foreach ([
     'app/Core/Router.php',
     'app/Core/Database.php',
     'app/Core/Auth.php',
+    'config/validate.php',
+    'scripts/migrate.php',
+    'app/Core/RateLimiter.php',
+    'app/Controllers/HealthController.php',
+    'app/Controllers/SupportController.php',
+    'app/Controllers/FavoriteController.php',
+    'app/Controllers/SavedSearchController.php',
+    'app/Models/SupportMessage.php',
+    'app/Models/Gallery.php',
+    'app/Models/FavoriteCategory.php',
+    'app/Models/SavedSearch.php',
+    'views/support/contact.php',
+    'views/support/show.php',
+    'views/favorites/index.php',
+    'bin/video_export_worker.php',
+    'bin/video_export_queue.php',
+    'config/gallery-video-export.service',
 ] as $rel) {
     $check(file_exists("$root/$rel"), "missing file: $rel");
 }
+$check(is_dir("$root/database/migrations"), 'missing directory: database/migrations');
 
 // --- Route table sanity ---------------------------------------------------
 /** @var array $routes */
@@ -74,14 +92,29 @@ $check($duplicates === [], 'duplicate routes: ' . implode(', ', $duplicates));
 $schema = (string) file_get_contents("$root/schema.sql");
 preg_match_all('/CREATE TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+`?([A-Za-z0-9_]+)`?/i', $schema, $m);
 $tables = array_map('strtolower', $m[1]);
-foreach (['users', 'galleries', 'photos', 'subscriptions', 'storage_snapshots'] as $must) {
+foreach (['users', 'galleries', 'photos', 'subscriptions', 'storage_snapshots', 'support_replies', 'gallery_favorites', 'saved_searches'] as $must) {
     $check(in_array($must, $tables, true), "schema.sql missing table: $must");
 }
 // Columns added by recent features must stay in schema.sql.
-foreach (['last_seen_at' => 'users', 'video_count' => 'storage_snapshots', 'min_level' => 'galleries'] as $col => $table) {
+foreach (['last_seen_at' => 'users', 'email_verified_at' => 'users', 'email_verification_token' => 'users', 'video_count' => 'storage_snapshots', 'min_level' => 'galleries', 'membership_number' => 'subscriptions'] as $col => $table) {
     $check(preg_match('/CREATE TABLE(\s+IF\s+NOT\s+EXISTS)?\s+' . $table . '\b(?:(?!CREATE TABLE).)*' . $col . '/is', $schema) === 1,
         "schema.sql: $table.$col missing");
 }
+$migrationReadme = (string) file_get_contents("$root/database/migrations/README.md");
+$check(strpos($migrationReadme, 'schema_migrations') !== false,
+    'database/migrations/README.md must document schema_migrations');
+
+// Operational and security guardrails must remain present.
+$health = (string) file_get_contents("$root/app/Controllers/HealthController.php");
+$limiter = (string) file_get_contents("$root/app/Core/RateLimiter.php");
+$deploy = (string) file_get_contents("$root/scripts/deploy.sh");
+$routesSource = (string) file_get_contents("$root/config/routes.php");
+$check(strpos($health, 'Cache-Control: no-store') !== false,
+    'HealthController must disable response caching');
+$check(strpos($limiter, "hash('sha256'") !== false,
+    'RateLimiter must hash identifiers with sha256');
+$check(strpos($deploy, 'rollback') !== false, 'deploy script must contain rollback handling');
+$check(strpos($routesSource, "'/health'") !== false, 'routes.php must expose health route');
 
 // --- Debug leftovers ------------------------------------------------------
 $debugHits = [];
