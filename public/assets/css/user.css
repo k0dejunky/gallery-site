@@ -119,6 +119,11 @@ img.is-loaded{animation:none;opacity:1;transition:opacity .2s ease}
 .gallery-item figcaption a{color:var(--purple-600);text-decoration:none}
 .gallery-item figcaption a:hover{text-decoration:underline}
 
+/* Category names – prevent overflow on long words */
+table td:nth-child(1) { overflow-wrap: anywhere; word-break: break-word; }
+.favorite-category strong { overflow-wrap: anywhere; word-break: break-word; }
+.user-nav .nav-item { overflow-wrap: anywhere; word-break: break-word; }
+
 /* View modes: list and compact */
 .g-view-list .grid{display:flex;flex-direction:column;gap:var(--spacing-sm)}
 .g-view-list .grid .card{display:grid;grid-template-columns:120px 1fr auto;gap:var(--spacing-sm);align-items:center;margin-bottom:0}
