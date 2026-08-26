@@ -269,17 +269,6 @@ $isAuthPage = $isLoginPage
                     <a class="nav-item<?= $isActive ? ' active' : '' ?>" href="<?= url('/galleries/category/' . e($cat['slug']) . $typeSuffix) ?>"><?= e($cat['name']) ?></a>
                 <?php endforeach; ?>
             <?php endif; ?>
-        <?php if (!empty($favoriteGalleries)): ?>
-            <div class="nav-sep"></div>
-            <div class="nav-section-label">Favorite galleries</div>
-            <?php foreach ($favoriteGalleries as $favoriteGallery): ?>
-                <?php $favoriteCover = $favoriteGallery['first_photo'] ?? null; ?>
-                <a class="nav-item nav-media-item" href="<?= url('/galleries/' . (int) $favoriteGallery['id']) ?>">
-                    <?php if ($favoriteCover !== null): ?><img src="<?= e(file_url($favoriteCover['filename'], 'thumb')) ?>" alt=""><?php endif; ?>
-                    <span><?= e($favoriteGallery['title']) ?></span>
-                </a>
-            <?php endforeach; ?>
-        <?php endif; ?>
             <div class="nav-sep"></div>
             <form class="nav-logout" method="post" action="<?= url('/logout') ?>">
                 <?= csrf_field() ?>
