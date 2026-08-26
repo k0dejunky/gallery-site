@@ -3,6 +3,7 @@
 namespace App\Core;
 
 use App\Models\FavoriteCategory;
+use App\Models\SupportMessage;
 
 /**
  * Base controller. Holds the shared request instance and the rendering
@@ -27,6 +28,9 @@ class Controller
     protected function view(string $template, array $data = []): void
     {
         $data['sidebarNav'] = $data['sidebarNav'] ?? Auth::check();
+        if (Auth::check()) {
+            $data['supportUnreadCount'] = SupportMessage::unreadCountForUser((int) Auth::user()['id']);
+        }
 
         if ($data['sidebarNav'] && !isset($data['navCategories'])) {
             $data['navCategories'] = $this->navCategories();
@@ -93,6 +97,13 @@ class Controller
         if (preg_match('#^https?://#i', $path)) {
             header('Location: ' . $path);
             exit;
+        }
+
+        // If the path already includes the base path (e.g. from $_SERVER['REQUEST_URI']),
+        // strip it to avoid double-prefixing.
+        $base = rtrim((string) config('app.base_path'), '/');
+        if ($base !== '' && strpos($path, $base) === 0) {
+            $path = substr($path, strlen($base));
         }
 
         header('Location: ' . url($path));

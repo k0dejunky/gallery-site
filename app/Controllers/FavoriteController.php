@@ -7,17 +7,19 @@ use App\Core\Controller;
 use App\Core\Request;
 use App\Models\Category;
 use App\Models\FavoriteCategory;
+use App\Models\Gallery;
 use App\Models\Plan;
+use App\Models\SavedSearch;
 
 class FavoriteController extends Controller
 {
     /**
-     * Favouriting is a logged-in user action.
+     * No constructor auth — individual actions gate themselves so the site
+     * editor can preview public pages with ?se=user.
      */
     public function __construct(Request $request)
     {
         parent::__construct($request);
-        Auth::requireLogin();
     }
 
     /**
@@ -25,6 +27,7 @@ class FavoriteController extends Controller
      */
     public function toggle(int $categoryId): void
     {
+        Auth::requireLogin();
         $category = Category::find($categoryId);
 
         if ($category === null) {
@@ -47,5 +50,59 @@ class FavoriteController extends Controller
         }
 
         $this->redirect('/galleries');
+    }
+
+    public function index(): void
+    {
+        $siteEditorPreview = $this->request->query('se', '') === 'user';
+        if (!$siteEditorPreview) {
+            Auth::requireSubscription();
+        }
+        $userId = $siteEditorPreview ? 0 : (int) Auth::user()['id'];
+        $galleries = $siteEditorPreview ? [] : Gallery::favoriteGalleries($userId, 100);
+        $ids = array_map('intval', array_column($galleries, 'id'));
+
+        $this->view('favorites/index', [
+            'title' => 'Favorites',
+            'favoriteCategories' => $siteEditorPreview ? [] : FavoriteCategory::forUser($userId),
+            'favoriteGalleries' => $galleries,
+            'savedSearches' => $siteEditorPreview ? [] : SavedSearch::forUser($userId),
+            'cardCovers' => [
+                'covers' => $siteEditorPreview ? [] : Gallery::firstPhotos($ids),
+                'categories' => $siteEditorPreview ? [] : Gallery::categoriesBulk($ids),
+            ],
+            'currentUser' => $siteEditorPreview ? ['id' => 0] : Auth::user(),
+            'hasActive' => true,
+            'viewedIds' => $siteEditorPreview ? [] : Gallery::viewedByIds($userId, $ids),
+            'siteEditorPreview' => $siteEditorPreview,
+        ]);
+    }
+
+    /**
+     * Add or remove a gallery as a favourite for the current user.
+     */
+    public function toggleGallery(int $galleryId): void
+    {
+        Auth::requireLogin();
+        $gallery = Gallery::find($galleryId);
+        if ($gallery === null) {
+            $this->notFound();
+            return;
+        }
+
+        Auth::requireMembershipLevel(
+            Plan::SILVER_LEVEL,
+            'Selecting favorite galleries requires at least a Silver level membership.'
+        );
+
+        $favorited = Gallery::toggleFavorite((int) $_SESSION['user_id'], $galleryId);
+        $this->flash('success', ($favorited ? 'Added "' : 'Removed "') . $gallery['title'] . '" ' . ($favorited ? 'to' : 'from') . ' your favorite galleries.');
+
+        $returnTo = (string) $this->request->query('return_to', $this->request->input('return_to', ''));
+        if (!preg_match('#^/(?!/)[^\\r\\n]*$#', $returnTo) || parse_url($returnTo, PHP_URL_HOST) !== null) {
+            $returnTo = '/galleries';
+        }
+
+        $this->redirect($returnTo);
     }
 }
