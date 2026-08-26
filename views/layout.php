@@ -280,7 +280,7 @@ $isAuthPage = $isLoginPage
                     <?php if ($rvCover !== null): ?>
                         <img src="<?= e(file_url($rvCover['filename'], 'thumb')) ?>" alt="">
                     <?php endif; ?>
-                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?= e($rv['title']) ?></span>
+                    <span><?= e($rv['title']) ?></span>
                 </a>
             <?php endforeach; ?>
         <?php endif; ?>
@@ -291,7 +291,7 @@ $isAuthPage = $isLoginPage
                 <?php $favoriteCover = $favoriteGallery['first_photo'] ?? null; ?>
                 <a class="nav-item nav-media-item" href="<?= url('/galleries/' . (int) $favoriteGallery['id']) ?>">
                     <?php if ($favoriteCover !== null): ?><img src="<?= e(file_url($favoriteCover['filename'], 'thumb')) ?>" alt=""><?php endif; ?>
-                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?= e($favoriteGallery['title']) ?></span>
+                    <span><?= e($favoriteGallery['title']) ?></span>
                 </a>
             <?php endforeach; ?>
         <?php endif; ?>
