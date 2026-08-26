@@ -395,9 +395,8 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
         }
         function applyOrder(change) {
             var parent = change.parentKey === 'body' ? document.body : null;
-            if (change.parentOrigin) parent = document.querySelector(change.parentOrigin) || parent;
+            if (change.parentOrigin) { parent = document.querySelector(change.parentOrigin) || parent; if (parent && change.parentKey) parent.setAttribute('data-se-move-key', change.parentKey); }
             if (!parent) return;
-            if (change.parentKey) parent.setAttribute('data-se-move-key', change.parentKey);
             (change.items || []).map(findItem).filter(Boolean).forEach(function (item) {
                 parent.appendChild(item);
             });
@@ -406,21 +405,24 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
             try {
                 if (change.type === 'order') { applyOrder(change); return; }
                 var el = change.key ? document.querySelector('[data-se-move-key="' + change.key + '"]') : null;
-                if (!el && change.origin) el = document.querySelector(change.origin);
-                if (!el && change.selector) el = document.querySelector(change.selector);
+                if (!el && change.origin) { el = document.querySelector(change.origin); if (el && change.key) el.setAttribute('data-se-move-key', change.key); }
+                if (!el) el = document.querySelector(change.selector);
                 if (!el) return;
                 if (change.type === 'hide' || change.type === 'delete') el.style.display = 'none';
                 else if (change.type === 'restyle') Object.keys(change.styles || {}).forEach(function (key) { el.style[key] = change.styles[key]; });
                 else if (change.type === 'move') {
-                    var anchor = change.anchorKey ? document.querySelector('[data-se-move-key="' + change.anchorKey + '"]') : null;
-                    if (!anchor && change.anchorOrigin) anchor = document.querySelector(change.anchorOrigin);
-                    if (!anchor && change.anchor) anchor = document.querySelector(change.anchor);
-                    var parent = change.parent === 'body' ? document.body : (change.parent ? document.querySelector(change.parent) : null);
-                    if (anchor && anchor !== el && !el.contains(anchor)) {
-                        if (change.position === 'before') anchor.parentNode.insertBefore(el, anchor);
-                        else anchor.parentNode.insertBefore(el, anchor.nextSibling);
-                    } else if (parent && change.position === 'append') parent.appendChild(el);
-                    else {
+                    if (change.anchor || change.parent) {
+                        var anchor = change.anchorKey ? document.querySelector('[data-se-move-key="' + change.anchorKey + '"]') : null;
+                        if (!anchor && change.anchorOrigin) { anchor = document.querySelector(change.anchorOrigin); if (anchor && change.anchorKey) anchor.setAttribute('data-se-move-key', change.anchorKey); }
+                        if (!anchor && change.anchor) anchor = document.querySelector(change.anchor);
+                        if (anchor && anchor !== el && !el.contains(anchor)) {
+                            if (change.position === 'before') anchor.parentNode.insertBefore(el, anchor);
+                            else anchor.parentNode.insertBefore(el, anchor.nextSibling);
+                        } else {
+                            var parent = change.parent === 'body' ? document.body : (change.parent ? document.querySelector(change.parent) : null);
+                            if (parent && change.position === 'append') parent.appendChild(el);
+                        }
+                    } else {
                         var vw = document.documentElement.clientWidth || 1;
                         var vh = document.documentElement.clientHeight || 1;
                         var rect = el.getBoundingClientRect();
@@ -432,6 +434,8 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
                     var target = change.parent ? document.querySelector(change.parent) : document.body;
                     if (!target) return;
                     var added = document.createElement(change.tag || 'div');
+                    added.className = 'se-added-element';
+                    added.setAttribute('data-se-added', '1');
                     added.innerHTML = change.html || '';
                     Object.keys(change.styles || {}).forEach(function (key) { added.style[key] = change.styles[key]; });
                     if (change.position === 'prepend') target.prepend(added);
