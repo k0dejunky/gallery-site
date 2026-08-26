@@ -62,7 +62,7 @@ class FavoriteController extends Controller
         $galleries = $siteEditorPreview ? [] : Gallery::favoriteGalleries($userId, 100);
         $ids = array_map('intval', array_column($galleries, 'id'));
 
-        $recentlyViewed = $siteEditorPreview ? [] : Gallery::recentlyViewed($userId, 8);
+        $recentlyViewed = $siteEditorPreview ? [] : Gallery::recentlyViewed($userId, 12);
         $rvIds = array_map('intval', array_column($recentlyViewed, 'id'));
 
         $this->view('favorites/index', [
