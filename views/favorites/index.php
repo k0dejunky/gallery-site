@@ -19,6 +19,17 @@
     <?php endif; ?>
 </section>
 
+<?php if (!empty($recentlyViewed)): ?>
+<section class="favorites-section">
+    <div class="favorites-heading"><h2>Recently viewed</h2><a href="<?= e(url('/galleries')) ?>">Browse all</a></div>
+    <div class="grid">
+        <?php foreach ($recentlyViewed as $gallery): ?>
+            <?php $cover = $gallery['first_photo'] ?? null; $galleryCategories = $cardCovers['categories'][(int) $gallery['id']] ?? []; require __DIR__ . '/../partials/gallery_card.php'; ?>
+        <?php endforeach; ?>
+    </div>
+</section>
+<?php endif; ?>
+
 <section class="favorites-section">
     <div class="favorites-heading"><h2>Saved searches</h2><a href="<?= e(url('/galleries')) ?>">Search galleries</a></div>
     <?php if (empty($savedSearches)): ?>

@@ -62,18 +62,22 @@ class FavoriteController extends Controller
         $galleries = $siteEditorPreview ? [] : Gallery::favoriteGalleries($userId, 100);
         $ids = array_map('intval', array_column($galleries, 'id'));
 
+        $recentlyViewed = $siteEditorPreview ? [] : Gallery::recentlyViewed($userId, 8);
+        $rvIds = array_map('intval', array_column($recentlyViewed, 'id'));
+
         $this->view('favorites/index', [
             'title' => 'Favorites',
             'favoriteCategories' => $siteEditorPreview ? [] : FavoriteCategory::forUser($userId),
             'favoriteGalleries' => $galleries,
             'savedSearches' => $siteEditorPreview ? [] : SavedSearch::forUser($userId),
-            'cardCovers' => [
-                'covers' => $siteEditorPreview ? [] : Gallery::firstPhotos($ids),
-                'categories' => $siteEditorPreview ? [] : Gallery::categoriesBulk($ids),
+            'recentlyViewed' => $recentlyViewed,
+            'cardCovers' => $siteEditorPreview ? [] : [
+                'covers' => Gallery::firstPhotos(array_unique(array_merge($ids, $rvIds))),
+                'categories' => Gallery::categoriesBulk(array_unique(array_merge($ids, $rvIds))),
             ],
             'currentUser' => $siteEditorPreview ? ['id' => 0] : Auth::user(),
             'hasActive' => true,
-            'viewedIds' => $siteEditorPreview ? [] : Gallery::viewedByIds($userId, $ids),
+            'viewedIds' => $siteEditorPreview ? [] : Gallery::viewedByIds($userId, array_unique(array_merge($ids, $rvIds))),
             'siteEditorPreview' => $siteEditorPreview,
         ]);
     }
