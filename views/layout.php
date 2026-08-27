@@ -134,7 +134,7 @@ $isAuthPage = $isLoginPage
         .user-nav .nav-empty { margin: 0; font-size: var(--font-size-sm); }
         .user-nav .nav-media-item { display: flex; align-items: center; gap: .5rem; }
         .user-nav .nav-media-item img { width: 40px; height: 30px; flex: 0 0 40px; object-fit: cover; border-radius: 4px; }
-        .user-nav .nav-logout { width: 100%; }
+        .user-nav .nav-logout { width: 100%; margin-top: var(--spacing-xs); }
         .home-nav-actions h2 { margin: 0 0 var(--spacing-xs); font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--sidebar-heading); text-align: center; }
         .home-nav h2 { margin: 0 0 var(--spacing-sm); font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--sidebar-heading); text-align: center; }
         .home-nav-link { display: block; padding: var(--spacing-sm) var(--card-padding); border-radius: var(--border-radius); color: var(--sidebar-link-color); text-decoration: none; background: var(--sidebar-link-bg); border: var(--input-border-width) solid var(--sidebar-link-border); }
@@ -258,6 +258,10 @@ $isAuthPage = $isLoginPage
                 <a class="nav-item" href="<?= url('/admin') ?>">Admin</a>
             <?php endif; ?>
             <a class="nav-item<?= strpos($currentPath, url('/settings')) === 0 ? ' active' : '' ?>" href="<?= url('/settings') ?>">Settings</a>
+            <form class="nav-logout" method="post" action="<?= url('/logout') ?>">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-sm btn-danger">Logout</button>
+            </form>
             <div class="nav-sep"></div>
             <div class="nav-section-label">Favorite categories</div>
             <?php if (empty($navCategories)): ?>
@@ -270,10 +274,6 @@ $isAuthPage = $isLoginPage
                 <?php endforeach; ?>
             <?php endif; ?>
             <div class="nav-sep"></div>
-            <form class="nav-logout" method="post" action="<?= url('/logout') ?>">
-                <?= csrf_field() ?>
-                <button type="submit" class="btn btn-sm btn-danger">Logout</button>
-            </form>
         </nav>
         </div>
         <main class="home-main">
