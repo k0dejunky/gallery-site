@@ -81,8 +81,17 @@
         <div class="bulk-photo-toolbar">
             <label><input type="checkbox" id="select-all-images"> Select all images</label>
             <span class="muted" id="selected-image-count">0 selected</span>
+            <?php if (!empty($activeEditJob) && in_array($activeEditJob['status'], ['queued', 'running'], true)): ?>
+                <span class="muted" id="edit-job-status">
+                    Rotate in progress: <?= e($activeEditJob['status']) ?>
+                    (<?= (int) $activeEditJob['done'] + (int) $activeEditJob['failed'] ?>/<?= (int) $activeEditJob['total'] ?>, <?= (int) $activeEditJob['progress'] ?>%)
+                </span>
+            <?php endif; ?>
             <button type="submit" name="direction" value="left" class="btn btn-sm" disabled data-bulk-rotate>&larr; Rotate left</button>
             <button type="submit" name="direction" value="right" class="btn btn-sm" disabled data-bulk-rotate>Rotate right &rarr;</button>
+            <?php if (!empty($activeEditJob) && in_array($activeEditJob['status'], ['queued', 'running'], true)): ?>
+                <span class="muted" title="Another rotation is already processing this gallery.">Buttons disabled while a job runs.</span>
+            <?php endif; ?>
         </div>
     <table>
         <thead>
@@ -168,10 +177,15 @@
         var boxes = Array.prototype.slice.call(document.querySelectorAll('[data-image-select]'));
         var buttons = Array.prototype.slice.call(document.querySelectorAll('[data-bulk-rotate]'));
         var count = document.getElementById('selected-image-count');
+        var jobActive = <?php echo (!empty($activeEditJob) && in_array($activeEditJob['status'], ['queued', 'running'], true)) ? 'true' : 'false'; ?>;
+        if (jobActive) {
+            boxes.forEach(function (box) { box.disabled = true; });
+            if (all) all.disabled = true;
+        }
         function update() {
-            var selected = boxes.filter(function (box) { return box.checked; }).length;
+            var selected = boxes.filter(function (box) { return box.checked && !box.disabled; }).length;
             count.textContent = selected + ' selected';
-            buttons.forEach(function (button) { button.disabled = selected === 0; });
+            buttons.forEach(function (button) { button.disabled = selected === 0 || jobActive; });
             if (all) all.checked = boxes.length > 0 && selected === boxes.length;
         }
         if (all) all.addEventListener('change', function () {

@@ -48,6 +48,19 @@
         </table>
     </div>
 
+    <!-- Photo edit queue -->
+    <div class="sys-card">
+        <h2>Photo edit queue</h2>
+        <table>
+            <tr><th>Edit worker</th><td class="<?= $photoEditQueue['service_active'] ? 'sys-ok' : 'sys-bad' ?>"><?= $photoEditQueue['service_active'] ? 'installed' : 'not installed' ?></td></tr>
+            <tr><th>Queued</th><td class="<?= $photoEditQueue['queued'] ? 'sys-bad' : 'sys-ok' ?>"><?= (int) $photoEditQueue['queued'] ?></td></tr>
+            <tr><th>Running</th><td><?= (int) $photoEditQueue['running'] ?></td></tr>
+            <tr><th>Completed</th><td><?= (int) $photoEditQueue['completed'] ?></td></tr>
+            <tr><th>Failed</th><td class="<?= $photoEditQueue['failed'] ? 'sys-bad' : 'sys-ok' ?>"><?= (int) $photoEditQueue['failed'] ?></td></tr>
+            <tr><th>Last edit</th><td class="muted"><?= $photoEditQueue['latest'] ? e((string) $photoEditQueue['latest']) : 'never' ?></td></tr>
+        </table>
+    </div>
+
     <!-- Maintenance mode + housekeeping -->
     <div class="sys-card">
         <h2>Site status</h2>

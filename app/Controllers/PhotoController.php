@@ -10,6 +10,7 @@ use App\Core\Request;
 use App\Models\AuditLog;
 use App\Models\Gallery;
 use App\Models\Photo;
+use App\Models\PhotoJob;
 
 class PhotoController extends Controller
 {
@@ -201,45 +202,20 @@ class PhotoController extends Controller
             $this->redirect('/admin/galleries/' . $galleryId);
         }
 
-        $galleryPhotos = [];
-        foreach (Gallery::photos($galleryId) as $photo) {
-            $galleryPhotos[(int) $photo['id']] = $photo;
-        }
+        $userId = (int) Auth::user()['id'];
+        $jobId  = PhotoJob::createBulkRotate($userId, $galleryId, $direction, $selected);
 
-        $config = config('app.uploads');
-        $rotated = 0;
-        $failed = 0;
+        AuditLog::record(
+            $userId,
+            'update',
+            'gallery',
+            $galleryId,
+            'Queued bulk rotate (background job #' . $jobId . ')',
+            ['direction' => $direction, 'count' => count($selected)]
+        );
 
-        foreach ($selected as $photoId) {
-            $photo = $galleryPhotos[$photoId] ?? null;
-            if ($photo === null || is_video($photo['filename'])) {
-                $failed++;
-                continue;
-            }
-
-            $path = $config['dir'] . '/' . $photo['filename'];
-            if (!is_file($path) || !ImageEditor::rotate($path, $direction)) {
-                $failed++;
-                continue;
-            }
-
-            $this->regenerateVariants($photo, $config);
-            AuditLog::record(
-                (int) Auth::user()['id'],
-                'update',
-                'photo',
-                $photoId,
-                'Bulk-rotated image',
-                ['filename' => $photo['filename'], 'direction' => $direction]
-            );
-            $rotated++;
-        }
-
-        $message = $rotated . ' image' . ($rotated === 1 ? '' : 's') . ' rotated.';
-        if ($failed > 0) {
-            $message .= ' ' . $failed . ' item' . ($failed === 1 ? '' : 's') . ' skipped.';
-        }
-        $this->flash($rotated > 0 ? 'success' : 'error', $message);
+        $this->flash('success', count($selected) . ' image' . (count($selected) === 1 ? '' : 's')
+            . ' queued for rotation. Processing continues in the background.');
         $this->redirect('/admin/galleries/' . $galleryId);
     }
 

@@ -110,6 +110,7 @@ class AdminController extends Controller
                 static fn (array $category): int => (int) $category['id'],
                 Gallery::categories($id)
             ),
+            'activeEditJob' => \App\Models\PhotoJob::latestForGallery($id),
         ]);
     }
 }

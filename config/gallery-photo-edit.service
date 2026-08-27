@@ -1,0 +1,17 @@
+[Unit]
+Description=Gallery photo edit queue worker (bulk rotate)
+After=network.target mysql.service php8.3-fpm.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/gallery
+ExecStart=/usr/bin/php /var/www/gallery/bin/photo_edit_queue.php
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

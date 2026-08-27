@@ -54,6 +54,7 @@ class SystemController extends Controller
             'diskFree'    => @disk_free_space($this->storage),
             'diagnostics' => $this->operationalDiagnostics(),
             'exportQueue' => $this->videoExportQueue(),
+            'photoEditQueue' => $this->photoEditQueue(),
         ]);
     }
 
@@ -150,6 +151,44 @@ class SystemController extends Controller
 
         $summary['service_active'] = (bool) @file_exists('/etc/systemd/system/gallery-video-export.service')
             && @filesize('/etc/systemd/system/gallery-video-export.service') > 0;
+
+        return $summary;
+    }
+
+    /**
+     * Photo edit queue (bulk rotate) summary by status and worker install state.
+     */
+    private function photoEditQueue(): array
+    {
+        $summary = [
+            'service_active' => false,
+            'queued'   => 0,
+            'running'  => 0,
+            'completed' => 0,
+            'failed'   => 0,
+            'latest'   => null,
+        ];
+
+        try {
+            $rows = Database::run(
+                "SELECT status, COUNT(*) AS c FROM photo_edit_jobs GROUP BY status"
+            )->fetchAll();
+            foreach ($rows as $row) {
+                $summary[(string) $row['status']] = (int) $row['c'];
+            }
+
+            $latest = Database::run(
+                "SELECT finished_at, created_at FROM photo_edit_jobs ORDER BY COALESCE(finished_at, created_at) DESC LIMIT 1"
+            )->fetch();
+            if ($latest) {
+                $summary['latest'] = $latest['finished_at'] ?? $latest['created_at'];
+            }
+        } catch (\Throwable $e) {
+            // Older installations without the table yet.
+        }
+
+        $summary['service_active'] = (bool) @file_exists('/etc/systemd/system/gallery-photo-edit.service')
+            && @filesize('/etc/systemd/system/gallery-photo-edit.service') > 0;
 
         return $summary;
     }

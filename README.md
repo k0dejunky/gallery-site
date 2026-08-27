@@ -132,6 +132,20 @@ sudo systemctl status gallery-video-export.service
 
 Apply the queue migration before starting the worker with `php scripts/migrate.php`.
 
+### Photo edit jobs (bulk rotate)
+
+Long-running image edits (currently bulk rotate) are stored in
+`photo_edit_jobs` and processed by the supervised `bin/photo_edit_queue.php`
+worker (`bin/photo_edit_worker.php` processes each claimed job). Enqueueing
+instead of processing in the HTTP request avoids FPM timeouts when rotating
+many large images. Install with:
+
+```bash
+sudo cp config/gallery-photo-edit.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now gallery-photo-edit.service
+```
+
 ## Migrations and deployment
 
 The installer bootstraps the current schema from `schema.sql`. Subsequent
