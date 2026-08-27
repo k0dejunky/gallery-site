@@ -22,16 +22,6 @@ $breadcrumbItems = [
 <?php if (empty($photos)): ?>
     <p>No photos in this gallery yet.</p>
 <?php else: ?>
-    <p class="gallery-progress" id="gallery-progress" role="status" aria-live="polite">Item 1 of <?= count($photos) ?></p>
-    <nav class="gallery-filmstrip" aria-label="Gallery media">
-        <?php foreach ($photos as $idx => $photo): ?>
-            <?php $mediaPath = is_video($photo['filename']) ? '/videos/' : '/images/'; ?>
-            <a class="gallery-thumb" href="<?= e(url($mediaPath . (int) $photo['id']) . '?' . http_build_query(['return_to' => $returnTo])) ?>" data-gallery-thumb="<?= $idx ?>" data-gallery-index="<?= $idx ?>" aria-current="<?= $idx === 0 ? 'page' : 'false' ?>" aria-label="Open item <?= $idx + 1 ?> of <?= count($photos) ?>">
-                <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>" alt="" loading="lazy" decoding="async" sizes="80px">
-                <?php if (is_video($photo['filename'])): ?><span class="play-badge" aria-hidden="true">&#9654;</span><?php endif; ?>
-            </a>
-        <?php endforeach; ?>
-    </nav>
     <div class="grid" id="gallery">
         <?php foreach ($photos as $idx => $photo): ?>
             <?php if (is_video($photo['filename'])): ?>

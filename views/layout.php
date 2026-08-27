@@ -120,7 +120,7 @@ $isAuthPage = $isLoginPage
         .section-title { color: var(--purple-800); border-bottom: 2px solid var(--pink-300); padding-bottom: var(--spacing-xs); }
         .muted { color: var(--purple-800); opacity: 0.75; }
         .home-layout { display: flex; gap: var(--spacing-lg); align-items: flex-start; }
-         .home-nav-wrap { flex: 0 0 180px; display: flex; flex-direction: column; gap: var(--spacing-md); position: sticky; top: 0; }
+         .home-nav-wrap { flex: 0 0 230px; display: flex; flex-direction: column; gap: var(--spacing-md); position: sticky; top: 0; }
         .home-nav-actions, .home-nav { display: flex; flex-direction: column; gap: var(--spacing-xs); padding: var(--spacing-md); background: var(--sidebar-bg); border: var(--input-border-width) solid var(--sidebar-border); border-radius: var(--border-radius-lg); }
         .home-nav-actions { gap: var(--spacing-sm); }
         .home-nav-actions .btn { display: block; width: 100%; box-sizing: border-box; padding: var(--spacing-sm) var(--card-padding); border-radius: var(--border-radius); text-align: center; }
