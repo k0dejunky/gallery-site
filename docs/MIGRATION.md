@@ -6,6 +6,11 @@ data that is **not** baked into `scripts/install.sh` (which only scaffolds a
 fresh, minimal install), so the new server can be brought up to feature parity
 with the current one.
 
+> **Migration scope this time:** database **structure**, the `fidjiter@gmail.com`
+> super_admin, and the **categories** table data. **Media and the
+> `gallery_category` link table are NOT migrated** (no `storage/uploads` copy;
+> the links reference gallery IDs that won't exist). See §2.
+
 > Target: Ubuntu 24.04, kernel 6.8, Apache 2.4.58, PHP 8.3 (FPM), MySQL 8.0.
 
 ---
@@ -33,36 +38,77 @@ The repo's CI/smoke tests and the deploy/restore scripts assume a systemd host.
 
 ## 2. Data to migrate
 
-Everything under `/var/www/gallery` PLUS the database and media files.
+**Scope for this migration:** the database **structure** (full schema), the
+**fidjiter admin user**, and the **categories** table data. **Media is NOT
+migrated** — the new server starts with an empty `storage/uploads` tree (fresh
+uploads only). The `gallery_category` link table is also excluded (its
+`gallery_id` references won't exist without gallery content). No gallery/photo
+content data and no other user accounts travel over.
 
-### 2.1 Database
+### 2.1 Database — schema + selected seed data
 
-Export the full schema **and** data. Do **not** use `schema.sql` alone — it only
-seeds plans + a default admin and would lose all real content:
+Do **not** use the stock `schema.sql` alone for a data migration — it only
+seeds plans + a placeholder admin and carries no real data. Instead, restore
+the full schema from the production dump and then migrate the specific rows.
+
+**Step 1 — dump the schema (+ schema_migrations metadata) from the current host:**
 
 ```bash
-mysqldump -u root gallery_mvc > gallery_mvc_full.sql
+mysqldump -u root --no-data gallery_mvc > gallery_schema.sql
+mysqldump -u root --no-data gallery_mvc schema_migrations > gallery_schema_migrations.sql 2>/dev/null
 ```
 
-Also dump the `schema_migrations` content is included above; before going live,
-confirm migration checksums match (`php scripts/migrate.php --status`).
-
-On the new server (after installing the app code + `.env`):
+**Step 2 — on the new server**, after the app code + `.env` are in place:
 
 ```bash
-mysql -u root gallery_mvc < gallery_mvc_full.sql
+mysql -u root gallery_mvc < gallery_schema.sql
+# restore migration-metadata so checksums match (must be identical to prod)
+mysql -u root gallery_mvc < gallery_schema_migrations.sql
+php scripts/migrate.php --status     # expect: no pending migrations
 ```
 
-### 2.2 Media / storage tree
+**Step 3 — migrate only the fidjiter admin + the categories table.**
+
+The `fidjiter@gmail.com` super_admin and the category list are the only content
+rows copied here. The `gallery_category` link table is **deliberately skipped**:
+its rows reference `gallery_id`s that will not exist on the new server (no
+gallery content/media is migrated), so they would be orphaned or violate the
+foreign key.
+
+```bash
+# Dump just those rows on the current host:
+mysqldump -u root gallery_mvc users --where="id = 2" --no-create-info > seed_admin.sql
+mysqldump -u root gallery_mvc categories --no-create-info > seed_categories.sql
+
+# On the new server, load them:
+mysql -u root gallery_mvc < seed_admin.sql
+mysql -u root gallery_mvc < seed_categories.sql
+```
+
+Notes:
+- `users` row `id=2` is `fidjiter@gmail.com`, role `super_admin`; its bcrypt
+  password hash travels with the row so the existing password keeps working.
+- The `categories` table (75 rows: `id`, `name`, `slug`) is fully loaded.
+- The `gallery_category` join table is **not** migrated (see above); categories
+  can be re-assigned to galleries once content is added later.
+- Before going live, confirm migration checksums match
+  (`php scripts/migrate.php --status`).
+
+### 2.2 Media / storage tree — NOT migrated
 
 `/var/www/gallery/storage/` holds all user-generated media and generated
-thumbnails/derivatives:
+derivatives. It is **excluded from this migration**. The new server should
+have an empty, writable storage tree:
 
 ```bash
-rsync -a /var/www/gallery/storage/ newserver:/var/www/gallery/storage/
+# On the new server, create fresh (do NOT copy from the old host):
+mkdir -p /var/www/gallery/storage/uploads/exports
+chown -R www-data:www-data /var/www/gallery/storage
+chmod -R 775 /var/www/gallery/storage
 ```
 
-Preserve ownership (`www-data:www-data`) and perms (uploads `775`).
+Again: **do not** rsync `/var/www/gallery/storage/` from the old server for
+this migration.
 
 ### 2.3 `.env` (secrets)
 
@@ -255,8 +301,9 @@ systemctl is-active gallery-video-export gallery-photo-edit   # both active
 ```
 
 Also confirm: storage uploads writable by `www-data`, rclone sync works
-(backup.log reflects a successful run), and the `/gallery/files/*` media
-streaming path returns `206` for ranges.
+(backup.log reflects a successful run). Media streaming (`/gallery/files/*`)
+has no legacy files on the new host (media was not migrated); uploads created
+on the new server are served as normal.
 
 ---
 
@@ -275,8 +322,9 @@ streaming path returns `206` for ranges.
 | Path (source host) | Purpose |
 |---|---|
 | `/var/www/gallery/.env` | secrets (DB, SMTP, cron key) |
-| `/var/www/gallery/storage/` | media + generated derivatives |
-| DB `gallery_mvc` (mysql dump) | all content |
+| DB `gallery_mvc` schema dump (`--no-data` + `schema_migrations`) | table structure |
+| DB `users` `id=2` (`fidjiter@gmail.com` super_admin) | admin login (password hash travels) |
+| DB `categories` dump | category data (75 rows) |
 | `/var/www/.config/rclone/rclone.conf` | Drive offsite backup |
 | `/etc/apache2/sites-enabled/gallery-headers.conf` | security headers/CSP |
 | edits to `sites-available/000-default.conf` | alias, XSendFile, TLS, assets |
@@ -286,3 +334,7 @@ streaming path returns `206` for ranges.
 | `/etc/cron.d/gallery-{backup,housekeeping,restore-drill}` | cron jobs |
 | `/etc/systemd/system/gallery-{video-export,photo-edit}.service` | workers |
 | `/etc/apt/apt.conf.d/99gallery-confold` | protect confs on OS upgrades |
+
+**Not migrated in this pass (by design):** `/var/www/gallery/storage/` (media +
+derivatives), the `gallery_category` link table, gallery/photo content, and all
+user accounts except the fidjiter admin. These stay on the old host.
