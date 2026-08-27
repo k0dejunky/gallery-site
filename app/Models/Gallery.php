@@ -466,6 +466,7 @@ class Gallery
      */
     public static function firstPhotos(array $galleryIds): array
     {
+        $galleryIds = array_values($galleryIds);
         if (empty($galleryIds)) {
             return [];
         }
@@ -501,6 +502,7 @@ class Gallery
      */
     public static function categoriesBulk(array $galleryIds): array
     {
+        $galleryIds = array_values($galleryIds);
         if (empty($galleryIds)) {
             return [];
         }
@@ -623,6 +625,7 @@ class Gallery
      */
     public static function viewedByIds(int $userId, array $galleryIds): array
     {
+        $galleryIds = array_values($galleryIds);
         if (empty($galleryIds) || $userId <= 0) {
             return [];
         }
