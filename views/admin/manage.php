@@ -194,12 +194,16 @@
                 body.append('_token', token.value);
                 body.append('direction', direction.value);
 
-                fetch(form.action, { method: 'POST', body: body, redirect: 'manual' })
+                fetch(form.action, {
+                    method: 'POST',
+                    body: body,
+                    headers: { 'X-Requested-With': 'fetch' },
+                    redirect: 'manual'
+                })
                     .then(function (r) {
-                        // The server answers with a 302 back to the manage
-                        // page. With redirect:'manual' the response is opaque
-                        // (no body to download), so we finish immediately and
-                        // refresh the preview instead of following the reload.
+                        // The server now answers with JSON (no redirect, no
+                        // flash), so nothing accumulates in the session and
+                        // there is no body to download. Refresh the preview.
                         if (img) {
                             var base = img.src.split('?')[0];
                             img.src = base + '?size=thumb&v=' + Date.now();

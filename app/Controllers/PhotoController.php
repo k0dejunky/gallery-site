@@ -143,11 +143,17 @@ class PhotoController extends Controller
         $photo = Photo::find($photoId);
 
         if ($photo === null) {
+            if ($this->isAjax()) {
+                $this->json(['ok' => false, 'error' => 'Photo not found.'], 404);
+            }
             $this->notFound();
             return;
         }
 
         if (is_video($photo['filename'])) {
+            if ($this->isAjax()) {
+                $this->json(['ok' => false, 'error' => 'Only images can be rotated.'], 400);
+            }
             $this->flash('error', 'Only images can be rotated.');
             $this->redirect('/admin/galleries/' . $galleryId);
         }
@@ -160,11 +166,17 @@ class PhotoController extends Controller
         $path   = $config['dir'] . '/' . $photo['filename'];
 
         if (!is_file($path)) {
+            if ($this->isAjax()) {
+                $this->json(['ok' => false, 'error' => 'Image file not found.'], 404);
+            }
             $this->flash('error', 'Image file not found.');
             $this->redirect('/admin/galleries/' . $galleryId);
         }
 
         if (!ImageEditor::rotate($path, $direction)) {
+            if ($this->isAjax()) {
+                $this->json(['ok' => false, 'error' => 'Could not rotate image.'], 500);
+            }
             $this->flash('error', 'Could not rotate image.');
             $this->redirect('/admin/galleries/' . $galleryId);
         }
@@ -172,6 +184,10 @@ class PhotoController extends Controller
         $this->regenerateVariants($photo, $config);
 
         AuditLog::record((int) Auth::user()['id'], 'update', 'photo', $photoId, 'Rotated image', ['filename' => $photo['filename']]);
+
+        if ($this->isAjax()) {
+            $this->json(['ok' => true]);
+        }
 
         $this->flash('success', 'Image rotated.');
         $this->redirect('/admin/galleries/' . $galleryId);
