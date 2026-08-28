@@ -109,6 +109,20 @@ class Photo
     }
 
     /**
+     * Photos saved successfully but not attached to any gallery.
+     */
+    public static function abandoned(): array
+    {
+        return Database::run(
+            'SELECT p.*
+             FROM photos p
+             LEFT JOIN gallery_photo gp ON gp.photo_id = p.id
+             WHERE gp.photo_id IS NULL
+             ORDER BY p.created_at DESC, p.id DESC'
+        )->fetchAll();
+    }
+
+    /**
      * Most recent video uploads, used on the login page. A limit of 0 means
      * no limit.
      */

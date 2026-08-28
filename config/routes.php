@@ -50,6 +50,8 @@ return [
     // Admin
     ['GET', '/admin', 'AdminController@dashboard'],
     ['POST', '/admin', 'AdminController@login'],
+    ['GET', '/admin/abandoned-uploads', 'AdminController@abandonedUploads'],
+    ['POST', '/admin/abandoned-uploads/{photoId}', 'AdminController@assignAbandoned'],
     ['GET', '/admin/search', 'SearchController@index'],
     ['GET', '/admin/categories', 'CategoryController@index'],
     ['POST', '/admin/categories', 'CategoryController@store'],

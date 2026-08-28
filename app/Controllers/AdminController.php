@@ -6,6 +6,7 @@ use App\Core\Auth;
 use App\Core\Controller;
 use App\Models\Category;
 use App\Models\Gallery;
+use App\Models\Photo;
 use App\Models\Stats;
 
 class AdminController extends Controller
@@ -112,5 +113,53 @@ class AdminController extends Controller
             ),
             'activeEditJob' => \App\Models\PhotoJob::latestForGallery($id),
         ]);
+    }
+
+    /**
+     * Admin: show uploads that are not assigned to any gallery yet.
+     */
+    public function abandonedUploads(): void
+    {
+        Auth::requirePermission('dashboard');
+
+        $this->viewAdmin('abandoned', [
+            'photos' => Photo::abandoned(),
+            'galleries' => Gallery::all(),
+        ]);
+    }
+
+    /**
+     * Admin: assign one abandoned upload to a compatible gallery.
+     */
+    public function assignAbandoned(int $photoId): void
+    {
+        Auth::requirePermission('dashboard');
+
+        $photo = Photo::find($photoId);
+        $galleryId = (int) $this->request->post('gallery_id', 0);
+        $gallery = $galleryId > 0 ? Gallery::find($galleryId) : null;
+
+        if ($photo === null || Photo::firstGalleryId($photoId) !== null) {
+            $this->flash('error', 'That upload is no longer available for recovery.');
+            $this->redirect('/admin/abandoned-uploads');
+        }
+
+        if ($gallery === null) {
+            $this->flash('error', 'Select a valid gallery.');
+            $this->redirect('/admin/abandoned-uploads');
+        }
+
+        $isVideo = (int) ($photo['is_video'] ?? (is_video($photo['filename']) ? 1 : 0)) === 1;
+        $galleryIsVideo = ($gallery['type'] ?? 'images') === 'videos';
+
+        if ($isVideo !== $galleryIsVideo) {
+            $this->flash('error', 'The upload type does not match that gallery.');
+            $this->redirect('/admin/abandoned-uploads');
+        }
+
+        Gallery::attachPhoto($galleryId, $photoId);
+
+        $this->flash('success', 'Upload assigned to "' . $gallery['title'] . '".');
+        $this->redirect('/admin/abandoned-uploads');
     }
 }

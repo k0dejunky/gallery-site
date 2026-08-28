@@ -247,6 +247,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
                        style="width:100%;font-size:var(--font-size-sm);" aria-label="Global admin search">
             </form>
             <a class="nav-item <?= $navActive('/admin', true) ?>" href="<?= url('/admin') ?>">Dashboard</a>
+            <a class="nav-item <?= $navActive('/admin/abandoned-uploads') ?>" href="<?= url('/admin/abandoned-uploads') ?>">Abandoned Uploads</a>
             <a class="nav-item <?= $navActive('/admin/trends') ?>" href="<?= url('/admin/trends') ?>">Trends</a>
             <a class="nav-item <?= $navActive('/admin/galleries') ?>" href="<?= url('/admin/galleries/create') ?>">Gallery Management</a>
             <a class="nav-item <?= $navActive('/admin/video-projects') ?>" href="<?= url('/admin/video-projects') ?>">Video Projects</a>
