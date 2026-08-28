@@ -41,6 +41,7 @@ class GalleryController extends Controller
 
         $user      = Auth::user();
         $isMember  = Auth::hasActiveSubscription();
+        $maxLevel  = Auth::effectiveLevel();
         $favorites = $user !== null && $isMember ? FavoriteCategory::forUser((int) $user['id']) : [];
 
         // Full listing: every gallery grouped under its category — never
@@ -53,7 +54,7 @@ class GalleryController extends Controller
         $categories = Category::all();
 
         if ($q === '') {
-            $byCategory = Gallery::inCategories(array_column($categories, 'id'), $type);
+            $byCategory = Gallery::inCategories(array_column($categories, 'id'), $type, $maxLevel);
 
             foreach ($categories as $cat) {
                 $galleries = [];
@@ -73,7 +74,7 @@ class GalleryController extends Controller
             }
 
             $uncategorized = array_values(array_filter(
-                Gallery::withoutCategory($type),
+                Gallery::withoutCategory($type, $maxLevel),
                 static fn (array $gallery): bool => !isset($seen[(int) $gallery['id']])
             ));
 
@@ -100,7 +101,7 @@ class GalleryController extends Controller
             }
         }
 
-        $filters = ['q' => $q];
+        $filters = ['q' => $q, 'max_level' => $maxLevel];
         if ($catId > 0) {
             $filters['category'] = $catId;
         }
@@ -197,7 +198,7 @@ class GalleryController extends Controller
             ? (string) $this->request->query('sort')
             : '';
 
-        $filters       = ['q' => $q, 'category' => (int) $category['id']];
+        $filters       = ['q' => $q, 'category' => (int) $category['id'], 'max_level' => Auth::effectiveLevel()];
         if ($sort !== '') {
             $filters['sort'] = $sort;
         }
@@ -843,6 +844,7 @@ class GalleryController extends Controller
         $title       = $this->request->input('title');
         $description = $this->request->input('description');
         $type        = $this->request->input('type', 'images') === 'videos' ? 'videos' : 'images';
+        $minLevel    = max(0, min(4, (int) $this->request->input('min_level', '0')));
         $categoryIds = $this->request->post('categories', []);
         $categoryIds = is_array($categoryIds) ? $categoryIds : [];
 
@@ -851,17 +853,19 @@ class GalleryController extends Controller
             $this->redirect('/admin/galleries/' . $id . '/edit');
         }
 
-        Gallery::update($id, $title, $description, $type);
+        Gallery::update($id, $title, $description, $type, $minLevel);
         Gallery::setCategories($id, $categoryIds);
 
         $after = [
             'title' => $title, 'description' => $description, 'type' => $type,
+            'min_level' => $minLevel,
             'categories' => array_map('intval', $categoryIds),
         ];
         $before = [
             'title' => $gallery['title'] ?? '',
             'description' => $gallery['description'] ?? '',
             'type' => $gallery['type'] ?? 'images',
+            'min_level' => (int) ($gallery['min_level'] ?? 0),
             'categories' => $beforeCategories,
         ];
 

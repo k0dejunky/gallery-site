@@ -277,6 +277,28 @@ class Auth
     }
 
     /**
+     * The highest gallery membership level this user may view. Free accounts
+     * (and guests) only see level-0 content; members reach their plan level;
+     * admins see everything. Used to filter gallery listings.
+     */
+    public static function effectiveLevel(): int
+    {
+        $user = self::user();
+
+        if ($user === null) {
+            return 0;
+        }
+
+        if (self::isAdmin()) {
+            return PHP_INT_MAX;
+        }
+
+        $active = Subscription::activeFor((int) $user['id']);
+
+        return $active !== null ? (int) $active['plan_level'] : 0;
+    }
+
+    /**
      * Guard for content gated by a gallery's minimum membership level. Level 0
      * content is free for any logged-in user; higher levels require a
      * subscription that reaches that level. Anonymous visitors go to login.

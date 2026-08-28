@@ -89,6 +89,14 @@ class Gallery
             $where[] = self::mediaTypeCondition($filters['type']);
         }
 
+        if (array_key_exists('max_level', $filters)) {
+            $maxLevel = (int) $filters['max_level'];
+            if ($maxLevel < PHP_INT_MAX) {
+                $where[]  = 'g.min_level <= ?';
+                $params[] = $maxLevel;
+            }
+        }
+
         $orderBy = 'g.created_at DESC';
         if (!empty($filters['sort'])) {
             match ($filters['sort']) {
@@ -128,7 +136,7 @@ class Gallery
      * that contain images or videos. Used for category pages and the
      * per-favorite sections on the home page.
      */
-    public static function inCategory(int $categoryId, string $type = ''): array
+    public static function inCategory(int $categoryId, string $type = '', int $maxLevel = PHP_INT_MAX): array
     {
         $typeCondition = '';
 
@@ -136,12 +144,14 @@ class Gallery
             $typeCondition = ' AND ' . self::mediaTypeCondition($type);
         }
 
+        $levelCondition = $maxLevel < PHP_INT_MAX ? ' AND g.min_level <= ' . (int) $maxLevel : '';
+
         return Database::run(
             'SELECT g.*, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
              FROM galleries g
              INNER JOIN gallery_category gc ON gc.gallery_id = g.id
              LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
-             WHERE gc.category_id = ? AND g.deleted_at IS NULL' . $typeCondition . '
+             WHERE gc.category_id = ? AND g.deleted_at IS NULL' . $typeCondition . $levelCondition . '
              GROUP BY g.id
              ORDER BY g.created_at DESC',
             [$categoryId]
@@ -154,7 +164,7 @@ class Gallery
      * category it belongs to; callers deduplicate across categories. This
      * replaces the N+1 pattern of calling inCategory() once per category.
      */
-    public static function inCategories(array $categoryIds, string $type = ''): array
+    public static function inCategories(array $categoryIds, string $type = '', int $maxLevel = PHP_INT_MAX): array
     {
         $result = [];
 
@@ -174,12 +184,14 @@ class Gallery
             $typeCondition = ' AND ' . self::mediaTypeCondition($type);
         }
 
+        $levelCondition = $maxLevel < PHP_INT_MAX ? ' AND g.min_level <= ' . (int) $maxLevel : '';
+
         $rows = Database::run(
             'SELECT g.*, gc.category_id, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
              FROM galleries g
              INNER JOIN gallery_category gc ON gc.gallery_id = g.id
              LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
-             WHERE gc.category_id IN (' . $placeholders . ') AND g.deleted_at IS NULL' . $typeCondition . '
+             WHERE gc.category_id IN (' . $placeholders . ') AND g.deleted_at IS NULL' . $typeCondition . $levelCondition . '
              GROUP BY g.id, gc.category_id
              ORDER BY g.created_at DESC',
             $ids
@@ -196,19 +208,21 @@ class Gallery
      * Galleries tagged with no category at all (shown in the catch-all
      * "Uncategorized" section of the full listing).
      */
-    public static function withoutCategory(string $type = ''): array
+    public static function withoutCategory(string $type = '', int $maxLevel = PHP_INT_MAX): array
     {
         $typeCondition = '';
         if (in_array($type, ['images', 'videos'], true)) {
             $typeCondition = ' AND ' . self::mediaTypeCondition($type);
         }
 
+        $levelCondition = $maxLevel < PHP_INT_MAX ? ' AND g.min_level <= ' . (int) $maxLevel : '';
+
         return Database::run(
             'SELECT g.*, NULL AS category_id, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
              FROM galleries g
              LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
              WHERE g.deleted_at IS NULL
-               AND NOT EXISTS (SELECT 1 FROM gallery_category gc WHERE gc.gallery_id = g.id)' . $typeCondition . '
+               AND NOT EXISTS (SELECT 1 FROM gallery_category gc WHERE gc.gallery_id = g.id)' . $typeCondition . $levelCondition . '
              GROUP BY g.id
              ORDER BY g.created_at DESC'
         )->fetchAll();
