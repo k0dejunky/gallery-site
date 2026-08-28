@@ -17,6 +17,25 @@
 <h1 class="section-title">System</h1>
 <p class="muted">Disk free: <b><?= $diskFree !== false ? number_format((float) $diskFree / 1048576) . ' MB' : 'unknown' ?></b></p>
 
+<script>
+// Keep the page scroll position when a system button posts a form and the
+// page reloads, so admins are not snapped back to the top after an action.
+(function () {
+    var key = 'system-scroll-pos';
+    var saved = sessionStorage.getItem(key);
+    if (saved !== null) {
+        sessionStorage.removeItem(key);
+        try { window.scrollTo(0, parseInt(saved, 10) || 0); } catch (e) {}
+    }
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!form || !form.matches('form')) return;
+        if (form.getAttribute('data-no-progress') !== null) return;
+        try { sessionStorage.setItem(key, String(window.scrollY || 0)); } catch (e) {}
+    }, true);
+})();
+</script>
+
 <div class="sys-grid">
     <!-- Operational diagnostics -->
     <div class="sys-card">
