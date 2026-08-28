@@ -149,12 +149,12 @@
                             <a class="btn btn-sm btn-outline" href="<?= url('/admin/photos/' . (int) $photo['id'] . '/edit?back=' . (int) $gallery['id']) ?>">Edit</a>
                         <?php endif; ?>
                         <?php if (!is_video($photo['filename'])): ?>
-                            <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/' . (int) $photo['id'] . '/rotate') ?>">
+                            <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/' . (int) $photo['id'] . '/rotate') ?>" data-photo-rotate>
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="direction" value="left">
                                 <button type="submit" class="btn btn-sm" title="Rotate left">&larr;</button>
                             </form>
-                            <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/' . (int) $photo['id'] . '/rotate') ?>">
+                            <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/' . (int) $photo['id'] . '/rotate') ?>" data-photo-rotate>
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="direction" value="right">
                                 <button type="submit" class="btn btn-sm" title="Rotate right">&rarr;</button>
@@ -171,6 +171,48 @@
         </tbody>
     </table>
     </form>
+    <script>
+    (function () {
+        // Per-photo rotate is handled in place via AJAX so the admin keeps
+        // their scroll position. Without JS the form still posts normally.
+        var forms = Array.prototype.slice.call(document.querySelectorAll('[data-photo-rotate]'));
+        forms.forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+
+                var token = form.querySelector('input[name="_token"]');
+                var direction = form.querySelector('input[name="direction"]');
+                if (!token || !direction) return;
+
+                var row = form.closest('tr');
+                var img = row ? row.querySelector('td img') : null;
+                var button = form.querySelector('button');
+
+                if (button) button.disabled = true;
+
+                var body = new FormData();
+                body.append('_token', token.value);
+                body.append('direction', direction.value);
+
+                fetch(form.action, { method: 'POST', body: body })
+                    .then(function (r) {
+                        if (!r.redirected) return r.text();
+                        // Redirect to the same page: refresh the preview and
+                        // stay put instead of following the full reload.
+                        if (img) {
+                            var base = img.src.split('?')[0];
+                            img.src = base + '?size=thumb&v=' + Date.now();
+                        }
+                        return r.text();
+                    })
+                    .catch(function () {})
+                    .then(function () {
+                        if (button) button.disabled = false;
+                    });
+            });
+        });
+    }());
+    </script>
     <script>
     (function () {
         var all = document.getElementById('select-all-images');
