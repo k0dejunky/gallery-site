@@ -324,6 +324,7 @@ class GalleryController extends Controller
         $title       = $this->request->input('title');
         $description = $this->request->input('description');
         $type        = $this->request->input('type', 'images') === 'videos' ? 'videos' : 'images';
+        $minLevel    = max(0, min(4, (int) $this->request->input('min_level', '0')));
         $categoryIds = $this->request->post('categories', []);
         $categoryIds = is_array($categoryIds) ? $categoryIds : [];
 
@@ -332,13 +333,14 @@ class GalleryController extends Controller
             $this->redirect('/admin/galleries/create');
         }
 
-        $galleryId = Gallery::create($title, $description, $type);
+        $galleryId = Gallery::create($title, $description, $type, $minLevel);
         Gallery::setCategories($galleryId, $categoryIds);
 
         $count = $this->finalizePending($galleryId, $type);
 
         AuditLog::record((int) Auth::user()['id'], 'create', 'gallery', $galleryId, 'Created gallery "' . $title . '"', null, [
             'title' => $title, 'description' => $description, 'type' => $type,
+            'min_level' => $minLevel,
             'categories' => array_map('intval', $categoryIds),
             'photos' => $count,
         ]);
