@@ -194,19 +194,20 @@
                 body.append('_token', token.value);
                 body.append('direction', direction.value);
 
-                fetch(form.action, { method: 'POST', body: body })
+                fetch(form.action, { method: 'POST', body: body, redirect: 'manual' })
                     .then(function (r) {
-                        if (!r.redirected) return r.text();
-                        // Redirect to the same page: refresh the preview and
-                        // stay put instead of following the full reload.
+                        // The server answers with a 302 back to the manage
+                        // page. With redirect:'manual' the response is opaque
+                        // (no body to download), so we finish immediately and
+                        // refresh the preview instead of following the reload.
                         if (img) {
                             var base = img.src.split('?')[0];
                             img.src = base + '?size=thumb&v=' + Date.now();
                         }
-                        return r.text();
                     })
                     .catch(function () {})
                     .then(function () {
+                        if (window.AdminProgress) window.AdminProgress.hide();
                         if (button) button.disabled = false;
                     });
             });

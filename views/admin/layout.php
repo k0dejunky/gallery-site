@@ -330,6 +330,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             },
             hide: function () {
                 overlay.classList.remove('active');
+                if (timer) { clearInterval(timer); timer = null; }
                 return this;
             },
             busy: function (text) {
