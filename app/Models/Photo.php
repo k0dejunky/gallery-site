@@ -109,17 +109,42 @@ class Photo
     }
 
     /**
-     * Photos saved successfully but not attached to any gallery.
+     * Staged uploads abandoned mid-upload: files sitting in the session
+     * staging area (<code>storage/uploads/pending/&lt;session&gt;/</code>)
+     * whose session ended before the gallery was created. Each original
+     * file is named <code>pending_&lt;uniqid&gt;.&lt;ext&gt;</code> with
+     * optional <code>thumb_</code>/<code>web_</code> variants alongside.
      */
-    public static function abandoned(): array
+    public static function abandonedPending(): array
     {
-        return Database::run(
-            'SELECT p.*
-             FROM photos p
-             LEFT JOIN gallery_photo gp ON gp.photo_id = p.id
-             WHERE gp.photo_id IS NULL
-             ORDER BY p.created_at DESC, p.id DESC'
-        )->fetchAll();
+        $base  = config('app.uploads.dir') . '/pending';
+        $rows  = [];
+
+        foreach (glob($base . '/*', GLOB_ONLYDIR) ?: [] as $sessionDir) {
+            $session = basename($sessionDir);
+
+            foreach (glob($sessionDir . '/pending_*') ?: [] as $file) {
+                $name = basename($file);
+
+                if (!preg_match('/^pending_[A-Za-z0-9_.-]+\.[A-Za-z0-9]+$/', $name)) {
+                    continue;
+                }
+
+                $rows[] = [
+                    'session'  => $session,
+                    'filename' => $name,
+                    'is_video' => is_video($name) ? 1 : 0,
+                    'size'     => (int) @filesize($file),
+                    'modified' => @filemtime($file) ?: null,
+                ];
+            }
+        }
+
+        usort($rows, static function (array $a, array $b): int {
+            return ($b['modified'] ?? 0) <=> ($a['modified'] ?? 0);
+        });
+
+        return $rows;
     }
 
     /**

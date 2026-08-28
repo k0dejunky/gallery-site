@@ -116,48 +116,143 @@ class AdminController extends Controller
     }
 
     /**
-     * Admin: show uploads that are not assigned to any gallery yet.
+     * Admin: show staged uploads that were abandoned before their gallery
+     * was created. These are files still sitting in session staging dirs.
      */
     public function abandonedUploads(): void
     {
         Auth::requirePermission('dashboard');
 
         $this->viewAdmin('abandoned', [
-            'photos' => Photo::abandoned(),
+            'uploads' => Photo::abandonedPending(),
             'galleries' => Gallery::all(),
         ]);
     }
 
     /**
-     * Admin: assign one abandoned upload to a compatible gallery.
+     * Admin: serve a staged file (original, web or thumb) from an abandoned
+     * session's pending directory so admins can preview before assigning.
      */
-    public function assignAbandoned(int $photoId): void
+    public function abandonedFile(string $session, string $file): void
     {
         Auth::requirePermission('dashboard');
 
-        $photo = Photo::find($photoId);
-        $galleryId = (int) $this->request->post('gallery_id', 0);
-        $gallery = $galleryId > 0 ? Gallery::find($galleryId) : null;
+        $session = basename($session);
+        $file    = basename($file);
+        $size    = (string) $this->request->query('size', '');
 
-        if ($photo === null || Photo::firstGalleryId($photoId) !== null) {
-            $this->flash('error', 'That upload is no longer available for recovery.');
-            $this->redirect('/admin/abandoned-uploads');
+        if ($session === '' || !preg_match('/^[A-Za-z0-9_,-]+$/', $session)
+            || !preg_match('/^pending_[A-Za-z0-9_.-]+\.[A-Za-z0-9]+$/', $file)) {
+            $this->notFound();
+            return;
         }
+
+        $name = $file;
+        if ($size === 'thumb') {
+            $name = 'thumb_' . $file;
+        } elseif ($size === 'web') {
+            $name = 'web_' . $file;
+        }
+
+        $path = config('app.uploads.dir') . '/pending/' . $session . '/' . $name;
+
+        if (!is_file($path)) {
+            $this->notFound();
+            return;
+        }
+
+        $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        $mime      = match ($extension) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+            'mp4', 'm4v' => 'video/mp4',
+            'webm' => 'video/webm',
+            'ogg' => 'video/ogg',
+            'mov' => 'video/quicktime',
+            'avi' => 'video/x-msvideo',
+            'mkv' => 'video/x-matroska',
+            default => 'application/octet-stream',
+        };
+
+        header('Content-Type: ' . $mime);
+        header('Content-Length: ' . filesize($path));
+        header('Cache-Control: public, max-age=3600');
+        readfile($path);
+        exit;
+    }
+
+    /**
+     * Admin: assign one abandoned staged upload to a compatible gallery.
+     * The file is moved out of the pending staging dir into the uploads dir,
+     * deduplicated by content hash, and attached to the chosen gallery.
+     */
+    public function assignAbandoned(string $session, string $file): void
+    {
+        Auth::requirePermission('dashboard');
+
+        $session   = basename($session);
+        $file      = basename($file);
+        $galleryId = (int) $this->request->post('gallery_id', 0);
+        $gallery   = $galleryId > 0 ? Gallery::find($galleryId) : null;
+
+        $source = config('app.uploads.dir') . '/pending/' . $session . '/' . $file;
 
         if ($gallery === null) {
             $this->flash('error', 'Select a valid gallery.');
             $this->redirect('/admin/abandoned-uploads');
         }
 
-        $isVideo = (int) ($photo['is_video'] ?? (is_video($photo['filename']) ? 1 : 0)) === 1;
+        if ($session === '' || !preg_match('/^[A-Za-z0-9_,-]+$/', $session)
+            || !preg_match('/^pending_[A-Za-z0-9_.-]+\.[A-Za-z0-9]+$/', $file)
+            || !is_file($source)) {
+            $this->flash('error', 'That upload is no longer available.');
+            $this->redirect('/admin/abandoned-uploads');
+        }
+
         $galleryIsVideo = ($gallery['type'] ?? 'images') === 'videos';
 
-        if ($isVideo !== $galleryIsVideo) {
+        if (is_video($file) !== $galleryIsVideo) {
             $this->flash('error', 'The upload type does not match that gallery.');
             $this->redirect('/admin/abandoned-uploads');
         }
 
-        Gallery::attachPhoto($galleryId, $photoId);
+        $config  = config('app.uploads');
+        $hash    = sha1_file($source);
+        $existing = Photo::findByHash($hash);
+
+        if ($existing !== null) {
+            Gallery::attachPhoto($galleryId, (int) $existing['id']);
+        } else {
+            $dest = $config['dir'] . '/' . $file;
+
+            if (!rename($source, $dest)) {
+                $this->flash('error', 'Could not move the upload.');
+                $this->redirect('/admin/abandoned-uploads');
+            }
+
+            foreach (['thumb_', 'web_'] as $prefix) {
+                $variant = config('app.uploads.dir') . '/pending/' . $session . '/' . $prefix . $file;
+
+                if (is_file($variant)) {
+                    rename($variant, $config['dir'] . '/' . $prefix . $file);
+                }
+            }
+
+            $photoId = Photo::create($file, $hash);
+            Gallery::attachPhoto($galleryId, $photoId);
+        }
+
+        $dir = config('app.uploads.dir') . '/pending/' . $session;
+
+        foreach (glob($dir . '/*') ?: [] as $leftover) {
+            if (is_file($leftover)) {
+                @unlink($leftover);
+            }
+        }
+
+        @rmdir($dir);
 
         $this->flash('success', 'Upload assigned to "' . $gallery['title'] . '".');
         $this->redirect('/admin/abandoned-uploads');

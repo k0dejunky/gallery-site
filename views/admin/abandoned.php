@@ -2,9 +2,9 @@
 
 <p><a href="<?= url('/admin') ?>">&larr; Dashboard</a></p>
 <h1>Abandoned Uploads</h1>
-<p class="muted">Uploads saved without a gallery assignment. Assign each one to a matching image or video gallery.</p>
+<p class="muted">Uploads staged during a session that ended before the gallery was created. Assign each one to a matching image or video gallery.</p>
 
-<?php if (empty($photos)): ?>
+<?php if (empty($uploads)): ?>
     <p>No abandoned uploads.</p>
 <?php else: ?>
     <table>
@@ -12,31 +12,35 @@
             <tr>
                 <th>Preview</th>
                 <th>File</th>
-                <th>Uploaded</th>
+                <th>Type</th>
+                <th>Size</th>
                 <th>Assign To</th>
             </tr>
         </thead>
         <tbody>
-            <?php foreach ($photos as $photo): ?>
-                <?php $photoIsVideo = (int) ($photo['is_video'] ?? (is_video($photo['filename']) ? 1 : 0)) === 1; ?>
+            <?php foreach ($uploads as $upload): ?>
+                <?php $isVideo = (int) ($upload['is_video'] ?? 0) === 1; ?>
+                <?php $session = rawurlencode($upload['session']); ?>
+                <?php $file = rawurlencode($upload['filename']); ?>
                 <tr>
                     <td>
-                        <?php if ($photoIsVideo): ?>
-                            <video src="<?= e(file_url($photo['filename'])) ?>" width="160" muted controls preload="metadata"></video>
+                        <?php if ($isVideo): ?>
+                            <video src="<?= e(url('/admin/abandoned-uploads/' . $session . '/' . $file)) ?>" width="160" muted controls preload="metadata"></video>
                         <?php else: ?>
-                            <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>" alt="" width="120">
+                            <img src="<?= e(url('/admin/abandoned-uploads/' . $session . '/' . $file . '?size=thumb')) ?>" alt="" width="120">
                         <?php endif; ?>
                     </td>
-                    <td><?= e($photo['filename']) ?></td>
-                    <td><?= e($photo['created_at']) ?></td>
+                    <td><?= e($upload['filename']) ?></td>
+                    <td><?= $isVideo ? 'Video' : 'Image' ?></td>
+                    <td><?= number_format((int) $upload['size']) ?> B</td>
                     <td>
-                        <form method="post" action="<?= url('/admin/abandoned-uploads/' . (int) $photo['id']) ?>">
+                        <form method="post" action="<?= url('/admin/abandoned-uploads/' . $session . '/' . $file) ?>">
                             <?= csrf_field() ?>
                             <select name="gallery_id" required>
                                 <option value="">Choose a gallery</option>
                                 <?php foreach ($galleries as $gallery): ?>
                                     <?php $galleryIsVideo = ($gallery['type'] ?? 'images') === 'videos'; ?>
-                                    <?php if ($photoIsVideo === $galleryIsVideo): ?>
+                                    <?php if ($isVideo === $galleryIsVideo): ?>
                                         <option value="<?= (int) $gallery['id'] ?>"><?= e($gallery['title']) ?></option>
                                     <?php endif; ?>
                                 <?php endforeach; ?>
