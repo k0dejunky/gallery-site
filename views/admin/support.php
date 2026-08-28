@@ -11,7 +11,6 @@ foreach ($messages as $supportMessage) {
 <div class="admin-support-page">
 <header class="admin-support-header">
     <div><h1>Support Messages</h1><p class="muted">Review member questions and keep every conversation moving.</p></div>
-    <a class="btn btn-outline" href="<?= url('/admin') ?>">Admin dashboard</a>
 </header>
 
 <div class="admin-support-summary" aria-label="Ticket summary">

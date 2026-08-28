@@ -31,8 +31,6 @@
     @media (max-width: 640px) { .sale-form-grid { grid-template-columns: 1fr; } .sale-form-wide { grid-column: auto; } }
 </style>
 
-<p><a href="<?= url('/admin') ?>">&larr; Dashboard</a></p>
-
 <h1>Membership Plans</h1>
 
 <h2>Plans</h2>

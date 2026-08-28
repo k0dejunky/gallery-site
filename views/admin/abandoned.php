@@ -1,6 +1,5 @@
 <?php $title = 'Abandoned Uploads'; ?>
 
-<p><a href="<?= url('/admin') ?>">&larr; Dashboard</a></p>
 <h1>Abandoned Uploads</h1>
 <p class="muted">Uploads staged during a session that ended before the gallery was created. Assign each one to an existing gallery, or select files and resume the new-gallery flow to finish creating a gallery.</p>
 

@@ -35,8 +35,6 @@ $webhookBase = $scheme . '://' . $host . rtrim((string) config('app.base_path'),
     @media (max-width: 720px) { .pay-form-grid { grid-template-columns: 1fr; } .pay-form-wide { grid-column: auto; } }
 </style>
 
-<p><a href="<?= url('/admin') ?>">&larr; Dashboard</a></p>
-
 <h1>Payment Processors</h1>
 
 <p class="muted">Configure the payment gateways visitors can use to subscribe to memberships.
