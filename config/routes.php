@@ -51,6 +51,7 @@ return [
     ['GET', '/admin', 'AdminController@dashboard'],
     ['POST', '/admin', 'AdminController@login'],
     ['GET', '/admin/abandoned-uploads', 'AdminController@abandonedUploads'],
+    ['POST', '/admin/abandoned-uploads/resume', 'AdminController@resumeAbandoned'],
     ['GET', '/admin/abandoned-uploads/{session}/{file}', 'AdminController@abandonedFile'],
     ['POST', '/admin/abandoned-uploads/{session}/{file}', 'AdminController@assignAbandoned'],
     ['GET', '/admin/search', 'SearchController@index'],

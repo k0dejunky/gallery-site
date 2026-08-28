@@ -276,26 +276,33 @@ class GalleryController extends Controller
     }
 
     /**
-     * Admin: show the create-gallery form.
+     * Admin: show the create-gallery form. When arriving via the abandoned
+     * uploads resume flow (?resume=1) the current session's staging area is
+     * kept so the admin can finish a gallery that was abandoned mid-upload.
      */
     public function create(): void
     {
         Auth::requirePermission('galleries');
 
+        $resume = $this->request->query('resume') === '1';
+
         // A fresh visit to the create form should not carry over previously
-        // staged files that were never saved.
-        $dir = config('app.uploads.dir') . '/pending/' . session_id();
-        if (is_dir($dir)) {
-            $this->clearPendingDir($dir);
+        // staged files that were never saved. Resuming keeps them instead.
+        if (!$resume) {
+            $dir = config('app.uploads.dir') . '/pending/' . session_id();
+            if (is_dir($dir)) {
+                $this->clearPendingDir($dir);
+            }
+            unset($_SESSION['pending_gallery_files']);
         }
-        unset($_SESSION['pending_gallery_files']);
 
         $page = (int) $this->request->query('page', 1);
 
         $this->viewAdmin('create', [
-            'categories'  => Category::all(),
-            'galleryType' => 'images',
-            'paginator'   => Gallery::paginate($page, 10),
+            'categories'   => Category::all(),
+            'galleryType'  => 'images',
+            'paginator'    => Gallery::paginate($page, 10),
+            'pendingFiles' => $this->pendingListMeta(),
         ]);
     }
 

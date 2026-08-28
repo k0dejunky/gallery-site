@@ -186,7 +186,7 @@
     var tilesEl = document.getElementById('pending-tiles');
     var countEl = document.getElementById('pending-count');
     var saveBtn = document.getElementById('save-btn');
-    var pendingFiles = [];
+    var pendingFiles = <?= json_encode($pendingFiles ?? [], JSON_UNESCAPED_SLASHES) ?> || [];
     var uploadQueue = [];
     var uploading = false;
 

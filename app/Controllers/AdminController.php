@@ -184,6 +184,91 @@ class AdminController extends Controller
     }
 
     /**
+     * Admin: resume gallery creation from bulk-selected abandoned uploads.
+     * The chosen staged files are moved into the current session's pending
+     * staging area with their metadata restored, then the admin is sent to
+     * the normal create-gallery page to finish as if nothing was abandoned.
+     */
+    public function resumeAbandoned(): void
+    {
+        Auth::requirePermission('galleries');
+
+        $selected = $this->request->post('files', []);
+        $selected = is_array($selected) ? $selected : [];
+
+        if ($selected === []) {
+            $this->flash('error', 'Select at least one upload to resume.');
+            $this->redirect('/admin/abandoned-uploads');
+        }
+
+        $config = config('app.uploads');
+        $dir    = $config['dir'] . '/pending/' . session_id();
+
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+
+        $list  = $_SESSION['pending_gallery_files'] ?? [];
+        $added = 0;
+
+        foreach ($selected as $key) {
+            $key = (string) $key;
+            [$session, $file] = array_pad(explode('|', $key, 2), 2, '');
+
+            if ($session === '' || !preg_match('/^[A-Za-z0-9_,-]+$/', $session)
+                || !preg_match('/^pending_[A-Za-z0-9_.-]+\.[A-Za-z0-9]+$/', $file)) {
+                continue;
+            }
+
+            $source = $config['dir'] . '/pending/' . $session . '/' . $file;
+
+            if (!is_file($source)) {
+                continue;
+            }
+
+            $dest = $dir . '/' . $file;
+
+            if (!rename($source, $dest)) {
+                continue;
+            }
+
+            foreach (['thumb_', 'web_'] as $prefix) {
+                $variant = $config['dir'] . '/pending/' . $session . '/' . $prefix . $file;
+
+                if (is_file($variant)) {
+                    rename($variant, $dir . '/' . $prefix . $file);
+                }
+            }
+
+            $isImage = !is_video($file);
+
+            $list[] = [
+                'filename' => $file,
+                'original' => $file,
+                'hash'     => sha1_file($dest),
+                'is_image' => $isImage,
+            ];
+            $added++;
+
+            // Remove the abandoned session dir once it is empty.
+            $sessionDir = $config['dir'] . '/pending/' . $session;
+            if (is_dir($sessionDir) && count(glob($sessionDir . '/*') ?: []) === 0) {
+                @rmdir($sessionDir);
+            }
+        }
+
+        if ($added === 0) {
+            $this->flash('error', 'None of the selected uploads could be resumed.');
+            $this->redirect('/admin/abandoned-uploads');
+        }
+
+        $_SESSION['pending_gallery_files'] = $list;
+
+        $this->flash('success', $added . ' upload(s) staged. Finish creating the gallery below.');
+        $this->redirect('/admin/galleries/create?resume=1');
+    }
+
+    /**
      * Admin: assign one abandoned staged upload to a compatible gallery.
      * The file is moved out of the pending staging dir into the uploads dir,
      * deduplicated by content hash, and attached to the chosen gallery.
