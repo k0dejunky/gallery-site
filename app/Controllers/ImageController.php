@@ -24,7 +24,7 @@ class ImageController extends Controller
      */
     protected function showMedia(int $id, bool $requireVideo): void
     {
-        Auth::requireSubscription();
+        Auth::requireLogin();
 
         $photo = Photo::find($id);
 
@@ -33,14 +33,19 @@ class ImageController extends Controller
             return;
         }
 
+        $galleryId = Photo::firstGalleryId($id);
+        $gallery   = $galleryId !== null ? Gallery::find($galleryId) : null;
+
+        Auth::requireGalleryLevel(
+            Photo::minimumGalleryLevel($id),
+            'A membership is required to view that media.'
+        );
+
         $user = Auth::user();
 
         if ($user !== null) {
             Photo::recordView($id, (int) $user['id']);
         }
-
-        $galleryId = Photo::firstGalleryId($id);
-        $gallery   = $galleryId !== null ? Gallery::find($galleryId) : null;
 
         [$prev, $next] = $galleryId !== null
             ? Photo::galleryNeighbors($galleryId, $id)

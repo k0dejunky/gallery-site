@@ -243,11 +243,12 @@ class GalleryController extends Controller
     }
 
     /**
-     * A gallery's photo/video viewer page.
+     * A gallery's photo/video viewer page. Level 0 (free) galleries are open
+     * to any logged-in user; higher levels require a matching subscription.
      */
     public function show(int $id): void
     {
-        Auth::requireSubscription();
+        Auth::requireLogin();
 
         $gallery = Gallery::find($id);
 
@@ -255,6 +256,11 @@ class GalleryController extends Controller
             $this->notFound();
             return;
         }
+
+        Auth::requireGalleryLevel(
+            (int) ($gallery['min_level'] ?? 0),
+            'A membership is required to view that gallery.'
+        );
 
         $user = Auth::user();
 

@@ -70,6 +70,20 @@ class Photo
     }
 
     /**
+     * Look up a photo by its stored filename, used to gate direct file access
+     * by the gallery's minimum membership level.
+     */
+    public static function findByFilename(string $filename): ?array
+    {
+        $photo = Database::run(
+            'SELECT * FROM photos WHERE filename = ? LIMIT 1',
+            [$filename]
+        )->fetch();
+
+        return $photo ?: null;
+    }
+
+    /**
      * Insert a new photo record and return its id. The media type (image vs
      * video) is derived from the filename's extension and stored in
      * <code>is_video</code> so every media-type query can use an index-backed
@@ -106,6 +120,24 @@ class Photo
         )->fetchColumn();
 
         return ($id === false || $id === null) ? null : (int) $id;
+    }
+
+    /**
+     * The lowest minimum membership level across every gallery that contains
+     * this photo. Used to gate direct media views: a photo living in a free
+     * (level 0) gallery stays viewable to logged-in free users even if a
+     * sibling gallery is subscription-only.
+     */
+    public static function minimumGalleryLevel(int $photoId): int
+    {
+        $level = Database::run(
+            'SELECT MIN(g.min_level) FROM gallery_photo gp
+             INNER JOIN galleries g ON g.id = gp.gallery_id
+             WHERE gp.photo_id = ?',
+            [$photoId]
+        )->fetchColumn();
+
+        return ($level === false || $level === null) ? 0 : (int) $level;
     }
 
     /**

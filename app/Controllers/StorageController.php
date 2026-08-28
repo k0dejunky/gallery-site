@@ -4,14 +4,17 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Models\Photo;
 
 class StorageController extends Controller
 {
     /**
      * Serve an uploaded file or generated variant. Thumbnails are public for
-     * the login page; originals and web-sized variants require authentication.
-     * Video playback is supported through HTTP Range requests (206 partial
-     * content), which browsers require for seeking in large files.
+     * the login page; originals and web-sized variants require the viewer to
+     * reach the gallery's minimum membership level (free level-0 content is
+     * available to any logged-in user). Video playback is supported through
+     * HTTP Range requests (206 partial content), which browsers require for
+     * seeking in large files.
      */
     public function serve(string $file): void
     {
@@ -25,9 +28,19 @@ class StorageController extends Controller
         $size = (string) $this->request->query('size', '');
 
         // Thumbnails remain available on the guest login page, but originals
-        // and web-sized variants require a paid membership.
+        // and web-sized variants are gated by the media's gallery level. Files
+        // with no photo record (e.g. video exports) keep the subscription gate.
         if ($size !== 'thumb') {
-            Auth::requireSubscription();
+            $photo = Photo::findByFilename($name);
+
+            if ($photo === null) {
+                Auth::requireSubscription();
+            } else {
+                Auth::requireGalleryLevel(
+                    Photo::minimumGalleryLevel((int) $photo['id']),
+                    'A membership is required to view that file.'
+                );
+            }
         }
 
         if ($size === 'thumb') {

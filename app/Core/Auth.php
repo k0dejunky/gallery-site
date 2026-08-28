@@ -277,6 +277,31 @@ class Auth
     }
 
     /**
+     * Guard for content gated by a gallery's minimum membership level. Level 0
+     * content is free for any logged-in user; higher levels require a
+     * subscription that reaches that level. Anonymous visitors go to login.
+     */
+    public static function requireGalleryLevel(int $minLevel, string $message): void
+    {
+        self::start();
+
+        if (!isset($_SESSION['user_id'])) {
+            header('Location: ' . url('/login'));
+            exit;
+        }
+
+        if ($minLevel <= 0) {
+            return;
+        }
+
+        if (!self::hasMembershipLevel($minLevel)) {
+            Flash::set('error', $message);
+            header('Location: ' . url('/membership'));
+            exit;
+        }
+    }
+
+    /**
      * Guard for actions that need a membership of at least the given plan
      * level: users who do not qualify are redirected to the membership page
      * with the given message. Anonymous visitors go to the login page.
