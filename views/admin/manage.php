@@ -20,6 +20,17 @@
         <span class="type-switch-track" aria-hidden="true"></span>
         <strong class="type-switch-label"><?= ($gallery['type'] ?? 'images') === 'videos' ? 'Video Gallery' : 'Image Gallery' ?></strong>
     </label>
+    <p class="muted" style="margin-top: var(--spacing-sm);">
+        <label for="manage-min-level">Membership level required to view</label>
+        <select name="min_level" id="manage-min-level">
+            <option value="0"<?= (int) ($gallery['min_level'] ?? 0) === 0 ? ' selected' : '' ?>>Level 0 — Free for all registered users</option>
+            <option value="1"<?= (int) ($gallery['min_level'] ?? 0) === 1 ? ' selected' : '' ?>>Level 1 — Silver</option>
+            <option value="2"<?= (int) ($gallery['min_level'] ?? 0) === 2 ? ' selected' : '' ?>>Level 2 — Gold</option>
+            <option value="3"<?= (int) ($gallery['min_level'] ?? 0) === 3 ? ' selected' : '' ?>>Level 3 — Platinum</option>
+            <option value="4"<?= (int) ($gallery['min_level'] ?? 0) === 4 ? ' selected' : '' ?>>Level 4 — Diamond</option>
+        </select>
+        <span class="muted">Members below this level cannot view the gallery.</span>
+    </p>
     <?php if (empty($categories)): ?>
         <p class="muted">No categories available.</p>
     <?php else: ?>
