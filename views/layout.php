@@ -175,6 +175,7 @@ $isAuthPage = $isLoginPage
          .theme-choice-preview button:hover { background: var(--btn-hover-bg); }
          @media (max-width: 768px) { .theme-choice-layout { grid-template-columns: 1fr; } }
         .collapsible { overflow: hidden; transition: max-height .3s; }
+        img { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
      </style>
     <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=4">
 </head>

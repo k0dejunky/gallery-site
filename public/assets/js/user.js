@@ -300,3 +300,28 @@
     });
   });
 })();
+
+/* Anti-image-protection: disable right-click, drag, and save shortcuts */
+(function(){
+  document.addEventListener('contextmenu',function(e){
+    if(e.target.tagName==='IMG'||e.target.closest('img')){
+      e.preventDefault();
+      return false;
+    }
+  });
+  document.addEventListener('dragstart',function(e){
+    if(e.target.tagName==='IMG'||e.target.closest('img')){
+      e.preventDefault();
+      return false;
+    }
+  });
+  document.addEventListener('keydown',function(e){
+    if((e.ctrlKey||e.metaKey)&&(e.key==='s'||e.key==='S')){
+      var a=document.activeElement;
+      if(a&&(a.tagName==='IMG'||a.closest('img')||a.closest('.se-lightbox'))){
+        e.preventDefault();
+        return false;
+      }
+    }
+  });
+})();
