@@ -54,7 +54,7 @@ foreach ($recentVideos as $photo) {
 
     <p class="auth-links">No account yet? <a href="<?= url('/signup') ?>">Sign up</a> &middot; <a href="<?= url('/membership') ?>">Membership</a> &middot; <a href="<?= url('/admin') ?>">Admin login</a></p>
     <p class="muted" style="text-align:center;font-size:0.8rem;margin-bottom:0;">
-        <a href="<?= url('/terms') ?>">Terms of Service</a> &middot; <a href="<?= url('/privacy') ?>">Privacy Policy</a>
+        <a href="<?= url('/terms') ?>">Terms of Service</a> &middot; <a href="<?= url('/privacy') ?>">Privacy Policy</a> &middot; <a href="<?= url('/about') ?>">About Us</a>
     </p>
 </div>
 

@@ -9,6 +9,7 @@ return [
     ['GET', '/', 'AuthController@loginForm'],
     ['GET', '/terms', 'StaticPageController@terms'],
     ['GET', '/privacy', 'StaticPageController@privacy'],
+    ['GET', '/about', 'StaticPageController@about'],
     ['GET', '/galleries', 'GalleryController@index'],
     ['GET', '/galleries/category/{slug}', 'GalleryController@category'],
     ['GET', '/galleries/{id}/photos', 'GalleryController@photosPage'],

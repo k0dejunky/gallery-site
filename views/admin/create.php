@@ -425,6 +425,7 @@
                 <tr>
                     <th><input type="checkbox" id="gallery-check-all" title="Select all"></th>
                     <th>Title</th>
+                    <th>Level</th>
                     <th>Photos</th>
                     <th>Total Views</th>
                     <th>Unique Views</th>
@@ -437,6 +438,11 @@
                     <tr>
                         <td><input type="checkbox" name="ids[]" value="<?= (int) $gallery['id'] ?>" class="gallery-check"></td>
                         <td><?= e($gallery['title']) ?></td>
+                        <td><?php
+                            $level = (int) ($gallery['min_level'] ?? 0);
+                            $levelNames = [0 => 'Free', 1 => 'Silver', 2 => 'Gold', 3 => 'Platinum', 4 => 'Diamond'];
+                            echo $levelNames[$level] ?? 'Level ' . $level;
+                        ?></td>
                         <td><?= (int) $gallery['photo_count'] ?></td>
                         <td><?= number_format((int) $gallery['views']) ?></td>
                         <td><?= number_format((int) $gallery['unique_views']) ?></td>

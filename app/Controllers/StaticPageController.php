@@ -11,6 +11,18 @@ use App\Core\Controller;
 class StaticPageController extends Controller
 {
     /**
+     * Render the About page.
+     */
+    public function about(): void
+    {
+        $this->view('about', [
+            'title'            => 'About Us',
+            'siteName'         => (string) config('app.site_name'),
+            'supportEmail'     => 'support@' . (string) config('app.site_name') . '.com',
+        ]);
+    }
+
+    /**
      * Render the Terms of Service page.
      */
     public function terms(): void
