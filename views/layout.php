@@ -195,9 +195,9 @@ $isAuthPage = $isLoginPage
     </header>
     <?php if (!$sidebarNav && !$isAuthPage): ?>
     <nav class="nav">
-        <button class="nav-toggle" type="button" aria-label="Menu" onclick="document.querySelector('.nav-links').classList.toggle('open')">&#9776;</button>
+        <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav-links-id" id="nav-toggle-id" onclick="GalleryNav.toggle()">&#9776;</button>
         <span class="spacer"></span>
-        <div class="nav-links">
+        <div class="nav-links" id="nav-links-id">
         <?php if ($user !== null): ?>
             <a class="btn btn-sm btn-outline" href="<?= url('/settings') ?>">Settings</a>
             <form class="inline" method="post" action="<?= url('/logout') ?>">
@@ -366,6 +366,35 @@ $isAuthPage = $isLoginPage
 
         })();
     </script>
+    <script>
+        // Accessible mobile nav: track the expanded state on the toggle button
+        // and close the dropdown on outside clicks, Escape, or following a link.
+        window.GalleryNav = {
+            toggle: function () {
+                var btn = document.getElementById('nav-toggle-id');
+                var links = document.getElementById('nav-links-id');
+                if (!btn || !links) return;
+                var open = links.classList.toggle('open');
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            },
+            close: function () {
+                var btn = document.getElementById('nav-toggle-id');
+                var links = document.getElementById('nav-links-id');
+                if (!btn || !links) return;
+                links.classList.remove('open');
+                btn.setAttribute('aria-expanded', 'false');
+            }
+        };
+        document.addEventListener('click', function (e) {
+            var links = document.getElementById('nav-links-id');
+            if (!links) return;
+            var inside = links.contains(e.target) || (e.target.id && e.target.id === 'nav-toggle-id');
+            if (!inside) window.GalleryNav.close();
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') window.GalleryNav.close();
+        });
+    </script>
 <?php if (!empty($_GET['se']) && in_array($_GET['se'], ['1', 'user'], true)): ?>
     <script>
     (function(){
@@ -434,6 +463,6 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
     </script>
 <?php endif; ?>
     <script>try{var p=JSON.parse(localStorage.getItem('galleryDisplayPrefs')||'{}');var v=p.view||'grid';var s=p.size||'md';document.documentElement.classList.add('g-view-'+v);document.documentElement.classList.add('g-size-'+s);if(p.masonry)document.documentElement.classList.add('g-masonry');}catch(e){document.documentElement.classList.add('g-view-grid');document.documentElement.classList.add('g-size-md');}</script>
-    <script src="<?= url('/assets/js/user.js') ?>?v=3" defer></script>
+    <script src="<?= url('/assets/js/user.js') ?>?v=4" defer></script>
 </body>
 </html>

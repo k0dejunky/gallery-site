@@ -136,12 +136,26 @@
     var gallery=document.getElementById('gallery'), progress=document.getElementById('gallery-progress');
     if(gallery){
       var key='gallery-position-'+location.pathname;
+      var items=function(){return Array.prototype.slice.call(document.querySelectorAll('[data-gallery-index]'));};
       try{
         var saved=JSON.parse(localStorage.getItem(key)||'null');
-        if(saved&&typeof saved.y==='number')window.setTimeout(function(){window.scrollTo(0,saved.y)},0);
-        if(saved&&typeof saved.index==='number'&&progress)progress.textContent='Item '+(saved.index+1)+' of '+document.querySelectorAll('[data-gallery-thumb]').length;
+        if(saved&&saved.index!=null){
+          // Scroll to the exact item the member was viewing (element-based so
+          // it stays accurate even while lazy thumbnails above are still
+          // loading and reshuffling layout height).
+          var list=items();
+          if(list[saved.index]){
+            var target=list[saved.index];
+            window.setTimeout(function(){target.scrollIntoView({block:'start'});},0);
+          }else if(typeof saved.y==='number'){
+            window.scrollTo(0,saved.y);
+          }
+          if(progress)progress.textContent='Item '+(saved.index+1)+' of '+list.length;
+        }else if(saved&&typeof saved.y==='number'){
+          window.scrollTo(0,saved.y);
+        }
       }catch(e){}
-      gallery.querySelectorAll('a[href]').forEach(function(link){
+      gallery.querySelectorAll('a[href][data-gallery-index]').forEach(function(link){
         link.addEventListener('click',function(){
           var index=parseInt(link.getAttribute('data-gallery-index')||'',10);
           if(!isFinite(index))return;

@@ -20,7 +20,10 @@ $breadcrumbItems = [
 <?php endif; ?>
 
 <?php if (empty($photos)): ?>
-    <p>No photos in this gallery yet.</p>
+    <div class="empty-state">
+        <p class="muted">This gallery doesn&rsquo;t have any media yet.</p>
+        <a class="btn btn-sm" href="<?= e(url('/galleries')) ?>">Browse other galleries</a>
+    </div>
 <?php else: ?>
     <div class="grid" id="gallery">
         <?php foreach ($photos as $idx => $photo): ?>
