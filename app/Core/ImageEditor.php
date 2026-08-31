@@ -36,6 +36,16 @@ class ImageEditor
         }
 
         if ($image === false) {
+            // Formats GD cannot open (HEIC/HEIF, TIFF, AVIF) are decoded via
+            // ImageMagick when available, then handed to GD as pixels.
+            if (class_exists('\\Imagick')) {
+                $viaImagick = _load_image_imagick($path);
+
+                if ($viaImagick !== null) {
+                    return $viaImagick;
+                }
+            }
+
             return null;
         }
 

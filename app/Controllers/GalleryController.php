@@ -779,7 +779,7 @@ class GalleryController extends Controller
         }
 
         if ($isImage) {
-            if (@getimagesize($files['tmp_name'][$index]) === false) {
+            if (!image_can_decode($files['tmp_name'][$index])) {
                 return 'File is not a valid image.';
             }
 
@@ -799,6 +799,8 @@ class GalleryController extends Controller
         $map = [
             'image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif',
             'image/webp' => 'webp', 'image/bmp' => 'bmp', 'image/x-ms-bmp' => 'bmp',
+            'image/heic' => 'heic', 'image/heif' => 'heic',
+            'image/avif' => 'avif', 'image/tiff' => 'tiff', 'image/x-tiff' => 'tiff',
             'image/vnd.microsoft.icon' => 'ico', 'image/x-icon' => 'ico',
             'video/mp4' => 'mp4', 'video/webm' => 'webm', 'video/ogg' => 'ogg',
             'video/quicktime' => 'mov', 'video/x-msvideo' => 'avi',

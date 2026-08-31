@@ -464,6 +464,6 @@
         });
     })();
     </script>
-    <?php $baseUrl = url('/admin'); require __DIR__ . '/../partials/pagination.php'; ?>
+    <?php $baseUrl = url('/admin/galleries/create'); require __DIR__ . '/../partials/pagination.php'; ?>
     <?php endif; ?>
 </div>

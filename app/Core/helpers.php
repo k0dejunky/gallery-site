@@ -319,6 +319,148 @@ function apply_exif_orientation($image, int $orientation)
 }
 
 /**
+ * Decode an image file with ImageMagick (when available) and hand the result
+ * to GD as true-color pixels, returning [$resource, IMAGETYPE_JPEG] or null.
+ *
+ * This is the path for formats GD/getimagesize cannot read on their own --
+ * notably HEIC/HEIF (iPhone), which PHP's getimagesize returns false for on
+ * builds without HEIC support -- plus TIFF and AVIF. Auto-orientation is
+ * applied so the pixels are already upright, and the width/type returned is
+ * IMAGETYPE_JPEG so downstream variant/save code writes compact JPEG (plus
+ * the separate WebP copies produced alongside).
+ */
+function _load_image_imagick(string $src): ?array
+{
+    if (!class_exists('Imagick')) {
+        return null;
+    }
+
+    try {
+        $im = new Imagick($src);
+
+        if ($im->getNumberImages() < 1 || $im->getImageWidth() < 1) {
+            $im->destroy();
+
+            return null;
+        }
+
+        $im->setIteratorIndex(0);
+
+        // Auto-orient by rotating from the EXIF orientation tag. manual
+        // rotation is used because autoOrientImage() is unavailable on some
+        // ImageMagick 6/php-imagick builds, and method_exists is unreliable
+        // for Imagick (it dispatches all unknown methods via __call).
+        $orientation = $im->getImageOrientation();
+
+        if ($orientation === \Imagick::ORIENTATION_LEFTTOP) {
+            $im->rotateImage('#00000000', 90);
+        } elseif ($orientation === \Imagick::ORIENTATION_RIGHTTOP) {
+            $im->rotateImage('#00000000', 180);
+        } elseif ($orientation === \Imagick::ORIENTATION_RIGHTBOTTOM) {
+            $im->rotateImage('#00000000', 270);
+        } elseif ($orientation === \Imagick::ORIENTATION_LEFTBOTTOM) {
+            $im->rotateImage('#00000000', 0);
+        } elseif ($orientation === \Imagick::ORIENTATION_TOPRIGHT) {
+            $im->flopImage();
+        } elseif ($orientation === \Imagick::ORIENTATION_BOTTOMLEFT) {
+            $im->flipImage();
+        } elseif ($orientation === \Imagick::ORIENTATION_BOTTOMRIGHT) {
+            $im->rotateImage('#00000000', 90);
+            $im->flopImage();
+        }
+
+        $im->setImageOrientation(\Imagick::ORIENTATION_TOPLEFT);
+
+        // Flatten layered formats (e.g. TIFF/PDF) onto the first frame so the
+        // single frame we hand to GD is the visible one. mergeImageLayers works
+        // across ImageMagick 6 and 7 without deprecation notices.
+        if ($im->getNumberImages() > 1 && method_exists($im, 'mergeImageLayers')) {
+            $flat = $im->mergeImageLayers(\Imagick::LAYERMETHOD_FLATTEN);
+
+            if ($flat !== false) {
+                $im->destroy();
+                $im = $flat;
+            }
+        }
+
+        // Drop any alpha channel so the JPEG we output has a solid background
+        // (matching the dominant photo path) rather than translucent pixels.
+        $im->setImageBackgroundColor('#ffffff');
+        $im->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
+
+        // Encode to PNG inside ImageMagick before reading pixels back: the PNG
+        // encoder is always available, whereas re-encoding a format the box can
+        // only decode (HEIC has no HEVC encoder) would yield an empty blob.
+        $im->setImageFormat('PNG');
+        $blob = $im->getImageBlob();
+
+        $im->destroy();
+    } catch (Throwable $e) {
+        return null;
+    }
+
+    if ($blob === '') {
+        return null;
+    }
+
+    $image = @imagecreatefromstring($blob);
+
+    if ($image === false) {
+        return null;
+    }
+
+    if (!imageistruecolor($image)) {
+        imagepalettetotruecolor($image);
+    }
+
+    return [$image, IMAGETYPE_JPEG];
+}
+
+/**
+ * Whether a file can be decoded as an image for upload/storage. Uses GD's
+ * getimagesize when it recognises the file, falling back to ImageMagick for
+ * formats (HEIC/HEIF, AVIF, TIFF) GD cannot inspect.
+ */
+function image_can_decode(string $src): bool
+{
+    if (@getimagesize($src) !== false) {
+        return true;
+    }
+
+    return _load_image_imagick($src) !== null;
+}
+
+/**
+ * Measured pixel dimensions [width, height] of an image via ImageMagick, or
+ * null when it cannot be decoded. Used by create_image_variants to size a
+ * source that getimagesize cannot inspect (HEIC/HEIF).
+ */
+function _imagick_dimensions(string $src): ?array
+{
+    if (!class_exists('Imagick')) {
+        return null;
+    }
+
+    try {
+        $im = new Imagick($src);
+
+        if ($im->getNumberImages() < 1 || $im->getImageWidth() < 1) {
+            $im->destroy();
+
+            return null;
+        }
+
+        $dims = [$im->getImageWidth(), $im->getImageHeight()];
+
+        $im->destroy();
+
+        return $dims;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/**
  * Load an image file into a GD resource, returning [$resource, $type] or
  * [false, 0] on failure. Shared by create_thumbnail and create_web_image.
  */
@@ -326,8 +468,13 @@ function _load_image(string $src)
 {
     $info = @getimagesize($src);
 
+    // getimagesize returns false for some valid formats (HEIC/HEIF on builds
+    // without HEIC support, and some AVIF/TIFF variants) that ImageMagick can
+    // still decode. Try Imagick before giving up.
     if ($info === false) {
-        return [false, 0];
+        $imagick = _load_image_imagick($src);
+
+        return $imagick !== null ? $imagick : [false, 0];
     }
 
     $type = $info[2];
@@ -378,6 +525,8 @@ function _load_image(string $src)
         $image = @imagecreatefromgif($src);
     } elseif ($type === IMAGETYPE_WEBP && function_exists('imagecreatefromwebp')) {
         $image = @imagecreatefromwebp($src);
+    } elseif ($type === IMAGETYPE_BMP && function_exists('imagecreatefrombmp')) {
+        $image = @imagecreatefrombmp($src);
     }
 
     if ($prescaled !== null) {
@@ -385,7 +534,11 @@ function _load_image(string $src)
     }
 
     if ($image === false) {
-        return [false, 0];
+        // getimagesize recognised the file (AVIF/TIFF/BMP report a type) but
+        // GD still cannot decode it. Fall back to ImageMagick.
+        $imagick = _load_image_imagick($src);
+
+        return $imagick !== null ? $imagick : [false, 0];
     }
 
     return [$image, $type];
@@ -584,16 +737,29 @@ function create_image_variants(string $src, string $webDest, string $thumbDest, 
 
     $info = @getimagesize($src);
 
+    // getimagesize returns false for some valid formats (HEIC/HEIF on builds
+    // without HEIC support, and some AVIF/TIFF variants). ImageMagick can
+    // still decode them, so measure the source through Imagick and continue
+    // via the GD fallback path below; _variants_gd -> _load_image handles the
+    // Imagick decode itself. Genuine JPEGs keep the fast ffmpeg path.
     if ($info === false) {
-        return false;
-    }
+        $imagickDims = _imagick_dimensions($src);
 
-    [$srcW, $srcH, $type] = $info;
+        if ($imagickDims === null) {
+            return false;
+        }
+
+        $nativeJpeg = false;
+        [$srcW, $srcH, $type] = [$imagickDims[0], $imagickDims[1], IMAGETYPE_JPEG];
+    } else {
+        $nativeJpeg = $info[2] === IMAGETYPE_JPEG;
+        [$srcW, $srcH, $type] = $info;
+    }
 
     $webpWebDest   = preg_replace('/\.[^.]+$/', '.webp', $webDest);
     $webpThumbDest = preg_replace('/\.[^.]+$/', '.webp', $thumbDest);
 
-    if ($type === IMAGETYPE_JPEG && is_executable('/usr/bin/ffmpeg')) {
+    if ($nativeJpeg && is_executable('/usr/bin/ffmpeg')) {
         $orientation = exif_orientation_of($src);
 
         // Orientations 5-8 swap width/height relative to the stored pixels.

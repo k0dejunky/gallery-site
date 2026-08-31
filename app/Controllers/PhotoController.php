@@ -803,7 +803,7 @@ class PhotoController extends Controller
         }
 
         if ($isImage) {
-            if (@getimagesize($files['tmp_name'][$index]) === false) {
+            if (!image_can_decode($files['tmp_name'][$index])) {
                 return 'File is not a valid image.';
             }
 
