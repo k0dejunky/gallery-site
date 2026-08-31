@@ -10,11 +10,15 @@ class StorageController extends Controller
 {
     /**
      * Serve an uploaded file or generated variant. Thumbnails are public for
-     * the login page; originals and web-sized variants require the viewer to
-     * reach the gallery's minimum membership level (free level-0 content is
-     * available to any logged-in user). Video playback is supported through
-     * HTTP Range requests (206 partial content), which browsers require for
-     * seeking in large files.
+     * the login page; originals and web-sized variants require:
+     *
+     *  1. A valid GALLERY_MEDIA_KEY token in the query string so the URL
+     *     can't be replayed from DevTools / new-tab / direct link without
+     *     the signed HMAC.
+     *  2. The viewer to reach the gallery's minimum membership level.
+     *
+     * Video playback is supported through HTTP Range requests (206 partial
+     * content), which browsers require for seeking in large files.
      */
     public function serve(string $file): void
     {
@@ -27,11 +31,23 @@ class StorageController extends Controller
 
         $size   = (string) $this->request->query('size', '');
         $format = (string) $this->request->query('format', '');
+        $token  = (string) $this->request->query('t', '');
 
         // Thumbnails remain available on the guest login page, but originals
-        // and web-sized variants are gated by the media's gallery level. Files
-        // with no photo record (e.g. video exports) keep the subscription gate.
+        // and web-sized variants are gated by a signed media token AND the
+        // viewer's gallery level. Files with no photo record (e.g. video
+        // exports) keep the subscription gate.
         if ($size !== 'thumb') {
+            // Require a valid HMAC token so raw-URL replay from DevTools is
+            // rejected. The token is bound to the original filename plus the
+            // caller's session, so it can't be used without the matching
+            // session cookie and stays valid for the life of the session
+            // (bounded by the app's session idle timeout).
+            if (!media_token_valid($name, $token)) {
+                $this->notFound();
+                return;
+            }
+
             $photo = Photo::findByFilename($name);
 
             if ($photo === null) {

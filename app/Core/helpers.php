@@ -39,6 +39,52 @@ function url(string $path = ''): string
 }
 
 /**
+ * Produce a session-bound HMAC token proving a request URL was handed out by
+ * this exact browser session, backed by GALLERY_MEDIA_KEY from the .env file.
+ * Non-thumb media served via /files/ require this token so a raw URL (e.g.
+ * opened directly, or copied from DevTools by an outsider) can't be replayed:
+ * the token is useless unless the requester also holds the matching session
+ * cookie.
+ *
+ * Tokens have no short time expiry and stay valid for the life of the session,
+ * so long video watch/seek (which reuses the URL across Range requests) is
+ * never interrupted — the app's existing session idle timeout still bounds
+ * how long a session (and therefore its tokens) remains usable.
+ */
+function media_token(string $path): string
+{
+    $secret = env_value('GALLERY_MEDIA_KEY');
+
+    if ($secret === '') {
+        return '';
+    }
+
+    return hash_hmac('sha256', $path . ':' . session_id(), $secret);
+}
+
+/**
+ * Validate a media token for a path. $given comes from the request t=
+ * query parameter; $path is the canonical target. Returns true when the
+ * signature matches the token produced for the current session.
+ */
+function media_token_valid(string $path, string $given): bool
+{
+    if ($given === '') {
+        return false;
+    }
+
+    $secret = env_value('GALLERY_MEDIA_KEY');
+
+    if ($secret === '') {
+        // No secret configured: the gate is inert so the site keeps working,
+        // but originals/web sizes still require the membership level check.
+        return true;
+    }
+
+    return hash_equals(media_token($path), $given);
+}
+
+/**
  * Build the URL used to serve an uploaded file, optionally pointing at a
  * generated variant served by StorageController: '' = the original full-size
  * file, 'thumb' = the 400x300 crop, 'web' = the fast-loading web variant.
@@ -68,6 +114,16 @@ function file_url(string $filename, string $size = '', string $format = ''): str
 
         if ($mtime !== false) {
             $query .= '&v=' . $mtime;
+        }
+    }
+
+    // Append a time-bound HMAC for non-thumb variants so a raw URL opened in
+    // DevTools or a new tab can't be saved without the token.
+    if ($size !== 'thumb') {
+        $token = media_token($filename);
+
+        if ($token !== '') {
+            $query .= ($query === '' ? '?' : '&') . 't=' . rawurlencode($token);
         }
     }
 
