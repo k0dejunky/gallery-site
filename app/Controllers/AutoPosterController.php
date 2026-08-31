@@ -103,6 +103,95 @@ class AutoPosterController extends Controller
     }
 
     /**
+     * Redirect the admin to X's OAuth2 authorization page (PKCE + refresh
+     * token) so the app can post tweets on their behalf. Stores the state and
+     * PKCE code_verifier in the session for the callback.
+     */
+    public function authorizeTwitter(): void
+    {
+        $config  = AutoPosterConfig::all();
+        $twitter = new TwitterClient($config['twitter']);
+
+        if (!$twitter->isConfigured()) {
+            $this->flash('error', 'Save your X client ID and secret first.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        $state         = bin2hex(random_bytes(16));
+        $codeVerifier  = $this->pkceVerifier();
+        $codeChallenge = rtrim(strtr(base64_encode(hash('sha256', $codeVerifier, true)), '+/', '-_'), '=');
+
+        $_SESSION['twitter_oauth_state']   = $state;
+        $_SESSION['twitter_pkce_verifier'] = $codeVerifier;
+
+        $redirectUri = $this->absoluteUrl('/admin/auto-poster/twitter/callback');
+
+        header('Location: ' . $twitter->authorizationUrl($state, $codeChallenge, $redirectUri));
+        exit;
+    }
+
+    /**
+     * Handle X's OAuth callback. Verifies the state token, exchanges the code
+     * for a refresh token (using the PKCE verifier) and stores it.
+     */
+    public function callbackTwitter(): void
+    {
+        $code  = trim((string) $this->request->query('code', ''));
+        $state = trim((string) $this->request->query('state', ''));
+        $error = trim((string) $this->request->query('error', ''));
+
+        if ($error !== '') {
+            $this->flash('error', 'X authorization was cancelled or failed: ' . $error);
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        $expected = $_SESSION['twitter_oauth_state'] ?? '';
+        unset($_SESSION['twitter_oauth_state']);
+
+        if ($state === '' || !hash_equals($expected, $state)) {
+            $this->flash('error', 'X authorization state mismatch. Please try again.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        $verifier = $_SESSION['twitter_pkce_verifier'] ?? '';
+        unset($_SESSION['twitter_pkce_verifier']);
+
+        if ($code === '') {
+            $this->flash('error', 'X did not return an authorization code.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        $config  = AutoPosterConfig::all();
+        $twitter = new TwitterClient($config['twitter']);
+        $redirectUri = $this->absoluteUrl('/admin/auto-poster/twitter/callback');
+
+        $result = $twitter->exchangeCode($code, $verifier, $redirectUri);
+
+        if (!$result['ok']) {
+            $this->flash('error', $result['error'] ?? 'X authorization failed.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        AutoPosterConfig::saveTwitterToken($result['refresh_token'], $result['access_token'] ?? '');
+
+        $this->flash('success', 'X authorized successfully. You can now post tweets.');
+        $this->redirect('/admin/auto-poster');
+    }
+
+    /**
+     * Generate a random PKCE code_verifier (43-128 chars, unreserved chars).
+     */
+    private function pkceVerifier(): string
+    {
+        return rtrim(strtr(base64_encode(random_bytes(64)), '+/', '-_'), '=');
+    }
+
+    /**
      * Save the Reddit and X/Twitter API credentials.
      */
     public function saveSettings(): void
@@ -123,11 +212,23 @@ class AutoPosterController extends Controller
         }
 
         $twitter = [
-            'bearer_token' => trim((string) $this->request->post('twitter_bearer_token', '')),
+            'client_id'     => trim((string) $this->request->post('twitter_client_id', '')),
+            'client_secret' => trim((string) $this->request->post('twitter_client_secret', '')),
         ];
 
-        if ($twitter['bearer_token'] === '' && !empty($config['twitter']['bearer_token'])) {
-            $twitter['bearer_token'] = $config['twitter']['bearer_token'];
+        // Keep existing values if the fields were left blank (masked in the form).
+        if ($twitter['client_id'] === '' && !empty($config['twitter']['client_id'])) {
+            $twitter['client_id'] = $config['twitter']['client_id'];
+        }
+        if ($twitter['client_secret'] === '' && !empty($config['twitter']['client_secret'])) {
+            $twitter['client_secret'] = $config['twitter']['client_secret'];
+        }
+
+        // Preserve an existing authorization token across a settings save.
+        foreach (['refresh_token', 'access_token', 'bearer_token'] as $key) {
+            if (!empty($config['twitter'][$key])) {
+                $twitter[$key] = $config['twitter'][$key];
+            }
         }
 
         AutoPosterConfig::save($reddit, $twitter);

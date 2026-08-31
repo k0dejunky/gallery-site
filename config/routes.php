@@ -7,6 +7,8 @@ return [
     // Public (guests can reach these)
     ['GET', '/health', 'HealthController@show'],
     ['GET', '/', 'AuthController@loginForm'],
+    ['GET', '/terms', 'StaticPageController@terms'],
+    ['GET', '/privacy', 'StaticPageController@privacy'],
     ['GET', '/galleries', 'GalleryController@index'],
     ['GET', '/galleries/category/{slug}', 'GalleryController@category'],
     ['GET', '/galleries/{id}/photos', 'GalleryController@photosPage'],
@@ -212,6 +214,8 @@ return [
     ['POST', '/admin/auto-poster/settings', 'AutoPosterController@saveSettings'],
     ['GET', '/admin/auto-poster/reddit/authorize', 'AutoPosterController@authorizeReddit'],
     ['GET', '/admin/auto-poster/reddit/callback', 'AutoPosterController@callbackReddit'],
+    ['GET', '/admin/auto-poster/twitter/authorize', 'AutoPosterController@authorizeTwitter'],
+    ['GET', '/admin/auto-poster/twitter/callback', 'AutoPosterController@callbackTwitter'],
     ['POST', '/admin/auto-poster/post/reddit', 'AutoPosterController@postReddit'],
     ['POST', '/admin/auto-poster/post/twitter', 'AutoPosterController@postTwitter'],
     ['POST', '/admin/auto-poster/clear-log', 'AutoPosterController@clearLog'],

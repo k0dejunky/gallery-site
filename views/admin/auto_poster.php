@@ -2,9 +2,6 @@
 <?php
 $reddit  = $config['reddit'] ?? [];
 $twitter = $config['twitter'] ?? [];
-$maskSecret = static function (string $v): string {
-    return $v === '' ? '' : str_repeat('•', min(12, strlen($v)));
-};
 ?>
 <h1>Auto Poster</h1>
 <p class="muted">Post content from this site to Reddit (any subreddit) and X (formerly Twitter). Configure your API credentials below, then compose a post.</p>
@@ -27,7 +24,7 @@ $maskSecret = static function (string $v): string {
             </p>
             <p>
                 <label for="reddit_client_secret">Client Secret</label><br>
-                <input type="password" name="reddit_client_secret" id="reddit_client_secret" value="<?= e($maskSecret($reddit['client_secret'] ?? '')) ?>" placeholder="<?= empty($reddit['client_secret']) ? '' : 'Leave blank to keep the saved secret' ?>" style="width:100%;box-sizing:border-box;">
+                <input type="password" name="reddit_client_secret" id="reddit_client_secret" value="" placeholder="<?= empty($reddit['client_secret']) ? '' : 'Leave blank to keep the saved secret' ?>" style="width:100%;box-sizing:border-box;">
             </p>
             <p>
                 <label for="reddit_username">Reddit username</label><br>
@@ -55,14 +52,29 @@ $maskSecret = static function (string $v): string {
         <form method="post" action="<?= url('/admin/auto-poster/settings') ?>">
             <?= csrf_field() ?>
             <p class="muted" style="font-size:0.85rem;">
-                Create an app in the <a href="https://developer.x.com" target="_blank" rel="noopener">X developer portal</a>, grant <code>tweet.read tweet.write users.read</code>, and paste its bearer token.
+                Create an app in the <a href="https://developer.x.com" target="_blank" rel="noopener">X developer portal</a>
+                and set its <strong>callback URL</strong> to
+                <code><?= e((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . url('/admin/auto-poster/twitter/callback')) ?></code>.
+                Grant <code>tweet.read tweet.write users.read offline.access</code> and paste the app's Client ID and Client Secret below.
             </p>
             <p>
-                <label for="twitter_bearer_token">Bearer Token</label><br>
-                <input type="password" name="twitter_bearer_token" id="twitter_bearer_token" value="<?= e($maskSecret($twitter['bearer_token'] ?? '')) ?>" placeholder="<?= empty($twitter['bearer_token']) ? '' : 'Leave blank to keep the saved token' ?>" style="width:100%;box-sizing:border-box;">
+                <label for="twitter_client_id">Client ID</label><br>
+                <input type="text" name="twitter_client_id" id="twitter_client_id" value="<?= e($twitter['client_id'] ?? '') ?>" style="width:100%;box-sizing:border-box;">
+            </p>
+            <p>
+                <label for="twitter_client_secret">Client Secret</label><br>
+                <input type="password" name="twitter_client_secret" id="twitter_client_secret" value="" placeholder="<?= empty($twitter['client_secret']) ? '' : 'Leave blank to keep the saved secret' ?>" style="width:100%;box-sizing:border-box;">
             </p>
             <button type="submit" class="btn">Save X Settings</button>
         </form>
+        <p style="margin-top:0.75rem;">
+            <?php if (!empty($twitter['refresh_token'])): ?>
+                <span style="color:var(--success,#2e7d32);font-weight:600;">&#10003; Authorized — you can post tweets.</span>
+            <?php else: ?>
+                <span class="muted" style="display:block;margin-bottom:0.5rem;">Not authorized yet. Complete the flow below to enable posting.</span>
+                <a class="btn" href="<?= url('/admin/auto-poster/twitter/authorize') ?>">Authorize X</a>
+            <?php endif; ?>
+        </p>
     </div>
 </div>
 

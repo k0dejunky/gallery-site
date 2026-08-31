@@ -16,8 +16,11 @@ namespace App\Models;
  */
 class TwitterClient
 {
-    private const API_URL      = 'https://api.twitter.com/2';
-    private const MEDIA_URL    = 'https://upload.twitter.com/1.1/media/upload.json';
+    private const API_URL      = 'https://api.x.com/2';
+    private const MEDIA_URL    = 'https://upload.x.com/1.1/media/upload.json';
+    private const OAUTH_TOKEN_URL  = 'https://api.x.com/2/oauth2/token';
+    private const AUTHORIZE_URL    = 'https://x.com/i/oauth2/authorize';
+    private const SCOPES = 'tweet.read tweet.write users.read offline.access';
     private const CHUNK_SIZE   = 5242880; // 5 MB per APPEND chunk
     private const MAX_IMAGES   = 4;
     private const MAX_IMAGE_BYTES = 5242880; // 5 MB
@@ -31,11 +34,128 @@ class TwitterClient
     }
 
     /**
-     * Whether the required credentials are present.
+     * Whether the required client credentials are present.
      */
     public function isConfigured(): bool
     {
-        return !empty($this->config['bearer_token']);
+        return !empty($this->config['client_id']);
+    }
+
+    /**
+     * Whether an owned-account refresh token has been stored, i.e. the user has
+     * completed the OAuth2 authorization flow to let this app post on their
+     * behalf. Auto-posting to X requires this (the app must be approved for
+     * Read & Write with the automated-app OAuth2 flow).
+     */
+    public function isUserAuthorized(): bool
+    {
+        return !empty($this->config['refresh_token']);
+    }
+
+    /**
+     * OAuth2 Enhanced-BC with Proof Key for Code Exchange (PKCE) is the flow X
+     * requires for apps that automate posting on behalf of a single account.
+     * Returns the URL the admin must visit to authorize this app.
+     */
+    public function authorizationUrl(string $state, string $codeChallenge, string $redirectUri): string
+    {
+        $params = [
+            'response_type'         => 'code',
+            'client_id'             => $this->config['client_id'],
+            'redirect_uri'          => $redirectUri,
+            'scope'                 => self::SCOPES,
+            'state'                 => $state,
+            'code_challenge'        => $codeChallenge,
+            'code_challenge_method' => 'S256',
+        ];
+
+        return self::AUTHORIZE_URL . '?' . http_build_query($params);
+    }
+
+    /**
+     * Exchange the authorization code (returned on the callback) for a refresh
+     * token and initial access token. Uses the client credentials (Basic auth)
+     * to identify the app.
+     *
+     * @return array{ok:bool, refresh_token?:string, access_token?:string, error?:string}
+     */
+    public function exchangeCode(string $code, string $codeVerifier, string $redirectUri): array
+    {
+        return $this->tokenRequest([
+            'grant_type'    => 'authorization_code',
+            'code'          => $code,
+            'redirect_uri'  => $redirectUri,
+            'code_verifier' => $codeVerifier,
+        ]);
+    }
+
+    /**
+     * Obtain an OAuth2 access token for the authorized account. Uses the saved
+     * refresh token, renewing it when the response rotates it.
+     *
+     * @return array{ok:bool, token?:string, error?:string}
+     */
+    private function token(): array
+    {
+        if (!$this->isUserAuthorized()) {
+            return ['ok' => false, 'error' => 'X is not user-authorized. Complete the authorization flow first.'];
+        }
+
+        $result = $this->tokenRequest([
+            'grant_type'    => 'refresh_token',
+            'refresh_token' => $this->config['refresh_token'],
+        ]);
+
+        if (!$result['ok']) {
+            return $result;
+        }
+
+        // X rotates the refresh token on each use; persist the new one so the
+        // next post keeps working.
+        if (!empty($result['refresh_token']) && $result['refresh_token'] !== $this->config['refresh_token']) {
+            AutoPosterConfig::saveTwitterToken($result['refresh_token'], $result['access_token'] ?? '');
+        }
+
+        return ['ok' => true, 'token' => $result['access_token'] ?? ''];
+    }
+
+    /**
+     * POST to X's OAuth2 token endpoint. Adds the app's Basic auth header, the
+     * x-api-key header and the client_id form parameter X requires, then
+     * returns the normalized result array.
+     */
+    private function tokenRequest(array $form): array
+    {
+        $auth = base64_encode($this->config['client_id'] . ':' . ($this->config['client_secret'] ?? ''));
+
+        [$status, , $body] = Http::request(self::OAUTH_TOKEN_URL, [
+            'method'  => 'POST',
+            'headers' => [
+                'Authorization' => 'Basic ' . $auth,
+                'x-api-key'     => $this->config['client_id'],
+            ],
+            'form' => array_merge(['client_id' => $this->config['client_id']], $form),
+        ]);
+
+        if ($status < 200 || $status >= 300) {
+            $detail = json_decode($body, true);
+            $msg = is_array($detail)
+                ? ($detail['error_description'] ?? $detail['error'] ?? '')
+                : '';
+            return ['ok' => false, 'error' => $msg !== '' ? $msg : 'X OAuth failed (HTTP ' . $status . ').'];
+        }
+
+        $data = json_decode($body, true);
+
+        if (empty($data['refresh_token']) && empty($data['access_token'])) {
+            return ['ok' => false, 'error' => 'X returned no OAuth token.'];
+        }
+
+        return [
+            'ok'            => true,
+            'refresh_token' => $data['refresh_token'] ?? '',
+            'access_token'  => $data['access_token'] ?? '',
+        ];
     }
 
     /**
@@ -53,6 +173,12 @@ class TwitterClient
             return ['ok' => false, 'error' => 'X/Twitter is not configured.'];
         }
 
+        $auth = $this->token();
+        if (!$auth['ok']) {
+            return ['ok' => false, 'error' => $auth['error'] ?? 'X is not authorized.'];
+        }
+        $token = $auth['token'];
+
         $text = mb_substr(trim($content), 0, 280);
         if ($text === '') {
             return ['ok' => false, 'error' => 'Post text cannot be empty.'];
@@ -68,7 +194,7 @@ class TwitterClient
         if (!empty($media)) {
             $mediaIds = [];
             foreach ($media as $file) {
-                $upload = $this->uploadMedia($file);
+                $upload = $this->uploadMedia($file, $token);
                 if (!$upload['ok']) {
                     return $upload;
                 }
@@ -80,7 +206,7 @@ class TwitterClient
         [$status, , $body] = Http::request(self::API_URL . '/tweets', [
             'method'  => 'POST',
             'headers' => [
-                'Authorization' => 'Bearer ' . $this->config['bearer_token'],
+                'Authorization' => 'Bearer ' . $token,
                 'Content-Type'  => 'application/json',
             ],
             'json'    => $payload,
@@ -101,7 +227,7 @@ class TwitterClient
         return [
             'ok'  => true,
             'id'  => $tweetId,
-            'url' => $tweetId !== '' ? 'https://twitter.com/i/status/' . $tweetId : '',
+            'url' => $tweetId !== '' ? 'https://x.com/i/status/' . $tweetId : '',
         ];
     }
 
@@ -156,7 +282,7 @@ class TwitterClient
      *
      * @return array{ok:bool, media_id?:string, error?:string}
      */
-    private function uploadMedia(array $file): array
+    private function uploadMedia(array $file, string $token): array
     {
         $path = $file['tmp_name'] ?? '';
         if (!is_file($path)) {
@@ -167,7 +293,10 @@ class TwitterClient
         $mime  = $file['type'] ?? (mime_content_type($path) ?: 'application/octet-stream');
         $isVideo = strpos($mime, 'video/') === 0;
 
-        $headers = ['Authorization' => 'Bearer ' . $this->config['bearer_token']];
+        $headers = [
+            'Authorization' => 'Bearer ' . $token,
+            'x-api-key'     => $this->config['client_id'],
+        ];
 
         // INIT
         [$initStatus, , $initBody] = Http::request(self::MEDIA_URL, [

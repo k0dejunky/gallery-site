@@ -100,9 +100,21 @@ class Http
             return strlen($line);
         });
 
+        // Normalize headers into flat "Name: value" strings. PHP's cURL does not
+        // reliably convert associative (name => value) entries into header lines
+        // on every version, so every header must be a ready-to-send string.
+        $curlHeaders = [];
+        foreach ($headers as $name => $value) {
+            if (is_int($name)) {
+                $curlHeaders[] = (string) $value;
+            } else {
+                $curlHeaders[] = $name . ': ' . $value;
+            }
+        }
+
         // Add remaining headers as curl header array.
-        if (!empty($headers)) {
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        if (!empty($curlHeaders)) {
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $curlHeaders);
         }
 
         $response = curl_exec($ch);
