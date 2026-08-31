@@ -289,6 +289,8 @@ class Theme
         }
 
         file_put_contents($file, json_encode($theme, JSON_PRETTY_PRINT));
+
+        self::clearCssCache($scope);
     }
 
     /**
@@ -310,6 +312,17 @@ class Theme
         }
 
         file_put_contents($file, json_encode($theme, JSON_PRETTY_PRINT));
+
+        self::clearCssCache($scope);
+    }
+
+    /**
+     * Drop the cached rendered CSS for a scope after its source changes.
+     */
+    private static function clearCssCache(string $scope = self::SCOPE_SITE): void
+    {
+        \App\Core\Cache::forget('theme.css.' . $scope . '.' . md5($scope === self::SCOPE_ADMIN ? '.admin-theme' : ':root'));
+        \App\Core\Cache::forget('theme.cssLayout.' . $scope . '.' . md5($scope === self::SCOPE_ADMIN ? '.admin-theme' : ':root'));
     }
 
     /**
@@ -318,14 +331,17 @@ class Theme
     public static function css(string $scope = self::SCOPE_SITE, ?string $selector = null): string
     {
         $selector = $selector ?? ($scope === self::SCOPE_ADMIN ? '.admin-theme' : ':root');
-        $lines    = [];
 
-        foreach (self::all($scope) as $key => $value) {
-            if ($key[0] === '_' || !is_string($value)) continue;
-            $lines[] = '    --' . $key . ': ' . $value . ';';
-        }
+        return \App\Core\Cache::remember('theme.css.' . $scope . '.' . md5($selector), 300, function () use ($scope, $selector) {
+            $lines = [];
 
-        return $selector . ' {' . "\n" . implode("\n", $lines) . "\n}";
+            foreach (self::all($scope) as $key => $value) {
+                if ($key[0] === '_' || !is_string($value)) continue;
+                $lines[] = '    --' . $key . ': ' . $value . ';';
+            }
+
+            return $selector . ' {' . "\n" . implode("\n", $lines) . "\n}";
+        });
     }
 
     /**
@@ -334,13 +350,16 @@ class Theme
     public static function cssLayout(string $scope = self::SCOPE_SITE, ?string $selector = null): string
     {
         $selector = $selector ?? ($scope === self::SCOPE_ADMIN ? '.admin-theme' : ':root');
-        $lines    = [];
 
-        foreach (self::allLayout($scope) as $key => $value) {
-            $lines[] = '    --' . $key . ': ' . $value . ';';
-        }
+        return \App\Core\Cache::remember('theme.cssLayout.' . $scope . '.' . md5($selector), 300, function () use ($scope, $selector) {
+            $lines = [];
 
-        return $selector . ' {' . "\n" . implode("\n", $lines) . "\n}";
+            foreach (self::allLayout($scope) as $key => $value) {
+                $lines[] = '    --' . $key . ': ' . $value . ';';
+            }
+
+            return $selector . ' {' . "\n" . implode("\n", $lines) . "\n}";
+        });
     }
 
     /**

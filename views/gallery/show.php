@@ -41,11 +41,15 @@ $breadcrumbItems = [
             <?php else: ?>
                 <figure class="gallery-item">
                     <a class="grid-link" data-gallery-index="<?= $idx ?>" href="<?= e(url('/images/' . (int) $photo['id']) . '?' . http_build_query(['return_to' => $returnTo])) ?>" title="View item <?= $idx + 1 ?> of <?= count($photos) ?>">
-                        <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>"
-                             data-lightbox="<?= e(file_url($photo['filename'])) ?>"
-                             data-lightbox-caption="<?= e($photo['caption']) ?>"
-                             alt="<?= e($photo['caption']) ?>"
-                             loading="lazy" decoding="async" sizes="(max-width: 640px) 100vw, (max-width: 1000px) 50vw, 220px">
+                        <picture>
+                            <source type="image/webp" srcset="<?= e(file_url($photo['filename'], 'thumb', 'webp')) ?>">
+                            <source type="image/jpeg" srcset="<?= e(file_url($photo['filename'], 'thumb')) ?>">
+                            <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>"
+                                 data-lightbox="<?= e(file_url($photo['filename'])) ?>"
+                                 data-lightbox-caption="<?= e($photo['caption']) ?>"
+                                 alt="<?= e($photo['caption']) ?>"
+                                 loading="lazy" decoding="async" sizes="(max-width: 640px) 100vw, (max-width: 1000px) 50vw, 220px">
+                        </picture>
                     </a>
                     <figcaption>
                         <?php if ($photo['link'] !== ''): ?>

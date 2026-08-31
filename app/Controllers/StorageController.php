@@ -25,7 +25,8 @@ class StorageController extends Controller
             return;
         }
 
-        $size = (string) $this->request->query('size', '');
+        $size   = (string) $this->request->query('size', '');
+        $format = (string) $this->request->query('format', '');
 
         // Thumbnails remain available on the guest login page, but originals
         // and web-sized variants are gated by the media's gallery level. Files
@@ -47,6 +48,16 @@ class StorageController extends Controller
             $name = 'thumb_' . $name;
         } elseif ($size === 'web') {
             $name = 'web_' . $name;
+        }
+
+        // Prefer the WebP copy of a variant when requested and present.
+        if ($format === 'webp' && in_array($size, ['thumb', 'web'], true)) {
+            $webpName = preg_replace('/\.[^.]+$/', '.webp', $name);
+            $webpPath = config('app.uploads.dir') . '/' . $webpName;
+
+            if (is_file($webpPath)) {
+                $name = $webpName;
+            }
         }
 
         $uploadsDir = config('app.uploads.dir');

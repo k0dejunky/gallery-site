@@ -17,6 +17,7 @@ foreach ($recentImages as $photo) {
         'type'  => 'image',
         'url'   => url('/images/' . (int) $photo['id']),
         'thumb' => file_url($photo['filename'], 'thumb'),
+        'filename' => (string) $photo['filename'],
     ];
 }
 foreach ($recentVideos as $photo) {
@@ -27,6 +28,7 @@ foreach ($recentVideos as $photo) {
         'type'  => 'video',
         'url'   => url('/videos/' . (int) $photo['id']),
         'thumb' => file_url($photo['filename'], 'thumb'),
+        'filename' => (string) $photo['filename'],
     ];
 }
 ?>
@@ -65,7 +67,10 @@ foreach ($recentVideos as $photo) {
             <div class="card recent-card">
                 <a class="card-link" href="<?= e($item['url']) ?>">
                     <div class="card-cover">
-                        <img src="<?= e($item['thumb']) ?>" alt="" loading="lazy" onerror="this.onerror=null;this.src='<?= e($pictureBlank) ?>'">
+                        <picture>
+                            <source type="image/webp" srcset="<?= e(file_url($item['filename'], 'thumb', 'webp')) ?>">
+                            <img src="<?= e($item['thumb']) ?>" alt="" loading="lazy" onerror="this.onerror=null;this.src='<?= e($pictureBlank) ?>'">
+                        </picture>
                     </div>
                 </a>
             </div>

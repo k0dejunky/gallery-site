@@ -42,8 +42,10 @@ function url(string $path = ''): string
  * Build the URL used to serve an uploaded file, optionally pointing at a
  * generated variant served by StorageController: '' = the original full-size
  * file, 'thumb' = the 400x300 crop, 'web' = the fast-loading web variant.
+ * Pass $format = 'webp' to prefer the WebP copy of a variant when one exists
+ * (it falls back to the original variant format if no WebP file is present).
  */
-function file_url(string $filename, string $size = ''): string
+function file_url(string $filename, string $size = '', string $format = ''): string
 {
     $query = in_array($size, ['thumb', 'web'], true) ? '?size=' . $size : '';
 
@@ -51,7 +53,18 @@ function file_url(string $filename, string $size = ''): string
     // shows a stale thumbnail/web image after it is edited or recaptured.
     if ($size === 'thumb' || $size === 'web') {
         $variant = ($size === 'thumb' ? 'thumb_' : 'web_') . $filename;
-        $mtime   = @filemtime(config('app.uploads.dir') . '/' . $variant);
+
+        if ($format === 'webp') {
+            $webp = preg_replace('/\.[^.]+$/', '.webp', $variant);
+            $webpPath = config('app.uploads.dir') . '/' . $webp;
+
+            if (is_file($webpPath)) {
+                $variant = $webp;
+                $query  .= '&format=webp';
+            }
+        }
+
+        $mtime = @filemtime(config('app.uploads.dir') . '/' . $variant);
 
         if ($mtime !== false) {
             $query .= '&v=' . $mtime;
@@ -59,6 +72,52 @@ function file_url(string $filename, string $size = ''): string
     }
 
     return url('/files/' . rawurlencode($filename) . $query);
+}
+
+/**
+ * Responsive image source set: returns a srcset string covering the thumb
+ * and web variants (with their WebP versions), so browsers pick the right
+ * size and format. Returns '' when the media has no image variants.
+ */
+function file_srcset(string $filename): string
+{
+    $thumb = file_url($filename, 'thumb');
+    $web   = file_url($filename, 'web');
+
+    $set = [];
+    if ($thumb !== '') {
+        $set[] = $thumb . ' 400w';
+    }
+    if ($web !== '') {
+        $set[] = $web . ' 1600w';
+    }
+
+    return implode(', ', $set);
+}
+
+/**
+ * Build a <picture> element that serves WebP when supported and falls back to
+ * the JPEG/PNG variant otherwise, with responsive srcset sizing. $classes and
+ * $attrs (e.g. loading, decoding) are applied to the inner <img>.
+ */
+function responsive_picture(string $filename, string $size, array $attrs = []): string
+{
+    $thumbWebp = file_url($filename, $size, 'webp');
+    $thumbFallback = file_url($filename, $size);
+
+    $attrString = '';
+    foreach ($attrs as $key => $value) {
+        if ($value === true) {
+            $attrString .= ' ' . $key;
+        } elseif ($value !== false && $value !== null) {
+            $attrString .= ' ' . $key . '="' . e((string) $value) . '"';
+        }
+    }
+
+    return '<picture>'
+        . '<source type="image/webp" srcset="' . e($thumbWebp) . '">'
+        . '<img src="' . e($thumbFallback) . '"' . $attrString . '>'
+        . '</picture>';
 }
 
 /**
@@ -454,6 +513,9 @@ function _exif_transpose_chain(int $orientation): string
  * each loaded and decoded the full source separately), which made large
  * photo uploads take 15-30+ seconds; the single pass cuts that to ~2-5s.
  *
+ * WebP variants (web_*.webp / thumb_*.webp) are produced in the same pass
+ * so browsers with WebP support skip the JPEG download entirely.
+ *
  * JPEGs take the ffmpeg route (the dominant, slowest upload type). Palette
  * and alpha formats keep the exact GD path. If ffmpeg is missing or fails,
  * the GD fallback still produces both variants so uploads never break.
@@ -471,6 +533,9 @@ function create_image_variants(string $src, string $webDest, string $thumbDest, 
     }
 
     [$srcW, $srcH, $type] = $info;
+
+    $webpWebDest   = preg_replace('/\.[^.]+$/', '.webp', $webDest);
+    $webpThumbDest = preg_replace('/\.[^.]+$/', '.webp', $thumbDest);
 
     if ($type === IMAGETYPE_JPEG && is_executable('/usr/bin/ffmpeg')) {
         $orientation = exif_orientation_of($src);
@@ -492,16 +557,23 @@ function create_image_variants(string $src, string $webDest, string $thumbDest, 
             $webChain = "[a]scale={$webW}:{$webH}[w]";
         }
 
+        $webpWebW = max(1, (int) round($effW * min(1.0, $maxDim / max($effW, $effH))));
+        $webpWebH = max(1, (int) round($effH * min(1.0, $maxDim / max($effW, $effH))));
+
         $pre       = _exif_transpose_chain($orientation);
-        $filters   = ($pre !== '' ? $pre . ',' : '') . 'split=2[a][b]'
+        $filters   = ($pre !== '' ? $pre . ',' : '') . 'split=4[a][b][c][d]'
             . ';' . $webChain
-            . ";[b]scale={$thumbWidth}:{$thumbHeight}:force_original_aspect_ratio=increase,crop={$thumbWidth}:{$thumbHeight}[t]";
+            . ";[b]scale={$thumbWidth}:{$thumbHeight}:force_original_aspect_ratio=increase,crop={$thumbWidth}:{$thumbHeight}[t]"
+            . ";[c]scale={$webpWebW}:{$webpWebH}[ww]"
+            . ";[d]scale={$thumbWidth}:{$thumbHeight}:force_original_aspect_ratio=increase,crop={$thumbWidth}:{$thumbHeight}[tt]";
 
         $cmd = escapeshellarg('/usr/bin/ffmpeg')
             . ' -y -hide_banner -loglevel error -i ' . escapeshellarg($src)
             . ' -filter_complex "' . $filters . '"'
             . ' -map "[w]" -frames:v 1 -q:v 4 ' . escapeshellarg($webDest)
             . ' -map "[t]" -frames:v 1 -q:v 5 ' . escapeshellarg($thumbDest)
+            . ' -map "[ww]" -frames:v 1 -c:v libwebp -quality 80 ' . escapeshellarg($webpWebDest)
+            . ' -map "[tt]" -frames:v 1 -c:v libwebp -quality 80 ' . escapeshellarg($webpThumbDest)
             . ' 2>/dev/null';
 
         exec($cmd, $out, $rc);
@@ -512,9 +584,86 @@ function create_image_variants(string $src, string $webDest, string $thumbDest, 
 
         @unlink($webDest);
         @unlink($thumbDest);
+        @unlink($webpWebDest);
+        @unlink($webpThumbDest);
     }
 
-    return _variants_gd($src, $webDest, $thumbDest, $maxDim, $thumbWidth, $thumbHeight);
+    $ok = _variants_gd($src, $webDest, $thumbDest, $maxDim, $thumbWidth, $thumbHeight);
+    _variants_gd_webp($src, $webpWebDest, $webpThumbDest, $maxDim, $thumbWidth, $thumbHeight);
+
+    return $ok;
+}
+
+/**
+ * GD-only WebP variant generation: decode once, then write the web and
+ * thumbnail sizes as WebP. Used as the fallback when ffmpeg is unavailable
+ * (or for non-JPEG uploads), keeping WebP parity with the ffmpeg path.
+ */
+function _variants_gd_webp(string $src, string $webpWebDest, string $webpThumbDest, int $maxDim, int $thumbWidth, int $thumbHeight): bool
+{
+    if (!function_exists('imagewebp')) {
+        return false;
+    }
+
+    [$source, $type] = _load_image($src);
+
+    if ($source === false) {
+        return false;
+    }
+
+    $orientation = $type === IMAGETYPE_JPEG ? exif_orientation_of($src) : 1;
+    $source = apply_exif_orientation($source, $orientation);
+
+    if ($source === false) {
+        return false;
+    }
+
+    if (!imageistruecolor($source)) {
+        imagepalettetotruecolor($source);
+    }
+
+    $srcW = imagesx($source);
+    $srcH = imagesy($source);
+
+    $scale = min(1.0, $maxDim / max($srcW, $srcH));
+    $dstW  = max(1, (int) round($srcW * $scale));
+    $dstH  = max(1, (int) round($srcH * $scale));
+
+    $web = imagecreatetruecolor($dstW, $dstH);
+
+    if ($type === IMAGETYPE_PNG || $type === IMAGETYPE_WEBP) {
+        imagealphablending($web, false);
+        imagesavealpha($web, true);
+    }
+
+    imagecopyresampled($web, $source, 0, 0, 0, 0, $dstW, $dstH, $srcW, $srcH);
+    imagedestroy($source);
+
+    $webpWebOk = imagewebp($web, $webpWebDest, 80);
+
+    $wW = imagesx($web);
+    $wH = imagesy($web);
+
+    $scale = min($wW / $thumbWidth, $wH / $thumbHeight);
+    $cropW = (int) min($wW, $thumbWidth * $scale);
+    $cropH = (int) min($wH, $thumbHeight * $scale);
+    $srcX  = (int) (($wW - $cropW) / 2);
+    $srcY  = (int) (($wH - $cropH) / 2);
+
+    $thumb = imagecreatetruecolor($thumbWidth, $thumbHeight);
+
+    if ($type === IMAGETYPE_PNG || $type === IMAGETYPE_WEBP) {
+        imagealphablending($thumb, false);
+        imagesavealpha($thumb, true);
+    }
+
+    imagecopyresampled($thumb, $web, 0, 0, $srcX, $srcY, $thumbWidth, $thumbHeight, $cropW, $cropH);
+    $webpThumbOk = imagewebp($thumb, $webpThumbDest, 80);
+
+    imagedestroy($thumb);
+    imagedestroy($web);
+
+    return $webpWebOk && $webpThumbOk;
 }
 
 /**

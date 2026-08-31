@@ -54,11 +54,15 @@ foreach ($rows as $row) {
 
     $needWeb = !is_file($webPath);
     $needThumb = !is_file($thumbPath);
+    $webpWebPath   = preg_replace('/\.[^.]+$/', '.webp', $webPath);
+    $webpThumbPath = preg_replace('/\.[^.]+$/', '.webp', $thumbPath);
+    $needWebpWeb   = !is_file($webpWebPath);
+    $needWebpThumb = !is_file($webpThumbPath);
 
-    if ($needWeb || $needThumb) {
-        echo "image " . ($needWeb && $needThumb ? 'thumb+web' : ($needWeb ? 'web' : 'thumb')) . " {$filename}\n";
+    if ($needWeb || $needThumb || $needWebpWeb || $needWebpThumb) {
+        echo "image " . ($needWeb && $needThumb ? 'thumb+web' : ($needWeb ? 'web' : 'thumb')) . ($needWebpWeb || $needWebpThumb ? '+webp' : '') . " {$filename}\n";
         if (!$dryRun) {
-            // Generate both when either is missing; the helper overwrites.
+            // Generate all variants; the helper writes JPEG + WebP copies.
             create_image_variants($src, $webPath, $thumbPath, $config['uploads']['web_max_width'], $config['uploads']['thumb_width'], $config['uploads']['thumb_height']);
         }
         if ($needThumb) $fixedThumb++;

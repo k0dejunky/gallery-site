@@ -12,14 +12,18 @@ $breadcrumbItems = [
 
 <figure style="margin: 1rem 0; text-align: center;">
     <p class="media-progress" role="status">Item <?= (int) ($currentIndex + 1) ?> of <?= count($mediaItems ?? [$photo]) ?></p>
-    <img id="fullsize-img"
-         src="<?= e(file_url($photo['filename'], 'web')) ?>"
-         data-web="<?= e(file_url($photo['filename'], 'web')) ?>"
-         data-full="<?= e(file_url($photo['filename'])) ?>"
-         decoding="async"
-         fetchpriority="high"
-         alt="<?= e($photo['caption']) ?>"
-         style="max-width: 100%; height: auto; border-radius: 10px; box-shadow: 0 2px 12px rgba(59, 7, 100, 0.35);">
+    <picture>
+        <source type="image/webp" srcset="<?= e(file_url($photo['filename'], 'web', 'webp')) ?>">
+        <img id="fullsize-img"
+             src="<?= e(file_url($photo['filename'], 'web')) ?>"
+             data-web="<?= e(file_url($photo['filename'], 'web')) ?>"
+             data-web-webp="<?= e(file_url($photo['filename'], 'web', 'webp')) ?>"
+             data-full="<?= e(file_url($photo['filename'])) ?>"
+             decoding="async"
+             fetchpriority="high"
+             alt="<?= e($photo['caption']) ?>"
+             style="max-width: 100%; height: auto; border-radius: 10px; box-shadow: 0 2px 12px rgba(59, 7, 100, 0.35);">
+    </picture>
     <figcaption class="muted" style="margin-top: 0.75rem">
         <?php if ($photo['caption'] !== ''): ?>
             <span><?= e($photo['caption']) ?></span><br>
@@ -37,7 +41,16 @@ $breadcrumbItems = [
         var full = false;
         toggle.addEventListener('click', function () {
             full = !full;
-            img.src = full ? img.dataset.full : img.dataset.web;
+            if (full) {
+                img.removeAttribute('srcset');
+                img.src = img.dataset.full;
+            } else {
+                img.src = img.dataset.web;
+                if (img.dataset.webWebp && window.createImageBitmap) {
+                    // Serve WebP when supported; otherwise the jpeg web copy.
+                    img.src = img.dataset.webWebp;
+                }
+            }
             toggle.textContent = full ? 'Show smaller image' : 'View full size';
         });
     })();

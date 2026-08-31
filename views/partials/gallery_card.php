@@ -30,7 +30,15 @@ $cardId = 'card-' . (int) $gallery['id'];
             </div>
         <?php else: ?>
             <div class="card-cover">
-                <img src="<?= e(file_url($cover['filename'], 'thumb')) ?>" alt="" loading="lazy" onerror="this.onerror=null;this.src='<?= e($placeholder) ?>'">
+                <?php if ($isVideoCard): ?>
+                    <img src="<?= e(file_url($cover['filename'], 'thumb')) ?>" alt="" loading="lazy" onerror="this.onerror=null;this.src='<?= e($placeholder) ?>'">
+                <?php else: ?>
+                    <picture>
+                        <source type="image/webp" srcset="<?= e(file_url($cover['filename'], 'thumb', 'webp')) ?>">
+                        <source type="image/jpeg" srcset="<?= e(file_url($cover['filename'], 'thumb')) ?>">
+                        <img src="<?= e(file_url($cover['filename'], 'thumb')) ?>" srcset="<?= e(file_srcset($cover['filename'])) ?>" sizes="(min-width: 800px) 400px, 100vw" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='<?= e($placeholder) ?>'">
+                    </picture>
+                <?php endif; ?>
                 <?php if ($isVideoCard): ?><span class="video-badge">&#9654;</span><?php endif; ?>
                 <?php if ($isViewed): ?><span class="viewed-badge"></span><?php endif; ?>
             </div>
