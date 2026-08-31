@@ -354,12 +354,26 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
         // (covers saves on all admin pages). The page navigates on success so
         // the overlay clears itself on load; forms that stay (e.g. inline
         // controls) call AdminProgress.hide() via the global progress event.
+        // Forms with an inline onsubmit handler (e.g. return confirm(...)) run
+        // that handler *after* this capture listener; if the user cancels, the
+        // submit is prevented and the optimistic overlay would stay stuck, so
+        // skip those forms and let them manage progress themselves.
         document.addEventListener('submit', function (e) {
             var form = e.target;
             if (!form || !form.matches('form')) return;
             if (form.getAttribute('data-no-progress') !== null) return;
+            if (form.hasAttribute('onsubmit')) return;
             window.AdminProgress.busy('Saving…');
         }, true);
+
+        // Safety net: never leave a full-screen busy overlay stuck over the
+        // admin UI. Pressing Escape or clicking the backdrop dismisses it.
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') window.AdminProgress.hide();
+        });
+        overlay.addEventListener('click', function () {
+            window.AdminProgress.hide();
+        });
 
         // Allow any fetch-based operation to surface progress generically:
         //   document.dispatchEvent(new CustomEvent('admin-progress', {
