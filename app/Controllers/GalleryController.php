@@ -269,17 +269,64 @@ class GalleryController extends Controller
             Gallery::recordView($id, (int) $user['id']);
         }
 
-        $photos = Gallery::photos($id);
-        $photoCount = count($photos);
+        // Paginate the grid so large galleries don't ship every item's markup
+        // in the initial response; the remainder loads via "Load more" AJAX.
+        $pageSize = max(1, (int) config('app.gallery_page_size', 48));
+        $total    = Gallery::photoCount($id);
+        $photos   = Gallery::photosSlice($id, $pageSize, 0);
 
         $this->view('gallery/show', [
             'gallery'    => $gallery,
             'photos'     => $photos,
+            'total'      => $total,
+            'pageSize'   => $pageSize,
             'categories' => Gallery::categories($id),
             'currentUser' => Auth::user(),
-            'photoCount' => $photoCount,
+            'photoCount' => $total,
             'returnTo'   => url('/galleries/' . $id),
         ]);
+    }
+
+    /**
+     * AJAX: the next page of gallery grid items (HTML fragment) for the
+     * gallery viewer's "Load more" UI. Requires the same auth/membership as
+     * the gallery itself. Returns plain HTML<figure> items that the front-end
+     * appends to #gallery and rebinds.
+     */
+    public function photosPage(int $id): void
+    {
+        Auth::requireLogin();
+
+        $gallery = Gallery::find($id);
+
+        if ($gallery === null) {
+            $this->notFound();
+            return;
+        }
+
+        Auth::requireGalleryLevel(
+            (int) ($gallery['min_level'] ?? 0),
+            'A membership is required to view that gallery.'
+        );
+
+        $pageSize = max(1, (int) config('app.gallery_page_size', 48));
+        $offset   = max(0, (int) $this->request->query('offset', 0));
+        $total    = Gallery::photoCount($id);
+
+        if ($offset >= $total) {
+            echo '';
+            return;
+        }
+
+        $photos  = Gallery::photosSlice($id, $pageSize, $offset);
+        $returnTo = url('/galleries/' . $id);
+
+        header('Content-Type: text/html; charset=utf-8');
+        foreach ($photos as $k => $photo) {
+            $idx     = $offset + $k; // global index across all loaded pages
+            require __DIR__ . '/../../views/partials/gallery_grid_item.php';
+        }
+        exit;
     }
 
     /**

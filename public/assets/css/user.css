@@ -130,6 +130,10 @@ img.is-loaded{animation:none;opacity:1;transition:opacity .2s ease}
 .gallery-item figcaption a{color:var(--purple-600);text-decoration:none}
 .gallery-item figcaption a:hover{text-decoration:underline}
 
+/* "Load more" for large galleries */
+.load-more-wrap{display:flex;flex-direction:column;align-items:center;gap:var(--spacing-sm);margin:var(--spacing-lg) 0;text-align:center}
+.load-more-wrap .btn[hidden]{display:none}
+
 /* Category names – prevent overflow on long words */
 table td:nth-child(1) { overflow-wrap: anywhere; word-break: break-word; }
 .favorite-category strong { overflow-wrap: anywhere; word-break: break-word; }

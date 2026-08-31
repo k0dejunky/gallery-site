@@ -6,6 +6,11 @@ return [
 
     'site_name' => 'amethyst2213',
 
+    // How many gallery grid items are rendered in the initial page response
+    // before the rest is loaded on demand ("Load more"). Keeps the HTML
+    // payload of very large galleries small.
+    'gallery_page_size' => 48,
+
     'uploads' => [
         // Where uploaded originals, web variants and thumbnails are stored.
         'dir'          => __DIR__ . '/../storage/uploads',

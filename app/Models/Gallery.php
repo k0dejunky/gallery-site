@@ -460,6 +460,38 @@ class Gallery
     }
 
     /**
+     * A page of photos inside a gallery (display order, limited to a window).
+     * Used by the gallery viewer's "load more" pagination so large galleries
+     * do not ship every item's markup in the initial page response.
+     */
+    public static function photosSlice(int $galleryId, int $limit, int $offset): array
+    {
+        $limit  = max(1, (int) $limit);
+        $offset = max(0, (int) $offset);
+
+        return Database::run(
+            'SELECT p.*, gp.position
+             FROM photos p
+             INNER JOIN gallery_photo gp ON gp.photo_id = p.id
+             WHERE gp.gallery_id = ?
+             ORDER BY gp.position ASC, p.id ASC
+             LIMIT ' . (int) $limit . ' OFFSET ' . (int) $offset,
+            [$galleryId]
+        )->fetchAll();
+    }
+
+    /**
+     * Total number of photos inside a gallery.
+     */
+    public static function photoCount(int $galleryId): int
+    {
+        return (int) Database::run(
+            'SELECT COUNT(*) FROM gallery_photo WHERE gallery_id = ?',
+            [$galleryId]
+        )->fetchColumn();
+    }
+
+    /**
      * Photos inside a gallery in display order.
      */
     public static function photos(int $galleryId): array

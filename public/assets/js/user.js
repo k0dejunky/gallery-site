@@ -37,9 +37,29 @@
     });
   }
 
+  // Build the lightbox image list from every rendered grid image. Because
+  // galleries can load more items via AJAX, the list is rebuilt at open time
+  // from the current DOM so the lightbox always covers everything loaded.
+  function buildList(){
+    var out=[];
+    document.querySelectorAll('#gallery [data-lightbox]').forEach(function(el){
+      out.push({src:el.getAttribute('data-lightbox'),caption:el.getAttribute('data-lightbox-caption')||el.alt||''});
+    });
+    return out;
+  }
+
   function open(list,startIdx,opener){
     create();
-    images=list;currentIdx=startIdx;returnFocus=opener||document.activeElement;
+    returnFocus=opener||document.activeElement;
+    if(list&&list.length){images=list;currentIdx=startIdx<0?0:startIdx;}
+    else{
+      images=buildList();
+      currentIdx=0;
+      if(images.length&&opener){
+        var idx=Array.prototype.indexOf.call(document.querySelectorAll('#gallery [data-lightbox]'),opener);
+        if(idx>-1)currentIdx=idx;
+      }
+    }
     show();
     lb.classList.add('open');
     document.body.style.overflow='hidden';
@@ -118,61 +138,94 @@
   });
 
   document.addEventListener('DOMContentLoaded',function(){
-    document.querySelectorAll('img[loading="lazy"]').forEach(function(img){
+    document.querySelectorAll('video[data-video-id]').forEach(function(video){initVideoResume(video)});
+
+    // Lightbox: delegated so newly loaded ("Load more") items work too.
+    document.addEventListener('click',function(e){
+      var el=e.target&&e.target.closest?e.target.closest('[data-lightbox]'):null;
+      if(el){e.preventDefault();open(null,-1,el);}
+    });
+
+    var gallery=document.getElementById('gallery'), progress=document.getElementById('gallery-progress');
+    if(gallery){bindSkeletons(gallery);bindGalleryPaging(gallery,progress);}
+  });
+
+  // Apply lazy-image skeleton classes inside a scope (re-run after AJAX
+  // load-more appends new items).
+  function bindSkeletons(scope){
+    (scope||document).querySelectorAll('img[loading="lazy"]').forEach(function(img){
+      if(img.__skeletonBound)return;
+      img.__skeletonBound=true;
       img.classList.add('loading','is-loading','media-skeleton');
       img.addEventListener('load',function(){img.classList.remove('loading','is-loading');img.classList.add('is-loaded')},{once:true});
       img.addEventListener('error',function(){img.classList.remove('loading','is-loading');img.classList.add('is-loaded')},{once:true});
       if(img.complete)img.classList.remove('loading','is-loading');
     });
-    document.querySelectorAll('video[data-video-id]').forEach(function(video){initVideoResume(video)});
-    var items=document.querySelectorAll('[data-lightbox]');
-    if(!items.length)return;
-    var list=[];
-    items.forEach(function(el,i){
-      list.push({src:el.getAttribute('data-lightbox'),caption:el.getAttribute('data-lightbox-caption')||el.alt||''});
-      el.style.cursor='pointer';
-       el.addEventListener('click',function(e){e.preventDefault();open(list,i,el)});
-    });
-    var gallery=document.getElementById('gallery'), progress=document.getElementById('gallery-progress');
-    if(gallery){
-      var key='gallery-position-'+location.pathname;
-      var items=function(){return Array.prototype.slice.call(document.querySelectorAll('[data-gallery-index]'));};
-      try{
-        var saved=JSON.parse(localStorage.getItem(key)||'null');
-        if(saved&&saved.index!=null){
-          // Scroll to the exact item the member was viewing (element-based so
-          // it stays accurate even while lazy thumbnails above are still
-          // loading and reshuffling layout height).
-          var list=items();
-          if(list[saved.index]){
-            var target=list[saved.index];
+  }
+
+  // Scroll-position restore/save for the gallery grid plus the "Load more"
+  // pagination. Uses a single galleryPosition key and delegated clicks so
+  // items added via AJAX are covered automatically.
+  function bindGalleryPaging(gallery,progress){
+    var key='gallery-position-'+location.pathname;
+    function indexEls(){return Array.prototype.slice.call(gallery.querySelectorAll('[data-gallery-index]'));}
+    function loadedCount(){return indexEls().length;}
+
+    // Restore scroll to the previously-viewed item once the page settles.
+    try{
+      var saved=JSON.parse(localStorage.getItem(key)||'null');
+      if(saved){
+        if(saved.index!=null){
+          var els=indexEls();
+          if(els[saved.index]&&els[saved.index].scrollIntoView){
+            var target=els[saved.index];
             window.setTimeout(function(){target.scrollIntoView({block:'start'});},0);
-          }else if(typeof saved.y==='number'){
-            window.scrollTo(0,saved.y);
+          }else if(typeof saved.y==='number'){window.scrollTo(0,saved.y);}
+        }else if(typeof saved.y==='number'){window.scrollTo(0,saved.y);}
+      }
+    }catch(err){}
+
+    // Save position when opening an item (delegated -> covers load-more items).
+    gallery.addEventListener('click',function(e){
+      var link=e.target&&e.target.closest?e.target.closest('a[data-gallery-index]'):null;
+      if(!link)return;
+      var index=parseInt(link.getAttribute('data-gallery-index')||'',10);
+      if(!isFinite(index))return;
+      try{localStorage.setItem(key,JSON.stringify({index:index,y:window.scrollY}))}catch(err){}
+    });
+
+    var total=parseInt(gallery.getAttribute('data-total')||'0',10);
+    var btn=document.getElementById('load-more-btn');
+    var state=document.getElementById('load-more-state');
+    var loaded=loadedCount();
+    if(progress)progress.textContent='Showing '+loaded+' of '+total+' items';
+    if(!btn||total<=loaded)return;
+
+    var loading=false;
+    btn.addEventListener('click',function(){
+      if(loading)return;
+      var offset=loadedCount();
+      if(offset>=total)return;
+      loading=true;
+      if(state)state.textContent='Loading&hellip;';
+      btn.disabled=true;
+      fetch(location.pathname+'/photos?offset='+offset,{headers:{'X-Requested-With':'XMLHttpRequest'}})
+        .then(function(r){return r.text()})
+        .then(function(html){
+          if(html){
+            var wrap=document.createElement('div');
+            wrap.innerHTML=html;
+            while(wrap.firstChild){gallery.appendChild(wrap.firstChild);}
+            bindSkeletons(gallery);
           }
-          if(progress)progress.textContent='Item '+(saved.index+1)+' of '+list.length;
-        }else if(saved&&typeof saved.y==='number'){
-          window.scrollTo(0,saved.y);
-        }
-      }catch(e){}
-      gallery.querySelectorAll('a[href][data-gallery-index]').forEach(function(link){
-        link.addEventListener('click',function(){
-          var index=parseInt(link.getAttribute('data-gallery-index')||'',10);
-          if(!isFinite(index))return;
-          try{localStorage.setItem(key,JSON.stringify({index:index,y:window.scrollY}))}catch(e){}
-        });
-      });
-      document.querySelectorAll('[data-gallery-thumb]').forEach(function(thumb){
-        thumb.addEventListener('click',function(){
-          var index=parseInt(thumb.getAttribute('data-gallery-thumb'),10)||0;
-          try{localStorage.setItem(key,JSON.stringify({index:index,y:window.scrollY}))}catch(e){}
-          if(progress)progress.textContent='Item '+(index+1)+' of '+document.querySelectorAll('[data-gallery-thumb]').length;
-          document.querySelectorAll('[data-gallery-thumb]').forEach(function(item){item.removeAttribute('aria-current')});
-          thumb.setAttribute('aria-current','page');
-        });
-      });
-    }
-  });
+          if(progress)progress.textContent='Showing '+loadedCount()+' of '+total+' items';
+          if(btn)btn.hidden=loadedCount()>=total;
+          if(state)state.textContent='';
+        })
+        .catch(function(){if(state)state.textContent='Could not load more. Please try again.';})
+        .then(function(){loading=false;btn.disabled=false;});
+    });
+  }
 
   function initVideoResume(video){
     var key='gallery-video-position-'+video.getAttribute('data-video-id'), saved=0, resume=video.parentNode.querySelector('.video-resume');
