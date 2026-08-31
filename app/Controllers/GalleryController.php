@@ -757,7 +757,7 @@ class GalleryController extends Controller
         // so an image mislabelled as a video (or vice versa) is rejected for
         // the wrong gallery type.
         if (!$isImage && !$isVideo) {
-            return 'File type not allowed.';
+            return 'File type not allowed. Supported: ' . implode(', ', $config['image_ext']) . ' (images) or ' . implode(', ', $config['video_ext']) . ' (videos).';
         }
 
         // The MIME-derived extension must also be one the app is configured
@@ -765,10 +765,10 @@ class GalleryController extends Controller
         $extension = $this->extensionForMime($mime);
 
         if ($isImage && !in_array($extension, $config['image_ext'], true)) {
-            return 'Image type not allowed.';
+            return 'Image type not allowed. Supported image types: ' . implode(', ', $config['image_ext']) . '.';
         }
         if ($isVideo && !in_array($extension, $config['video_ext'], true)) {
-            return 'Video type not allowed.';
+            return 'Video type not allowed. Supported video types: ' . implode(', ', $config['video_ext']) . '.';
         }
 
         if ($galleryType === 'videos' && $isImage) {
@@ -798,7 +798,8 @@ class GalleryController extends Controller
     {
         $map = [
             'image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif',
-            'image/webp' => 'webp',
+            'image/webp' => 'webp', 'image/bmp' => 'bmp', 'image/x-ms-bmp' => 'bmp',
+            'image/vnd.microsoft.icon' => 'ico', 'image/x-icon' => 'ico',
             'video/mp4' => 'mp4', 'video/webm' => 'webm', 'video/ogg' => 'ogg',
             'video/quicktime' => 'mov', 'video/x-msvideo' => 'avi',
             'video/x-matroska' => 'mkv',

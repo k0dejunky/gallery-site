@@ -309,12 +309,16 @@
             xhr.addEventListener('load', function () {
                 var ok = false;
                 var skipped = [];
+                var reason = '';
                 try {
                     var res = JSON.parse(xhr.responseText);
                     ok = res.ok === true;
                     skipped = res.skipped || [];
+                    reason = res.error || '';
                 } catch (err) {}
-                if (!ok) failures.push(item.file.name + ': rejected by server');
+                // Show the server's actual reason when there is one, so the
+                // admin knows why the file was rejected.
+                if (!ok) failures.push(item.file.name + ': rejected by server' + (reason ? ' — ' + reason : ''));
                 for (var s = 0; s < skipped.length; s++) failures.push(skipped[s] + ': could not be saved');
                 next();
             });

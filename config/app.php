@@ -17,7 +17,10 @@ return [
         // Per-file upload ceiling: 10 GiB.
         'max_size'     => 10 * 1024 * 1024 * 1024,
         // Accepted extensions, split into images (GD) and videos (ffmpeg).
-        'image_ext'    => ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+        // Keep this in sync with the list of formats the server's GD build can
+        // actually process (so uploads are never accepted then fail later
+        // during thumbnail generation).
+        'image_ext'    => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'],
         'video_ext'    => ['mp4', 'webm', 'mov', 'm4v', 'ogg', 'avi', 'mkv'],
         // Thumbnail dimensions; images are center-cropped to this ratio.
         'thumb_width'  => 400,
