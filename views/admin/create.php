@@ -424,6 +424,7 @@
             <thead>
                 <tr>
                     <th><input type="checkbox" id="gallery-check-all" title="Select all"></th>
+                    <th>Cover</th>
                     <th>Title</th>
                     <th>Level</th>
                     <th>Photos</th>
@@ -437,6 +438,14 @@
                 <?php foreach ($paginator['items'] as $gallery): ?>
                     <tr>
                         <td><input type="checkbox" name="ids[]" value="<?= (int) $gallery['id'] ?>" class="gallery-check"></td>
+                        <td>
+                            <?php $cover = $covers[(int) $gallery['id']] ?? null; ?>
+                            <?php if ($cover !== null): ?>
+                                <img src="<?= e(file_url($cover['filename'], 'thumb')) ?>" alt="" width="56" height="42" style="object-fit:cover;border-radius:4px;" loading="lazy">
+                            <?php else: ?>
+                                <span class="muted">—</span>
+                            <?php endif; ?>
+                        </td>
                         <td><?= e($gallery['title']) ?></td>
                         <td><?php
                             $level = (int) ($gallery['min_level'] ?? 0);
