@@ -16,6 +16,9 @@
 /storage/autoposter.json
 /storage/security-rate-limit.json
 
+# Runtime log/lock files (created by workers and cron jobs)
+/storage/logs/
+
 # Node modules & build output for the video editor
 /frontend/video-editor/node_modules/
 /frontend/video-editor/dist/*.map

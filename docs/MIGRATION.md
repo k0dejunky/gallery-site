@@ -257,6 +257,12 @@ Recreate all three files in `/etc/cron.d/` (owner `root:root`, mode `644`):
 ```
 (a restore-drill script proves Drive backups are restorable.)
 
+`gallery-autopost` (every minute — publishes queued auto-posts once their
+`scheduled_at` time passes; remove it to pause auto-posting):
+```
+* * * * * www-data /usr/bin/php /var/www/gallery/bin/autopost_worker.php --once >> /var/www/gallery/storage/logs/autopost.log 2>&1
+```
+
 ---
 
 ## 7. SYSTEMD background workers

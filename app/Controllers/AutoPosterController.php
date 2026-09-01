@@ -399,17 +399,19 @@ class AutoPosterController extends Controller
     }
 
     /**
-     * Add a recommended photo to the posting queue. Accepts an optional edited
-     * post text; when empty the standard recommendation is generated.
+     * Add a recommended gallery to the posting queue. Accepts an optional
+     * edited post text and a publish date/time; when empty the standard
+     * recommendation and default schedule are used.
      */
     public function queueRecommendation(): void
     {
-        $photoId = (int) $this->request->post('photo_id', 0);
-        $text    = (string) $this->request->post('text', '');
-        $queueId = AutoPostQueue::enqueue($photoId, $text);
+        $galleryId   = (int) $this->request->post('gallery_id', 0);
+        $text        = (string) $this->request->post('text', '');
+        $scheduledAt = (string) $this->request->post('scheduled_at', '');
+        $queueId     = AutoPostQueue::enqueue($galleryId, $text, $scheduledAt);
 
         if ($queueId <= 0) {
-            $this->flash('error', 'Photo not found.');
+            $this->flash('error', 'Gallery not found or not eligible.');
             $this->redirect('/admin/auto-poster');
             return;
         }
@@ -419,7 +421,7 @@ class AutoPosterController extends Controller
             'create',
             'auto_post_queue',
             $queueId,
-            'Queued photo #' . $photoId . ' for auto-posting'
+            'Queued gallery #' . $galleryId . ' for auto-posting'
         );
 
         $this->flash('success', 'Added to the posting queue.');
@@ -428,21 +430,22 @@ class AutoPosterController extends Controller
 
     /**
      * Post a queued item to its platform immediately. Accepts either a
-     * queue_id (existing queue row) or a photo_id (recommendation: enqueue it
+     * queue_id (existing queue row) or a gallery_id (recommendation: enqueue it
      * first, then post on the spot).
      */
     public function postQueued(): void
     {
         $id = (int) $this->request->post('queue_id', 0);
 
-        $photoId = (int) $this->request->post('photo_id', 0);
-        if ($id <= 0 && $photoId > 0) {
-            $text = (string) $this->request->post('text', '');
-            $id   = AutoPostQueue::enqueue($photoId, $text);
+        $galleryId = (int) $this->request->post('gallery_id', 0);
+        if ($id <= 0 && $galleryId > 0) {
+            $text        = (string) $this->request->post('text', '');
+            $scheduledAt = (string) $this->request->post('scheduled_at', '');
+            $id          = AutoPostQueue::enqueue($galleryId, $text, $scheduledAt);
         }
 
         if ($id <= 0) {
-            $this->flash('error', 'No photo or queued item to post.');
+            $this->flash('error', 'No gallery or queued item to post.');
             $this->redirect('/admin/auto-poster');
             return;
         }
@@ -460,6 +463,39 @@ class AutoPosterController extends Controller
         $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
             ? 'Posted to X: ' . ($result['url'] ?? '')
             : 'Post failed: ' . ($result['error'] ?? 'Unknown error'));
+        $this->redirect('/admin/auto-poster');
+    }
+
+    /**
+     * Change the publish date/time of a queued auto-post. An empty value
+     * schedules the post for the next worker run.
+     */
+    public function rescheduleQueued(): void
+    {
+        $id          = (int) $this->request->post('queue_id', 0);
+        $scheduledAt = (string) $this->request->post('scheduled_at', '');
+
+        if ($id <= 0 || AutoPostQueue::find($id) === null) {
+            $this->flash('error', 'Queue item not found.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        if (!AutoPostQueue::reschedule($id, $scheduledAt)) {
+            $this->flash('error', 'Could not update the schedule — use a valid date and time.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        AuditLog::record(
+            (int) Auth::user()['id'],
+            'update',
+            'auto_post_queue',
+            $id,
+            'Rescheduled auto-post queue item #' . $id . ' to ' . $scheduledAt
+        );
+
+        $this->flash('success', 'Schedule updated.');
         $this->redirect('/admin/auto-poster');
     }
 
@@ -492,16 +528,16 @@ class AutoPosterController extends Controller
     }
 
     /**
-     * Dismiss a queued or recommended post so its photo is not offered again.
-     * Accepts a queue_id or a photo_id (recommendation with no row yet).
+     * Dismiss a queued or recommended post so its gallery is not offered again.
+     * Accepts a queue_id or a gallery_id (recommendation with no row yet).
      */
     public function dismissQueued(): void
     {
         $id = (int) $this->request->post('queue_id', 0);
 
-        $photoId = (int) $this->request->post('photo_id', 0);
-        if ($id <= 0 && $photoId > 0) {
-            $id = AutoPostQueue::dismissPhoto($photoId);
+        $galleryId = (int) $this->request->post('gallery_id', 0);
+        if ($id <= 0 && $galleryId > 0) {
+            $id = AutoPostQueue::dismissGallery($galleryId);
         }
 
         if ($id <= 0 || AutoPostQueue::find($id) === null) {
@@ -520,7 +556,7 @@ class AutoPosterController extends Controller
             'Dismissed auto-post queue item #' . $id
         );
 
-        $this->flash('success', 'Dismissed — this photo will not be offered again.');
+        $this->flash('success', 'Dismissed — this gallery will not be offered again.');
         $this->redirect('/admin/auto-poster');
     }
 }

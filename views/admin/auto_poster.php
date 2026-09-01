@@ -10,32 +10,41 @@ $twitter = $config['twitter'] ?? [];
 <div class="stats-panel" style="margin-bottom:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <h2>Recommended posts</h2>
-        <span class="muted" style="font-size:.85rem;">Suggested X posts from images &amp; videos uploaded in the last 14 days. Each photo is offered once.</span>
+        <span class="muted" style="font-size:.85rem;">One post per gallery with uploads in the last 14 days, carrying 1&ndash;4 of its newest images (or a single video). Each gallery is offered once.</span>
     </div>
     <?php if (empty($recommended)): ?>
-        <p class="muted">No recent uploads to recommend. Upload new media, or every recent photo has already been queued/posted/dismissed.</p>
+        <p class="muted">No recent uploads to recommend. Upload new media, or every recent gallery has already been queued/posted/dismissed.</p>
     <?php else: ?>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;margin-top:.75rem;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem;margin-top:.75rem;">
             <?php foreach ($recommended as $rec): ?>
                 <div style="border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius,.5rem);padding:.75rem;display:flex;flex-direction:column;gap:.5rem;">
                     <div style="display:flex;gap:.75rem;align-items:center;">
-                        <?php $thumbUrl = file_url((string) $rec['filename'], 'thumb'); ?>
-                        <?php if ($rec['is_video']): ?>
-                            <img src="<?= e($thumbUrl) ?>" alt="" width="72" height="54" style="border-radius:4px;object-fit:cover;flex-shrink:0;background:#000;">
-                            <span style="font-size:.75rem;color:#6366f1;font-weight:600;">&#9654; VIDEO</span>
+                        <?php if (!empty($rec['media'])): ?>
+                            <img src="<?= e(file_url((string) $rec['media'][0]['filename'], 'thumb')) ?>" alt="" width="64" height="48" style="border-radius:4px;object-fit:cover;flex-shrink:0;background:#000;">
                         <?php else: ?>
-                            <img src="<?= e($thumbUrl) ?>" alt="" width="72" height="54" style="border-radius:4px;object-fit:cover;flex-shrink:0;background:#000;">
+                            <div style="width:64px;height:48px;border-radius:4px;background:#f3f4f6;flex-shrink:0;"></div>
                         <?php endif; ?>
                         <div style="min-width:0;">
-                            <div style="font-weight:600;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= e((string) $rec['gallery_title'] ?: 'Untitled upload') ?></div>
-                            <div class="muted" style="font-size:.8rem;"><?= e(date('M j, Y', strtotime((string) $rec['created_at']))) ?> &middot; <?= number_format((int) $rec['views']) ?> views</div>
+                            <div style="font-weight:600;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= e((string) $rec['gallery_title'] ?: 'Untitled gallery') ?></div>
+                            <div class="muted" style="font-size:.8rem;"><?= e(date('M j, Y', strtotime((string) $rec['newest_media_at']))) ?> &middot; <?= (int) $rec['media_count'] ?> file(s)</div>
                         </div>
                     </div>
+                    <?php if (count($rec['media']) > 1): ?>
+                        <div style="display:flex;gap:.25rem;flex-wrap:wrap;">
+                            <?php foreach ($rec['media'] as $mf): ?>
+                                <img src="<?= e(file_url((string) $mf['filename'], 'thumb')) ?>" alt="" width="56" height="42" style="border-radius:4px;object-fit:cover;background:#000;">
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
                     <form method="post" action="<?= url('/admin/auto-poster/queue/recommend') ?>" style="display:flex;flex-direction:column;gap:.5rem;">
                         <?= csrf_field() ?>
-                        <input type="hidden" name="photo_id" value="<?= (int) $rec['id'] ?>">
+                        <input type="hidden" name="gallery_id" value="<?= (int) $rec['gallery_id'] ?>">
                         <textarea name="text" rows="2" maxlength="280" style="font-size:.85rem;color:#374151;background:#fff;padding:.5rem .6rem;border-radius:4px;border:1px solid #d1d5db;word-wrap:break-word;resize:vertical;box-sizing:border-box;width:100%;"><?= e((string) $rec['suggested_text']) ?></textarea>
-                        <div class="muted" style="font-size:.75rem;">280 characters max &middot; edit freely before queueing</div>
+                        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+                            <label for="sched_<?= (int) $rec['gallery_id'] ?>" class="muted" style="font-size:.8rem;">Publish</label>
+                            <input type="datetime-local" name="scheduled_at" id="sched_<?= (int) $rec['gallery_id'] ?>" value="<?= e((string) $rec['default_scheduled_at']) ?>" style="font-size:.85rem;padding:.2rem .35rem;border:1px solid #d1d5db;border-radius:4px;">
+                            <span class="muted" style="font-size:.75rem;">auto-posts when the time passes</span>
+                        </div>
                         <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
                             <button type="submit" class="btn btn-sm">Add to queue</button>
                             <button type="submit" class="btn btn-sm" style="background:#0ea5e9;color:#fff;"
@@ -78,25 +87,42 @@ $twitter = $config['twitter'] ?? [];
             <thead>
                 <tr>
                     <th>#</th>
-                    <th>Photo</th>
+                    <th>Media</th>
                     <th>Text</th>
-                    <th>Queued</th>
+                    <th>Scheduled</th>
                     <th style="text-align:right;">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach ($queue as $item): ?>
+                    <?php $media = \App\Models\AutoPostQueue::mediaFiles($item); ?>
                     <tr>
                         <td><?= (int) $item['id'] ?></td>
-                        <td>
-                            <?php if (!empty($item['filename'])): ?>
-                                <img src="<?= e(file_url((string) $item['filename'], 'thumb')) ?>" alt="" width="48" height="36" style="border-radius:4px;object-fit:cover;background:#000;vertical-align:middle;">
+                        <td style="white-space:nowrap;">
+                            <?php if (!empty($media)): ?>
+                                <?php foreach ($media as $mf): ?>
+                                    <img src="<?= e(file_url((string) $mf['filename'], 'thumb')) ?>" alt="" width="40" height="30" style="border-radius:4px;object-fit:cover;background:#000;vertical-align:middle;margin-right:2px;">
+                                <?php endforeach; ?>
                             <?php else: ?>
-                                <span class="muted">deleted</span>
+                                <span class="muted">no media</span>
                             <?php endif; ?>
                         </td>
-                        <td style="max-width:420px;font-size:.85rem;color:#374151;word-wrap:break-word;"><?= e((string) $item['text']) ?></td>
-                        <td class="muted"><?= e(substr((string) $item['created_at'], 5, 11)) ?></td>
+                        <td style="max-width:400px;font-size:.85rem;color:#374151;word-wrap:break-word;"><?= e((string) $item['text']) ?></td>
+                        <td>
+                            <form method="post" action="<?= url('/admin/auto-poster/queue/schedule') ?>" class="inline">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
+                                <input type="datetime-local" name="scheduled_at" value="<?= e(trim((string) $item['scheduled_at'])) ?>" style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;">
+                                <button type="submit" class="btn btn-sm">Set</button>
+                            </form>
+                            <div class="muted" style="font-size:.75rem;margin-top:.1rem;">
+                                <?php if (!empty($item['scheduled_at']) && $item['scheduled_at'] <= date('Y-m-d H:i:s')): ?>
+                                    <span style="color:#d97706;">publishing now on next worker run</span>
+                                <?php else: ?>
+                                    auto-posts at this time
+                                <?php endif; ?>
+                            </div>
+                        </td>
                         <td style="text-align:right;white-space:nowrap;">
                             <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/post') ?>">
                                 <?= csrf_field() ?>
