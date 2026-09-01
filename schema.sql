@@ -416,6 +416,17 @@ INSERT INTO users (email, password_hash, role)
 VALUES ('admin@example.com', '$2y$10$uNmLZcHOdbU1ClIdYBshduRC5MV6kNjkvhr20NZaWDRbyLFI4kX0m', 'admin')
 ON DUPLICATE KEY UPDATE email = email;
 
+-- Daily content view counts for the admin dashboard's view-trends charts.
+CREATE TABLE IF NOT EXISTS content_views (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    entity_type ENUM('gallery','photo') NOT NULL,
+    entity_id   INT UNSIGNED NOT NULL,
+    view_date   DATE NOT NULL,
+    count       INT UNSIGNED NOT NULL DEFAULT 0,
+    UNIQUE KEY uq_content_views_type_id_date (entity_type, entity_id, view_date),
+    INDEX idx_content_views_date (view_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE IF NOT EXISTS password_resets (
     id INT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) NOT NULL,

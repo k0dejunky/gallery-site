@@ -292,6 +292,17 @@ class Subscription
     }
 
     /**
+     * Human-readable tier name for a membership level (the "min_level" /
+     * plan "level" column). 0 = Free, 1-4 = the paid silver-to-diamond tiers.
+     */
+    public static function levelLabel(int $level): string
+    {
+        $labels = [0 => 'Free', 1 => 'Silver', 2 => 'Gold', 3 => 'Platinum', 4 => 'Diamond'];
+
+        return $labels[$level] ?? 'Level ' . $level;
+    }
+
+    /**
      * Find the subscription whose transaction_ref matches a Braintree
      * subscription ID (stored as "BT-<braintree_id>").
      */

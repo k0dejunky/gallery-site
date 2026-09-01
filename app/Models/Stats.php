@@ -504,6 +504,245 @@ class Stats
     }
 
     /**
+     * Record one view of a gallery or photo for the daily view-trends charts.
+     * Called from Gallery::recordView() / Photo::recordView() so every
+     * logged-in view also feeds the time-series (the lifetime totals are
+     * still tracked on their own counters). One row per entity+date, upserted
+     * so we never grow unbounded.
+     */
+    public static function recordContentView(string $entityType, int $entityId): void
+    {
+        if (!in_array($entityType, ['gallery', 'photo'], true) || $entityId <= 0) {
+            return;
+        }
+
+        Database::run(
+            'INSERT INTO content_views (entity_type, entity_id, view_date, count)
+             VALUES (?, ?, CURDATE(), 1)
+             ON DUPLICATE KEY UPDATE count = count + 1',
+            [$entityType, $entityId]
+        );
+    }
+
+    /**
+     * Daily total views of galleries and photos over the last $days days,
+     * for the dashboard view-trends sparkline/bar chart. Returns shared date
+     * labels plus separate gallery/photo/total series (Y-m-d => count).
+     *
+     * @return array{labels: array<int,string>, gallery: array<int,int>, photo: array<int,int>, total: array<int,int>}
+     */
+    public static function contentViewTrends(int $days = 30): array
+    {
+        $days   = max(7, min(365, $days));
+        $since  = date('Y-m-d', time() - $days * 86400);
+
+        $rows = Database::run(
+            'SELECT entity_type, view_date, SUM(count) AS cnt
+             FROM content_views
+             WHERE view_date >= ?
+             GROUP BY entity_type, view_date
+             ORDER BY view_date ASC',
+            [$since]
+        )->fetchAll();
+
+        $byType = ['gallery' => [], 'photo' => []];
+        foreach ($rows as $row) {
+            $type = (string) $row['entity_type'];
+            if (isset($byType[$type])) {
+                $byType[$type][(string) $row['view_date']] = (int) $row['cnt'];
+            }
+        }
+
+        $labels  = [];
+        $gallery = [];
+        $photo   = [];
+        $total   = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $key      = date('Y-m-d', time() - $i * 86400);
+            $g        = $byType['gallery'][$key] ?? 0;
+            $p        = $byType['photo'][$key] ?? 0;
+            $labels[] = date('n/j', strtotime($key));
+            $gallery[] = $g;
+            $photo[]   = $p;
+            $total[]   = $g + $p;
+        }
+
+        return [
+            'labels'  => $labels,
+            'gallery' => $gallery,
+            'photo'   => $photo,
+            'total'   => $total,
+        ];
+    }
+
+    /**
+     * Content-position growth series for the dashboard: how many new
+     * galleries/photos/videos and user signups were added in each of the
+     * trailing $months months. Uses the counters' created_at columns, so no
+     * new tracking is needed (unlike view trends).
+     *
+     * @return array{labels: array<int,string>, galleries: array<int,int>, photos: array<int,int>, videos: array<int,int>, users: array<int,int>}
+     */
+    public static function growthSeries(int $months = 6): array
+    {
+        $months = max(2, min(24, $months));
+        $since  = date('Y-m-01 00:00:00', strtotime('-' . ($months - 1) . ' months'));
+
+        $rows = Database::run(
+            "SELECT kind, ym, SUM(cnt) AS cnt FROM (
+                SELECT 'gallery' AS kind, DATE_FORMAT(created_at, '%Y-%m') AS ym, COUNT(*) AS cnt
+                FROM galleries WHERE created_at >= ? AND deleted_at IS NULL GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+                UNION ALL
+                SELECT 'photo', DATE_FORMAT(created_at, '%Y-%m'), COUNT(*) FROM photos WHERE created_at >= ? GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+                UNION ALL
+                SELECT 'video', DATE_FORMAT(created_at, '%Y-%m'), COUNT(*) FROM photos WHERE created_at >= ? AND is_video = 1 GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+                UNION ALL
+                SELECT 'user', DATE_FORMAT(created_at, '%Y-%m'), COUNT(*) FROM users WHERE created_at >= ? GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+            ) t GROUP BY kind, ym",
+            [$since, $since, $since, $since]
+        )->fetchAll();
+
+        $map = ['gallery' => [], 'photo' => [], 'video' => [], 'user' => []];
+        foreach ($rows as $row) {
+            $kind = (string) $row['kind'];
+            if (isset($map[$kind])) {
+                $map[$kind][(string) $row['ym']] = (int) $row['cnt'];
+            }
+        }
+
+        $labels = $galleries = $photos = $videos = $users = [];
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $ym          = date('Y-m', strtotime("-$i months"));
+            $labels[]    = date('M y', strtotime($ym . '-01'));
+            $galleries[] = $map['gallery'][$ym] ?? 0;
+            $photos[]    = $map['photo'][$ym] ?? 0;
+            $videos[]    = $map['video'][$ym] ?? 0;
+            $users[]     = $map['user'][$ym] ?? 0;
+        }
+
+        return [
+            'labels'    => $labels,
+            'galleries' => $galleries,
+            'photos'    => $photos,
+            'videos'    => $videos,
+            'users'     => $users,
+        ];
+    }
+
+    /**
+     * Top content leaderboard for the dashboard: the most-viewed and
+     * most-viewed-unique galleries and photos among non-soft-deleted content.
+     */
+    public static function topContent(int $limit = 5): array
+    {
+        $limit = max(1, min(20, $limit));
+
+        $galleries = Database::run(
+            "SELECT g.id, g.title, g.views, g.unique_views, g.type,
+                    COUNT(gp.photo_id) AS media_count
+             FROM galleries g
+             LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
+             WHERE g.deleted_at IS NULL
+             GROUP BY g.id
+             ORDER BY g.views DESC
+             LIMIT $limit"
+        )->fetchAll();
+
+        $photos = Database::run(
+            "SELECT p.id, p.filename, p.caption, p.views, p.unique_views, p.is_video,
+                    (SELECT MIN(g2.title) FROM gallery_photo gc2 JOIN galleries g2 ON g2.id = gc2.gallery_id WHERE gc2.photo_id = p.id AND g2.deleted_at IS NULL) AS gallery
+             FROM photos p
+             ORDER BY p.views DESC
+             LIMIT $limit"
+        )->fetchAll();
+
+        return ['galleries' => $galleries, 'photos' => $photos];
+    }
+
+    /**
+     * Membership plan distribution for the dashboard: how many active members
+     * each plan has (with its tier/level and recurring revenue), plus a
+     * per-tier rollup. Only currently-active subscriptions are counted.
+     */
+    public static function planDistribution(): array
+    {
+        $rows = Database::run(
+            'SELECT p.id, p.name, p.level, p.billing_cycle, p.price,
+                    COUNT(DISTINCT s.user_id) AS members,
+                    SUM(CASE p.billing_cycle WHEN "monthly" THEN p.price WHEN "yearly" THEN p.price / 12 ELSE p.price / 24 END) AS mrr
+             FROM plans p
+             LEFT JOIN subscriptions s ON s.plan_id = p.id
+                 AND s.status = ?
+                 AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
+             WHERE p.active = 1
+             GROUP BY p.id, p.name, p.level, p.billing_cycle, p.price
+             ORDER BY p.level ASC, p.name ASC',
+            ['active']
+        )->fetchAll();
+
+        $tierNames  = [1 => 'Silver', 2 => 'Gold', 3 => 'Platinum', 4 => 'Diamond'];
+        $byTier     = [];
+        $totalMembers = 0;
+
+        foreach ($rows as $row) {
+            $level = (int) $row['level'];
+            $tier  = $tierNames[$level] ?? 'Level ' . $level;
+            if (!isset($byTier[$tier])) {
+                $byTier[$tier] = ['level' => $level, 'members' => 0, 'mrr' => 0.0];
+            }
+            $byTier[$tier]['members'] += (int) $row['members'];
+            $byTier[$tier]['mrr']     += (float) $row['mrr'];
+            $totalMembers             += (int) $row['members'];
+        }
+
+        return [
+            'plans'        => $rows,
+            'by_tier'      => $byTier,
+            'total_members' => $totalMembers,
+        ];
+    }
+
+    /**
+     * Support ticket workload for the dashboard: open vs resolved counts,
+     * new tickets in the last 7 days/30 days, and average first-response time
+     * (in hours) for resolved tickets that have an admin reply.
+     */
+    public static function supportStats(): array
+    {
+        $counts = Database::run(
+            "SELECT
+                COALESCE(SUM(status IN ('new','read','postponed')), 0) AS open,
+                COALESCE(SUM(status IN ('resolved','ignored')), 0) AS closed,
+                COUNT(*) AS total,
+                COALESCE(SUM(created_at >= CURDATE() - INTERVAL 7 DAY), 0) AS new_7d,
+                COALESCE(SUM(created_at >= CURDATE() - INTERVAL 30 DAY), 0) AS new_30d
+             FROM support_messages"
+        )->fetch();
+
+        // Average first-response time: minutes from ticket creation to the
+        // earliest admin reply, among resolved/ignored tickets that have one.
+        $avgMins = Database::run(
+            "SELECT COALESCE(AVG(TIMESTAMPDIFF(MINUTE, m.created_at, r.first_reply)), 0) AS avg_min
+             FROM support_messages m
+             JOIN (
+                 SELECT ticket_id, MIN(created_at) AS first_reply
+                 FROM support_replies WHERE author_role = 'admin'
+                 GROUP BY ticket_id
+             ) r ON r.ticket_id = m.id
+             WHERE r.first_reply > m.created_at"
+        )->fetchColumn();
+
+        return [
+            'open'        => (int) ($counts['open'] ?? 0),
+            'closed'      => (int) ($counts['closed'] ?? 0),
+            'total'       => (int) ($counts['total'] ?? 0),
+            'new_7d'      => (int) ($counts['new_7d'] ?? 0),
+            'new_30d'     => (int) ($counts['new_30d'] ?? 0),
+            'avg_response_min' => round((float) $avgMins),
+        ];
+    }
+
+    /**
      * Record a category selection: every time a logged-in user opens a
      * category page it counts as one view of that category.
      */

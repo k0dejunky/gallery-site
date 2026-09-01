@@ -230,6 +230,179 @@
     <?php endif; ?>
 </div>
 
+<?php // Daily view trends (from the content_views log) — gallery vs photo vs total. ?>
+<div class="sys-card" style="margin-top:var(--spacing-lg);">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <h2 style="margin:0;">View trends — last 30 days</h2>
+    </div>
+    <?php
+        $viewTotals = array_sum($viewTrends['total']);
+        $viewNow    = (int) end($viewTrends['total']);
+        $viewDw     = array_sum(array_slice($viewTrends['total'], -7));
+    ?>
+    <?php if ($viewTotals <= 0): ?>
+        <p class="muted">No tracked views yet — a logged-in visit to a gallery or photo records a daily count from now on.</p>
+    <?php else: ?>
+        <div class="stat-cards" style="margin:.75rem 0;">
+            <div class="stat-card"><span class="muted">Views (30 days)</span><b style="font-size:1.3rem;"><?= number_format($viewTotals) ?></b></div>
+            <div class="stat-card"><span class="muted">Views (last 7 days)</span><b style="font-size:1.3rem;"><?= number_format($viewDw) ?></b></div>
+            <div class="stat-card"><span class="muted">Views (yesterday)</span><b style="font-size:1.3rem;"><?= number_format($viewNow) ?></b></div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
+            <div style="flex:2 1 400px;min-width:300px;">
+                <?= \App\Core\Charts::bars($viewTrends['labels'], $viewTrends['total'], 520, 140, '#0ea5e9', '%s') ?>
+            </div>
+            <div style="flex:1 1 180px;min-width:160px;">
+                <p class="muted" style="margin:0 0 .35rem;font-size:.85rem;">Gallery vs photo views</p>
+                <?= \App\Core\Charts::sparkline($viewTrends['gallery'], 200, 44, '#0ea5e9') ?>
+                <p class="muted" style="margin:.15rem 0 .35rem;font-size:.8rem;">Galleries</p>
+                <?= \App\Core\Charts::sparkline($viewTrends['photo'], 200, 44, '#a855f7') ?>
+                <p class="muted" style="margin:.15rem 0 0;font-size:.8rem;">Photos</p>
+            </div>
+        </div>
+    <?php endif; ?>
+</div>
+
+<?php // Content & membership growth over the trailing months. ?>
+<div class="sys-card" style="margin-top:var(--spacing-lg);">
+    <h2>Content &amp; membership growth — last 6 months</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
+        <div style="flex:2 1 420px;min-width:320px;">
+            <p class="muted" style="margin:0 0 .35rem;font-size:.85rem;">New galleries</p>
+            <?= \App\Core\Charts::sparkline($growthSeries['galleries'], 520, 40, '#16a34a') ?>
+            <p class="muted" style="margin:.5rem 0 .35rem;font-size:.85rem;">New photos</p>
+            <?= \App\Core\Charts::sparkline($growthSeries['photos'], 520, 40, '#0ea5e9') ?>
+            <p class="muted" style="margin:.5rem 0 .35rem;font-size:.85rem;">New signups</p>
+            <?= \App\Core\Charts::sparkline($growthSeries['users'], 520, 40, '#a855f7') ?>
+            <p class="muted" style="margin:.35rem 0 0;font-size:.8rem;">Labels across the series: <?= e(implode(' · ', $growthSeries['labels'])) ?></p>
+        </div>
+        <div style="flex:1 1 240px;min-width:220px;">
+            <table>
+                <thead><tr><th>Month</th><th style="text-align:right;">Gal.</th><th style="text-align:right;">Photos</th><th style="text-align:right;">Videos</th><th style="text-align:right;">Users</th></tr></thead>
+                <tbody>
+                <?php foreach ($growthSeries['labels'] as $i => $label): ?>
+                    <tr>
+                        <td><b><?= e($label) ?></b></td>
+                        <td style="text-align:right;"><?= number_format($growthSeries['galleries'][$i]) ?></td>
+                        <td style="text-align:right;"><?= number_format($growthSeries['photos'][$i]) ?></td>
+                        <td style="text-align:right;"><?= number_format($growthSeries['videos'][$i]) ?></td>
+                        <td style="text-align:right;"><?= number_format($growthSeries['users'][$i]) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<?php // Top content by views. ?>
+<div class="sys-card" style="margin-top:var(--spacing-lg);">
+    <h2>Top content by views</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
+        <div style="flex:1 1 340px;min-width:280px;">
+            <h3 style="margin:0 0 .35rem;font-size:.9rem;">Galleries</h3>
+            <?php if (empty($topContentStats['galleries'])): ?>
+                <p class="muted">No galleries yet.</p>
+            <?php else: ?>
+                <table>
+                    <thead><tr><th>Gallery</th><th style="text-align:right;">Views</th><th style="text-align:right;">Unique</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($topContentStats['galleries'] as $g): ?>
+                        <tr>
+                            <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                                <a href="<?= url('/admin/galleries/' . (int) $g['id']) ?>"><?= e((string) $g['title']) ?></a>
+                                <span class="muted" style="font-size:.8rem;"> · <?= number_format((int) $g['media_count']) ?> media</span>
+                            </td>
+                            <td style="text-align:right;"><?= number_format((int) $g['views']) ?></td>
+                            <td style="text-align:right;"><?= number_format((int) $g['unique_views']) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
+        <div style="flex:1 1 340px;min-width:280px;">
+            <h3 style="margin:0 0 .35rem;font-size:.9rem;">Photos</h3>
+            <?php if (empty($topContentStats['photos'])): ?>
+                <p class="muted">No photos yet.</p>
+            <?php else: ?>
+                <table>
+                    <thead><tr><th>Photo</th><th style="text-align:right;">Views</th><th style="text-align:right;">Unique</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($topContentStats['photos'] as $p): ?>
+                        <tr>
+                            <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                                <a href="<?= url('/admin/photos/' . (int) $p['id'] . '/edit') ?>"><?= e($p['caption'] !== '' ? $p['caption'] : basename((string) $p['filename'])) ?></a>
+                                <span class="muted" style="font-size:.8rem;"> · <?= $p['is_video'] ? 'video' : 'image' ?></span>
+                            </td>
+                            <td style="text-align:right;"><?= number_format((int) $p['views']) ?></td>
+                            <td style="text-align:right;"><?= number_format((int) $p['unique_views']) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<?php // Membership plan distribution. ?>
+<div class="sys-card" style="margin-top:var(--spacing-lg);">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <h2 style="margin:0;">Membership by plan</h2>
+        <a href="<?= url('/admin/subscriptions') ?>" class="btn btn-sm">Subscriptions</a>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
+        <div style="flex:1 1 340px;min-width:280px;">
+            <table>
+                <thead><tr><th>Plan</th><th>Tier</th><th style="text-align:right;">Members</th><th style="text-align:right;">MRR</th></tr></thead>
+                <tbody>
+                <?php foreach ($planDistribution['plans'] as $plan): ?>
+                    <tr>
+                        <td><b><?= e($plan['name']) ?></b></td>
+                        <td class="muted"><?= e(\App\Models\Subscription::levelLabel((int) $plan['level'])) ?></td>
+                        <td style="text-align:right;"><?= number_format((int) $plan['members']) ?></td>
+                        <td style="text-align:right;">$<?= number_format((float) $plan['mrr'], 2) ?>/mo</td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <div style="flex:1 1 260px;min-width:220px;">
+            <div class="stat-card" style="border-left:4px solid var(--purple-400,#a855f7);">
+                <b style="font-size:1.3rem;"><?= number_format((int) $planDistribution['total_members']) ?></b>
+                <small>Active members</small>
+            </div>
+            <table style="margin-top:.75rem;">
+                <tbody>
+                <?php foreach ($planDistribution['by_tier'] as $tier => $info): ?>
+                    <tr>
+                        <td><b><?= e($tier) ?></b></td>
+                        <td style="text-align:right;"><?= number_format((int) $info['members']) ?> members</td>
+                        <td style="text-align:right;">$<?= number_format((float) $info['mrr'], 0) ?>/mo</td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<?php // Support ticket workload. ?>
+<div class="sys-card" style="margin-top:var(--spacing-lg);">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <h2 style="margin:0;">Support</h2>
+        <a href="<?= url('/admin/support') ?>" class="btn btn-sm">Support inbox</a>
+    </div>
+    <div class="stat-cards" style="margin-top:.75rem;">
+        <div class="stat-card"><b><?= number_format((int) $supportStats['open']) ?></b><small>Open tickets</small></div>
+        <div class="stat-card"><b><?= number_format((int) $supportStats['closed']) ?></b><small>Resolved</small></div>
+        <div class="stat-card"><b><?= number_format((int) $supportStats['new_7d']) ?></b><small>New (7 days)</small></div>
+        <div class="stat-card"><b><?= number_format((int) $supportStats['new_30d']) ?></b><small>New (30 days)</small></div>
+        <div class="stat-card"><b><?= number_format((int) $supportStats['avg_response_min']) ?>m</b><small>Avg first response</small></div>
+    </div>
+</div>
+
 <div class="sys-card" style="margin-top:var(--spacing-lg);">
     <h2>Recent activity</h2>
     <?php if (empty($feed)): ?>

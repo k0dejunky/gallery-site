@@ -383,6 +383,8 @@ class Gallery
             return;
         }
 
+        \App\Models\Stats::recordContentView('gallery', $galleryId);
+
         $already = (int) Database::run(
             'SELECT COUNT(*) FROM gallery_viewers WHERE user_id = ? AND gallery_id = ?',
             [$userId, $galleryId]

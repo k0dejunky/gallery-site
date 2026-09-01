@@ -33,6 +33,8 @@ class Photo
             return;
         }
 
+        \App\Models\Stats::recordContentView('photo', $photoId);
+
         $already = (int) Database::run(
             'SELECT COUNT(*) FROM photo_viewers WHERE user_id = ? AND photo_id = ?',
             [$userId, $photoId]

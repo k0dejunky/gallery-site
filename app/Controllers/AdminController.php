@@ -71,6 +71,13 @@ class AdminController extends Controller
             'backupFailure' => $backupFailure,
             'cronAgeMin' => $cronAge,
             'diskFreeGb' => $diskFreeGb,
+
+            // Additional statistics.
+            'viewTrends' => \App\Models\Stats::contentViewTrends(30),
+            'growthSeries' => \App\Models\Stats::growthSeries(6),
+            'topContentStats' => \App\Models\Stats::topContent(5),
+            'planDistribution' => \App\Models\Stats::planDistribution(),
+            'supportStats' => \App\Models\Stats::supportStats(),
         ]);
     }
 
