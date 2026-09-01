@@ -233,6 +233,47 @@ $check(strpos($applyCron, 'posix_geteuid') !== false && strpos($applyCron, '/etc
     && strpos($applyCron, 'schedules.json') !== false && strpos($applyCron, 'systemctl restart gallery-video-export gallery-photo-edit') !== false,
     'apply_cron.php must require root, write /etc/cron.d and restart worker services');
 
+// --- Test suite feature --------------------------------------------------
+$routesFile2 = (string) file_get_contents("$root/config/routes.php");
+$check(strpos($routesFile2, 'admin/test-suite') !== false && strpos($routesFile2, 'admin/test-suite/status') !== false
+    && strpos($routesFile2, 'TestSuiteController@index') !== false
+    && strpos($routesFile2, 'TestSuiteController@run') !== false
+    && strpos($routesFile2, 'TestSuiteController@status') !== false,
+    'test suite routes (page / run POST / status GET) must be registered');
+
+$adminLayout2 = (string) @file_get_contents("$root/views/admin/layout.php");
+$check(strpos($adminLayout2, "Test suite") !== false && strpos($adminLayout2, '/admin/test-suite') !== false,
+    'admin layout sidebar must link the Test suite nav item');
+
+$tsCore = (string) @file_get_contents("$root/app/Core/TestSuite.php");
+$check(strpos($tsCore, 'public static function tests()') !== false
+    && strpos($tsCore, 'public static function grouped()') !== false
+    && strpos($tsCore, 'public static function run(') !== false
+    && strpos($tsCore, "public static function writeRun(") !== false,
+    'TestSuite core must expose tests()/grouped()/run()/writeRun()');
+
+$tsCtrl = (string) @file_get_contents("$root/app/Controllers/TestSuiteController.php");
+$check(strpos($tsCtrl, 'public function index()') !== false && strpos($tsCtrl, 'public function run()') !== false
+    && strpos($tsCtrl, 'public function status()') !== false && strpos($tsCtrl, 'spawnWorker') !== false
+    && strpos($tsCtrl, 'requirePermission') !== false,
+    'TestSuiteController must implement index/run/status + spawn the detached worker');
+
+$check(file_exists("$root/bin/test_runner.php"),
+    'missing file: bin/test_runner.php');
+$runner = (string) @file_get_contents("$root/bin/test_runner.php");
+$check(strpos($runner, 'App\\Core\\TestSuite') !== false && strpos($runner, 'TestSuite::run(') !== false,
+    'bin/test_runner.php must drive the TestSuite runner');
+
+$tsView = (string) @file_get_contents("$root/views/admin/test_suite.php");
+$check(strpos($tsView, 'ts-run-all') !== false && strpos($tsView, 'ts-run-selected') !== false
+    && strpos($tsView, 'fetch(') !== false && strpos($tsView, 'setInterval') !== false
+    && strpos($tsView, 'statusUrl') !== false,
+    'test suite view must render run controls + poll the status endpoint in real time');
+
+$gitignore = (string) @file_get_contents("$root/.gitignore");
+$check(strpos($gitignore, 'storage/testruns') !== false,
+    '.gitignore must exclude the runtime test-run state directory');
+
 // --- Report ----------------------------------------------------------------
 echo "smoke: $checks checks\n";
 if ($failures) {

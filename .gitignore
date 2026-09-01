@@ -19,6 +19,9 @@
 # Runtime log/lock files (created by workers and cron jobs)
 /storage/logs/
 
+# Real-time test suite run state (created per run on the servers)
+/storage/testruns/
+
 # Node modules & build output for the video editor
 /frontend/video-editor/node_modules/
 /frontend/video-editor/dist/*.map

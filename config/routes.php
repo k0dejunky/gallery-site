@@ -128,6 +128,10 @@ return [
     ['POST', '/admin/system/housekeeping', 'SystemController@housekeepingRun'],
     ['POST', '/admin/system/smtp-test', 'SystemController@smtpTest'],
     ['POST', '/admin/system/cron-schedule', 'SystemController@saveCronSchedule'],
+    // Test suite (admin only): page + real-time JSON polling + detached runner.
+    ['GET', '/admin/test-suite', 'TestSuiteController@index'],
+    ['POST', '/admin/test-suite/run', 'TestSuiteController@run'],
+    ['GET', '/admin/test-suite/status', 'TestSuiteController@status'],
     ['GET', '/admin/export/users', 'ExportController@users'],
     ['GET', '/admin/export/subscriptions', 'ExportController@subscriptions'],
 

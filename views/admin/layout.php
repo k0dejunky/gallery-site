@@ -266,6 +266,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             <a class="nav-item <?= $navActive('/admin/logs') ?>" href="<?= url('/admin/logs') ?>">Logs</a>
             <a class="nav-item <?= $navActive('/admin/error-logs') ?>" href="<?= url('/admin/error-logs') ?>">Error Logs</a>
             <a class="nav-item <?= $navActive('/admin/system') ?>" href="<?= url('/admin/system') ?>">System</a>
+            <a class="nav-item <?= $navActive('/admin/test-suite') ?>" href="<?= url('/admin/test-suite') ?>">Test suite</a>
             <a class="nav-item <?= $navActive('/admin/help') ?>" href="<?= url('/admin/help') ?>">Documentation</a>
             <?php if (\App\Core\Auth::can('support')): ?>
                 <a class="nav-item <?= $navActive('/admin/support') ?>" href="<?= url('/admin/support') ?>">Support</a>
