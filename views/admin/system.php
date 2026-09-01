@@ -153,6 +153,44 @@
 
 <!-- Cards that contain tables: one per row, full width -->
 <div class="sys-stack">
+    <!-- Cron jobs -->
+    <div class="sys-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;">
+            <h2>Scheduled tasks (cron)</h2>
+            <?php $cronOkCount = count(array_filter($cronJobs ?? [], fn($j) => !empty($j['ok']))); ?>
+            <span class="muted" style="font-size:.85rem;">
+                <?= $cronJobs === null || $cronJobs === [] ? 'no cron jobs detected' : (int) $cronOkCount . ' of ' . count($cronJobs) . ' healthy' ?>
+            </span>
+        </div>
+        <?php if (empty($cronJobs)): ?>
+            <p class="muted" style="margin-top:.5rem;font-size:.85rem;">
+                No scheduled-task log files found. Install the cron entries from
+                <code>docs/MIGRATION.md</code> (gallery-housekeeping, gallery-autopost,
+                gallery-backup, gallery-restore-drill) and they will appear here.
+            </p>
+        <?php else: ?>
+            <table>
+                <tr><th>Task</th><th>Runs</th><th>Last run</th><th>Status</th><th>Details</th></tr>
+                <?php foreach ($cronJobs as $job): ?>
+                    <tr>
+                        <td><b><?= e((string) $job['id']) ?></b><br>
+                            <span class="muted" style="font-size:.8rem;"><?= e((string) $job['desc']) ?></span></td>
+                        <td class="muted"><?= e((string) $job['schedule']) ?></td>
+                        <td><?= $job['lastRun'] ? e((string) $job['lastRun']) . ' <span class="muted">(' . e((string) $job['lastAgo']) . ')</span>' : '<span class="muted">never</span>' ?></td>
+                        <td>
+                            <?php if ($job['ok']): ?>
+                                <b class="sys-ok">&#10003; ok</b>
+                            <?php else: ?>
+                                <b class="sys-bad">&#9888; <?= $job['lastRun'] ? 'stale / failed' : 'not run' ?></b>
+                            <?php endif; ?>
+                        </td>
+                        <td class="muted" style="font-size:.83rem;overflow-wrap:anywhere;"><?= $job['note'] ? e((string) $job['note']) : '&mdash;' ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </table>
+        <?php endif; ?>
+    </div>
+
     <!-- Pending upload staging folders -->
     <div class="sys-card">
         <h2>Pending uploads</h2>

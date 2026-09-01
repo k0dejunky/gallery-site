@@ -47,6 +47,7 @@ class SystemController extends Controller
             'maintenance' => is_file($this->storage . '/maintenance.flag'),
             'cronKeySet'  => self::cronKey() !== '',
             'cronAgeMin'  => $this->cronLastRunMinutes(),
+            'cronJobs'    => $this->cronJobs(),
             'security'    => \App\Models\Stats::security(),
             'storageTrend' => \App\Models\Stats::storageTrend(),
             'retention'   => (int) env_value('HOUSEKEEPING_KEEP_BACKUPS', '10'),
@@ -223,6 +224,136 @@ class SystemController extends Controller
         }
 
         return (int) round((time() - (int) filemtime($log)) / 60);
+    }
+
+    /**
+     * @return array<int, array{id:string,schedule:string,desc:string,lastRun:?string,lastTs:?int,ok:bool,note:string}>
+     */
+    private function cronJobs(): array
+    {
+        $logs = $this->storage . '/logs';
+        $now  = time();
+
+        $lastRun = static function (string $file) use ($now): ?array {
+            if (!is_file($file)) {
+                return [null, null];
+            }
+            $ts = (int) filemtime($file);
+            return [$ts, date('Y-m-d H:i:s', $ts)];
+        };
+
+        [$hkTs, $hkAt] = $lastRun($logs . '/cron.log');
+        $hkFresh   = $hkTs !== null && ($now - $hkTs) <= 90 * 60;
+        $hkNote    = $this->lastLineSummary($logs . '/cron.log');
+
+        [$bpTs, $bpAt] = $lastRun($logs . '/backup.log');
+        $bpFailed  = is_file($this->backupDir . '/.failed');
+        $bpSync    = $this->lastSyncStatus();
+        $bpOk      = $bpTs !== null && !$bpFailed; // archive run completed
+        $bpNote    = $bpFailed ? 'last run reported failure' : '';
+        if ($bpSync) {
+            $syncOk = !empty($bpSync['ok']) && (int) ($bpSync['sync_rc'] ?? 1) === 0;
+            // The archive itself is fine; offsite sync health is separate detail.
+            $bpNote = ($bpNote ? $bpNote . ' · ' : '') . 'offsite sync ' . ($syncOk ? 'OK' : 'FAILED')
+                     . (isset($bpSync['at']) ? ' (' . $bpSync['at'] . ')' : '');
+        }
+
+        [$dlTs, $dlAt] = $lastRun($logs . '/drill.log');
+        $dlLine  = $this->lastLineSummary($logs . '/drill.log');
+        $dlOk    = $dlLine !== '' && stripos($dlLine, 'OK') !== false;
+
+        [$apTs, $apAt] = $lastRun($logs . '/autopost.log');
+        $apFail  = $this->autopostRecentFailure($logs . '/autopost.log');
+
+        $jobs = [
+            [
+                'id'       => 'housekeeping',
+                'schedule' => 'every 15 minutes',
+                'desc'     => 'Expire overdue subscriptions, purge stale staging dirs, prune old backups, snapshot storage',
+                'lastRun'  => $hkAt,
+                'lastAgo'  => $this->relativeAge($hkTs),
+                'ok'       => $hkFresh,
+                'note'     => $hkNote,
+            ],
+            [
+                'id'       => 'autopost',
+                'schedule' => 'every minute',
+                'desc'     => 'Publish queued auto-posts to X/Reddit once their scheduled time passes',
+                'lastRun'  => $apAt,
+                'lastAgo'  => $this->relativeAge($apTs),
+                'ok'       => $apTs !== null && $apFail === '',
+                'note'     => $apFail,
+            ],
+            [
+                'id'       => 'backup',
+                'schedule' => 'daily at 03:00',
+                'desc'     => 'Full DB + media archive, split into 4 GB parts and synced offsite',
+                'lastRun'  => $bpAt,
+                'lastAgo'  => $this->relativeAge($bpTs),
+                'ok'       => $bpOk,
+                'note'     => $bpNote,
+            ],
+            [
+                'id'       => 'restore-drill',
+                'schedule' => 'weekly, Sundays at 04:00',
+                'desc'     => 'Restore a recent backup into a scratch DB to prove backups are restorable',
+                'lastRun'  => $dlAt,
+                'lastAgo'  => $this->relativeAge($dlTs),
+                'ok'       => $dlOk,
+                'note'     => $dlLine,
+            ],
+        ];
+
+        return $jobs;
+    }
+
+    private function relativeAge(?int $ts): string
+    {
+        if ($ts === null) {
+            return 'never';
+        }
+        $diff = time() - $ts;
+        if ($diff < 60) {
+            return 'just now';
+        }
+        if ($diff < 3600) {
+            return (int) floor($diff / 60) . ' min ago';
+        }
+        if ($diff < 86400) {
+            return (int) floor($diff / 3600) . ' hr ago';
+        }
+        return (int) floor($diff / 86400) . 'd ago';
+    }
+
+    private function lastLineSummary(string $file): string
+    {
+        if (!is_file($file)) {
+            return '';
+        }
+        $size = filesize($file);
+        $fh   = fopen($file, 'r');
+        fseek($fh, max(0, $size - 512));
+        $tail = (string) stream_get_contents($fh);
+        fclose($fh);
+        $lines = array_filter(explode("\n", $tail), static fn (string $l): bool => trim($l) !== '');
+        $last  = end($lines);
+        return trim((string) preg_replace('/\s+/', ' ', trim((string) $last)));
+    }
+
+    private function autopostRecentFailure(string $file): string
+    {
+        if (!is_file($file) || (time() - (int) filemtime($file)) > 86400) {
+            return ''; // aged out (daily cron) or no log yet
+        }
+        $size = filesize($file);
+        $fh = fopen($file, 'r');
+        fseek($fh, max(0, $size - 4096));
+        $tail = (string) stream_get_contents($fh);
+        fclose($fh);
+        if (preg_match('/failed: ([^\r\n]+)/', $tail, $m)) {
+            return 'last autopost failed: ' . trim($m[1]);
+        }
+        return '';
     }
 
     // ------------------------------------------------------------------

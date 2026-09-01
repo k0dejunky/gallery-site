@@ -206,6 +206,17 @@ $adminLayout = (string) file_get_contents("$root/views/admin/layout.php");
 $check(strpos($adminLayout, '$user =') === false,
     'views/admin/layout.php must not assign $user (viewAdmin() scope collision)');
 
+// --- System page cron oversight -------------------------------------------
+$systemView   = (string) file_get_contents("$root/views/admin/system.php");
+$systemCtrl   = (string) file_get_contents("$root/app/Controllers/SystemController.php");
+$check(strpos($systemView, 'Scheduled tasks (cron)') !== false
+    && strpos($systemView, 'cronJobs') !== false && strpos($systemView, 'lastRun') !== false,
+    'system view must render a scheduled-tasks (cron) table with last-run times');
+$check(strpos($systemCtrl, 'private function cronJobs') !== false
+    && strpos($systemCtrl, 'relativeAge') !== false
+    && strpos($systemCtrl, 'autopostRecentFailure') !== false,
+    'system controller must assemble cron-jobs status from log files');
+
 // --- Report ----------------------------------------------------------------
 echo "smoke: $checks checks\n";
 if ($failures) {
