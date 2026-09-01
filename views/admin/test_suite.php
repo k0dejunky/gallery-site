@@ -100,7 +100,7 @@
     var token = <?= json_encode(\App\Core\Csrf::token()) ?>;
     var statusUrl = <?= json_encode(url('/admin/test-suite/status')) ?>;
     var runUrl    = <?= json_encode(url('/admin/test-suite/run')) ?>;
-    var activeRun = <?= json_encode($running) ?: 'null' ?>;
+    var activeRun = <?= json_encode($running) ?>;
 
     var els = {
         runSelected: document.getElementById('ts-run-selected'),
@@ -120,6 +120,8 @@
         rowsById[tr.dataset.id] = tr;
     });
     els.total.textContent = Object.keys(rowsById).length + ' tests';
+    // All tests are checked by default, so "Run selected" is usable at load.
+    els.runSelected.disabled = document.querySelectorAll('.ts-cbx:checked').length === 0;
 
     function selectedIds() {
         var out = [];
