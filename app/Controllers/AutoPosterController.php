@@ -6,6 +6,8 @@ use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\Request;
 use App\Models\AutoPosterConfig;
+use App\Models\AuditLog;
+use App\Models\AutoPostQueue;
 use App\Models\RedditClient;
 use App\Models\TwitterClient;
 
@@ -19,13 +21,17 @@ class AutoPosterController extends Controller
 
     /**
      * Show the Auto Poster admin page: credential settings, a posting form
-     * (Reddit + X) and the posting history log.
+     * (Reddit + X), recommended posts generated from recent uploads, the
+     * pending queue and the posting history log.
      */
     public function index(): void
     {
         $this->viewAdmin('auto_poster', [
-            'config'  => AutoPosterConfig::all(),
-            'log'     => AutoPosterConfig::logEntries(),
+            'config'        => AutoPosterConfig::all(),
+            'log'           => AutoPosterConfig::logEntries(),
+            'recommended'   => AutoPostQueue::recommendations(8),
+            'queue'         => AutoPostQueue::queued(50),
+            'queueCounts'   => AutoPostQueue::statusCounts(),
         ]);
     }
 
@@ -389,6 +395,130 @@ class AutoPosterController extends Controller
     {
         AutoPosterConfig::clearLog();
         $this->flash('success', 'Auto Poster log cleared.');
+        $this->redirect('/admin/auto-poster');
+    }
+
+    /**
+     * Add a recommended photo to the posting queue. Re-generates the draft
+     * text from the photo's current title/caption and enqueues it.
+     */
+    public function queueRecommendation(): void
+    {
+        $photoId  = (int) $this->request->post('photo_id', 0);
+        $queueId  = AutoPostQueue::enqueue($photoId);
+
+        if ($queueId <= 0) {
+            $this->flash('error', 'Photo not found.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        AuditLog::record(
+            (int) Auth::user()['id'],
+            'create',
+            'auto_post_queue',
+            $queueId,
+            'Queued photo #' . $photoId . ' for auto-posting'
+        );
+
+        $this->flash('success', 'Added to the posting queue.');
+        $this->redirect('/admin/auto-poster');
+    }
+
+    /**
+     * Post a queued item to its platform immediately. Accepts either a
+     * queue_id (existing queue row) or a photo_id (recommendation: enqueue it
+     * first, then post on the spot).
+     */
+    public function postQueued(): void
+    {
+        $id = (int) $this->request->post('queue_id', 0);
+
+        $photoId = (int) $this->request->post('photo_id', 0);
+        if ($id <= 0 && $photoId > 0) {
+            $id = AutoPostQueue::enqueue($photoId);
+        }
+
+        if ($id <= 0) {
+            $this->flash('error', 'No photo or queued item to post.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        $result = AutoPostQueue::post($id);
+
+        AuditLog::record(
+            (int) Auth::user()['id'],
+            'update',
+            'auto_post_queue',
+            $id,
+            $result['ok'] ? 'Posted queued auto-post #' . $id : 'Failed queued auto-post #' . $id . ': ' . ($result['error'] ?? '')
+        );
+
+        $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
+            ? 'Posted to X: ' . ($result['url'] ?? '')
+            : 'Post failed: ' . ($result['error'] ?? 'Unknown error'));
+        $this->redirect('/admin/auto-poster');
+    }
+
+    /**
+     * Publish every currently queued item, stopping at the first failure so a
+     * burst of posts cannot mask a systemic error (e.g. depleted credits).
+     */
+    public function postAllQueued(): void
+    {
+        $items = AutoPostQueue::queued(50);
+        $posted = 0;
+        $failed = 0;
+
+        foreach ($items as $item) {
+            $result = AutoPostQueue::post((int) $item['id']);
+            if ($result['ok']) {
+                $posted++;
+            } else {
+                $failed++;
+                break;
+            }
+        }
+
+        $this->flash($failed === 0 ? 'success' : 'error', sprintf(
+            'Posted %d queued post(s).%s',
+            $posted,
+            $failed > 0 ? ' Stopped after a failure: ' . (string) ($result['error'] ?? '') : ''
+        ));
+        $this->redirect('/admin/auto-poster');
+    }
+
+    /**
+     * Dismiss a queued or recommended post so its photo is not offered again.
+     * Accepts a queue_id or a photo_id (recommendation with no row yet).
+     */
+    public function dismissQueued(): void
+    {
+        $id = (int) $this->request->post('queue_id', 0);
+
+        $photoId = (int) $this->request->post('photo_id', 0);
+        if ($id <= 0 && $photoId > 0) {
+            $id = AutoPostQueue::dismissPhoto($photoId);
+        }
+
+        if ($id <= 0 || AutoPostQueue::find($id) === null) {
+            $this->flash('error', 'Queue item not found.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        AutoPostQueue::dismiss($id);
+
+        AuditLog::record(
+            (int) Auth::user()['id'],
+            'delete',
+            'auto_post_queue',
+            $id,
+            'Dismissed auto-post queue item #' . $id
+        );
+
+        $this->flash('success', 'Dismissed — this photo will not be offered again.');
         $this->redirect('/admin/auto-poster');
     }
 }

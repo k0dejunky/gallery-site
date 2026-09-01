@@ -6,6 +6,122 @@ $twitter = $config['twitter'] ?? [];
 <h1>Auto Poster</h1>
 <p class="muted">Post content from this site to Reddit (any subreddit) and X (formerly Twitter). Configure your API credentials below, then compose a post.</p>
 
+<?php // ----- Recommended posts: generated from recent uploads ----- ?>
+<div class="stats-panel" style="margin-bottom:1rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+        <h2>Recommended posts</h2>
+        <span class="muted" style="font-size:.85rem;">Suggested X posts from images &amp; videos uploaded in the last 14 days. Each photo is offered once.</span>
+    </div>
+    <?php if (empty($recommended)): ?>
+        <p class="muted">No recent uploads to recommend. Upload new media, or every recent photo has already been queued/posted/dismissed.</p>
+    <?php else: ?>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;margin-top:.75rem;">
+            <?php foreach ($recommended as $rec): ?>
+                <div style="border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius,.5rem);padding:.75rem;display:flex;flex-direction:column;gap:.5rem;">
+                    <div style="display:flex;gap:.75rem;align-items:center;">
+                        <?php $thumbUrl = file_url((string) $rec['filename'], 'thumb'); ?>
+                        <?php if ($rec['is_video']): ?>
+                            <img src="<?= e($thumbUrl) ?>" alt="" width="72" height="54" style="border-radius:4px;object-fit:cover;flex-shrink:0;background:#000;">
+                            <span style="font-size:.75rem;color:#6366f1;font-weight:600;">&#9654; VIDEO</span>
+                        <?php else: ?>
+                            <img src="<?= e($thumbUrl) ?>" alt="" width="72" height="54" style="border-radius:4px;object-fit:cover;flex-shrink:0;background:#000;">
+                        <?php endif; ?>
+                        <div style="min-width:0;">
+                            <div style="font-weight:600;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= e((string) $rec['gallery_title'] ?: 'Untitled upload') ?></div>
+                            <div class="muted" style="font-size:.8rem;"><?= e(date('M j, Y', strtotime((string) $rec['created_at']))) ?> &middot; <?= number_format((int) $rec['views']) ?> views</div>
+                        </div>
+                    </div>
+                    <div style="font-size:.85rem;color:#374151;background:#f9fafb;padding:.5rem .6rem;border-radius:4px;border:1px solid #f3f4f6;word-wrap:break-word;"><?= e((string) $rec['suggested_text']) ?></div>
+                    <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
+                        <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/recommend') ?>">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="photo_id" value="<?= (int) $rec['id'] ?>">
+                            <button type="submit" class="btn btn-sm">Add to queue</button>
+                        </form>
+                        <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/post') ?>"
+                              onsubmit="return confirm('Post this now to X?');">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="photo_id" value="<?= (int) $rec['id'] ?>">
+                            <button type="submit" class="btn btn-sm" style="background:#0ea5e9;color:#fff;">Queue &amp; post now</button>
+                        </form>
+                        <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/dismiss') ?>"
+                              onsubmit="return confirm('Dismiss this recommended post?');">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="photo_id" value="<?= (int) $rec['id'] ?>">
+                            <button type="submit" class="btn btn-sm btn-danger">Dismiss</button>
+                        </form>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</div>
+
+<?php // ----- Pending queue ----- ?>
+<div class="stats-panel" style="margin-bottom:1rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+        <h2>Posting queue</h2>
+        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+            <span class="muted" style="font-size:.85rem;">
+                <?= number_format((int) $queueCounts['queued']) ?> queued &middot;
+                <?= number_format((int) $queueCounts['posted']) ?> posted &middot;
+                <?= number_format((int) $queueCounts['failed']) ?> failed
+            </span>
+            <?php if (!empty($queue) && count($queue) > 0): ?>
+                <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/post-all') ?>"
+                      onsubmit="return confirm('Post all <?= number_format(count($queue)) ?> queued item(s) to X now?');">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="btn btn-sm">Post all queued</button>
+                </form>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php if (empty($queue)): ?>
+        <p class="muted">The queue is empty — add a recommended post above.</p>
+    <?php else: ?>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Photo</th>
+                    <th>Text</th>
+                    <th>Queued</th>
+                    <th style="text-align:right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($queue as $item): ?>
+                    <tr>
+                        <td><?= (int) $item['id'] ?></td>
+                        <td>
+                            <?php if (!empty($item['filename'])): ?>
+                                <img src="<?= e(file_url((string) $item['filename'], 'thumb')) ?>" alt="" width="48" height="36" style="border-radius:4px;object-fit:cover;background:#000;vertical-align:middle;">
+                            <?php else: ?>
+                                <span class="muted">deleted</span>
+                            <?php endif; ?>
+                        </td>
+                        <td style="max-width:420px;font-size:.85rem;color:#374151;word-wrap:break-word;"><?= e((string) $item['text']) ?></td>
+                        <td class="muted"><?= e(substr((string) $item['created_at'], 5, 11)) ?></td>
+                        <td style="text-align:right;white-space:nowrap;">
+                            <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/post') ?>">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
+                                <button type="submit" class="btn btn-sm">Post now</button>
+                            </form>
+                            <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/dismiss') ?>"
+                                  onsubmit="return confirm('Dismiss this queued post?');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
+                                <button type="submit" class="btn btn-sm btn-danger">Dismiss</button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
+</div>
+
 <div class="stats-grid">
     <?php // ----- Reddit credentials ----- ?>
     <div class="stats-panel">

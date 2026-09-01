@@ -219,5 +219,9 @@ return [
     ['GET', '/admin/auto-poster/twitter/callback', 'AutoPosterController@callbackTwitter'],
     ['POST', '/admin/auto-poster/post/reddit', 'AutoPosterController@postReddit'],
     ['POST', '/admin/auto-poster/post/twitter', 'AutoPosterController@postTwitter'],
+    ['POST', '/admin/auto-poster/queue/recommend', 'AutoPosterController@queueRecommendation'],
+    ['POST', '/admin/auto-poster/queue/post', 'AutoPosterController@postQueued'],
+    ['POST', '/admin/auto-poster/queue/post-all', 'AutoPosterController@postAllQueued'],
+    ['POST', '/admin/auto-poster/queue/dismiss', 'AutoPosterController@dismissQueued'],
     ['POST', '/admin/auto-poster/clear-log', 'AutoPosterController@clearLog'],
 ];

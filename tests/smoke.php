@@ -51,6 +51,8 @@ foreach ([
     'config/gallery-video-export.service',
     'database/migrations/005_login_attempts_attempted_at.sql',
     'database/migrations/006_content_view_stats.sql',
+    'database/migrations/007_auto_poster_queue.sql',
+    'app/Models/AutoPostQueue.php',
 ] as $rel) {
     $check(file_exists("$root/$rel"), "missing file: $rel");
 }
@@ -108,6 +110,8 @@ $check(in_array('content_views', $tables, true),
     'schema.sql missing table: content_views');
 $check(strpos($schema, 'uq_content_views_type_id_date') !== false,
     'schema.sql: content_views unique key missing');
+$check(in_array('auto_poster_queue', $tables, true),
+    'schema.sql missing table: auto_poster_queue');
 $migrationReadme = (string) file_get_contents("$root/database/migrations/README.md");
 $check(strpos($migrationReadme, 'schema_migrations') !== false,
     'database/migrations/README.md must document schema_migrations');
