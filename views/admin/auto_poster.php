@@ -112,7 +112,7 @@ $twitter = $config['twitter'] ?? [];
                             <form method="post" action="<?= url('/admin/auto-poster/queue/schedule') ?>" class="inline">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
-                                <input type="datetime-local" name="scheduled_at" value="<?= e(trim((string) $item['scheduled_at'])) ?>" style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;">
+                                <input type="datetime-local" name="scheduled_at" value="<?= e(\App\Models\AutoPostQueue::displaySchedule($item['scheduled_at'] ?? null)) ?>" style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;">
                                 <button type="submit" class="btn btn-sm">Set</button>
                             </form>
                             <div class="muted" style="font-size:.75rem;margin-top:.1rem;">
@@ -224,6 +224,16 @@ $twitter = $config['twitter'] ?? [];
             <p>
                 <label for="twitter_oauth_token_secret">Access Token Secret</label><br>
                 <input type="password" name="twitter_oauth_token_secret" id="twitter_oauth_token_secret" value="" placeholder="<?= empty($twitter['oauth_token_secret']) ? '' : 'Leave blank to keep the saved secret' ?>" style="width:100%;box-sizing:border-box;">
+            </p>
+            <p>
+                <label for="timezone">Schedule timezone</label><br>
+                <select name="timezone" id="timezone" style="width:100%;box-sizing:border-box;">
+                    <?php $tzs = preg_grep('/^((Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Europe|Indian|Pacific)\/)/', DateTimeZone::listIdentifiers()); ?>
+                    <?php foreach ($tzs as $tz): ?>
+                        <option value="<?= e($tz) ?>"<?= ($config['timezone'] ?? 'UTC') === $tz ? ' selected' : '' ?>><?= e($tz) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <span class="muted" style="font-size:0.8rem;">Times in "Recommended posts" and the queue show in this zone; posting happens at the equivalent UTC moment.</span>
             </p>
             <button type="submit" class="btn">Save X Settings</button>
         </form>

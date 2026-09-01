@@ -10,6 +10,7 @@ use App\Models\AuditLog;
 use App\Models\AutoPostQueue;
 use App\Models\RedditClient;
 use App\Models\TwitterClient;
+use DateTimeZone;
 
 class AutoPosterController extends Controller
 {
@@ -240,7 +241,15 @@ class AutoPosterController extends Controller
             }
         }
 
-        AutoPosterConfig::save($reddit, $twitter);
+        // Persist the scheduler timezone, falling back to UTC when the submitted
+        // value is not a valid PHP timezone identifier.
+        try {
+            $timezone = (new DateTimeZone(trim((string) $this->request->post('timezone', 'UTC'))))->getName();
+        } catch (\Throwable $e) {
+            $timezone = 'UTC';
+        }
+
+        AutoPosterConfig::save($reddit, $twitter, $timezone);
 
         $this->flash('success', 'Auto Poster settings saved.');
         $this->redirect('/admin/auto-poster');

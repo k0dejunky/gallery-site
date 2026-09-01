@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Core\Database;
+use DateTimeZone;
 
 /**
  * Persists Auto Poster configuration (Reddit + X/Twitter API credentials) and
@@ -25,32 +26,41 @@ class AutoPosterConfig
 
     /**
      * Load the saved credentials. Returns an array with 'reddit' and 'twitter'
-     * sub-arrays (each may be empty).
+     * sub-arrays (each may be empty) plus the validated 'timezone'.
      */
     public static function all(): array
     {
         $path = self::file();
 
         if (!is_file($path)) {
-            return ['reddit' => [], 'twitter' => []];
+            return ['reddit' => [], 'twitter' => [], 'timezone' => 'UTC'];
         }
 
         $data = json_decode((string) file_get_contents($path), true);
 
         if (!is_array($data)) {
-            return ['reddit' => [], 'twitter' => []];
+            return ['reddit' => [], 'twitter' => [], 'timezone' => 'UTC'];
         }
 
         return [
-            'reddit'  => is_array($data['reddit'] ?? null) ? $data['reddit'] : [],
-            'twitter' => is_array($data['twitter'] ?? null) ? $data['twitter'] : [],
+            'reddit'   => is_array($data['reddit'] ?? null) ? $data['reddit'] : [],
+            'twitter'  => is_array($data['twitter'] ?? null) ? $data['twitter'] : [],
+            'timezone' => self::validatedTimezone((string) ($data['timezone'] ?? 'UTC')),
         ];
+    }
+
+    /**
+     * The scheduler timezone (falls back to UTC when unset or invalid).
+     */
+    public static function timezone(): string
+    {
+        return self::all()['timezone'];
     }
 
     /**
      * Persist the credentials file. Creates storage/ if needed.
      */
-    public static function save(array $reddit, array $twitter): void
+    public static function save(array $reddit, array $twitter, string $timezone = 'UTC'): void
     {
         $path = self::file();
         $dir  = dirname($path);
@@ -60,9 +70,23 @@ class AutoPosterConfig
         }
 
         file_put_contents($path, json_encode([
-            'reddit'  => $reddit,
-            'twitter' => $twitter,
+            'reddit'   => $reddit,
+            'twitter'  => $twitter,
+            'timezone' => self::validatedTimezone($timezone),
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    /**
+     * Validate a PHP IANA timezone identifier, defaulting to UTC. Callers use
+     * this so a stale/typoed stored value can never break future scheduling.
+     */
+    private static function validatedTimezone(string $timezone): string
+    {
+        if ($timezone !== '' && in_array($timezone, DateTimeZone::listIdentifiers(), true)) {
+            return $timezone;
+        }
+
+        return 'UTC';
     }
 
     /**

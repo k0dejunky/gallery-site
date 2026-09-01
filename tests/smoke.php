@@ -132,6 +132,8 @@ $check(strpos($autoPostQueueModel, 'create_blurred_copy') !== false && strpos($a
 $helpersSource = (string) file_get_contents("$root/app/Core/helpers.php");
 $check(strpos($helpersSource, 'function create_blurred_copy') !== false && strpos($helpersSource, 'IMG_FILTER_GAUSSIAN_BLUR') !== false,
     'helpers must provide a blurred temp copy that never overwrites the source');
+$check(strpos($autoPostQueueModel, 'displaySchedule') !== false && strpos($autoPostQueueModel, 'schedulerTimezone') !== false && strpos($autoPostQueueModel, 'setTimezone(new DateTimeZone(\'UTC\'))') !== false,
+    'auto-post queue must convert schedule times to/from the configured timezone');
 $check(strpos($autoPostQueueModel, "'come visit my site to see what else I get myself into!! amethyst2213.com'") !== false,
     'auto-post recommendations must carry the call-to-action text');
 $check(strpos($autoPostQueueModel, 'MAX_TAGS = 10') !== false,
@@ -148,6 +150,11 @@ $check(strpos($autoPosterView, 'datetime-local') !== false,
     'auto-poster must expose a publish date/time field');
 $check(strpos($autoPosterView, 'mediaFiles') !== false,
     'auto-poster queue must display attached media');
+$check(strpos($autoPosterView, 'Schedule timezone') !== false && strpos($autoPosterView, 'DateTimeZone::listIdentifiers') !== false,
+    'auto-poster settings must expose a schedule-timezone selector');
+$autoPosterConfigModel = (string) file_get_contents("$root/app/Models/AutoPosterConfig.php");
+$check(strpos($autoPosterConfigModel, 'validatedTimezone') !== false && strpos($autoPosterConfigModel, "'timezone' =>") !== false,
+    'auto-poster config must persist a validated timezone');
 $twitterClient = (string) file_get_contents("$root/app/Models/TwitterClient.php");
 $check(strpos($twitterClient, 'oauth1Header') !== false && strpos($twitterClient, 'HMAC-SHA1') !== false,
     'twitter client must sign media uploads with OAuth1.0a');

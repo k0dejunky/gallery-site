@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Core\Database;
+use DateTime;
+use DateTimeZone;
 
 /**
  * Queue for the Auto Poster: stores generated post drafts built from recent
@@ -203,14 +205,39 @@ class AutoPostQueue
 
     /**
      * Default schedule (a datetime-local string) for the next queued post:
-     * DEFAULT_SCHEDULE_MINUTES from now. Used to prefill the admin's schedule
-     * field so every post consistently starts with a publish date/time.
+     * DEFAULT_SCHEDULE_MINUTES from now in the scheduler timezone. Used to
+     * prefill the admin's schedule field so every post consistently starts
+     * with a publish date/time.
      */
     public static function defaultSchedule(?int $from = null): string
     {
         $from = $from ?? time();
+        $dt   = (new DateTime('@' . $from))->setTimezone(self::schedulerTimezone());
+        $dt->modify('+' . self::DEFAULT_SCHEDULE_MINUTES . ' minutes');
 
-        return date('Y-m-d\TH:i', $from + self::DEFAULT_SCHEDULE_MINUTES * 60);
+        return $dt->format('Y-m-d\TH:i');
+    }
+
+    /**
+     * Render a stored UTC scheduled_at as a datetime-local string in the
+     * scheduler timezone for the admin picker. Missing/invalid values fall
+     * back to the default schedule.
+     */
+    public static function displaySchedule(?string $utc): string
+    {
+        $value = trim((string) $utc);
+
+        if ($value === '') {
+            return self::defaultSchedule();
+        }
+
+        $dt = DateTime::createFromFormat('Y-m-d H:i:s', $value, new DateTimeZone('UTC'));
+
+        if ($dt === false) {
+            return self::defaultSchedule();
+        }
+
+        return $dt->setTimezone(self::schedulerTimezone())->format('Y-m-d\TH:i');
     }
 
     /**
@@ -622,7 +649,9 @@ class AutoPostQueue
 
     /**
      * Accept an admin datetime (datetime-local sends "Y-m-d\TH:i") and return
-     * a MySQL DATETIME string, or null when unparseable.
+     * a MySQL DATETIME string in UTC, or null when unparseable. The picker
+     * value is interpreted in the scheduler timezone, so 9:10 PM in the site's
+     * timezone is stored as the correct UTC instant.
      */
     private static function normalizeSchedule(?string $value): ?string
     {
@@ -633,14 +662,23 @@ class AutoPostQueue
 
         $v = str_replace('T', ' ', $v);
         if (preg_match('/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2})(:\d{2})?$/', $v, $m)) {
-            $timestamp = strtotime($m[1]);
-            if ($timestamp === false) {
+            $parsed = $m[1] . (isset($m[2]) ? $m[2] : ':00');
+            $dt = DateTime::createFromFormat('Y-m-d H:i:s', $parsed, self::schedulerTimezone());
+            if ($dt === false) {
                 return null;
             }
 
-            return date('Y-m-d H:i:s', $timestamp);
+            return $dt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
         }
 
         return null;
+    }
+
+    /**
+     * The timezone the admin schedules in (site setting, UTC by default).
+     */
+    private static function schedulerTimezone(): DateTimeZone
+    {
+        return new DateTimeZone(AutoPosterConfig::timezone());
     }
 }
