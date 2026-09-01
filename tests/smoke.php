@@ -141,6 +141,16 @@ $check(strpos($autoPosterView, 'datetime-local') !== false,
     'auto-poster must expose a publish date/time field');
 $check(strpos($autoPosterView, 'mediaFiles') !== false,
     'auto-poster queue must display attached media');
+$twitterClient = (string) file_get_contents("$root/app/Models/TwitterClient.php");
+$check(strpos($twitterClient, 'oauth1Header') !== false && strpos($twitterClient, 'HMAC-SHA1') !== false,
+    'twitter client must sign media uploads with OAuth1.0a');
+$check(strpos($twitterClient, 'consumer_key') !== false && strpos($twitterClient, 'oauth_token_secret') !== false,
+    'twitter client must read OAuth1 consumer/access-token secrets');
+$check(strpos($autoPosterView, 'twitter_consumer_key') !== false && strpos($autoPosterView, 'twitter_oauth_token_secret') !== false,
+    'auto-poster settings must expose OAuth1 media-upload fields');
+$autoPosterController = (string) file_get_contents("$root/app/Controllers/AutoPosterController.php");
+$check(strpos($autoPosterController, 'twitter_oauth_token_secret') !== false,
+    'auto-poster settings save must persist the OAuth1 token secret');
 $migrationReadme = (string) file_get_contents("$root/database/migrations/README.md");
 $check(strpos($migrationReadme, 'schema_migrations') !== false,
     'database/migrations/README.md must document schema_migrations');

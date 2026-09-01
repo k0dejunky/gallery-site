@@ -218,16 +218,19 @@ class AutoPosterController extends Controller
         }
 
         $twitter = [
-            'client_id'     => trim((string) $this->request->post('twitter_client_id', '')),
-            'client_secret' => trim((string) $this->request->post('twitter_client_secret', '')),
+            'client_id'          => trim((string) $this->request->post('twitter_client_id', '')),
+            'client_secret'      => trim((string) $this->request->post('twitter_client_secret', '')),
+            'consumer_key'       => trim((string) $this->request->post('twitter_consumer_key', '')),
+            'consumer_secret'    => trim((string) $this->request->post('twitter_consumer_secret', '')),
+            'oauth_token'        => trim((string) $this->request->post('twitter_oauth_token', '')),
+            'oauth_token_secret' => trim((string) $this->request->post('twitter_oauth_token_secret', '')),
         ];
 
         // Keep existing values if the fields were left blank (masked in the form).
-        if ($twitter['client_id'] === '' && !empty($config['twitter']['client_id'])) {
-            $twitter['client_id'] = $config['twitter']['client_id'];
-        }
-        if ($twitter['client_secret'] === '' && !empty($config['twitter']['client_secret'])) {
-            $twitter['client_secret'] = $config['twitter']['client_secret'];
+        foreach (['client_id', 'client_secret', 'consumer_key', 'consumer_secret', 'oauth_token', 'oauth_token_secret'] as $key) {
+            if ($twitter[$key] === '' && !empty($config['twitter'][$key])) {
+                $twitter[$key] = $config['twitter'][$key];
+            }
         }
 
         // Preserve an existing authorization token across a settings save.

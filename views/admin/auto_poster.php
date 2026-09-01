@@ -202,6 +202,29 @@ $twitter = $config['twitter'] ?? [];
                 <label for="twitter_client_secret">Client Secret</label><br>
                 <input type="password" name="twitter_client_secret" id="twitter_client_secret" value="" placeholder="<?= empty($twitter['client_secret']) ? '' : 'Leave blank to keep the saved secret' ?>" style="width:100%;box-sizing:border-box;">
             </p>
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:.5rem 0;">
+            <p style="font-size:0.85rem;margin:.5rem 0;">
+                <strong>Media upload (OAuth 1.0a)</strong> — X 403s image/video uploads made with the
+                OAuth2 bearer token. Paste the app's API Key/Secret and the account's Access Token/Secret
+                (Developer Portal &rarr; Keys and tokens &rarr; <em>Read and write</em> + <em>Media</em>)
+                so attached images are uploaded instead of failing.
+            </p>
+            <p>
+                <label for="twitter_consumer_key">API Key (consumer key)</label><br>
+                <input type="text" name="twitter_consumer_key" id="twitter_consumer_key" value="<?= e($twitter['consumer_key'] ?? '') ?>" placeholder="(optional) enables media uploads" style="width:100%;box-sizing:border-box;">
+            </p>
+            <p>
+                <label for="twitter_consumer_secret">API Secret (consumer secret)</label><br>
+                <input type="password" name="twitter_consumer_secret" id="twitter_consumer_secret" value="" placeholder="<?= empty($twitter['consumer_secret']) ? '' : 'Leave blank to keep the saved secret' ?>" style="width:100%;box-sizing:border-box;">
+            </p>
+            <p>
+                <label for="twitter_oauth_token">Access Token</label><br>
+                <input type="text" name="twitter_oauth_token" id="twitter_oauth_token" value="<?= e($twitter['oauth_token'] ?? '') ?>" placeholder="555555555-TokenHere" style="width:100%;box-sizing:border-box;">
+            </p>
+            <p>
+                <label for="twitter_oauth_token_secret">Access Token Secret</label><br>
+                <input type="password" name="twitter_oauth_token_secret" id="twitter_oauth_token_secret" value="" placeholder="<?= empty($twitter['oauth_token_secret']) ? '' : 'Leave blank to keep the saved secret' ?>" style="width:100%;box-sizing:border-box;">
+            </p>
             <button type="submit" class="btn">Save X Settings</button>
         </form>
         <p style="margin-top:0.75rem;">

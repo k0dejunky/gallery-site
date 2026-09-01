@@ -9,6 +9,12 @@ namespace App\Models;
  * v1.1 media/upload endpoint (with chunking for large files), then posting a
  * tweet that references the uploaded media_ids.
  *
+ * X only reliably allows OAuth1.0a user tokens to upload media to the v1.1
+ * media/upload endpoint (OAuth2 bearer tokens are silently 403'd there while
+ * text posts still work). When OAuth1 keys (consumer key/secret + account
+ * access token/secret) are configured the media upload is signed with OAuth1,
+ * then the tweet itself is still created through the OAuth2 /2/tweets call.
+ *
  * Per-site limits (v2 API):
  *   - Up to 4 images per tweet, or 1 video.
  *   - Images: max 5 MB each; supported types jpg/png/webp/gif (animated gif ok).
@@ -45,11 +51,25 @@ class TwitterClient
      * Whether an owned-account refresh token has been stored, i.e. the user has
      * completed the OAuth2 authorization flow to let this app post on their
      * behalf. Auto-posting to X requires this (the app must be approved for
-     * Read & Write with the automated-app OAuth2 flow).
+     * Read & Write with the automated-app OAuth2 flow). OAuth1 keys count too —
+     * media uploads require them.
      */
     public function isUserAuthorized(): bool
     {
-        return !empty($this->config['refresh_token']);
+        return !empty($this->config['refresh_token']) || $this->hasOAuth1();
+    }
+
+    /**
+     * Whether full OAuth1.0a credentials (API key/secret pair plus an account
+     * access token/secret pair) are configured. X serves the media upload
+     * endpoint only to OAuth1 user-context requests.
+     */
+    public function hasOAuth1(): bool
+    {
+        return !empty($this->config['consumer_key'])
+            && !empty($this->config['consumer_secret'])
+            && !empty($this->config['oauth_token'])
+            && !empty($this->config['oauth_token_secret']);
     }
 
     /**
@@ -277,6 +297,66 @@ class TwitterClient
     }
 
     /**
+     * Build the OAuth1.0a Authorization header (RFC 5849 HMAC-SHA1) for a
+     * request. $params are the request's non-file form fields — every one must
+     * be covered by the signature.
+     */
+    private function oauth1Header(string $method, string $url, array $params): string
+    {
+        $oauth = [
+            'oauth_consumer_key'     => (string) $this->config['consumer_key'],
+            'oauth_nonce'            => bin2hex(random_bytes(16)),
+            'oauth_signature_method' => 'HMAC-SHA1',
+            'oauth_timestamp'        => (string) time(),
+            'oauth_token'            => (string) $this->config['oauth_token'],
+            'oauth_version'          => '1.0',
+        ];
+
+        $signParams = array_merge($oauth, $params);
+
+        $pairs = [];
+        foreach ($signParams as $key => $value) {
+            $pairs[rawurlencode((string) $key)] = rawurlencode((string) $value);
+        }
+        ksort($pairs);
+
+        $query = implode('&', array_map(
+            static fn (string $k, string $v): string => $k . '=' . $v,
+            array_keys($pairs),
+            array_values($pairs)
+        ));
+
+        $base  = strtoupper($method) . '&' . rawurlencode($url) . '&' . rawurlencode($query);
+        $key   = rawurlencode((string) $this->config['consumer_secret']) . '&' . rawurlencode((string) $this->config['oauth_token_secret']);
+        $oauth['oauth_signature'] = base64_encode(hash_hmac('sha1', $base, $key, true));
+
+        $parts = [];
+        foreach ($oauth as $name => $value) {
+            $parts[] = $name . '="' . rawurlencode((string) $value) . '"';
+        }
+
+        return 'OAuth ' . implode(', ', $parts);
+    }
+
+    /**
+     * Authorization headers for a media upload request: OAuth1 when the legacy
+     * keys are present (required by X for the media endpoint), otherwise the
+     * OAuth2 bearer token. $params are the request fields the signature must
+     * cover (config.command, total_bytes, media_type, media_category, ...).
+     */
+    private function mediaAuth(string $method, array $params, string $token): array
+    {
+        if ($this->hasOAuth1()) {
+            return ['Authorization' => $this->oauth1Header($method, self::MEDIA_URL, $params)];
+        }
+
+        return [
+            'Authorization' => 'Bearer ' . $token,
+            'x-api-key'     => $this->config['client_id'],
+        ];
+    }
+
+    /**
      * Upload a single file to X, returning its media_id. Uses the INIT /
      * APPEND / FINALIZE flow with chunking for files larger than the chunk size.
      *
@@ -293,21 +373,19 @@ class TwitterClient
         $mime  = $file['type'] ?? (mime_content_type($path) ?: 'application/octet-stream');
         $isVideo = strpos($mime, 'video/') === 0;
 
-        $headers = [
-            'Authorization' => 'Bearer ' . $token,
-            'x-api-key'     => $this->config['client_id'],
-        ];
-
         // INIT
+        $initFields = [
+            'command'           => 'INIT',
+            'total_bytes'       => (string) $total,
+            'media_type'        => $mime,
+            'media_category'    => $isVideo ? 'tweet_video' : 'tweet_image',
+        ];
+        $headers = $this->mediaAuth('POST', $initFields, $token);
+
         [$initStatus, $initHeaders, $initBody] = Http::request(self::MEDIA_URL, [
             'method'  => 'POST',
             'headers' => $headers,
-            'form'    => [
-                'command'     => 'INIT',
-                'total_bytes' => (string) $total,
-                'media_type'  => $mime,
-                'media_category' => $isVideo ? 'tweet_video' : 'tweet_image',
-            ],
+            'form'    => $initFields,
         ]);
 
         $initData = json_decode($initBody, true);
@@ -347,14 +425,22 @@ class TwitterClient
             $tmp = tempnam(sys_get_temp_dir(), 'xmedia');
             file_put_contents($tmp, $chunk);
 
+            $appendFields = [
+                'command'       => 'APPEND',
+                'media_id'      => $mediaId,
+                'segment_index' => (string) $segmentIndex,
+            ];
+
+            // RFC 5849 signs multipart file parameters by name only: the
+            // signature covers the field names (media) with an empty value,
+            // while the multipart body carries the actual chunk.
+            $signatureFields = $appendFields + ['media' => ''];
+
             [, , $appendBody] = Http::request(self::MEDIA_URL, [
                 'method'  => 'POST',
-                'headers' => $headers,
-                'multipart' => [
-                    'command'       => 'APPEND',
-                    'media_id'      => $mediaId,
-                    'segment_index' => (string) $segmentIndex,
-                    'media'         => ['file' => $tmp, 'name' => 'media', 'type' => 'application/octet-stream'],
+                'headers' => $this->mediaAuth('POST', $signatureFields, $token),
+                'multipart' => $appendFields + [
+                    'media' => ['file' => $tmp, 'name' => 'media', 'type' => 'application/octet-stream'],
                 ],
             ]);
 
@@ -371,13 +457,15 @@ class TwitterClient
         fclose($handle);
 
         // FINALIZE
+        $finalFields = [
+            'command'  => 'FINALIZE',
+            'media_id' => $mediaId,
+        ];
+
         [$finStatus, , $finBody] = Http::request(self::MEDIA_URL, [
             'method'  => 'POST',
-            'headers' => $headers,
-            'form'    => [
-                'command'  => 'FINALIZE',
-                'media_id' => $mediaId,
-            ],
+            'headers' => $this->mediaAuth('POST', $finalFields, $token),
+            'form'    => $finalFields,
         ]);
 
         $finData = json_decode($finBody, true);
