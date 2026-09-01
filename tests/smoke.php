@@ -49,6 +49,7 @@ foreach ([
     'bin/video_export_worker.php',
     'bin/video_export_queue.php',
     'config/gallery-video-export.service',
+    'database/migrations/005_login_attempts_attempted_at.sql',
 ] as $rel) {
     $check(file_exists("$root/$rel"), "missing file: $rel");
 }
@@ -100,6 +101,8 @@ foreach (['last_seen_at' => 'users', 'email_verified_at' => 'users', 'email_veri
     $check(preg_match('/CREATE TABLE(\s+IF\s+NOT\s+EXISTS)?\s+' . $table . '\b(?:(?!CREATE TABLE).)*' . $col . '/is', $schema) === 1,
         "schema.sql: $table.$col missing");
 }
+$check(strpos($schema, 'idx_login_attempts_at') !== false,
+    'schema.sql: login_attempts.attempted_at index missing');
 $migrationReadme = (string) file_get_contents("$root/database/migrations/README.md");
 $check(strpos($migrationReadme, 'schema_migrations') !== false,
     'database/migrations/README.md must document schema_migrations');

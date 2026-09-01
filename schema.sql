@@ -113,7 +113,8 @@ CREATE TABLE IF NOT EXISTS login_attempts (
     email        VARCHAR(255) NOT NULL,
     ip           VARCHAR(45) NOT NULL,
     attempted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_email_ip_time (email, ip, attempted_at)
+    INDEX idx_email_ip_time (email, ip, attempted_at),
+    INDEX idx_login_attempts_at (attempted_at)
 );
 
 CREATE TABLE IF NOT EXISTS user_notes (

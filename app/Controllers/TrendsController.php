@@ -74,9 +74,11 @@ class TrendsController extends Controller
 
         if ($viewMode === 'compare') {
             $multiTrends = Stats::categoryTrendsMulti();
+            $sparkIds = array_map('intval', array_column(array_slice($multiTrends, 0, 15), 'id'));
+            $history = Stats::categoryViewHistoryBulk($sparkIds, 30);
             $sparklines = [];
-            foreach (array_slice($multiTrends, 0, 15) as $cat) {
-                $sparklines[$cat['id']] = Stats::categoryViewHistory($cat['id'], 30);
+            foreach ($sparkIds as $id) {
+                $sparklines[$id] = $history[$id] ?? [];
             }
             $data['multiTrends'] = $multiTrends;
             $data['sparklines'] = $sparklines;

@@ -393,10 +393,16 @@ class Stats
 
         $period = is_string($period) && isset($periods[$period]) ? $period : 'week';
 
-        $rows = Database::run(
-            'SELECT captured_at, uploads_bytes, photos_count, video_count
-             FROM storage_snapshots ORDER BY captured_at LIMIT 200000'
-        )->fetchAll();
+        try {
+            $rows = Database::run(
+                'SELECT captured_at, uploads_bytes, photos_count, video_count
+                 FROM storage_snapshots ORDER BY captured_at LIMIT 200000'
+            )->fetchAll();
+        } catch (\Throwable $error) {
+            // The snapshots table may not exist yet on a fresh/partial install;
+            // treat it as "no history" rather than failing the whole dashboard.
+            $rows = [];
+        }
 
         if (!$rows) {
             return [
@@ -756,31 +762,58 @@ class Stats
      */
     public static function categoryViewHistory(int $categoryId, int $days = 30): array
     {
+        return self::categoryViewHistoryBulk([$categoryId], $days)[$categoryId] ?? [];
+    }
+
+    /**
+     * Daily view counts for many categories in a single query, so the
+     * compare-mode trends view loads every sparkline without an N+1 round of
+     * per-category SELECTs.
+     *
+     * @param array<int, int> $categoryIds
+     * @return array<int, array<string, int>> keyed by category id, each value a
+     *                                          [Y-m-d => count] map for $days days
+     */
+    public static function categoryViewHistoryBulk(array $categoryIds, int $days = 30): array
+    {
+        $categoryIds = array_values(array_unique(array_map('intval', $categoryIds)));
+        $result = [];
+
+        if ($categoryIds === []) {
+            return $result;
+        }
+
         $since = date('Y-m-d H:i:s', time() - $days * 86400);
+        $placeholders = implode(',', array_fill(0, count($categoryIds), '?'));
 
         $rows = Database::run(
-            'SELECT DATE(created_at) AS dt, COUNT(*) AS cnt
+            "SELECT category_id, DATE(created_at) AS dt, COUNT(*) AS cnt
              FROM category_views
-             WHERE category_id = ? AND created_at >= ?
-             GROUP BY DATE(created_at)
-             ORDER BY dt ASC',
-            [$categoryId, $since]
+             WHERE category_id IN ($placeholders) AND created_at >= ?
+             GROUP BY category_id, DATE(created_at)
+             ORDER BY dt ASC",
+            array_merge($categoryIds, [$since])
         )->fetchAll();
 
-        $result = [];
         $start = new \DateTime('-' . $days . ' days');
         $end = new \DateTime();
         $end->modify('+1 day');
         $period = new \DatePeriod($start, new \DateInterval('P1D'), $end);
 
-        $countsByDate = [];
-        foreach ($rows as $row) {
-            $countsByDate[(string) $row['dt']] = (int) $row['cnt'];
-        }
+        foreach ($categoryIds as $id) {
+            $countsByDate = [];
+            foreach ($rows as $row) {
+                if ((int) $row['category_id'] === $id) {
+                    $countsByDate[(string) $row['dt']] = (int) $row['cnt'];
+                }
+            }
 
-        foreach ($period as $date) {
-            $key = $date->format('Y-m-d');
-            $result[$key] = $countsByDate[$key] ?? 0;
+            $series = [];
+            foreach ($period as $date) {
+                $key = $date->format('Y-m-d');
+                $series[$key] = $countsByDate[$key] ?? 0;
+            }
+            $result[$id] = $series;
         }
 
         return $result;
