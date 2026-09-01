@@ -314,11 +314,12 @@ class TwitterClient
         if ($initStatus !== 200 || empty($initData['media_id_string'])) {
             $message = $initData['errors'][0]['message'] ?? null;
             if ($message === null) {
-                // X sometimes returns a bare status with no JSON body (e.g. the
-                // empty 403 when an API key is over its media quota). Pass the
-                // raw response through so the failure is diagnosable.
+                // X often returns a bare status with no JSON body (e.g. the
+                // silent 403 it gives when the account/app has media uploads
+                // restricted, while text posts still succeed). Pass the raw
+                // response through so the failure is diagnosable.
                 $rate   = trim((string) ($initHeaders['x-rate-limit-remaining'] ?? ''));
-                $hint   = $initStatus === 403 ? ' (out-of-quota / locked media endpoint)' : '';
+                $hint   = $initStatus === 403 ? ' (media upload restricted for account/app)' : '';
                 $detail = trim($initBody) !== '' ? ' body=' . mb_substr($initBody, 0, 400) : '';
                 $message = 'X media INIT failed (HTTP ' . $initStatus . $hint . $detail . ')'
                     . ($rate !== '' ? ' remaining=' . $rate : '');
