@@ -14,6 +14,8 @@ use App\Core\Database;
  */
 class AutoPostQueue
 {
+    public const POST_DOMAIN = 'amethyst2213.com';
+
     /**
      * Recent uploads the queue will propose. Photos already referenced by any
      * queue row (queued, posted, failed or dismissed) are skipped so a photo
@@ -52,8 +54,9 @@ class AutoPostQueue
 
     /**
      * Compose the 280-character post text for a photo: starts with the gallery
-     * title (when known), adds the photo caption, then a site hashtag line if
-     * space allows. Hashtags already in the caption/title are kept.
+     * title (when known), adds the photo caption, then a site hashtag line and
+     * the site domain so every post links back to the site. Hashtags already
+     * in the caption/title are kept.
      */
     public static function buildText(array $photo): string
     {
@@ -73,24 +76,38 @@ class AutoPostQueue
         $text = implode(' — ', $parts);
         $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
 
-        if (mb_strlen($text) > 260) {
-            $text = rtrim(mb_substr($text, 0, 259)) . '…';
+        $site     = mb_strtolower(trim((string) config('app.site_name', '')));
+        $hashtag  = $site !== '' ? '#' . str_replace([' ', '-'], '', ucwords(str_replace(['_', '-'], ' ', $site))) : '#new';
+        $url      = ' ' . self::postDomain();
+
+        $maxText = 280 - mb_strlen($hashtag) - mb_strlen($url) - 1;
+        if ($maxText < 10) {
+            $maxText = 10;
         }
 
-        $site = mb_strtolower(trim((string) config('app.site_name', '')));
-        $hashtag = $site !== '' ? '#' . str_replace([' ', '-'], '', ucwords(str_replace(['_', '-'], ' ', $site))) : '#new';
-
-        if (mb_strlen($text) + mb_strlen($hashtag) + 1 <= 280) {
-            $text .= ' ' . $hashtag;
+        if (mb_strlen($text) > $maxText) {
+            $text = rtrim(mb_substr($text, 0, max(0, $maxText - 1))) . '…';
         }
 
-        return trim($text);
+        return trim($text . ' ' . $hashtag . $url);
+    }
+
+    /**
+     * Domain appended to every generated post so the links always point back
+     * to the site, regardless of the environment the queue runs in.
+     */
+    private static function postDomain(): string
+    {
+        return self::POST_DOMAIN;
     }
 
     /**
      * Insert a new queued post for the given photo. Returns the new queue id.
+     *
+     * @param string|null $text Optional approved/custom post text; when empty
+     *                          the standard recommendation is generated.
      */
-    public static function enqueue(int $photoId): int
+    public static function enqueue(int $photoId, ?string $text = null): int
     {
         $photo = Database::run(
             'SELECT * FROM photos WHERE id = ? LIMIT 1',
@@ -102,10 +119,15 @@ class AutoPostQueue
         }
 
         $galleryId = (int) (Photo::firstGalleryId($photoId) ?? 0);
-        $text = self::buildText([
-            'gallery_title' => $galleryId > 0 ? (string) (Gallery::find($galleryId)['title'] ?? '') : '',
-            'caption'       => (string) $photo['caption'],
-        ]);
+
+        if ($text === null || trim($text) === '') {
+            $text = self::buildText([
+                'gallery_title' => $galleryId > 0 ? (string) (Gallery::find($galleryId)['title'] ?? '') : '',
+                'caption'       => (string) $photo['caption'],
+            ]);
+        } else {
+            $text = mb_substr(trim($text), 0, 280);
+        }
 
         Database::run(
             'INSERT INTO auto_poster_queue (platform, photo_id, gallery_id, text, status, created_at)

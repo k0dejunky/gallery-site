@@ -31,26 +31,21 @@ $twitter = $config['twitter'] ?? [];
                             <div class="muted" style="font-size:.8rem;"><?= e(date('M j, Y', strtotime((string) $rec['created_at']))) ?> &middot; <?= number_format((int) $rec['views']) ?> views</div>
                         </div>
                     </div>
-                    <div style="font-size:.85rem;color:#374151;background:#f9fafb;padding:.5rem .6rem;border-radius:4px;border:1px solid #f3f4f6;word-wrap:break-word;"><?= e((string) $rec['suggested_text']) ?></div>
-                    <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
-                        <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/recommend') ?>">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="photo_id" value="<?= (int) $rec['id'] ?>">
+                    <form method="post" action="<?= url('/admin/auto-poster/queue/recommend') ?>" style="display:flex;flex-direction:column;gap:.5rem;">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="photo_id" value="<?= (int) $rec['id'] ?>">
+                        <textarea name="text" rows="2" maxlength="280" style="font-size:.85rem;color:#374151;background:#fff;padding:.5rem .6rem;border-radius:4px;border:1px solid #d1d5db;word-wrap:break-word;resize:vertical;box-sizing:border-box;width:100%;"><?= e((string) $rec['suggested_text']) ?></textarea>
+                        <div class="muted" style="font-size:.75rem;">280 characters max &middot; edit freely before queueing</div>
+                        <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
                             <button type="submit" class="btn btn-sm">Add to queue</button>
-                        </form>
-                        <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/post') ?>"
-                              onsubmit="return confirm('Post this now to X?');">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="photo_id" value="<?= (int) $rec['id'] ?>">
-                            <button type="submit" class="btn btn-sm" style="background:#0ea5e9;color:#fff;">Queue &amp; post now</button>
-                        </form>
-                        <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/dismiss') ?>"
-                              onsubmit="return confirm('Dismiss this recommended post?');">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="photo_id" value="<?= (int) $rec['id'] ?>">
-                            <button type="submit" class="btn btn-sm btn-danger">Dismiss</button>
-                        </form>
-                    </div>
+                            <button type="submit" class="btn btn-sm" style="background:#0ea5e9;color:#fff;"
+                                    formaction="<?= url('/admin/auto-poster/queue/post') ?>"
+                                    onclick="return confirm('Post this now to X?');">Queue &amp; post now</button>
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                    formaction="<?= url('/admin/auto-poster/queue/dismiss') ?>"
+                                    onclick="return confirm('Dismiss this recommended post?');">Dismiss</button>
+                        </div>
+                    </form>
                 </div>
             <?php endforeach; ?>
         </div>

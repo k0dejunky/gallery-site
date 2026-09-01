@@ -399,13 +399,14 @@ class AutoPosterController extends Controller
     }
 
     /**
-     * Add a recommended photo to the posting queue. Re-generates the draft
-     * text from the photo's current title/caption and enqueues it.
+     * Add a recommended photo to the posting queue. Accepts an optional edited
+     * post text; when empty the standard recommendation is generated.
      */
     public function queueRecommendation(): void
     {
-        $photoId  = (int) $this->request->post('photo_id', 0);
-        $queueId  = AutoPostQueue::enqueue($photoId);
+        $photoId = (int) $this->request->post('photo_id', 0);
+        $text    = (string) $this->request->post('text', '');
+        $queueId = AutoPostQueue::enqueue($photoId, $text);
 
         if ($queueId <= 0) {
             $this->flash('error', 'Photo not found.');
@@ -436,7 +437,8 @@ class AutoPosterController extends Controller
 
         $photoId = (int) $this->request->post('photo_id', 0);
         if ($id <= 0 && $photoId > 0) {
-            $id = AutoPostQueue::enqueue($photoId);
+            $text = (string) $this->request->post('text', '');
+            $id   = AutoPostQueue::enqueue($photoId, $text);
         }
 
         if ($id <= 0) {

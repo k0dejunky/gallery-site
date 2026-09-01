@@ -112,6 +112,14 @@ $check(strpos($schema, 'uq_content_views_type_id_date') !== false,
     'schema.sql: content_views unique key missing');
 $check(in_array('auto_poster_queue', $tables, true),
     'schema.sql missing table: auto_poster_queue');
+$autoPostQueueModel = (string) file_get_contents("$root/app/Models/AutoPostQueue.php");
+$check(strpos($autoPostQueueModel, 'amethyst2213.com') !== false,
+    'auto-post recommendations must include the site domain');
+$check(strpos($autoPostQueueModel, 'mb_substr(trim($text), 0, 280)') !== false,
+    'auto-post queue must cap custom text at 280 characters');
+$autoPosterView = (string) file_get_contents("$root/views/admin/auto_poster.php");
+$check(strpos($autoPosterView, 'name="text"') !== false,
+    'auto-poster recommended posts must be editable text');
 $migrationReadme = (string) file_get_contents("$root/database/migrations/README.md");
 $check(strpos($migrationReadme, 'schema_migrations') !== false,
     'database/migrations/README.md must document schema_migrations');
