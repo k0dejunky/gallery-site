@@ -672,11 +672,13 @@ function create_web_image(string $src, string $dest, int $maxDim): bool
  * Create a blurred, throwaway copy of an image in the system temp dir for
  * posting, leaving the source file (and any stored web variants) untouched.
  *
- * The blur is blended back over the sharp original at blurPercent/100, so
- * "25" yields a quarter-strength Gaussian blur rather than a heavy one.
- * Returns the temp file path, or null when GD cannot process the image (the
- * caller then falls back to the unblurred file). The returned temp file is the
- * caller's responsibility to unlink.
+ * The blur is a downscale-then-upscale (large effective radius, so it is
+ * clearly visible and survives X's re-encode, which re-sharpens uploads),
+ * blended back over the sharp original at blurPercent/100. Stronger blurPercent
+ * both enlarges the downscale divisor (2 -> 100, capping at 12x) and blends a
+ * larger share of the blurred base. Returns the temp file path, or null when
+ * GD cannot process the image (the caller then falls back to the unblurred
+ * file). The returned temp file is the caller's responsibility to unlink.
  */
 function create_blurred_copy(string $src, int $blurPercent = 25): ?string
 {
@@ -700,24 +702,42 @@ function create_blurred_copy(string $src, int $blurPercent = 25): ?string
 
     $width  = imagesx($image);
     $height = imagesy($image);
-    $blurred = imagecreatetruecolor($width, $height);
+    $percent = max(0, min(100, (int) $blurPercent));
 
-    if ($blurred === false) {
+    // Downscale to a fraction of the original size, smooth it, then scale it
+    // back up: the resample blurs across a wide neighbourhood (unlike the
+    // small-radius GD gaussian kernel). Divisor scales with the percentage.
+    $divisor = 2 + (int) round(($percent / 100) * 10);
+    $divisor = max(2, min(12, $divisor));
+    $smallW  = max(8, (int) round($width / $divisor));
+    $smallH  = max(8, (int) round($height / $divisor));
+    $small   = imagecreatetruecolor($smallW, $smallH);
+
+    if ($small === false) {
         imagedestroy($image);
 
         return null;
     }
 
-    imagecopy($blurred, $image, 0, 0, 0, 0, $width, $height);
-    imagefilter($blurred, IMG_FILTER_GAUSSIAN_BLUR);
+    imagecopyresampled($small, $image, 0, 0, 0, 0, $smallW, $smallH, $width, $height);
+    imagefilter($small, IMG_FILTER_GAUSSIAN_BLUR);
+    imagefilter($small, IMG_FILTER_GAUSSIAN_BLUR);
 
-    $percent = max(0, min(100, (int) $blurPercent));
+    $blurred = imagecreatetruecolor($width, $height);
 
-    if ($percent <= 0) {
-        // No blur requested; keep the clear copy as-is.
-    } elseif ($percent >= 100) {
+    if ($blurred === false) {
+        imagedestroy($small);
+        imagedestroy($image);
+
+        return null;
+    }
+
+    imagecopyresampled($blurred, $small, 0, 0, 0, 0, $width, $height, $smallW, $smallH);
+    imagedestroy($small);
+
+    if ($percent >= 100) {
         imagecopy($image, $blurred, 0, 0, 0, 0, $width, $height);
-    } else {
+    } elseif ($percent > 0) {
         imagecopymerge($image, $blurred, 0, 0, 0, 0, $width, $height, $percent);
     }
 
