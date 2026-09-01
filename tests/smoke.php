@@ -155,6 +155,9 @@ $check(strpos($autoPosterView, 'Schedule timezone') !== false && strpos($autoPos
 $check(strpos($autoPosterView, 'ap-countdown') !== false && strpos($autoPosterView, 'data-synced') !== false
     && strpos($autoPosterView, 'mo') !== false && strpos($autoPosterView, 'setInterval(tick, 1000)') !== false,
     'auto-poster queue must show a live months/days/hours/minutes/seconds countdown');
+$check(strpos($autoPosterView, 'ap-log') !== false && strpos($autoPosterView, 'ap-pill') !== false
+    && strpos($autoPosterView, 'ap-time-relative') !== false && strpos($autoPosterView, 'data-uts') !== false,
+    'auto-poster posting log must render status pills and relative timestamps');
 $autoPosterConfigModel = (string) file_get_contents("$root/app/Models/AutoPosterConfig.php");
 $check(strpos($autoPosterConfigModel, 'validatedTimezone') !== false && strpos($autoPosterConfigModel, "'timezone' =>") !== false,
     'auto-poster config must persist a validated timezone');

@@ -309,50 +309,101 @@ $twitter = $config['twitter'] ?? [];
 </div>
 
 <?php // ----- Log ----- ?>
-<div class="stats-panel" style="margin-top:1rem;">
-    <div style="display:flex;align-items:center;justify-content:space-between;">
-        <h2>Posting log</h2>
-        <form method="post" action="<?= url('/admin/auto-poster/clear-log') ?>" onsubmit="return confirm('Clear the entire posting log?');">
-            <?= csrf_field() ?>
-            <button type="submit" class="btn btn-sm btn-danger">Clear Log</button>
-        </form>
+<style>
+    .ap-log { margin-top: 1rem; }
+    .ap-log-card { background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 10px; overflow: hidden; }
+    .ap-log-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; padding: .85rem 1.1rem; border-bottom: 1px solid var(--pink-300); }
+    .ap-log-head h2 { margin: 0; font-size: 1.05rem; color: var(--purple-800); border: 0; padding: 0; }
+    .ap-log-summary { font-size: .8rem; color: var(--purple-700); }
+    .ap-log-empty { padding: 1.25rem 1.1rem; font-size: .9rem; color: var(--purple-800); opacity: .75; }
+    .ap-log .ap-table { width: 100%; border-collapse: collapse; }
+    .ap-log .ap-table th { text-align: left; padding: .5rem .75rem; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--purple-700); border-bottom: 2px solid var(--pink-300); white-space: nowrap; }
+    .ap-log .ap-table td { padding: .6rem .75rem; border-bottom: 1px solid rgba(244,114,182,.25); vertical-align: middle; font-size: .88rem; color: var(--purple-800); }
+    .ap-log .ap-table tr:last-child td { border-bottom: 0; }
+    .ap-log .ap-table tbody tr:hover { background: rgba(244,114,182,.10); }
+    .ap-time { white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .ap-time-relative { display: block; font-weight: 600; }
+    .ap-time-absolute { font-size: .78rem; opacity: .7; }
+    .ap-pill { display: inline-flex; align-items: center; gap: .35rem; padding: .18rem .6rem; border-radius: 999px; font-size: .72rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; line-height: 1.3; }
+    .ap-pill .ap-dot { width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; opacity: .9; }
+    .ap-pill-success, .ap-pill-info { color: #1d7a3a; background: rgba(29,122,58,.12); }
+    .ap-pill-failed, .ap-pill-error { color: #b3261e; background: rgba(179,38,30,.12); }
+    .ap-pill-pending { color: #92400e; background: rgba(146,64,14,.12); }
+    .ap-target { font-weight: 600; }
+    .ap-msg { overflow-wrap: anywhere; }
+    .ap-msg a.ap-link { color: var(--purple-700); text-decoration: none; font-weight: 600; }
+    .ap-msg a.ap-link:hover { text-decoration: underline; }
+    .ap-msg .ap-err { color: #b3261e; }
+    @media (max-width: 600px) {
+        .ap-log .ap-table th { display: none; }
+        .ap-log .ap-table, .ap-log .ap-table tbody, .ap-log .ap-table tr, .ap-log .ap-table td { display: block; width: 100%; }
+        .ap-log .ap-table tr { padding: .5rem .75rem; border-bottom: 1px solid rgba(244,114,182,.25); }
+        .ap-log .ap-table td { border: 0; padding: .15rem .75rem; }
+    }
+</style>
+<div class="stats-panel ap-log">
+    <div class="ap-log-card">
+        <div class="ap-log-head">
+            <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
+                <h2>Posting log</h2>
+                <?php $logCount  = count($log); ?>
+                <?php $logOk     = count(array_filter($log, fn($l) => ($l['status'] ?? '') === 'success')); ?>
+                <span class="ap-log-summary"><?= (int) $logCount ?> entries &middot; <?= (int) $logOk ?> succeeded &middot; <?= (int) ($logCount - $logOk) ?> failed</span>
+            </div>
+            <form method="post" action="<?= url('/admin/auto-poster/clear-log') ?>" onsubmit="return confirm('Clear the entire posting log?');">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-sm btn-danger">Clear Log</button>
+            </form>
+        </div>
+        <?php if (empty($log)): ?>
+            <div class="ap-log-empty">No posts have been made yet.</div>
+        <?php else: ?>
+            <div style="overflow-x:auto;">
+                <table class="ap-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Platform</th>
+                            <th>Target</th>
+                            <th>Status</th>
+                            <th>Message / URL</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($log as $entry): ?>
+                            <?php
+                            $apStatus  = strtolower((string) ($entry['status'] ?? ''));
+                            $apMsg     = (string) ($entry['message'] ?? '');
+                            $apIsUrl   = stripos($apMsg, 'http') === 0;
+                            $apPillCls = in_array($apStatus, ['success', 'failed', 'error', 'pending'], true) ? $apStatus : 'pending';
+                            $apTs      = strtotime((string) ($entry['created_at'] ?? ''));
+                            ?>
+                            <tr class="ap-row">
+                                <td class="ap-time">
+                                    <span class="ap-time-relative" data-uts="<?= $apTs ?: 0 ?>">&mdash;</span>
+                                    <span class="ap-time-absolute"><?= $apTs ? date('Y-m-d H:i', $apTs) : '&mdash;' ?></span>
+                                </td>
+                                <td><?= e(ucfirst((string) ($entry['platform'] ?? ''))) ?></td>
+                                <td class="ap-target"><?= e((string) ($entry['target'] ?? '')) ?></td>
+                                <td>
+                                    <span class="ap-pill ap-pill-<?= e($apPillCls) ?>">
+                                        <span class="ap-dot"></span><?= e(ucfirst($apStatus ?: 'Pending')) ?>
+                                    </span>
+                                </td>
+                                <td class="ap-msg">
+                                    <?php if ($apIsUrl): ?>
+                                        <a class="ap-link" href="<?= e($apMsg) ?>" target="_blank" rel="noopener"><?= e($apMsg) ?></a>
+                                    <?php else: ?>
+                                        <span<?= ($apStatus === 'failed' || $apStatus === 'error') ? ' class="ap-err"' : '' ?>><?= $apMsg !== '' ? e($apMsg) : '&mdash;' ?></span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
     </div>
-    <?php if (empty($log)): ?>
-        <p class="muted">No posts have been made yet.</p>
-    <?php else: ?>
-        <table>
-            <thead>
-                <tr>
-                    <th>Time</th>
-                    <th>Platform</th>
-                    <th>Target</th>
-                    <th>Status</th>
-                    <th>Message / URL</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($log as $entry): ?>
-                    <tr>
-                        <td><?= e($entry['created_at'] ?? '') ?></td>
-                        <td><?= e(ucfirst($entry['platform'] ?? '')) ?></td>
-                        <td><?= e($entry['target'] ?? '') ?></td>
-                        <td>
-                            <span style="color:<?= ($entry['status'] ?? '') === 'success' ? 'var(--success,#2e7d32)' : 'var(--danger,#c62828)' ?>">
-                                <?= e(ucfirst($entry['status'] ?? '')) ?>
-                            </span>
-                        </td>
-                        <td>
-                            <?php if (strpos((string) $entry['message'], 'http') === 0): ?>
-                                <a href="<?= e($entry['message']) ?>" target="_blank" rel="noopener"><?= e($entry['message']) ?></a>
-                            <?php else: ?>
-                                <?= e($entry['message'] ?? '') ?>
-                            <?php endif; ?>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    <?php endif; ?>
 </div>
 
 <script>
@@ -420,6 +471,32 @@ $twitter = $config['twitter'] ?? [];
 
         tick();
         setInterval(tick, 1000);
+    })();
+
+    // Relative timestamps for the posting log ("5m ago" / "just now"),
+    // refreshing every 30 seconds.
+    (function () {
+        var UNITS = [
+            [31536000, 'y'], [2592000, 'mo'], [86400, 'd'], [3600, 'h'], [60, 'm'], [1, 's']
+        ];
+        function fmt(sec) {
+            if (sec < 45) { return 'just now'; }
+            for (var i = 0; i < UNITS.length; i++) {
+                if (sec >= UNITS[i][0]) {
+                    return Math.round(sec / UNITS[i][0]) + UNITS[i][1] + ' ago';
+                }
+            }
+            return 'just now';
+        }
+        function render() {
+            var now = Date.now() / 1000;
+            document.querySelectorAll('.ap-time-relative').forEach(function (el) {
+                var uts = parseInt(el.getAttribute('data-uts'), 10) || 0;
+                el.textContent = uts ? fmt(now - uts) : '\u2014';
+            });
+        }
+        render();
+        setInterval(render, 30000);
     })();
 })();
 </script>
