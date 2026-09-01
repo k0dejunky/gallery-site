@@ -116,10 +116,11 @@ $twitter = $config['twitter'] ?? [];
                                 <button type="submit" class="btn btn-sm">Set</button>
                             </form>
                             <div class="muted" style="font-size:.75rem;margin-top:.1rem;">
-                                <?php if (!empty($item['scheduled_at']) && $item['scheduled_at'] <= date('Y-m-d H:i:s')): ?>
-                                    <span style="color:#d97706;">publishing now on next worker run</span>
+                                <?php if (!empty($item['scheduled_at'])): ?>
+                                    <?php $apUntil = (int) strtotime($item['scheduled_at'] . ' UTC'); ?>
+                                    <span class="ap-countdown" data-until="<?= $apUntil ?>" data-synced="<?= time() ?>" data-past-label="publishing now on next worker run" style="font-variant-numeric:tabular-nums;">calculating&hellip;</span>
                                 <?php else: ?>
-                                    auto-posts at this time
+                                    no schedule
                                 <?php endif; ?>
                             </div>
                         </td>
@@ -373,5 +374,52 @@ $twitter = $config['twitter'] ?? [];
     if (tInput && tCount) {
         tInput.addEventListener('input', function () { tCount.textContent = tInput.value.length; });
     }
+
+    // Live countdown to each queued post's publish time. The server stamps
+    // the target (data-until) and its own clock (data-synced) so the client
+    // shows a correct countdown regardless of clock skew.
+    (function () {
+        var load = Date.now() / 1000;
+        var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+
+        function breakdown(remainingSec) {
+            var target = new Date(Date.now() + remainingSec * 1000);
+            var now = new Date();
+            var months = (target.getFullYear() - now.getFullYear()) * 12 + (target.getMonth() - now.getMonth());
+            var monthAnchor = new Date(now);
+            monthAnchor.setMonth(now.getMonth() + months);
+            if (monthAnchor > target) {
+                months--;
+                monthAnchor = new Date(now);
+                monthAnchor.setMonth(now.getMonth() + months);
+            }
+            var days = Math.floor((target - monthAnchor) / 86400000);
+            var hours = Math.floor(((target - monthAnchor) % 86400000) / 3600000);
+            var minutes = Math.floor((((target - monthAnchor) % 86400000) % 3600000) / 60000);
+            var seconds = Math.round(((((target - monthAnchor) % 86400000) % 3600000) % 60000) / 1000);
+            if (seconds === 60) { seconds = 0; minutes++; }
+            if (minutes === 60) { minutes = 0; hours++; }
+            if (hours === 24) { hours = 0; days++; }
+            return { mo: months, d: days, h: hours, m: minutes, s: seconds };
+        }
+
+        function tick() {
+            document.querySelectorAll('.ap-countdown').forEach(function (span) {
+                var until = parseInt(span.getAttribute('data-until'), 10) || 0;
+                var synced = parseInt(span.getAttribute('data-synced'), 10) || 0;
+                var remaining = (until - synced) - ((Date.now() / 1000) - load);
+                if (remaining <= 0) {
+                    span.textContent = span.getAttribute('data-past-label') || 'publishing now';
+                    return;
+                }
+                var p = breakdown(remaining);
+                span.textContent = 'in ' + p.mo + 'mo ' + p.d + 'd '
+                    + pad(p.h) + 'h ' + pad(p.m) + 'm ' + pad(p.s) + 's';
+            });
+        }
+
+        tick();
+        setInterval(tick, 1000);
+    })();
 })();
 </script>
