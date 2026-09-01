@@ -48,6 +48,8 @@ class SystemController extends Controller
             'cronKeySet'  => self::cronKey() !== '',
             'cronAgeMin'  => $this->cronLastRunMinutes(),
             'cronJobs'    => $this->cronJobs(),
+            'cronSchedule'=> $this->cronSchedule(),
+            'cronScheduleIsSuper' => (Auth::user()['role'] ?? '') === 'super_admin',
             'security'    => \App\Models\Stats::security(),
             'storageTrend' => \App\Models\Stats::storageTrend(),
             'retention'   => (int) env_value('HOUSEKEEPING_KEEP_BACKUPS', '10'),
@@ -354,6 +356,110 @@ class SystemController extends Controller
             return 'last autopost failed: ' . trim($m[1]);
         }
         return '';
+    }
+
+    // ------------------------------------------------------------------
+    // Cron scheduling
+    // ------------------------------------------------------------------
+
+    private function cronSchedulesFile(): string
+    {
+        return $this->storage . '/cron/schedules.json';
+    }
+
+    /**
+     * Desired cron schedules. Defaults match the documented install :
+     * housekeeping every 15 min, autopost every minute, backup daily 03:00,
+     * restore-drill weekly Sunday 04:00. Stored JSON overrides, if present.
+     */
+    private function cronSchedule(): array
+    {
+        $default = [
+            'housekeeping'   => ['every_minutes' => 15],
+            'autopost'       => ['every_minutes' => 1],
+            'backup'         => ['hour' => 3, 'minute' => 0],
+            'restore-drill'  => ['dow' => 0, 'hour' => 4, 'minute' => 0],
+        ];
+        $file = $this->cronSchedulesFile();
+        if (is_file($file)) {
+            $data = json_decode((string) file_get_contents($file), true);
+            if (is_array($data)) {
+                foreach ($default as $id => $fields) {
+                    foreach ($fields as $k => $v) {
+                        if (isset($data[$id][$k]) && is_numeric($data[$id][$k])) {
+                            $default[$id][$k] = (int) $data[$id][$k];
+                        }
+                    }
+                }
+            }
+        }
+        return $default;
+    }
+
+    /**
+     * Super-admin only: persist the requested cron schedules and apply them
+     * to /etc/cron.d/ via the scoped root helper, then restart the workers.
+     */
+    public function saveCronSchedule(): void
+    {
+        Auth::requirePermission('logs');
+        $user = Auth::user();
+        $isSuper = is_array($user) && ($user['role'] ?? '') === 'super_admin';
+
+        if (!$isSuper) {
+            $this->flash('error', 'Only the super admin can change cron schedules.');
+            $this->redirect('/admin/system');
+        }
+
+        $req = $this->request;
+        $clamp = static fn (int $v, int $min, int $max): int => min($max, max($min, $v));
+
+        $sched = [
+            'housekeeping'  => ['every_minutes' => $clamp((int) $req->post('cron_housekeeping_min', 15), 1, 1440)],
+            'autopost'      => ['every_minutes' => $clamp((int) $req->post('cron_autopost_min', 1), 1, 1440)],
+            'backup'        => [
+                'hour'   => $clamp((int) $req->post('cron_backup_hour', 3), 0, 23),
+                'minute' => $clamp((int) $req->post('cron_backup_minute', 0), 0, 59),
+            ],
+            'restore-drill' => [
+                'dow'    => $clamp((int) $req->post('cron_drill_dow', 0), 0, 6),
+                'hour'   => $clamp((int) $req->post('cron_drill_hour', 4), 0, 23),
+                'minute' => $clamp((int) $req->post('cron_drill_minute', 0), 0, 59),
+            ],
+        ];
+
+        // Persist the declaration (www-data writable; root applies it).
+        $dir = dirname($this->cronSchedulesFile());
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        $written = @file_put_contents(
+            $this->cronSchedulesFile(),
+            json_encode($sched, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
+        );
+
+        if ($written === false) {
+            $this->flash('error', 'Could not write the cron schedule file (permissions?).');
+            $this->redirect('/admin/system');
+        }
+
+        // Apply via the scoped root helper: writes /etc/cron.d and restarts.
+        // Invoke the CLI binary explicitly (PHP_BINARY is the FPM master under
+        // mod_php/php-fpm and cannot be exec'd to run a script).
+        $phpBin = '/usr/bin/php';
+        $cmd    = 'sudo -n ' . escapeshellarg($phpBin) . ' ' . escapeshellarg($this->root . '/bin/apply_cron.php') . ' 2>&1';
+        exec($cmd, $outLines, $rc);
+
+        if ($rc === 0) {
+            AuditLog::record($user['id'] ?? null, 'update', 'system_cron_schedule', null,
+                'Cron schedules saved + applied: ' . json_encode($sched));
+            $this->flash('success', 'Cron schedules saved and applied. Worker services restarted.');
+        } else {
+            $this->flash('error', 'Schedules saved but could NOT be applied — ' . trim(implode(' ', $outLines))
+                . ' (check the www-data sudoers rule for apply_cron.php).');
+        }
+
+        $this->redirect('/admin/system');
     }
 
     // ------------------------------------------------------------------

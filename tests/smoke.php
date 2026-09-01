@@ -55,6 +55,7 @@ foreach ([
     'database/migrations/008_auto_post_media_and_schedule.sql',
     'app/Models/AutoPostQueue.php',
     'bin/autopost_worker.php',
+    'bin/apply_cron.php',
 ] as $rel) {
     $check(file_exists("$root/$rel"), "missing file: $rel");
 }
@@ -216,6 +217,21 @@ $check(strpos($systemCtrl, 'private function cronJobs') !== false
     && strpos($systemCtrl, 'relativeAge') !== false
     && strpos($systemCtrl, 'autopostRecentFailure') !== false,
     'system controller must assemble cron-jobs status from log files');
+$check(strpos($systemView, 'Configure schedules') !== false
+    && stripos($systemView, 'save &amp; apply schedules') !== false
+    && strpos($systemView, 'cron_housekeeping_min') !== false && strpos($systemView, 'cron_backup_hour') !== false
+    && strpos($systemView, 'cron_drill_dow') !== false,
+    'system view must offer a super-admin cron schedule config form');
+$check(strpos($systemCtrl, 'saveCronSchedule') !== false && strpos($systemCtrl, 'cronSchedule()') !== false
+    && strpos($systemCtrl, 'super_admin') !== false && strpos($systemCtrl, 'apply_cron.php') !== false,
+    'system controller must persist + apply schedules only for super admin via the root helper');
+$routesFile = (string) file_get_contents("$root/config/routes.php");
+$check(strpos($routesFile, 'system/cron-schedule') !== false,
+    'route for saving the cron schedule must exist');
+$applyCron = (string) file_get_contents("$root/bin/apply_cron.php");
+$check(strpos($applyCron, 'posix_geteuid') !== false && strpos($applyCron, '/etc/cron.d/') !== false
+    && strpos($applyCron, 'schedules.json') !== false && strpos($applyCron, 'systemctl restart gallery-video-export gallery-photo-edit') !== false,
+    'apply_cron.php must require root, write /etc/cron.d and restart worker services');
 
 // --- Report ----------------------------------------------------------------
 echo "smoke: $checks checks\n";

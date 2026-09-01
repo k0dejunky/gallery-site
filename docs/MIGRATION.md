@@ -263,6 +263,18 @@ Recreate all three files in `/etc/cron.d/` (owner `root:root`, mode `644`):
 * * * * * www-data /usr/bin/php /var/www/gallery/bin/autopost_worker.php --once >> /var/www/gallery/storage/logs/autopost.log 2>&1
 ```
 
+These four entries are managed by the admin System page once configured: the
+**super admin** edits schedules in "Scheduled tasks (cron) → Configure
+schedules". Saving writes `storage/cron/schedules.json`, then invokes the
+root helper `bin/apply_cron.php` to regenerate the `/etc/cron.d/` files and
+restart the two worker services. For that the web user (`www-data`) needs a
+scoped sudo rule — create `/etc/sudoers.d/gallery-apply-cron` (0440):
+```
+www-data ALL=(root) NOPASSWD: /usr/bin/php /var/www/gallery/bin/apply_cron.php
+```
+and ensure `storage/cron/` is owned by `www-data` (chown www-data:www-data,
+mode 775). The helper refuses to run unless it is actually root.
+
 ---
 
 ## 7. SYSTEMD background workers

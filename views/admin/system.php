@@ -189,6 +189,46 @@
                 <?php endforeach; ?>
             </table>
         <?php endif; ?>
+
+        <?php if (!empty($cronScheduleIsSuper)): ?>
+            <div style="border-top:1px solid var(--table-border);margin-top:1rem;padding-top:1rem;">
+                <h3 style="margin:0 0 .25rem;text-align:left;color:var(--card-title-color);">Configure schedules</h3>
+                <p class="muted" style="margin:0 0 .75rem;font-size:.82rem;">
+                    Changes are written to <code>storage/cron/schedules.json</code> and applied to
+                    <code>/etc/cron.d/</code> immediately, restarting the two worker services.
+                </p>
+                <form method="post" action="<?= url('/admin/system/cron-schedule') ?>" style="display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end;">
+                    <?= csrf_field() ?>
+                    <div>
+                        <label style="font-size:.8rem;">Housekeeping — every</label><br>
+                        <input type="number" name="cron_housekeeping_min" min="1" max="1440" value="<?= (int) ($cronSchedule['housekeeping']['every_minutes'] ?? 15) ?>">
+                        <span class="muted" style="font-size:.75rem;">min</span>
+                    </div>
+                    <div>
+                        <label style="font-size:.8rem;">Autopost — every</label><br>
+                        <input type="number" name="cron_autopost_min" min="1" max="1440" value="<?= (int) ($cronSchedule['autopost']['every_minutes'] ?? 1) ?>">
+                        <span class="muted" style="font-size:.75rem;">min</span>
+                    </div>
+                    <div>
+                        <label style="font-size:.8rem;">Backup — daily at</label><br>
+                        <input type="number" name="cron_backup_hour" min="0" max="23" value="<?= (int) ($cronSchedule['backup']['hour'] ?? 3) ?>" style="width:3.4rem;">
+                        : <input type="number" name="cron_backup_minute" min="0" max="59" value="<?= (int) ($cronSchedule['backup']['minute'] ?? 0) ?>" style="width:3.4rem;">
+                    </div>
+                    <div>
+                        <label style="font-size:.8rem;">Restore drill —</label><br>
+                        <select name="cron_drill_dow" style="padding:.3rem;">
+                            <?php $dow = (int) ($cronSchedule['restore-drill']['dow'] ?? 0); ?>
+                            <?php foreach ([0=>'Sunday',1=>'Monday',2=>'Tuesday',3=>'Wednesday',4=>'Thursday',5=>'Friday',6=>'Saturday'] as $d=>$label): ?>
+                                <option value="<?= $d ?>"<?= $d === $dow ? ' selected' : '' ?>><?= $label ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <input type="number" name="cron_drill_hour" min="0" max="23" value="<?= (int) ($cronSchedule['restore-drill']['hour'] ?? 4) ?>" style="width:3.4rem;">
+                        : <input type="number" name="cron_drill_minute" min="0" max="59" value="<?= (int) ($cronSchedule['restore-drill']['minute'] ?? 0) ?>" style="width:3.4rem;">
+                    </div>
+                    <button class="btn" type="submit">Save &amp; apply schedules</button>
+                </form>
+            </div>
+        <?php endif; ?>
     </div>
 
     <!-- Pending upload staging folders -->

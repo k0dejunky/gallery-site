@@ -127,6 +127,7 @@ return [
     ['POST', '/admin/system/maintenance', 'SystemController@maintenanceToggle'],
     ['POST', '/admin/system/housekeeping', 'SystemController@housekeepingRun'],
     ['POST', '/admin/system/smtp-test', 'SystemController@smtpTest'],
+    ['POST', '/admin/system/cron-schedule', 'SystemController@saveCronSchedule'],
     ['GET', '/admin/export/users', 'ExportController@users'],
     ['GET', '/admin/export/subscriptions', 'ExportController@subscriptions'],
 
