@@ -336,6 +336,12 @@ class TestSuite
             return ['pass' => env_value('MAIL_HOST') !== '', 'detail' => env_value('MAIL_HOST') ?: 'empty'];
         });
 
+        // Merge in every static smoke check (single source of truth shared
+        // with tests/smoke.php) so the admin suite can run them too.
+        foreach (SmokeChecks::all() as $id => $smokeTest) {
+            $tests[$id] = $smokeTest;
+        }
+
         return $tests;
     }
 
