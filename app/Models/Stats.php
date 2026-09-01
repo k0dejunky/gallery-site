@@ -77,6 +77,38 @@ class Stats
     }
 
     /**
+     * Gallery access-level breakdown for the dashboard: how many active
+     * galleries require each membership level (0 = free for all registered
+     * users), plus the totals that are member-gated vs open.
+     */
+    public static function galleryLevels(): array
+    {
+        $rows = Database::run(
+            'SELECT min_level, COUNT(*) AS c
+             FROM galleries
+             WHERE deleted_at IS NULL
+             GROUP BY min_level
+             ORDER BY min_level ASC'
+        )->fetchAll();
+
+        $counts = [0 => 0, 1 => 0, 2 => 0, 3 => 0, 4 => 0];
+        foreach ($rows as $row) {
+            $level = (int) $row['min_level'];
+            if (isset($counts[$level])) {
+                $counts[$level] = (int) $row['c'];
+            }
+        }
+
+        $totalGated = $counts[1] + $counts[2] + $counts[3] + $counts[4];
+
+        return [
+            'levels'      => $counts,
+            'total'       => $counts[0] + $totalGated,
+            'total_gated' => $totalGated,
+        ];
+    }
+
+    /**
      * Membership growth figures for the admin dashboard: monthly-equivalent
      * recurring revenue of active subscriptions, recent signups, and how
      * active members are distributed across payment processors.

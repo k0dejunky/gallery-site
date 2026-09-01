@@ -64,6 +64,7 @@ class AdminController extends Controller
             'growth'    => Stats::growth(),
             'finance'   => \App\Models\Stats::finance(),
             'feed'      => \App\Models\Stats::feed(),
+            'galleryLevels' => Stats::galleryLevels(),
             'storageTrend' => \App\Models\Stats::storageTrend($storagePeriod),
             'storagePeriod' => $storagePeriod,
             'security'  => $security,

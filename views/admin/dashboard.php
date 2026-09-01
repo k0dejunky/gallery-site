@@ -43,6 +43,34 @@
     <div class="stat-card"><b><?= number_format($summary['logged_in_members']) ?></b><small>Logged In Members</small></div>
 </div>
 
+<?php // Gallery access-level breakdown: how many galleries are behind each tier. ?>
+<div class="sys-card" style="margin-top:var(--spacing-lg);">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <h2 style="margin:0;">Galleries by access level</h2>
+        <a href="<?= url('/admin/galleries/create') ?>" class="btn btn-sm">Gallery Management</a>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:flex-start;margin-top:.75rem;">
+        <div style="flex:1 1 320px;min-width:260px;">
+            <table>
+                <tbody>
+                    <tr><td><b>Free</b> <span class="muted">(all registered users)</span></td><td style="text-align:right;"><?= number_format($galleryLevels['levels'][0]) ?></td></tr>
+                    <tr><td><b>Silver</b></td><td style="text-align:right;"><?= number_format($galleryLevels['levels'][1]) ?></td></tr>
+                    <tr><td><b>Gold</b></td><td style="text-align:right;"><?= number_format($galleryLevels['levels'][2]) ?></td></tr>
+                    <tr><td><b>Platinum</b></td><td style="text-align:right;"><?= number_format($galleryLevels['levels'][3]) ?></td></tr>
+                    <tr><td><b>Diamond</b></td><td style="text-align:right;"><?= number_format($galleryLevels['levels'][4]) ?></td></tr>
+                    <tr><td><b>Total</b></td><td style="text-align:right;"><?= number_format($galleryLevels['total']) ?></td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div style="flex:1 1 240px;min-width:200px;">
+            <div class="stat-card" style="border-left:4px solid var(--purple-400,#a855f7);">
+                <b style="font-size:1.3rem;"><?= number_format($galleryLevels['total_gated']) ?></b>
+                <small>Member-gated galleries (behind a paid tier)</small>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php // System health: disk space + security summary. ?>
 <div class="stat-cards">
     <?php if ($diskFreeGb !== null): ?>
