@@ -343,6 +343,32 @@ class AutoPostQueue
     }
 
     /**
+     * Resolve the file to attach to a post for a stored photo. Prefers the
+     * web-optimized variant (web_<file>, or its WebP copy) so uploads stay well
+     * under X's 5 MB image cap; falls back to the original file when no web
+     * variant exists (e.g. videos, which have no web copy). Returns null when
+     * no file can be found.
+     */
+    public static function preferredMediaPath(string $filename): ?string
+    {
+        $dir = rtrim((string) config('app.uploads.dir'), '/');
+
+        $candidates = [
+            $dir . '/web_' . $filename,
+            $dir . '/web_' . (string) preg_replace('/\.[^.]+$/', '.webp', $filename),
+            $dir . '/' . $filename,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Status breakdown for the queue summary cards.
      *
      * @return array{queued: int, posted: int, failed: int, dismissed: int}
@@ -512,12 +538,12 @@ class AutoPostQueue
 
         $media = [];
         foreach (self::mediaFiles($item) as $photo) {
-            $path = config('app.uploads.dir') . '/' . $photo['filename'];
+            $path = self::preferredMediaPath((string) $photo['filename']);
 
-            if (is_file($path)) {
+            if ($path !== null) {
                 $media[] = [
                     'tmp_name' => $path,
-                    'name'     => (string) $photo['filename'],
+                    'name'     => basename((string) $path),
                     'type'     => (string) (mime_content_type($path) ?: 'application/octet-stream'),
                     'size'     => (int) filesize($path),
                 ];
