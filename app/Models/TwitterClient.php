@@ -389,7 +389,7 @@ class TwitterClient
         ]);
 
         $initData = json_decode($initBody, true);
-        if ($initStatus !== 200 || empty($initData['media_id_string'])) {
+        if (($initStatus < 200 || $initStatus >= 300) || empty($initData['media_id_string'])) {
             $message = $initData['errors'][0]['message'] ?? null;
             if ($message === null) {
                 // X often returns a bare status with no JSON body (e.g. the
@@ -431,14 +431,13 @@ class TwitterClient
                 'segment_index' => (string) $segmentIndex,
             ];
 
-            // RFC 5849 signs multipart file parameters by name only: the
-            // signature covers the field names (media) with an empty value,
-            // while the multipart body carries the actual chunk.
-            $signatureFields = $appendFields + ['media' => ''];
-
+            // APPEND sends a multipart/form-data body, which OAuth1 (RFC 5849
+            // and X) excludes from the signature base string entirely — only
+            // the oauth_* parameters are signed (unlike the form-encoded
+            // INIT/FINALIZE calls, whose body parameters must be covered).
             [, , $appendBody] = Http::request(self::MEDIA_URL, [
                 'method'  => 'POST',
-                'headers' => $this->mediaAuth('POST', $signatureFields, $token),
+                'headers' => $this->mediaAuth('POST', [], $token),
                 'multipart' => $appendFields + [
                     'media' => ['file' => $tmp, 'name' => 'media', 'type' => 'application/octet-stream'],
                 ],
@@ -469,7 +468,7 @@ class TwitterClient
         ]);
 
         $finData = json_decode($finBody, true);
-        if ($finStatus !== 200) {
+        if ($finStatus < 200 || $finStatus >= 300) {
             return ['ok' => false, 'error' => $finData['errors'][0]['message'] ?? 'X media FINALIZE failed (HTTP ' . $finStatus . ').'];
         }
 

@@ -146,6 +146,8 @@ $check(strpos($autoPosterView, 'mediaFiles') !== false,
 $twitterClient = (string) file_get_contents("$root/app/Models/TwitterClient.php");
 $check(strpos($twitterClient, 'oauth1Header') !== false && strpos($twitterClient, 'HMAC-SHA1') !== false,
     'twitter client must sign media uploads with OAuth1.0a');
+$check(strpos($twitterClient, "mediaAuth('POST', [], \$token)") !== false && strpos($twitterClient, "'multipart'") !== false,
+    'twitter client must exclude the multipart body from the APPEND signature');
 $check(strpos($twitterClient, 'consumer_key') !== false && strpos($twitterClient, 'oauth_token_secret') !== false,
     'twitter client must read OAuth1 consumer/access-token secrets');
 $check(strpos($autoPosterView, 'twitter_consumer_key') !== false && strpos($autoPosterView, 'twitter_oauth_token_secret') !== false,
