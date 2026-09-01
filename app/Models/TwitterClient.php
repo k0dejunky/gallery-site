@@ -299,7 +299,7 @@ class TwitterClient
         ];
 
         // INIT
-        [$initStatus, , $initBody] = Http::request(self::MEDIA_URL, [
+        [$initStatus, $initHeaders, $initBody] = Http::request(self::MEDIA_URL, [
             'method'  => 'POST',
             'headers' => $headers,
             'form'    => [
@@ -312,7 +312,18 @@ class TwitterClient
 
         $initData = json_decode($initBody, true);
         if ($initStatus !== 200 || empty($initData['media_id_string'])) {
-            return ['ok' => false, 'error' => $initData['errors'][0]['message'] ?? 'X media INIT failed (HTTP ' . $initStatus . ').'];
+            $message = $initData['errors'][0]['message'] ?? null;
+            if ($message === null) {
+                // X sometimes returns a bare status with no JSON body (e.g. the
+                // empty 403 when an API key is over its media quota). Pass the
+                // raw response through so the failure is diagnosable.
+                $rate   = trim((string) ($initHeaders['x-rate-limit-remaining'] ?? ''));
+                $hint   = $initStatus === 403 ? ' (out-of-quota / locked media endpoint)' : '';
+                $detail = trim($initBody) !== '' ? ' body=' . mb_substr($initBody, 0, 400) : '';
+                $message = 'X media INIT failed (HTTP ' . $initStatus . $hint . $detail . ')'
+                    . ($rate !== '' ? ' remaining=' . $rate : '');
+            }
+            return ['ok' => false, 'error' => $message];
         }
 
         $mediaId = $initData['media_id_string'];
