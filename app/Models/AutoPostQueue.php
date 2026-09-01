@@ -41,7 +41,7 @@ class AutoPostQueue
      * temp copy; source files and web variants are never modified. Videos are
      * untouched.
      */
-    public const POST_IMAGE_BLUR_PERCENT = 25;
+    public const POST_IMAGE_BLUR_PERCENT = 75;
 
     /**
      * Recent galleries the queue will propose. A gallery with new uploads in

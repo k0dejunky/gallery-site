@@ -127,8 +127,8 @@ $check(strpos($autoPostQueueModel, 'MAX_ATTACHED_MEDIA') !== false,
     'auto-post queue must cap attachments at 4 media files');
 $check(strpos($autoPostQueueModel, 'preferredMediaPath') !== false && strpos($autoPostQueueModel, "'/web_'") !== false,
     'auto-post queue must upload the web-optimized image variant');
-$check(strpos($autoPostQueueModel, 'create_blurred_copy') !== false && strpos($autoPostQueueModel, 'POST_IMAGE_BLUR_PERCENT') !== false,
-    'auto-post queue must blur attached images before posting');
+$check(strpos($autoPostQueueModel, 'create_blurred_copy') !== false && strpos($autoPostQueueModel, 'POST_IMAGE_BLUR_PERCENT = 75') !== false,
+    'auto-post queue must blur attached images (75%) before posting');
 $helpersSource = (string) file_get_contents("$root/app/Core/helpers.php");
 $check(strpos($helpersSource, 'function create_blurred_copy') !== false && strpos($helpersSource, 'IMG_FILTER_GAUSSIAN_BLUR') !== false,
     'helpers must provide a blurred temp copy that never overwrites the source');
