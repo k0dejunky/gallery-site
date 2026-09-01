@@ -18,6 +18,12 @@ class AutoPostQueue
 {
     public const POST_DOMAIN = 'amethyst2213.com';
 
+    /** Call-to-action appended to every recommended post (keeps the domain). */
+    public const POST_CTA = 'come visit my site to see what else I get myself into!! amethyst2213.com';
+
+    /** Up to how many of a gallery's categories become post hashtags. */
+    public const MAX_TAGS = 10;
+
     /** Minutes ahead of "now" a newly queued post is scheduled by default. */
     public const DEFAULT_SCHEDULE_MINUTES = 60;
 
@@ -64,7 +70,7 @@ class AutoPostQueue
             $row['suggested_text'] = self::buildText([
                 'gallery_title' => (string) $row['gallery_title'],
                 'caption'       => (string) $row['gallery_description'],
-            ]);
+            ], self::categoryHashtags((int) $row['gallery_id']));
             $row['default_scheduled_at'] = self::defaultSchedule();
         }
         unset($row);
@@ -105,12 +111,40 @@ class AutoPostQueue
     }
 
     /**
-     * Compose the 280-character post text for a gallery: starts with the
-     * gallery title, adds the gallery description, then a site hashtag line and
-     * the site domain so every post links back to the site. Hashtags already in
-     * the title/description are kept.
+     * Up to MAX_TAGS of a gallery's categories as hashtag words (first 10 in
+     * the gallery's category list, so every post carries the site's labels).
+     *
+     * @return list<string>
      */
-    public static function buildText(array $gallery): string
+    public static function categoryHashtags(int $galleryId, int $limit = self::MAX_TAGS): array
+    {
+        $limit = max(0, min(self::MAX_TAGS, $limit));
+        $tags  = [];
+
+        foreach (Gallery::categories($galleryId) as $category) {
+            $name = trim((string) ($category['name'] ?? ''));
+            $tag  = ucwords(str_replace(['-', '_'], ' ', $name));
+            $tag  = trim((string) preg_replace('/[^A-Za-z0-9_]/', '', $tag));
+            if ($tag === '' || mb_strlen($tag) > 40) {
+                continue;
+            }
+            $tags[] = $tag;
+            if (count($tags) >= $limit) {
+                break;
+            }
+        }
+
+        return $tags;
+    }
+
+    /**
+     * Compose the 280-character post text for a gallery: starts with the
+     * gallery title, adds the gallery description, then the gallery's first
+     * MAX_TAGS categories as hashtags and ends with POST_CTA, which links back
+     * to the site. The gallery text is truncated (and, only if needed, trailing
+     * hashtags dropped) so the call-to-action is always the last line.
+     */
+    public static function buildText(array $gallery, array $tags = []): string
     {
         $title       = trim((string) ($gallery['gallery_title'] ?? ''));
         $description = trim((string) ($gallery['caption'] ?? ''));
@@ -125,23 +159,38 @@ class AutoPostQueue
             $parts[] = $description;
         }
 
-        $text = implode(' — ', $parts);
-        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+        $base = preg_replace('/\s+/u', ' ', implode(' — ', $parts)) ?? '';
 
-        $site    = mb_strtolower(trim((string) config('app.site_name', '')));
-        $hashtag = $site !== '' ? '#' . str_replace([' ', '-'], '', ucwords(str_replace(['_', '-'], ' ', $site))) : '#new';
-        $url     = ' ' . self::postDomain();
-
-        $maxText = 280 - mb_strlen($hashtag) - mb_strlen($url) - 1;
-        if ($maxText < 10) {
-            $maxText = 10;
+        $cleanTags = [];
+        foreach ($tags as $tag) {
+            $tag = trim((string) preg_replace('/[^A-Za-z0-9_]/', '', (string) $tag));
+            if ($tag !== '' && mb_strlen($tag) <= 40) {
+                $cleanTags[] = $tag;
+            }
+            if (count($cleanTags) >= self::MAX_TAGS) {
+                break;
+            }
         }
 
-        if (mb_strlen($text) > $maxText) {
-            $text = rtrim(mb_substr($text, 0, max(0, $maxText - 1))) . '…';
+        $cta    = self::POST_CTA;
+        $suffix = '';
+        foreach ($cleanTags as $tag) {
+            $candidate = $suffix === '' ? '#' . $tag : $suffix . ' #' . $tag;
+            if (mb_strlen(' ' . $candidate) + mb_strlen($cta) + 1 + self::MAX_TAGS > 280) {
+                break;
+            }
+            $suffix = $candidate;
+        }
+        $suffix = ($suffix !== '' ? ' ' . $suffix : '') . ' ' . $cta;
+
+        if (mb_strlen($base) + mb_strlen($suffix) > 280) {
+            $room = 280 - mb_strlen($suffix);
+            $base = $room > 3
+                ? rtrim(mb_substr($base, 0, $room - 1)) . '…'
+                : '…';
         }
 
-        return trim($text . ' ' . $hashtag . $url);
+        return trim($base . $suffix);
     }
 
     /**
@@ -187,7 +236,7 @@ class AutoPostQueue
             $text = self::buildText([
                 'gallery_title' => (string) $gallery['title'],
                 'caption'       => (string) $gallery['description'],
-            ]);
+            ], self::categoryHashtags($galleryId));
         } else {
             $text = mb_substr(trim($text), 0, 280);
         }
@@ -428,7 +477,7 @@ class AutoPostQueue
         $text = self::buildText([
             'gallery_title' => (string) $gallery['title'],
             'caption'       => (string) $gallery['description'],
-        ]);
+        ], self::categoryHashtags($galleryId));
 
         Database::run(
             'INSERT INTO auto_poster_queue
@@ -515,15 +564,6 @@ class AutoPostQueue
         )->fetch();
 
         return $row ?: null;
-    }
-
-    /**
-     * Domain appended to every generated post so the links always point back
-     * to the site, regardless of the environment the queue runs in.
-     */
-    private static function postDomain(): string
-    {
-        return self::POST_DOMAIN;
     }
 
     /**

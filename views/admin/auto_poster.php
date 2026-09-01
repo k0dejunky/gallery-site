@@ -49,7 +49,7 @@ $twitter = $config['twitter'] ?? [];
                             <button type="submit" class="btn btn-sm">Add to queue</button>
                             <button type="submit" class="btn btn-sm" style="background:#0ea5e9;color:#fff;"
                                     formaction="<?= url('/admin/auto-poster/queue/post') ?>"
-                                    onclick="return confirm('Post this now to X?');">Queue &amp; post now</button>
+                                    onclick="return confirm('Post this now to X?');">Post now</button>
                             <button type="submit" class="btn btn-sm btn-danger"
                                     formaction="<?= url('/admin/auto-poster/queue/dismiss') ?>"
                                     onclick="return confirm('Dismiss this recommended post?');">Dismiss</button>

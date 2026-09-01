@@ -125,6 +125,10 @@ $check(strpos($autoPostQueueModel, 'mb_substr(trim($text), 0, 280)') !== false,
     'auto-post queue must cap custom text at 280 characters');
 $check(strpos($autoPostQueueModel, 'MAX_ATTACHED_MEDIA') !== false,
     'auto-post queue must cap attachments at 4 media files');
+$check(strpos($autoPostQueueModel, "'come visit my site to see what else I get myself into!! amethyst2213.com'") !== false,
+    'auto-post recommendations must carry the call-to-action text');
+$check(strpos($autoPostQueueModel, 'MAX_TAGS = 10') !== false,
+    'auto-post recommendations must tag up to 10 categories');
 $autoPostWorker = (string) file_get_contents("$root/bin/autopost_worker.php");
 $check(strpos($autoPostWorker, 'AutoPostQueue::due') !== false,
     'autopost worker must publish due queue rows');
