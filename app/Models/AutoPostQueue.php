@@ -36,6 +36,14 @@ class AutoPostQueue
     public const MAX_ATTACHED_MEDIA = 4;
 
     /**
+     * Attached images are blurred by this percent (0-100) before posting to
+     * keep forum-sourced previews low detail. Blur is applied to a throwaway
+     * temp copy; source files and web variants are never modified. Videos are
+     * untouched.
+     */
+    public const POST_IMAGE_BLUR_PERCENT = 25;
+
+    /**
      * Recent galleries the queue will propose. A gallery with new uploads in
      * the last RECENT_WINDOW_DAYS becomes one recommended post (built from its
      * gallery title/description with up to 4 of its newest files attached).
@@ -536,18 +544,34 @@ class AutoPostQueue
             return ['ok' => false, 'error' => 'Queue item not found or already processed.'];
         }
 
-        $media = [];
+        $media    = [];
+        $blurredTmp = [];
         foreach (self::mediaFiles($item) as $photo) {
             $path = self::preferredMediaPath((string) $photo['filename']);
 
-            if ($path !== null) {
-                $media[] = [
-                    'tmp_name' => $path,
-                    'name'     => basename((string) $path),
-                    'type'     => (string) (mime_content_type($path) ?: 'application/octet-stream'),
-                    'size'     => (int) filesize($path),
-                ];
+            if ($path === null) {
+                continue;
             }
+
+            $isVideo = (int) $photo['is_video'] === 1;
+
+            // Images get blurred in a throwaway temp copy (source is never
+            // overwritten); videos go through untouched.
+            if (!$isVideo) {
+                $copy = create_blurred_copy($path, self::POST_IMAGE_BLUR_PERCENT);
+
+                if ($copy !== null) {
+                    $blurredTmp[] = $copy;
+                    $path         = $copy;
+                }
+            }
+
+            $media[] = [
+                'tmp_name' => $path,
+                'name'     => basename((string) $path),
+                'type'     => (string) (mime_content_type($path) ?: 'application/octet-stream'),
+                'size'     => (int) filesize($path),
+            ];
         }
 
         $config   = AutoPosterConfig::all();
@@ -572,6 +596,10 @@ class AutoPostQueue
             $result['ok'] ? 'success' : 'failed',
             $result['ok'] ? ($result['url'] ?? 'Posted') : ($result['error'] ?? 'Unknown error')
         );
+
+        foreach ($blurredTmp as $tmp) {
+            @unlink($tmp);
+        }
 
         return $result;
     }

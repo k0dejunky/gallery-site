@@ -669,6 +669,77 @@ function create_web_image(string $src, string $dest, int $maxDim): bool
 }
 
 /**
+ * Create a blurred, throwaway copy of an image in the system temp dir for
+ * posting, leaving the source file (and any stored web variants) untouched.
+ *
+ * The blur is blended back over the sharp original at blurPercent/100, so
+ * "25" yields a quarter-strength Gaussian blur rather than a heavy one.
+ * Returns the temp file path, or null when GD cannot process the image (the
+ * caller then falls back to the unblurred file). The returned temp file is the
+ * caller's responsibility to unlink.
+ */
+function create_blurred_copy(string $src, int $blurPercent = 25): ?string
+{
+    if (!function_exists('imagecreatetruecolor') || !function_exists('imagefilter')) {
+        return null;
+    }
+
+    [$source, $type] = _load_image($src);
+
+    if ($source === false) {
+        return null;
+    }
+
+    $orientation = $type === IMAGETYPE_JPEG ? exif_orientation_of($src) : 1;
+    $image = apply_exif_orientation($source, $orientation);
+    imagedestroy($source);
+
+    if ($image === false) {
+        return null;
+    }
+
+    $width  = imagesx($image);
+    $height = imagesy($image);
+    $blurred = imagecreatetruecolor($width, $height);
+
+    if ($blurred === false) {
+        imagedestroy($image);
+
+        return null;
+    }
+
+    imagecopy($blurred, $image, 0, 0, 0, 0, $width, $height);
+    imagefilter($blurred, IMG_FILTER_GAUSSIAN_BLUR);
+
+    $percent = max(0, min(100, (int) $blurPercent));
+
+    if ($percent <= 0) {
+        // No blur requested; keep the clear copy as-is.
+    } elseif ($percent >= 100) {
+        imagecopy($image, $blurred, 0, 0, 0, 0, $width, $height);
+    } else {
+        imagecopymerge($image, $blurred, 0, 0, 0, 0, $width, $height, $percent);
+    }
+
+    imagedestroy($blurred);
+
+    $extensions = [
+        IMAGETYPE_JPEG => 'jpg',
+        IMAGETYPE_PNG  => 'png',
+        IMAGETYPE_GIF  => 'gif',
+        IMAGETYPE_WEBP => 'webp',
+    ];
+
+    $dest = sys_get_temp_dir() . '/blur_' . bin2hex(random_bytes(6)) . '.'
+        . ($extensions[$type] ?? 'jpg');
+
+    $saved = save_image($image, $dest, $type, 82);
+    imagedestroy($image);
+
+    return $saved && is_file($dest) ? $dest : null;
+}
+
+/**
  * Write a GD image to disk in the format matching the given image type,
  * using quality settings tuned for display rather than archival.
  */
