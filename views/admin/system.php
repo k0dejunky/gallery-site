@@ -154,6 +154,16 @@
 <!-- Cards that contain tables: one per row, full width -->
 <div class="sys-stack">
     <!-- Cron jobs -->
+    <style>
+        .cron-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem; }
+        .cron-card { display: flex; flex-direction: column; gap: .5rem; border: 1px solid var(--card-border, var(--pink-300)); border-radius: var(--card-radius, var(--border-radius-lg)); padding: var(--card-padding, .9rem); background: var(--card-bg, var(--pink-100)); box-shadow: var(--shadow); }
+        .cron-card h3 { margin: 0; color: var(--card-title-color, var(--purple-800)); }
+        .cron-card .cron-desc { margin: 0; font-size: .8rem; color: var(--card-text-color, var(--purple-700)); }
+        .cron-card .cron-meta { font-size: .78rem; color: var(--purple-700); line-height: 1.5; }
+        .cron-card .cron-fields { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-top: auto; }
+        .cron-card .cron-fields input[type="number"], .cron-card .cron-fields select { padding: .3rem .45rem; border: 1px solid var(--pink-300); border-radius: 4px; background: var(--pink-100); color: var(--purple-900); }
+        .cron-card .cron-save { margin-top: .25rem; }
+    </style>
     <div class="sys-card">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;">
             <h2>Scheduled tasks (cron)</h2>
@@ -169,64 +179,86 @@
                 gallery-backup, gallery-restore-drill) and they will appear here.
             </p>
         <?php else: ?>
-            <table>
-                <tr><th>Task</th><th>Runs</th><th>Last run</th><th>Status</th><th>Details</th></tr>
-                <?php foreach ($cronJobs as $job): ?>
-                    <tr>
-                        <td><b><?= e((string) $job['id']) ?></b><br>
-                            <span class="muted" style="font-size:.8rem;"><?= e((string) $job['desc']) ?></span></td>
-                        <td class="muted"><?= e((string) $job['schedule']) ?></td>
-                        <td><?= $job['lastRun'] ? e((string) $job['lastRun']) . ' <span class="muted">(' . e((string) $job['lastAgo']) . ')</span>' : '<span class="muted">never</span>' ?></td>
-                        <td>
-                            <?php if ($job['ok']): ?>
-                                <b class="sys-ok">&#10003; ok</b>
-                            <?php else: ?>
-                                <b class="sys-bad">&#9888; <?= $job['lastRun'] ? 'stale / failed' : 'not run' ?></b>
-                            <?php endif; ?>
-                        </td>
-                        <td class="muted" style="font-size:.83rem;overflow-wrap:anywhere;"><?= $job['note'] ? e((string) $job['note']) : '&mdash;' ?></td>
-                    </tr>
+            <?php
+                $cronCardJobs = [
+                    'housekeeping' => ['Housekeeping', 'Expire overdue subscriptions, purge stale staging dirs, prune old backups, snapshot storage'],
+                    'autopost'     => ['Auto-poster', 'Publish queued auto-posts to X/Reddit once their scheduled time passes'],
+                    'backup'       => ['Backup', 'Full DB + media archive, split into 4 GB parts and synced offsite'],
+                    'restore-drill'=> ['Restore drill', 'Restore a recent backup into a scratch DB to prove backups are restorable'],
+                ];
+                $cronCardStates = [];
+                foreach ($cronJobs as $cronJob) {
+                    $cronCardStates[$cronJob['id']] = $cronJob;
+                }
+            ?>
+            <div class="cron-card-grid">
+                <?php foreach ($cronCardJobs as $cronCardId => $cronCard): ?>
+                    <?php $cronState = $cronCardStates[$cronCardId] ?? null; ?>
+                    <div class="cron-card">
+                        <h3><?= e($cronCard[0]) ?></h3>
+                        <p class="cron-desc"><?= e($cronCard[1]) ?></p>
+                        <?php if ($cronState): ?>
+                            <div class="cron-meta">
+                                <b><?= e((string) $cronState['id']) ?></b> &middot;
+                                <?= $cronState['lastRun']
+                                    ? 'last run ' . e((string) $cronState['lastAgo'])
+                                    : 'never run' ?>
+                                &middot;
+                                <?php if ($cronState['ok']): ?>
+                                    <b class="sys-ok">&#10003; ok</b>
+                                <?php else: ?>
+                                    <b class="sys-bad">&#9888; <?= $cronState['lastRun'] ? 'stale / failed' : 'not run' ?></b>
+                                <?php endif; ?>
+                                <?php if (!empty($cronState['note'])): ?>
+                                    <br><span class="muted"><?= e((string) $cronState['note']) ?></span>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+                        <?php if (!empty($cronScheduleIsSuper)): ?>
+                            <form method="post" action="<?= url('/admin/system/cron-schedule/' . e($cronCardId)) ?>">
+                                <?= csrf_field() ?>
+                                <div class="cron-fields">
+                                    <?php if ($cronCardId === 'housekeeping' || $cronCardId === 'autopost'): ?>
+                                        every
+                                        <input type="number" name="cron_<?= e($cronCardId) ?>_min" min="1" max="1440"
+                                               value="<?= (int) ($cronSchedule[$cronCardId]['every_minutes'] ?? ($cronCardId === 'housekeeping' ? 15 : 1)) ?>"
+                                               aria-label="<?= e($cronCard[0]) ?> interval in minutes">
+                                        <span class="muted">min</span>
+                                    <?php elseif ($cronCardId === 'backup'): ?>
+                                        daily at
+                                        <input type="number" name="cron_backup_hour" min="0" max="23"
+                                               value="<?= (int) ($cronSchedule['backup']['hour'] ?? 3) ?>" style="width:3.4rem;"
+                                               aria-label="Backup hour">
+                                        :
+                                        <input type="number" name="cron_backup_minute" min="0" max="59"
+                                               value="<?= (int) ($cronSchedule['backup']['minute'] ?? 0) ?>" style="width:3.4rem;"
+                                               aria-label="Backup minute">
+                                    <?php elseif ($cronCardId === 'restore-drill'): ?>
+                                        <select name="cron_drill_dow" aria-label="Restore drill day of week">
+                                            <?php $cronDow = (int) ($cronSchedule['restore-drill']['dow'] ?? 0); ?>
+                                            <?php foreach ([0=>'Sunday',1=>'Monday',2=>'Tuesday',3=>'Wednesday',4=>'Thursday',5=>'Friday',6=>'Saturday'] as $cronD => $cronLabel): ?>
+                                                <option value="<?= $cronD ?>"<?= $cronD === $cronDow ? ' selected' : '' ?>><?= $cronLabel ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        at
+                                        <input type="number" name="cron_drill_hour" min="0" max="23"
+                                               value="<?= (int) ($cronSchedule['restore-drill']['hour'] ?? 4) ?>" style="width:3.4rem;"
+                                               aria-label="Restore drill hour">
+                                        :
+                                        <input type="number" name="cron_drill_minute" min="0" max="59"
+                                               value="<?= (int) ($cronSchedule['restore-drill']['minute'] ?? 0) ?>" style="width:3.4rem;"
+                                               aria-label="Restore drill minute">
+                                    <?php endif; ?>
+                                </div>
+                                <button class="btn cron-save" type="submit">Save &amp; apply</button>
+                            </form>
+                            <p class="muted" style="margin:0;font-size:.72rem;">
+                                Writes <code>storage/cron/schedules.json</code> and applies to
+                                <code>/etc/cron.d/</code>, restarting the worker services.
+                            </p>
+                        <?php endif; ?>
+                    </div>
                 <?php endforeach; ?>
-            </table>
-        <?php endif; ?>
-
-        <?php if (!empty($cronScheduleIsSuper)): ?>
-            <div style="border-top:1px solid var(--table-border);margin-top:1rem;padding-top:1rem;">
-                <h3 style="margin:0 0 .25rem;text-align:left;color:var(--card-title-color);">Configure schedules</h3>
-                <p class="muted" style="margin:0 0 .75rem;font-size:.82rem;">
-                    Changes are written to <code>storage/cron/schedules.json</code> and applied to
-                    <code>/etc/cron.d/</code> immediately, restarting the two worker services.
-                </p>
-                <form method="post" action="<?= url('/admin/system/cron-schedule') ?>" style="display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end;">
-                    <?= csrf_field() ?>
-                    <div>
-                        <label style="font-size:.8rem;">Housekeeping — every</label><br>
-                        <input type="number" name="cron_housekeeping_min" min="1" max="1440" value="<?= (int) ($cronSchedule['housekeeping']['every_minutes'] ?? 15) ?>">
-                        <span class="muted" style="font-size:.75rem;">min</span>
-                    </div>
-                    <div>
-                        <label style="font-size:.8rem;">Autopost — every</label><br>
-                        <input type="number" name="cron_autopost_min" min="1" max="1440" value="<?= (int) ($cronSchedule['autopost']['every_minutes'] ?? 1) ?>">
-                        <span class="muted" style="font-size:.75rem;">min</span>
-                    </div>
-                    <div>
-                        <label style="font-size:.8rem;">Backup — daily at</label><br>
-                        <input type="number" name="cron_backup_hour" min="0" max="23" value="<?= (int) ($cronSchedule['backup']['hour'] ?? 3) ?>" style="width:3.4rem;">
-                        : <input type="number" name="cron_backup_minute" min="0" max="59" value="<?= (int) ($cronSchedule['backup']['minute'] ?? 0) ?>" style="width:3.4rem;">
-                    </div>
-                    <div>
-                        <label style="font-size:.8rem;">Restore drill —</label><br>
-                        <select name="cron_drill_dow" style="padding:.3rem;">
-                            <?php $dow = (int) ($cronSchedule['restore-drill']['dow'] ?? 0); ?>
-                            <?php foreach ([0=>'Sunday',1=>'Monday',2=>'Tuesday',3=>'Wednesday',4=>'Thursday',5=>'Friday',6=>'Saturday'] as $d=>$label): ?>
-                                <option value="<?= $d ?>"<?= $d === $dow ? ' selected' : '' ?>><?= $label ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <input type="number" name="cron_drill_hour" min="0" max="23" value="<?= (int) ($cronSchedule['restore-drill']['hour'] ?? 4) ?>" style="width:3.4rem;">
-                        : <input type="number" name="cron_drill_minute" min="0" max="59" value="<?= (int) ($cronSchedule['restore-drill']['minute'] ?? 0) ?>" style="width:3.4rem;">
-                    </div>
-                    <button class="btn" type="submit">Save &amp; apply schedules</button>
-                </form>
             </div>
         <?php endif; ?>
     </div>

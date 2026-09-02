@@ -397,10 +397,12 @@ class SystemController extends Controller
     }
 
     /**
-     * Super-admin only: persist the requested cron schedules and apply them
-     * to /etc/cron.d/ via the scoped root helper, then restart the workers.
+     * Super-admin only: persist the requested cron schedule for ONE job and
+     * apply the resulting /etc/cron.d/ entries via the scoped root helper,
+     * then restart the workers. Only the submitted job's fields change; the
+     * other jobs keep their stored schedules.
      */
-    public function saveCronSchedule(): void
+    public function saveCronSchedule(string $job): void
     {
         Auth::requirePermission('logs');
         $user = Auth::user();
@@ -411,22 +413,37 @@ class SystemController extends Controller
             $this->redirect('/admin/system');
         }
 
-        $req = $this->request;
-        $clamp = static fn (int $v, int $min, int $max): int => min($max, max($min, $v));
+        $valid = ['housekeeping', 'autopost', 'backup', 'restore-drill'];
+        if (!in_array($job, $valid, true)) {
+            $this->flash('error', 'Unknown cron job.');
+            $this->redirect('/admin/system');
+        }
 
-        $sched = [
-            'housekeeping'  => ['every_minutes' => $clamp((int) $req->post('cron_housekeeping_min', 15), 1, 1440)],
-            'autopost'      => ['every_minutes' => $clamp((int) $req->post('cron_autopost_min', 1), 1, 1440)],
-            'backup'        => [
-                'hour'   => $clamp((int) $req->post('cron_backup_hour', 3), 0, 23),
-                'minute' => $clamp((int) $req->post('cron_backup_minute', 0), 0, 59),
-            ],
-            'restore-drill' => [
-                'dow'    => $clamp((int) $req->post('cron_drill_dow', 0), 0, 6),
-                'hour'   => $clamp((int) $req->post('cron_drill_hour', 4), 0, 23),
-                'minute' => $clamp((int) $req->post('cron_drill_minute', 0), 0, 59),
-            ],
-        ];
+        $req   = $this->request;
+        $clamp = static fn (int $v, int $min, int $max): int => min($max, max($min, $v));
+        $sched = $this->cronSchedule();
+
+        switch ($job) {
+            case 'housekeeping':
+                $sched['housekeeping'] = ['every_minutes' => $clamp((int) $req->post('cron_housekeeping_min', 15), 1, 1440)];
+                break;
+            case 'autopost':
+                $sched['autopost'] = ['every_minutes' => $clamp((int) $req->post('cron_autopost_min', 1), 1, 1440)];
+                break;
+            case 'backup':
+                $sched['backup'] = [
+                    'hour'   => $clamp((int) $req->post('cron_backup_hour', 3), 0, 23),
+                    'minute' => $clamp((int) $req->post('cron_backup_minute', 0), 0, 59),
+                ];
+                break;
+            case 'restore-drill':
+                $sched['restore-drill'] = [
+                    'dow'    => $clamp((int) $req->post('cron_drill_dow', 0), 0, 6),
+                    'hour'   => $clamp((int) $req->post('cron_drill_hour', 4), 0, 23),
+                    'minute' => $clamp((int) $req->post('cron_drill_minute', 0), 0, 59),
+                ];
+                break;
+        }
 
         // Persist the declaration (www-data writable; root applies it).
         $dir = dirname($this->cronSchedulesFile());
@@ -450,12 +467,20 @@ class SystemController extends Controller
         $cmd    = 'sudo -n ' . escapeshellarg($phpBin) . ' ' . escapeshellarg($this->root . '/bin/apply_cron.php') . ' 2>&1';
         exec($cmd, $outLines, $rc);
 
+        $labels = [
+            'housekeeping'  => 'Housekeeping',
+            'autopost'      => 'Auto-poster',
+            'backup'        => 'Backup',
+            'restore-drill' => 'Restore drill',
+        ];
+        $label = $labels[$job] ?? $job;
+
         if ($rc === 0) {
             AuditLog::record($user['id'] ?? null, 'update', 'system_cron_schedule', null,
-                'Cron schedules saved + applied: ' . json_encode($sched));
-            $this->flash('success', 'Cron schedules saved and applied. Worker services restarted.');
+                'Cron schedule saved + applied for ' . $job . ': ' . json_encode($sched[$job]));
+            $this->flash('success', $label . ' schedule saved and applied. Workers restarted.');
         } else {
-            $this->flash('error', 'Schedules saved but could NOT be applied — ' . trim(implode(' ', $outLines))
+            $this->flash('error', 'Schedule saved but could NOT be applied — ' . trim(implode(' ', $outLines))
                 . ' (check the www-data sudoers rule for apply_cron.php).');
         }
 
