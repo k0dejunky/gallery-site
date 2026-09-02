@@ -704,13 +704,14 @@ function create_blurred_copy(string $src, int $blurPercent = 25): ?string
     $height = imagesy($image);
     $percent = max(0, min(100, (int) $blurPercent));
 
-    // Downscale to a fraction of the original size, smooth it, then scale it
-    // back up: the resample blurs across a wide neighbourhood (unlike the
-    // small-radius GD gaussian kernel). Divisor scales with the percentage.
-    $divisor = 2 + (int) round(($percent / 100) * 10);
-    $divisor = max(2, min(12, $divisor));
-    $smallW  = max(8, (int) round($width / $divisor));
-    $smallH  = max(8, (int) round($height / $divisor));
+    // Downscale by a wide divisor, smooth it, then scale back up: the resample
+    // blurs across a very wide neighbourhood (unlike the small-radius GD
+    // gaussian kernel). At 100% the image is shrunk ~16x so the upscaled copy
+    // is uniformly soft and unrecognisable while still hinting at the subject.
+    $divisor = 4 + (int) round(($percent / 100) * 12);
+    $divisor = max(4, min(20, $divisor));
+    $smallW  = max(6, (int) round($width / $divisor));
+    $smallH  = max(6, (int) round($height / $divisor));
     $small   = imagecreatetruecolor($smallW, $smallH);
 
     if ($small === false) {
@@ -720,6 +721,7 @@ function create_blurred_copy(string $src, int $blurPercent = 25): ?string
     }
 
     imagecopyresampled($small, $image, 0, 0, 0, 0, $smallW, $smallH, $width, $height);
+    imagefilter($small, IMG_FILTER_GAUSSIAN_BLUR);
     imagefilter($small, IMG_FILTER_GAUSSIAN_BLUR);
     imagefilter($small, IMG_FILTER_GAUSSIAN_BLUR);
 
@@ -736,6 +738,7 @@ function create_blurred_copy(string $src, int $blurPercent = 25): ?string
     imagedestroy($small);
 
     if ($percent >= 100) {
+        // Fully blurred preview: the sharp original never bleeds through.
         imagecopy($image, $blurred, 0, 0, 0, 0, $width, $height);
     } elseif ($percent > 0) {
         imagecopymerge($image, $blurred, 0, 0, 0, 0, $width, $height, $percent);
