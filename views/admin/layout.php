@@ -465,5 +465,62 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
     })();
     </script>
 <?php endif; ?>
+
+    <script>
+        // Keep the phone screen awake while a file upload is in flight so the
+        // request isn't suspended or the network dropped mid-upload.
+        (function () {
+            'use strict';
+            var wakeLock = null;
+            var wanted = false;
+
+            function supported() {
+                return 'wakeLock' in navigator;
+            }
+
+            function requestLock() {
+                if (!supported() || !wanted || wakeLock) return;
+                navigator.wakeLock.request('screen').then(function (lock) {
+                    wakeLock = lock;
+                    lock.addEventListener('release', function () {
+                        wakeLock = null;
+                        if (wanted) requestLock();
+                    });
+                }).catch(function () {
+                    wakeLock = null;
+                });
+            }
+
+            function releaseLock() {
+                wanted = false;
+                if (wakeLock) {
+                    var lock = wakeLock;
+                    wakeLock = null;
+                    lock.release().catch(function () {});
+                }
+            }
+
+            function hasFiles(form) {
+                var inputs = form.querySelectorAll('input[type="file"]');
+                for (var i = 0; i < inputs.length; i++) {
+                    if (inputs[i].files && inputs[i].files.length > 0) return true;
+                }
+                return false;
+            }
+
+            document.addEventListener('submit', function (e) {
+                if (e.target && e.target.tagName === 'FORM' && hasFiles(e.target)) {
+                    wanted = true;
+                    requestLock();
+                }
+            }, true);
+
+            document.addEventListener('visibilitychange', function () {
+                if (document.visibilityState === 'visible') requestLock();
+            });
+
+            window.addEventListener('pagehide', releaseLock);
+        })();
+    </script>
 </body>
 </html>
