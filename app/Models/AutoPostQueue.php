@@ -378,6 +378,41 @@ class AutoPostQueue
     }
 
     /**
+     * Most recent failed posts, newest first, joined to their gallery so the
+     * admin can see what failed and retry it. Used on the dashboard and the
+     * Auto Poster page.
+     */
+    public static function failed(int $limit = 10): array
+    {
+        $limit = max(1, min(100, $limit));
+
+        return Database::run(
+            "SELECT q.*, COALESCE(g.title, '') AS gallery_title
+             FROM auto_poster_queue q
+             LEFT JOIN galleries g ON g.id = q.gallery_id
+             WHERE q.status = 'failed'
+             ORDER BY q.id DESC
+             LIMIT $limit"
+        )->fetchAll();
+    }
+
+    /**
+     * Move a failed post back into the queue (clearing its error and schedule)
+     * so it can be posted again.
+     */
+    public static function requeue(int $id): bool
+    {
+        $row = Database::run(
+            'UPDATE auto_poster_queue
+             SET status = ?, error = NULL, scheduled_at = NULL, posted_at = NULL
+             WHERE id = ? AND status = ?',
+            ['queued', $id, 'failed']
+        );
+
+        return $row->rowCount() > 0;
+    }
+
+    /**
      * Resolve the file to attach to a post for a stored photo. Prefers the
      * web-optimized variant (web_<file>, or its WebP copy) so uploads stay well
      * under X's 5 MB image cap; falls back to the original file when no web

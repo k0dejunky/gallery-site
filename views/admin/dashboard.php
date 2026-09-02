@@ -22,6 +22,61 @@
     </p>
 <?php endif; ?>
 
+<?php // One-click entry points for the most common admin tasks, plus an
+     // optional auto-refresh toggle that reloads the dashboard every minute. ?>
+<div class="quick-actions">
+    <span class="qa-label">Quick actions</span>
+    <a class="btn btn-sm" href="<?= url('/admin/galleries/create') ?>">New Gallery</a>
+    <a class="btn btn-sm" href="<?= url('/admin/galleries') ?>">Manage Galleries</a>
+    <a class="btn btn-sm" href="<?= url('/admin/auto-poster') ?>">Auto-Poster<?php if ((int) ($autopostCounts['failed'] ?? 0) > 0): ?> <span class="pill pill-err"><?= (int) $autopostCounts['failed'] ?> failed</span><?php endif; ?></a>
+    <a class="btn btn-sm" href="<?= url('/admin/test-suite') ?>">Run Test Suite</a>
+    <form class="inline" method="post" action="<?= url('/admin/system/backup') ?>" onsubmit="return confirm('Create a full site backup now?');">
+        <?= csrf_field() ?>
+        <button type="submit" class="btn btn-sm btn-outline" aria-label="Create a site backup now">Backup now</button>
+    </form>
+    <label class="qa-live" style="margin-left:auto;display:inline-flex;align-items:center;gap:.4rem;font-size:var(--font-size-sm);cursor:pointer;" title="Reload this page automatically every 60 seconds">
+        <input type="checkbox" id="qa-live-refresh">
+        Auto-refresh (60s)
+    </label>
+</div>
+
+<?php // Failed auto-posts need attention: show the most recent ones here with
+     // a one-click retry instead of hiding them in the Auto Poster page. ?>
+<?php if (!empty($autopostFailed)): ?>
+<div class="sys-card" style="margin-top:var(--spacing-lg);">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <h2 style="margin:0;">Auto-poster failures <span class="pill pill-err"><?= count($autopostFailed) ?> need attention</span></h2>
+        <a href="<?= url('/admin/auto-poster') ?>" class="btn btn-sm">Auto Poster</a>
+    </div>
+    <table>
+        <thead><tr><th>#</th><th>Gallery</th><th>Error</th><th style="text-align:right;">Actions</th></tr></thead>
+        <tbody>
+        <?php foreach ($autopostFailed as $item): ?>
+            <tr>
+                <td><?= (int) $item['id'] ?></td>
+                <td><?= e((string) $item['gallery_title']) ?></td>
+                <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?= e((string) $item['error']) ?>">
+                    <span class="pill pill-err">failed</span> <?= e((string) $item['error']) ?>
+                </td>
+                <td style="text-align:right;white-space:nowrap;">
+                    <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/retry') ?>" onsubmit="return confirm('Retry post #<?= (int) $item['id'] ?> now?');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
+                        <button type="submit" class="btn btn-sm" aria-label="Retry failed post #<?= (int) $item['id'] ?>">Retry</button>
+                    </form>
+                    <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/dismiss') ?>" onsubmit="return confirm('Dismiss this failed post?');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
+                        <button type="submit" class="btn btn-sm btn-danger" aria-label="Dismiss failed post #<?= (int) $item['id'] ?>">Dismiss</button>
+                    </form>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+</div>
+<?php endif; ?>
+
 <?php // Membership growth cards: recurring revenue + recent signups. ?>
 <div class="stat-cards">
     <div class="stat-card"><b>$<?= number_format((float) $growth['mrr'], 2) ?></b><small>Recurring / month</small></div>
@@ -140,14 +195,36 @@
                     </tbody>
                 </table>
             </div>
-        <?php endif; ?>
-    </div>
+<?php endif; ?>
+</div>
+
+<script>
+    // Optional live dashboard: auto-reload once a minute while the toggle is on.
+    (function () {
+        var toggle = document.getElementById('qa-live-refresh');
+        if (!toggle) return;
+        var KEY = 'admin_live_refresh';
+        var on = false;
+        try { on = localStorage.getItem(KEY) === '1'; } catch (ignore) {}
+        toggle.checked = on;
+        toggle.addEventListener('change', function () {
+            var enable = toggle.checked;
+            try { localStorage.setItem(KEY, enable ? '1' : '0'); } catch (ignore) {}
+            if (enable) scheduleReload();
+        });
+        function scheduleReload() {
+            try { if (localStorage.getItem(KEY) !== '1') return; } catch (ignore) {}
+            setTimeout(function () { window.location.reload(); }, 60000);
+        }
+        if (on) scheduleReload();
+    })();
+</script>
 </div>
 <?php endif; ?>
 
 <?php // Revenue & churn: monthly bars + trailing totals, all server-rendered SVG. ?>
-<div class="sys-card" style="margin-top:var(--spacing-lg);">
-    <h2>Revenue &amp; churn — last 6 months</h2>
+<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="finance" open>
+    <summary><h2>Revenue &amp; churn — last 6 months</h2></summary>
     <?php
         $mrrNow = (float) $growth['mrr'];
         $activeMembers = max(1, (int) $summary['total_members']);
@@ -179,18 +256,16 @@
             </table>
         </div>
     </div>
-</div>
+</details>
 
 <?php // Storage growth trend (from housekeeping snapshots), selectable window. ?>
-<div class="sys-card" style="margin-top:var(--spacing-lg);">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
-        <h2 style="margin:0;">Storage trend</h2>
-        <div class="storage-periods" role="navigation" aria-label="Storage trend period">
-            <?php foreach (['day' => 'Day', 'week' => 'Week', 'month' => 'Month', 'year' => 'Year', 'all' => 'All time'] as $p => $label): ?>
-                <a class="btn btn-sm<?= $storagePeriod === $p ? ' storage-period-active' : '' ?>"
-                   href="<?= e(url('/admin?period=' . $p)) ?>"><?= e($label) ?></a>
-            <?php endforeach; ?>
-        </div>
+<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="storage" open>
+    <summary><h2 style="margin:0;">Storage trend</h2></summary>
+    <div class="storage-periods" role="navigation" aria-label="Storage trend period" style="margin-top:var(--spacing-sm);">
+        <?php foreach (['day' => 'Day', 'week' => 'Week', 'month' => 'Month', 'year' => 'Year', 'all' => 'All time'] as $p => $label): ?>
+            <a class="btn btn-sm<?= $storagePeriod === $p ? ' storage-period-active' : '' ?>"
+               href="<?= e(url('/admin?period=' . $p)) ?>"><?= e($label) ?></a>
+        <?php endforeach; ?>
     </div>
     <style>
         .storage-periods { display: flex; gap: .35rem; flex-wrap: wrap; }
@@ -228,13 +303,11 @@
             · history begins <?= e(date('n/j/Y', strtotime($storageTrend['first_snapshot']))) ?><?php endif; ?>
         </p>
     <?php endif; ?>
-</div>
+</details>
 
 <?php // Daily view trends (from the content_views log) — gallery vs photo vs total. ?>
-<div class="sys-card" style="margin-top:var(--spacing-lg);">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
-        <h2 style="margin:0;">View trends — last 30 days</h2>
-    </div>
+<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="views" open>
+    <summary><h2 style="margin:0;">View trends — last 30 days</h2></summary>
     <?php
         $viewTotals = array_sum($viewTrends['total']);
         $viewNow    = (int) end($viewTrends['total']);
@@ -261,11 +334,11 @@
             </div>
         </div>
     <?php endif; ?>
-</div>
+</details>
 
 <?php // Content & membership growth over the trailing months. ?>
-<div class="sys-card" style="margin-top:var(--spacing-lg);">
-    <h2>Content &amp; membership growth — last 6 months</h2>
+<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="growth" open>
+    <summary><h2>Content &amp; membership growth — last 6 months</h2></summary>
     <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
         <div style="flex:2 1 420px;min-width:320px;">
             <p class="muted" style="margin:0 0 .35rem;font-size:.85rem;">New galleries</p>
@@ -293,16 +366,16 @@
             </table>
         </div>
     </div>
-</div>
+</details>
 
 <?php // Top content by views. ?>
-<div class="sys-card" style="margin-top:var(--spacing-lg);">
-    <h2>Top content by views</h2>
+<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="topcontent" open>
+    <summary><h2>Top content by views</h2></summary>
     <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
         <div style="flex:1 1 340px;min-width:280px;">
             <h3 style="margin:0 0 .35rem;font-size:.9rem;">Galleries</h3>
             <?php if (empty($topContentStats['galleries'])): ?>
-                <p class="muted">No galleries yet.</p>
+                <p class="muted">No galleries yet — <a href="<?= url('/admin/galleries/create') ?>">create one</a>.</p>
             <?php else: ?>
                 <table>
                     <thead><tr><th>Gallery</th><th style="text-align:right;">Views</th><th style="text-align:right;">Unique</th></tr></thead>
@@ -324,7 +397,7 @@
         <div style="flex:1 1 340px;min-width:280px;">
             <h3 style="margin:0 0 .35rem;font-size:.9rem;">Photos</h3>
             <?php if (empty($topContentStats['photos'])): ?>
-                <p class="muted">No photos yet.</p>
+                <p class="muted">No photos yet — <a href="<?= url('/admin/galleries') ?>">upload some</a>.</p>
             <?php else: ?>
                 <table>
                     <thead><tr><th>Photo</th><th style="text-align:right;">Views</th><th style="text-align:right;">Unique</th></tr></thead>
@@ -344,19 +417,22 @@
             <?php endif; ?>
         </div>
     </div>
-</div>
+</details>
 
 <?php // Membership plan distribution. ?>
-<div class="sys-card" style="margin-top:var(--spacing-lg);">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="plans" open>
+    <summary>
         <h2 style="margin:0;">Membership by plan</h2>
-        <a href="<?= url('/admin/subscriptions') ?>" class="btn btn-sm">Subscriptions</a>
-    </div>
+        <span class="collapsible-meta"><a href="<?= url('/admin/subscriptions') ?>" class="btn btn-sm">Subscriptions</a></span>
+    </summary>
     <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
         <div style="flex:1 1 340px;min-width:280px;">
             <table>
                 <thead><tr><th>Plan</th><th>Tier</th><th style="text-align:right;">Members</th><th style="text-align:right;">MRR</th></tr></thead>
                 <tbody>
+                <?php if (empty($planDistribution['plans'])): ?>
+                    <tr><td colspan="4" class="muted">No plans yet — <a href="<?= url('/admin/plans/create') ?>">create a membership plan</a>.</td></tr>
+                <?php endif; ?>
                 <?php foreach ($planDistribution['plans'] as $plan): ?>
                     <tr>
                         <td><b><?= e($plan['name']) ?></b></td>
@@ -386,7 +462,7 @@
             </table>
         </div>
     </div>
-</div>
+</details>
 
 <?php // Support ticket workload. ?>
 <div class="sys-card" style="margin-top:var(--spacing-lg);">
@@ -406,7 +482,7 @@
 <div class="sys-card" style="margin-top:var(--spacing-lg);">
     <h2>Recent activity</h2>
     <?php if (empty($feed)): ?>
-        <p class="muted">Nothing recorded yet.</p>
+        <p class="muted">Nothing recorded yet — activity appears here as actions are taken. See <a href="<?= url('/admin/logs') ?>">Logs</a>.</p>
     <?php else: ?>
         <table>
             <tbody>

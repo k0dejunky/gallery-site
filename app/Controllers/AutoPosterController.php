@@ -512,6 +512,28 @@ class AutoPosterController extends Controller
     }
 
     /**
+     * Requeue a failed post and publish it right away. Used by the dashboard's
+     * failed-posts list and the Auto Poster page retry button.
+     */
+    public function retryQueued(): void
+    {
+        $id = (int) $this->request->post('queue_id', 0);
+
+        if ($id <= 0 || !AutoPostQueue::requeue($id)) {
+            $this->flash('error', 'Could not requeue that failed post.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        $result = AutoPostQueue::post($id);
+
+        $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
+            ? 'Posted to X: ' . ($result['url'] ?? '')
+            : 'Post failed: ' . ($result['error'] ?? 'Unknown error'));
+        $this->redirect('/admin/auto-poster');
+    }
+
+    /**
      * Publish every currently queued item, stopping at the first failure so a
      * burst of posts cannot mask a systemic error (e.g. depleted credits).
      */

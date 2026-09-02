@@ -218,6 +218,119 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             border-radius: 50%; animation: pb-spin .8s linear infinite;
         }
         @keyframes pb-spin { to { transform: rotate(360deg); } }
+
+        /* ---- Mobile navigation drawer ---- */
+        .nav-toggle { display: none; }
+        .nav-backdrop { display: none; }
+        @media (max-width: 900px) {
+            .admin-shell { display: block; }
+            .admin-nav {
+                position: fixed; top: 0; left: 0; bottom: 0; z-index: 900;
+                width: 250px; max-width: 82vw; overflow-y: auto;
+                border-radius: 0 var(--border-radius-lg) var(--border-radius-lg) 0;
+                transform: translateX(-105%); transition: transform .22s ease;
+                box-shadow: var(--shadow);
+            }
+            body.nav-open .admin-nav { transform: translateX(0); }
+            .nav-backdrop {
+                display: none; position: fixed; inset: 0; z-index: 890;
+                background: rgba(20, 12, 30, .45);
+            }
+            body.nav-open .nav-backdrop { display: block; }
+            .nav-toggle {
+                display: inline-flex; align-items: center; justify-content: center;
+                width: 2.4rem; height: 2.4rem; font-size: 1.35rem; line-height: 1;
+                background: var(--sidebar-link-bg); color: var(--purple-700);
+                border: 1px solid var(--pink-400); border-radius: var(--border-radius);
+                cursor: pointer; margin-bottom: .75rem;
+            }
+            .admin-main { width: 100%; }
+            body { padding: .75rem .9rem; }
+            .stat-cards { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+            .quick-actions { justify-content: flex-start; }
+        }
+
+        /* ---- Quick actions bar ---- */
+        .quick-actions {
+            display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+            margin: 0 0 1rem; padding: .6rem .8rem;
+            background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: var(--border-radius-lg);
+        }
+        .quick-actions .qa-label { font-size: var(--font-size-sm); color: var(--purple-700); font-weight: bold; margin-right: .25rem; }
+
+        /* ---- Status pills ---- */
+        .pill {
+            display: inline-flex; align-items: center; gap: .3rem;
+            padding: .1rem .55rem; border-radius: 999px;
+            font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+            background: var(--pink-300); color: var(--purple-700);
+            border: 1px solid var(--pink-400); white-space: nowrap;
+        }
+        .pill-ok   { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+        .pill-err  { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+        .pill-warn { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+        .pill-info { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+        .pill-muted{ background: var(--pink-200); color: var(--purple-800); border-color: var(--pink-300); }
+
+        /* ---- Flash toasts ---- */
+        .flash-stack {
+            position: fixed; top: .9rem; right: .9rem; z-index: 950;
+            display: flex; flex-direction: column; gap: .5rem; max-width: min(360px, 92vw);
+        }
+        .flash-toast {
+            display: flex; align-items: flex-start; gap: .6rem;
+            padding: .7rem .9rem; border-radius: var(--border-radius); box-shadow: var(--shadow);
+            background: var(--pink-100); color: var(--purple-900);
+            border-left: 4px solid var(--purple-500);
+            animation: toast-in .25s ease;
+        }
+        .flash-toast.error { background: #fef2f2; border-left-color: #dc2626; color: #7f1d1d; }
+        .flash-toast.success { background: #f0fdf4; border-left-color: #16a34a; color: #14532d; }
+        .flash-toast .flash-close { margin-left: auto; background: none; border: none; cursor: pointer; color: inherit; opacity: .6; font-size: 1rem; line-height: 1; padding: 0 .1rem; }
+        .flash-toast.hide { opacity: 0; transform: translateX(8px); transition: all .3s ease; }
+        @keyframes toast-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+        /* ---- Command palette ---- */
+        .palette-overlay {
+            position: fixed; inset: 0; z-index: 1000;
+            display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh;
+            background: rgba(20, 12, 30, .5);
+        }
+        .palette {
+            width: min(560px, 92vw); background: var(--pink-100); color: var(--purple-900);
+            border: 1px solid var(--pink-400); border-radius: var(--border-radius-lg);
+            box-shadow: 0 18px 50px rgba(0, 0, 0, .4); overflow: hidden;
+        }
+        .palette-input {
+            width: 100%; box-sizing: border-box; padding: .9rem 1rem; font-size: 1rem;
+            border: none; border-bottom: 1px solid var(--pink-300); background: var(--pink-200);
+            color: var(--purple-900); outline: none;
+        }
+        .palette-list { max-height: 55vh; overflow-y: auto; padding: .4rem; }
+        .palette-group { font-size: .72rem; font-weight: bold; text-transform: uppercase; letter-spacing: .05em; color: var(--purple-600); padding: .55rem .6rem .2rem; }
+        .palette-item {
+            display: flex; align-items: center; gap: .6rem;
+            padding: .5rem .6rem; border-radius: var(--border-radius); cursor: pointer;
+            text-decoration: none; color: var(--purple-900);
+        }
+        .palette-item .pi-kind { font-size: .7rem; color: var(--purple-600); min-width: 3.4rem; text-transform: uppercase; }
+        .palette-item .pi-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .palette-item.active, .palette-item:hover { background: var(--sidebar-active-bg, #7c3aed); color: var(--sidebar-active-color, #fff); }
+        .palette-item.active .pi-kind { color: inherit; opacity: .85; }
+        .palette-empty { padding: 1rem; text-align: center; color: var(--purple-700); }
+        .palette-hint { padding: .4rem .7rem; font-size: .72rem; color: var(--purple-600); border-top: 1px solid var(--pink-300); }
+
+        /* ---- Collapsible dashboard sections ---- */
+        details.sys-card > summary {
+            cursor: pointer; list-style: none; user-select: none; display: flex; align-items: center; gap: .35rem;
+        }
+        details.sys-card > summary::-webkit-details-marker { display: none; }
+        details.sys-card > summary::before {
+            content: '▸'; display: inline-block; transition: transform .15s ease; color: var(--purple-500);
+        }
+        details.sys-card[open] > summary::before { transform: rotate(90deg); }
+        details.sys-card > summary h2 { margin: 0; }
+        details.sys-card > summary .collapsible-meta { margin-left: auto; font-size: var(--font-size-sm); }
     </style>
 </head>
 <body class="admin-theme">
@@ -236,7 +349,8 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             <img src="<?= e(\App\Models\Theme::titleImageUrl(\App\Models\Theme::SCOPE_ADMIN)) ?>" alt="<?= e(config('app.site_name')) ?> Admin">
     </header>
     <div class="admin-shell">
-        <nav class="admin-nav">
+        <div class="nav-backdrop" id="nav-backdrop" aria-hidden="true"></div>
+        <nav class="admin-nav" id="admin-nav">
             <?php if (!empty($topContent)): ?>
                 <div class="nav-top-content"><?= $topContent ?></div>
                 <div class="nav-sep"></div>
@@ -280,14 +394,28 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             </form>
         </nav>
         <main class="admin-main">
+            <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="admin-nav">☰</button>
+            <div class="flash-stack" role="status" aria-live="polite">
             <?php foreach ($flash as $flashType => $messages): ?>
                 <?php foreach ($messages as $message): ?>
-                    <div class="flash <?= e($flashType) ?>"><?= e($message) ?></div>
+                    <div class="flash-toast <?= e($flashType) ?>">
+                        <span><?= e($message) ?></span>
+                        <button type="button" class="flash-close" aria-label="Dismiss notification">&times;</button>
+                    </div>
                 <?php endforeach; ?>
             <?php endforeach; ?>
+            </div>
 
             <?php require $content; ?>
         </main>
+    </div>
+
+    <div class="palette-overlay" id="admin-palette" hidden>
+        <div class="palette" role="dialog" aria-modal="true" aria-label="Quick navigation">
+            <input type="search" id="palette-input" class="palette-input" placeholder="Search galleries, users, plans, pages…  (Esc to close)" autocomplete="off">
+            <div class="palette-list" id="palette-results"></div>
+            <div class="palette-hint">↑↓ to navigate · Enter to open · Esc to close</div>
+        </div>
     </div>
 
     <div class="progress-overlay" id="admin-progress" aria-live="polite">
@@ -467,8 +595,174 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
 <?php endif; ?>
 
     <script>
-        // Keep the phone screen awake while a file upload is in flight so the
-        // request isn't suspended or the network dropped mid-upload.
+        // Admin shell behaviours: mobile nav drawer, auto-dismissing flash
+        // toasts, the Ctrl+K command palette, and remembered collapsible
+        // dashboard sections.
+        (function () {
+            'use strict';
+            var base = <?= json_encode(rtrim((string) url('/'), '/')) ?>;
+
+            // --- Mobile nav drawer ---
+            var navToggle = document.getElementById('nav-toggle');
+            var navBackdrop = document.getElementById('nav-backdrop');
+            function setNav(open) {
+                document.body.classList.toggle('nav-open', open);
+                if (navToggle) navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            }
+            if (navToggle) {
+                navToggle.addEventListener('click', function () {
+                    setNav(!document.body.classList.contains('nav-open'));
+                });
+            }
+            if (navBackdrop) {
+                navBackdrop.addEventListener('click', function () { setNav(false); });
+            }
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') setNav(false);
+            });
+
+            // --- Flash toasts ---
+            document.querySelectorAll('.flash-toast').forEach(function (toast) {
+                var close = toast.querySelector('.flash-close');
+                if (close) {
+                    close.addEventListener('click', function () { dismiss(toast); });
+                }
+                setTimeout(function () { dismiss(toast); }, 4500);
+            });
+            function dismiss(toast) {
+                if (toast.classList.contains('hide')) return;
+                toast.classList.add('hide');
+                setTimeout(function () { toast.remove(); }, 320);
+            }
+
+            // --- Command palette (Ctrl/Cmd+K or "/") ---
+            var palette = document.getElementById('admin-palette');
+            var paletteInput = document.getElementById('palette-input');
+            var paletteResults = document.getElementById('palette-results');
+            var paletteTimer = null;
+            var paletteItems = [];
+            var paletteIndex = -1;
+
+            function openPalette() {
+                if (!palette) return;
+                palette.hidden = false;
+                setTimeout(function () {
+                    if (paletteInput) paletteInput.focus();
+                }, 10);
+            }
+            function closePalette() {
+                if (palette) palette.hidden = true;
+                paletteResults.innerHTML = '';
+                paletteItems = [];
+                paletteIndex = -1;
+            }
+            document.addEventListener('keydown', function (e) {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                    e.preventDefault();
+                    palette && palette.hidden ? openPalette() : closePalette();
+                }
+            });
+            if (paletteInput) {
+                paletteInput.addEventListener('input', function () {
+                    clearTimeout(paletteTimer);
+                    var q = paletteInput.value.trim();
+                    if (q.length < 1) {
+                        paletteResults.innerHTML = '';
+                        paletteItems = [];
+                        paletteIndex = -1;
+                        return;
+                    }
+                    paletteTimer = setTimeout(function () { searchPalette(q); }, 220);
+                });
+                paletteInput.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape') { e.preventDefault(); closePalette(); return; }
+                    if (e.key === 'ArrowDown') { e.preventDefault(); moveIndex(1); return; }
+                    if (e.key === 'ArrowUp') { e.preventDefault(); moveIndex(-1); return; }
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (paletteIndex >= 0 && paletteItems[paletteIndex]) {
+                            window.location.href = paletteItems[paletteIndex].href;
+                        }
+                    }
+                });
+            }
+
+            function moveIndex(delta) {
+                if (!paletteItems.length) return;
+                paletteIndex = (paletteIndex + delta + paletteItems.length) % paletteItems.length;
+                renderPaletteHighlight();
+            }
+            function renderPaletteHighlight() {
+                var nodes = paletteResults.querySelectorAll('.palette-item');
+                nodes.forEach(function (node, i) {
+                    node.classList.toggle('active', i === paletteIndex);
+                });
+                var active = nodes[paletteIndex];
+                if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest' });
+            }
+            function searchPalette(q) {
+                fetch(base + '/admin/search.json?q=' + encodeURIComponent(q), {
+                    headers: { 'X-Requested-With': 'fetch' },
+                    credentials: 'same-origin'
+                }).then(function (res) {
+                    return res.json();
+                }).then(function (data) {
+                    if (!data || !data.groups) return;
+                    paletteItems = [];
+                    paletteIndex = -1;
+                    var html = '';
+                    var empty = true;
+                    data.groups.forEach(function (group) {
+                        if (!group.items || !group.items.length) return;
+                        empty = false;
+                        html += '<div class="palette-group">' + escapeHtml(group.label) + '</div>';
+                        group.items.forEach(function (item) {
+                            paletteItems.push({ href: item.href });
+                            html += '<a class="palette-item" href="' + escapeAttr(item.href) + '">'
+                                + '<span class="pi-kind">' + escapeHtml(item.kind) + '</span>'
+                                + '<span class="pi-title">' + escapeHtml(item.title) + '</span></a>';
+                        });
+                    });
+                    if (empty) {
+                        html = '<div class="palette-empty">No matches for “' + escapeHtml(q) + '”.</div>';
+                    }
+                    paletteResults.innerHTML = html;
+                    paletteResults.querySelectorAll('.palette-item').forEach(function (node, i) {
+                        node.addEventListener('click', function () { paletteIndex = i; });
+                    });
+                }).catch(function () {
+                    paletteResults.innerHTML = '<div class="palette-empty">Search is unavailable right now.</div>';
+                });
+            }
+
+            function escapeHtml(s) {
+                return String(s).replace(/[&<>"']/g, function (c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+                });
+            }
+            function escapeAttr(s) {
+                return String(s).replace(/["&]/g, function (c) {
+                    return { '&': '&amp;', '"': '&quot;' }[c];
+                });
+            }
+
+            // --- Remembered collapsible sections ---
+            document.querySelectorAll('details.sys-card[data-collapse-key]').forEach(function (details) {
+                var key = 'admin-collapse-' + details.getAttribute('data-collapse-key');
+                try {
+                    var saved = localStorage.getItem(key);
+                    if (saved === 'closed') details.removeAttribute('open');
+                } catch (ignore) {}
+                details.addEventListener('toggle', function () {
+                    try {
+                        localStorage.setItem(key, details.hasAttribute('open') ? 'open' : 'closed');
+                    } catch (ignore) {}
+                });
+            });
+        })();
+    </script>
+
+    <script>
         (function () {
             'use strict';
             var wakeLock = null;

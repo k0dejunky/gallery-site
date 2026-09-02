@@ -78,6 +78,8 @@ class AdminController extends Controller
             'topContentStats' => \App\Models\Stats::topContent(5),
             'planDistribution' => \App\Models\Stats::planDistribution(),
             'supportStats' => \App\Models\Stats::supportStats(),
+            'autopostFailed' => \App\Models\AutoPostQueue::failed(6),
+            'autopostCounts' => \App\Models\AutoPostQueue::statusCounts(),
         ]);
     }
 
