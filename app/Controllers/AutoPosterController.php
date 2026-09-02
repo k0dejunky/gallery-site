@@ -368,7 +368,64 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
     }
 
     /**
-     * Schedule a recorded post to publish again later (from the Recent posts
+     * Edit a failed post and then either publish it right away or schedule it
+     * (from the Recent posts list). The edited wording is copied into a fresh
+     * queue row, so the original failed row is left untouched for reference.
+     * Dispatch is done via the submitted "action" field (repost | reschedule).
+     */
+    public function editPosted(): void
+    {
+        $id          = (int) $this->request->post('post_id', 0);
+        $action      = (string) $this->request->post('action', 'repost');
+        $text        = (string) $this->request->post('text', '');
+        $scheduledAt = (string) $this->request->post('scheduled_at', '');
+        $src         = AutoPostQueue::find($id);
+
+        if ($id <= 0 || $src === null) {
+            $this->flash('error', 'Post not found.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        $newId = AutoPostQueue::requeueFrom($id, $scheduledAt, $text);
+        if ($newId <= 0) {
+            $this->flash('error', $action === 'reschedule'
+                ? 'Could not schedule that post — use a valid date and time.'
+                : 'Could not re-queue that post.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        if ($action === 'reschedule') {
+            AuditLog::record(
+                (int) Auth::user()['id'],
+                'create',
+                'auto_post_queue',
+                $newId,
+                'Scheduled edited repost of #' . $id . ' as #' . $newId
+            );
+            $this->flash('success', 'Scheduled to publish again with your edited text — see the Posting queue.');
+            $this->redirect('/admin/auto-poster');
+            return;
+        }
+
+        $result = AutoPostQueue::post($newId);
+
+        AuditLog::record(
+            (int) Auth::user()['id'],
+            'create',
+            'auto_post_queue',
+            $newId,
+            'Reposted edited item #' . $id . ' as #' . $newId . ($result['ok'] ? '' : ': ' . ($result['error'] ?? ''))
+        );
+
+        $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
+            ? 'Reposted to X: ' . ($result['url'] ?? '')
+            : (empty($result['skipped']) ? 'Repost failed: ' : 'Not reposted — ') . ($result['error'] ?? 'Unknown error'));
+        $this->redirect('/admin/auto-poster');
+    }
+
+    /**
      * list): copies its text + media into a fresh queued row at the chosen
      * time, where the autopost cron publishes it.
      */

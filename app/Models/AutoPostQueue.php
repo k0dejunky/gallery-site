@@ -440,10 +440,12 @@ class AutoPostQueue
     /**
      * Copy a recorded post (posted/failed/skipped row) into a fresh queued
      * row so it can be reposted or rescheduled, preserving its text, media
-     * set, gallery and platform. An empty schedule means "due immediately".
-     * Returns the new queue id, or 0 when the source row is missing.
+     * set, gallery and platform. Pass an optional $text to override the stored
+     * wording (e.g. to edit a failed post before reposting). An empty schedule
+     * means "due immediately". Returns the new queue id, or 0 when the source
+     * row is missing.
      */
-    public static function requeueFrom(int $sourceId, ?string $scheduledAt = null): int
+    public static function requeueFrom(int $sourceId, ?string $scheduledAt = null, ?string $text = null): int
     {
         $src = Database::run(
             'SELECT * FROM auto_poster_queue WHERE id = ? LIMIT 1',
@@ -459,6 +461,10 @@ class AutoPostQueue
             $scheduled = self::normalizeSchedule($scheduledAt) ?? self::defaultSchedule();
         }
 
+        $newText = ($text !== null && trim($text) !== '')
+            ? mb_substr(trim($text), 0, 280)
+            : (string) $src['text'];
+
         Database::run(
             'INSERT INTO auto_poster_queue
                 (platform, photo_id, gallery_id, media_ids, text, status, created_at, scheduled_at)
@@ -468,7 +474,7 @@ class AutoPostQueue
                 $src['photo_id'],
                 $src['gallery_id'],
                 $src['media_ids'],
-                (string) $src['text'],
+                $newText,
                 'queued',
                 $scheduled,
             ]

@@ -173,34 +173,61 @@ $twitter = $config['twitter'] ?? [];
                     $rpPill   = $rpStatus === 'posted' ? 'success' : ($rpStatus === 'failed' ? 'failed' : 'pending');
                     $rpTs     = strtotime((string) ($rp['posted_at'] ?? $rp['created_at'] ?? ''));
                     ?>
+                    <?php $rpEditable = $rpStatus === 'failed'; ?>
                     <tr>
                         <td><span class="ap-pill ap-pill-<?= e($rpPill) ?>"><span class="ap-dot"></span><?= e(ucfirst($rpStatus)) ?></span></td>
                         <td><?= e(ucfirst((string) ($rp['platform'] ?? ''))) ?></td>
                         <td class="muted" style="font-size:.8rem;"><?= e((string) $rp['gallery_title']) ?></td>
-                        <td style="max-width:320px;font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?= e((string) $rp['text']) ?>">
-                            <?php if ($rpStatus === 'posted' && !empty($rp['post_url'])): ?>
-                                <a href="<?= e((string) $rp['post_url']) ?>" target="_blank" rel="noopener" class="ap-link"><?= e((string) $rp['text']) ?></a>
-                            <?php else: ?>
-                                <?= e((string) $rp['text']) ?>
-                            <?php endif; ?>
-                        </td>
+                        <?php if ($rpEditable): ?>
+                            <?php // Failed posts: editable text so the wording can be fixed, then reposted/scheduled. ?>
+                            <td style="max-width:340px;font-size:.85rem;" class="rp-edit">
+                                <textarea name="text" form="ap-edit-<?= (int) $rp['id'] ?>" maxlength="280" rows="2"
+                                          style="width:100%;box-sizing:border-box;font-size:.85rem;font-family:inherit;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;"
+                                          aria-label="Editable text for post #<?= (int) $rp['id'] ?>"><?= e((string) $rp['text']) ?></textarea>
+                                <div class="muted" style="font-size:.72rem;margin-top:.15rem;">Edit the wording, then click Repost now or Reschedule.</div>
+                            </td>
+                        <?php else: ?>
+                            <td style="max-width:320px;font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?= e((string) $rp['text']) ?>">
+                                <?php if ($rpStatus === 'posted' && !empty($rp['post_url'])): ?>
+                                    <a href="<?= e((string) $rp['post_url']) ?>" target="_blank" rel="noopener" class="ap-link"><?= e((string) $rp['text']) ?></a>
+                                <?php else: ?>
+                                    <?= e((string) $rp['text']) ?>
+                                <?php endif; ?>
+                            </td>
+                        <?php endif; ?>
                         <td class="ap-time"><span class="muted"><?= $rpTs ? date('Y-m-d H:i', $rpTs) : '&mdash;' ?></span></td>
                         <td style="text-align:right;white-space:nowrap;">
-                            <form class="inline" method="post" action="<?= url('/admin/auto-poster/history/repost') ?>"
-                                  onsubmit="return confirm('Repost #<?= (int) $rp['id'] ?> to X now?');">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
-                                <button type="submit" class="btn btn-sm" title="Post the same content again right away">Repost</button>
-                            </form>
-                            <form class="inline" method="post" action="<?= url('/admin/auto-poster/history/reschedule') ?>">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
-                                <input type="datetime-local" name="scheduled_at"
+                            <?php if ($rpEditable): ?>
+                                <?php // One shared form; the textarea/schedule/buttons link to it via the HTML5 "form" attribute. ?>
+                                <form id="ap-edit-<?= (int) $rp['id'] ?>" method="post" action="<?= url('/admin/auto-poster/history/edit') ?>">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
+                                </form>
+                                <input type="datetime-local" name="scheduled_at" form="ap-edit-<?= (int) $rp['id'] ?>"
                                        value="<?= e(\App\Models\AutoPostQueue::displaySchedule($rp['scheduled_at'] ?? null)) ?>"
                                        style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;width:9.5rem;"
                                        aria-label="Schedule repost time for post #<?= (int) $rp['id'] ?>">
-                                <button type="submit" class="btn btn-sm" title="Queue to publish again at the chosen time">Reschedule</button>
-                            </form>
+                                <button type="submit" name="action" value="repost" form="ap-edit-<?= (int) $rp['id'] ?>"
+                                        class="btn btn-sm" title="Publish the edited text now">Repost now</button>
+                                <button type="submit" name="action" value="reschedule" form="ap-edit-<?= (int) $rp['id'] ?>"
+                                        class="btn btn-sm" title="Queue the edited text to publish at the chosen time">Reschedule</button>
+                            <?php else: ?>
+                                <form class="inline" method="post" action="<?= url('/admin/auto-poster/history/repost') ?>"
+                                      onsubmit="return confirm('Repost #<?= (int) $rp['id'] ?> to X now?');">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
+                                    <button type="submit" class="btn btn-sm" title="Post the same content again right away">Repost</button>
+                                </form>
+                                <form class="inline" method="post" action="<?= url('/admin/auto-poster/history/reschedule') ?>">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
+                                    <input type="datetime-local" name="scheduled_at"
+                                           value="<?= e(\App\Models\AutoPostQueue::displaySchedule($rp['scheduled_at'] ?? null)) ?>"
+                                           style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;width:9.5rem;"
+                                           aria-label="Schedule repost time for post #<?= (int) $rp['id'] ?>">
+                                    <button type="submit" class="btn btn-sm" title="Queue to publish again at the chosen time">Reschedule</button>
+                                </form>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>
