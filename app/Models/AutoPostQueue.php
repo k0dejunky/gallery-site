@@ -43,7 +43,7 @@ class AutoPostQueue
      * temp copy; source files and web variants are never modified. Videos are
      * untouched.
      */
-    public const POST_IMAGE_BLUR_PERCENT = 100;
+    public const POST_IMAGE_BLUR_PERCENT = 75;
 
     /**
      * How many random still frames are captured from a video and posted as

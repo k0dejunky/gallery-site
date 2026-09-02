@@ -181,7 +181,7 @@ class SmokeChecks
                 : $bad('auto-post queue must upload the web-optimized image variant');
         });
         $add('smoke.ap.blur', 'Smoke · Auto Poster', 'Attached images blurred 75% before posting', static function () use ($apq, $ok, $bad): array {
-            return strpos($apq, 'create_blurred_copy') !== false && strpos($apq, 'POST_IMAGE_BLUR_PERCENT = 100') !== false
+            return strpos($apq, 'create_blurred_copy') !== false && strpos($apq, 'POST_IMAGE_BLUR_PERCENT = 75') !== false
                 ? $ok('75% blur')
                 : $bad('auto-post queue must blur attached images (75%) before posting');
         });
