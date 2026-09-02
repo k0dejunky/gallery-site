@@ -228,6 +228,8 @@ return [
     ['POST', '/admin/auto-poster/queue/recommend', 'AutoPosterController@queueRecommendation'],
     ['POST', '/admin/auto-poster/queue/post', 'AutoPosterController@postQueued'],
     ['POST', '/admin/auto-poster/queue/retry', 'AutoPosterController@retryQueued'],
+    ['POST', '/admin/auto-poster/history/repost', 'AutoPosterController@repostPosted'],
+    ['POST', '/admin/auto-poster/history/reschedule', 'AutoPosterController@reschedulePosted'],
     ['POST', '/admin/auto-poster/queue/post-all', 'AutoPosterController@postAllQueued'],
     ['POST', '/admin/auto-poster/queue/schedule', 'AutoPosterController@rescheduleQueued'],
     ['POST', '/admin/auto-poster/queue/dismiss', 'AutoPosterController@dismissQueued'],

@@ -145,6 +145,71 @@ $twitter = $config['twitter'] ?? [];
     <?php endif; ?>
 </div>
 
+<?php // ----- Recent posts: repost or reschedule a past post ----- ?>
+<div class="stats-panel" style="margin-bottom:1rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+        <h2>Recent posts</h2>
+        <span class="muted" style="font-size:.85rem;">Re-publish a past post now, or schedule it to go out again later.</span>
+    </div>
+    <?php if (empty($recentPosts)): ?>
+        <p class="muted">No posts recorded yet — posted, failed and skipped items will appear here.</p>
+    <?php else: ?>
+        <div style="overflow-x:auto;">
+            <table class="ap-table">
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Platform</th>
+                        <th>Gallery</th>
+                        <th>Text</th>
+                        <th>Posted</th>
+                        <th style="text-align:right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($recentPosts as $rp): ?>
+                    <?php
+                    $rpStatus = (string) ($rp['status'] ?? 'posted');
+                    $rpPill   = $rpStatus === 'posted' ? 'success' : ($rpStatus === 'failed' ? 'failed' : 'pending');
+                    $rpTs     = strtotime((string) ($rp['posted_at'] ?? $rp['created_at'] ?? ''));
+                    ?>
+                    <tr>
+                        <td><span class="ap-pill ap-pill-<?= e($rpPill) ?>"><span class="ap-dot"></span><?= e(ucfirst($rpStatus)) ?></span></td>
+                        <td><?= e(ucfirst((string) ($rp['platform'] ?? ''))) ?></td>
+                        <td class="muted" style="font-size:.8rem;"><?= e((string) $rp['gallery_title']) ?></td>
+                        <td style="max-width:320px;font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?= e((string) $rp['text']) ?>">
+                            <?php if ($rpStatus === 'posted' && !empty($rp['post_url'])): ?>
+                                <a href="<?= e((string) $rp['post_url']) ?>" target="_blank" rel="noopener" class="ap-link"><?= e((string) $rp['text']) ?></a>
+                            <?php else: ?>
+                                <?= e((string) $rp['text']) ?>
+                            <?php endif; ?>
+                        </td>
+                        <td class="ap-time"><span class="muted"><?= $rpTs ? date('Y-m-d H:i', $rpTs) : '&mdash;' ?></span></td>
+                        <td style="text-align:right;white-space:nowrap;">
+                            <form class="inline" method="post" action="<?= url('/admin/auto-poster/history/repost') ?>"
+                                  onsubmit="return confirm('Repost #<?= (int) $rp['id'] ?> to X now?');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
+                                <button type="submit" class="btn btn-sm" title="Post the same content again right away">Repost</button>
+                            </form>
+                            <form class="inline" method="post" action="<?= url('/admin/auto-poster/history/reschedule') ?>">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
+                                <input type="datetime-local" name="scheduled_at"
+                                       value="<?= e(\App\Models\AutoPostQueue::displaySchedule($rp['scheduled_at'] ?? null)) ?>"
+                                       style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;width:9.5rem;"
+                                       aria-label="Schedule repost time for post #<?= (int) $rp['id'] ?>">
+                                <button type="submit" class="btn btn-sm" title="Queue to publish again at the chosen time">Reschedule</button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+</div>
+
 <div class="stats-grid">
     <?php // ----- Reddit credentials ----- ?>
     <div class="stats-panel">
