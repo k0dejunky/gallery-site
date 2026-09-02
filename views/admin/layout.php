@@ -296,6 +296,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh;
             background: rgba(20, 12, 30, .5);
         }
+        .palette-overlay[hidden] { display: none; }
         .palette {
             width: min(560px, 92vw); background: var(--pink-100); color: var(--purple-900);
             border: 1px solid var(--pink-400); border-radius: var(--border-radius-lg);
