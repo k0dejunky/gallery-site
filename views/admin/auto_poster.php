@@ -317,6 +317,11 @@ $twitter = $config['twitter'] ?? [];
     .ap-log-head h2 { margin: 0; font-size: 1.05rem; color: var(--purple-800); border: 0; padding: 0; }
     .ap-log-summary { font-size: .8rem; color: var(--purple-700); }
     .ap-log-empty { padding: 1.25rem 1.1rem; font-size: .9rem; color: var(--purple-800); opacity: .75; }
+    .ap-log details.ap-log-card > summary { cursor: pointer; list-style: none; user-select: none; }
+    .ap-log details.ap-log-card > summary::-webkit-details-marker { display: none; }
+    .ap-log details.ap-log-card > summary::after { content: '▾'; margin-left: auto; font-size: .8rem; color: var(--purple-600); transition: transform .15s ease; }
+    .ap-log details.ap-log-card:not([open]) > summary::after { transform: rotate(-90deg); }
+    .ap-log-body { border-top: 1px solid var(--pink-300); }
     .ap-log .ap-table { width: 100%; border-collapse: collapse; }
     .ap-log .ap-table th { text-align: left; padding: .5rem .75rem; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--purple-700); border-bottom: 2px solid var(--pink-300); white-space: nowrap; }
     .ap-log .ap-table td { padding: .6rem .75rem; border-bottom: 1px solid rgba(244,114,182,.25); vertical-align: middle; font-size: .88rem; color: var(--purple-800); }
@@ -343,19 +348,16 @@ $twitter = $config['twitter'] ?? [];
     }
 </style>
 <div class="stats-panel ap-log">
-    <div class="ap-log-card">
-        <div class="ap-log-head">
+    <details class="ap-log-card" open>
+        <summary class="ap-log-head">
             <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
                 <h2>Posting log</h2>
                 <?php $logCount  = count($log); ?>
                 <?php $logOk     = count(array_filter($log, fn($l) => ($l['status'] ?? '') === 'success')); ?>
                 <span class="ap-log-summary"><?= (int) $logCount ?> entries &middot; <?= (int) $logOk ?> succeeded &middot; <?= (int) ($logCount - $logOk) ?> failed</span>
             </div>
-            <form method="post" action="<?= url('/admin/auto-poster/clear-log') ?>" onsubmit="return confirm('Clear the entire posting log?');">
-                <?= csrf_field() ?>
-                <button type="submit" class="btn btn-sm btn-danger">Clear Log</button>
-            </form>
-        </div>
+        </summary>
+        <div class="ap-log-body">
         <?php if (empty($log)): ?>
             <div class="ap-log-empty">No posts have been made yet.</div>
         <?php else: ?>
@@ -404,7 +406,14 @@ $twitter = $config['twitter'] ?? [];
                 </table>
             </div>
         <?php endif; ?>
-    </div>
+            <div style="padding:.6rem 1.1rem;text-align:right;border-top:1px solid var(--pink-300);">
+                <form method="post" action="<?= url('/admin/auto-poster/clear-log') ?>" onsubmit="return confirm('Clear the entire posting log?');">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="btn btn-sm btn-danger">Clear Log</button>
+                </form>
+            </div>
+        </div>
+    </details>
 </div>
 
 <script>

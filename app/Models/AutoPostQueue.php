@@ -413,6 +413,65 @@ class AutoPostQueue
     }
 
     /**
+     * Recent post history: the newest posted, failed and skipped rows, joined
+     * to their gallery so the admin can repost or reschedule them. Dismissed
+     * rows are excluded.
+     */
+    public static function recentPosts(int $limit = 20): array
+    {
+        $limit = max(1, min(100, $limit));
+
+        return Database::run(
+            "SELECT q.*, COALESCE(g.title, '') AS gallery_title
+             FROM auto_poster_queue q
+             LEFT JOIN galleries g ON g.id = q.gallery_id
+             WHERE q.status IN ('posted', 'failed', 'skipped')
+             ORDER BY COALESCE(q.posted_at, q.created_at) DESC, q.id DESC
+             LIMIT $limit"
+        )->fetchAll();
+    }
+
+    /**
+     * Copy a recorded post (posted/failed/skipped row) into a fresh queued
+     * row so it can be reposted or rescheduled, preserving its text, media
+     * set, gallery and platform. An empty schedule means "due immediately".
+     * Returns the new queue id, or 0 when the source row is missing.
+     */
+    public static function requeueFrom(int $sourceId, ?string $scheduledAt = null): int
+    {
+        $src = Database::run(
+            'SELECT * FROM auto_poster_queue WHERE id = ? LIMIT 1',
+            [$sourceId]
+        )->fetch();
+
+        if (!$src) {
+            return 0;
+        }
+
+        $scheduled = null;
+        if (trim((string) $scheduledAt) !== '') {
+            $scheduled = self::normalizeSchedule($scheduledAt) ?? self::defaultSchedule();
+        }
+
+        Database::run(
+            'INSERT INTO auto_poster_queue
+                (platform, photo_id, gallery_id, media_ids, text, status, created_at, scheduled_at)
+             VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)',
+            [
+                (string) $src['platform'],
+                $src['photo_id'],
+                $src['gallery_id'],
+                $src['media_ids'],
+                (string) $src['text'],
+                'queued',
+                $scheduled,
+            ]
+        );
+
+        return (int) Database::connection()->lastInsertId();
+    }
+
+    /**
      * Whether a queue item's platform has an authorized API connection ready
      * for posting. A platform is authorized only when its credentials are
      * configured AND the OAuth user authorization (refresh token) has been
