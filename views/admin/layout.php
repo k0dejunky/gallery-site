@@ -414,7 +414,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
         <div class="palette" role="dialog" aria-modal="true" aria-label="Quick navigation">
             <input type="search" id="palette-input" class="palette-input" placeholder="Search galleries, users, plans, pages…  (Esc to close)" autocomplete="off">
             <div class="palette-list" id="palette-results"></div>
-            <div class="palette-hint">↑↓ to navigate · Enter to open · Esc to close</div>
+            <div class="palette-hint">Ctrl+K or / to open · ↑↓ navigate · Enter open · Esc close</div>
         </div>
     </div>
 
@@ -656,12 +656,46 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
                 paletteItems = [];
                 paletteIndex = -1;
             }
+            function isTypingTarget(e) {
+                var t = e.target;
+                if (!t || !t.tagName) return false;
+                var name = t.tagName.toLowerCase();
+                return name === 'input' || name === 'textarea' || t.isContentEditable;
+            }
             document.addEventListener('keydown', function (e) {
-                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                var k = e.key.toLowerCase();
+
+                // Ctrl/Cmd+K toggles the palette.
+                if ((e.ctrlKey || e.metaKey) && k === 'k') {
                     e.preventDefault();
-                    palette && palette.hidden ? openPalette() : closePalette();
+                    if (palette && palette.hidden) openPalette();
+                    else closePalette();
+                    return;
+                }
+
+                // "/" opens the palette unless the user is typing somewhere.
+                if (k === '/' && !isTypingTarget(e)) {
+                    e.preventDefault();
+                    openPalette();
+                    return;
+                }
+
+                // Escape closes whichever layer is open: the palette first,
+                // then the mobile nav drawer. Works regardless of focus.
+                if (e.key === 'Escape') {
+                    if (palette && !palette.hidden) {
+                        e.preventDefault();
+                        closePalette();
+                    } else {
+                        setNav(false);
+                    }
                 }
             });
+            if (palette) {
+                palette.addEventListener('click', function (e) {
+                    if (e.target === palette) closePalette();
+                });
+            }
             if (paletteInput) {
                 paletteInput.addEventListener('input', function () {
                     clearTimeout(paletteTimer);
@@ -675,7 +709,6 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
                     paletteTimer = setTimeout(function () { searchPalette(q); }, 220);
                 });
                 paletteInput.addEventListener('keydown', function (e) {
-                    if (e.key === 'Escape') { e.preventDefault(); closePalette(); return; }
                     if (e.key === 'ArrowDown') { e.preventDefault(); moveIndex(1); return; }
                     if (e.key === 'ArrowUp') { e.preventDefault(); moveIndex(-1); return; }
                     if (e.key === 'Enter') {
