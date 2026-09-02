@@ -413,7 +413,7 @@ CREATE TABLE IF NOT EXISTS auto_poster_queue (
     gallery_id  INT UNSIGNED NULL,
     media_ids   VARCHAR(400) NULL,
     text        VARCHAR(280) NOT NULL,
-    status      ENUM('queued','posted','failed','dismissed') NOT NULL DEFAULT 'queued',
+    status      ENUM('queued','posted','failed','dismissed','skipped') NOT NULL DEFAULT 'queued',
     post_url    VARCHAR(500) NULL,
     error       VARCHAR(500) NULL,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

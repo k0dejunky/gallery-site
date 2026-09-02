@@ -474,7 +474,7 @@ class AutoPosterController extends Controller
 
         $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
             ? 'Posted to X: ' . ($result['url'] ?? '')
-            : 'Post failed: ' . ($result['error'] ?? 'Unknown error'));
+            : (empty($result['skipped']) ? 'Post failed: ' : 'Not sent — ') . ($result['error'] ?? 'Unknown error'));
         $this->redirect('/admin/auto-poster');
     }
 
@@ -529,7 +529,7 @@ class AutoPosterController extends Controller
 
         $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
             ? 'Posted to X: ' . ($result['url'] ?? '')
-            : 'Post failed: ' . ($result['error'] ?? 'Unknown error'));
+            : (empty($result['skipped']) ? 'Post failed: ' : 'Not sent — ') . ($result['error'] ?? 'Unknown error'));
         $this->redirect('/admin/auto-poster');
     }
 
@@ -540,24 +540,31 @@ class AutoPosterController extends Controller
     public function postAllQueued(): void
     {
         $items = AutoPostQueue::queued(50);
-        $posted = 0;
-        $failed = 0;
+        $posted  = 0;
+        $skipped = 0;
+        $failed  = 0;
 
         foreach ($items as $item) {
             $result = AutoPostQueue::post((int) $item['id']);
             if ($result['ok']) {
                 $posted++;
+            } elseif (!empty($result['skipped'])) {
+                $skipped++;
             } else {
                 $failed++;
                 break;
             }
         }
 
-        $this->flash($failed === 0 ? 'success' : 'error', sprintf(
-            'Posted %d queued post(s).%s',
-            $posted,
-            $failed > 0 ? ' Stopped after a failure: ' . (string) ($result['error'] ?? '') : ''
-        ));
+        $summary = 'Posted ' . $posted . ' queued post(s).';
+        if ($skipped > 0) {
+            $summary .= ' Skipped ' . $skipped . ' (platform not authorized).';
+        }
+        if ($failed > 0) {
+            $summary .= ' Stopped after a failure: ' . (string) ($result['error'] ?? '');
+        }
+
+        $this->flash($failed === 0 ? 'success' : 'error', $summary);
         $this->redirect('/admin/auto-poster');
     }
 

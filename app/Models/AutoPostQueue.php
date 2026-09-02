@@ -413,6 +413,41 @@ class AutoPostQueue
     }
 
     /**
+     * Whether a queue item's platform has an authorized API connection ready
+     * for posting. A platform is authorized only when its credentials are
+     * configured AND the OAuth user authorization (refresh token) has been
+     * completed. Unauthorized platforms are skipped by the worker instead of
+     * being attempted (and failing) every cron tick.
+     */
+    public static function platformAuthorized(string $platform): bool
+    {
+        $config = AutoPosterConfig::all();
+        $cfg    = $config[$platform] ?? [];
+
+        $client = match ($platform) {
+            'twitter' => new TwitterClient($cfg),
+            'reddit'  => new RedditClient($cfg),
+            default   => null,
+        };
+
+        return $client !== null && $client->isConfigured() && $client->isUserAuthorized();
+    }
+
+    /**
+     * Move a queued post to the skipped state (platform not authorized). The
+     * row stays recorded for review but is never attempted again.
+     */
+    public static function markSkipped(int $id, string $note = ''): bool
+    {
+        $row = Database::run(
+            'UPDATE auto_poster_queue SET status = ?, error = ?, posted_at = NULL WHERE id = ?',
+            ['skipped', $note, $id]
+        );
+
+        return $row->rowCount() > 0;
+    }
+
+    /**
      * Resolve the file to attach to a post for a stored photo. Prefers the
      * web-optimized variant (web_<file>, or its WebP copy) so uploads stay well
      * under X's 5 MB image cap; falls back to the original file when no web
@@ -441,7 +476,7 @@ class AutoPostQueue
     /**
      * Status breakdown for the queue summary cards.
      *
-     * @return array{queued: int, posted: int, failed: int, dismissed: int}
+     * @return array{queued: int, posted: int, failed: int, dismissed: int, skipped: int}
      */
     public static function statusCounts(): array
     {
@@ -449,7 +484,7 @@ class AutoPostQueue
             'SELECT status, COUNT(*) AS c FROM auto_poster_queue GROUP BY status'
         )->fetchAll();
 
-        $counts = ['queued' => 0, 'posted' => 0, 'failed' => 0, 'dismissed' => 0];
+        $counts = ['queued' => 0, 'posted' => 0, 'failed' => 0, 'dismissed' => 0, 'skipped' => 0];
 
         foreach ($rows as $row) {
             if (isset($counts[$row['status']])) {
@@ -606,6 +641,19 @@ class AutoPostQueue
             return ['ok' => false, 'error' => 'Queue item not found or already processed.'];
         }
 
+        $platform = (string) $item['platform'];
+
+        // Only send to platforms with an authorized API connection. An
+        // unauthorized platform is skipped (recorded, never attempted) rather
+        // than failed, so the autopost cron stays healthy.
+        if (!self::platformAuthorized($platform)) {
+            $note = ucfirst($platform) . ' is not authorized — skipped.';
+            self::markSkipped((int) $item['id'], $note);
+            AutoPosterConfig::log($platform, '', 'skipped', $note);
+
+            return ['ok' => false, 'skipped' => true, 'error' => $note];
+        }
+
         $media    = [];
         $blurredTmp = [];
         foreach (self::mediaFiles($item) as $photo) {
@@ -637,7 +685,6 @@ class AutoPostQueue
         }
 
         $config   = AutoPosterConfig::all();
-        $platform = $item['platform'];
 
         $result = match ($platform) {
             'twitter' => (new TwitterClient($config['twitter']))->post((string) $item['text'], $media),

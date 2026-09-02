@@ -69,7 +69,8 @@ $twitter = $config['twitter'] ?? [];
             <span class="muted" style="font-size:.85rem;">
                 <?= number_format((int) $queueCounts['queued']) ?> queued &middot;
                 <?= number_format((int) $queueCounts['posted']) ?> posted &middot;
-                <?= number_format((int) $queueCounts['failed']) ?> failed
+                <?= number_format((int) $queueCounts['failed']) ?> failed &middot;
+                <?= number_format((int) $queueCounts['skipped']) ?> skipped
             </span>
             <?php if (!empty($queue) && count($queue) > 0): ?>
                 <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/post-all') ?>"

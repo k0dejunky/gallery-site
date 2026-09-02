@@ -328,12 +328,13 @@ class SmokeChecks
                 ? $ok('cron status logic present')
                 : $bad('system controller must assemble cron-jobs status from log files');
         });
-        $add('smoke.sys.schedule_form', 'Smoke · System', 'System view offers super-admin cron schedule config form', static function () use ($systemView, $ok, $bad): array {
-            return strpos($systemView, 'Configure schedules') !== false
-                && stripos($systemView, 'save &amp; apply schedules') !== false
+        $add('smoke.sys.schedule_form', 'Smoke · System', 'System view offers per-job super-admin cron schedule cards', static function () use ($systemView, $ok, $bad): array {
+            return strpos($systemView, 'cron-card') !== false
+                && stripos($systemView, 'save &amp; apply') !== false
                 && strpos($systemView, 'cron_housekeeping_min') !== false && strpos($systemView, 'cron_backup_hour') !== false
                 && strpos($systemView, 'cron_drill_dow') !== false
-                ? $ok('schedule form present')
+                && strpos($systemView, 'admin/system/cron-schedule/') !== false
+                ? $ok('per-job schedule cards present')
                 : $bad('system view must offer a super-admin cron schedule config form');
         });
         $add('smoke.sys.schedule_save', 'Smoke · System', 'System controller saves + applies schedules for super admin', static function () use ($systemCtrl, $ok, $bad): array {

@@ -190,6 +190,7 @@
                 foreach ($cronJobs as $cronJob) {
                     $cronCardStates[$cronJob['id']] = $cronJob;
                 }
+                $cronMinFields = ['housekeeping' => 'cron_housekeeping_min', 'autopost' => 'cron_autopost_min'];
             ?>
             <div class="cron-card-grid">
                 <?php foreach ($cronCardJobs as $cronCardId => $cronCard): ?>
@@ -220,7 +221,7 @@
                                 <div class="cron-fields">
                                     <?php if ($cronCardId === 'housekeeping' || $cronCardId === 'autopost'): ?>
                                         every
-                                        <input type="number" name="cron_<?= e($cronCardId) ?>_min" min="1" max="1440"
+                                        <input type="number" name="<?= e($cronMinFields[$cronCardId]) ?>" min="1" max="1440"
                                                value="<?= (int) ($cronSchedule[$cronCardId]['every_minutes'] ?? ($cronCardId === 'housekeeping' ? 15 : 1)) ?>"
                                                aria-label="<?= e($cronCard[0]) ?> interval in minutes">
                                         <span class="muted">min</span>

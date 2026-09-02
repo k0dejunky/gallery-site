@@ -53,10 +53,13 @@ do {
             $result = AutoPostQueue::post((int) $item['id']);
 
             error_log(sprintf(
-                '[autopost] queue #%d: %s%s',
+                '[autopost] queue #%d: %s',
                 (int) $item['id'],
-                $result['ok'] ? 'posted ' . ($result['url'] ?? '') : 'failed: ' . ($result['error'] ?? 'unknown'),
-                ''
+                $result['ok']
+                    ? 'posted ' . ($result['url'] ?? '')
+                    : (empty($result['skipped'])
+                        ? 'failed: ' . ($result['error'] ?? 'unknown')
+                        : 'skipped: ' . ($result['error'] ?? 'platform not authorized'))
             ));
         }
     } catch (Throwable $error) {
