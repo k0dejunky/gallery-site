@@ -201,8 +201,8 @@ class SmokeChecks
                 ? $ok('CTA present')
                 : $bad('auto-post recommendations must carry the call-to-action text');
         });
-        $add('smoke.ap.tags', 'Smoke · Auto Poster', 'Recommendations tag up to 10 categories', static function () use ($apq, $ok, $bad): array {
-            return strpos($apq, 'MAX_TAGS = 10') !== false ? $ok('MAX_TAGS = 10') : $bad('auto-post recommendations must tag up to 10 categories');
+        $add('smoke.ap.tags', 'Smoke · Auto Poster', 'Recommendations tag up to 20 categories', static function () use ($apq, $ok, $bad): array {
+            return strpos($apq, 'MAX_TAGS = 20') !== false ? $ok('MAX_TAGS = 20') : $bad('auto-post recommendations must tag up to 20 categories');
         });
         $apw = $read("$root/bin/autopost_worker.php");
         $add('smoke.ap.worker_due', 'Smoke · Auto Poster', 'Worker publishes due queue rows', static function () use ($apw, $ok, $bad): array {

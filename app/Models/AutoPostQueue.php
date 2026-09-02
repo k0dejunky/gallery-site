@@ -24,7 +24,7 @@ class AutoPostQueue
     public const POST_CTA = 'come visit my site to see what else I get myself into!! amethyst2213.com';
 
     /** Up to how many of a gallery's categories become post hashtags. */
-    public const MAX_TAGS = 10;
+    public const MAX_TAGS = 20;
 
     /** Minutes ahead of "now" a newly queued post is scheduled by default. */
     public const DEFAULT_SCHEDULE_MINUTES = 60;
@@ -127,7 +127,7 @@ class AutoPostQueue
     }
 
     /**
-     * Up to MAX_TAGS of a gallery's categories as hashtag words (first 10 in
+     * Up to MAX_TAGS of a gallery's categories as hashtag words (first 20 in
      * the gallery's category list, so every post carries the site's labels).
      *
      * @return list<string>
