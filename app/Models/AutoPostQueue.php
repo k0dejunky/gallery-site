@@ -46,6 +46,12 @@ class AutoPostQueue
     public const POST_IMAGE_BLUR_PERCENT = 75;
 
     /**
+     * How many random still frames are captured from a video and posted as
+     * blurred preview images (X rejects full-size videos on standard accounts).
+     */
+    public const VIDEO_SCREENSHOTS = 3;
+
+    /**
      * Recent galleries the queue will propose. A gallery with new uploads in
      * the last RECENT_WINDOW_DAYS becomes one recommended post (built from its
      * gallery title/description with up to 4 of its newest files attached).
@@ -725,7 +731,9 @@ class AutoPostQueue
             $isVideo = (int) $photo['is_video'] === 1;
 
             // Images get blurred in a throwaway temp copy (source is never
-            // overwritten); videos go through untouched.
+            // overwritten). Videos are too large for X on a standard account,
+            // so a few random frames are captured, blurred with the same
+            // preview blur, and posted as images instead of the video file.
             if (!$isVideo) {
                 $copy = create_blurred_copy($path, self::POST_IMAGE_BLUR_PERCENT);
 
@@ -733,6 +741,24 @@ class AutoPostQueue
                     $blurredTmp[] = $copy;
                     $path         = $copy;
                 }
+            } else {
+                $frames = self::videoScreenshots($path, self::VIDEO_SCREENSHOTS);
+
+                if ($frames !== []) {
+                    foreach ($frames as $frame) {
+                        $media[] = [
+                            'tmp_name' => $frame,
+                            'name'     => basename((string) $frame),
+                            'type'     => 'image/jpeg',
+                            'size'     => (int) filesize($frame),
+                        ];
+                        $blurredTmp[] = $frame;
+                    }
+                    continue;
+                }
+
+                // No screenshots could be extracted — fall back to the
+                // original file (previous behaviour).
             }
 
             $media[] = [
@@ -770,6 +796,82 @@ class AutoPostQueue
         }
 
         return $result;
+    }
+
+    /**
+     * Capture a few random still frames from a video, blur each with the same
+     * preview blur used for images, and return the temp JPEG paths for posting.
+     * Frames are scaled so the longest side is at most 1280 px (X images must
+     * be under 5 MB). Returns an empty list when ffmpeg is unavailable or the
+     * video cannot be decoded.
+     *
+     * @return list<string>
+     */
+    private static function videoScreenshots(string $path, int $count = 3): array
+    {
+        $ffmpeg  = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : null;
+        $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : null;
+
+        if ($ffmpeg === null) {
+            return [];
+        }
+
+        // Probe the duration (seconds) so frames are picked from across the
+        // clip rather than always the opening frames.
+        $duration = null;
+        if ($ffprobe !== null) {
+            exec(
+                escapeshellarg($ffprobe) . ' -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '
+                . escapeshellarg($path) . ' 2>/dev/null',
+                $durOut,
+                $rc
+            );
+            if ($rc === 0 && isset($durOut[0]) && is_numeric(trim($durOut[0]))) {
+                $duration = (float) trim($durOut[0]);
+            }
+        }
+
+        $count = max(1, min(4, $count));
+        $times = [];
+
+        if ($duration !== null && $duration > 3) {
+            $lo = max(0.5, $duration * 0.05);
+            $hi = max($lo + 1, $duration * 0.95);
+
+            for ($i = 0; $i < $count; $i++) {
+                $times[] = $lo + (($hi - $lo) * (mt_rand(0, 10000) / 10000));
+            }
+        } else {
+            for ($i = 0; $i < $count; $i++) {
+                $times[] = max(0.2, 0.6 + $i * 0.9);
+            }
+        }
+
+        $frames = [];
+
+        foreach ($times as $t) {
+            $tmp = tempnam(sys_get_temp_dir(), 'xframe') . '.jpg';
+
+            $cmd = escapeshellarg($ffmpeg) . ' -y -hide_banner -loglevel error -ss ' . escapeshellarg((string) $t)
+                . ' -i ' . escapeshellarg($path)
+                . ' -frames:v 1 -q:v 3 -vf scale=1280:-2:force_original_aspect_ratio=decrease '
+                . escapeshellarg($tmp) . ' 2>/dev/null';
+
+            exec($cmd, $o, $rc);
+
+            if ($rc === 0 && is_file($tmp) && (int) filesize($tmp) > 0) {
+                $blurred = create_blurred_copy($tmp, self::POST_IMAGE_BLUR_PERCENT);
+                @unlink($tmp);
+
+                if ($blurred !== null) {
+                    $frames[] = $blurred;
+                }
+            } else {
+                @unlink($tmp);
+            }
+        }
+
+        return $frames;
     }
 
     /**
