@@ -1,0 +1,25 @@
+{
+  "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+  "name": "amethyst2213nsfw",
+  "server": {
+    "dir": "dist/server",
+    "entry": "index.js",
+    "externalEndpoints": {
+      "onPublish": {
+        "endpoint": "/external/on/publish",
+        "scopes": [
+          "global"
+        ]
+      }
+    }
+  },
+  "permissions": {
+    "media": true,
+    "reddit": {
+      "enable": true
+    }
+  },
+  "dev": {
+    "subreddit": "amethyst2213nsfw_dev"
+  }
+}

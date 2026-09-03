@@ -1,0 +1,7 @@
+{
+  // Only build references.
+  "files": [],
+  "references": [
+    {"path": "./src/server/"}
+  ]
+}

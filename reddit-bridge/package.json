@@ -1,0 +1,22 @@
+{
+  "private": true,
+  "name": "amethyst2213nsfw",
+  "version": "0.0.0",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:server",
+    "build:server": "esbuild --bundle --log-level=warning --sourcemap=linked --target=es2023 --format=cjs --outdir=dist/server --platform=node src/server/index.ts",
+    "clean": "rm -rf dist/",
+    "typecheck": "tsc --build src/server"
+  },
+  "devDependencies": {
+    "@devvit/web": "0.14.2",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.28.0",
+    "typescript": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

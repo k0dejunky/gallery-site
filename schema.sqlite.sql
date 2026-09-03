@@ -275,6 +275,19 @@ CREATE TABLE IF NOT EXISTS auto_poster_log (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- User activity monitor: per-member login / logout / gallery-view events
+-- powering the admin User Monitor tab (see UserActivity model).
+CREATE TABLE IF NOT EXISTS user_activity (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER NOT NULL,
+    action       VARCHAR(20) NOT NULL,
+    gallery_id   INTEGER,
+    gallery_name VARCHAR(255),
+    ip           VARCHAR(45),
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 INSERT OR IGNORE INTO plans (name, slug, price, billing_cycle, description, sort_order, level, active) VALUES
     ('Silver', 'silver', 5.00, 'monthly', 'Full access for one month.', 1, 1, 1),
     ('Gold', 'gold', 10.00, 'monthly', 'Full access for one month.', 2, 2, 1),

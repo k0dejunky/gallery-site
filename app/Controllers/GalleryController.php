@@ -267,6 +267,14 @@ class GalleryController extends Controller
 
         if ($user !== null) {
             Gallery::recordView($id, (int) $user['id']);
+
+            \App\Models\UserActivity::record(
+                (int) $user['id'],
+                \App\Models\UserActivity::ACTION_VIEW,
+                $id,
+                (string) ($gallery['title'] ?? ''),
+                $this->request->ip()
+            );
         }
 
         // Paginate the grid so large galleries don't ship every item's markup

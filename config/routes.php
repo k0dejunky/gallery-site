@@ -165,6 +165,7 @@ return [
     ['GET', '/admin/error-logs', 'LogsController@errorIndex'],
     ['POST', '/admin/logs/{id}/rollback', 'LogsController@rollback'],
     ['POST', '/admin/logs/{id}/purge', 'LogsController@purgeGallery'],
+    ['GET', '/admin/user-monitor', 'UserMonitorController@index'],
 
     // Settings (logged in)
     ['GET', '/settings', 'SettingsController@show'],

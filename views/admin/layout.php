@@ -379,6 +379,9 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
                 <a class="nav-item <?= $navActive('/admin/site-editor') ?>" href="<?= url('/admin/site-editor') ?>">Site Editor</a>
             <?php endif; ?>
             <a class="nav-item <?= $navActive('/admin/logs') ?>" href="<?= url('/admin/logs') ?>">Logs</a>
+            <?php if (\App\Core\Auth::can('user_monitor')): ?>
+                <a class="nav-item <?= $navActive('/admin/user-monitor') ?>" href="<?= url('/admin/user-monitor') ?>">User Monitor</a>
+            <?php endif; ?>
             <a class="nav-item <?= $navActive('/admin/error-logs') ?>" href="<?= url('/admin/error-logs') ?>">Error Logs</a>
             <a class="nav-item <?= $navActive('/admin/system') ?>" href="<?= url('/admin/system') ?>">System</a>
             <a class="nav-item <?= $navActive('/admin/test-suite') ?>" href="<?= url('/admin/test-suite') ?>">Test suite</a>

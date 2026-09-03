@@ -484,20 +484,28 @@ class AutoPostQueue
     }
 
     /**
-     * Whether a queue item's platform has an authorized API connection ready
-     * for posting. A platform is authorized only when its credentials are
-     * configured AND the OAuth user authorization (refresh token) has been
-     * completed. Unauthorized platforms are skipped by the worker instead of
-     * being attempted (and failing) every cron tick.
+     * Whether a queue item's platform has an authorized connection ready for
+     * posting. Twitter/Reddit-OAuth require their credentials AND the OAuth
+     * user authorization (refresh token). Reddit via the Devvit bridge is
+     * authorized when its bridge endpoint + shared secret are configured (it
+     * does not need Reddit OAuth credentials). Unauthorized platforms are
+     * skipped by the worker instead of being attempted (and failing) every
+     * cron tick.
      */
     public static function platformAuthorized(string $platform): bool
     {
         $config = AutoPosterConfig::all();
         $cfg    = $config[$platform] ?? [];
 
+        if ($platform === 'reddit') {
+            // Bridge-driven reddit: no OAuth client needed, just the bridge.
+            return trim((string) ($cfg['devvit_endpoint'] ?? '')) !== ''
+                && trim((string) ($cfg['bridge_secret'] ?? '')) !== ''
+                && trim((string) ($cfg['subreddit'] ?? '')) !== '';
+        }
+
         $client = match ($platform) {
             'twitter' => new TwitterClient($cfg),
-            'reddit'  => new RedditClient($cfg),
             default   => null,
         };
 
@@ -779,6 +787,7 @@ class AutoPostQueue
 
         $result = match ($platform) {
             'twitter' => (new TwitterClient($config['twitter']))->post((string) $item['text'], $media),
+            'reddit'  => RedditBridge::publish((string) $item['text'], $media, $config['reddit']),
             default   => ['ok' => false, 'error' => 'Unsupported platform: ' . $platform],
         };
 

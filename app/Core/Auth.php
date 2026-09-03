@@ -6,6 +6,7 @@ use App\Core\Database;
 use App\Models\LoginAttempt;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Models\UserActivity;
 
 /**
  * Authentication helpers: session lifecycle, credential verification, login
@@ -16,9 +17,9 @@ class Auth
     public const ADMIN_ROLES = ['super_admin', 'admin', 'editor', 'moderator', 'viewer'];
     public const PERMISSIONS = [
         'super_admin' => ['*'],
-        'admin'      => ['dashboard', 'trends', 'galleries', 'videos', 'categories', 'users', 'membership', 'payments', 'theme', 'site_editor', 'logs', 'documentation', 'autoposter', 'support'],
+        'admin'      => ['dashboard', 'trends', 'galleries', 'videos', 'categories', 'users', 'membership', 'payments', 'theme', 'site_editor', 'logs', 'documentation', 'autoposter', 'support', 'user_monitor'],
         'editor'     => ['dashboard', 'trends', 'galleries', 'videos', 'categories', 'documentation'],
-        'moderator'  => ['dashboard', 'users', 'membership', 'logs', 'documentation'],
+        'moderator'  => ['dashboard', 'users', 'membership', 'logs', 'documentation', 'user_monitor'],
         'viewer'     => ['dashboard', 'trends', 'documentation'],
     ];
     /**
@@ -91,6 +92,8 @@ class Auth
             'UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?',
             [$userId]
         );
+
+        UserActivity::record($userId, UserActivity::ACTION_LOGIN, null, null, self::clientIp());
     }
 
     /**
@@ -409,8 +412,22 @@ class Auth
     public static function logout(): void
     {
         self::start();
+
+        $userId = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : 0;
+
+        UserActivity::record($userId, UserActivity::ACTION_LOGOUT, null, null, self::clientIp());
+
         $_SESSION = [];
         session_destroy();
+    }
+
+    /**
+     * Best-effort client IP for activity recording. Mirrors Request::ip()
+     * but keeps Auth decoupled from the Request object.
+     */
+    private static function clientIp(): string
+    {
+        return (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
     }
 
     /** Invalidate every session for one account, including the current one. */
