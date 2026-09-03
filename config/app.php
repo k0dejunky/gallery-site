@@ -21,7 +21,7 @@ return [
         // actually process (so uploads are never accepted then fail later
         // during thumbnail generation).
         'image_ext'    => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif', 'avif', 'tiff'],
-        'video_ext'    => ['mp4', 'webm', 'mov', 'm4v', 'ogg', 'avi', 'mkv'],
+        'video_ext'    => ['mp4', 'webm', 'mov', 'm4v', 'ogg', 'avi', 'mkv', '3gp', '3g2', 'mpg', 'mpeg', 'wmv', 'flv', 'ts', 'mts', 'm2ts', 'vob', 'asf'],
         // Thumbnail dimensions; images are center-cropped to this ratio.
         'thumb_width'  => 400,
         'thumb_height' => 300,

@@ -815,8 +815,13 @@ class GalleryController extends Controller
             'image/avif' => 'avif', 'image/tiff' => 'tiff', 'image/x-tiff' => 'tiff',
             'image/vnd.microsoft.icon' => 'ico', 'image/x-icon' => 'ico',
             'video/mp4' => 'mp4', 'video/webm' => 'webm', 'video/ogg' => 'ogg',
-            'video/quicktime' => 'mov', 'video/x-msvideo' => 'avi',
-            'video/x-matroska' => 'mkv',
+            'video/quicktime' => 'mov', 'video/x-quicktime' => 'mov',
+            'video/x-msvideo' => 'avi', 'video/avi' => 'avi',
+            'video/x-matroska' => 'mkv', 'video/x-m4v' => 'm4v',
+            'video/3gpp' => '3gp', 'video/3gpp2' => '3g2',
+            'video/mpeg' => 'mpg', 'video/x-mpeg' => 'mpg',
+            'video/x-ms-wmv' => 'wmv', 'video/x-ms-asf' => 'wmv', 'video/x-ms-wm' => 'wmv',
+            'video/x-flv' => 'flv', 'video/mp2t' => 'ts', 'video/mp2p' => 'ts',
         ];
 
         return $map[$mime] ?? 'bin';
