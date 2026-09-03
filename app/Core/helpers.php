@@ -1091,7 +1091,14 @@ function create_video_frame(string $src, string $dest, int $width, int $height, 
         $second % 60
     );
 
-    $cmd = escapeshellarg($ffmpeg) . ' -y -ss ' . escapeshellarg($time)
+    // Bounded thumbnail generation: wrap ffmpeg in `timeout` and keep it off
+    // stdin so a slow or pathological source (e.g. a large download with the
+    // moov atom at the end, which forces an expensive full-file scan before
+    // seeking) can never hang the upload request. The caller treats a missing
+    // thumbnail as non-fatal, so this prevents the FPM request timeout from
+    // marking the whole upload as "rejected by server".
+    $cmd = 'timeout 60 ' . escapeshellarg($ffmpeg) . ' -nostdin -y -ss '
+        . escapeshellarg($time)
         . ' -i ' . escapeshellarg($src)
         . ' -an -frames:v 1 -vf ' . escapeshellarg($filter)
         . ' -q:v 5 -f mjpeg ' . escapeshellarg($dest) . ' 2>&1';
