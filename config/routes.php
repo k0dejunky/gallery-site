@@ -65,7 +65,7 @@ return [
     ['GET', '/admin/categories/{id}/edit', 'CategoryController@edit'],
     ['POST', '/admin/categories/{id}', 'CategoryController@update'],
     ['POST', '/admin/categories/{id}/delete', 'CategoryController@destroy'],
-    ['GET', '/admin/galleries', 'GalleryController@index'],
+    ['GET', '/admin/galleries', 'AdminController@galleries'],
     ['GET', '/admin/galleries/create', 'GalleryController@create'],
     ['POST', '/admin/galleries/pending/upload', 'GalleryController@pendingUpload'],
     ['POST', '/admin/galleries/pending/chunk', 'GalleryController@chunkUpload'],

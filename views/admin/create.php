@@ -550,11 +550,9 @@
                         <td>
                             <?php // Manage = photo controls; Delete = confirm + remove. ?>
                             <a class="btn btn-sm" href="<?= url('/admin/galleries/' . (int) $gallery['id']) ?>">Manage</a>
-                            <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/delete') ?>"
-                                  onsubmit="return confirm('Delete this gallery and orphaned photos?');">
-                                <?= csrf_field() ?>
-                                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-                            </form>
+                            <button type="button" class="btn btn-sm btn-danger js-gallery-delete"
+                                    data-id="<?= (int) $gallery['id'] ?>"
+                                    data-title="<?= e((string) $gallery['title']) ?>">Delete</button>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -563,6 +561,17 @@
     </form>
     <script>
     (function () {
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest('.js-gallery-delete');
+            if (!btn) return;
+            e.preventDefault();
+            if (!confirm('Delete gallery "' + (btn.dataset.title || '') + '" and orphaned photos?')) return;
+            var fd = new FormData();
+            fd.append('_token', document.querySelector('#gallery-form input[name="_token"]').value);
+            fetch('<?= url('/admin/galleries') ?>/' + encodeURIComponent(btn.dataset.id) + '/delete', { method: 'POST', body: fd })
+                .then(function (r) { if (r.redirected || r.ok) { location.reload(); return; } return r.json().then(function (res) { alert((res && res.error) || 'Could not delete gallery.'); }); })
+                .catch(function () { alert('Could not delete gallery.'); });
+        });
         var all = document.getElementById('gallery-check-all');
         if (!all) return;
         all.addEventListener('change', function () {

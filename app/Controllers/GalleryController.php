@@ -1226,7 +1226,7 @@ class GalleryController extends Controller
         Gallery::softDelete($id);
 
         $this->flash('success', 'Gallery deleted. You can restore it from the admin logs.');
-        $this->redirect('/admin');
+        $this->redirect('/admin/galleries');
     }
 
     /**

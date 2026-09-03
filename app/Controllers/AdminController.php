@@ -83,6 +83,23 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Admin: list every gallery in one place with per-row Manage / Edit /
+     * Delete actions. This is the landing page for the dashboard's
+     * "Manage Galleries" quick action and the admin sidebar's
+     * "Gallery Management" item.
+     */
+    public function galleries(): void
+    {
+        Auth::requirePermission('galleries');
+        $galleries = Gallery::all();
+
+        $this->viewAdmin('galleries', [
+            'galleries'  => $galleries,
+            'categories' => Gallery::categoriesBulk(array_map('intval', array_column($galleries, 'id'))),
+        ]);
+    }
+
     public function login(): void
     {
         $email    = $this->request->input('email');
