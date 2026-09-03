@@ -1013,7 +1013,7 @@ BASH;
                 'Deleted backup ' . $name);
             $this->flash('success', 'Backup deleted.');
 
-            return;
+            $this->redirect('/admin/system');
         }
 
         // Split archive base name: remove every part plus its checksum file.
