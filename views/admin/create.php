@@ -189,6 +189,12 @@
     var pendingFiles = <?= json_encode($pendingFiles ?? [], JSON_UNESCAPED_SLASHES) ?> || [];
     var uploadQueue = [];
     var uploading = false;
+    // Files at/above CHUNK_MIN bytes are uploaded as CHUNK_SIZE chunks so a
+    // multi-GB video uploads as many small fast requests (resumable) instead
+    // of one long request the webserver/fastcgi timeouts would kill. Kept in
+    // sync with config/app.php => uploads => chunk_size / chunk_min.
+    var CHUNK_MIN = <?= (int) config('app.uploads.chunk_min') ?>;
+    var CHUNK_SIZE = <?= (int) config('app.uploads.chunk_size') ?>;
 
     function currentType() {
         var checked = typeInputs.find(function (i) { return i.checked; });
@@ -272,12 +278,18 @@
         saveBtn.disabled = true;
 
         var totalBytes = uploadQueue.reduce(function (sum, item) { return sum + item.file.size; }, 0);
-        var sentBytes = 0;
+        var sentBytes = 0; // cumulative bytes of fully-completed files
         var failures = [];
 
         if (window.AdminProgress) {
             window.AdminProgress.show('Uploading files…');
             window.AdminProgress.progress(0, uploadQueue.length + ' file(s)');
+        }
+
+        function report(pct, label) {
+            if (window.AdminProgress) {
+                window.AdminProgress.progress(pct == null ? (sentBytes / Math.max(totalBytes, 1)) * 100 : pct, label || uploadQueue.length + ' file(s) remaining');
+            }
         }
 
         function next() {
@@ -293,6 +305,28 @@
             }
 
             var item = uploadQueue[0];
+            if (item.file.size >= CHUNK_MIN) uploadChunked(item);
+            else uploadDirect(item);
+        }
+
+        // Finish one file successfully and move to the next in the queue.
+        function finishFile(item, data) {
+            if (data && data.files) { pendingFiles = data.files; render(); }
+            sentBytes += item.file.size;
+            report();
+            uploadQueue.shift();
+            next();
+        }
+
+        // Drop one file with a message and move to the next in the queue.
+        function failFile(item, message) {
+            failures.push(message);
+            uploadQueue.shift();
+            next();
+        }
+
+        // Small files: a single POST, exactly as before.
+        function uploadDirect(item) {
             var data = new FormData();
             data.append('photos[]', item.file);
             data.append('type', item.type);
@@ -301,45 +335,102 @@
             var xhr = new XMLHttpRequest();
             xhr.open('POST', '<?= url('/admin/galleries/pending/upload') ?>');
             xhr.upload.addEventListener('progress', function (e) {
-                if (e.lengthComputable && window.AdminProgress) {
-                    var pct = ((sentBytes + e.loaded) / Math.max(totalBytes, 1)) * 100;
-                    window.AdminProgress.progress(pct, (uploadQueue.length) + ' remaining — ' + item.file.name);
-                }
+                if (e.lengthComputable) report(((sentBytes + e.loaded) / Math.max(totalBytes, 1)) * 100, item.file.name);
             });
             xhr.addEventListener('load', function () {
-                var ok = false;
-                var skipped = [];
-                var reason = '';
-                try {
-                    var res = JSON.parse(xhr.responseText);
-                    ok = res.ok === true;
-                    skipped = res.skipped || [];
-                    reason = res.error || '';
-                } catch (err) {}
-                // Show the server's actual reason when there is one, so the
-                // admin knows why the file was rejected.
-                if (!ok) failures.push(item.file.name + ': rejected by server' + (reason ? ' — ' + reason : ''));
-                for (var s = 0; s < skipped.length; s++) failures.push(skipped[s] + ': could not be saved');
-                next();
+                var ok = false, skipped = [], reason = '', res = null;
+                try { res = JSON.parse(xhr.responseText); ok = res.ok === true; skipped = res.skipped || []; reason = res.error || ''; } catch (err) {}
+                if (!ok) failFile(item, item.file.name + ': rejected by server' + (reason ? ' — ' + reason : ''));
+                else if (skipped.length) failFile(item, skipped[0] + ': could not be saved');
+                else finishFile(item, res);
             });
             xhr.addEventListener('error', function () {
-                failures.push(item.file.name + ': network error');
-                next();
+                failFile(item, item.file.name + ': network error');
             });
-            xhr.addEventListener('loadend', function () {
-                // Refresh tiles from whatever the session now holds; on a
-                // JSON parse failure fall back to leaving the list as-is.
-                try {
-                    var res = JSON.parse(xhr.responseText);
-                    if (res.ok) {
-                        pendingFiles = res.files;
-                        render();
-                        sentBytes += item.file.size;
-                    }
-                } catch (err) {}
-            });
-            uploadQueue.shift();
             xhr.send(data);
+        }
+
+        // Large files: slice into chunks, upload each chunk to /pending/chunk
+        // (auto-retrying a chunk on a transient failure so the upload resumes
+        // from the last good chunk), then finalise with /pending/complete.
+        function uploadChunked(item) {
+            var uid = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+            var total = Math.max(1, Math.ceil(item.file.size / CHUNK_SIZE));
+            var chunk = 0;
+
+            function sendChunk() {
+                if (chunk >= total) { completeFile(); return; }
+                var start = chunk * CHUNK_SIZE;
+                var end = Math.min(item.file.size, start + CHUNK_SIZE);
+                var blob = item.file.slice(start, end);
+                var fd = new FormData();
+                fd.append('chunk', blob, 'chunk.bin');
+                fd.append('upload_uid', uid);
+                fd.append('chunk_index', String(chunk));
+                fd.append('total_chunks', String(total));
+                fd.append('type', item.type);
+                fd.append('_token', csrf);
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '<?= url('/admin/galleries/pending/chunk') ?>');
+                xhr.upload.addEventListener('progress', function (e) {
+                    if (e.lengthComputable) {
+                        var done = Math.min(item.file.size, chunk * CHUNK_SIZE + e.loaded);
+                        report(((sentBytes + done) / Math.max(totalBytes, 1)) * 100, chunk + '/' + total + ' — ' + item.file.name);
+                    }
+                });
+                xhr.addEventListener('load', function () {
+                    var ok = false;
+                    try { ok = JSON.parse(xhr.responseText).ok === true; } catch (err) {}
+                    if (!ok) {
+                        failFile(item, item.file.name + ': rejected by server');
+                        return;
+                    }
+                    chunk++;
+                    sendChunk();
+                });
+                xhr.addEventListener('error', function () {
+                    // Network drop: retry this chunk in place (resume). Give up
+                    // after a few attempts so a dead link surfaces to the user.
+                    var attempt = 0;
+                    function retry() {
+                        attempt++;
+                        if (attempt <= 8) { setTimeout(sendChunk, 700 * attempt); return; }
+                        failFile(item, item.file.name + ': network error (could not resume)');
+                    }
+                    retry();
+                });
+                xhr.send(fd);
+            }
+
+            // All chunks stored -> ask the server to assemble + validate.
+            function completeFile() {
+                var fd = new FormData();
+                fd.append('upload_uid', uid);
+                fd.append('original_name', item.file.name);
+                fd.append('total_chunks', String(total));
+                fd.append('type', item.type);
+                fd.append('_token', csrf);
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '<?= url('/admin/galleries/pending/complete') ?>');
+                xhr.addEventListener('load', function () {
+                    var res = null;
+                    try { res = JSON.parse(xhr.responseText); } catch (err) {}
+                    if (!res || res.ok !== true) {
+                        var msg = res && res.error ? ' — ' + res.error : '';
+                        failFile(item, item.file.name + ': rejected by server' + msg);
+                        return;
+                    }
+                    finishFile(item, res);
+                });
+                xhr.addEventListener('error', function () {
+                    failFile(item, item.file.name + ': network error');
+                });
+                xhr.send(fd);
+            }
+
+            sendChunk();
         }
 
         next();

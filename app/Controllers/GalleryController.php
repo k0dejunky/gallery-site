@@ -503,6 +503,243 @@ class GalleryController extends Controller
     }
 
     /**
+     * Admin: accept one resumable-upload chunk (a single file slice) and store
+     * it as part-<index> under this session's .chunks/<upload_uid>/ directory.
+     * Chunks are written independently so a failed request can simply be
+     * retried (overwriting the same part) — this is what makes the upload
+     * resumable. The full file is only validated/reassembled in chunkComplete().
+     */
+    public function chunkUpload(): void
+    {
+        Auth::requirePermission('galleries');
+
+        $uid   = $this->sanitizeUid((string) $this->request->input('upload_uid'));
+        $index = max(0, (int) $this->request->input('chunk_index', '-1'));
+        $total = max(1, (int) $this->request->input('total_chunks', '0'));
+        $chunk = $this->request->file('chunk');
+
+        if ($uid === '' || $total > 200000 || $index >= $total) {
+            $this->jsonReply(['ok' => false, 'error' => 'Invalid chunk parameters.']);
+            return;
+        }
+
+        // Normalise the uploaded chunk: a single "chunk" field arrives in the
+        // flat shape (name/tmp_name/error as scalars), while a "chunk[]" field
+        // arrives nested. Accept both.
+        $tmp   = is_array($chunk['tmp_name'] ?? null) ? ($chunk['tmp_name'][0] ?? null) : ($chunk['tmp_name'] ?? null);
+        $err   = is_array($chunk['error'] ?? null) ? ($chunk['error'][0] ?? UPLOAD_ERR_NO_FILE) : ($chunk['error'] ?? UPLOAD_ERR_NO_FILE);
+
+        if ($chunk === null || $tmp === null || $tmp === '' || $err !== UPLOAD_ERR_OK) {
+            $this->jsonReply(['ok' => false, 'error' => 'Missing chunk data.']);
+            return;
+        }
+
+        $parts = $this->chunksDir($uid);
+        if (!is_dir($parts) && !@mkdir($parts, 0775, true)) {
+            $this->jsonReply(['ok' => false, 'error' => 'Could not allocate upload space.']);
+            return;
+        }
+
+        $partFile = $parts . '/part-' . str_pad((string) $index, 6, '0', STR_PAD_LEFT);
+
+        if (!move_uploaded_file($tmp, $partFile)) {
+            $this->jsonReply(['ok' => false, 'error' => 'Could not save chunk.']);
+            return;
+        }
+
+        $this->jsonReply(['ok' => true, 'index' => $index]);
+    }
+
+    /**
+     * Admin: reassemble all uploaded chunks into a single file, then validate,
+     * move and variant-generate it exactly like a direct upload. The final
+     * result is identical to pendingUpload()'s, so the tiled preview and
+     * finalizePending() work unchanged.
+     */
+    public function chunkComplete(): void
+    {
+        Auth::requirePermission('galleries');
+
+        $uid          = $this->sanitizeUid((string) $this->request->input('upload_uid'));
+        $originalName = (string) $this->request->input('original_name', 'upload');
+        $type         = $this->request->input('type', 'images') === 'videos' ? 'videos' : 'images';
+        $totalChunks  = (int) $this->request->input('total_chunks', '1');
+        $config       = config('app.uploads');
+        $dir          = $this->pendingDir();
+
+        if ($uid === '' || $totalChunks < 1 || $totalChunks > 200000) {
+            $this->jsonReply(['ok' => false, 'error' => 'Invalid upload parameters.']);
+            return;
+        }
+
+        $assembled = $this->reassembleChunks($uid, $totalChunks);
+        if ($assembled === null) {
+            $this->jsonReply(['ok' => false, 'error' => 'Upload is incomplete. Some chunks are missing; please retry.']);
+            return;
+        }
+
+        $mime = $this->pendingMimeOf($assembled);
+
+        $files = [
+            'name'     => [$originalName],
+            'tmp_name' => [$assembled],
+            'size'     => [(int) filesize($assembled)],
+            'error'    => [UPLOAD_ERR_OK],
+        ];
+
+        $error = $this->validatePending($files, 0, $config, $type, $mime);
+
+        if ($error !== null) {
+            @unlink($assembled);
+            $this->removeChunks($uid);
+            $this->jsonReply(['ok' => false, 'error' => $originalName . ': ' . $error]);
+            return;
+        }
+
+        $hash      = sha1_file($assembled);
+        $isImage   = strpos($mime, 'image/') === 0;
+        $extension = $this->extensionForMime($mime);
+        $filename  = uniqid('pending_', true) . '.' . $extension;
+
+        if (!@rename($assembled, $dir . '/' . $filename)) {
+            $this->removeChunks($uid);
+            $this->jsonReply(['ok' => false, 'error' => $originalName . ': could not be saved.']);
+            return;
+        }
+
+        if ($isImage) {
+            create_image_variants(
+                $dir . '/' . $filename,
+                $dir . '/web_' . $filename,
+                $dir . '/thumb_' . $filename,
+                $config['web_max_width'],
+                $config['thumb_width'],
+                $config['thumb_height']
+            );
+        } else {
+            create_video_thumbnail(
+                $dir . '/' . $filename,
+                $dir . '/thumb_' . $filename,
+                $config['thumb_width'],
+                $config['thumb_height']
+            );
+        }
+
+        $this->removeChunks($uid);
+
+        $list = $_SESSION['pending_gallery_files'] ?? [];
+        $list[] = [
+            'filename' => $filename,
+            'original' => $originalName,
+            'hash'     => $hash,
+            'is_image' => $isImage,
+        ];
+        $_SESSION['pending_gallery_files'] = $list;
+
+        $this->jsonReply([
+            'ok' => true,
+            'added' => 1,
+            'files' => $this->pendingListMeta(),
+        ]);
+    }
+
+    /**
+     * Admin: discard any partially-uploaded chunks for an upload identifier,
+     * used by the client when an upload is cancelled or abandoned.
+     */
+    public function chunkAbort(): void
+    {
+        Auth::requirePermission('galleries');
+
+        $uid = $this->sanitizeUid((string) $this->request->input('upload_uid'));
+
+        if ($uid !== '') {
+            $this->removeChunks($uid);
+        }
+
+        $this->jsonReply(['ok' => true]);
+    }
+
+    /**
+     * Absolute path to this session's chunk staging directory for the given
+     * (already sanitised) upload identifier, creating the parent when needed.
+     */
+    private function chunksDir(string $uid): string
+    {
+        return config('app.uploads.dir') . '/pending/' . session_id() . '/.chunks/' . $uid;
+    }
+
+    /**
+     * Restrict an upload identifier to filesystem-safe characters.
+     */
+    private function sanitizeUid(string $uid): string
+    {
+        $uid = trim($uid);
+        if (strlen($uid) > 128) {
+            $uid = substr($uid, 0, 128);
+        }
+
+        return preg_replace('/[^A-Za-z0-9_\-]/', '_', $uid);
+    }
+
+    /**
+     * Reassemble all numbered parts for an upload identifier into a single
+     * file in the pending directory, returning that path or null when any part
+     * is missing (so an interrupted transfer is detected before validation).
+     */
+    private function reassembleChunks(string $uid, int $totalChunks): ?string
+    {
+        $parts = $this->chunksDir($uid);
+        $out   = $this->pendingDir() . '/.assembled-' . $uid;
+
+        $fh = @fopen($out, 'wb');
+        if ($fh === false) {
+            return null;
+        }
+
+        for ($i = 0; $i < $totalChunks; $i++) {
+            $part = $parts . '/part-' . str_pad((string) $i, 6, '0', STR_PAD_LEFT);
+            if (!is_file($part)) {
+                fclose($fh);
+                @unlink($out);
+                return null;
+            }
+            $in = @fopen($part, 'rb');
+            if ($in === false) {
+                fclose($fh);
+                @unlink($out);
+                return null;
+            }
+            stream_copy_to_stream($in, $fh);
+            fclose($in);
+        }
+
+        fclose($fh);
+
+        return $out;
+    }
+
+    /**
+     * Recursively remove all chunks for an upload identifier.
+     */
+    private function removeChunks(string $uid): void
+    {
+        $parts = $this->chunksDir($uid);
+
+        if (!is_dir($parts)) {
+            return;
+        }
+
+        foreach (glob($parts . '/*') ?: [] as $file) {
+            if (is_file($file)) {
+                @unlink($file);
+            }
+        }
+
+        @rmdir($parts);
+    }
+
+    /**
      * Admin: rotate a staged (pending) image in place and regenerate its
      * thumbnail/web variant. Returns the refreshed pending list as JSON.
      */
@@ -743,6 +980,21 @@ class GalleryController extends Controller
             if (is_file($file)) {
                 @unlink($file);
             }
+        }
+
+        // Drop any leftover chunk-staging directories (may hold partially
+        // uploaded chunks from an abandoned/resumable upload). Each uid is a
+        // subdirectory of .chunks; remove those then the .chunks dir itself.
+        $chunksRoot = $dir . '/.chunks';
+        if (is_dir($chunksRoot)) {
+            foreach (glob($chunksRoot . '/*') ?: [] as $sub) {
+                if (is_dir($sub)) {
+                    $this->removeChunks((string) basename($sub));
+                } else {
+                    @unlink($sub);
+                }
+            }
+            @rmdir($chunksRoot);
         }
 
         @rmdir($dir);

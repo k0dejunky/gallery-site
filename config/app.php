@@ -16,6 +16,12 @@ return [
         'dir'          => __DIR__ . '/../storage/uploads',
         // Per-file upload ceiling: 10 GiB.
         'max_size'     => 10 * 1024 * 1024 * 1024,
+        // Resumable chunked upload: any file at/above 'chunk_min' bytes is
+        // sliced into 'chunk_size' byte parts and reassembled server-side, so
+        // a 4-5 GB video uploads as many small fast requests instead of one
+        // long request that the webserver/fastcgi timeouts would kill.
+        'chunk_size'   => 16 * 1024 * 1024, // 16 MiB
+        'chunk_min'    => 8 * 1024 * 1024,  // 8 MiB threshold to enable chunking
         // Accepted extensions, split into images (GD) and videos (ffmpeg).
         // Keep this in sync with the list of formats the server's GD build can
         // actually process (so uploads are never accepted then fail later
