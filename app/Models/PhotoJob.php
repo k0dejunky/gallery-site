@@ -41,15 +41,6 @@ class PhotoJob
         )->fetch() ?: null;
     }
 
-    /** Latest job for an admin user. */
-    public static function latestForUser(int $userId): ?array
-    {
-        return Database::run(
-            'SELECT * FROM photo_edit_jobs WHERE user_id = ? ORDER BY id DESC LIMIT 1',
-            [$userId]
-        )->fetch() ?: null;
-    }
-
     public static function findById(int $id): ?array
     {
         return Database::run('SELECT * FROM photo_edit_jobs WHERE id = ?', [$id])->fetch() ?: null;

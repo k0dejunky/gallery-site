@@ -109,40 +109,11 @@ class UserController extends Controller
 
     /**
      * Bulk actions over the checked users: assign a role or delete.
-     * GET with ?preview=1 shows a confirmation page first.
      */
     public function bulk(): void
     {
         $ids    = array_values(array_filter(array_map('intval', (array) ($this->request->post('ids') ?? []))));
         $action = (string) $this->request->post('action', '');
-
-        // Preview mode: GET request with ?preview=1
-        if ($this->request->isGet() && (string) ($this->request->query('preview') ?? '') !== '') {
-            $previewIds = array_values(array_filter(array_map('intval', (array) ($this->request->query('ids') ?? []))));
-            $previewAction = (string) ($this->request->query('action') ?? '');
-            $previewRole   = (string) ($this->request->query('role') ?? '');
-
-            if ($previewIds === []) {
-                $this->flash('error', 'No users selected.');
-                $this->redirect('/admin/users');
-            }
-
-            $previewUsers = [];
-            foreach ($previewIds as $pid) {
-                $u = User::find($pid);
-                if ($u !== null) {
-                    $previewUsers[] = $u;
-                }
-            }
-
-            $this->viewAdmin('user_bulk_preview', [
-                'previewUsers' => $previewUsers,
-                'previewAction' => $previewAction,
-                'previewRole'   => $previewRole,
-                'ids'           => $previewIds,
-            ]);
-            return;
-        }
 
         $me = (int) Auth::user()['id'];
 

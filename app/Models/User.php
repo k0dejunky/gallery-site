@@ -94,25 +94,6 @@ class User
     }
 
     /**
-     * Search users by email (case-insensitive LIKE).
-     */
-    public static function search(string $query): array
-    {
-        return Database::run(
-            'SELECT u.id, u.email, u.role, u.created_at, u.last_login_at, u.status,
-                    s.status AS sub_status, p.name AS sub_plan
-             FROM users u
-             LEFT JOIN subscriptions s ON s.id = (
-                 SELECT MAX(s2.id) FROM subscriptions s2 WHERE s2.user_id = u.id
-             )
-             LEFT JOIN plans p ON p.id = s.plan_id
-             WHERE u.email LIKE ?
-             ORDER BY u.role DESC, u.created_at ASC',
-            ['%' . $query . '%']
-        )->fetchAll();
-    }
-
-    /**
      * Register a new account with a bcrypt-hashed password.
      */
     public static function create(string $email, string $password, string $role, ?string $dateOfBirth = null): bool
@@ -250,17 +231,6 @@ class User
             'UPDATE users SET billing_first_name = ?, billing_last_name = ?, billing_address_line1 = ?, billing_address_line2 = ?, billing_city = ?, billing_state = ?, billing_zip = ?, billing_country = ? WHERE id = ?',
             [$firstName ?: null, $lastName ?: null, $address1 ?: null, $address2 ?: null, $city ?: null, $state ?: null, $zip ?: null, $country ?: null, $id]
         );
-    }
-
-    /**
-     * Total number of user accounts.
-     */
-    public static function countTotal(): int
-    {
-        return (int) Database::run(
-            'SELECT COUNT(*) FROM users',
-            []
-        )->fetchColumn();
     }
 
     /**

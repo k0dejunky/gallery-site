@@ -994,17 +994,6 @@ class Stats
     }
 
     /**
-     * Daily view counts for a single category over the last $days days.
-     * Returns an array of [date => count] for sparkline rendering.
-     *
-     * @return array<string, int> keyed by date (Y-m-d)
-     */
-    public static function categoryViewHistory(int $categoryId, int $days = 30): array
-    {
-        return self::categoryViewHistoryBulk([$categoryId], $days)[$categoryId] ?? [];
-    }
-
-    /**
      * Daily view counts for many categories in a single query, so the
      * compare-mode trends view loads every sparkline without an N+1 round of
      * per-category SELECTs.

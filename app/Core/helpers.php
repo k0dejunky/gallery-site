@@ -152,31 +152,6 @@ function file_srcset(string $filename): string
 }
 
 /**
- * Build a <picture> element that serves WebP when supported and falls back to
- * the JPEG/PNG variant otherwise, with responsive srcset sizing. $classes and
- * $attrs (e.g. loading, decoding) are applied to the inner <img>.
- */
-function responsive_picture(string $filename, string $size, array $attrs = []): string
-{
-    $thumbWebp = file_url($filename, $size, 'webp');
-    $thumbFallback = file_url($filename, $size);
-
-    $attrString = '';
-    foreach ($attrs as $key => $value) {
-        if ($value === true) {
-            $attrString .= ' ' . $key;
-        } elseif ($value !== false && $value !== null) {
-            $attrString .= ' ' . $key . '="' . e((string) $value) . '"';
-        }
-    }
-
-    return '<picture>'
-        . '<source type="image/webp" srcset="' . e($thumbWebp) . '">'
-        . '<img src="' . e($thumbFallback) . '"' . $attrString . '>'
-        . '</picture>';
-}
-
-/**
  * Determine whether an uploaded filename is a video based on its extension.
  * Used to branch between image and video rendering in views.
  */
@@ -462,7 +437,7 @@ function _imagick_dimensions(string $src): ?array
 
 /**
  * Load an image file into a GD resource, returning [$resource, $type] or
- * [false, 0] on failure. Shared by create_thumbnail and create_web_image.
+ * [false, 0] on failure. Shared by create_thumbnail.
  */
 function _load_image(string $src)
 {
@@ -605,65 +580,6 @@ function create_thumbnail(string $src, string $dest, int $width, int $height): b
 
     imagedestroy($source);
     imagedestroy($thumb);
-
-    return $saved;
-}
-
-/**
- * Generate the fast-loading web variant of an image: scaled down to fit
- * within maxDim on its longest side (aspect ratio preserved, never cropped)
- * and saved in the source format. The original file is left untouched so the
- * full-size version is always available.
- */
-function create_web_image(string $src, string $dest, int $maxDim): bool
-{
-    if (!function_exists('imagecreatetruecolor')) {
-        return false;
-    }
-
-    [$source, $type] = _load_image($src);
-
-    if ($source === false) {
-        return false;
-    }
-
-    if (!imageistruecolor($source)) {
-        imagepalettetotruecolor($source);
-    }
-
-    $source = apply_exif_orientation($source, $type === IMAGETYPE_JPEG ? exif_orientation_of($src) : 1);
-
-    if ($source === false) {
-        return false;
-    }
-
-    $srcW = imagesx($source);
-    $srcH = imagesy($source);
-
-    if ($srcW <= $maxDim && $srcH <= $maxDim) {
-        $saved = save_image($source, $dest, $type, 82);
-        imagedestroy($source);
-
-        return $saved;
-    }
-
-    $scale  = min(1, $maxDim / max($srcW, $srcH));
-    $dstW   = max(1, (int) round($srcW * $scale));
-    $dstH   = max(1, (int) round($srcH * $scale));
-    $web    = imagecreatetruecolor($dstW, $dstH);
-
-    if ($type === IMAGETYPE_PNG || $type === IMAGETYPE_WEBP) {
-        imagealphablending($web, false);
-        imagesavealpha($web, true);
-    }
-
-    imagecopyresampled($web, $source, 0, 0, 0, 0, $dstW, $dstH, $srcW, $srcH);
-
-    imagedestroy($source);
-
-    $saved = save_image($web, $dest, $type, 82);
-
-    imagedestroy($web);
 
     return $saved;
 }

@@ -117,7 +117,7 @@ gallery-mvc/
 │   │   ├── ImageEditor.php       GD image editing: blur, sharpen, resize, rotate, crop, text,
 │   │   │                         watermark, EXIF normalize
 │   │   └── helpers.php           e(), url(), file_url(), is_video(), config(), csrf_field(),
-│   │                             slugify(), create_thumbnail(), create_web_image(),
+│   │                             slugify(), create_thumbnail(),
 │   │                             create_video_thumbnail(), create_video_frame(), save_image()
 │   ├── Controllers/              Per-feature HTTP handlers
 │   │   ├── AuthController.php          User login, signup, logout

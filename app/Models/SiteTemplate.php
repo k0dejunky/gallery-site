@@ -23,16 +23,6 @@ class SiteTemplate
         return $row ?: null;
     }
 
-    public static function findBySlug(string $slug, string $scope = self::SCOPE_USER): ?array
-    {
-        $slug = preg_replace('/[^a-z0-9\-]/', '', $slug);
-        $row = Database::run(
-            'SELECT * FROM site_templates WHERE name = ? AND scope = ? LIMIT 1',
-            [$slug, $scope]
-        )->fetch();
-        return $row ?: null;
-    }
-
     public static function active(string $scope = self::SCOPE_USER): ?array
     {
         $row = Database::run(

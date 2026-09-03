@@ -163,49 +163,6 @@ class BraintreeGateway
         throw new \RuntimeException('Braintree vault payment method failed: ' . json_encode($response));
     }
 
-    /**
-     * Find a payment method by its token.
-     */
-    public function findPaymentMethod(string $token): ?array
-    {
-        try {
-            $response = $this->get('/merchants/' . $this->merchantId . '/payment_methods/' . $token);
-            return $response['payment_method'] ?? null;
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // Transactions (one-time charges)
-    // ------------------------------------------------------------------
-
-    /**
-     * Create a sale transaction (one-time payment). Returns the
-     * transaction array.
-     */
-    public function createSale(float $amount, string $paymentMethodToken, ?string $customerId = null, bool $submitForSettlement = true): array
-    {
-        $payload = [
-            'transaction' => array_filter([
-                'amount'                 => number_format($amount, 2, '.', ''),
-                'payment_method_token'   => $paymentMethodToken,
-                'customer_id'            => $customerId,
-                'options'                => [
-                    'submit_for_settlement' => $submitForSettlement,
-                ],
-            ], fn($v) => $v !== null && $v !== ''),
-        ];
-
-        $response = $this->post('/merchants/' . $this->merchantId . '/transactions', $payload);
-
-        if (isset($response['transaction'])) {
-            return $response['transaction'];
-        }
-
-        throw new \RuntimeException('Braintree sale failed: ' . json_encode($response));
-    }
-
     // ------------------------------------------------------------------
     // Subscriptions
     // ------------------------------------------------------------------
@@ -235,33 +192,6 @@ class BraintreeGateway
         }
 
         throw new \RuntimeException('Braintree create subscription failed: ' . json_encode($response));
-    }
-
-    /**
-     * Find a subscription by its Braintree id.
-     */
-    public function findSubscription(string $subscriptionId): ?array
-    {
-        try {
-            $response = $this->get('/merchants/' . $this->merchantId . '/subscriptions/' . $subscriptionId);
-            return $response['subscription'] ?? null;
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    /**
-     * Cancel an active subscription.
-     */
-    public function cancelSubscription(string $subscriptionId): array
-    {
-        $response = $this->put('/merchants/' . $this->merchantId . '/subscriptions/' . $subscriptionId . '/cancel', []);
-
-        if (isset($response['subscription'])) {
-            return $response['subscription'];
-        }
-
-        throw new \RuntimeException('Braintree cancel subscription failed: ' . json_encode($response));
     }
 
     // ------------------------------------------------------------------

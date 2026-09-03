@@ -228,22 +228,6 @@ class PaymentProcessor
     }
 
     /**
-     * The first enabled processor, used as the checkout default when the user
-     * does not make an explicit choice. Returns null when none are configured.
-     */
-    public static function default(): ?array
-    {
-        $row = Database::run(
-            'SELECT * FROM payment_processors
-             WHERE enabled = 1
-             ORDER BY is_default DESC, id ASC
-             LIMIT 1'
-        )->fetch();
-
-        return $row ?: null;
-    }
-
-    /**
      * Fetch a single processor by id, or null when it does not exist.
      */
     public static function find(int $id): ?array

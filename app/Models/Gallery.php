@@ -132,37 +132,10 @@ class Gallery
     }
 
     /**
-     * Galleries belonging to one category, optionally limited to galleries
-     * that contain images or videos. Used for category pages and the
-     * per-favorite sections on the home page.
-     */
-    public static function inCategory(int $categoryId, string $type = '', int $maxLevel = PHP_INT_MAX): array
-    {
-        $typeCondition = '';
-
-        if (in_array($type, ['images', 'videos'], true)) {
-            $typeCondition = ' AND ' . self::mediaTypeCondition($type);
-        }
-
-        $levelCondition = $maxLevel < PHP_INT_MAX ? ' AND g.min_level <= ' . (int) $maxLevel : '';
-
-        return Database::run(
-            'SELECT g.*, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
-             FROM galleries g
-             INNER JOIN gallery_category gc ON gc.gallery_id = g.id
-             LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
-             WHERE gc.category_id = ? AND g.deleted_at IS NULL' . $typeCondition . $levelCondition . '
-             GROUP BY g.id
-             ORDER BY g.created_at DESC',
-            [$categoryId]
-        )->fetchAll();
-    }
-
-    /**
      * Galleries belonging to any of the given categories, returned as a map
      * of [category_id => [gallery, ...]]. A gallery appears under every
      * category it belongs to; callers deduplicate across categories. This
-     * replaces the N+1 pattern of calling inCategory() once per category.
+     * avoids the N+1 pattern of one query per category.
      */
     public static function inCategories(array $categoryIds, string $type = '', int $maxLevel = PHP_INT_MAX): array
     {

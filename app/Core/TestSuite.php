@@ -436,11 +436,6 @@ class TestSuite
     }
 
     // ------------------------------------------------------------ run-state persistence
-    public static function runsDir(): string
-    {
-        return self::RUN_DIR;
-    }
-
     public static function ensureRunsDir(): void
     {
         if (!is_dir(self::RUN_DIR)) {
