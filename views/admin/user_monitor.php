@@ -40,7 +40,7 @@
     <label>User<br>
         <select name="user">
             <option value="">— all —</option>
-            <?php foreach (UserActivity::lastSeenByUser(500) as $u): ?>
+            <?php foreach (\App\Models\UserActivity::lastSeenByUser(500) as $u): ?>
                 <option value="<?= (int) $u['user_id'] ?>" <?= $filterUserId === (int) $u['user_id'] ? 'selected' : '' ?>><?= e($u['user_email']) ?></option>
             <?php endforeach; ?>
         </select></label>
