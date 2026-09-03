@@ -48,6 +48,9 @@ class WebhookController extends Controller
             case 'braintree':
                 $this->braintree();
                 return;
+            case 'paypal':
+                $this->paypal();
+                return;
         }
 
         http_response_code(404);
@@ -454,6 +457,184 @@ class WebhookController extends Controller
                 echo 'unhandled: ' . $kind;
                 return;
         }
+    }
+
+    // ------------------------------------------------------------------
+    // PayPal
+    //
+    // PayPal subscription webhooks arrive as JSON with PayPal-* transmission
+    // headers. When REST client credentials + a webhook id are configured the
+    // event is verified against /v1/notifications/verify-webhook-signature;
+    // otherwise it is accepted but logged so setup is visible (mirrors the
+    // other billers' fallback). Events reconcile a subscription by its
+    // "PAYPAL-<id>" reference and drive activation/cancellation.
+    // ------------------------------------------------------------------
+    private function paypal(): void
+    {
+        $rawBody = file_get_contents('php://input') ?: '';
+        if ($rawBody === '') {
+            http_response_code(400);
+            echo 'empty body';
+            return;
+        }
+
+        $event     = json_decode($rawBody, true);
+        $eventType = is_array($event) ? (string) ($event['event_type'] ?? '') : '';
+
+        if ($eventType === '' || !is_array($event['resource'] ?? null)) {
+            http_response_code(400);
+            echo 'bad payload';
+            return;
+        }
+
+        $gateway  = null;
+        $webhookId = '';
+
+        foreach ($this->processorRows('paypal') as $row) {
+            $g = \App\Core\PayPalGateway::fromConfig($row);
+            if ($g !== null) {
+                $gateway   = $g;
+                $webhookId = \App\Core\PayPalGateway::webhookId($row);
+                break;
+            }
+        }
+
+        if ($gateway !== null) {
+            $authAlgo = (string) $this->request->header('Paypal-Auth-Algo');
+            $certUrl  = (string) $this->request->header('Paypal-Cert-Url');
+            $transId  = (string) $this->request->header('Paypal-Transmission-Id');
+            $transTime = (string) $this->request->header('Paypal-Transmission-Time');
+            $sig      = (string) $this->request->header('Paypal-Transmission-Sig');
+
+            if ($webhookId !== '' && $authAlgo !== '' && $certUrl !== ''
+                && $transId !== '' && $transTime !== '' && $sig !== '') {
+                try {
+                    $ok = $gateway->verifyWebhookSignature(
+                        $webhookId,
+                        $authAlgo,
+                        $certUrl,
+                        $transId,
+                        $transTime,
+                        $sig,
+                        $rawBody
+                    );
+
+                    if (!$ok) {
+                        http_response_code(400);
+                        echo 'bad signature';
+                        return;
+                    }
+                } catch (\Throwable $e) {
+                    error_log('[webhooks/paypal] signature verification failed: ' . $e->getMessage());
+                    http_response_code(500);
+                    echo 'verification error';
+                    return;
+                }
+            } else {
+                error_log('[webhooks/paypal] signature verification skipped: webhook_id or transmission headers missing');
+            }
+        } else {
+            error_log('[webhooks/paypal] accepted without signature verification: no PayPal credentials configured');
+        }
+
+        $resourceId = (string) ($event['resource']['id'] ?? '');
+        $ref        = 'PAYPAL-' . $resourceId;
+
+        $subscription = $this->findByPayPalRef($ref);
+        if ($subscription === null) {
+            error_log('[webhooks/paypal] no matching subscription for ' . $ref . ' (' . $eventType . ')');
+            echo 'no matching subscription';
+            return;
+        }
+
+        $subId = (int) $subscription['id'];
+
+        switch ($eventType) {
+            case 'BILLING.SUBSCRIPTION.ACTIVATED':
+            case 'BILLING.SUBSCRIPTION.APPROVED':
+            case 'PAYMENT.SALE.COMPLETED':
+                if ((string) $subscription['status'] !== 'active') {
+                    Subscription::activateWithTransaction($subId, $ref);
+                    $this->notifyPayment('PayPal', $subId, $ref);
+                }
+                echo 'ok';
+                return;
+
+            case 'BILLING.SUBSCRIPTION.CANCELLED':
+                Subscription::cancel($subId);
+                AuditLog::record(
+                    (int) $subscription['user_id'],
+                    'update',
+                    'subscription',
+                    $subId,
+                    'PayPal webhook: subscription cancelled',
+                    null,
+                    ['paypal_subscription_id' => $resourceId, 'event' => $eventType]
+                );
+                echo 'cancelled';
+                return;
+
+            case 'BILLING.SUBSCRIPTION.SUSPENDED':
+                Database::run(
+                    "UPDATE subscriptions SET status = 'past_due', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'active'",
+                    [$subId]
+                );
+                AuditLog::record(
+                    (int) $subscription['user_id'],
+                    'update',
+                    'subscription',
+                    $subId,
+                    'PayPal webhook: subscription suspended',
+                    null,
+                    ['paypal_subscription_id' => $resourceId, 'event' => $eventType]
+                );
+                echo 'flagged';
+                return;
+
+            case 'BILLING.SUBSCRIPTION.EXPIRED':
+                Database::run(
+                    "UPDATE subscriptions SET status = 'expired', expires_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN ('active', 'past_due')",
+                    [$subId]
+                );
+                AuditLog::record(
+                    (int) $subscription['user_id'],
+                    'update',
+                    'subscription',
+                    $subId,
+                    'PayPal webhook: subscription expired',
+                    null,
+                    ['paypal_subscription_id' => $resourceId, 'event' => $eventType]
+                );
+                echo 'expired';
+                return;
+
+            case 'PAYMENT.SALE.DENIED':
+            case 'PAYMENT.SALE.REFUNDED':
+            case 'PAYMENT.SALE.REVERSED':
+                error_log('[webhooks/paypal] ' . $eventType . ' for subscription ' . $subId);
+                echo 'noted';
+                return;
+
+            default:
+                error_log('[webhooks/paypal] unhandled event: ' . $eventType . ' for ' . $ref);
+                echo 'unhandled: ' . $eventType;
+                return;
+        }
+    }
+
+    /**
+     * Locate a subscription by its PayPal reference. Prefers a pending
+     * signup (whose placeholder ref was inserted on subscribe), but also
+     * matches existing rows so renewals/cancellations can be reconciled.
+     */
+    private function findByPayPalRef(string $ref): ?array
+    {
+        $row = Database::run(
+            'SELECT * FROM subscriptions WHERE transaction_ref = ? ORDER BY id DESC LIMIT 1',
+            [$ref]
+        )->fetch();
+
+        return $row ?: null;
     }
 
     // ------------------------------------------------------------------

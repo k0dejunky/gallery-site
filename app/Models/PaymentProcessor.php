@@ -52,6 +52,11 @@ class PaymentProcessor
             'private_key' => 'Private key',
             'plan_id'     => 'Braintree plan ID (for subscriptions)',
         ],
+        'paypal' => [
+            'client_id'     => 'REST API client ID',
+            'client_secret' => 'REST API secret',
+            'webhook_id'    => 'Webhook ID',
+        ],
     ];
 
     /** ISO currency -> CCBill numeric currency code (CCBill docs). */

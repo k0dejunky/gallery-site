@@ -339,7 +339,8 @@ class MembershipController extends Controller
         $plan = Plan::find((int) $this->request->post('plan_id', 0));
         $paypalId = trim((string) $this->request->post('paypal_subscription_id', ''));
 
-        if ($plan === null || strtolower((string) ($plan['slug'] ?? $plan['name'])) !== 'silver'
+        $planSlug = strtolower((string) ($plan['slug'] ?? $plan['name']));
+        if ($plan === null || !in_array($planSlug, ['silver', 'gold'], true)
             || !preg_match('/\A[A-Za-z0-9_-]{6,100}\z/', $paypalId)) {
             http_response_code(400);
             echo json_encode(['ok' => false, 'error' => 'Invalid PayPal subscription.']);
@@ -370,7 +371,7 @@ class MembershipController extends Controller
                 $processor !== null ? (int) $processor['id'] : null,
                 'PAYPAL-' . $paypalId
             );
-            AuditLog::record($userId, 'create', 'subscription', $subscriptionId, 'PayPal Silver subscription pending verification', null, [
+            AuditLog::record($userId, 'create', 'subscription', $subscriptionId, 'PayPal ' . ucfirst($planSlug) . ' subscription pending verification', null, [
                 'plan_id' => (int) $plan['id'],
                 'paypal_subscription_id' => $paypalId,
             ]);

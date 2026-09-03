@@ -441,6 +441,11 @@ class UserController extends Controller
         User::updatePassword($id, password_hash($temp, PASSWORD_DEFAULT));
         Database::run('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [$id]);
 
+        // Keep the current session alive when the admin reset their own password.
+        if ((int) (Auth::user()['id'] ?? 0) === $id) {
+            $_SESSION['session_version'] = (int) (User::find($id)['session_version'] ?? 0);
+        }
+
         AuditLog::record((int) (Auth::user()['id'] ?? 0), 'update', 'user_password', $id,
             'Reset password for "' . $target['email'] . '"');
 
@@ -632,6 +637,14 @@ class UserController extends Controller
             }
             User::updatePassword($id, password_hash($password, PASSWORD_DEFAULT));
             Database::run('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [$id]);
+
+            // Keep the current session alive when the admin edited their own
+            // account (bumping session_version would otherwise log them out on
+            // the next request, mirroring the self-change-password flow).
+            if ((int) (Auth::user()['id'] ?? 0) === $id) {
+                $_SESSION['session_version'] = (int) (User::find($id)['session_version'] ?? 0);
+            }
+
             AuditLog::record((int) Auth::user()['id'], 'update', 'user_password', $id, 'Changed password for account "' . $user['email'] . '"');
         }
 
