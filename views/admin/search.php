@@ -1,14 +1,7 @@
 <?php $title = 'Search'; ?>
 
-<h1>Admin search</h1>
-
-<form method="get" action="<?= url('/admin/search') ?>" style="display:flex;gap:.5rem;margin:var(--spacing-md) 0;">
-    <input type="search" name="q" value="<?= e($q) ?>" placeholder="Email, gallery title, photo filename, transaction ref…" style="flex:1;" autofocus>
-    <button type="submit" class="btn">Search</button>
-</form>
-
 <?php if (mb_strlen($q) < 2): ?>
-    <p class="muted">Type at least two characters.</p>
+    <p class="muted">Type at least two characters in the search bar above.</p>
 <?php else: ?>
     <?php $any = false; ?>
 
