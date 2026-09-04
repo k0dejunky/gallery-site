@@ -165,6 +165,42 @@ class PayPalGateway
     }
 
     /**
+     * Cancel a PayPal subscription on PayPal's side so it stops billing.
+     * POST /v1/billing/subscriptions/{id}/cancel with an empty JSON body.
+     * Returns true when PayPal accepted the cancellation.
+     */
+    public function cancelSubscription(string $paypalSubscriptionId): bool
+    {
+        $paypalSubscriptionId = trim($paypalSubscriptionId);
+
+        if ($paypalSubscriptionId === '' || !preg_match('/\A[A-Za-z0-9_-]{6,100}\z/', $paypalSubscriptionId)) {
+            return false;
+        }
+
+        $token = $this->accessToken();
+
+        [$status, , $body] = Http::request(
+            $this->baseUrl . '/v1/billing/subscriptions/' . rawurlencode($paypalSubscriptionId) . '/cancel',
+            [
+                'method'  => 'POST',
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $token,
+                    'Content-Type'  => 'application/json',
+                ],
+                'json'    => new \stdClass(), // PayPal expects an empty JSON object {}
+                'timeout' => 30,
+            ]
+        );
+
+        if ($status !== 204 && $status !== 200) {
+            error_log('[paypal-cancel] failed (HTTP ' . $status . ') for ' . $paypalSubscriptionId . ': ' . substr((string) $body, 0, 300));
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Human-readable test for gateway configuration (separate from null
      * factory state).
      */

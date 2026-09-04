@@ -21,8 +21,11 @@ class Subscription
     }
 
     /**
-     * The user's current active subscription joined with its plan, or null
-     * when they do not have usable access.
+     * The user's current subscription that grants access, or null when they
+     * do not have usable access. A cancelled subscription still grants access
+     * until its expiry date (the member already paid for that period); a
+     * lifetime plan cancelled without a stored expiry loses access at cancel
+     * time (its expires_at is set to "now").
      */
     public static function activeFor(int $userId): ?array
     {
@@ -32,11 +35,11 @@ class Subscription
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
              WHERE s.user_id = ?
-               AND s.status = ?
+               AND s.status IN (?, ?)
                AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
              ORDER BY s.starts_at DESC
              LIMIT 1',
-            [$userId, 'active']
+            [$userId, 'active', 'cancelled']
         )->fetch();
 
         return $row ?: null;
@@ -265,6 +268,31 @@ class Subscription
              WHERE id = ?',
             ['cancelled', $expires, $id]
         );
+
+        // When the membership is billed through PayPal, cancel it there too so
+        // the member stops being charged (best-effort: a local cancel always
+        // succeeds even if the PayPal call fails — the reconciliation worker
+        // and PayPal webhooks reconcile the remote side later).
+        $ref = (string) ($row['transaction_ref'] ?? '');
+        if (strpos($ref, 'PAYPAL-') === 0) {
+            $paypalId = substr($ref, strlen('PAYPAL-'));
+
+            try {
+                $processor = $row['payment_processor_id'] !== null
+                    ? \App\Models\PaymentProcessor::find((int) $row['payment_processor_id'])
+                    : null;
+
+                $gateway = $processor !== null
+                    ? \App\Core\PayPalGateway::fromConfig($processor)
+                    : null;
+
+                if ($gateway !== null && !$gateway->cancelSubscription($paypalId)) {
+                    error_log('[paypal-cancel] PayPal did not confirm cancellation for ' . $ref);
+                }
+            } catch (\Throwable $e) {
+                error_log('[paypal-cancel] PayPal cancellation failed for ' . $ref . ': ' . $e->getMessage());
+            }
+        }
     }
 
     /**
