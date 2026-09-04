@@ -359,9 +359,9 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
     <header class="title-header"<?= $isSiteEditor ? ' style="display:none"' : '' ?>>
             <img src="<?= e(\App\Models\Theme::titleImageUrl(\App\Models\Theme::SCOPE_ADMIN)) ?>" alt="<?= e(config('app.site_name')) ?> Admin">
     </header>
-    <div class="admin-shell">
-        <div class="nav-backdrop" id="nav-backdrop" aria-hidden="true"></div>
-        <nav class="admin-nav" id="admin-nav">
+    <div class="admin-shell" data-se-move-key="shell">
+        <div class="nav-backdrop" id="nav-backdrop" aria-hidden="true" data-se-move-key="nav-backdrop"></div>
+        <nav class="admin-nav" id="admin-nav" data-se-move-key="nav">
             <?php if (!empty($topContent)): ?>
                 <div class="nav-top-content"><?= $topContent ?></div>
                 <div class="nav-sep"></div>
@@ -403,7 +403,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
                 <button type="submit" class="btn btn-sm btn-danger">Logout</button>
             </form>
         </nav>
-        <main class="admin-main">
+        <main class="admin-main" data-se-move-key="main">
             <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="admin-nav">☰</button>
             <form class="admin-top-search" method="get" action="<?= url('/admin/search') ?>" data-se-move-key="nav-search">
                 <input type="search" name="q" placeholder="Search users, galleries…" value=""
