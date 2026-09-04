@@ -33,31 +33,38 @@ class PayPalGateway
 
     /**
      * Build a gateway from a payment_processors row's config_json, or null
-     * when the PayPal REST credentials are not configured yet.
+     * when the PayPal REST credentials are not configured yet. Uses the
+     * sandbox credential set when the processor mode is test, and the live
+     * set when it is live.
      */
     public static function fromConfig(array $processor): ?self
     {
-        $cfg          = \App\Models\PaymentProcessor::decodeConfig($processor);
-        $clientId     = trim((string) ($cfg['client_id'] ?? ''));
-        $clientSecret = trim((string) ($cfg['client_secret'] ?? ''));
+        $cfg = \App\Models\PaymentProcessor::decodeConfig($processor);
+        $live = strtolower((string) $processor['mode']) === 'live';
+
+        $clientId     = trim((string) ($cfg[$live ? 'client_id' : 'sandbox_client_id'] ?? ''));
+        $clientSecret = trim((string) ($cfg[$live ? 'client_secret' : 'sandbox_client_secret'] ?? ''));
 
         if ($clientId === '' || $clientSecret === '') {
             return null;
         }
 
-        $environment = strtolower((string) $processor['mode']) === 'live' ? 'live' : 'sandbox';
+        $environment = $live ? 'live' : 'sandbox';
 
         return new self($clientId, $clientSecret, $environment);
     }
 
     /**
-     * The configured webhook id (used to verify webhook signatures).
+     * The configured webhook id (used to verify webhook signatures). Picks
+     * the sandbox webhook id when the processor mode is test, otherwise the
+     * live one.
      */
     public static function webhookId(array $processor): string
     {
         $cfg = \App\Models\PaymentProcessor::decodeConfig($processor);
+        $live = strtolower((string) $processor['mode']) === 'live';
 
-        return trim((string) ($cfg['webhook_id'] ?? ''));
+        return trim((string) ($cfg[$live ? 'webhook_id' : 'sandbox_webhook_id'] ?? ''));
     }
 
     /**

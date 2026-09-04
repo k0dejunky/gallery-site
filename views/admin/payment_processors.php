@@ -148,6 +148,12 @@ $webhookBase = $scheme . '://' . $host . rtrim((string) config('app.base_path'),
             ?>
             <fieldset class="prov-cfg" data-provider="<?= e($provKey) ?>">
                 <legend><?= e(\App\Models\PaymentProcessor::providerLabel($provKey)) ?> credentials</legend>
+                <?php if ($provKey === 'paypal'): ?>
+                    <p class="muted" style="font-size:var(--font-size-sm);margin:.25rem 0 .5rem;">
+                        In <strong>test</strong> mode the sandbox credentials are used; switch the processor to
+                        <strong>live</strong> to use the live credentials.
+                    </p>
+                <?php endif; ?>
                 <?php foreach ($fields as $fieldKey => $label): ?>
                     <label><?= e($label) ?></label>
                     <?php if ($isSecretField($fieldKey)): ?>

@@ -53,9 +53,12 @@ class PaymentProcessor
             'plan_id'     => 'Braintree plan ID (for subscriptions)',
         ],
         'paypal' => [
-            'client_id'     => 'REST API client ID',
-            'client_secret' => 'REST API secret',
-            'webhook_id'    => 'Webhook ID',
+            'client_id'            => 'Live REST API client ID',
+            'client_secret'        => 'Live REST API secret',
+            'webhook_id'           => 'Live Webhook ID',
+            'sandbox_client_id'    => 'Sandbox REST API client ID',
+            'sandbox_client_secret'=> 'Sandbox REST API secret',
+            'sandbox_webhook_id'   => 'Sandbox Webhook ID',
         ],
     ];
 
