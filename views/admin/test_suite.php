@@ -16,6 +16,10 @@
     .ts-none { margin-top: 1rem; }
     .test-runs { margin-top: 1.5rem; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    #ts-runs-table tbody tr { cursor: pointer; }
+    #ts-runs-table tbody tr:hover { background: var(--filter-hover-bg); }
+    #ts-runs-table tbody tr.ts-run-selected { outline: 2px solid var(--purple-500); outline-offset: -2px; }
+    .ts-viewing { margin-bottom: 1rem; font-size: .9rem; color: var(--muted-text-color); }
 </style>
 
 <div class="test-hero">
@@ -38,6 +42,8 @@
     <span><b id="ts-failed">0</b> failed</span>
     <span><b id="ts-pending">0</b> pending</span>
 </div>
+
+<div id="ts-viewing" class="ts-viewing" hidden></div>
 
 <div id="ts-groups">
 
@@ -76,10 +82,11 @@
 <!-- Past runs -->
 <div class="test-runs">
     <h2 class="section-title">Recent runs</h2>
+    <p class="muted" style="margin-top:0;">Click a run to view its full per-test results.</p>
     <div class="users-table-wrap">
         <table class="users-table" id="ts-runs-table">
             <thead>
-                <tr><th>Run</th><th>Started</th><th>Result</th><th>Progress</th></tr>
+                <tr><th>Run</th><th>Started</th><th>Result</th><th>Progress</th><th></th></tr>
             </thead>
             <tbody>
             <?php foreach ($runs as $r): ?>
@@ -88,6 +95,7 @@
                     <td><?= e($r['started_at'] ?? '') ?></td>
                     <td><span class="status-badge <?= ($r['status'] ?? '') === 'complete' ? ('ts-' . ($r['failed'] > 0 ? 'failed' : 'passed')) : 'ts-running' ?>"><?= e($r['status'] ?? '') ?></span></td>
                     <td class="detail-cell"><?= (int) ($r['passed'] ?? 0) ?> / <?= (int) ($r['total'] ?? 0) ?> passed, <?= (int) ($r['failed'] ?? 0) ?> failed</td>
+                    <td><button type="button" class="btn btn-sm" data-view-run="<?= e($r['id']) ?>">View</button></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>
@@ -226,10 +234,60 @@
             body: body.toString()
         }).then(function (r) { return r.json(); }).then(function (res) {
             if (!res.ok) { alert(res.error || 'Could not start test run'); return; }
+            clearViewedRun();
             startPolling(res.run);
             // refresh the recent-runs table cheaply on completion
         });
     }
+
+    var viewingEl = document.getElementById('ts-viewing');
+
+    function highlightRun(runId) {
+        document.querySelectorAll('#ts-runs-table tbody tr').forEach(function (tr) {
+            tr.classList.toggle('ts-run-selected', tr.dataset.run === runId);
+        });
+    }
+
+    function clearViewedRun() {
+        if (viewingEl) viewingEl.hidden = true;
+        highlightRun(null);
+    }
+
+    // Load and display the full results of a past run without re-running it.
+    function viewRun(runId) {
+        if (!runId) return;
+        fetch(statusUrl + '?run=' + encodeURIComponent(runId), {
+            headers: { 'Accept': 'application/json' }
+        }).then(function (r) { return r.json(); }).then(function (state) {
+            if (!state || state.ok !== true || state.status === 'pending' || state.status === 'running') {
+                // A still-running run is shown live below; don't freeze it here.
+                if (state && state.status === 'running') { startPolling(runId); return; }
+                alert('Could not load run results.');
+                return;
+            }
+            renderRun(state);
+            if (viewingEl) {
+                viewingEl.textContent = 'Viewing results from run ' + runId + ' (click a run in Recent runs to switch, or start a new run to go live).';
+                viewingEl.hidden = false;
+            }
+            highlightRun(runId);
+        }).catch(function () { alert('Could not load run results.'); });
+    }
+
+    // Clicking a row or its View button loads that past run's results.
+    document.querySelectorAll('#ts-runs-table tbody tr').forEach(function (tr) {
+        tr.addEventListener('click', function (e) {
+            if (e.target.closest('button')) return; // button has its own handler
+            if (activeRun) return;
+            viewRun(tr.dataset.run);
+        });
+    });
+    document.querySelectorAll('[data-view-run]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (activeRun) return;
+            viewRun(btn.dataset.viewRun);
+        });
+    });
 
     els.runAll.addEventListener('click', function () { if (!activeRun) launch(null); });
     els.runSelected.addEventListener('click', function () {
