@@ -153,14 +153,29 @@ function buildSelector(el){
       part='a'+(anchorClass?'.'+anchorClass:'')+'[href="'+cur.getAttribute('href').replace(/"/g,'\\"')+'"]';
       parts.unshift(part);break;
     }
+    var cls='';
     if(cur.className&&typeof cur.className==='string'){
-      var cls=cur.className.trim().split(/\s+/).filter(function(c){return c&&c.indexOf('se-')<0&&c.indexOf('nle-')<0}).slice(0,2).join('.');
+      cls=cur.className.trim().split(/\s+/).filter(function(c){return c&&c.indexOf('se-')<0&&c.indexOf('nle-')<0}).slice(0,2).join('.');
       if(cls)part+='.'+cls;
     }
     var p=cur.parentElement;
     if(p){
       var sibs=Array.prototype.filter.call(p.children,function(c){return c.tagName===cur.tagName});
-      if(sibs.length>1){var idx=sibs.indexOf(cur)+1;part+=':nth-of-type('+idx+')';}
+      // Only disambiguate with :nth-of-type when the tag+class combo is NOT
+      // already unique among same-tag siblings. Positional selectors silently
+      // rebind to a different element when siblings are added or removed
+      // (e.g. a sidebar search form being moved once sent the logout button
+      // to the top of the admin nav), so a unique class or id is preferred.
+      var ambiguous=true;
+      if(cls){
+        var sameClass=Array.prototype.filter.call(p.children,function(c){
+          if(c.tagName!==cur.tagName)return false;
+          var cc=c.className&&typeof c.className==='string'?c.className.trim().split(/\s+/).filter(function(x){return x&&x.indexOf('se-')<0&&x.indexOf('nle-')<0}).slice(0,2).join('.') : '';
+          return cc===cls;
+        });
+        if(sameClass.length<=1)ambiguous=false;
+      }
+      if(ambiguous&&sibs.length>1){var idx=sibs.indexOf(cur)+1;part+=':nth-of-type('+idx+')';}
     }
     parts.unshift(part);
     cur=cur.parentElement;
@@ -198,7 +213,7 @@ function applyOrderOperation(c,doc){
    var p=c.parentKey==='body'?doc.body:null;
   if(c.parentOrigin){p=doc.querySelector(c.parentOrigin)||p;if(p&&c.parentKey)p.setAttribute('data-se-move-key',c.parentKey);}
   if(!p)return;
-   var items=(c.items||[]).map(function(item){var el=item.origin?doc.querySelector(item.origin):null;if(!el)el=doc.querySelector('[data-se-move-key="'+item.key+'"]');if(el&&item.key)el.setAttribute('data-se-move-key',item.key);if(el&&item.styles)restoreVisualStyle(el,item.styles);return el;}).filter(Boolean);
+   var items=(c.items||[]).map(function(item){var el=item.key?doc.querySelector('[data-se-move-key="'+item.key+'"]'):null;if(!el&&item.origin)el=doc.querySelector(item.origin);if(el&&item.key&&!el.hasAttribute('data-se-move-key'))el.setAttribute('data-se-move-key',item.key);if(el&&item.styles)restoreVisualStyle(el,item.styles);return el;}).filter(Boolean);
   items.forEach(function(el){p.appendChild(el);});
 }
 

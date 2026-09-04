@@ -199,8 +199,8 @@ $isAuthPage = $isLoginPage
         <span class="spacer"></span>
         <div class="nav-links" id="nav-links-id">
         <?php if ($user !== null): ?>
-            <a class="btn btn-sm btn-outline" href="<?= url('/settings') ?>">Settings</a>
-            <form class="inline" method="post" action="<?= url('/logout') ?>">
+            <a class="btn btn-sm btn-outline" href="<?= url('/settings') ?>" data-se-move-key="top-settings">Settings</a>
+            <form class="inline" method="post" action="<?= url('/logout') ?>" data-se-move-key="top-logout">
                 <?= csrf_field() ?>
                 <button type="submit" class="btn btn-sm btn-danger">Logout</button>
             </form>
@@ -249,17 +249,17 @@ $isAuthPage = $isLoginPage
         }
         ?>
         <nav class="home-nav-actions user-nav" aria-label="Site menu">
-            <a class="nav-brand" href="<?= url('/account') ?>">Dashboard</a>
-            <a class="nav-item<?= $currentPath === url('/account') ? ' active' : '' ?>" href="<?= url('/account') ?>">Dashboard</a>
-            <a class="nav-item<?= strpos($currentPath, url('/galleries')) === 0 ? ' active' : '' ?>" href="<?= url('/galleries') ?>">Galleries</a>
-            <a class="nav-item<?= strpos($currentPath, url('/favorites')) === 0 ? ' active' : '' ?>" href="<?= url('/favorites') ?>">Favorites</a>
-            <a class="nav-item<?= strpos($currentPath, url('/membership')) === 0 ? ' active' : '' ?>" href="<?= url('/membership') ?>">Membership</a>
-            <a class="nav-item<?= strpos($currentPath, url('/support')) === 0 ? ' active' : '' ?>" href="<?= url('/support') ?>">Support<?php if (!empty($supportUnreadCount)): ?> <span class="nav-unread" aria-label="<?= (int) $supportUnreadCount ?> unread replies"><?= (int) $supportUnreadCount ?></span><?php endif; ?></a>
+            <a class="nav-brand" href="<?= url('/account') ?>" data-se-move-key="pub-dashboard">Dashboard</a>
+            <a class="nav-item<?= $currentPath === url('/account') ? ' active' : '' ?>" href="<?= url('/account') ?>" data-se-move-key="pub-account">Dashboard</a>
+            <a class="nav-item<?= strpos($currentPath, url('/galleries')) === 0 ? ' active' : '' ?>" href="<?= url('/galleries') ?>" data-se-move-key="pub-galleries">Galleries</a>
+            <a class="nav-item<?= strpos($currentPath, url('/favorites')) === 0 ? ' active' : '' ?>" href="<?= url('/favorites') ?>" data-se-move-key="pub-favorites">Favorites</a>
+            <a class="nav-item<?= strpos($currentPath, url('/membership')) === 0 ? ' active' : '' ?>" href="<?= url('/membership') ?>" data-se-move-key="pub-membership">Membership</a>
+            <a class="nav-item<?= strpos($currentPath, url('/support')) === 0 ? ' active' : '' ?>" href="<?= url('/support') ?>" data-se-move-key="pub-support">Support<?php if (!empty($supportUnreadCount)): ?> <span class="nav-unread" aria-label="<?= (int) $supportUnreadCount ?> unread replies"><?= (int) $supportUnreadCount ?></span><?php endif; ?></a>
             <?php if ($user !== null && \App\Core\Auth::isAdmin()): ?>
-                <a class="nav-item" href="<?= url('/admin') ?>">Admin</a>
+                <a class="nav-item" href="<?= url('/admin') ?>" data-se-move-key="pub-admin">Admin</a>
             <?php endif; ?>
-            <a class="nav-item<?= strpos($currentPath, url('/settings')) === 0 ? ' active' : '' ?>" href="<?= url('/settings') ?>">Settings</a>
-            <form class="nav-logout" method="post" action="<?= url('/logout') ?>">
+            <a class="nav-item<?= strpos($currentPath, url('/settings')) === 0 ? ' active' : '' ?>" href="<?= url('/settings') ?>" data-se-move-key="pub-settings">Settings</a>
+            <form class="nav-logout" method="post" action="<?= url('/logout') ?>" data-se-move-key="pub-logout">
                 <?= csrf_field() ?>
                 <button type="submit" class="btn btn-sm btn-danger">Logout</button>
             </form>
@@ -419,7 +419,7 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
             var p=c.parentKey==='body'?document.body:null;
             if(c.parentOrigin){p=document.querySelector(c.parentOrigin)||p;if(p&&c.parentKey)p.setAttribute('data-se-move-key',c.parentKey);}
             if(!p)return;
-            (c.items||[]).map(function(item){var el=item.origin?document.querySelector(item.origin):null;if(!el)el=document.querySelector('[data-se-move-key="'+item.key+'"]');if(el&&item.key)el.setAttribute('data-se-move-key',item.key);if(el&&item.styles)Object.keys(item.styles).forEach(function(k){if(item.styles[k])el.style.setProperty(k,item.styles[k]);});return el;}).filter(Boolean).forEach(function(el){p.appendChild(el);});
+            (c.items||[]).map(function(item){var el=item.key?document.querySelector('[data-se-move-key="'+item.key+'"]'):null;if(!el&&item.origin)el=document.querySelector(item.origin);if(el&&item.key&&!el.hasAttribute('data-se-move-key'))el.setAttribute('data-se-move-key',item.key);if(el&&item.styles)Object.keys(item.styles).forEach(function(k){if(item.styles[k])el.style.setProperty(k,item.styles[k]);});return el;}).filter(Boolean).forEach(function(el){p.appendChild(el);});
         }
         changes.forEach(function(c){
             try{

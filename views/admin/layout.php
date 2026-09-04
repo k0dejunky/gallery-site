@@ -366,46 +366,46 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
                 <div class="nav-top-content"><?= $topContent ?></div>
                 <div class="nav-sep"></div>
             <?php endif; ?>
-            <a class="nav-brand" href="<?= url('/admin') ?>">Admin</a>
-            <a class="nav-item <?= $navActive('/admin', true) ?>" href="<?= url('/admin') ?>">Dashboard</a>
-            <a class="nav-item <?= $navActive('/admin/abandoned-uploads') ?>" href="<?= url('/admin/abandoned-uploads') ?>">Abandoned Uploads</a>
-            <a class="nav-item <?= $navActive('/admin/trends') ?>" href="<?= url('/admin/trends') ?>">Trends</a>
-            <a class="nav-item <?= $navActive('/admin/galleries') ?>" href="<?= url('/admin/galleries') ?>">Gallery Management</a>
-            <a class="nav-item <?= $navActive('/admin/video-projects') ?>" href="<?= url('/admin/video-projects') ?>">Video Projects</a>
-            <a class="nav-item <?= $navActive('/admin/auto-poster') ?>" href="<?= url('/admin/auto-poster') ?>">Auto Poster</a>
-            <a class="nav-item <?= $navActive('/admin/categories') ?>" href="<?= url('/admin/categories') ?>">Categories</a>
-            <a class="nav-item <?= $navActive('/admin/users') ?>" href="<?= url('/admin/users') ?>">Users</a>
-            <a class="nav-item <?= $navActive('/admin/plans') ?>" href="<?= url('/admin/plans') ?>">Membership</a>
+            <a class="nav-brand" href="<?= url('/admin') ?>" data-se-move-key="nav-brand">Admin</a>
+            <a class="nav-item <?= $navActive('/admin', true) ?>" href="<?= url('/admin') ?>" data-se-move-key="nav-dashboard">Dashboard</a>
+            <a class="nav-item <?= $navActive('/admin/abandoned-uploads') ?>" href="<?= url('/admin/abandoned-uploads') ?>" data-se-move-key="nav-abandoned-uploads">Abandoned Uploads</a>
+            <a class="nav-item <?= $navActive('/admin/trends') ?>" href="<?= url('/admin/trends') ?>" data-se-move-key="nav-trends">Trends</a>
+            <a class="nav-item <?= $navActive('/admin/galleries') ?>" href="<?= url('/admin/galleries') ?>" data-se-move-key="nav-galleries">Gallery Management</a>
+            <a class="nav-item <?= $navActive('/admin/video-projects') ?>" href="<?= url('/admin/video-projects') ?>" data-se-move-key="nav-video-projects">Video Projects</a>
+            <a class="nav-item <?= $navActive('/admin/auto-poster') ?>" href="<?= url('/admin/auto-poster') ?>" data-se-move-key="nav-auto-poster">Auto Poster</a>
+            <a class="nav-item <?= $navActive('/admin/categories') ?>" href="<?= url('/admin/categories') ?>" data-se-move-key="nav-categories">Categories</a>
+            <a class="nav-item <?= $navActive('/admin/users') ?>" href="<?= url('/admin/users') ?>" data-se-move-key="nav-users">Users</a>
+            <a class="nav-item <?= $navActive('/admin/plans') ?>" href="<?= url('/admin/plans') ?>" data-se-move-key="nav-plans">Membership</a>
             <?php if (\App\Core\Auth::can('membership')): ?>
-                <a class="nav-item <?= $navActive('/admin/subscriptions') ?>" href="<?= url('/admin/subscriptions') ?>">Subscriptions</a>
-                <a class="nav-item <?= $navActive('/admin/payment-processors') ?>" href="<?= url('/admin/payment-processors') ?>">Payments</a>
+                <a class="nav-item <?= $navActive('/admin/subscriptions') ?>" href="<?= url('/admin/subscriptions') ?>" data-se-move-key="nav-subscriptions">Subscriptions</a>
+                <a class="nav-item <?= $navActive('/admin/payment-processors') ?>" href="<?= url('/admin/payment-processors') ?>" data-se-move-key="nav-payments">Payments</a>
             <?php endif; ?>
-            <a class="nav-item <?= $navActive('/admin/theme') ?>" href="<?= url('/admin/theme') ?>">Theme</a>
+            <a class="nav-item <?= $navActive('/admin/theme') ?>" href="<?= url('/admin/theme') ?>" data-se-move-key="nav-theme">Theme</a>
             <?php if (\App\Core\Auth::can('site_editor')): ?>
-                <a class="nav-item <?= $navActive('/admin/site-editor') ?>" href="<?= url('/admin/site-editor') ?>">Site Editor</a>
+                <a class="nav-item <?= $navActive('/admin/site-editor') ?>" href="<?= url('/admin/site-editor') ?>" data-se-move-key="nav-site-editor">Site Editor</a>
             <?php endif; ?>
-            <a class="nav-item <?= $navActive('/admin/logs') ?>" href="<?= url('/admin/logs') ?>">Logs</a>
+            <a class="nav-item <?= $navActive('/admin/logs') ?>" href="<?= url('/admin/logs') ?>" data-se-move-key="nav-logs">Logs</a>
             <?php if (\App\Core\Auth::can('user_monitor')): ?>
-                <a class="nav-item <?= $navActive('/admin/user-monitor') ?>" href="<?= url('/admin/user-monitor') ?>">User Monitor</a>
+                <a class="nav-item <?= $navActive('/admin/user-monitor') ?>" href="<?= url('/admin/user-monitor') ?>" data-se-move-key="nav-user-monitor">User Monitor</a>
             <?php endif; ?>
-            <a class="nav-item <?= $navActive('/admin/error-logs') ?>" href="<?= url('/admin/error-logs') ?>">Error Logs</a>
-            <a class="nav-item <?= $navActive('/admin/system') ?>" href="<?= url('/admin/system') ?>">System</a>
-            <a class="nav-item <?= $navActive('/admin/test-suite') ?>" href="<?= url('/admin/test-suite') ?>">Test suite</a>
-            <a class="nav-item <?= $navActive('/admin/help') ?>" href="<?= url('/admin/help') ?>">Documentation</a>
+            <a class="nav-item <?= $navActive('/admin/error-logs') ?>" href="<?= url('/admin/error-logs') ?>" data-se-move-key="nav-error-logs">Error Logs</a>
+            <a class="nav-item <?= $navActive('/admin/system') ?>" href="<?= url('/admin/system') ?>" data-se-move-key="nav-system">System</a>
+            <a class="nav-item <?= $navActive('/admin/test-suite') ?>" href="<?= url('/admin/test-suite') ?>" data-se-move-key="nav-test-suite">Test suite</a>
+            <a class="nav-item <?= $navActive('/admin/help') ?>" href="<?= url('/admin/help') ?>" data-se-move-key="nav-help">Documentation</a>
             <?php if (\App\Core\Auth::can('support')): ?>
-                <a class="nav-item <?= $navActive('/admin/support') ?>" href="<?= url('/admin/support') ?>">Support</a>
+                <a class="nav-item <?= $navActive('/admin/support') ?>" href="<?= url('/admin/support') ?>" data-se-move-key="nav-support">Support</a>
             <?php endif; ?>
-            <div class="nav-sep"></div>
-            <a class="nav-item" href="<?= url('/galleries') ?>">View Site</a>
-            <a class="nav-item <?= $navActive('/settings') ?>" href="<?= url('/settings') ?>">Settings</a>
-            <form class="nav-logout" method="post" action="<?= url('/logout') ?>">
+            <div class="nav-sep" data-se-move-key="nav-sep"></div>
+            <a class="nav-item" href="<?= url('/galleries') ?>" data-se-move-key="nav-view-site">View Site</a>
+            <a class="nav-item <?= $navActive('/settings') ?>" href="<?= url('/settings') ?>" data-se-move-key="nav-settings">Settings</a>
+            <form class="nav-logout" method="post" action="<?= url('/logout') ?>" data-se-move-key="nav-logout">
                 <?= csrf_field() ?>
                 <button type="submit" class="btn btn-sm btn-danger">Logout</button>
             </form>
         </nav>
         <main class="admin-main">
             <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="admin-nav">☰</button>
-            <form class="admin-top-search" method="get" action="<?= url('/admin/search') ?>">
+            <form class="admin-top-search" method="get" action="<?= url('/admin/search') ?>" data-se-move-key="nav-search">
                 <input type="search" name="q" placeholder="Search users, galleries…" value=""
                        aria-label="Global admin search">
             </form>
@@ -546,9 +546,17 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
         var changes = <?= $_tplJson ?>;
         if (!Array.isArray(changes)) changes = [];
         function findItem(item) {
-            var el = item.origin ? document.querySelector(item.origin) : null;
-            if (!el && item.key) el = document.querySelector('[data-se-move-key="' + item.key + '"]');
-            if (el && item.key) el.setAttribute('data-se-move-key', item.key);
+            // Prefer the stable move-key over the CSS origin selector. The
+            // origin selector is positional (e.g. "form:nth-of-type(1)") and
+            // silently resolves to a DIFFERENT element when the page structure
+            // changes (e.g. a sidebar form is added/removed), which previously
+            // moved the logout button to the top of the admin nav.
+            var el = item.key ? document.querySelector('[data-se-move-key="' + item.key + '"]') : null;
+            if (!el && item.origin) el = document.querySelector(item.origin);
+            // Never clobber a stable key that was baked into the HTML: if the
+            // element already carries one, keep it so stored-template keys
+            // (m1, m2, ...) can never fight over the same element.
+            if (el && item.key && !el.hasAttribute('data-se-move-key')) el.setAttribute('data-se-move-key', item.key);
             if (el && item.styles) Object.keys(item.styles).forEach(function (key) { if (item.styles[key]) el.style.setProperty(key, item.styles[key]); });
             return el;
         }
