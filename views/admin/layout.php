@@ -390,6 +390,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             <?php endif; ?>
             <a class="nav-item <?= $navActive('/admin/error-logs') ?>" href="<?= url('/admin/error-logs') ?>" data-se-move-key="nav-error-logs">Error Logs</a>
             <a class="nav-item <?= $navActive('/admin/system') ?>" href="<?= url('/admin/system') ?>" data-se-move-key="nav-system">System</a>
+            <a class="nav-item <?= $navActive('/admin/mail') ?>" href="<?= url('/admin/mail') ?>" data-se-move-key="nav-mail">Email</a>
             <a class="nav-item <?= $navActive('/admin/test-suite') ?>" href="<?= url('/admin/test-suite') ?>" data-se-move-key="nav-test-suite">Test suite</a>
             <a class="nav-item <?= $navActive('/admin/help') ?>" href="<?= url('/admin/help') ?>" data-se-move-key="nav-help">Documentation</a>
             <?php if (\App\Core\Auth::can('support')): ?>

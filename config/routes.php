@@ -137,6 +137,13 @@ return [
     ['POST', '/admin/system/housekeeping', 'SystemController@housekeepingRun', 'dashboard'],
     ['POST', '/admin/system/smtp-test', 'SystemController@smtpTest', 'dashboard'],
     ['POST', '/admin/system/cron-schedule/{job}', 'SystemController@saveCronSchedule', 'dashboard'],
+
+    // Email server administration (admin only)
+    ['GET', '/admin/mail', 'EmailController@index', 'dashboard'],
+    ['POST', '/admin/mail/create', 'EmailController@create', 'dashboard'],
+    ['POST', '/admin/mail/delete', 'EmailController@delete', 'dashboard'],
+    ['POST', '/admin/mail/password', 'EmailController@password', 'dashboard'],
+    ['POST', '/admin/mail/test', 'EmailController@smtpTest', 'dashboard'],
     // Test suite (admin only): page + real-time JSON polling + detached runner.
     ['GET', '/admin/test-suite', 'TestSuiteController@index', 'logs'],
     ['POST', '/admin/test-suite/run', 'TestSuiteController@run', 'logs'],
