@@ -52,6 +52,51 @@ class AutoPostQueue
     public const VIDEO_SCREENSHOTS = 3;
 
     /**
+     * Words that must never appear in a recommended post. They are stripped
+     * from the post text and offending category hashtags are dropped, but the
+     * gallery itself is still posted.
+     */
+    public const BANNED_WORDS = ['nipple', 'nipples'];
+
+    /**
+     * Whether a piece of text contains any banned word (case-insensitive,
+     * word-boundary aware so "nipples" also matches "nipple").
+     */
+    public static function containsBannedWord(string $text): bool
+    {
+        $text = mb_strtolower($text);
+
+        foreach (self::BANNED_WORDS as $word) {
+            if (preg_match('/(?<![a-z])' . preg_quote(mb_strtolower($word), '/') . '(?![a-z])/u', $text) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Remove every banned word from a piece of text so the word never appears
+     * in a post (used on the title/description that build the post body).
+     */
+    public static function stripBannedWords(string $text): string
+    {
+        $result = $text;
+
+        foreach (self::BANNED_WORDS as $word) {
+            $result = preg_replace(
+                '/(?<![a-z])' . preg_quote(mb_strtolower($word), '/') . '(?![a-z])/iu',
+                '',
+                $result
+            ) ?? $result;
+        }
+
+        $result = preg_replace('/\s{2,}/u', ' ', $result) ?? $result;
+
+        return trim($result);
+    }
+
+    /**
      * Recent galleries the queue will propose. A gallery with new uploads in
      * the last RECENT_WINDOW_DAYS becomes one recommended post (built from its
      * gallery title/description with up to 4 of its newest files attached).
@@ -177,6 +222,12 @@ class AutoPostQueue
 
         $base = preg_replace('/\s+/u', ' ', implode(' — ', $parts)) ?? '';
 
+        // Banned-word filter: strip offending words from the post body so the
+        // word never appears, while still posting the gallery.
+        $base = self::stripBannedWords($base);
+        $base = preg_replace('/\s+/u', ' ', $base) ?? '';
+        $base = trim($base);
+
         $cleanTags = [];
         foreach ($tags as $tag) {
             $tag = trim((string) preg_replace('/[^A-Za-z0-9_]/', '', (string) $tag));
@@ -184,8 +235,12 @@ class AutoPostQueue
                 // X autoposter filter: never post a "tits"/"titties" hashtag.
                 // When the word already appears in the title/description the
                 // hashtag is dropped as redundant; otherwise it is replaced
-                // with "boobs".
+                // with "boobs". Banned words (nipple/nipples) are always
+                // dropped so they never appear in a post's text.
                 $tagLower = mb_strtolower($tag);
+                if (self::containsBannedWord($tagLower)) {
+                    continue;
+                }
                 $isSensitive = mb_strpos($tagLower, 'tits') !== false
                     || mb_strpos($tagLower, 'titties') !== false;
                 if ($isSensitive) {
@@ -297,6 +352,11 @@ class AutoPostQueue
         } else {
             $text = mb_substr(trim($text), 0, 280);
         }
+
+        // Banned-word filter: strip offending words from an admin-provided
+        // draft too, so the word never appears in the published post (the
+        // gallery itself is still queued).
+        $text = self::stripBannedWords($text);
 
         $scheduled = self::normalizeSchedule($scheduledAt) ?? self::defaultSchedule();
 
