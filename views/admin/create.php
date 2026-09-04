@@ -7,19 +7,19 @@
 
     .create-grid {
         display: grid;
-        grid-template-columns: minmax(360px, 520px) 1fr;
+        grid-template-columns: 1fr;
         gap: 1.5rem;
         align-items: start;
+        width: 100%;
     }
-    @media (max-width: 860px) { .create-grid { grid-template-columns: 1fr; } }
 
     .create-form-card {
         border: 1px solid var(--card-border, #ddd);
         border-radius: var(--card-radius, 8px);
         background: var(--card-bg, #fff);
         padding: 1.25rem;
-        position: sticky;
-        top: 1rem;
+        width: 100%;
+        box-sizing: border-box;
     }
     .create-form-card h2 { margin: 0 0 1rem; font-size: var(--font-size-lg, 1.15rem); }
     .create-form-card input[type="text"],
@@ -34,7 +34,7 @@
     .create-actions .btn:last-child { flex: 0 0 auto; }
     .cat-chips { display: flex; flex-wrap: wrap; gap: .4rem; max-height: 150px; overflow-y: auto; }
 
-    .upload-panel { min-width: 0; }
+    .upload-panel { min-width: 0; width: 100%; box-sizing: border-box; }
     .drop-zone {
         border: 2px dashed var(--card-border, #bbb);
         border-radius: var(--border-radius, 6px);
