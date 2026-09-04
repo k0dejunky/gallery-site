@@ -56,5 +56,4 @@ $line = sprintf(
 
 @file_put_contents(dirname(__DIR__) . '/storage/logs/paypal-reconcile.log', $line . "\n", FILE_APPEND);
 
-echo $line . "\n";
 exit(0);
