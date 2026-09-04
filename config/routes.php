@@ -54,7 +54,10 @@ return [
     ['POST', '/support/{id}/reply', 'SupportController@reply'],
 
     // Admin
-    ['GET', '/admin', 'AdminController@dashboard', 'dashboard'],
+    // GET /admin is the admin entry point: it renders the login form for
+    // anonymous visitors and the dashboard for logged-in admins, so it must
+    // NOT be gated at the router level (the controller decides).
+    ['GET', '/admin', 'AdminController@dashboard'],
     ['POST', '/admin', 'AdminController@login'],
     ['GET', '/admin/abandoned-uploads', 'AdminController@abandonedUploads', 'galleries'],
     ['POST', '/admin/abandoned-uploads/resume', 'AdminController@resumeAbandoned', 'galleries'],
