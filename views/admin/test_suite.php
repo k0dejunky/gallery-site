@@ -45,6 +45,33 @@
 
 <div id="ts-viewing" class="ts-viewing" hidden></div>
 
+<!-- Past runs (collapsible, shown above the tests) -->
+<details class="sys-card test-runs" id="ts-runs-panel" open>
+    <summary>
+        <h2 class="section-title" style="display:inline;">Recent runs</h2>
+        <span class="collapsible-meta muted" id="ts-runs-count"></span>
+    </summary>
+    <p class="muted" style="margin-top:.5rem;">Click a run to view its full per-test results.</p>
+    <div class="users-table-wrap">
+        <table class="users-table" id="ts-runs-table">
+            <thead>
+                <tr><th>Run</th><th>Started</th><th>Result</th><th>Progress</th><th></th></tr>
+            </thead>
+            <tbody>
+            <?php foreach ($runs as $r): ?>
+                <tr data-run="<?= e($r['id']) ?>">
+                    <td class="mono"><?= e($r['id']) ?></td>
+                    <td><?= e($r['started_at'] ?? '') ?></td>
+                    <td><span class="status-badge <?= ($r['status'] ?? '') === 'complete' ? ('ts-' . ($r['failed'] > 0 ? 'failed' : 'passed')) : 'ts-running' ?>"><?= e($r['status'] ?? '') ?></span></td>
+                    <td class="detail-cell"><?= (int) ($r['passed'] ?? 0) ?> / <?= (int) ($r['total'] ?? 0) ?> passed, <?= (int) ($r['failed'] ?? 0) ?> failed</td>
+                    <td><button type="button" class="btn btn-sm" data-view-run="<?= e($r['id']) ?>">View</button></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</details>
+
 <div id="ts-groups">
 
 <?php foreach ($groups as $group => $tests): $total = count($tests); ?>
@@ -79,30 +106,6 @@
 
 </div>
 
-<!-- Past runs -->
-<div class="test-runs">
-    <h2 class="section-title">Recent runs</h2>
-    <p class="muted" style="margin-top:0;">Click a run to view its full per-test results.</p>
-    <div class="users-table-wrap">
-        <table class="users-table" id="ts-runs-table">
-            <thead>
-                <tr><th>Run</th><th>Started</th><th>Result</th><th>Progress</th><th></th></tr>
-            </thead>
-            <tbody>
-            <?php foreach ($runs as $r): ?>
-                <tr data-run="<?= e($r['id']) ?>">
-                    <td class="mono"><?= e($r['id']) ?></td>
-                    <td><?= e($r['started_at'] ?? '') ?></td>
-                    <td><span class="status-badge <?= ($r['status'] ?? '') === 'complete' ? ('ts-' . ($r['failed'] > 0 ? 'failed' : 'passed')) : 'ts-running' ?>"><?= e($r['status'] ?? '') ?></span></td>
-                    <td class="detail-cell"><?= (int) ($r['passed'] ?? 0) ?> / <?= (int) ($r['total'] ?? 0) ?> passed, <?= (int) ($r['failed'] ?? 0) ?> failed</td>
-                    <td><button type="button" class="btn btn-sm" data-view-run="<?= e($r['id']) ?>">View</button></td>
-                </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-    </div>
-</div>
-
 <script>
 (function () {
     var token = <?= json_encode(\App\Core\Csrf::token()) ?>;
@@ -130,6 +133,12 @@
     els.total.textContent = Object.keys(rowsById).length + ' tests';
     // All tests are checked by default, so "Run selected" is usable at load.
     els.runSelected.disabled = document.querySelectorAll('.ts-cbx:checked').length === 0;
+
+    // Show how many past runs exist in the collapsible panel's summary line.
+    var runsCountEl = document.getElementById('ts-runs-count');
+    if (runsCountEl) {
+        runsCountEl.textContent = document.querySelectorAll('#ts-runs-table tbody tr').length + ' stored run(s)';
+    }
 
     function selectedIds() {
         var out = [];
