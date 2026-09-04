@@ -120,6 +120,11 @@ class TestSuiteController extends Controller
             echo json_encode(['ok' => false, 'error' => 'no such run']);
             return;
         }
+        // Normalise the tests map (id => result) to a plain list so the
+        // client can iterate it directly without knowing the internal shape.
+        if (is_array($state['tests'] ?? null) && !array_is_list($state['tests'])) {
+            $state['tests'] = array_values($state['tests']);
+        }
         $state['ok'] = true;
         echo json_encode($state);
     }

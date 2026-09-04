@@ -170,7 +170,13 @@
 
     function renderRun(state) {
         if (!state || !state.tests) return;
-        state.tests.forEach(function (t) {
+        // The stored run state maps test id => result (an object, not an
+        // array). Normalise to a list so the same render path works whether
+        // the payload arrives as an object or an array.
+        var tests = Array.isArray(state.tests)
+            ? state.tests
+            : Object.keys(state.tests).map(function (id) { return state.tests[id]; });
+        tests.forEach(function (t) {
             if (!t) return;
             applyStatus(t.id, t.status || 'pending', t.detail || '');
         });
