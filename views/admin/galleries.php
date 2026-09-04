@@ -15,8 +15,6 @@ $levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill', 4 => 'pill-err']
 ?>
 
 <style>
-    .mg-header { display: flex; justify-content: flex-end; margin-bottom: 1rem; }
-
     .mg-table-wrap { background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 10px; overflow: hidden; margin-top: 1rem; }
     .mg-table-wrap table { margin: 0; border: none; }
     .mg-table-wrap th, .mg-table-wrap td { border-color: var(--pink-200); }
@@ -40,13 +38,7 @@ $levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill', 4 => 'pill-err']
 
     .mg-empty { padding: 2.5rem 1rem; text-align: center; color: var(--purple-800); }
     .mg-empty .btn { margin-top: .75rem; }
-
-    .mg-count { margin-bottom: .75rem; font-size: .85rem; color: var(--purple-800); }
 </style>
-
-<div class="mg-header">
-    <a class="btn btn-sm" href="<?= url('/admin/galleries/create') ?>">New Gallery</a>
-</div>
 
 <?php if (empty($galleries)): ?>
     <div class="mg-empty">
@@ -75,7 +67,9 @@ $levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill', 4 => 'pill-err']
         </div>
     </div>
 
-    <p class="mg-count muted"><?= number_format(count($galleries)) ?> gallery<?= count($galleries) === 1 ? '' : 'ies' ?></p>
+    <div style="display:flex;justify-content:flex-end;margin:.75rem 0;">
+        <a class="btn btn-sm" href="<?= url('/admin/galleries/create') ?>">New Gallery</a>
+    </div>
 
     <div class="mg-table-wrap">
         <table>
