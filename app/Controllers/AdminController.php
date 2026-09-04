@@ -97,9 +97,8 @@ class AdminController extends Controller
         $galleryIds = array_map('intval', array_column($galleries, 'id'));
 
         $this->viewAdmin('galleries', [
-            'galleries'  => $galleries,
-            'categories' => Gallery::categoriesBulk($galleryIds),
-            'covers'     => Gallery::firstPhotos($galleryIds),
+            'galleries' => $galleries,
+            'covers'    => Gallery::firstPhotos($galleryIds),
         ]);
     }
 

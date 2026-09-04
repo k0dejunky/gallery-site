@@ -92,7 +92,6 @@ $levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill', 4 => 'pill-err']
                     <th>Type</th>
                     <th>Media</th>
                     <th>Level</th>
-                    <th>Categories</th>
                     <th>Created</th>
                     <th style="text-align:right;">Actions</th>
                 </tr>
@@ -133,18 +132,6 @@ $levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill', 4 => 'pill-err']
                                 <span class="pill pill-muted">Free</span>
                             <?php else: ?>
                                 <span class="pill <?= $levelPill[$level] ?? 'pill' ?>"><?= $levelNames[$level] ?? 'Level ' . $level ?></span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php $gs = $categories[$gid] ?? []; ?>
-                            <?php if ($gs === []): ?>
-                                <span class="muted">Uncategorized</span>
-                            <?php else: ?>
-                                <div style="display:flex;flex-wrap:wrap;gap:.25rem;max-width:16rem;">
-                                    <?php foreach ($gs as $cat): ?>
-                                        <span class="pill pill-muted"><?= e((string) $cat['name']) ?></span>
-                                    <?php endforeach; ?>
-                                </div>
                             <?php endif; ?>
                         </td>
                         <td class="mg-date"><?= e((string) ($gallery['created_at'] ?? '')) ?></td>
