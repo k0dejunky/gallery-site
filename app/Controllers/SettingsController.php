@@ -189,4 +189,92 @@ class SettingsController extends Controller
         header('Location: ' . url('/login'));
         exit;
     }
+
+    /**
+     * Generate a fresh TOTP secret and show its provisioning URI so the admin
+     * can scan it into an authenticator app before enabling two-factor.
+     */
+    public function twoFactorSetup(): void
+    {
+        $user = Auth::user();
+        if ($user === null) {
+            $this->redirect('/login');
+        }
+
+        $secret = \App\Core\Totp::generateSecret();
+        \App\Models\User::setTotpSecret((int) $user['id'], $secret);
+
+        $uri = \App\Core\Totp::provisioningUri(
+            $secret,
+            (string) config('app.site_name', 'Gallery'),
+            (string) $user['email']
+        );
+
+        $this->flash('success', 'Scan the QR code with your authenticator app, then enter a code to enable two-factor.');
+        $this->viewAdmin('settings_2fa_setup', [
+            'secret' => $secret,
+            'uri'    => $uri,
+        ]);
+    }
+
+    /**
+     * Enable two-factor for the current admin after verifying their current
+     * TOTP code matches the stored secret.
+     */
+    public function twoFactorEnable(): void
+    {
+        $user = Auth::user();
+        if ($user === null) {
+            $this->redirect('/login');
+        }
+
+        $code = (string) $this->request->post('code', '');
+        $stored = (string) ($user['totp_secret'] ?? '');
+
+        if ($stored === '' || !\App\Core\Totp::verify($stored, $code)) {
+            $this->flash('error', 'The verification code is invalid. Two-factor was not enabled.');
+            $this->redirect('/settings?se=admin#two-factor');
+        }
+
+        \App\Models\User::enableTotp((int) $user['id']);
+
+        \App\Models\AuditLog::record((int) $user['id'], 'update', 'user_two_factor', (int) $user['id'], 'Enabled two-factor authentication');
+
+        $this->flash('success', 'Two-factor authentication is now enabled.');
+        $this->redirect('/settings?se=admin#two-factor');
+    }
+
+    /**
+     * Disable two-factor for the current admin, confirming with their current
+     * TOTP code.
+     */
+    public function twoFactorDisable(): void
+    {
+        $user = Auth::user();
+        if ($user === null) {
+            $this->redirect('/login');
+        }
+
+        $code = (string) $this->request->post('code', '');
+
+        if ((int) ($user['totp_enabled'] ?? 0) === 0) {
+            $this->flash('success', 'Two-factor authentication is already disabled.');
+            $this->redirect('/settings?se=admin#two-factor');
+        }
+
+        // Require a valid current code to disable, so a stolen session alone
+        // can't turn off the protection.
+        $stored = (string) ($user['totp_secret'] ?? '');
+        if ($stored === '' || !\App\Core\Totp::verify($stored, $code)) {
+            $this->flash('error', 'The verification code is invalid. Two-factor was not disabled.');
+            $this->redirect('/settings?se=admin#two-factor');
+        }
+
+        \App\Models\User::disableTotp((int) $user['id']);
+
+        \App\Models\AuditLog::record((int) $user['id'], 'update', 'user_two_factor', (int) $user['id'], 'Disabled two-factor authentication');
+
+        $this->flash('success', 'Two-factor authentication is now disabled.');
+        $this->redirect('/settings?se=admin#two-factor');
+    }
 }

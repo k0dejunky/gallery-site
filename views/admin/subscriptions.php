@@ -93,7 +93,8 @@
                             </form>
                         <?php endif; ?>
                         <?php if ($sub['status'] === 'active'): ?>
-                            <form class="inline" method="post" action="<?= url('/admin/subscriptions/' . (int) $sub['id'] . '/cancel') ?>">
+                            <form class="inline" method="post" action="<?= url('/admin/subscriptions/' . (int) $sub['id'] . '/cancel') ?>"
+                                  onsubmit="return confirm('Cancel this active subscription? This will end the member\u2019s access.');">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm btn-outline">Cancel</button>
                             </form>

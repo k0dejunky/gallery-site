@@ -380,8 +380,18 @@ class GalleryController extends Controller
         $categoryIds = $this->request->post('categories', []);
         $categoryIds = is_array($categoryIds) ? $categoryIds : [];
 
-        if ($title === '') {
-            $this->flash('error', 'Title is required.');
+        $errors = \App\Core\Validator::validate([
+            'title'       => $title,
+            'min_level'   => $minLevel,
+            'categories'  => $categoryIds,
+        ], [
+            'title'      => 'required|max:255',
+            'min_level'  => 'numeric|min:0|max:4',
+            'categories' => 'numeric',
+        ]);
+
+        if ($errors !== []) {
+            $this->flash('error', implode(' ', $errors));
             $this->redirect('/admin/galleries/create');
         }
 

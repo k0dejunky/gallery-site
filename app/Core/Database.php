@@ -12,6 +12,14 @@ class Database
 {
     private static ?PDO $pdo = null;
 
+    /** In-memory record of queries that exceeded the slow threshold. */
+    private static array $slowQueries = [];
+
+    /**
+     * Queries slower than this (seconds) are recorded and logged.
+     */
+    private const SLOW_THRESHOLD = 1.0;
+
     /**
      * Get the shared PDO connection, configuring errors to throw exceptions
      * and rows to return as associative arrays. Enables SQLite foreign keys.
@@ -44,13 +52,46 @@ class Database
     /**
      * Prepare and execute a parameterised query. Always pass values as
      * parameters (never interpolated) so input cannot change the query.
+     * Queries that take longer than the slow threshold are recorded and
+     * logged so regressions (e.g. missing indexes, N+1 loops) surface in the
+     * System page and the error log.
      */
     public static function run(string $sql, array $params = []): \PDOStatement
     {
-        $stmt = self::connection()->prepare($sql);
+        $start = microtime(true);
+        $stmt  = self::connection()->prepare($sql);
         $stmt->execute($params);
+        $elapsed = microtime(true) - $start;
+
+        if ($elapsed >= self::SLOW_THRESHOLD) {
+            $summary = preg_replace('/\s+/', ' ', trim($sql));
+            $summary = mb_substr($summary, 0, 500);
+
+            self::$slowQueries[] = [
+                'sql'      => $summary,
+                'params'   => $params,
+                'seconds'  => round($elapsed, 4),
+                'at'       => date('Y-m-d H:i:s'),
+            ];
+
+            error_log(sprintf(
+                '[db-slow] %.4fs %s (%d params)',
+                $elapsed,
+                $summary,
+                count($params)
+            ));
+        }
 
         return $stmt;
+    }
+
+    /**
+     * Queries recorded as slow on this request, newest last. Each entry is
+     * ['sql', 'params', 'seconds', 'at'].
+     */
+    public static function slowQueries(): array
+    {
+        return self::$slowQueries;
     }
 
     /**

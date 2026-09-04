@@ -46,6 +46,7 @@
             <tr><th>SMTP configured</th><td><?= $diagnostics['smtp'] ? 'yes' : 'no' ?></td></tr>
             <tr><th>PayPal</th><td><?= $diagnostics['paypal']['configured'] ? 'configured' : 'not configured' ?><?= $diagnostics['paypal']['enabled'] ? ' / enabled' : '' ?></td></tr>
             <tr><th>Migrations</th><td><?= $diagnostics['migrations']['table'] ? (int) $diagnostics['migrations']['applied'] . ' applied, ' . (int) $diagnostics['migrations']['pending'] . ' pending' : 'table unavailable' ?></td></tr>
+            <tr><th>Slow queries (this page)</th><td class="<?= empty($slowQueries) ? 'sys-ok' : 'sys-bad' ?>"><?= count($slowQueries) ?> over 1s</td></tr>
         </table>
         <form class="sys-actions" method="post" action="<?= url('/admin/system/smtp-test') ?>">
             <?= csrf_field() ?>
@@ -53,6 +54,26 @@
             <span class="muted">Send a test email to <?= e(\App\Core\Mailer::adminEmail() ?: '(no admin email)') ?></span>
         </form>
     </div>
+
+    <?php if (!empty($slowQueries)): ?>
+    <!-- Slow queries -->
+    <div class="sys-card">
+        <h2>Slow queries (this request)</h2>
+        <table>
+            <thead><tr><th>Seconds</th><th>At</th><th>Query</th></tr></thead>
+            <tbody>
+                <?php foreach ($slowQueries as $sq): ?>
+                    <tr>
+                        <td class="sys-bad"><?= (float) $sq['seconds'] ?>s</td>
+                        <td><?= e((string) $sq['at']) ?></td>
+                        <td><code style="font-size:.75rem;"><?= e((string) $sq['sql']) ?></code></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+        <p class="muted" style="font-size:.8rem;margin:.5rem 0 0;">Queries slower than 1 second are logged to the server error log as <code>[db-slow]</code>.</p>
+    </div>
+    <?php endif; ?>
 
     <!-- Video export queue -->
     <div class="sys-card">

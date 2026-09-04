@@ -33,7 +33,22 @@ class Auth
         }
 
         if (isset($_SESSION['user_id'])) {
-            $timeout = max(300, (int) config('app.auth.session_idle_seconds', 43200));
+            // Admins get a shorter idle timeout unless they opted to stay
+            // signed in via "remember me" at login. Non-admin sessions keep
+            // the general idle window. Read the role directly from the DB
+            // (via a static helper) instead of isAdmin(), which would recurse
+            // back into start().
+            $userId = (int) $_SESSION['user_id'];
+            $remember = !empty($_SESSION['remember_me']);
+
+            if ($remember) {
+                $timeout = max(300, (int) config('app.auth.admin_remember_seconds', 604800));
+            } elseif (self::userRole($userId) !== null && in_array(self::userRole($userId), self::ADMIN_ROLES, true)) {
+                $timeout = max(300, (int) config('app.auth.admin_idle_seconds', 1800));
+            } else {
+                $timeout = max(300, (int) config('app.auth.session_idle_seconds', 43200));
+            }
+
             $lastActivity = (int) ($_SESSION['last_activity_at'] ?? 0);
             if ($lastActivity > 0 && $lastActivity + $timeout < time()) {
                 self::revokeSession();
@@ -44,9 +59,29 @@ class Auth
     }
 
     /**
+     * The role of a user by id, or null when the row does not exist. Used in
+     * start() to pick an admin timeout without recursing through isAdmin().
+     */
+    private static function userRole(int $userId): ?string
+    {
+        if (self::$userCache !== null && (int) self::$userCache['id'] === $userId) {
+            return (string) (self::$userCache['role'] ?? 'user');
+        }
+
+        $row = User::find($userId);
+
+        return $row !== null ? (string) ($row['role'] ?? 'user') : null;
+    }
+
+    /**
      * Verify an email/password pair. Returns true on success, false on a
      * bad credential, or a message string when the user is locked out by too
      * many recent failures. Successful logins clear the attempt history.
+     *
+     * When the account has two-factor authentication enabled the user is NOT
+     * fully logged in; instead a "pending two-factor" state is stored and the
+     * caller must complete Auth::completeTwoFactor() with a valid TOTP code.
+     * Returns the string '2fa' in that case.
      */
     public static function attempt(string $email, string $password, string $ip)
     {
@@ -63,8 +98,19 @@ class Auth
                 return 'This account has been suspended.';
             }
 
-            self::loginUser((int) $user['id']);
             LoginAttempt::clear($email, $ip);
+
+            // Two-factor accounts require a second step before the session is
+            // established. Credentials are validated and the throttling reset,
+            // but login completes only after a valid TOTP code is supplied.
+            if (!empty($user['totp_enabled'])) {
+                $_SESSION['2fa_pending_user_id'] = (int) $user['id'];
+                self::start();
+
+                return '2fa';
+            }
+
+            self::loginUser((int) $user['id']);
 
             return true;
         }
@@ -75,15 +121,71 @@ class Auth
     }
 
     /**
-     * Mark a user as logged in: regenerate the session id to prevent session
-     * fixation, then store the user id in the session.
+     * Whether the current request is mid-way through a two-factor login.
      */
-    public static function loginUser(int $userId): void
+    public static function twoFactorPending(): bool
+    {
+        self::start();
+
+        return isset($_SESSION['2fa_pending_user_id']);
+    }
+
+    /**
+     * The user id awaiting a two-factor code, or null.
+     */
+    public static function twoFactorPendingUserId(): ?int
+    {
+        self::start();
+
+        return isset($_SESSION['2fa_pending_user_id'])
+            ? (int) $_SESSION['2fa_pending_user_id']
+            : null;
+    }
+
+    /**
+     * Verify a TOTP code for the pending two-factor login and, on success,
+     * establish the session. Returns true on success, false on a bad code.
+     */
+    public static function completeTwoFactor(string $code, bool $remember = false): bool
+    {
+        $userId = self::twoFactorPendingUserId();
+
+        if ($userId === null) {
+            return false;
+        }
+
+        $user = User::find($userId);
+
+        if ($user === null || empty($user['totp_enabled']) || empty($user['totp_secret'])) {
+            unset($_SESSION['2fa_pending_user_id']);
+
+            return false;
+        }
+
+        if (!\App\Core\Totp::verify((string) $user['totp_secret'], $code)) {
+            return false;
+        }
+
+        unset($_SESSION['2fa_pending_user_id']);
+        $remember = $remember || !empty($_SESSION['2fa_remember']);
+        unset($_SESSION['2fa_remember']);
+        self::loginUser($userId, $remember);
+
+        return true;
+    }
+
+    /**
+     * Mark a user as logged in: regenerate the session id to prevent session
+     * fixation, then store the user id in the session. When $remember is true
+     * the session is exempt from the shorter admin idle timeout.
+     */
+    public static function loginUser(int $userId, bool $remember = false): void
     {
         self::start();
         session_regenerate_id(true);
         $_SESSION['user_id'] = $userId;
         $_SESSION['last_activity_at'] = time();
+        $_SESSION['remember_me'] = $remember ? 1 : 0;
 
         $row = User::find($userId);
         $_SESSION['session_version'] = (int) ($row['session_version'] ?? 0);

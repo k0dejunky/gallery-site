@@ -58,6 +58,7 @@ class SystemController extends Controller
             'diagnostics' => $this->operationalDiagnostics(),
             'exportQueue' => $this->videoExportQueue(),
             'photoEditQueue' => $this->photoEditQueue(),
+            'slowQueries' => \App\Core\Database::slowQueries(),
         ]);
     }
 

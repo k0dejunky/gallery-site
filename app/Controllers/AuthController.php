@@ -31,13 +31,21 @@ class AuthController extends Controller
 
     /**
      * Handle the login POST and redirect to the user's role-appropriate home.
+     * Accounts with two-factor enabled are sent to the two-factor page after
+     * their password is verified.
      */
     public function login(): void
     {
         $email    = $this->request->input('email');
         $password = (string) $this->request->post('password', '');
+        $remember = $this->request->post('remember_me', null) !== null;
 
         $result = Auth::attempt($email, $password, $this->request->ip());
+
+        if ($result === '2fa') {
+            $_SESSION['2fa_remember'] = $remember ? 1 : 0;
+            $this->redirect('/login/2fa');
+        }
 
         if ($result === true) {
             $this->flash('success', 'Welcome back!');
@@ -47,6 +55,39 @@ class AuthController extends Controller
         $message = is_string($result) ? $result : 'Invalid email or password.';
         $this->flash('error', $message);
         $this->redirect('/login' . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
+    }
+
+    /**
+     * Two-factor verification page shown after a valid password on an
+     * account with TOTP enabled.
+     */
+    public function twoFactorForm(): void
+    {
+        if (!Auth::twoFactorPending()) {
+            $this->redirect('/login');
+        }
+
+        $this->view('auth/2fa', []);
+    }
+
+    /**
+     * Verify the TOTP code and complete the two-factor login.
+     */
+    public function twoFactorVerify(): void
+    {
+        if (!Auth::twoFactorPending()) {
+            $this->redirect('/login');
+        }
+
+        $code = (string) $this->request->post('code', '');
+
+        if (Auth::completeTwoFactor($code)) {
+            $this->flash('success', 'Welcome back!');
+            $this->redirect(Auth::homePath());
+        }
+
+        $this->flash('error', 'The verification code is invalid or has expired.');
+        $this->redirect('/login/2fa');
     }
 
     /**
@@ -81,13 +122,18 @@ class AuthController extends Controller
             $this->redirect('/signup');
         }
 
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $this->flash('error', 'A valid email address is required.');
-            $this->redirect('/signup');
-        }
+        $errors = \App\Core\Validator::validate([
+            'email'           => $email,
+            'password'        => $password,
+            'date_of_birth'   => (string) $dob,
+        ], [
+            'email'         => 'required|email',
+            'password'      => 'required|min:8',
+            'date_of_birth' => 'required|date',
+        ]);
 
-        if (strlen($password) < 8) {
-            $this->flash('error', 'Password must be at least 8 characters.');
+        if ($errors !== []) {
+            $this->flash('error', implode(' ', $errors));
             $this->redirect('/signup');
         }
 
@@ -99,11 +145,6 @@ class AuthController extends Controller
         if (User::findByEmail($email) !== null) {
             $this->flash('error', 'An account with that email already exists.');
             $this->redirect('/login');
-        }
-
-        if ($dob === null || $dob === '') {
-            $this->flash('error', 'Date of birth is required.');
-            $this->redirect('/signup');
         }
 
         $dobDate = date_create($dob);

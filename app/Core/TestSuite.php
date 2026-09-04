@@ -212,6 +212,28 @@ class TestSuite
             return ['pass' => $ok, 'detail' => $ok ? 'csrf helpers ok' : 'csrf missing'];
         });
 
+        $add('auth.totp', 'Auth', 'TOTP generates secrets and verifies codes', function () {
+            $secret = \App\Core\Totp::generateSecret();
+            $okBase32 = (bool) preg_match('/^[A-Z2-7]{16,64}$/', $secret);
+            $okUri = strpos(\App\Core\Totp::provisioningUri($secret, 'T', 'a@b.c'), 'otpauth://totp/') === 0;
+            $okReject = !\App\Core\Totp::verify($secret, '000000');
+            return ['pass' => $okBase32 && $okUri && $okReject, 'detail' => 'secret=' . strlen($secret) . ' chars, uri=' . ($okUri ? 'ok' : 'bad') . ', rejects-bad=' . ($okReject ? 'ok' : 'bad')];
+        });
+
+        $add('auth.validator', 'Auth', 'Validator rules enforce expected constraints', function () {
+            $errors = \App\Core\Validator::validate(
+                ['email' => 'not-an-email', 'age' => -1, 'role' => 'nope', 'title' => ''],
+                ['email' => 'required|email', 'age' => 'numeric|min:0', 'role' => 'in:admin,user', 'title' => 'required|max:255']
+            );
+            $pass = isset($errors['email']) && isset($errors['age']) && isset($errors['role']) && isset($errors['title']);
+
+            $clean = \App\Core\Validator::validate(
+                ['email' => 'a@b.co', 'age' => '3', 'role' => 'admin', 'title' => 'Hello'],
+                ['email' => 'required|email', 'age' => 'numeric|min:0', 'role' => 'in:admin,user', 'title' => 'required|max:255']
+            );
+            return ['pass' => $pass && $clean === [], 'detail' => ($pass && $clean === []) ? 'rules enforced' : 'expected failures: ' . implode(',', array_keys($errors))];
+        });
+
         // ---------------------------------------------------------------- Front-end / Routes
         $add('route.public_pages', 'Front-end', 'Public GET pages return HTTP 200', function () {
             $pages = ['/', '/galleries', '/about', '/terms', '/privacy', '/health'];
@@ -238,6 +260,40 @@ class TestSuite
         $add('route.media_guard', 'Front-end', '/files/ route requires media token logic', function () {
             $ok = function_exists('media_token') && function_exists('media_token_valid');
             return ['pass' => $ok, 'detail' => $ok ? 'media token helpers present' : 'missing'];
+        });
+
+        $add('route.no_shadowing', 'App & Config', 'No literal route is shadowed by an earlier wildcard', function () use ($root) {
+            $routes = require $root . '/config/routes.php';
+            $shadowed = [];
+
+            foreach ($routes as $i => [$method, $path, $handler]) {
+                // Only literal paths (no {param}) can be shadowed.
+                if (strpos($path, '{') !== false) {
+                    continue;
+                }
+
+                $literalRegex = '#^' . preg_replace('#\{[a-zA-Z0-9_]+\}#', '[^/]+', $path) . '/?$#';
+
+                foreach ($routes as $j => [$m2, $wPath]) {
+                    if ($j >= $i) {
+                        break; // only earlier routes can shadow this one
+                    }
+                    if ($m2 !== $method || strpos($wPath, '{') === false) {
+                        continue;
+                    }
+
+                    $wildRegex = '#^' . preg_replace('#\{[a-zA-Z0-9_]+\}#', '[^/]+', $wPath) . '/?$#';
+                    if (preg_match($wildRegex, $path)) {
+                        $shadowed[] = "$method $path (by $m2 $wPath)";
+                        break;
+                    }
+                }
+            }
+
+            return [
+                'pass'   => $shadowed === [],
+                'detail' => $shadowed === [] ? 'no shadowed literal routes' : implode('; ', $shadowed),
+            ];
         });
 
         // ---------------------------------------------------------------- Models

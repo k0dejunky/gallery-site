@@ -234,6 +234,40 @@ class User
     }
 
     /**
+     * Persist a TOTP secret for a user. The secret is generated and shown
+     * exactly once before two-factor is enabled; enabling records it.
+     */
+    public static function setTotpSecret(int $id, string $secret): void
+    {
+        Database::run(
+            'UPDATE users SET totp_secret = ?, totp_enabled = 0, totp_verified_at = NULL WHERE id = ?',
+            [$secret, $id]
+        );
+    }
+
+    /**
+     * Enable two-factor for a user once their code has been verified.
+     */
+    public static function enableTotp(int $id): void
+    {
+        Database::run(
+            'UPDATE users SET totp_enabled = 1, totp_verified_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [$id]
+        );
+    }
+
+    /**
+     * Disable two-factor for a user, clearing the stored secret.
+     */
+    public static function disableTotp(int $id): void
+    {
+        Database::run(
+            'UPDATE users SET totp_enabled = 0, totp_secret = NULL, totp_verified_at = NULL WHERE id = ?',
+            [$id]
+        );
+    }
+
+    /**
      * Number of users with a given status value.
      */
     public static function countByStatus(string $status): int

@@ -507,13 +507,16 @@ class UserController extends Controller
         $role     = $this->requestedRole();
         $dob      = $this->request->input('date_of_birth') ?: null;
 
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $this->flash('error', 'A valid email address is required.');
-            $this->redirect('/admin/users/create');
-        }
+        $errors = \App\Core\Validator::validate([
+            'email'    => $email,
+            'password' => $password,
+        ], [
+            'email'    => 'required|email',
+            'password' => 'required|min:8',
+        ]);
 
-        if (strlen($password) < 8) {
-            $this->flash('error', 'Password must be at least 8 characters.');
+        if ($errors !== []) {
+            $this->flash('error', implode(' ', $errors));
             $this->redirect('/admin/users/create');
         }
 

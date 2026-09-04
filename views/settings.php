@@ -175,6 +175,25 @@
     <form method="post" action="<?= e(url('/settings/logout-everywhere')) ?>" onsubmit="return confirm('Sign out every device connected to your account?');">
         <?= csrf_field() ?><button type="submit" class="btn btn-danger">Log out everywhere</button>
     </form>
+    <?php if (\App\Core\Auth::isAdmin()): ?>
+        <?php $totpEnabled = !empty($user['totp_enabled']); ?>
+        <hr style="margin:1rem 0;border:none;border-top:1px solid var(--pink-300);">
+        <h3 style="text-align:left;margin:0 0 .5rem;">Two-factor authentication</h3>
+        <p class="muted">Add a time-based one-time code from an authenticator app to protect admin access.</p>
+        <?php if ($totpEnabled): ?>
+            <p><span class="pill pill-ok" style="text-transform:none;">Enabled</span></p>
+            <form method="post" action="<?= e(url('/settings/two-factor/disable')) ?>" style="margin-top:.5rem;">
+                <?= csrf_field() ?>
+                <p>
+                    <label for="disable-2fa-code">Current verification code to disable</label><br>
+                    <input type="text" name="code" id="disable-2fa-code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required>
+                </p>
+                <button type="submit" class="btn btn-danger">Disable two-factor</button>
+            </form>
+        <?php else: ?>
+            <a class="btn" href="<?= e(url('/settings/two-factor/setup')) ?>">Set up two-factor authentication</a>
+        <?php endif; ?>
+    <?php endif; ?>
 </section>
 <form method="post" action="<?= url('/settings/password') ?>">
     <?= csrf_field() ?>
