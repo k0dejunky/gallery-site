@@ -1,7 +1,9 @@
 # gallery-mvc
 
 A self-hosted, plain-PHP photo & video gallery site with memberships, categories,
-a video editor/exporter, and a visual site editor.
+a video editor/exporter, a visual site editor, auto-posting to Reddit/X, an
+in-app test suite, admin two-factor authentication, and full email-server
+administration.
 
 No Composer, no framework CLI — it's a simple PHP app that ships its own schema
 and seed data, so installing on a fresh Ubuntu/Debian server is one command.
@@ -90,8 +92,34 @@ By default it removes only the site files and the Apache `/gallery` alias config
 - **Themes / layout:** regenerated from defaults in `storage/` if missing
 - **MySQL tuning:** `/etc/mysql/mysql.conf.d/99-gallery-tuning.cnf` (buffer pool, slow-query log)
 - **Optional hardening:** set `APP_ENV=production` and keep `APP_DEBUG=false`; `APP_URL` and
-  `PAYPAL_CLIENT_SECRET` are optional. Authenticated sessions expire after 12 hours idle by
-  default, and password recovery/email verification requests are rate limited.
+  `PAYPAL_CLIENT_SECRET` are optional. Admin sessions expire after 30 minutes idle by default
+  (or 7 days when "keep me signed in" is ticked at login); non-admin sessions use the general
+  window. Password recovery/email verification requests are rate limited, and admins can enable
+  TOTP two-factor authentication from Settings.
+
+## Admin email server administration
+
+The admin **Email** page manages the Postfix + Dovecot virtual mailboxes that
+serve the site's mail domain:
+
+- Lists every mailbox with per-mailbox storage and Postfix/Dovecot/OpenDKIM service status.
+- **Create** — email + password (min 8 chars): adds to `/etc/postfix/vmailbox` and the Dovecot
+  passwd-file (`/etc/dovecot/users`), generates a `{SHA512-CRYPT}` hash, creates the Maildir
+  (`/var/mail/vhosts/{domain}/{user}/`, owned `vmail:mail`), rebuilds the Postfix map and
+  reloads Dovecot.
+- **Change password** and **Delete** (with confirmation) work the same way.
+
+Privileged operations run through the root-only `bin/mail_admin.php` via a scoped sudoers rule,
+so the web process never edits `/etc` directly. On a mail host, install the rule once:
+
+```bash
+echo 'www-data ALL=(root) NOPASSWD: /usr/bin/php /var/www/gallery/bin/mail_admin.php *' \
+  > /etc/sudoers.d/gallery-mail-admin
+chmod 440 /etc/sudoers.d/gallery-mail-admin
+visudo -c
+```
+
+On hosts without Postfix/Dovecot the page reports "Mail admin unavailable" instead of failing.
 
 ## Server stack & performance
 
@@ -177,29 +205,21 @@ override deployment settings without changing the script.
 - The seed password is a known default; pass `--admin-pass` at install time to
   set a fresh one, or reset it from the admin Users page.
 
-## Gmail SMTP app password
+## Outbound email (SMTP)
 
-The site uses a Gmail App Password for outbound email (support replies,
-verification links, password resets). If the password stops working:
+The app sends email through the Mailer (SMTP over STARTTLS, or PHP `mail()`
+when no SMTP is configured). On the production host the site runs its own
+**Postfix + Dovecot + OpenDKIM** stack (the same mailboxes managed from the
+admin Email page), so outbound mail is delivered locally. SMTP configuration
+lives in `.env`:
 
-1. Go to [Google App Passwords](https://myaccount.google.com/apppasswords)
-   while logged into the admin Gmail account.
-2. Select app: **Mail**, device: **Other (Custom name)** → enter `Gallery SMTP`.
-3. Click **Generate** — Google shows a 16-character password once.
-4. Update `.env` on the server:
-   ```bash
-   sudo nano /var/www/gallery/.env
-   ```
-   Replace the `MAIL_PASSWORD=` value with the new password.
-5. Reload PHP-FPM:
-   ```bash
-   sudo systemctl reload php8.3-fpm
-   ```
-6. Test from the admin **System** page — click the **Test SMTP** button.
-   Or verify from the command line:
-   ```bash
-   sudo -u www-data php /var/www/gallery/bin/smtp_test.php
-   ```
+- `MAIL_HOST` / `MAIL_PORT` / `MAIL_USERNAME` / `MAIL_PASSWORD` — for a
+  relay such as Gmail when not using the local MTA.
+- `MAIL_FROM` — the From address used for alerts.
+- `ADMIN_EMAIL` — the recipient for throttled admin alerts.
 
-App passwords don't expire unless you revoke them or change your Google
-account password. The admin **System** page shows whether SMTP is configured.
+To test delivery, use the **Test SMTP** button on the admin System page (or
+the send-test form on the admin Email page), or send an app alert from the
+command line. If mail stops working, check `.env`, reload PHP-FPM
+(`sudo systemctl reload php8.3-fpm`), and inspect `/var/log/mail.log` on the
+mail host.

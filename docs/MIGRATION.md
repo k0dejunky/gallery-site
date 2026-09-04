@@ -325,10 +325,14 @@ on the new server are served as normal.
 
 ---
 
-## 10. DNS / email / payments (external, unchanged)
+## 10. DNS / email / payments (external)
 
-- **Email (SPF/DKIM/DMARC):** pending — needs DNS access. `MAIL_*` uses Gmail
-  SMTP with an app password.
+- **Email:** the site runs its own **Postfix + Dovecot + OpenDKIM** stack on
+  the mail host. `mail.amethyst2213.com` is the MX target (A = 40.160.136.132),
+  and the mailboxes are managed from the admin **Email** page. Outbound mail is
+  delivered locally through Postfix; `MAIL_*` env values are only needed if a
+  relay such as Gmail is configured instead. The `gallery-mail-admin` sudoers
+  rule must exist on the mail host for the Email page to work (see README).
 - **PayPal:** webhook auto-activation requires a REST App Secret + Webhook ID;
   currently records pending subscriptions for manual admin approval.
 - **Braintree:** uses a zero-dependency custom client; may need prod creds.
@@ -350,6 +354,9 @@ on the new server are served as normal.
 | `/etc/apache2/ssl/gallery.{crt,key}` | self-signed TLS cert |
 | `/etc/php/8.3/fpm/pool.d/www.conf` (edits) + `90-gallery-opcache.ini` | FPM tuning |
 | `/etc/cron.d/gallery-{backup,housekeeping,restore-drill}` | cron jobs |
+| `/etc/postfix/vmailbox` + `/etc/dovecot/users` | virtual mailboxes (backed up before any admin Email change) |
+| `/etc/sudoers.d/gallery-mail-admin` | lets www-data run `bin/mail_admin.php` for the Email page |
+| `/var/mail/vhosts/` | mailbox Maildirs (mail data, owned vmail:mail) |
 | `/etc/systemd/system/gallery-{video-export,photo-edit}.service` | workers |
 | `/etc/apt/apt.conf.d/99gallery-confold` | protect confs on OS upgrades |
 
