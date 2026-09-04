@@ -17,7 +17,6 @@ $levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill', 4 => 'pill-err']
 <style>
     .mg-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
     .mg-header h1 { margin: 0; text-align: left; }
-    .mg-header .muted { margin: .25rem 0 0; max-width: 46rem; }
 
     .mg-table-wrap { background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 10px; overflow: hidden; margin-top: 1rem; }
     .mg-table-wrap table { margin: 0; border: none; }
@@ -49,7 +48,6 @@ $levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill', 4 => 'pill-err']
 <div class="mg-header">
     <div>
         <h1>Manage Galleries</h1>
-        <p class="muted">Every gallery on the site, with quick access to its contents, settings, and deletion.</p>
     </div>
     <a class="btn btn-sm" href="<?= url('/admin/galleries/create') ?>">New Gallery</a>
 </div>
