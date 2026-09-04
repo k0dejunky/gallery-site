@@ -261,7 +261,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
         /* ---- Top search bar ---- */
         .admin-top-search { margin-bottom: 1rem; }
         .admin-top-search input {
-            width: 100%; box-sizing: border-box; max-width: 40rem;
+            width: 100%; box-sizing: border-box;
             padding: .5rem .85rem; font-size: var(--font-size-sm);
             border: 1px solid var(--pink-300); border-radius: 8px;
             background: var(--pink-100); color: var(--purple-900);
