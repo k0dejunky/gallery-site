@@ -111,6 +111,18 @@
         $paypalGoldPlan      = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-61A81431CY9628522NKINSBY';
         $paypalPlatinumPlan  = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-61D79162UG274461KNKIY55I';
         $paypalContainerBase = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : '';
+        // Plan display names sent to PayPal as the subscription's custom_id,
+        // so the buyer and the PayPal webhook can identify which plan a
+        // subscription was for.
+        $paypalSilverName   = '';
+        $paypalGoldName     = '';
+        $paypalPlatinumName = '';
+        foreach ($plans as $candidatePlan) {
+            $__slug = strtolower((string) ($candidatePlan['slug'] ?? $candidatePlan['name']));
+            if ($__slug === 'silver')    { $paypalSilverName   = (string) ($candidatePlan['name'] ?? ''); }
+            if ($__slug === 'gold')      { $paypalGoldName     = (string) ($candidatePlan['name'] ?? ''); }
+            if ($__slug === 'platinum')  { $paypalPlatinumName = (string) ($candidatePlan['name'] ?? ''); }
+        }
         ?>
         <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); order:7;">
             <?php foreach ($plans as $plan): ?>
@@ -191,7 +203,7 @@
     paypal.Buttons({
         style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe' },
         createSubscription: function (data, actions) {
-            return actions.subscription.create({ plan_id: '<?= e($paypalSilverPlan) ?>' });
+            return actions.subscription.create({ plan_id: '<?= e($paypalSilverPlan) ?>', custom_id: '<?= e($paypalSilverName) ?>' });
         },
         onApprove: function (data) {
             var token = document.querySelector('[data-paypal-csrf]');
@@ -221,7 +233,7 @@
         paypal.Buttons({
             style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe' },
             createSubscription: function (data, actions) {
-                return actions.subscription.create({ plan_id: '<?= e($paypalGoldPlan) ?>' });
+                return actions.subscription.create({ plan_id: '<?= e($paypalGoldPlan) ?>', custom_id: '<?= e($paypalGoldName) ?>' });
             },
             onApprove: function (data) {
                 var token = document.querySelector('[data-paypal-csrf-gold]');
@@ -249,7 +261,7 @@
         paypal.Buttons({
             style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe' },
             createSubscription: function (data, actions) {
-                return actions.subscription.create({ plan_id: '<?= e($paypalPlatinumPlan) ?>' });
+                return actions.subscription.create({ plan_id: '<?= e($paypalPlatinumPlan) ?>', custom_id: '<?= e($paypalPlatinumName) ?>' });
             },
             onApprove: function (data) {
                 var token = document.querySelector('[data-paypal-csrf-platinum]');
