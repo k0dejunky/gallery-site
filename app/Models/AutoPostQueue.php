@@ -181,6 +181,22 @@ class AutoPostQueue
         foreach ($tags as $tag) {
             $tag = trim((string) preg_replace('/[^A-Za-z0-9_]/', '', (string) $tag));
             if ($tag !== '' && mb_strlen($tag) <= 40) {
+                // X autoposter filter: never post a "tits"/"titties" hashtag.
+                // When the word already appears in the title/description the
+                // hashtag is dropped as redundant; otherwise it is replaced
+                // with "boobs".
+                $tagLower = mb_strtolower($tag);
+                $isSensitive = mb_strpos($tagLower, 'tits') !== false
+                    || mb_strpos($tagLower, 'titties') !== false;
+                if ($isSensitive) {
+                    $baseLower = mb_strtolower($base);
+                    $mentioned = mb_strpos($baseLower, 'tits') !== false
+                        || mb_strpos($baseLower, 'titties') !== false;
+                    if ($mentioned) {
+                        continue;
+                    }
+                    $tag = 'boobs';
+                }
                 $cleanTags[] = $tag;
             }
             if (count($cleanTags) >= self::MAX_TAGS) {
