@@ -94,9 +94,12 @@ class AdminController extends Controller
         Auth::requirePermission('galleries');
         $galleries = Gallery::all();
 
+        $galleryIds = array_map('intval', array_column($galleries, 'id'));
+
         $this->viewAdmin('galleries', [
             'galleries'  => $galleries,
-            'categories' => Gallery::categoriesBulk(array_map('intval', array_column($galleries, 'id'))),
+            'categories' => Gallery::categoriesBulk($galleryIds),
+            'covers'     => Gallery::firstPhotos($galleryIds),
         ]);
     }
 
