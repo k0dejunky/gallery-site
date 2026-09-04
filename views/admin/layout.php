@@ -258,6 +258,16 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
         }
         .quick-actions .qa-label { font-size: var(--font-size-sm); color: var(--purple-700); font-weight: bold; margin-right: .25rem; }
 
+        /* ---- Top search bar ---- */
+        .admin-top-search { margin-bottom: 1rem; }
+        .admin-top-search input {
+            width: 100%; box-sizing: border-box; max-width: 40rem;
+            padding: .5rem .85rem; font-size: var(--font-size-sm);
+            border: 1px solid var(--pink-300); border-radius: 8px;
+            background: var(--pink-100); color: var(--purple-900);
+        }
+        .admin-top-search input:focus { outline: 2px solid var(--purple-400); }
+
         /* ---- Status pills ---- */
         .pill {
             display: inline-flex; align-items: center; gap: .3rem;
@@ -357,10 +367,6 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
                 <div class="nav-sep"></div>
             <?php endif; ?>
             <a class="nav-brand" href="<?= url('/admin') ?>">Admin</a>
-            <form style="margin:0 0 var(--spacing-sm);" method="get" action="<?= url('/admin/search') ?>">
-                <input type="search" name="q" placeholder="Search users, galleries…" value=""
-                       style="width:100%;font-size:var(--font-size-sm);" aria-label="Global admin search">
-            </form>
             <a class="nav-item <?= $navActive('/admin', true) ?>" href="<?= url('/admin') ?>">Dashboard</a>
             <a class="nav-item <?= $navActive('/admin/abandoned-uploads') ?>" href="<?= url('/admin/abandoned-uploads') ?>">Abandoned Uploads</a>
             <a class="nav-item <?= $navActive('/admin/trends') ?>" href="<?= url('/admin/trends') ?>">Trends</a>
@@ -399,6 +405,10 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
         </nav>
         <main class="admin-main">
             <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="admin-nav">☰</button>
+            <form class="admin-top-search" method="get" action="<?= url('/admin/search') ?>">
+                <input type="search" name="q" placeholder="Search users, galleries…" value=""
+                       aria-label="Global admin search">
+            </form>
             <div class="flash-stack" role="status" aria-live="polite">
             <?php foreach ($flash as $flashType => $messages): ?>
                 <?php foreach ($messages as $message): ?>
