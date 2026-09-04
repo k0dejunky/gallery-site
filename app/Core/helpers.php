@@ -93,12 +93,12 @@ function media_token_valid(string $path, string $given): bool
  */
 function file_url(string $filename, string $size = '', string $format = ''): string
 {
-    $query = in_array($size, ['thumb', 'web'], true) ? '?size=' . $size : '';
+    $query = in_array($size, ['thumb', 'web', 'blur'], true) ? '?size=' . $size : '';
 
     // Version the regenerated variants by file mtime so the browser never
     // shows a stale thumbnail/web image after it is edited or recaptured.
-    if ($size === 'thumb' || $size === 'web') {
-        $variant = ($size === 'thumb' ? 'thumb_' : 'web_') . $filename;
+    if ($size === 'thumb' || $size === 'web' || $size === 'blur') {
+        $variant = ($size === 'thumb' ? 'thumb_' : ($size === 'web' ? 'web_' : 'blur_thumb_')) . $filename;
 
         if ($format === 'webp') {
             $webp = preg_replace('/\.[^.]+$/', '.webp', $variant);

@@ -12,7 +12,7 @@ foreach ($recentImages as $photo) {
     $recentItems[] = [
         'type'  => 'image',
         'url'   => url('/images/' . (int) $photo['id']),
-        'thumb' => file_url($photo['filename'], 'thumb'),
+        'thumb' => file_url($photo['filename'], 'blur'),
     ];
 }
 foreach ($recentVideos as $photo) {
@@ -22,7 +22,7 @@ foreach ($recentVideos as $photo) {
     $recentItems[] = [
         'type'  => 'video',
         'url'   => url('/videos/' . (int) $photo['id']),
-        'thumb' => file_url($photo['filename'], 'thumb'),
+        'thumb' => file_url($photo['filename'], 'blur'),
     ];
 }
 ?>
