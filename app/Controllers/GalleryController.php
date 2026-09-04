@@ -358,16 +358,9 @@ class GalleryController extends Controller
             unset($_SESSION['pending_gallery_files']);
         }
 
-        $page      = (int) $this->request->query('page', 1);
-        $paginator = Gallery::paginate($page, 10);
-
-        $coverIds = array_map('intval', array_column($paginator['items'], 'id'));
-
         $this->viewAdmin('create', [
             'categories'   => Category::all(),
             'galleryType'  => 'images',
-            'paginator'    => $paginator,
-            'covers'       => Gallery::firstPhotos($coverIds),
             'pendingFiles' => $this->pendingListMeta(),
         ]);
     }
