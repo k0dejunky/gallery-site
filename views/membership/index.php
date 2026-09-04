@@ -93,6 +93,25 @@
         <p class="muted" style="text-align:center; order:7;">No plans are available right now. Please check back soon.</p>
     <?php else: ?>
         <?php $silverPlanId = 0; foreach ($plans as $candidatePlan) { if (strtolower((string) ($candidatePlan['slug'] ?? $candidatePlan['name'])) === 'silver') { $silverPlanId = (int) $candidatePlan['id']; break; } } $goldPlanId = 0; foreach ($plans as $candidatePlan) { if (strtolower((string) ($candidatePlan['slug'] ?? $candidatePlan['name'])) === 'gold') { $goldPlanId = (int) $candidatePlan['id']; break; } } $platinumPlanId = 0; foreach ($plans as $candidatePlan) { if (strtolower((string) ($candidatePlan['slug'] ?? $candidatePlan['name'])) === 'platinum') { $platinumPlanId = (int) $candidatePlan['id']; break; } } ?>
+        <?php
+        // PayPal JS SDK: when the PayPal processor is in test mode we use the
+        // sandbox client id and a single sandbox subscription plan, so real
+        // checkout does not create production subscriptions by accident.
+        $paypalTest = false;
+        foreach (($paymentProcessors ?? []) as $__pp) {
+            if (strtolower((string) ($__pp['provider'] ?? '')) === 'paypal') {
+                $paypalTest = strtolower((string) ($__pp['mode'] ?? 'live')) !== 'live';
+                break;
+            }
+        }
+        $paypalClientId = $paypalTest
+            ? 'AWjv6zqSB5Ix5xpb9D8PWn2RFO3ELiglsL_JQqOM9BCYDluL1I_uN0oRCickXa7-BPgIrXZ2p8ltnS7-'
+            : 'BAAulxhXtOW_C1MbdQ9ieSDNNQYJhjbXAknX4UujE8n02reztiOBMnqH8cw0r-ZyKT9aIU0zZslsm3hyZc';
+        $paypalSilverPlan    = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-2EE95782UN3086035NKHSZ4A';
+        $paypalGoldPlan      = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-61A81431CY9628522NKINSBY';
+        $paypalPlatinumPlan  = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-61D79162UG274461KNKIY55I';
+        $paypalContainerBase = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : '';
+        ?>
         <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); order:7;">
             <?php foreach ($plans as $plan): ?>
                 <div class="card" style="display:flex; flex-direction:column; justify-content:space-between; text-align:center; margin:0;">
@@ -122,17 +141,17 @@
                         <button type="button" class="btn btn-disabled" disabled style="order:2;">Unavailable</button>
                     <?php elseif (strtolower((string) ($plan['slug'] ?? $plan['name'])) === 'silver'): ?>
                         <div style="order:2;">
-                            <div id="paypal-button-container-P-2EE95782UN3086035NKHSZ4A"></div>
+                            <div id="paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-2EE95782UN3086035NKHSZ4A') ?>"></div>
                             <input type="hidden" name="_token" value="<?= e(\App\Core\Csrf::token()) ?>" data-paypal-csrf>
                         </div>
                     <?php elseif (strtolower((string) ($plan['slug'] ?? $plan['name'])) === 'gold'): ?>
                         <div style="order:2;">
-                            <div id="paypal-button-container-P-61A81431CY9628522NKINSBY"></div>
+                            <div id="paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-gold' : 'P-61A81431CY9628522NKINSBY') ?>"></div>
                             <input type="hidden" name="_token" value="<?= e(\App\Core\Csrf::token()) ?>" data-paypal-csrf-gold>
                         </div>
                     <?php elseif (strtolower((string) ($plan['slug'] ?? $plan['name'])) === 'platinum'): ?>
                         <div style="order:2;">
-                            <div id="paypal-button-container-P-61D79162UG274461KNKIY55I"></div>
+                            <div id="paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-platinum' : 'P-61D79162UG274461KNKIY55I') ?>"></div>
                             <input type="hidden" name="_token" value="<?= e(\App\Core\Csrf::token()) ?>" data-paypal-csrf-platinum>
                         </div>
                     <?php else: ?>
@@ -165,14 +184,14 @@
 </div>
 
 <?php if (!$hasActive && $pendingSub === null): ?>
-<script src="https://www.paypal.com/sdk/js?client-id=BAAulxhXtOW_C1MbdQ9ieSDNNQYJhjbXAknX4UujE8n02reztiOBMnqH8cw0r-ZyKT9aIU0zZslsm3hyZc&vault=true&intent=subscription" data-sdk-integration-source="button-factory"></script>
+<script src="https://www.paypal.com/sdk/js?client-id=<?= e($paypalClientId) ?>&vault=true&intent=subscription" data-sdk-integration-source="button-factory"></script>
 <script>
 (function () {
     if (!window.paypal) return;
     paypal.Buttons({
         style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe' },
         createSubscription: function (data, actions) {
-            return actions.subscription.create({ plan_id: 'P-2EE95782UN3086035NKHSZ4A' });
+            return actions.subscription.create({ plan_id: '<?= e($paypalSilverPlan) ?>' });
         },
         onApprove: function (data) {
             var token = document.querySelector('[data-paypal-csrf]');
@@ -189,7 +208,7 @@
                 })
                 .catch(function () { alert('We could not record your subscription. Please contact support.'); });
         }
-    }).render('#paypal-button-container-P-2EE95782UN3086035NKHSZ4A');
+    }).render('#paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-2EE95782UN3086035NKHSZ4A') ?>');
 }());
 </script>
 <?php endif; ?>
@@ -197,12 +216,12 @@
 <?php if (!$hasActive && $pendingSub === null): ?>
     <script>
     (function () {
-        var goldBtn = document.getElementById('paypal-button-container-P-61A81431CY9628522NKINSBY');
+        var goldBtn = document.getElementById('paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-gold' : 'P-61A81431CY9628522NKINSBY') ?>');
         if (!goldBtn || !window.paypal) return;
         paypal.Buttons({
             style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe' },
             createSubscription: function (data, actions) {
-                return actions.subscription.create({ plan_id: 'P-61A81431CY9628522NKINSBY' });
+                return actions.subscription.create({ plan_id: '<?= e($paypalGoldPlan) ?>' });
             },
             onApprove: function (data) {
                 var token = document.querySelector('[data-paypal-csrf-gold]');
@@ -219,18 +238,18 @@
                     })
                     .catch(function () { alert('We could not record your subscription. Please contact support.'); });
             }
-        }).render('#paypal-button-container-P-61A81431CY9628522NKINSBY');
+        }).render('#paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-gold' : 'P-61A81431CY9628522NKINSBY') ?>');
     }());
     </script>
 <?php endif; ?>
     <script>
     (function () {
-        var platinumBtn = document.getElementById('paypal-button-container-P-61D79162UG274461KNKIY55I');
+        var platinumBtn = document.getElementById('paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-platinum' : 'P-61D79162UG274461KNKIY55I') ?>');
         if (!platinumBtn || !window.paypal) return;
         paypal.Buttons({
             style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe' },
             createSubscription: function (data, actions) {
-                return actions.subscription.create({ plan_id: 'P-61D79162UG274461KNKIY55I' });
+                return actions.subscription.create({ plan_id: '<?= e($paypalPlatinumPlan) ?>' });
             },
             onApprove: function (data) {
                 var token = document.querySelector('[data-paypal-csrf-platinum]');
@@ -247,7 +266,7 @@
                     })
                     .catch(function () { alert('We could not record your subscription. Please contact support.'); });
             }
-        }).render('#paypal-button-container-P-61D79162UG274461KNKIY55I');
+        }).render('#paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-platinum' : 'P-61D79162UG274461KNKIY55I') ?>');
     }());
     </script>
 
