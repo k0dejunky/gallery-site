@@ -16,8 +16,6 @@
 </style>
 
 <div class="auth-panel fa-setup">
-    <h1>Set up two-factor authentication</h1>
-
     <p>Open your authenticator app and add the secret below (or the full <code>otpauth://</code> URI), then enter the 6-digit code it generates to confirm.</p>
 
     <p><strong>Secret key</strong></p>

@@ -1,13 +1,6 @@
 <?php $title = 'Manage: ' . $gallery['title']; ?>
 
 <?php // Per-photo controls: upload new files, edit caption/link, reorder, rotate images and remove from this gallery. ?>
-<h1>Manage &ldquo;<?= e($gallery['title']) ?>&rdquo;</h1>
-
-<?php // Gallery-level view tracking stats. ?>
-<p class="muted">
-    <?= number_format((int) ($gallery['views'] ?? 0)) ?> total views &middot; <?= number_format((int) ($gallery['unique_views'] ?? 0)) ?> unique viewers
-</p>
-
 <h2>Categories</h2>
 <form method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id']) ?>">
     <?= csrf_field() ?>

@@ -1,10 +1,5 @@
 <?php $title = 'Documentation'; ?>
 
-<h1>Site Documentation</h1>
-
-<p class="muted">How the site is put together and how to modify the code. The app runs on the server at
-<code>/var/www/gallery</code> and is served under the <code>/gallery</code> URL prefix.</p>
-
 <h2 class="section-title">Admin roles and permissions</h2>
 <ul>
     <li><strong>Super Admin</strong> — unrestricted access, including role and permission management. Assigned to <code>fidjiter@gmail.com</code>.</li>

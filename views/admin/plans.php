@@ -31,8 +31,6 @@
     @media (max-width: 640px) { .sale-form-grid { grid-template-columns: 1fr; } .sale-form-wide { grid-column: auto; } }
 </style>
 
-<h1>Membership Plans</h1>
-
 <h2>Plans</h2>
 <?php if (empty($plans)): ?>
     <p>No plans yet.</p>

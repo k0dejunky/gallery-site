@@ -1,8 +1,5 @@
 <?php $title = 'Abandoned Uploads'; ?>
 
-<h1>Abandoned Uploads</h1>
-<p class="muted">Uploads staged during a session that ended before the gallery was created. Assign each one to an existing gallery, or select files and resume the new-gallery flow to finish creating a gallery.</p>
-
 <?php if (empty($uploads)): ?>
     <p>No abandoned uploads.</p>
 <?php else: ?>

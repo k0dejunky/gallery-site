@@ -3,7 +3,6 @@
 .ve-export-preview{width:180px;max-width:18vw;aspect-ratio:16/9;background:#111;border-radius:6px;display:block}.ve-source-thumb{width:72px;height:48px;object-fit:cover;border-radius:5px;cursor:zoom-in;background:#eee}.ve-thumb-link{display:inline-block}.ve-preview-dialog{border:0;border-radius:10px;padding:0;background:rgba(10,10,15,.94);max-width:min(92vw,1100px);max-height:92vh}.ve-preview-dialog::backdrop{background:rgba(0,0,0,.72)}.ve-preview-dialog img{display:block;max-width:88vw;max-height:84vh}.ve-preview-close{position:absolute;right:8px;top:5px;border:0;background:rgba(0,0,0,.65);color:#fff;border-radius:50%;width:30px;height:30px;font-size:20px;cursor:pointer}
 </style>
 <div class="subhead">
-    <h1>Video Projects</h1>
     <a class="btn" href="<?= url('/admin/videos') ?>">Video list</a>
 </div>
 <?php

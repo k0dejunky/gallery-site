@@ -20,7 +20,6 @@
 
 <div class="users-hero">
     <div>
-        <h1><?= e($user['email']) ?></h1>
         <p>
             <span class="role-badge <?= e($user['role']) ?>"><?= e(str_replace('_', ' ', $user['role'])) ?></span>
             <?php if (!empty($user['status'])): ?>

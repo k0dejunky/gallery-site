@@ -14,7 +14,6 @@
     .sys-stack .sys-card { width: 100%; }
 </style>
 
-<h1 class="section-title">System</h1>
 <p class="muted">Disk free: <b><?= $diskFree !== false ? number_format((float) $diskFree / 1048576) . ' MB' : 'unknown' ?></b></p>
 
 <script>

@@ -10,8 +10,11 @@
     .status-badge.ts-running { background: #7c3aed; color: #fff; }
     .status-badge.ts-pending { background: #e5e7eb; color: #1f2937; }
     .detail-cell { color: var(--muted-text-color); font-size: .82rem; overflow-wrap: anywhere; }
-    .test-group-head { display: flex; align-items: center; gap: .5rem; padding: .6rem .9rem; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--card-radius); }
-    .test-group-head .g-count { margin-left: auto; font-size: .82rem; color: var(--muted-text-color); }
+    .test-group-head, .ts-group > summary { display: flex; align-items: center; gap: .5rem; padding: .6rem .9rem; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--card-radius); cursor: pointer; }
+    .ts-group > summary::-webkit-details-marker { display: none; }
+    .ts-group > summary::before { content: '▸'; display: inline-block; transition: transform .15s ease; color: var(--purple-500); }
+    .ts-group[open] > summary::before { transform: rotate(90deg); }
+    .test-group-head .g-count, .ts-group > summary .g-count { margin-left: auto; font-size: .82rem; color: var(--muted-text-color); }
     .check-col { width: 2.2rem; text-align: center; }
     .ts-none { margin-top: 1rem; }
     .test-runs { margin-top: 1.5rem; }
@@ -23,10 +26,6 @@
 </style>
 
 <div class="test-hero">
-    <div>
-        <h1 class="section-title">Test suite</h1>
-        <p class="muted">Run self-contained front-end and back-end checks against the whole site. Tests are read-only and safe to repeat.</p>
-    </div>
     <div class="test-tools">
         <button type="button" class="btn" id="ts-check-none">None</button>
         <button type="button" class="btn" id="ts-check-all">Select all</button>
@@ -75,33 +74,35 @@
 <div id="ts-groups">
 
 <?php foreach ($groups as $group => $tests): $total = count($tests); ?>
-    <div class="test-group-head" data-group="<?= e($group) ?>">
-        <input type="checkbox" class="ts-grp-cbx" data-group="<?= e($group) ?>" title="toggle group">
-        <strong><?= e($group) ?></strong>
-        <span class="g-count"><span class="ts-grp-pass" data-group="<?= e($group) ?>">0</span>/<?= $total ?> passed</span>
-    </div>
-    <div class="users-table-wrap">
-        <table class="users-table ts-table" data-group="<?= e($group) ?>">
-            <thead>
-                <tr>
-                    <th class="check-col"><input type="checkbox" class="ts-grp-cbx" data-group="<?= e($group) ?>"></th>
-                    <th>Test</th>
-                    <th>Status</th>
-                    <th>Result</th>
-                </tr>
-            </thead>
-            <tbody>
-            <?php foreach ($tests as $t): ?>
-                <tr data-id="<?= e($t['id']) ?>" data-group="<?= e($group) ?>">
-                    <td class="check-col"><input type="checkbox" class="ts-cbx" value="<?= e($t['id']) ?>" checked></td>
-                    <td><?= e($t['name']) ?></td>
-                    <td><span class="status-badge ts-pending">pending</span></td>
-                    <td class="detail-cell"></td>
-                </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-    </div>
+    <details class="sys-card ts-group" data-group="<?= e($group) ?>" open>
+        <summary>
+            <input type="checkbox" class="ts-grp-cbx" data-group="<?= e($group) ?>" title="toggle group" onclick="event.stopPropagation()">
+            <strong><?= e($group) ?></strong>
+            <span class="g-count"><span class="ts-grp-pass" data-group="<?= e($group) ?>">0</span>/<?= $total ?> passed</span>
+        </summary>
+        <div class="users-table-wrap">
+            <table class="users-table ts-table" data-group="<?= e($group) ?>">
+                <thead>
+                    <tr>
+                        <th class="check-col"><input type="checkbox" class="ts-grp-cbx" data-group="<?= e($group) ?>" onclick="event.stopPropagation()"></th>
+                        <th>Test</th>
+                        <th>Status</th>
+                        <th>Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($tests as $t): ?>
+                    <tr data-id="<?= e($t['id']) ?>" data-group="<?= e($group) ?>">
+                        <td class="check-col"><input type="checkbox" class="ts-cbx" value="<?= e($t['id']) ?>" checked></td>
+                        <td><?= e($t['name']) ?></td>
+                        <td><span class="status-badge ts-pending">pending</span></td>
+                        <td class="detail-cell"></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </details>
 <?php endforeach; ?>
 
 </div>

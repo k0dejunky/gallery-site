@@ -2,10 +2,6 @@
 <?php // Shared listing styles (users-table, badges, hero) live in /assets/admin-shared.css. ?>
 
 <?php // List existing accounts and link to the create-user page. ?>
-<div class="users-hero">
-    <div><h1>Manage Users</h1><p>Manage accounts, roles, memberships, and access.</p></div>
-</div>
-
 <h2 class="section-title">Users</h2>
 <form method="get" action="<?= url('/admin/users') ?>" style="display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem;flex-wrap:wrap;">
     <input type="text" name="q" value="<?= e($search ?? '') ?>" placeholder="Search by email…" style="flex:1;min-width:200px;padding:.4rem .6rem;border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius);">

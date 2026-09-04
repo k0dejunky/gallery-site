@@ -2,11 +2,9 @@
 .error-log-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.error-log-message{max-width:760px;white-space:pre-wrap;word-break:break-word;font-family:monospace;font-size:12px}.error-log-source{font-weight:600;color:var(--text-heading)}
 </style>
 <div class="error-log-toolbar">
-    <h1>Error Logs</h1>
     <a class="btn" href="<?= url('/admin/video-projects') ?>">Video Projects</a>
 </div>
 <div class="card">
-    <p class="text-muted">Failed exports and readable Apache, PHP, MySQL, and application log entries.</p>
     <div class="table-responsive">
         <table>
             <thead><tr><th>Source</th><th>Time</th><th>Error</th></tr></thead>

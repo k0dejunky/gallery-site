@@ -1,12 +1,5 @@
 <?php $title = 'Trends'; ?>
 
-<h1>Trends</h1>
-
-<p class="muted">
-    How categories and missed searches are trending. Pick a period to compare the current window with the
-    same-length window before it, or <em>All time</em> for lifetime totals.
-</p>
-
 <?php
 $isAllTime = $currentPeriod === 'all';
 $rangeLabel = $periods[$currentPeriod]['range'];

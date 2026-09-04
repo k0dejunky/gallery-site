@@ -1,8 +1,5 @@
 <?php $title = 'User Monitor'; ?>
 
-<h1>User Monitor</h1>
-<p class="muted">When members log in, log out, and which galleries they are viewing. Each row is one event.</p>
-
 <?php if (!empty($lastSeen)): ?>
     <h2>Active Users</h2>
     <p class="muted">Most recent activity per member.</p>

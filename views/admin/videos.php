@@ -12,7 +12,6 @@
 </style>
 
 <div class="subhead">
-    <h1>Video List</h1>
     <div class="subhead-actions">
         <form method="get" action="<?= url('/admin/videos') ?>">
             <input type="search" name="q" value="<?= e($search) ?>" placeholder="Search videos...">

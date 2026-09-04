@@ -35,13 +35,6 @@ $webhookBase = $scheme . '://' . $host . rtrim((string) config('app.base_path'),
     @media (max-width: 720px) { .pay-form-grid { grid-template-columns: 1fr; } .pay-form-wide { grid-column: auto; } }
 </style>
 
-<h1>Payment Processors</h1>
-
-<p class="muted">Configure the payment gateways visitors can use to subscribe to memberships.
-Enable at least one processor to offer online checkout on the pricing page. Secret keys are
-stored in the database and shown masked; leave a credential blank when editing to keep the
-saved value.</p>
-
 <?php if (empty($processors)): ?>
     <div class="pay-empty">No payment processors configured yet. Use the form below to add one.
     Supported providers: <?= e(implode(', ', array_map(fn ($p) => \App\Models\PaymentProcessor::providerLabel($p), \App\Models\PaymentProcessor::PROVIDERS))) ?>.

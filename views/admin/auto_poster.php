@@ -3,8 +3,6 @@
 $reddit  = $config['reddit'] ?? [];
 $twitter = $config['twitter'] ?? [];
 ?>
-<h1>Auto Poster</h1>
-<p class="muted">Post content from this site to Reddit (any subreddit) and X (formerly Twitter). Configure your API credentials below, then compose a post.</p>
 
 <?php // ----- Recommended posts: generated from recent uploads ----- ?>
 <div class="stats-panel" style="margin-bottom:1rem;">

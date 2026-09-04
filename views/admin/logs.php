@@ -1,7 +1,5 @@
 <?php $title = 'Admin Logs'; ?>
 
-<h1>Admin Logs</h1>
-
 <?php if (!empty($pendingSubs)): ?>
 <h2>Pending Memberships</h2>
 <table>

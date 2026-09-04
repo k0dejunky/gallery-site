@@ -1,7 +1,5 @@
 <?php $title = 'Subscriptions'; ?>
 
-<h1>Subscriptions</h1>
-
 <?php if (!empty($reconciliation)): ?>
 <h2>Needs Attention — Pending Biller Signups</h2>
 <p class="muted">Checkouts that reached a payment processor but were never confirmed by its postback. Approve after verifying the payment in the biller's admin, or cancel to release the member.</p>

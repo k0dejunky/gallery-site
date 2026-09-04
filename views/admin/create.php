@@ -91,9 +91,6 @@
 </style>
 
 <div class="create-page">
-    <h1>Gallery Management</h1>
-    <p class="page-sub muted">Upload files first — they appear as tiled previews. Then give the gallery a name and save.</p>
-
     <div class="create-grid">
         <aside class="create-form-card">
             <h2>Gallery details</h2>

@@ -2,7 +2,6 @@
 
 <p><a href="<?= url('/admin/plans') ?>">&larr; Plans</a></p>
 
-<h1>Add New Membership Plan</h1>
 <form method="post" action="<?= url('/admin/plans') ?>" class="admin-form">
     <?= csrf_field() ?>
     <p>

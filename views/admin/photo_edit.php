@@ -13,8 +13,6 @@ $form = static function (string $operation) use ($editUrl, $back): string {
         . ($back !== null ? '<input type="hidden" name="back" value="' . (int) $back . '">' : '');
 };
 ?>
-<h1>Edit <?= $isVideo ? 'Video' : 'Image' ?></h1>
-<p class="muted"><?= e($photo['filename']) ?></p>
 <p><a href="<?= url($backUrl) ?>">&larr; Back to gallery</a></p>
 
 <?php if (!$isVideo): ?>
