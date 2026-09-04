@@ -27,11 +27,16 @@ class Housekeeping
             'expired_subs'  => 0,
             'pending_dirs'  => 0,
             'backups_pruned' => 0,
+            'paypal_reconciled' => 0,
             'disk_free_gb'  => null,
         ];
 
         self::watchBackupSync($root);
         self::watchRestoreDrill($root);
+
+        // Auto-approve paid PayPal memberships whose webhook was missed.
+        $reconciled = self::reconcilePayPalSubscriptions();
+        $out['paypal_reconciled'] = $reconciled['activated']; // activations are the headline number
 
         // Subscriptions whose expiry passed while nobody was watching.
         $stmt = Database::run(
@@ -120,6 +125,105 @@ class Housekeeping
         );
 
         return $out;
+    }
+
+    /**
+     * Reconcile pending PayPal subscriptions against PayPal's own status so
+     * a paid membership activates even when a webhook was missed (verified
+     * path — activation only happens when PayPal reports the subscription
+     * ACTIVE/APPROVED). Returns a summary for the caller to log.
+     *
+     * @return array{activated:int, closed:int, skipped:int, errors:int}
+     */
+    public static function reconcilePayPalSubscriptions(): array
+    {
+        $summary = ['activated' => 0, 'closed' => 0, 'skipped' => 0, 'errors' => 0];
+
+        $rows = Database::run(
+            "SELECT s.id, s.transaction_ref, s.user_id, s.plan_id,
+                    pp.id AS processor_id, pp.config_json
+             FROM subscriptions s
+             LEFT JOIN payment_processors pp ON pp.id = s.payment_processor_id
+             WHERE s.status = 'pending' AND s.transaction_ref LIKE 'PAYPAL-%'
+             ORDER BY s.id ASC"
+        )->fetchAll();
+
+        if ($rows === []) {
+            return $summary;
+        }
+
+        // A single enabled PayPal processor provides the credentials.
+        $gateway = null;
+        if (count($rows) > 0) {
+            $processor = Database::run(
+                "SELECT * FROM payment_processors
+                 WHERE provider = 'paypal' AND enabled = 1
+                 ORDER BY is_default DESC, id ASC LIMIT 1"
+            )->fetch();
+
+            if ($processor !== false) {
+                $gateway = \App\Core\PayPalGateway::fromConfig($processor);
+            }
+        }
+
+        if ($gateway === null) {
+            $summary['skipped'] = count($rows);
+            error_log('[paypal-reconcile] no enabled PayPal processor with credentials; left ' . count($rows) . ' pending');
+            return $summary;
+        }
+
+        foreach ($rows as $row) {
+            $id  = (int) $row['id'];
+            $ref = (string) $row['transaction_ref'];
+            // ref format: PAYPAL-<paypal subscription id>
+            $paypalId = preg_replace('/^PAYPAL-/', '', $ref);
+
+            try {
+                $status = $gateway->getSubscriptionStatus($paypalId);
+            } catch (\Throwable $e) {
+                error_log('[paypal-reconcile] status check failed for ' . $ref . ': ' . $e->getMessage());
+                $summary['errors']++;
+                continue;
+            }
+
+            if ($status === null) {
+                $summary['skipped']++;
+                continue;
+            }
+
+            if (in_array($status, ['ACTIVE', 'APPROVED'], true)) {
+                \App\Models\Subscription::activateWithTransaction($id, $ref);
+                \App\Models\AuditLog::record(
+                    (int) ($row['user_id'] ?? 0),
+                    'update',
+                    'subscription',
+                    $id,
+                    'Auto-approved via PayPal reconciliation (' . $status . ')',
+                    null,
+                    ['paypal_subscription_id' => $paypalId, 'status' => $status]
+                );
+                $summary['activated']++;
+                error_log('[paypal-reconcile] activated ' . $ref . ' (' . $status . ')');
+            } elseif (in_array($status, ['SUSPENDED', 'CANCELLED', 'EXPIRED', 'INACTIVE'], true)) {
+                \App\Models\Subscription::cancel($id);
+                \App\Models\AuditLog::record(
+                    (int) ($row['user_id'] ?? 0),
+                    'update',
+                    'subscription',
+                    $id,
+                    'Closed via PayPal reconciliation (' . $status . ')',
+                    null,
+                    ['paypal_subscription_id' => $paypalId, 'status' => $status]
+                );
+                $summary['closed']++;
+                error_log('[paypal-reconcile] closed ' . $ref . ' (' . $status . ')');
+            } else {
+                // Any other status (e.g. PENDING/APPROVED-but-not-active) is left alone.
+                $summary['skipped']++;
+            }
+        }
+
+        return $summary;
     }
 
     /**

@@ -2,7 +2,11 @@
 
 <?php if (!empty($reconciliation)): ?>
 <h2>Needs Attention — Pending Biller Signups</h2>
-<p class="muted">Checkouts that reached a payment processor but were never confirmed by its postback. Approve after verifying the payment in the biller's admin, or cancel to release the member.</p>
+<p class="muted">Checkouts that reached a payment processor but were never confirmed by its postback. PayPal rows are auto-checked against PayPal by the scheduled reconciler; approve after verifying the payment in the biller's admin, or cancel to release the member.</p>
+<form method="post" action="<?= url('/admin/system/paypal-reconcile') ?>" class="inline" style="margin-bottom:.5rem;">
+    <?= csrf_field() ?>
+    <button type="submit" class="btn btn-sm">Run PayPal reconciliation now</button>
+</form>
 <table>
     <thead><tr><th>Membership ID</th><th>Age</th><th>User</th><th>Plan</th><th>Processor</th><th>Reference</th><th>Actions</th></tr></thead>
     <tbody>

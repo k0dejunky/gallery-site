@@ -58,17 +58,20 @@ $intOr = static function ($v, int $default): int {
 };
 $everyMin = $clamp($intOr($json['housekeeping']['every_minutes'] ?? null, 15), 1, 1440);
 $postMin  = $clamp($intOr($json['autopost'      ]['every_minutes'] ?? null, 1), 1, 1440);
+$ppMin    = $clamp($intOr($json['paypal-reconcile']['every_minutes'] ?? null, 5), 1, 1440);
 $backupH  = $clamp($intOr($json['backup']['hour']   ?? null, 3), 0, 23);
 $backupM  = $clamp($intOr($json['backup']['minute'] ?? null, 0), 0, 59);
 $drillD   = $clamp($intOr($json['restore-drill']['dow']      ?? null, 0), 0, 6);
 $drillH   = $clamp($intOr($json['restore-drill']['hour']     ?? null, 4), 0, 23);
 $drillM   = $clamp($intOr($json['restore-drill']['minute']   ?? null, 0), 0, 59);
 
-// --- Render the four cron.d entries -------------------------------------------
+// --- Render the five cron.d entries --------------------------------------------
 $php      = 'www-data /usr/bin/php ' . SITE_ROOT;
 $crond    = [];
 $crond['gallery-housekeeping'] =
     "*/{$everyMin} * * * * www-data curl -fsS \"http://127.0.0.1/gallery/cron/housekeeping?key={$key}\" > /dev/null 2>&1\n";
+$crond['gallery-paypal-reconcile'] =
+    "*/{$ppMin} * * * * {$php}/bin/paypal_reconcile.php >> " . SITE_ROOT . "/storage/logs/paypal-reconcile.log 2>&1\n";
 $crond['gallery-autopost'] =
     "*/{$postMin} * * * * {$php}/bin/autopost_worker.php --once >> " . SITE_ROOT . "/storage/logs/autopost.log 2>&1\n";
 $crond['gallery-backup'] =
@@ -90,5 +93,5 @@ foreach ($crond as $name => $content) {
 $ok($svcRc === 0, 'systemctl restart of worker services failed');
 
 // Cron daemon picks up /etc/cron.d changes automatically; nothing else to do.
-echo "apply_cron: wrote 4 /etc/cron.d entries and restarted worker services\n";
+echo "apply_cron: wrote 5 /etc/cron.d entries and restarted worker services\n";
 exit(0);

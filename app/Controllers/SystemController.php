@@ -268,6 +268,10 @@ class SystemController extends Controller
         [$apTs, $apAt] = $lastRun($logs . '/autopost.log');
         $apFail  = $this->autopostRecentFailure($logs . '/autopost.log');
 
+        [$ppTs, $ppAt] = $lastRun($logs . '/paypal-reconcile.log');
+        $ppNote = $this->lastLineSummary($logs . '/paypal-reconcile.log');
+        $ppFresh = $ppTs !== null && ($now - $ppTs) <= 90 * 60;
+
         $jobs = [
             [
                 'id'       => 'housekeeping',
@@ -286,6 +290,15 @@ class SystemController extends Controller
                 'lastAgo'  => $this->relativeAge($apTs),
                 'ok'       => $apTs !== null && $apFail === '',
                 'note'     => $apFail,
+            ],
+            [
+                'id'       => 'paypal-reconcile',
+                'schedule' => 'every 5 minutes',
+                'desc'     => 'Auto-approve paid PayPal memberships by confirming their status with PayPal',
+                'lastRun'  => $ppAt,
+                'lastAgo'  => $this->relativeAge($ppTs),
+                'ok'       => $ppFresh,
+                'note'     => $ppNote,
             ],
             [
                 'id'       => 'backup',
@@ -378,6 +391,7 @@ class SystemController extends Controller
         $default = [
             'housekeeping'   => ['every_minutes' => 15],
             'autopost'       => ['every_minutes' => 1],
+            'paypal-reconcile' => ['every_minutes' => 5],
             'backup'         => ['hour' => 3, 'minute' => 0],
             'restore-drill'  => ['dow' => 0, 'hour' => 4, 'minute' => 0],
         ];
@@ -414,7 +428,7 @@ class SystemController extends Controller
             $this->redirect('/admin/system');
         }
 
-        $valid = ['housekeeping', 'autopost', 'backup', 'restore-drill'];
+        $valid = ['housekeeping', 'autopost', 'paypal-reconcile', 'backup', 'restore-drill'];
         if (!in_array($job, $valid, true)) {
             $this->flash('error', 'Unknown cron job.');
             $this->redirect('/admin/system');
@@ -430,6 +444,9 @@ class SystemController extends Controller
                 break;
             case 'autopost':
                 $sched['autopost'] = ['every_minutes' => $clamp((int) $req->post('cron_autopost_min', 1), 1, 1440)];
+                break;
+            case 'paypal-reconcile':
+                $sched['paypal-reconcile'] = ['every_minutes' => $clamp((int) $req->post('cron_paypal_reconcile_min', 5), 1, 1440)];
                 break;
             case 'backup':
                 $sched['backup'] = [
@@ -469,10 +486,11 @@ class SystemController extends Controller
         exec($cmd, $outLines, $rc);
 
         $labels = [
-            'housekeeping'  => 'Housekeeping',
-            'autopost'      => 'Auto-poster',
-            'backup'        => 'Backup',
-            'restore-drill' => 'Restore drill',
+            'housekeeping'    => 'Housekeeping',
+            'autopost'        => 'Auto-poster',
+            'paypal-reconcile' => 'PayPal reconciliation',
+            'backup'          => 'Backup',
+            'restore-drill'   => 'Restore drill',
         ];
         $label = $labels[$job] ?? $job;
 
@@ -673,6 +691,27 @@ PHP;
             'Housekeeping done — %d sub(s) expired, %d stale staging dir(s) removed, %d old backup(s) pruned.',
             $summary['expired_subs'], $summary['pending_dirs'], $summary['backups_pruned']
         ));
+        $this->redirect('/admin/system');
+    }
+
+    /**
+     * Run the PayPal subscription reconciler now and report what it did.
+     * Activates paid memberships whose PayPal status confirms the payment.
+     */
+    public function paypalReconcile(): void
+    {
+        $summary = \App\Core\Housekeeping::reconcilePayPalSubscriptions();
+
+        AuditLog::record(Auth::user()['id'] ?? null, 'update', 'system_paypal_reconcile', null,
+            'Manual PayPal reconciliation: ' . json_encode($summary));
+
+        $this->flash(
+            $summary['errors'] > 0 ? 'error' : 'success',
+            sprintf(
+                'PayPal reconciliation done — %d activated, %d closed, %d skipped, %d errors.',
+                $summary['activated'], $summary['closed'], $summary['skipped'], $summary['errors']
+            )
+        );
         $this->redirect('/admin/system');
     }
 

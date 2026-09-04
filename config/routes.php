@@ -135,6 +135,7 @@ return [
     ['POST', '/admin/system/db/optimize', 'SystemController@dbOptimize', 'dashboard'],
     ['POST', '/admin/system/maintenance', 'SystemController@maintenanceToggle', 'dashboard'],
     ['POST', '/admin/system/housekeeping', 'SystemController@housekeepingRun', 'dashboard'],
+    ['POST', '/admin/system/paypal-reconcile', 'SystemController@paypalReconcile', 'dashboard'],
     ['POST', '/admin/system/smtp-test', 'SystemController@smtpTest', 'dashboard'],
     ['POST', '/admin/system/cron-schedule/{job}', 'SystemController@saveCronSchedule', 'dashboard'],
 

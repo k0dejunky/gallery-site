@@ -120,6 +120,44 @@ class PayPalGateway
     }
 
     /**
+     * Fetch the current status of a PayPal subscription by its REST id.
+     * Returns the status string (ACTIVE, APPROVED, SUSPENDED, CANCELLED,
+     * EXPIRED, ...) or null when PayPal cannot be reached or the id is
+     * unknown. Used by the scheduled reconciler to auto-activate paid
+     * memberships when a webhook was missed.
+     */
+    public function getSubscriptionStatus(string $paypalSubscriptionId): ?string
+    {
+        $paypalSubscriptionId = trim($paypalSubscriptionId);
+
+        if ($paypalSubscriptionId === '' || !preg_match('/\A[A-Za-z0-9_-]{6,100}\z/', $paypalSubscriptionId)) {
+            return null;
+        }
+
+        $token = $this->accessToken();
+
+        [$status, , $body] = Http::request(
+            $this->baseUrl . '/v1/billing/subscriptions/' . rawurlencode($paypalSubscriptionId),
+            [
+                'method'  => 'GET',
+                'headers' => ['Authorization' => 'Bearer ' . $token],
+                'timeout' => 30,
+            ]
+        );
+
+        if ($status !== 200) {
+            error_log('[paypal-reconcile] status lookup failed (HTTP ' . $status . ') for ' . $paypalSubscriptionId . ': ' . substr((string) $body, 0, 300));
+            return null;
+        }
+
+        $data = json_decode((string) $body, true);
+
+        $result = (string) ($data['status'] ?? '');
+
+        return $result !== '' ? $result : null;
+    }
+
+    /**
      * Human-readable test for gateway configuration (separate from null
      * factory state).
      */

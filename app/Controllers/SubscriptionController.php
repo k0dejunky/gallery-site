@@ -41,9 +41,9 @@ class SubscriptionController extends Controller
              JOIN users u ON u.id = s.user_id
              JOIN plans p ON p.id = s.plan_id
              LEFT JOIN payment_processors pp ON pp.id = s.payment_processor_id
-             WHERE s.status = ? AND s.transaction_ref LIKE ?
+             WHERE s.status = ? AND (s.transaction_ref LIKE ? OR s.transaction_ref LIKE ?)
              ORDER BY s.created_at ASC',
-            ['pending', 'PENDING-%']
+            ['pending', 'PENDING-%', 'PAYPAL-%']
         )->fetchAll();
 
         $this->viewAdmin('subscriptions', [

@@ -132,6 +132,10 @@
             <?= csrf_field() ?>
             <button class="btn" type="submit">Run housekeeping now</button>
         </form>
+        <form class="sys-actions" method="post" action="<?= url('/admin/system/paypal-reconcile') ?>" style="margin-top:.5rem;">
+            <?= csrf_field() ?>
+            <button class="btn" type="submit">Run PayPal reconciliation now</button>
+        </form>
     </div>
 
     <!-- Media variants -->
@@ -201,16 +205,17 @@
         <?php else: ?>
             <?php
                 $cronCardJobs = [
-                    'housekeeping' => ['Housekeeping', 'Expire overdue subscriptions, purge stale staging dirs, prune old backups, snapshot storage'],
-                    'autopost'     => ['Auto-poster', 'Publish queued auto-posts to X/Reddit once their scheduled time passes'],
-                    'backup'       => ['Backup', 'Full DB + media archive, split into 4 GB parts and synced offsite'],
-                    'restore-drill'=> ['Restore drill', 'Restore a recent backup into a scratch DB to prove backups are restorable'],
+                    'housekeeping'   => ['Housekeeping', 'Expire overdue subscriptions, purge stale staging dirs, prune old backups, snapshot storage'],
+                    'autopost'       => ['Auto-poster', 'Publish queued auto-posts to X/Reddit once their scheduled time passes'],
+                    'paypal-reconcile' => ['PayPal reconciliation', 'Auto-approve paid PayPal memberships by confirming their status with PayPal'],
+                    'backup'         => ['Backup', 'Full DB + media archive, split into 4 GB parts and synced offsite'],
+                    'restore-drill'  => ['Restore drill', 'Restore a recent backup into a scratch DB to prove backups are restorable'],
                 ];
                 $cronCardStates = [];
                 foreach ($cronJobs as $cronJob) {
                     $cronCardStates[$cronJob['id']] = $cronJob;
                 }
-                $cronMinFields = ['housekeeping' => 'cron_housekeeping_min', 'autopost' => 'cron_autopost_min'];
+                $cronMinFields = ['housekeeping' => 'cron_housekeeping_min', 'autopost' => 'cron_autopost_min', 'paypal-reconcile' => 'cron_paypal_reconcile_min'];
             ?>
             <div class="cron-card-grid">
                 <?php foreach ($cronCardJobs as $cronCardId => $cronCard): ?>
@@ -239,10 +244,10 @@
                             <form method="post" action="<?= url('/admin/system/cron-schedule/' . e($cronCardId)) ?>">
                                 <?= csrf_field() ?>
                                 <div class="cron-fields">
-                                    <?php if ($cronCardId === 'housekeeping' || $cronCardId === 'autopost'): ?>
+                                    <?php if ($cronCardId === 'housekeeping' || $cronCardId === 'autopost' || $cronCardId === 'paypal-reconcile'): ?>
                                         every
                                         <input type="number" name="<?= e($cronMinFields[$cronCardId]) ?>" min="1" max="1440"
-                                               value="<?= (int) ($cronSchedule[$cronCardId]['every_minutes'] ?? ($cronCardId === 'housekeeping' ? 15 : 1)) ?>"
+                                               value="<?= (int) ($cronSchedule[$cronCardId]['every_minutes'] ?? ($cronCardId === 'housekeeping' ? 15 : ($cronCardId === 'autopost' ? 1 : 5))) ?>"
                                                aria-label="<?= e($cronCard[0]) ?> interval in minutes">
                                         <span class="muted">min</span>
                                     <?php elseif ($cronCardId === 'backup'): ?>
