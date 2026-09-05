@@ -91,13 +91,14 @@ class SettingsController extends Controller
     }
 
     /**
-     * Save the selected site preset for an eligible yearly or lifetime member.
+     * Save the selected site preset for an eligible Platinum-or-higher
+     * member (yearly/lifetime levels also qualify).
      */
     public function updateTheme(): void
     {
         $user = Auth::user();
         if (!Auth::canUseCustomTheme()) {
-            $this->flash('error', 'Theme selection requires an active yearly or lifetime membership.');
+            $this->flash('error', 'Theme selection requires a Platinum or higher membership.');
             $this->redirect($this->settingsPath());
         }
 

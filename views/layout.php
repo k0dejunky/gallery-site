@@ -9,11 +9,8 @@ $flash = \App\Core\Flash::all();
 \App\Core\Flash::clear();
 $sidebarNav = $sidebarNav ?? false;
 $userThemePreset = null;
-if ($user !== null) {
-    $activeSubscription = \App\Models\Subscription::activeFor((int) $user['id']);
-    if ($activeSubscription !== null && in_array($activeSubscription['billing_cycle'] ?? '', ['yearly', 'lifetime'], true)) {
-        $userThemePreset = $user['theme_preset'] ?? null;
-    }
+if ($user !== null && \App\Core\Auth::canUseCustomTheme()) {
+    $userThemePreset = $user['theme_preset'] ?? null;
 }
 
 // Carry the current images/videos filter onto sidebar and section links so

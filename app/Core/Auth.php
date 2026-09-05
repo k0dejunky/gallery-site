@@ -335,10 +335,14 @@ class Auth
 
     public static function canUseCustomTheme(): bool
     {
+        if (self::isAdmin()) {
+            return true;
+        }
+
         $user = self::user();
         if ($user === null) return false;
         $active = Subscription::activeFor((int) $user['id']);
-        return $active !== null && in_array($active['billing_cycle'] ?? '', ['yearly', 'lifetime'], true);
+        return $active !== null && (int) ($active['plan_level'] ?? 0) >= 3;
     }
 
     /**
