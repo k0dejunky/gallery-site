@@ -73,14 +73,21 @@ class SubscriptionController extends Controller
 
         $userId = (int) $user['id'];
 
-        if (Subscription::isActive($userId) || Subscription::pendingFor($userId) !== null) {
-            $this->flash('error', 'That user already has a membership or pending request.');
-            $this->redirect('/admin/subscriptions');
+        // A manual grant always takes effect: if the user already has a
+        // subscription, it is overwritten with the newly granted plan (any
+        // pending request is cleared too) so the new level applies right away.
+        $current = Subscription::activeFor($userId);
+        if ($current !== null) {
+            Subscription::cancel((int) $current['id']);
+        }
+        $pending = Subscription::pendingFor($userId);
+        if ($pending !== null) {
+            Subscription::delete((int) $pending['id']);
         }
 
         $id = Subscription::create($userId, $planId, null, false);
         Subscription::approve($id);
-        AuditLog::record((int) Auth::user()['id'], 'create', 'subscription', $id, 'Granted "' . $plan['name'] . '" to ' . $user['email'], null, ['user_id' => $userId, 'plan_id' => $planId]);
+        AuditLog::record((int) Auth::user()['id'], 'create', 'subscription', $id, 'Granted "' . $plan['name'] . '" to ' . $user['email'] . ($current !== null ? ' (replaced prior subscription)' : ''), null, ['user_id' => $userId, 'plan_id' => $planId, 'replaced_subscription_id' => $current !== null ? (int) $current['id'] : null]);
 
         $this->flash('success', 'Membership granted to "' . $user['email'] . '".');
         $this->redirect('/admin/subscriptions');

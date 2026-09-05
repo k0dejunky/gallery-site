@@ -37,7 +37,7 @@ class Subscription
              WHERE s.user_id = ?
                AND s.status IN (?, ?)
                AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
-             ORDER BY s.starts_at DESC
+             ORDER BY s.id DESC
              LIMIT 1',
             [$userId, 'active', 'cancelled']
         )->fetch();
