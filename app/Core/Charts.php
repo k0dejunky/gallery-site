@@ -164,9 +164,9 @@ class Charts
             $largeArc = $frac > 0.5 ? 1 : 0;
 
             $svg .= sprintf(
-                '<path d="M %.2f %.2f A %d %d 0 %d 1 %.2f %.2f Z" fill="%s">'
+                '<path d="M %d %d L %.2f %.2f A %d %d 0 %d 1 %.2f %.2f Z" fill="%s">'
                 . '<title>%s — %s</title></path>',
-                $x1, $y1, $r, $r, $largeArc, $x2, $y2,
+                $cx, $cy, $x1, $y1, $r, $r, $largeArc, $x2, $y2,
                 htmlspecialchars($slice['color'], ENT_QUOTES),
                 htmlspecialchars((string) $slice['label'], ENT_QUOTES),
                 htmlspecialchars(number_format($value, 0), ENT_QUOTES)
