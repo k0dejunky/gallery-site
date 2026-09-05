@@ -161,8 +161,9 @@
                         <div style="flex:1 1 auto;min-width:60px;height:.55rem;background:rgba(120,120,140,.15);border-radius:.3rem;overflow:hidden;">
                             <div style="<?= $diskHelpers['bar']((float) $slice['value']) ?>;height:100%;background:<?= e($slice['color']) ?>;"></div>
                         </div>
-                        <b style="flex:0 0 58px;text-align:right;font-variant-numeric:tabular-nums;">
+                        <b style="flex:0 0 118px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;">
                             <?= $diskHelpers['gb']((float) $slice['value']) ?> GB
+                            <span class="muted" style="font-size:.8rem;">(<?= number_format((float) $slice['value'] / (float) $disk['total'] * 100, 1) ?>%)</span>
                         </b>
                     </div>
                 <?php endforeach; ?>
