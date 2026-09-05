@@ -108,4 +108,73 @@ class Charts
 
         return $svg . '</svg>';
     }
+
+    /**
+     * Donut pie chart for a set of labelled shares. Each slice is a colour,
+     * carries a <title> with the label/value for hover, and the legend is
+     * rendered separately by the caller so it can style the list freely.
+     *
+     * @param array<int, array{label:string, value:float, color:string}> $slices
+     */
+    public static function pie(array $slices, int $w = 220, int $h = 220): string
+    {
+        $slices = array_values(array_filter($slices, static function (array $s): bool {
+            return (float) $s['value'] > 0;
+        }));
+
+        $total = array_sum(array_map(static fn (array $s): float => (float) $s['value'], $slices));
+
+        if ($total <= 0) {
+            return '<svg viewBox="0 0 ' . $w . ' ' . $h . '" width="' . $w . '" height="' . $h . '" role="img" style="display:block"></svg>';
+        }
+
+        $cx = $w / 2;
+        $cy = $h / 2;
+        $r  = min($w, $h) / 2 - 4;
+        $svg = sprintf(
+            '<svg viewBox="0 0 %d %d" width="%d" height="%d" role="img" style="display:block">',
+            $w, $h, $w, $h
+        );
+
+        $angle = -M_PI / 2;
+
+        if (count($slices) === 1) {
+            $slice = $slices[0];
+            $svg .= sprintf(
+                '<circle cx="%d" cy="%d" r="%d" fill="%s">'
+                . '<title>%s — %s</title></circle>',
+                $cx, $cy, $r,
+                htmlspecialchars($slice['color'], ENT_QUOTES),
+                htmlspecialchars((string) $slice['label'], ENT_QUOTES),
+                htmlspecialchars(number_format((float) $slice['value'], 0), ENT_QUOTES)
+            );
+            return $svg . '</svg>';
+        }
+
+        foreach ($slices as $slice) {
+            $value = (float) $slice['value'];
+            $frac  = $value / $total;
+            $end   = $angle + $frac * 2 * M_PI;
+
+            $x1 = $cx + $r * cos($angle);
+            $y1 = $cy + $r * sin($angle);
+            $x2 = $cx + $r * cos($end);
+            $y2 = $cy + $r * sin($end);
+
+            $largeArc = $frac > 0.5 ? 1 : 0;
+
+            $svg .= sprintf(
+                '<path d="M %.2f %.2f A %d %d 0 %d 1 %.2f %.2f Z" fill="%s">'
+                . '<title>%s — %s</title></path>',
+                $x1, $y1, $r, $r, $largeArc, $x2, $y2,
+                htmlspecialchars($slice['color'], ENT_QUOTES),
+                htmlspecialchars((string) $slice['label'], ENT_QUOTES),
+                htmlspecialchars(number_format($value, 0), ENT_QUOTES)
+            );
+
+            $angle = $end;
+        }
+
+        return $svg . '</svg>';
+    }
 }

@@ -126,18 +126,54 @@
     </div>
 </div>
 
-<?php // System health: disk space + security summary. ?>
-<div class="stat-cards">
-    <?php if ($diskFreeGb !== null): ?>
-        <?php
-            $diskColor = $diskFreeGb > 20 ? '#16a34a' : ($diskFreeGb > 10 ? '#d97706' : '#dc2626');
-            $diskBg    = $diskFreeGb > 20 ? '#f0fdf4' : ($diskFreeGb > 10 ? '#fffbeb' : '#fef2f2');
-        ?>
-        <div class="stat-card" style="background:<?= $diskBg ?>;">
-            <b style="color:<?= $diskColor ?>;font-size:1.3rem;"><?= number_format($diskFreeGb, 1) ?> GB</b>
-            <small>Free disk space</small>
+<?php // System health: disk space pie + security summary. ?>
+<?php if (!empty($disk)): ?>
+    <?php
+        $diskHelpers = [
+            'gb' => static fn (float $b): string => number_format($b / 1073741824, 1),
+            'bar' => static fn (float $f): string => 'width:' . number_format($f / (float) $disk['total'] * 100, 2) . '%;',
+        ];
+        $diskSlices = [
+            ['label' => 'Free disk',      'value' => (float) $disk['free'],   'color' => '#16a34a'],
+            ['label' => 'Images',         'value' => (float) $disk['images'], 'color' => '#0ea5e9'],
+            ['label' => 'Videos',         'value' => (float) $disk['videos'], 'color' => '#a855f7'],
+            ['label' => 'Database',       'value' => (float) $disk['db'],     'color' => '#f59e0b'],
+            ['label' => 'OS',             'value' => (float) $disk['os'],     'color' => '#64748b'],
+        ];
+    ?>
+    <div class="sys-card" style="margin-top:var(--spacing-lg);">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+            <h2 style="margin:0;">Disk space</h2>
+            <span class="muted" style="font-size:.85rem;">
+                <?= $diskHelpers['gb']((float) $disk['total']) ?> GB total · <?= $diskHelpers['gb']((float) $disk['free']) ?> GB free
+            </span>
         </div>
-    <?php endif; ?>
+        <div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:center;margin-top:.75rem;">
+            <div style="flex:0 0 auto;">
+                <?= \App\Core\Charts::pie($diskSlices, 230, 230) ?>
+            </div>
+            <div style="flex:1 1 280px;min-width:220px;">
+                <?php foreach ($diskSlices as $slice): ?>
+                    <div style="display:flex;align-items:center;gap:.6rem;margin:.45rem 0;">
+                        <i style="flex:0 0 auto;width:.85rem;height:.85rem;border-radius:.2rem;background:<?= e($slice['color']) ?>;display:inline-block;"></i>
+                        <span style="flex:0 0 90px;"><?= e($slice['label']) ?></span>
+                        <div style="flex:1 1 auto;min-width:60px;height:.55rem;background:rgba(120,120,140,.15);border-radius:.3rem;overflow:hidden;">
+                            <div style="<?= $diskHelpers['bar']((float) $slice['value']) ?>;height:100%;background:<?= e($slice['color']) ?>;"></div>
+                        </div>
+                        <b style="flex:0 0 58px;text-align:right;font-variant-numeric:tabular-nums;">
+                            <?= $diskHelpers['gb']((float) $slice['value']) ?> GB
+                        </b>
+                    </div>
+                <?php endforeach; ?>
+                <p class="muted" style="margin:.6rem 0 0;font-size:.85rem;">
+                    OS = everything outside the site's uploads and database (server, app, backups, logs).
+                </p>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
+<div class="stat-cards" style="margin-top:var(--spacing-lg);">
     <?php if ((int) $security['locked_ips'] > 0 || (int) $security['locked_pairs'] > 0): ?>
         <div class="stat-card" style="background:#fef2f2;">
             <b style="color:#dc2626;font-size:1.3rem;"><?= count($security['locked_ips']) + count($security['locked_pairs']) ?></b>

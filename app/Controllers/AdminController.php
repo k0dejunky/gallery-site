@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\Database;
 use App\Models\Category;
 use App\Models\Gallery;
 use App\Models\Photo;
@@ -48,11 +49,7 @@ class AdminController extends Controller
             );
         }
 
-        $diskFreeGb = null;
-        $free = @disk_free_space($root);
-        if ($free !== false) {
-            $diskFreeGb = round($free / 1073741824, 1);
-        }
+        $disk = $this->diskBreakdown();
 
         $storagePeriod = (string) ($_GET['period'] ?? 'week');
         if (!in_array($storagePeriod, ['day', 'week', 'month', 'year', 'all'], true)) {
@@ -70,7 +67,7 @@ class AdminController extends Controller
             'security'  => $security,
             'backupFailure' => $backupFailure,
             'cronAgeMin' => $cronAge,
-            'diskFreeGb' => $diskFreeGb,
+            'disk'       => $disk,
 
             // Additional statistics.
             'viewTrends' => \App\Models\Stats::contentViewTrends(30),
@@ -370,5 +367,62 @@ class AdminController extends Controller
 
         $this->flash('success', 'Upload assigned to "' . $gallery['title'] . '".');
         $this->redirect('/admin/abandoned-uploads');
+    }
+
+    /**
+     * Disk space breakdown for the dashboard pie chart: total and free bytes
+     * from the filesystem, image/video storage from the photos table, and the
+     * MySQL database footprint from information_schema. The OS share is what
+     * remains after those (server + app code, backing files, logs, etc.).
+     */
+    private function diskBreakdown(): array
+    {
+        $root  = dirname(__DIR__, 2);
+        $total = @disk_total_space($root);
+        $free  = @disk_free_space($root);
+
+        if ($total === false || $free === false) {
+            return ['total' => 0, 'free' => 0, 'images' => 0, 'videos' => 0, 'db' => 0, 'os' => 0];
+        }
+
+        $uploads = (string) config('app.uploads.dir');
+        $images  = 0;
+        $videos  = 0;
+
+        foreach (Database::run('SELECT filename, is_video FROM photos')->fetchAll() as $photo) {
+            $size = @filesize($uploads . '/' . $photo['filename']);
+            if ($size === false) {
+                continue;
+            }
+            if ((int) $photo['is_video'] === 1) {
+                $videos += $size;
+            } else {
+                $images += $size;
+            }
+        }
+
+        $dbName = (string) (config('database.database') ?: '');
+
+        $db = 0;
+        if ($dbName !== '') {
+            $db = (float) Database::run(
+                'SELECT COALESCE(SUM(data_length + index_length), 0)
+                 FROM information_schema.tables
+                 WHERE table_schema = ?',
+                [$dbName]
+            )->fetchColumn();
+        }
+
+        $used = $total - $free;
+        $os   = max(0, $used - $images - $videos - $db);
+
+        return [
+            'total'  => (float) $total,
+            'free'   => (float) $free,
+            'images' => (float) $images,
+            'videos' => (float) $videos,
+            'db'     => (float) $db,
+            'os'     => (float) $os,
+        ];
     }
 }
