@@ -534,6 +534,36 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
                 window.AdminProgress.hide();
             }
         });
+
+        // --- Keep the admin's scroll position when a button submits a form
+        // and the page reloads. The position is saved per URL so a same-page
+        // submit (toggle, delete, approve, save) lands back where the admin
+        // was instead of snapping to the top.
+        var scrollKey = 'admin-scroll-pos';
+        if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+        try {
+            var adminScroll = sessionStorage.getItem(scrollKey);
+            if (adminScroll !== null) {
+                sessionStorage.removeItem(scrollKey);
+                var savedPos = JSON.parse(adminScroll);
+                if (savedPos && savedPos.p === location.pathname + location.search && !location.hash) {
+                    setTimeout(function () {
+                        window.scrollTo(0, parseInt(savedPos.y, 10) || 0);
+                    }, 0);
+                }
+            }
+        } catch (ignore) {}
+        document.addEventListener('submit', function (e) {
+            var form = e.target;
+            if (!form || !form.matches('form')) return;
+            if (form.getAttribute('data-no-scroll-restore') !== null) return;
+            try {
+                sessionStorage.setItem(scrollKey, JSON.stringify({
+                    p: location.pathname + location.search,
+                    y: window.scrollY || 0
+                }));
+            } catch (ignore) {}
+        }, true);
     })();
     </script>
 <?php
