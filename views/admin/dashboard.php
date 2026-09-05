@@ -134,11 +134,12 @@
             'bar' => static fn (float $f): string => 'width:' . number_format($f / (float) $disk['total'] * 100, 2) . '%;',
         ];
         $diskSlices = [
-            ['label' => 'Free disk',      'value' => (float) $disk['free'],   'color' => '#16a34a'],
-            ['label' => 'Images',         'value' => (float) $disk['images'], 'color' => '#0ea5e9'],
-            ['label' => 'Videos',         'value' => (float) $disk['videos'], 'color' => '#a855f7'],
-            ['label' => 'Database',       'value' => (float) $disk['db'],     'color' => '#f59e0b'],
-            ['label' => 'OS',             'value' => (float) $disk['os'],     'color' => '#64748b'],
+            ['label' => 'Free disk',      'value' => (float) $disk['free'],    'color' => '#16a34a'],
+            ['label' => 'Backups',        'value' => (float) $disk['backups'], 'color' => '#f43f5e'],
+            ['label' => 'Images',         'value' => (float) $disk['images'],  'color' => '#0ea5e9'],
+            ['label' => 'Videos',         'value' => (float) $disk['videos'],  'color' => '#a855f7'],
+            ['label' => 'Database',       'value' => (float) $disk['db'],      'color' => '#f59e0b'],
+            ['label' => 'OS',             'value' => (float) $disk['os'],      'color' => '#64748b'],
         ];
     ?>
     <div class="sys-card" style="margin-top:var(--spacing-lg);">
@@ -166,7 +167,7 @@
                     </div>
                 <?php endforeach; ?>
                 <p class="muted" style="margin:.6rem 0 0;font-size:.85rem;">
-                    OS = everything outside the site's uploads and database (server, app, backups, logs).
+                    OS = everything outside the site's uploads, backups and database (server, app, logs).
                 </p>
             </div>
         </div>

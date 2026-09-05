@@ -401,6 +401,15 @@ class AdminController extends Controller
             }
         }
 
+        // The backup archive directory (.tar.gz chunks and .sql.gz dumps).
+        $backupDir = $root . '/storage/backups';
+        $backups   = is_dir($backupDir)
+            ? (float) array_sum(array_map(
+                static fn (string $file): int => (int) @filesize($file),
+                glob($backupDir . '/*') ?: []
+            ))
+            : 0.0;
+
         $dbName = (string) (config('database.database') ?: '');
 
         $db = 0;
@@ -414,15 +423,16 @@ class AdminController extends Controller
         }
 
         $used = $total - $free;
-        $os   = max(0, $used - $images - $videos - $db);
+        $os   = max(0, $used - $images - $videos - $backups - $db);
 
         return [
-            'total'  => (float) $total,
-            'free'   => (float) $free,
-            'images' => (float) $images,
-            'videos' => (float) $videos,
-            'db'     => (float) $db,
-            'os'     => (float) $os,
+            'total'   => (float) $total,
+            'free'    => (float) $free,
+            'images'  => (float) $images,
+            'videos'  => (float) $videos,
+            'backups' => $backups,
+            'db'      => (float) $db,
+            'os'      => (float) $os,
         ];
     }
 }
