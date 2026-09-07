@@ -87,6 +87,9 @@
     .pending-tile .tile-controls button.danger { color: var(--danger, #c62828); border-color: var(--danger, #c62828); }
     .pending-tile.is-busy::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,.25); }
     .tile-spinner { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(255,255,255,.7); color: var(--text-muted, #888); font-size: var(--font-size-xs, .75rem); }
+    .pending-tile.is-waiting { opacity: .85; }
+    .pending-tile.is-failed { opacity: .55; border-color: var(--danger, #c62828); }
+    .pending-tile.is-failed .tile-name { color: var(--danger, #c62828); }
     .empty-state { padding: 1.5rem; text-align: center; color: var(--text-muted, #888); border: 1px dashed var(--card-border, #ddd); border-radius: var(--border-radius, 6px); }
 </style>
 
@@ -185,7 +188,14 @@
     var saveBtn = document.getElementById('save-btn');
     var pendingFiles = <?= json_encode($pendingFiles ?? [], JSON_UNESCAPED_SLASHES) ?> || [];
     var uploadQueue = [];
+    var queuedTiles = []; // uploadQueue items that are showing an on-screen tile
     var uploading = false;
+    // Upload debugging: window.__galleryUploadDebug = true prints every queue
+    // transition to the console (handy if "add more" seems to do nothing).
+    var debugLog = function () {
+        if (!window.__galleryUploadDebug) return;
+        console.info('[gallery-upload]', Array.prototype.slice.call(arguments).join(' '));
+    };
     // Files at/above CHUNK_MIN bytes are uploaded as CHUNK_SIZE chunks so a
     // multi-GB video uploads as many small fast requests (resumable) instead
     // of one long request the webserver/fastcgi timeouts would kill. Kept in
@@ -213,9 +223,9 @@
     }
 
     function render() {
-        countEl.textContent = pendingFiles.length;
+        countEl.textContent = pendingFiles.length + (queuedTiles.length ? ' + ' + queuedTiles.length + ' queued' : '');
         tilesEl.innerHTML = '';
-        if (!pendingFiles.length) {
+        if (!pendingFiles.length && !queuedTiles.length) {
             tilesEl.innerHTML = '<div class="empty-state">No files uploaded yet.</div>';
             return;
         }
@@ -237,6 +247,7 @@
                 '</div>';
             tilesEl.appendChild(tile);
         });
+        queuedTiles.forEach(function (item) { tilesEl.appendChild(item.tile); });
     }
 
     function setBusy(tile, busy) {
@@ -253,6 +264,20 @@
         }
     }
 
+    function waitTile(name) {
+        var tile = document.createElement('div');
+        tile.className = 'pending-tile is-waiting';
+        var sp = document.createElement('div');
+        sp.className = 'tile-spinner';
+        sp.textContent = 'Queued…';
+        var nm = document.createElement('span');
+        nm.className = 'tile-name';
+        nm.textContent = name;
+        tile.appendChild(sp);
+        tile.appendChild(nm);
+        return tile;
+    }
+
     function uploadFiles(fileList) {
         // Queue every selected file and upload them ONE per request.
         // PHP silently truncates multi-file requests at max_file_uploads
@@ -260,10 +285,21 @@
         // the 20th file. Per-file requests have no count limit, keep the
         // exact same server-side validation rules for every file, and let
         // one bad file fail without cancelling the rest of the batch.
+        //
+        // Every selected file gets an on-screen "Queued…" tile immediately so
+        // a slow or mixed batch shows feedback the moment it is selected; the
+        // tile is replaced by the real thumbnail once the server confirms the
+        // upload (success) or marked failed (rejection) otherwise.
         var type = currentType();
+        var added = 0;
         Array.prototype.forEach.call(fileList, function (file) {
-            uploadQueue.push({ file: file, type: type });
+            var item = { file: file, type: type, tile: waitTile(file.name) };
+            queuedTiles.push(item);
+            tilesEl.appendChild(item.tile);
+            uploadQueue.push(item);
+            added++;
         });
+        debugLog('selected', added, 'file(s); queue is now', uploadQueue.length);
         processQueue();
     }
 
@@ -294,7 +330,10 @@
                 uploading = false;
                 saveBtn.disabled = false;
                 fileInput.value = '';
+                queuedTiles = [];
+                render();
                 if (window.AdminProgress) window.AdminProgress.hide();
+                debugLog('queue drained');
                 if (failures.length) {
                     alert('Some files could not be uploaded:\n\n' + failures.join('\n'));
                 }
@@ -302,13 +341,19 @@
             }
 
             var item = uploadQueue[0];
+            var sp = item.tile && item.tile.querySelector('.tile-spinner');
+            if (sp) sp.textContent = 'Uploading…';
+            debugLog('uploading', item.file.name, '(' + item.file.size + ' bytes)');
             if (item.file.size >= CHUNK_MIN) uploadChunked(item);
             else uploadDirect(item);
         }
 
         // Finish one file successfully and move to the next in the queue.
         function finishFile(item, data) {
-            if (data && data.files) { pendingFiles = data.files; render(); }
+            if (data && data.files) { pendingFiles = data.files; }
+            var qi = queuedTiles.indexOf(item);
+            if (qi >= 0) queuedTiles.splice(qi, 1);
+            render();
             sentBytes += item.file.size;
             report();
             uploadQueue.shift();
@@ -319,6 +364,15 @@
         function failFile(item, message) {
             failures.push(message);
             uploadQueue.shift();
+            if (item.tile) {
+                var qi = queuedTiles.indexOf(item);
+                if (qi >= 0) queuedTiles.splice(qi, 1);
+                item.tile.classList.add('is-failed');
+                var nm = item.tile.querySelector('.tile-name');
+                if (nm) nm.textContent = item.file.name + ' — rejected';
+                item.tile.title = message;
+            }
+            debugLog('failed', item.file.name, '-', message);
             next();
         }
 
