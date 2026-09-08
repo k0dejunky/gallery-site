@@ -39,6 +39,48 @@ function url(string $path = ''): string
 }
 
 /**
+ * Build an absolute URL (scheme + host + path) from a route path. The site's
+ * APP_URL (which already includes the base path, e.g.
+ * https://amethyst2213.com/gallery) anchors the result; without it the
+ * current request's scheme/host is used so links still work on any host.
+ * Sign-off emails and newsletter bodies use this so links work inside email
+ * clients (which never carry the browser's session).
+ */
+function absolute_url(string $path = ''): string
+{
+    $base   = rtrim((string) config('app.base_path'), '/');
+    $appUrl = trim((string) env_value('APP_URL', ''));
+
+    // The path may already carry the base prefix (e.g. url() output from
+    // file_url()); strip it, because APP_URL already includes the base.
+    if ($base !== '' && strpos($path, $base . '/') === 0) {
+        $path = substr($path, strlen($base));
+    }
+
+    if ($appUrl === '') {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $appUrl = $scheme . '://' . $host . $base;
+    }
+
+    return rtrim($appUrl, '/') . '/' . ltrim($path, '/');
+}
+
+/**
+ * Render an email template from views/emails/ into a string buffer. Email
+ * templates are plain PHP fragments (no shared layout) so they can be safely
+ * rendered both by the web request (admin send-now / test) and the CLI worker.
+ */
+function render_email(string $template, array $data = []): string
+{
+    extract($data, EXTR_SKIP);
+    ob_start();
+    require __DIR__ . '/../../views/emails/' . $template . '.php';
+
+    return (string) ob_get_clean();
+}
+
+/**
  * Produce a session-bound HMAC token proving a request URL was handed out by
  * this exact browser session, backed by GALLERY_MEDIA_KEY from the .env file.
  * Non-thumb media served via /files/ require this token so a raw URL (e.g.

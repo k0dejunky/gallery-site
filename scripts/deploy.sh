@@ -41,9 +41,9 @@ ROLLBACK_NEEDED=0
 rollback() {
     [[ "$ROLLBACK_NEEDED" == 1 ]] || return 0
     echo ">> deployment failed; restoring snapshot" >&2
-    local script="set -e\n"
+    local script="set -e"$'\n'
     for rel in "${FILES[@]}"; do
-        script+="if [ -f '$SNAP/$rel' ]; then mkdir -p \"\$(dirname '$REMOTE_ROOT/$rel')\"; cp '$SNAP/$rel' '$REMOTE_ROOT/$rel'; else rm -f '$REMOTE_ROOT/$rel'; fi\n"
+        script+="if [ -f '$SNAP/$rel' ]; then mkdir -p \"\$(dirname '$REMOTE_ROOT/$rel')\"; cp '$SNAP/$rel' '$REMOTE_ROOT/$rel'; else rm -f '$REMOTE_ROOT/$rel'; fi"$'\n'
     done
     remote "$script" || echo "rollback failed; snapshot retained at $SNAP" >&2
 }
@@ -74,7 +74,7 @@ done
 remote "set -e
 while IFS= read -r -d '' file; do
     php -l \"\$file\" >/dev/null
-done < <(find '$REMOTE_ROOT' -type f -name '*.php' -print0)
+done < <(find '$REMOTE_ROOT' -path '$REMOTE_ROOT/storage' -prune -o -type f -name '*.php' -print0)
 "
 
 if [[ -n "${DEPLOY_HEALTH_URL:-}" ]]; then

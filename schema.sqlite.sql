@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     last_login_at DATETIME,
     last_seen_at DATETIME,
     session_version INTEGER NOT NULL DEFAULT 0,
+    marketing_opt_out INTEGER NOT NULL DEFAULT 0,
     billing_first_name VARCHAR(100), billing_last_name VARCHAR(100), billing_address_line1 VARCHAR(255), billing_address_line2 VARCHAR(255), billing_city VARCHAR(100), billing_state VARCHAR(50), billing_zip VARCHAR(20), billing_country VARCHAR(2)
 );
 
@@ -286,6 +287,22 @@ CREATE TABLE IF NOT EXISTS user_activity (
     ip           VARCHAR(45),
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS email_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    audience VARCHAR(20) NOT NULL CHECK (audience IN ('subscriber','non_subscriber')),
+    user_id INTEGER,
+    email VARCHAR(255) NOT NULL,
+    subject VARCHAR(255) NOT NULL,
+    html_body TEXT NOT NULL,
+    text_body TEXT,
+    status VARCHAR(10) NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','sent','failed')),
+    attempts TINYINT NOT NULL DEFAULT 0,
+    error VARCHAR(500),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at DATETIME,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 INSERT OR IGNORE INTO plans (name, slug, price, billing_cycle, description, sort_order, level, active) VALUES

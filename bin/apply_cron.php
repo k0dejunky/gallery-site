@@ -74,6 +74,8 @@ $crond['gallery-paypal-reconcile'] =
     "*/{$ppMin} * * * * {$php}/bin/paypal_reconcile.php >> " . SITE_ROOT . "/storage/logs/paypal-reconcile.log 2>&1\n";
 $crond['gallery-autopost'] =
     "*/{$postMin} * * * * {$php}/bin/autopost_worker.php --once >> " . SITE_ROOT . "/storage/logs/autopost.log 2>&1\n";
+$crond['gallery-emailer'] =
+    "*/5 * * * * {$php}/bin/email_worker.php --once >> " . SITE_ROOT . "/storage/logs/emailer.log 2>&1\n";
 $crond['gallery-backup'] =
     "{$backupM} {$backupH} * * * {$php}/bin/gallery_backup.php >> " . SITE_ROOT . "/storage/logs/backup.log 2>&1\n";
 $crond['gallery-restore-drill'] =
@@ -93,5 +95,5 @@ foreach ($crond as $name => $content) {
 $ok($svcRc === 0, 'systemctl restart of worker services failed');
 
 // Cron daemon picks up /etc/cron.d changes automatically; nothing else to do.
-echo "apply_cron: wrote 5 /etc/cron.d entries and restarted worker services\n";
+echo "apply_cron: wrote 6 /etc/cron.d entries and restarted worker services\n";
 exit(0);

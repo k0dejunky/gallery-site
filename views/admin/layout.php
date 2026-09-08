@@ -373,6 +373,9 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             <a class="nav-item <?= $navActive('/admin/galleries') ?>" href="<?= url('/admin/galleries') ?>" data-se-move-key="nav-galleries">Gallery Management</a>
             <a class="nav-item <?= $navActive('/admin/video-projects') ?>" href="<?= url('/admin/video-projects') ?>" data-se-move-key="nav-video-projects">Video Projects</a>
             <a class="nav-item <?= $navActive('/admin/auto-poster') ?>" href="<?= url('/admin/auto-poster') ?>" data-se-move-key="nav-auto-poster">Auto Poster</a>
+            <?php if (\App\Core\Auth::can('membership')): ?>
+                <a class="nav-item <?= $navActive('/admin/emailer') ?>" href="<?= url('/admin/emailer') ?>" data-se-move-key="nav-emailer">Emailer</a>
+            <?php endif; ?>
             <a class="nav-item <?= $navActive('/admin/categories') ?>" href="<?= url('/admin/categories') ?>" data-se-move-key="nav-categories">Categories</a>
             <a class="nav-item <?= $navActive('/admin/users') ?>" href="<?= url('/admin/users') ?>" data-se-move-key="nav-users">Users</a>
             <a class="nav-item <?= $navActive('/admin/plans') ?>" href="<?= url('/admin/plans') ?>" data-se-move-key="nav-plans">Membership</a>

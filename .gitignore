@@ -16,6 +16,9 @@
 /storage/autoposter.json
 /storage/security-rate-limit.json
 
+# Emailer schedule & audience settings (never commit)
+/storage/emailer.json
+
 # Runtime log/lock files (created by workers and cron jobs)
 /storage/logs/
 

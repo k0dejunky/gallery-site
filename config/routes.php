@@ -14,6 +14,7 @@ return [
     ['GET', '/galleries/category/{slug}', 'GalleryController@category'],
     ['GET', '/galleries/{id}/photos', 'GalleryController@photosPage'],
     ['GET', '/galleries/{id}', 'GalleryController@show'],
+    ['GET', '/unsubscribe', 'UnsubscribeController@index'],
     ['GET', '/images/{id}', 'ImageController@show'],
     ['GET', '/videos/{id}', 'VideoController@show'],
     ['GET', '/files/{file}', 'StorageController@serve'],
@@ -255,4 +256,11 @@ return [
     ['POST', '/admin/auto-poster/queue/schedule', 'AutoPosterController@rescheduleQueued'],
     ['POST', '/admin/auto-poster/queue/dismiss', 'AutoPosterController@dismissQueued'],
     ['POST', '/admin/auto-poster/clear-log', 'AutoPosterController@clearLog'],
+
+    // Emailer (admin only; content engine behind the membership permission)
+    ['GET', '/admin/emailer', 'EmailerController@index', 'membership'],
+    ['POST', '/admin/emailer/save', 'EmailerController@save', 'membership'],
+    ['POST', '/admin/emailer/send-now', 'EmailerController@sendNow', 'membership'],
+    ['POST', '/admin/emailer/test', 'EmailerController@test', 'membership'],
+    ['POST', '/admin/emailer/retry', 'EmailerController@retry', 'membership'],
 ];

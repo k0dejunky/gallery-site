@@ -75,6 +75,17 @@ class SmokeChecks
             'app/Models/AutoPostQueue.php',
             'bin/autopost_worker.php',
             'bin/apply_cron.php',
+            'app/Models/EmailerConfig.php',
+            'app/Models/EmailQueue.php',
+            'app/Controllers/EmailerController.php',
+            'app/Controllers/UnsubscribeController.php',
+            'bin/email_worker.php',
+            'views/emails/newsletter.php',
+            'views/emails/newsletter.text.php',
+            'views/unsubscribe.php',
+            'views/admin/emailer.php',
+            'database/migrations/012_email_queue.sql',
+            'database/migrations/013_user_marketing_opt_out.sql',
         ];
         foreach ($files as $rel) {
             $slug = str_replace(['/', '.'], '_', $rel);
@@ -129,13 +140,13 @@ class SmokeChecks
         preg_match_all('/CREATE TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+`?([A-Za-z0-9_]+)`?/i', $schema, $m);
         $tables = array_map('strtolower', $m[1]);
 
-        foreach (['users', 'galleries', 'photos', 'subscriptions', 'storage_snapshots', 'support_replies', 'gallery_favorites', 'saved_searches'] as $must) {
+        foreach (['users', 'galleries', 'photos', 'subscriptions', 'storage_snapshots', 'support_replies', 'gallery_favorites', 'saved_searches', 'email_queue'] as $must) {
             $add("smoke.schema.table.$must", 'Smoke · Schema', "schema.sql has table: $must", static function () use ($must, $tables, $ok, $bad): array {
                 return in_array($must, $tables, true) ? $ok('present') : $bad("schema.sql missing table: $must");
             });
         }
 
-        foreach (['last_seen_at' => 'users', 'email_verified_at' => 'users', 'email_verification_token' => 'users', 'video_count' => 'storage_snapshots', 'min_level' => 'galleries', 'membership_number' => 'subscriptions'] as $col => $table) {
+        foreach (['last_seen_at' => 'users', 'email_verified_at' => 'users', 'email_verification_token' => 'users', 'video_count' => 'storage_snapshots', 'min_level' => 'galleries', 'membership_number' => 'subscriptions', 'marketing_opt_out' => 'users', 'sent_at' => 'email_queue', 'audience' => 'email_queue', 'attempts' => 'email_queue'] as $col => $table) {
             $add("smoke.schema.col.$table.$col", 'Smoke · Schema', "schema.sql has column: $table.$col", static function () use ($col, $table, $schema, $ok, $bad): array {
                 return preg_match('/CREATE TABLE(\s+IF\s+NOT\s+EXISTS)?\s+' . $table . '\b(?:(?!CREATE TABLE).)*' . $col . '/is', $schema) === 1
                     ? $ok('present')
@@ -162,6 +173,11 @@ class SmokeChecks
         });
         $add('smoke.schema.apq_index', 'Smoke · Schema', 'auto_poster_queue scheduled index in schema.sql', static function () use ($schema, $ok, $bad): array {
             return strpos($schema, 'idx_apq_scheduled') !== false ? $ok('present') : $bad('schema.sql: auto_poster_queue scheduled index missing');
+        });
+        $add('smoke.schema.email_queue_index', 'Smoke · Schema', 'email_queue status + audience index in schema.sql', static function () use ($schema, $ok, $bad): array {
+            return strpos($schema, 'idx_email_queue_status') !== false && strpos($schema, 'idx_email_queue_audience') !== false
+                ? $ok('indexes present')
+                : $bad('schema.sql: email_queue must carry status and audience indexes');
         });
 
         // ------------------------------------------------------ Auto Poster
@@ -272,6 +288,122 @@ class SmokeChecks
         $migReadme = $read("$root/database/migrations/README.md");
         $add('smoke.ap.migration_readme', 'Smoke · Auto Poster', 'Migrations README documents schema_migrations', static function () use ($migReadme, $ok, $bad): array {
             return strpos($migReadme, 'schema_migrations') !== false ? $ok('documented') : $bad('database/migrations/README.md must document schema_migrations');
+        });
+
+        // ------------------------------------------------------------ Emailer
+        $eq   = $read("$root/app/Models/EmailQueue.php");
+        $ecfg = $read("$root/app/Models/EmailerConfig.php");
+        $mail = $read("$root/app/Core/Mailer.php");
+        $ew   = $read("$root/bin/email_worker.php");
+        $acrn = $read("$root/bin/apply_cron.php");
+        $nlt  = $read("$root/views/emails/newsletter.php");
+        $nltt = $read("$root/views/emails/newsletter.text.php");
+        $unv  = $read("$root/views/unsubscribe.php");
+        $ecv  = $read("$root/views/admin/emailer.php");
+        $ecCtrl = $read("$root/app/Controllers/EmailerController.php");
+        $adminLayout2 = $read("$root/views/admin/layout.php");
+        $routesSrc = $read("$root/config/routes.php");
+
+        $add('smoke.email.config_schedule', 'Smoke · Emailer', 'EmailerConfig exposes MAX_SAMPLE + due/nextSendAt', static function () use ($ecfg, $ok, $bad): array {
+            return strpos($ecfg, 'MAX_SAMPLE') !== false && strpos($ecfg, 'public static function due(') !== false
+                && strpos($ecfg, 'public static function nextSendAt(') !== false
+                ? $ok('schedule engine present')
+                : $bad('EmailerConfig must expose MAX_SAMPLE and the due()/nextSendAt() schedule engine');
+        });
+        $add('smoke.email.config_timezone', 'Smoke · Emailer', 'EmailerConfig converts schedule times to a timezone', static function () use ($ecfg, $ok, $bad): array {
+            return strpos($ecfg, 'DateTimeImmutable') !== false && strpos($ecfg, 'setTimezone') !== false
+                && strpos($ecfg, 'validatedTimezone') !== false && strpos($ecfg, 'DateTimeZone::listIdentifiers()') !== false
+                ? $ok('timezone-aware schedule')
+                : $bad('EmailerConfig must evaluate the schedule in a configured timezone');
+        });
+        $add('smoke.email.digest_templates', 'Smoke · Emailer', 'Digest renders subscriber + non-subscriber templates', static function () use ($eq, $ok, $bad): array {
+            return strpos($eq, "render_email('newsletter'") !== false && strpos($eq, "render_email('newsletter.text'") !== false
+                && strpos($eq, 'include_non_subscribers') !== false
+                ? $ok('both audiences rendered')
+                : $bad('EmailQueue::enqueueDigest must render separate subscriber/non-subscriber templates');
+        });
+        $add('smoke.email.opt_out_filter', 'Smoke · Emailer', 'Recipients exclude opted-out accounts', static function () use ($eq, $ok, $bad): array {
+            return strpos($eq, 'COALESCE(u.marketing_opt_out, 0) = 0') !== false
+                ? $ok('opt-outs filtered')
+                : $bad('EmailQueue recipients must exclude accounts with marketing_opt_out set');
+        });
+        $add('smoke.email.signed_unsubscribe', 'Smoke · Emailer', 'Unsubscribe link signed with GALLERY_MEDIA_KEY + hash_equals', static function () use ($eq, $ok, $bad): array {
+            return strpos($eq, "hash_hmac('sha256', 'unsubscribe:'") !== false && strpos($eq, 'hash_equals') !== false
+                && strpos($eq, "UNSUB_PLACEHOLDER") !== false
+                ? $ok('signed opt-out link')
+                : $bad('EmailQueue must sign the unsubscribe token with GALLERY_MEDIA_KEY and verify it with hash_equals');
+        });
+        $add('smoke.email.opt_out_apply', 'Smoke · Emailer', 'Opt-out persists users.marketing_opt_out = 1', static function () use ($eq, $ok, $bad): array {
+            return strpos($eq, 'UPDATE users SET marketing_opt_out = 1') !== false
+                ? $ok('opt-out persisted')
+                : $bad('EmailQueue::optOut must set users.marketing_opt_out = 1');
+        });
+        $add('smoke.email.delivery_sendhtml', 'Smoke · Emailer', 'sendDue delivers queued rows via Mailer::sendHtml', static function () use ($eq, $ok, $bad): array {
+            return strpos($eq, 'Mailer::sendHtml(') !== false && strpos($eq, 'UNSUB_PLACEHOLDER') !== false
+                ? $ok('sendHtml delivery')
+                : $bad('EmailQueue::sendDue must hand rows to Mailer::sendHtml with the unsubscribe link substituted');
+        });
+        $add('smoke.email.mailer_html', 'Smoke · Emailer', 'Mailer::sendHtml renders multipart/alternative', static function () use ($mail, $ok, $bad): array {
+            return strpos($mail, 'public static function sendHtml(') !== false && strpos($mail, 'multipart/alternative') !== false
+                && strpos($mail, 'boundary') !== false
+                ? $ok('multipart html+text')
+                : $bad('Mailer must provide sendHtml() building a multipart/alternative (html + text) message');
+        });
+        $add('smoke.email.helpers', 'Smoke · Emailer', 'helpers provide absolute_url + render_email', static function () use ($helpers, $ok, $bad): array {
+            return strpos($helpers, 'function absolute_url(') !== false && strpos($helpers, 'function render_email(') !== false
+                ? $ok('helpers present')
+                : $bad('helpers.php must provide absolute_url() and render_email() for email templates');
+        });
+        $add('smoke.email.sub_view', 'Smoke · Emailer', 'Newsletter HTML uses public thumb/blur + unsubscribe link', static function () use ($nlt, $ok, $bad): array {
+            return strpos($nlt, '$subscriber ? \'thumb\' : \'blur\'') !== false && strpos($nlt, 'absolute_url(') !== false
+                && strpos($nlt, '{{unsubscribe-url}}') !== false
+                ? $ok('subscriber/guest split + opt-out')
+                : $bad('views/emails/newsletter.php must show sharp thumbs to subscribers, blur to guests and carry the unsubscribe link');
+        });
+        $add('smoke.email.text_view', 'Smoke · Emailer', 'Plain-text newsletter carries the unsubscribe link', static function () use ($nltt, $ok, $bad): array {
+            return strpos($nltt, '{{unsubscribe-url}}') !== false
+                ? $ok('opt-out in text part')
+                : $bad('views/emails/newsletter.text.php must carry the unsubscribe link');
+        });
+        $add('smoke.email.unsub_view', 'Smoke · Emailer', 'Unsubscribe page renders opt-out confirmation', static function () use ($unv, $ok, $bad): array {
+            return strpos($unv, '$optOut') !== false && strpos($unv, '$message') !== false
+                ? $ok('confirmation page')
+                : $bad('views/unsubscribe.php must render the opt-out result and message');
+        });
+        $add('smoke.email.worker', 'Smoke · Emailer', 'email_worker.php locks, enqueues when due, sends batches', static function () use ($ew, $ok, $bad): array {
+            return strpos($ew, 'flock') !== false && strpos($ew, 'EmailerConfig::due(') !== false
+                && strpos($ew, 'EmailQueue::sendDue(') !== false
+                ? $ok('worker wired')
+                : $bad('bin/email_worker.php must flock, enqueue when EmailerConfig::due() and send EmailQueue::sendDue() batches');
+        });
+        $add('smoke.email.cron_entry', 'Smoke · Emailer', 'apply_cron.php installs the emailer cron job', static function () use ($acrn, $ok, $bad): array {
+            return strpos($acrn, 'gallery-emailer') !== false && strpos($acrn, 'email_worker.php --once') !== false
+                ? $ok('cron entry present')
+                : $bad('bin/apply_cron.php must install the gallery-emailer cron job running email_worker.php --once');
+        });
+        $add('smoke.email.routes', 'Smoke · Emailer', 'Public unsubscribe + admin emailer routes registered', static function () use ($routesSrc, $ok, $bad): array {
+            return strpos($routesSrc, "'/unsubscribe'") !== false && strpos($routesSrc, '/admin/emailer/save') !== false
+                && strpos($routesSrc, '/admin/emailer/send-now') !== false && strpos($routesSrc, '/admin/emailer/test') !== false
+                && strpos($routesSrc, '/admin/emailer/retry') !== false
+                ? $ok('routes present')
+                : $bad('routes.php must register public /unsubscribe and the admin emailer save/send-now/test/retry routes');
+        });
+        $add('smoke.email.permission', 'Smoke · Emailer', 'Emailer admin gated by membership permission', static function () use ($ecCtrl, $ok, $bad): array {
+            return strpos($ecCtrl, "Auth::requirePermission('membership')") !== false
+                ? $ok('membership gate')
+                : $bad('EmailerController must require the membership permission');
+        });
+        $add('smoke.email.nav', 'Smoke · Emailer', 'Admin sidebar links Emailer behind membership', static function () use ($adminLayout2, $ok, $bad): array {
+            return strpos($adminLayout2, "Auth::can('membership')") !== false && strpos($adminLayout2, '/admin/emailer') !== false
+                ? $ok('nav item gated')
+                : $bad('views/admin/layout.php must link the Emailer page behind the membership permission');
+        });
+        $add('smoke.email.admin_view', 'Smoke · Emailer', 'Admin emailer view exposes settings/test/send-now/queue', static function () use ($ecv, $ok, $bad): array {
+            return strpos($ecv, 'send-now') !== false && strpos($ecv, 'name="sample_count"') !== false
+                && strpos($ecv, 'timezone') !== false && strpos($ecv, 'retry') !== false
+                && strpos($ecv, 'audience') !== false
+                ? $ok('view wired')
+                : $bad('views/admin/emailer.php must expose settings, sample count, timezone, test/send-now actions and queue retry');
         });
 
         // ------------------------------------------------- Security & Ops

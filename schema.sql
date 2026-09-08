@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     age_verified_at DATETIME NULL DEFAULT NULL,
     email_verified_at DATETIME NULL DEFAULT NULL,
     email_verification_token CHAR(64) NULL DEFAULT NULL,
+    marketing_opt_out TINYINT(1) NOT NULL DEFAULT 0,
     billing_first_name VARCHAR(100) NULL DEFAULT NULL,
     billing_last_name  VARCHAR(100) NULL DEFAULT NULL,
     billing_address_line1 VARCHAR(255) NULL DEFAULT NULL,
@@ -424,6 +425,28 @@ CREATE TABLE IF NOT EXISTS auto_poster_queue (
     INDEX idx_apq_created (created_at),
     INDEX idx_apq_scheduled (status, scheduled_at),
     FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Emailer queue: one row per outgoing newsletter email, snapshotting the
+-- recipient address and the rendered subject/body at enqueue time. The email
+-- worker picks 'queued' rows and sends them via Mailer::sendHtml(), marking
+-- each row 'sent' or 'failed'.
+CREATE TABLE IF NOT EXISTS email_queue (
+    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    audience   ENUM('subscriber','non_subscriber') NOT NULL,
+    user_id    INT UNSIGNED NULL,
+    email      VARCHAR(255) NOT NULL,
+    subject    VARCHAR(255) NOT NULL,
+    html_body  MEDIUMTEXT NOT NULL,
+    text_body  TEXT NULL,
+    status     ENUM('queued','sent','failed') NOT NULL DEFAULT 'queued',
+    attempts   TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    error      VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at    DATETIME NULL,
+    INDEX idx_email_queue_status (status),
+    INDEX idx_email_queue_audience (audience),
+    CONSTRAINT fk_email_queue_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, level, active) VALUES
