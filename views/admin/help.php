@@ -2,7 +2,7 @@
 
 <h2 class="section-title">Admin roles and permissions</h2>
 <ul>
-    <li><strong>Super Admin</strong> — unrestricted access, including role and permission management. Assigned to <code>fidjiter@gmail.com</code>.</li>
+    <li><strong>Super Admin</strong> — unrestricted access, including role and permission management. Assigned to the <code>fidjiter@gmail.com</code> account; admin communications are sent to the <code>admin@amethyst2213.com</code> mailbox.</li>
     <li><strong>Admin</strong> — dashboard, trends, galleries, videos, categories, users, memberships, payments, theme, Site Editor, auto poster, logs, documentation, user monitor, and support.</li>
     <li><strong>Editor</strong> — dashboard, trends, galleries, videos, categories, and documentation. Site Editor access is not included.</li>
     <li><strong>Moderator</strong> — dashboard, users, memberships, logs, and documentation.</li>
@@ -130,7 +130,8 @@ gallery-mvc/
 │   │   ├── Database.php          PDO wrapper around MySQL; records slow queries (>1s) as [db-slow]
 │   │   ├── ImageEditor.php       GD image editing: blur, sharpen, resize, rotate, crop, text,
 │   │   │                         watermark, EXIF normalize
-│   │   ├── Mailer.php            SMTP mail (STARTTLS/AUTH) with Gmail support + throttled alerts
+│   │   ├── Mailer.php            SMTP mail (STARTTLS/AUTH) via the site's own
+│   │   │                            mail server + throttled alerts
 │   │   ├── BraintreeGateway.php  Braintree vault/client-token/subscription/webhook client
 │   │   ├── PayPalGateway.php     Minimal PayPal REST client (tokens + webhook signature verify)
 │   │   ├── RateLimiter.php       Generic per-key rate limiting

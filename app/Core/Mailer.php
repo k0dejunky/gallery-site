@@ -3,8 +3,9 @@
 namespace App\Core;
 
 /**
- * SMTP mailer with Gmail support. When SMTP is not configured, it uses PHP's
- * mail() when available; otherwise messages are written to an outbox.
+ * SMTP mailer using the site's own mail server (STARTTLS + AUTH LOGIN). When
+ * SMTP is not configured, it uses PHP's mail() when available; otherwise
+ * messages are written to an outbox.
  *
  * adminAlert() adds per-key cooldown dedupe (storage/logs/alerts.state) so
  * recurring conditions (disk low, login spikes, cron stale) cannot flood
@@ -165,11 +166,11 @@ class Mailer
 
     /**
      * Send one message through an SMTP server using STARTTLS and AUTH LOGIN.
-     * Gmail accepts this with an App Password when 2-Step Verification is on.
+     * Dovecot SASL on the site's own mail domain accepts mailbox credentials.
      */
     private static function sendSmtp(string $to, string $subject, string $headers, string $body): bool
     {
-        $host = env_value('MAIL_HOST', 'smtp.gmail.com');
+        $host = env_value('MAIL_HOST', 'amethyst2213.com');
         $port = (int) env_value('MAIL_PORT', '587');
         $user = env_value('MAIL_USERNAME', '');
         $pass = env_value('MAIL_PASSWORD', '');
