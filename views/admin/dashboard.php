@@ -62,11 +62,13 @@
                     <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/retry') ?>" onsubmit="return confirm('Retry post #<?= (int) $item['id'] ?> now?');">
                         <?= csrf_field() ?>
                         <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
+                        <input type="hidden" name="redirect_to" value="<?= url('/admin') ?>">
                         <button type="submit" class="btn btn-sm" aria-label="Retry failed post #<?= (int) $item['id'] ?>">Retry</button>
                     </form>
                     <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/dismiss') ?>" onsubmit="return confirm('Dismiss this failed post?');">
                         <?= csrf_field() ?>
                         <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
+                        <input type="hidden" name="redirect_to" value="<?= url('/admin') ?>">
                         <button type="submit" class="btn btn-sm btn-danger" aria-label="Dismiss failed post #<?= (int) $item['id'] ?>">Dismiss</button>
                     </form>
                 </td>

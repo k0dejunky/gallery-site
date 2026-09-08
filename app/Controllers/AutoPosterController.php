@@ -649,11 +649,13 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
      */
     public function retryQueued(): void
     {
+        $redirectTo = $this->defaultRedirect();
+
         $id = (int) $this->request->post('queue_id', 0);
 
         if ($id <= 0 || !AutoPostQueue::requeue($id)) {
             $this->flash('error', 'Could not requeue that failed post.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirect($redirectTo);
             return;
         }
 
@@ -662,7 +664,32 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
         $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
             ? 'Posted to X: ' . ($result['url'] ?? '')
             : (empty($result['skipped']) ? 'Post failed: ' : 'Not sent — ') . ($result['error'] ?? 'Unknown error'));
-        $this->redirect('/admin/auto-poster');
+        $this->redirect($redirectTo);
+    }
+
+    /**
+     * Resolve where to send the user after a queue action. Prefers an explicit
+     * redirect_to field (set by the dashboard so it stays on /admin instead of
+     * jumping to the Auto Poster page), falling back to the Auto Poster page.
+     */
+    private function defaultRedirect(): string
+    {
+        $redirectTo = trim((string) $this->request->post('redirect_to', ''));
+
+        if ($redirectTo === '') {
+            return '/admin/auto-poster';
+        }
+
+        $base = rtrim((string) config('app.base_path'), '/');
+        if ($base !== '' && strpos($redirectTo, $base) === 0) {
+            $redirectTo = substr($redirectTo, strlen($base));
+        }
+
+        if ($redirectTo === '' || strpos($redirectTo, '/admin') !== 0) {
+            return '/admin/auto-poster';
+        }
+
+        return $redirectTo;
     }
 
     /**
@@ -706,6 +733,8 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
      */
     public function dismissQueued(): void
     {
+        $redirectTo = $this->defaultRedirect();
+
         $id = (int) $this->request->post('queue_id', 0);
 
         $galleryId = (int) $this->request->post('gallery_id', 0);
@@ -715,7 +744,7 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
 
         if ($id <= 0 || AutoPostQueue::find($id) === null) {
             $this->flash('error', 'Queue item not found.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirect($redirectTo);
             return;
         }
 
@@ -730,6 +759,6 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
         );
 
         $this->flash('success', 'Dismissed — this gallery will not be offered again.');
-        $this->redirect('/admin/auto-poster');
+        $this->redirect($redirectTo);
     }
 }
