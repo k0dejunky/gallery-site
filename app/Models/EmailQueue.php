@@ -32,9 +32,9 @@ class EmailQueue
     private const EXCLUDED_ROLES = ['super_admin', 'admin', 'editor', 'moderator', 'viewer'];
 
     /**
-     * Users who currently have a usable paid membership: verified, opted-in,
-     * non-admin accounts holding an active/cancelled subscription whose expiry
-     * (if any) is still in the future.
+     * Members with a usable paid membership (level 1+): opted-in, non-admin
+     * accounts holding an active/cancelled subscription whose expiry (if any)
+     * is still in the future.
      */
     public static function subscribers(): array
     {
@@ -42,7 +42,7 @@ class EmailQueue
     }
 
     /**
-     * Registered free users: verified, opted-in, non-admin accounts with no
+     * Free members (membership level 0): opted-in, non-admin accounts with no
      * usable subscription right now.
      */
     public static function nonSubscribers(): array
@@ -52,8 +52,11 @@ class EmailQueue
 
     /**
      * Shared recipient query. $paid true = has a usable subscription; false =
-     * has none. Both sides require an active account, a verified email and an
-     * explicit non-opt-out (default 0 = opted in).
+     * has none. Classification follows the membership level alone (0 = Free),
+     * so every non-admin account lands in exactly one audience. Both sides
+     * require an active account and an explicit non-opt-out (default 0 = opted
+     * in). Email verification is not required: unverified free members still
+     * count as non-subscribers.
      *
      * @return array<int, array{id: int, email: string}>
      */
@@ -75,7 +78,6 @@ class EmailQueue
             "SELECT u.id, u.email
              FROM users u
              WHERE u.status = 'active'
-               AND u.email_verified_at IS NOT NULL
                AND COALESCE(u.marketing_opt_out, 0) = 0
                AND u.role NOT IN ($excluded)
                AND $having
