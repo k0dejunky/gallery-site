@@ -88,25 +88,30 @@ class EmailQueue
 
     /**
      * The newest image uploads the digest will show: images (never videos)
-     * still attached to non-deleted galleries, deduplicated per photo. The
-     * newest photo on the list anchors the "last sent" watermark, so the
+     * still attached to non-deleted galleries, deduplicated per photo, each
+     * carrying the gallery it lives in so the email can link straight to it.
+     * The newest photo on the list anchors the "last sent" watermark, so the
      * worker only re-mails after genuinely new uploads arrive.
      *
-     * @return array<int, array{id: int, filename: string, created_at: string}>
+     * @return array<int, array{id: int, filename: string, created_at: string, gallery_id: int}>
      */
     public static function sample(int $count = 6): array
     {
         $count = max(1, min(EmailerConfig::MAX_SAMPLE, $count));
 
         return Database::run(
-            'SELECT p.id, p.filename, p.created_at
+            "SELECT p.id, p.filename, p.created_at,
+                    (SELECT MIN(gp2.gallery_id)
+                     FROM gallery_photo gp2
+                     JOIN galleries g2 ON g2.id = gp2.gallery_id
+                     WHERE gp2.photo_id = p.id AND g2.deleted_at IS NULL) AS gallery_id
              FROM gallery_photo gp
              JOIN photos p ON p.id = gp.photo_id
              JOIN galleries g ON g.id = gp.gallery_id
              WHERE g.deleted_at IS NULL AND p.is_video = 0
              GROUP BY p.id
              ORDER BY p.created_at DESC, p.id DESC
-             LIMIT ' . (int) $count,
+             LIMIT " . (int) $count,
             []
         )->fetchAll();
     }

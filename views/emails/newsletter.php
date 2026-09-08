@@ -4,15 +4,25 @@
  * {{unsubscribe-url}} placeholder is replaced with each recipient's signed
  * opt-out link when the worker sends the row.
  *
- * Variables: $subscriber (bool), $samples (rows: id, filename, created_at),
- * $count (int). Subscribers see sharp thumbnails + a CTA into the gallery;
- * non-subscribers see the public blurred previews + a CTA to become a member.
+ * Variables: $subscriber (bool), $samples (rows: id, filename, created_at,
+ * gallery_id), $count (int). Subscribers see sharp thumbnails + a CTA into the
+ * newest gallery; non-subscribers see the public blurred previews + a CTA to
+ * become a member. Each thumbnail links to its own gallery page.
  */
 $subscriber = !empty($subscriber);
 $samples    = isset($samples) ? (array) $samples : [];
 $count      = max(0, (int) ($count ?? count($samples)));
 $siteName   = (string) config('app.site_name');
-$ctaHref    = $subscriber ? absolute_url('/galleries') : absolute_url('/membership');
+$targetGalleryId = 0;
+foreach ($samples as $photo) {
+    if (!empty($photo['gallery_id'])) {
+        $targetGalleryId = (int) $photo['gallery_id'];
+        break;
+    }
+}
+$ctaHref    = $subscriber
+    ? absolute_url('/galleries/' . $targetGalleryId)
+    : absolute_url('/membership');
 $ctaLabel   = $subscriber ? 'Open the gallery' : 'Become a member';
 $imageSize  = $subscriber ? 'thumb' : 'blur';
 $copy       = $subscriber
@@ -57,7 +67,7 @@ $copy       = $subscriber
                             </tr><tr>
                                     <?php endif; ?>
                                     <td width="33%" valign="top">
-                                        <a href="<?= e($ctaHref) ?>">
+                                        <a href="<?= e(!empty($photo['gallery_id']) ? absolute_url('/galleries/' . (int) $photo['gallery_id']) : $ctaHref) ?>">
                                             <img src="<?= e(absolute_url(file_url((string) $photo['filename'], $imageSize))) ?>"
                                                  alt="Latest upload" width="100%" style="display:block;width:100%;height:96px;object-fit:cover;border-radius:8px;background:#efe5f5;">
                                         </a>
