@@ -267,7 +267,7 @@ dispatched to <code>/admin/users/{id}</code>).</p>
     <li><strong>Favorites</strong> — toggle favorite categories and galleries (requires login + membership level).</li>
     <li><strong>Admin</strong> — dashboard, gallery CRUD, photo management, photo/video editors, category CRUD, search, abandoned uploads, video projects/exports, trends, promotion, audit log + rollback/purge, error logs.</li>
     <li><strong>Users</strong> — admin user list, create, edit, update, delete, impersonate, bulk actions, notes, flags.</li>
-    <li><strong>System</strong> — system page, backups, cleanup, schema, maintenance, housekeeping, SMTP test, cron schedule.</li>
+    <li><strong>System</strong> — system page, backups, cleanup, schema, maintenance, housekeeping, SMTP test, API health probes (X, Reddit, PayPal, mail, offsite backup), cron schedule.</li>
     <li><strong>Email</strong> — mailbox list/create/delete/password and send-test.</li>
     <li><strong>Test suite</strong> — run, status polling, recent runs.</li>
     <li><strong>Auto poster</strong> — Reddit/X OAuth authorize/callback, post now, queue/recommend/retry/repost.</li>

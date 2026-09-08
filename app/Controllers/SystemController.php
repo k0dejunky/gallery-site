@@ -59,6 +59,7 @@ class SystemController extends Controller
             'exportQueue' => $this->videoExportQueue(),
             'photoEditQueue' => $this->photoEditQueue(),
             'slowQueries' => \App\Core\Database::slowQueries(),
+            'apiHealth'  => $this->apiHealth(),
         ]);
     }
 
@@ -113,6 +114,354 @@ class SystemController extends Controller
         }
 
         return $diagnostics;
+    }
+
+    // ------------------------------------------------------------------
+    // API health
+    // ------------------------------------------------------------------
+
+    /** Cached probe results from apiTest(), keyed by API id. */
+    private function apiHealthCache(): array
+    {
+        $file = $this->storage . '/logs/api_health.json';
+
+        if (!is_file($file)) {
+            return [];
+        }
+
+        $data = json_decode((string) @file_get_contents($file), true);
+
+        return is_array($data) ? $data : [];
+    }
+
+    private function saveApiHealthCache(array $cache): void
+    {
+        $dir = $this->storage . '/logs';
+
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+
+        @file_put_contents(
+            $dir . '/api_health.json',
+            json_encode($cache, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
+        );
+    }
+
+    /**
+     * Status shown by the admin API health section. Never makes outbound
+     * calls on page load — it reads stored configuration/settings plus the
+     * last probe results written by apiTest(). Live checks only happen when
+     * an admin presses a test button.
+     *
+     * @return array<int, array{id:string,label:string,configured:bool,authorized:?bool,enabled:?bool,mode:?string,status:string,summary:string,probe:?array}>
+     */
+    private function apiHealth(): array
+    {
+        $cache = $this->apiHealthCache();
+        $auto  = \App\Models\AutoPosterConfig::all();
+
+        $authorized = [];
+        foreach (['twitter' => \App\Models\TwitterClient::class, 'reddit' => \App\Models\RedditClient::class] as $key => $class) {
+            $authorized[$key] = ['configured' => false, 'authorized' => false];
+            try {
+                $client = new $class((array) ($auto[$key] ?? []));
+                $authorized[$key] = [
+                    'configured' => $client->isConfigured(),
+                    'authorized' => $client->isUserAuthorized(),
+                ];
+            } catch (\Throwable $e) {
+                // Keep the row usable if the credentials file failed to parse.
+            }
+        }
+
+        $paypal = ['configured' => false, 'enabled' => false, 'mode' => null];
+        try {
+            foreach (Database::run("SELECT * FROM payment_processors WHERE LOWER(provider) = 'paypal'")->fetchAll() as $row) {
+                $gateway = \App\Core\PayPalGateway::fromConfig($row);
+                $enabled = (int) ($row['enabled'] ?? 0) === 1;
+                $paypal['configured'] = $paypal['configured'] || $gateway !== null;
+                $paypal['enabled']    = $paypal['enabled'] || ($gateway !== null && $enabled);
+                $paypal['mode']       = strtolower((string) ($row['mode'] ?? '')) === 'live' ? 'live' : 'test';
+            }
+        } catch (\Throwable $e) {
+            // Older installations may not have the payment processor table yet.
+        }
+
+        $offsiteAt = null;
+        $offsiteOk = null;
+        $sync = $this->lastSyncStatus();
+        if ($sync !== null) {
+            $offsiteOk = (bool) (!empty($sync['ok']) && (int) ($sync['sync_rc'] ?? 1) === 0);
+            $offsiteAt = isset($sync['at']) ? (string) $sync['at'] : null;
+        }
+
+        $sections = [
+            'twitter' => [
+                'label' => 'X / Twitter', 'configured' => $authorized['twitter']['configured'],
+                'authorized' => $authorized['twitter']['authorized'], 'enabled' => null, 'mode' => null,
+            ],
+            'reddit' => [
+                'label' => 'Reddit', 'configured' => $authorized['reddit']['configured'],
+                'authorized' => $authorized['reddit']['authorized'], 'enabled' => null, 'mode' => null,
+            ],
+            'paypal' => [
+                'label' => 'PayPal payments', 'configured' => $paypal['configured'],
+                'authorized' => null, 'enabled' => $paypal['enabled'], 'mode' => $paypal['mode'],
+            ],
+            'mail' => [
+                'label' => 'Mail (SMTP)', 'configured' => $this->smtpConfigured(),
+                'authorized' => null, 'enabled' => null, 'mode' => null,
+            ],
+            'offsite' => [
+                'label' => 'Offsite backup target', 'configured' => trim((string) env_value('BACKUP_SYNC_CMD', '')) !== '',
+                'authorized' => null, 'enabled' => null, 'mode' => null,
+            ],
+        ];
+
+        $out = [];
+
+        foreach ($sections as $id => $section) {
+            $probe = $cache[$id] ?? null;
+
+            if ($probe !== null) {
+                $status = !empty($probe['ok']) ? 'ok' : 'bad';
+            } elseif ($id === 'offsite') {
+                $status = $section['configured'] ? ($offsiteOk === null ? 'idle' : ($offsiteOk ? 'ok' : 'bad')) : 'none';
+            } else {
+                $status = $section['configured'] ? 'idle' : 'none';
+            }
+
+            $out[] = [
+                'id'          => $id,
+                'label'       => $section['label'],
+                'configured'  => $section['configured'],
+                'authorized'  => $section['authorized'],
+                'enabled'     => $section['enabled'],
+                'mode'        => $section['mode'],
+                'status'      => $status,
+                'summary'     => $this->apiHealthSummary($id, $section, $probe, $offsiteOk, $offsiteAt),
+                'probe'       => $probe,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** Human-readable one-line summary for an API health row. */
+    private function apiHealthSummary(string $id, array $section, ?array $probe, ?bool $offsiteOk, ?string $offsiteAt): string
+    {
+        if ($id === 'offsite') {
+            if (!$section['configured']) {
+                return 'BACKUP_SYNC_CMD not set';
+            }
+            if ($offsiteAt === null) {
+                return 'never synced';
+            }
+            return 'last sync ' . ($offsiteOk ? 'OK' : 'FAILED') . ' at ' . $offsiteAt;
+        }
+
+        $parts = [];
+
+        if ($id === 'twitter' || $id === 'reddit') {
+            $parts[] = $section['configured'] ? 'configured' : 'not configured';
+            $parts[] = $section['authorized'] ? 'authorized' : 'not authorized';
+        } elseif ($id === 'paypal') {
+            $parts[] = $section['configured'] ? 'configured' : 'not configured';
+            $parts[] = $section['enabled'] ? 'enabled' : 'disabled';
+            if ($section['mode'] !== null) {
+                $parts[] = $section['mode'];
+            }
+        } else {
+            $parts[] = $section['configured'] ? 'configured' : 'not configured';
+        }
+
+        if ($probe !== null) {
+            $msg = !empty($probe['ok']) ? (string) ($probe['note'] ?? '') : (string) ($probe['error'] ?? 'probe failed');
+            $line = !empty($probe['ok']) ? 'last test OK' : 'last test FAILED';
+            if (!empty($probe['ok']) && isset($probe['latency_ms'])) {
+                $line .= ' (' . (int) $probe['latency_ms'] . ' ms)';
+            }
+            if (!empty($probe['at'])) {
+                $line .= ' at ' . $probe['at'];
+            }
+            if ($msg !== '') {
+                $line .= ' — ' . $msg;
+            }
+            $parts[] = $line;
+        } else {
+            $parts[] = 'not tested';
+        }
+
+        return implode(' · ', $parts);
+    }
+
+    private function smtpConfigured(): bool
+    {
+        return env_value('MAIL_HOST') !== ''
+            && env_value('MAIL_USERNAME') !== ''
+            && env_value('MAIL_PASSWORD') !== '';
+    }
+
+    /**
+     * Run a live probe for one external API (or all of them) and cache the
+     * results for the API health section. POST-only, gated by the same logs
+     * permission as the rest of the System page.
+     *
+     * @param string $api one of: twitter, reddit, paypal, mail, offsite or all
+     */
+    public function apiTest(string $api): void
+    {
+        $valid   = ['twitter', 'reddit', 'paypal', 'mail', 'offsite'];
+        $targets = in_array($api, $valid, true) ? [$api] : ($api === 'all' ? $valid : []);
+
+        if ($targets === []) {
+            $this->flash('error', 'Unknown API to test.');
+            $this->redirect('/admin/system');
+            return;
+        }
+
+        $cache   = $this->apiHealthCache();
+        $results = [];
+
+        foreach ($targets as $target) {
+            $probe = $this->probeApi($target);
+            $cache[$target] = $probe;
+            $results[$target] = !empty($probe['ok']) ? 'OK' : 'FAILED';
+        }
+
+        $this->saveApiHealthCache($cache);
+
+        AuditLog::record(Auth::user()['id'] ?? null, 'update', 'system_api_test', null,
+            'API health test: ' . json_encode($results));
+
+        $allOk = !in_array('FAILED', $results, true);
+
+        $this->flash($allOk ? 'success' : 'error',
+            count($targets) === 1
+                ? 'API test (' . $targets[0] . '): ' . $results[$targets[0]] . '.'
+                : 'API tests: ' . implode(', ', array_map(static fn (string $k, string $v): string => $k . '=' . $v, array_keys($results), $results)) . '.');
+        $this->redirect('/admin/system');
+    }
+
+    /**
+     * One live probe measurement: array{ok:bool, at:string, latency_ms:int,
+     * note?:string, error?:string}. The offsite target is not an HTTP API, so
+     * its "probe" is a read-only report of the configured sync command and the
+     * last offsite copy result (never triggers a real sync).
+     */
+    private function probeApi(string $id): array
+    {
+        $at = date('Y-m-d H:i:s');
+
+        if ($id === 'twitter' || $id === 'reddit') {
+            $class  = $id === 'twitter' ? \App\Models\TwitterClient::class : \App\Models\RedditClient::class;
+            $config = (array) ((\App\Models\AutoPosterConfig::all())[$id] ?? []);
+
+            try {
+                $client = new $class($config);
+                $result = $client->ping();
+            } catch (\Throwable $e) {
+                $result = ['ok' => false, 'error' => $e->getMessage()];
+            }
+
+            return [
+                'ok'         => !empty($result['ok']),
+                'at'         => $at,
+                'latency_ms' => (int) ($result['latency_ms'] ?? 0),
+                'note'       => isset($result['note']) ? (string) $result['note'] : '',
+                'error'      => isset($result['error']) ? (string) $result['error'] : '',
+            ];
+        }
+
+        if ($id === 'paypal') {
+            $row = null;
+
+            try {
+                foreach (Database::run("SELECT * FROM payment_processors WHERE LOWER(provider) = 'paypal' AND enabled = 1 ORDER BY id")->fetchAll() as $candidate) {
+                    if (\App\Core\PayPalGateway::fromConfig($candidate) !== null) {
+                        $row = $candidate;
+                        break;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // No processor table to probe.
+            }
+
+            $gateway = $row !== null ? \App\Core\PayPalGateway::fromConfig($row) : null;
+
+            if ($gateway === null) {
+                return ['ok' => false, 'at' => $at, 'latency_ms' => 0, 'error' => 'No enabled PayPal processor with credentials.'];
+            }
+
+            $start = hrtime(true);
+
+            try {
+                $token = $gateway->accessToken();
+                $latency = (int) round((hrtime(true) - $start) / 1e6);
+
+                return [
+                    'ok'         => $token !== '',
+                    'at'         => $at,
+                    'latency_ms' => $latency,
+                    'note'       => $token !== '' ? 'access token granted (' . ($gateway->isLive() ? 'live' : 'sandbox') . ')' : '',
+                    'error'      => $token === '' ? 'access token returned empty' : '',
+                ];
+            } catch (\Throwable $e) {
+                return ['ok' => false, 'at' => $at, 'latency_ms' => (int) round((hrtime(true) - $start) / 1e6), 'error' => $e->getMessage()];
+            }
+        }
+
+        if ($id === 'mail') {
+            $to = \App\Core\Mailer::adminEmail();
+
+            if ($to === '') {
+                return ['ok' => false, 'at' => $at, 'latency_ms' => 0, 'error' => 'No admin email configured — set ADMIN_EMAIL in .env.'];
+            }
+
+            $start = hrtime(true);
+
+            try {
+                $sent = \App\Core\Mailer::send(
+                    $to,
+                    '[gallery] API health probe — ' . $at,
+                    "API health probe from the gallery admin panel.\n\nHost: " . gethostname() . "\nTime: " . $at
+                );
+                $latency = (int) round((hrtime(true) - $start) / 1e6);
+
+                return [
+                    'ok'         => $sent,
+                    'at'         => $at,
+                    'latency_ms' => $latency,
+                    'note'       => $sent ? 'sent to ' . $to : '',
+                    'error'      => $sent ? '' : 'Mailer::send returned false.',
+                ];
+            } catch (\Throwable $e) {
+                return ['ok' => false, 'at' => $at, 'latency_ms' => (int) round((hrtime(true) - $start) / 1e6), 'error' => $e->getMessage()];
+            }
+        }
+
+        // offsite (read-only status refresh)
+        $cmd  = trim((string) env_value('BACKUP_SYNC_CMD', ''));
+        $sync = $this->lastSyncStatus();
+
+        if ($cmd === '') {
+            return ['ok' => false, 'at' => $at, 'latency_ms' => 0, 'error' => 'BACKUP_SYNC_CMD not set.', 'note' => ''];
+        }
+
+        if ($sync === null) {
+            return ['ok' => false, 'at' => $at, 'latency_ms' => 0, 'error' => 'No backup sync on record yet.', 'note' => ''];
+        }
+
+        $ok = (bool) (!empty($sync['ok']) && (int) ($sync['sync_rc'] ?? 1) === 0);
+
+        return [
+            'ok'         => $ok,
+            'at'         => $at,
+            'latency_ms' => 0,
+            'note'       => 'last sync at ' . ($sync['at'] ?? '?') . ' rc=' . (int) ($sync['sync_rc'] ?? -1),
+            'error'      => $ok ? '' : 'offsite sync reported a failure',
+        ];
     }
 
     /**

@@ -138,6 +138,7 @@ return [
     ['POST', '/admin/system/housekeeping', 'SystemController@housekeepingRun', 'dashboard'],
     ['POST', '/admin/system/paypal-reconcile', 'SystemController@paypalReconcile', 'dashboard'],
     ['POST', '/admin/system/smtp-test', 'SystemController@smtpTest', 'dashboard'],
+    ['POST', '/admin/system/api-test/{api}', 'SystemController@apiTest', 'dashboard'],
     ['POST', '/admin/system/cron-schedule/{job}', 'SystemController@saveCronSchedule', 'dashboard'],
 
     // Email server administration (admin only)

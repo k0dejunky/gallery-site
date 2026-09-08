@@ -154,6 +154,50 @@
             <a class="btn" href="<?= url('/admin/export/subscriptions') ?>">Subscriptions CSV</a>
         </div>
     </div>
+
+    <!-- API health -->
+    <div class="sys-card" id="api-health">
+        <h2>API health</h2>
+        <table style="width:100%;font-size:.85rem;">
+            <thead>
+                <tr><th style="text-align:left;">Integration</th><th style="text-align:left;">Status</th><th style="text-align:left;">Detail</th><th></th></tr>
+            </thead>
+            <tbody>
+                <?php foreach ($apiHealth as $api): ?>
+                    <tr>
+                        <td><?= e((string) $api['label']) ?></td>
+                        <td>
+                            <?php if ($api['status'] === 'ok'): ?>
+                                <span class="sys-ok">&#10003; ok</span>
+                            <?php elseif ($api['status'] === 'bad'): ?>
+                                <span class="sys-bad">&#9888; failed</span>
+                            <?php elseif ($api['status'] === 'none'): ?>
+                                <span class="muted">not configured</span>
+                            <?php else: ?>
+                                <span class="muted">untested</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="muted" style="font-size:.78rem;"><?= e((string) $api['summary']) ?></td>
+                        <td style="white-space:nowrap;">
+                            <form class="inline" method="post" action="<?= url('/admin/system/api-test/' . rawurlencode((string) $api['id'])) ?>">
+                                <?= csrf_field() ?>
+                                <button class="btn btn-sm" type="submit">Test</button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+        <form class="sys-actions" method="post" action="<?= url('/admin/system/api-test/all') ?>">
+            <?= csrf_field() ?>
+            <button class="btn" type="submit">Test all APIs</button>
+        </form>
+        <p class="muted" style="font-size:.75rem;margin:.5rem 0 0;line-height:1.5;">
+            Live probes run only when a test button is pressed and are cached in
+            <code>storage/logs/api_health.json</code>. X/Reddit use the Auto Poster credentials, PayPal probes the
+            enabled processor, mail sends a probe message over SMTP, and the offsite row reflects the last backup sync.
+        </p>
+    </div>
 </div>
 
 <!-- Cards that contain tables: one per row, full width -->

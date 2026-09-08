@@ -252,6 +252,49 @@ class TwitterClient
     }
 
     /**
+     * Lightweight connectivity + authorization check: fetch the authorized
+     * account's profile via the v2 users/me endpoint. Used by the admin "API
+     * health" section; never creates or changes anything.
+     *
+     * @return array{ok:bool, status?:int, latency_ms?:int, note?:string, error?:string}
+     */
+    public function ping(): array
+    {
+        if (!$this->isConfigured()) {
+            return ['ok' => false, 'error' => 'X/Twitter is not configured.'];
+        }
+
+        if (!$this->isUserAuthorized()) {
+            return ['ok' => false, 'error' => 'X is not user-authorized — complete the OAuth flow first.'];
+        }
+
+        $auth = $this->token();
+        if (!$auth['ok']) {
+            return ['ok' => false, 'error' => $auth['error'] ?? 'X is not authorized.'];
+        }
+
+        $start = hrtime(true);
+        [$status, , $body] = Http::request(self::API_URL . '/users/me', [
+            'headers' => ['Authorization' => 'Bearer ' . $auth['token']],
+        ]);
+        $latency = (int) round((hrtime(true) - $start) / 1e6);
+
+        $data = json_decode($body, true);
+
+        if ($status === 200 && !empty($data['data']['id'])) {
+            $account = trim((string) ($data['data']['username'] ?? ($data['data']['name'] ?? '')));
+            return ['ok' => true, 'status' => $status, 'latency_ms' => $latency, 'note' => $account !== '' ? 'connected as @' . $account : 'connected'];
+        }
+
+        $detail = $data['detail'] ?? '';
+        if ($detail === '' && isset($data['errors'][0]['message'])) {
+            $detail = $data['errors'][0]['message'];
+        }
+
+        return ['ok' => false, 'status' => $status, 'latency_ms' => $latency, 'error' => $detail !== '' ? $detail : 'X API check failed (HTTP ' . $status . ').'];
+    }
+
+    /**
      * Validate the uploaded media against X per-tweet limits. Returns an error
      * message or null when acceptable.
      */

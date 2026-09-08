@@ -406,6 +406,34 @@ class SmokeChecks
                 : $bad('views/admin/emailer.php must expose settings, sample count, timezone, test/send-now actions and queue retry');
         });
 
+        // ------------------------------------------------------- API health
+        $sysCtrl  = $read("$root/app/Controllers/SystemController.php");
+        $sysView  = $read("$root/views/admin/system.php");
+        $twitterC = $read("$root/app/Models/TwitterClient.php");
+        $redditC  = $read("$root/app/Models/RedditClient.php");
+        $add('smoke.apihealth.controller', 'Smoke · API health', 'SystemController builds apiHealth + runs apiTest probes', static function () use ($sysCtrl, $ok, $bad): array {
+            return strpos($sysCtrl, 'private function apiHealth(') !== false && strpos($sysCtrl, 'public function apiTest(') !== false
+                && strpos($sysCtrl, '/logs/api_health.json') !== false
+                ? $ok('builder + probe handler')
+                : $bad('SystemController must expose apiHealth() (config + cached probes, no live calls) and apiTest() running POST-only probes cached in storage/logs/api_health.json');
+        });
+        $add('smoke.apihealth.clients_ping', 'Smoke · API health', 'Twitter + Reddit clients expose ping()', static function () use ($twitterC, $redditC, $ok, $bad): array {
+            return strpos($twitterC, 'public function ping(') !== false && strpos($redditC, 'public function ping(') !== false
+                ? $ok('both clients probeable')
+                : $bad('TwitterClient and RedditClient must each expose a public ping() for the API health section');
+        });
+        $add('smoke.apihealth.routes', 'Smoke · API health', 'System registers /admin/system/api-test/{api}', static function () use ($routesSrc, $ok, $bad): array {
+            return strpos($routesSrc, "'/admin/system/api-test/{api}'") !== false && strpos($routesSrc, 'SystemController@apiTest') !== false
+                ? $ok('probe routes present')
+                : $bad('routes.php must register POST /admin/system/api-test/{api} against SystemController@apiTest');
+        });
+        $add('smoke.apihealth.view', 'Smoke · API health', 'System view renders the API health card', static function () use ($sysView, $ok, $bad): array {
+            return strpos($sysView, 'API health') !== false && strpos($sysView, '$apiHealth') !== false
+                && strpos($sysView, 'api-test/all') !== false && strpos($sysView, "api-test/' .") !== false
+                ? $ok('card wired to $apiHealth')
+                : $bad('views/admin/system.php must render the API health card with per-API Test buttons and a Test all action');
+        });
+
         // ------------------------------------------------- Security & Ops
         $health = $read("$root/app/Controllers/HealthController.php");
         $limiter = $read("$root/app/Core/RateLimiter.php");

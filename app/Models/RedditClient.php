@@ -215,6 +215,42 @@ class RedditClient
     }
 
     /**
+     * Lightweight connectivity + authorization check through the v1 oauth
+     * /me endpoint. Used by the admin "API health" section; never posts.
+     *
+     * @return array{ok:bool, status?:int, latency_ms?:int, note?:string, error?:string}
+     */
+    public function ping(): array
+    {
+        if (!$this->isConfigured()) {
+            return ['ok' => false, 'error' => 'Reddit is not configured.'];
+        }
+
+        $t = $this->token();
+        if (!$t['ok']) {
+            return ['ok' => false, 'error' => $t['error'] ?? 'Reddit is not authorized.'];
+        }
+
+        $start = hrtime(true);
+        [$status, , $body] = Http::request(self::API_URL . '/api/v1/me', [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $t['token'],
+                'User-Agent'    => $this->userAgent(),
+            ],
+        ]);
+        $latency = (int) round((hrtime(true) - $start) / 1e6);
+
+        $data = json_decode($body, true);
+
+        if ($status === 200 && !empty($data['name'])) {
+            return ['ok' => true, 'status' => $status, 'latency_ms' => $latency, 'note' => 'connected as u/' . $data['name']];
+        }
+
+        $error = $data['message'] ?? '';
+        return ['ok' => false, 'status' => $status, 'latency_ms' => $latency, 'error' => $error !== '' ? $error : 'Reddit API check failed (HTTP ' . $status . ').'];
+    }
+
+    /**
      * Upload an image to Reddit's media asset endpoint and return the asset
      * id + public URL for use in an image post.
      *
