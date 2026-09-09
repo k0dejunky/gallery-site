@@ -234,10 +234,11 @@ class SmokeChecks
                 ? $ok('signed serialization')
                 : $bad('Traffic::buildUrl must append &s=<signature> so forged ?c= codes are rejected');
         });
-        $add('smoke.traffic.sig_verify', 'Smoke · Traffic', 'Signatures verified in constant time', static function () use ($traf, $ok, $bad): array {
-            return strpos($traf, 'hash_hmac') !== false && strpos($traf, 'hash_equals') !== false && strpos($traf, 'preg_match(\'/\\A[a-f0-9]{64}\\z/\'') !== false
-                ? $ok('hmac + hash_equals')
-                : $bad('Traffic must authenticate codes with HMAC and compare via hash_equals(), rejecting non-hex signatures');
+        $add('smoke.traffic.sig_verify', 'Smoke · Traffic', 'Signatures compact (22-char) yet verified in constant time', static function () use ($traf, $ok, $bad): array {
+            return strpos($traf, 'hash_hmac') !== false && strpos($traf, 'hash_equals') !== false
+                && strpos($traf, 'compactSignature') !== false && strpos($traf, 'preg_match(\'/\\A[a-f0-9]{64}\\z|\\A[A-Za-z0-9_-]{22}\\z/\'') !== false
+                ? $ok('hmac + hash_equals + compact serialization')
+                : $bad('Traffic must authenticate codes with HMAC, compare via hash_equals(), and ship a compact 22-char base64url signature (plus legacy 64-hex support)');
         });
         $add('smoke.traffic.reject_forge', 'Smoke · Traffic', 'Capture ignores unsigned/forged codes', static function () use ($traf, $ok, $bad): array {
             return strpos($traf, '!self::validSignature($code, $sig)') !== false && strpos($traf, 'Forged/unsigned code') !== false

@@ -331,16 +331,22 @@ class TestSuite
         });
 
         // ---------------------------------------------------------------- Traffic
-        $add('traffic.signing', 'Traffic', 'Link codes are signed, tamper-proof serialization', function () {
+        $add('traffic.signing', 'Traffic', 'Link codes are signed, compact (22-char) tamper-proof serialization', function () {
             try {
-                $sig = \App\Models\Traffic::signCode('abc123');
-                $valid   = \App\Models\Traffic::validSignature('abc123', $sig);
-                $tampered = \App\Models\Traffic::validSignature('abc124', $sig);
-                $badShape = \App\Models\Traffic::validSignature('abc123', 'not-a-hex-signature');
+                $code = 'abc123';
+                $hex  = \App\Models\Traffic::signCode($code);
+                $url  = \App\Models\Traffic::buildUrl('/signup', $code);
+                $compact = null;
+                if (preg_match('/[?&]s=([A-Za-z0-9_-]{22})/', $url, $m)) {
+                    $compact = $m[1];
+                }
+                $valid    = $compact !== null && \App\Models\Traffic::validSignature($code, $compact);
+                $legacyOk = strlen($hex) === 64 && \App\Models\Traffic::validSignature($code, $hex);
+                $tampered = \App\Models\Traffic::validSignature('abc124', $compact);
+                $badShape = \App\Models\Traffic::validSignature($code, 'not-a-hex-signature');
                 $empty    = \App\Models\Traffic::validSignature('', '');
-                $signedUrl = \App\Models\Traffic::buildUrl('/signup', 'abc123');
-                $urlOk = strpos($signedUrl, 'c=abc123') !== false && strpos($signedUrl, '&s=') !== false;
-                return ['pass' => $valid && !$tampered && !$badShape && !$empty && $urlOk, 'detail' => $valid && $urlOk ? 'signature round-trip OK, tampering rejected' : 'signature verification failed'];
+                $urlOk    = strpos($url, 'c=abc123') !== false && strpos($url, '&s=') !== false;
+                return ['pass' => $valid && $legacyOk && !$tampered && !$badShape && !$empty && $urlOk, 'detail' => $valid && $urlOk ? 'compact 22-char sig OK, legacy 64-hex OK, tampering rejected' : 'signature verification failed'];
             } catch (\Throwable $ex) {
                 return ['pass' => false, 'detail' => $ex->getMessage()];
             }

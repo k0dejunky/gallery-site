@@ -409,14 +409,16 @@ class Traffic
 
     /**
      * The full shareable URL for a link. Every link is serialized with a
-     * signature (?c=<code>&s=<hmac>) so visitors cannot forge traffic by
-     * inventing codes — only links produced by Traffic::buildUrl() count.
+     * compact signature (?c=<code>&s=<22-char>) so visitors cannot forge
+     * traffic by inventing codes — only links produced by Traffic::buildUrl()
+     * count. The signature is short so it barely dents the 280-character post
+     * limit on X (previously a 64-char hex value).
      *
-     * e.g. https://example.com/signup?c=summer2026&s=<64 hex>
+     * e.g. https://example.com/signup?c=summer2026&s=<22 base64url chars>
      */
     public static function buildUrl(string $targetPath, string $code): string
     {
-        return absolute_url($targetPath) . '?c=' . rawurlencode($code) . '&s=' . self::signCode($code);
+        return absolute_url($targetPath) . '?c=' . rawurlencode($code) . '&s=' . self::compactSignature($code);
     }
 
     // ------------------------------------------------------------------
@@ -443,26 +445,41 @@ class Traffic
         return (string) $key;
     }
 
-    /** HMAC-SHA256 signature for a ?c= code, as a 64-char hex string. */
+    /** Full HMAC-SHA256 signature for a ?c= code (64-char hex). */
     public static function signCode(string $code): string
     {
         return hash_hmac('sha256', 'traffic-link:' . $code, self::signatureKey());
     }
 
     /**
-     * True when $signature authenticates $code. Compares in constant time
-     * and rejects anything that is not a 64-char hex signature.
+     * The signature used in share links: the first 128 bits of the HMAC-SHA256,
+     * base64url-encoded (22 chars, no padding). 128 bits is still far beyond any
+     * practical forgery effort while keeping the link short.
+     */
+    private static function compactSignature(string $code): string
+    {
+        $bin = hex2bin(substr(self::signCode($code), 0, 32)) ?: '';
+
+        return rtrim(strtr(base64_encode($bin), '+/', '-_'), '=');
+    }
+
+    /**
+     * True when $signature authenticates $code. Accepts the compact signature
+     * (22 base64url chars) and the legacy full form (64 hex chars), compares in
+     * constant time and rejects anything else. Legacy links keep working.
      */
     public static function validSignature(string $code, string $signature): bool
     {
         if ($code === '' || $signature === '') {
             return false;
         }
-        if (preg_match('/\A[a-f0-9]{64}\z/', $signature) !== 1) {
+        if (preg_match('/\A[a-f0-9]{64}\z|\A[A-Za-z0-9_-]{22}\z/', $signature) !== 1) {
             return false;
         }
 
-        return hash_equals(self::signCode($code), $signature);
+        $expected = strlen($signature) === 22 ? self::compactSignature($code) : self::signCode($code);
+
+        return hash_equals($expected, $signature);
     }
 
     /**
