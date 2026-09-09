@@ -184,6 +184,12 @@ return [
     ['POST', '/admin/logs/{id}/rollback', 'LogsController@rollback', 'logs'],
     ['POST', '/admin/logs/{id}/purge', 'LogsController@purgeGallery', 'logs'],
     ['GET', '/admin/user-monitor', 'UserMonitorController@index', 'user_monitor'],
+    ['GET', '/admin/traffic', 'TrafficController@index', 'traffic'],
+    ['POST', '/admin/traffic/create', 'TrafficController@create', 'traffic'],
+    ['POST', '/admin/traffic/{id}/update', 'TrafficController@update', 'traffic'],
+    ['POST', '/admin/traffic/{id}/toggle', 'TrafficController@toggle', 'traffic'],
+    ['GET', '/admin/traffic/{id}', 'TrafficController@show', 'traffic'],
+    ['POST', '/admin/traffic/{id}/delete', 'TrafficController@delete', 'traffic'],
 
     // Settings (logged in)
     ['GET', '/settings', 'SettingsController@show'],

@@ -86,6 +86,11 @@ class SmokeChecks
             'views/admin/emailer.php',
             'database/migrations/012_email_queue.sql',
             'database/migrations/013_user_marketing_opt_out.sql',
+            'database/migrations/014_traffic_links.sql',
+            'app/Models/Traffic.php',
+            'app/Controllers/TrafficController.php',
+            'views/admin/traffic.php',
+            'views/admin/traffic_show.php',
         ];
         foreach ($files as $rel) {
             $slug = str_replace(['/', '.'], '_', $rel);
@@ -140,13 +145,13 @@ class SmokeChecks
         preg_match_all('/CREATE TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+`?([A-Za-z0-9_]+)`?/i', $schema, $m);
         $tables = array_map('strtolower', $m[1]);
 
-        foreach (['users', 'galleries', 'photos', 'subscriptions', 'storage_snapshots', 'support_replies', 'gallery_favorites', 'saved_searches', 'email_queue'] as $must) {
+        foreach (['users', 'galleries', 'photos', 'subscriptions', 'storage_snapshots', 'support_replies', 'gallery_favorites', 'saved_searches', 'email_queue', 'content_views', 'auto_poster_queue', 'traffic_links', 'traffic_visits'] as $must) {
             $add("smoke.schema.table.$must", 'Smoke · Schema', "schema.sql has table: $must", static function () use ($must, $tables, $ok, $bad): array {
                 return in_array($must, $tables, true) ? $ok('present') : $bad("schema.sql missing table: $must");
             });
         }
 
-        foreach (['last_seen_at' => 'users', 'email_verified_at' => 'users', 'email_verification_token' => 'users', 'video_count' => 'storage_snapshots', 'min_level' => 'galleries', 'membership_number' => 'subscriptions', 'marketing_opt_out' => 'users', 'sent_at' => 'email_queue', 'audience' => 'email_queue', 'attempts' => 'email_queue'] as $col => $table) {
+        foreach (['last_seen_at' => 'users', 'email_verified_at' => 'users', 'email_verification_token' => 'users', 'video_count' => 'storage_snapshots', 'min_level' => 'galleries', 'membership_number' => 'subscriptions', 'marketing_opt_out' => 'users', 'sent_at' => 'email_queue', 'audience' => 'email_queue', 'attempts' => 'email_queue', 'signup_source_link_id' => 'users', 'utm_source' => 'users', 'visitor_id' => 'traffic_visits'] as $col => $table) {
             $add("smoke.schema.col.$table.$col", 'Smoke · Schema', "schema.sql has column: $table.$col", static function () use ($col, $table, $schema, $ok, $bad): array {
                 return preg_match('/CREATE TABLE(\s+IF\s+NOT\s+EXISTS)?\s+' . $table . '\b(?:(?!CREATE TABLE).)*' . $col . '/is', $schema) === 1
                     ? $ok('present')
@@ -178,6 +183,64 @@ class SmokeChecks
             return strpos($schema, 'idx_email_queue_status') !== false && strpos($schema, 'idx_email_queue_audience') !== false
                 ? $ok('indexes present')
                 : $bad('schema.sql: email_queue must carry status and audience indexes');
+        });
+        $add('smoke.schema.traffic_uq', 'Smoke · Schema', 'traffic_visits unique (link_id, ref_date, visitor_id)', static function () use ($schema, $ok, $bad): array {
+            return strpos($schema, 'uq_traffic_visits') !== false ? $ok('daily dedupe key') : $bad('schema.sql: traffic_visits must carry the (link_id, ref_date, visitor_id) unique key');
+        });
+
+        // --------------------------------------------------------------- Traffic
+        $traf = $read("$root/app/Models/Traffic.php");
+        $indexPhp = $read("$root/public/index.php");
+        $authCtrl = $read("$root/app/Controllers/AuthController.php");
+        $adminLayout = $read("$root/views/admin/layout.php");
+        $trafficView = $read("$root/views/admin/traffic.php");
+        $trafficShow = $read("$root/views/admin/traffic_show.php");
+        $trafficCtrl = $read("$root/app/Controllers/TrafficController.php");
+        $authCore = $read("$root/app/Core/Auth.php");
+        $add('smoke.traffic.index_hook', 'Smoke · Traffic', 'public/index.php captures traffic on public GETs', static function () use ($indexPhp, $ok, $bad): array {
+            return strpos($indexPhp, 'Traffic::capture') !== false ? $ok('capture hook present') : $bad('public/index.php must call Traffic::capture() before dispatch');
+        });
+        $add('smoke.traffic.signup_attach', 'Smoke · Traffic', 'Signup credits the stored traffic source', static function () use ($authCtrl, $ok, $bad): array {
+            return strpos($authCtrl, 'Traffic::attachSignup') !== false ? $ok('attribution wired') : $bad('AuthController::signup must attach the credited traffic source');
+        });
+        $add('smoke.traffic.permission', 'Smoke · Traffic', 'Traffic page gated behind a dedicated permission', static function () use ($authCore, $ok, $bad): array {
+            return strpos($authCore, "'traffic'") !== false ? $ok('permission declared') : $bad('Auth::PERMISSIONS must declare the traffic permission');
+        });
+        $add('smoke.traffic.nav', 'Smoke · Traffic', 'Admin nav links to the Traffic page', static function () use ($adminLayout, $ok, $bad): array {
+            return strpos($adminLayout, 'nav-traffic') !== false && strpos($adminLayout, "can('traffic')") !== false
+                ? $ok('nav item present')
+                : $bad('admin layout must render a permission-gated Traffic nav item');
+        });
+        $add('smoke.traffic.controller', 'Smoke · Traffic', 'TrafficController guards with requirePermission', static function () use ($trafficCtrl, $ok, $bad): array {
+            return strpos($trafficCtrl, "Auth::requirePermission('traffic')") !== false ? $ok('guard present') : $bad('TrafficController must require the traffic permission');
+        });
+        $add('smoke.traffic.model_attrs', 'Smoke · Traffic', 'Attribution expiry for terminated links', static function () use ($traf, $ok, $bad): array {
+            return strpos($traf, 'findActiveByCode') !== false && strpos($traf, 'clearRefCookie') !== false && strpos($traf, 'active = 1') !== false
+                ? $ok('expiry wired')
+                : $bad('Traffic must only attribute/record links that are still active and clear stale cookies');
+        });
+        $add('smoke.traffic.model_dedupe', 'Smoke · Traffic', 'Visits deduped per link/day/visitor', static function () use ($traf, $ok, $bad): array {
+            return strpos($traf, 'ON DUPLICATE KEY UPDATE') !== false && strpos($traf, 'CURDATE()') !== false
+                ? $ok('daily dedupe')
+                : $bad('Traffic::capture must upsert one visit row per link/day/visitor');
+        });
+        $add('smoke.traffic.model_utm', 'Smoke · Traffic', 'Short code + UTM parcels captured together', static function () use ($traf, $ok, $bad): array {
+            return strpos($traf, "'utm_source'") !== false && strpos($traf, "'c'  => \$code") !== false
+                ? $ok('code + utm payload')
+                : $bad('Traffic must persist the code together with utm_source/medium/campaign/content/term');
+        });
+        $add('smoke.traffic.view_copy', 'Smoke · Traffic', 'Traffic page offers one-click link copy', static function () use ($trafficView, $ok, $bad): array {
+            return strpos($trafficView, 'navigator.clipboard') !== false ? $ok('copy button') : $bad('traffic view must provide a copy-to-clipboard link button');
+        });
+        $add('smoke.traffic.view_terminate', 'Smoke · Traffic', 'Terminate/Reactivate actions exposed', static function () use ($trafficView, $ok, $bad): array {
+            return strpos($trafficView, '/toggle') !== false && strpos($trafficView, 'Terminate') !== false && strpos($trafficView, 'Reactivate') !== false
+                ? $ok('toggle wired')
+                : $bad('traffic view must expose terminate/reactivate actions');
+        });
+        $add('smoke.traffic.view_detail', 'Smoke · Traffic', 'Per-link detail page shows daily series + attributed signups', static function () use ($trafficShow, $ok, $bad): array {
+            return strpos($trafficShow, 'Attributed Signups') !== false && strpos($trafficShow, 'Last 30 Days') !== false && strpos($trafficShow, 'sparkline') !== false
+                ? $ok('detail page present')
+                : $bad('traffic_show view must render the 30-day series, sparkline and attributed signups');
         });
 
         // ------------------------------------------------------ Auto Poster

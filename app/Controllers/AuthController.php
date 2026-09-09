@@ -8,6 +8,7 @@ use App\Core\Mailer;
 use App\Core\RateLimiter;
 use App\Models\Photo;
 use App\Models\PasswordReset;
+use App\Models\Traffic;
 use App\Models\User;
 
 class AuthController extends Controller
@@ -161,6 +162,7 @@ class AuthController extends Controller
 
         User::create($email, $password, 'user', $dob);
         $userId = (int) User::findByEmail($email)['id'];
+        Traffic::attachSignup($userId, Traffic::attribution());
         $verificationToken = User::createVerificationToken($userId);
         $verificationUrl = rtrim(env_value('APP_URL', url('/')), '/')
             . '/verify-email?token=' . rawurlencode($verificationToken);

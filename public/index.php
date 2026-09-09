@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Core\Auth;
 use App\Core\Request;
 use App\Core\Router;
+use App\Models\Traffic;
 
 require __DIR__ . '/../app/Core/helpers.php';
 
@@ -65,4 +66,6 @@ if (is_file($maintenanceFlag)) {
 }
 
 $routes = require __DIR__ . '/../config/routes.php';
-(new Router($routes))->dispatch(new Request());
+$request = new Request();
+Traffic::capture($request);
+(new Router($routes))->dispatch($request);

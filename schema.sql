@@ -17,6 +17,12 @@ CREATE TABLE IF NOT EXISTS users (
     email_verified_at DATETIME NULL DEFAULT NULL,
     email_verification_token CHAR(64) NULL DEFAULT NULL,
     marketing_opt_out TINYINT(1) NOT NULL DEFAULT 0,
+    signup_source_link_id INT UNSIGNED NULL DEFAULT NULL,
+    utm_source   VARCHAR(120) NULL,
+    utm_medium   VARCHAR(120) NULL,
+    utm_campaign VARCHAR(120) NULL,
+    utm_content  VARCHAR(120) NULL,
+    utm_term     VARCHAR(120) NULL,
     billing_first_name VARCHAR(100) NULL DEFAULT NULL,
     billing_last_name  VARCHAR(100) NULL DEFAULT NULL,
     billing_address_line1 VARCHAR(255) NULL DEFAULT NULL,
@@ -472,6 +478,33 @@ CREATE TABLE IF NOT EXISTS content_views (
     count       INT UNSIGNED NOT NULL DEFAULT 0,
     UNIQUE KEY uq_content_views_type_id_date (entity_type, entity_id, view_date),
     INDEX idx_content_views_date (view_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Traffic links & attribution: admin-generated custom links (short ?c= code,
+-- optionally carrying utm parcels) record where visitors come from and which
+-- source signed them up.
+CREATE TABLE IF NOT EXISTS traffic_links (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    code        VARCHAR(64)  NOT NULL UNIQUE,
+    name        VARCHAR(120) NOT NULL,
+    target_path VARCHAR(255) NOT NULL DEFAULT '/signup',
+    active      TINYINT(1)   NOT NULL DEFAULT 1,
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_traffic_links_active (active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS traffic_visits (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    link_id     INT UNSIGNED NOT NULL,
+    visitor_id  CHAR(32)     NOT NULL,
+    ref_date    DATE         NOT NULL,
+    ip          VARCHAR(45)  NULL,
+    user_agent  VARCHAR(255) NULL,
+    landed_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_traffic_visits (link_id, ref_date, visitor_id),
+    INDEX idx_traffic_visits_date (ref_date, link_id),
+    CONSTRAINT fk_traffic_visits_link FOREIGN KEY (link_id)
+        REFERENCES traffic_links(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS password_resets (

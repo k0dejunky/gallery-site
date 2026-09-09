@@ -370,6 +370,9 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             <a class="nav-item <?= $navActive('/admin', true) ?>" href="<?= url('/admin') ?>" data-se-move-key="nav-dashboard">Dashboard</a>
             <a class="nav-item <?= $navActive('/admin/abandoned-uploads') ?>" href="<?= url('/admin/abandoned-uploads') ?>" data-se-move-key="nav-abandoned-uploads">Abandoned Uploads</a>
             <a class="nav-item <?= $navActive('/admin/trends') ?>" href="<?= url('/admin/trends') ?>" data-se-move-key="nav-trends">Trends</a>
+            <?php if (\App\Core\Auth::can('traffic')): ?>
+                <a class="nav-item <?= $navActive('/admin/traffic') ?>" href="<?= url('/admin/traffic') ?>" data-se-move-key="nav-traffic">Traffic</a>
+            <?php endif; ?>
             <a class="nav-item <?= $navActive('/admin/galleries') ?>" href="<?= url('/admin/galleries') ?>" data-se-move-key="nav-galleries">Gallery Management</a>
             <a class="nav-item <?= $navActive('/admin/video-projects') ?>" href="<?= url('/admin/video-projects') ?>" data-se-move-key="nav-video-projects">Video Projects</a>
             <a class="nav-item <?= $navActive('/admin/auto-poster') ?>" href="<?= url('/admin/auto-poster') ?>" data-se-move-key="nav-auto-poster">Auto Poster</a>

@@ -173,6 +173,21 @@ class TestSuite
             }
         });
 
+        $add('db.traffic_schema', 'Database', 'traffic tables + users source columns present', function () {
+            try {
+                $tables = Database::run('SHOW TABLES')->fetchAll(\PDO::FETCH_COLUMN);
+                if (!in_array('traffic_links', $tables, true) || !in_array('traffic_visits', $tables, true)) {
+                    return ['pass' => false, 'detail' => 'traffic tables missing'];
+                }
+                $cols = Database::run('SHOW COLUMNS FROM users')->fetchAll(\PDO::FETCH_COLUMN);
+                $need = ['signup_source_link_id', 'utm_source'];
+                $missing = array_values(array_diff($need, array_map('strtolower', $cols)));
+                return ['pass' => $missing === [], 'detail' => $missing === [] ? 'traffic_links + traffic_visits + users cols' : 'missing: ' . implode(', ', $missing)];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.content_counts', 'Database', 'Site has content (users/galleries/photos)', function () {
             try {
                 $u = (int) Database::run('SELECT COUNT(*) FROM users')->fetchColumn();
