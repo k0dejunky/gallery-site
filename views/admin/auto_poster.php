@@ -734,7 +734,7 @@ $twitter = $config['twitter'] ?? [];
         if (!form) { return; }
 
         var panels = form.querySelectorAll('.ap-tpl-panel');
-        var tabs = form.querySelectorAll('.ap-tpl-tab');
+        var tabs = document.querySelectorAll('.ap-tpl-tab');
 
         function renderPanel(platform) {
             var panel = document.getElementById('ap-tpl-' + platform);
