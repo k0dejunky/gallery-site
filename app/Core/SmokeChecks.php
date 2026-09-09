@@ -249,6 +249,11 @@ class SmokeChecks
                 ? $ok('signup verifies signature')
                 : $bad('Traffic::attribution must re-verify the cookie signature so a forged cookie is never credited');
         });
+        $add('smoke.traffic.no_time_expiry', 'Smoke · Traffic', 'Links have no time-based expiry (active until disabled/deleted)', static function () use ($traf, $ok, $bad): array {
+            return strpos($traf, 'COOKIE_REF_TTL = 315360000') !== false && strpos($traf, 'active until admin disables/deletes') !== false
+                ? $ok('no time box, only admin termination')
+                : $bad('Traffic cookies must be long-lived so a link stays active only until the admin disables or deletes it — never on a timer');
+        });
         $add('smoke.traffic.view_copy', 'Smoke · Traffic', 'Traffic page offers one-click link copy', static function () use ($trafficView, $ok, $bad): array {
             return strpos($trafficView, 'navigator.clipboard') !== false ? $ok('copy button') : $bad('traffic view must provide a copy-to-clipboard link button');
         });

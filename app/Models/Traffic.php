@@ -13,16 +13,18 @@ use App\Core\Request;
  * where visitors come from, and the credited source is stored on the account
  * at signup so campaigns can be measured (visits, unique visitors, signups).
  *
- * Attribution uses a 30-day httponly cookie and a 1-year visitor-id cookie.
- * A terminated (deactivated/unknown) code stops recording new visits AND stops
- * being credited at signup — the link "expires" the moment the admin ends it.
+ * Attribution cookies are long-lived (10 years): a link stays active — and
+ * keeps crediting signups — until the admin disables or deletes it, with no
+ * time-based expiry of its own. A terminated (deactivated/unknown) code stops
+ * recording new visits AND stops being credited at signup — the link "expires"
+ * the moment the admin ends it, never beforehand.
  */
 class Traffic
 {
     private const COOKIE_REF     = 'traffic_ref';
-    private const COOKIE_REF_TTL = 2592000;    // 30 days
+    private const COOKIE_REF_TTL = 315360000;   // 10 years: active until admin disables/deletes the link
     private const COOKIE_VISITOR = 'gvvid';
-    private const COOKIE_VISITOR_TTL = 31536000; // 1 year
+    private const COOKIE_VISITOR_TTL = 315360000; // 10 years
 
     // ------------------------------------------------------------------
     // Capture (public requests)
@@ -31,7 +33,7 @@ class Traffic
     /**
      * Called from public/index.php for public GET requests. If the request
      * carries a ?c=<code> with a valid ?s=<hmac> signature (or any utm_* param),
-     * the source is remembered in a 30-day cookie; a matching active link also
+     * the source is remembered in a long-lived cookie; a matching active link also
      * gets one daily visit row (deduped per link/day/visitor). Terminated links
      * record nothing and expire any previously stored cookie.
      *
@@ -133,7 +135,7 @@ class Traffic
     }
 
     /**
-     * Stable anonymous visitor id (1-year cookie, random 32 hex). Used to
+     * Stable anonymous visitor id (long-lived cookie, random 32 hex). Used to
      * dedupe visits per link/day without any personal data.
      */
     private static function visitorId(Request $request): string
@@ -154,7 +156,7 @@ class Traffic
     // ------------------------------------------------------------------
 
     /**
-     * The campaign credited to the current browser: reads the 30-day cookie
+     * The campaign credited to the current browser: reads the long-lived cookie
      * and resolves its code. Returns null when there is no stored source or
      * the stored code is terminated/unknown (and then clears the stale cookie).
      *
