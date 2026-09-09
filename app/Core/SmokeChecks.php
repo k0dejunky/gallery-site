@@ -309,6 +309,32 @@ class SmokeChecks
         $add('smoke.ap.tags', 'Smoke · Auto Poster', 'Recommendations tag up to 20 categories', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'MAX_TAGS = 20') !== false ? $ok('MAX_TAGS = 20') : $bad('auto-post recommendations must tag up to 20 categories');
         });
+        $add('smoke.ap.template_settings', 'Smoke · Auto Poster', 'Post template is editable (pattern, tags, sizes, banned words)', static function () use ($apq, $ok, $bad): array {
+            return strpos($apq, 'public static function templateSettings()') !== false
+                && strpos($apq, "'max_tags'") !== false && strpos($apq, "'max_length'") !== false
+                && strpos($apq, "'banned_words'") !== false
+                && strpos($apq, 'DEFAULT_PATTERN') !== false && strpos($apq, "'{title}'") !== false
+                    && strpos($apq, "'{hashtags}'") !== false
+                ? $ok('editable template settings present')
+                : $bad('AutoPostQueue must expose editable template settings (pattern tokens, hashtag/char limits, banned words)');
+        });
+        $add('smoke.ap.template_config', 'Smoke · Auto Poster', 'AutoPosterConfig persists + preserves the template', static function () use ($root, $read, $ok, $bad): array {
+            $cfg = $read("$root/app/Models/AutoPosterConfig.php");
+            return strpos($cfg, 'public static function saveTemplate(') !== false
+                && strpos($cfg, "'template' =>") !== false
+                ? $ok('saveTemplate + preserved on save()')
+                : $bad('AutoPosterConfig must save the template and carry it over on credential saves');
+        });
+        $add('smoke.ap.template_route', 'Smoke · Auto Poster', 'Route + controller persist the template', static function () use ($root, $read, $ok, $bad): array {
+            $routes = $read("$root/config/routes.php");
+            $ctrl   = $read("$root/app/Controllers/AutoPosterController.php");
+            return strpos($routes, 'auto-poster/template/save') !== false
+                && strpos($ctrl, 'public function saveTemplate()') !== false
+                    && strpos($ctrl, 'AutoPosterConfig::saveTemplate(') !== false
+                && strpos($ctrl, "'templatePreview'") !== false
+                ? $ok('save route + controller wired')
+                : $bad('the auto-poster template save route and controller action (with a live preview) must exist');
+        });
         $apw = $read("$root/bin/autopost_worker.php");
         $add('smoke.ap.worker_due', 'Smoke · Auto Poster', 'Worker publishes due queue rows', static function () use ($apw, $ok, $bad): array {
             return strpos($apw, 'AutoPostQueue::due') !== false ? $ok('AutoPostQueue::due used') : $bad('autopost worker must publish due queue rows');
@@ -336,6 +362,13 @@ class SmokeChecks
                 && strpos($apv, 'mo') !== false && strpos($apv, 'setInterval(tick, 1000)') !== false
                 ? $ok('countdown present')
                 : $bad('auto-poster queue must show a live months/days/hours/minutes/seconds countdown');
+        });
+        $add('smoke.ap.template_view', 'Smoke · Auto Poster', 'Template editor rendered on the Auto Poster page', static function () use ($apv, $ok, $bad): array {
+            return strpos($apv, 'name="pattern"') !== false && strpos($apv, 'ap-preview') !== false
+                && strpos($apv, 'Auto-post template') !== false
+                && strpos($apv, 'data-ap-template') !== false
+                ? $ok('editor panel + live preview present')
+                : $bad('auto-poster page must render an editable template panel with a live preview');
         });
         $add('smoke.ap.requeue_schedule', 'Smoke · Auto Poster', 'Repost/reschedule rows always get a real schedule', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'function requeueFrom') !== false && strpos($apq, '$scheduled = self::defaultSchedule();') !== false

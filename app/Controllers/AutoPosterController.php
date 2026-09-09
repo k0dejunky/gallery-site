@@ -28,13 +28,42 @@ class AutoPosterController extends Controller
     public function index(): void
     {
         $this->viewAdmin('auto_poster', [
-            'config'        => AutoPosterConfig::all(),
-            'log'           => AutoPosterConfig::logEntries(),
-            'recommended'   => AutoPostQueue::recommendations(8),
-            'queue'         => AutoPostQueue::queued(),
-            'queueCounts'   => AutoPostQueue::statusCounts(),
-            'recentPosts'   => AutoPostQueue::recentPosts(20),
+            'config'           => AutoPosterConfig::all(),
+            'log'              => AutoPosterConfig::logEntries(),
+            'recommended'      => AutoPostQueue::recommendations(8),
+            'queue'            => AutoPostQueue::queued(),
+            'queueCounts'      => AutoPostQueue::statusCounts(),
+            'recentPosts'      => AutoPostQueue::recentPosts(20),
+            'apTemplate'       => AutoPostQueue::templateSettings(),
+            'templatePreview'  => AutoPostQueue::buildText([
+                'gallery_title' => 'Example gallery',
+                'caption'       => 'Fresh uploads',
+            ], ['amateur', 'redhead', 'new']),
         ]);
+    }
+
+    /**
+     * Save the auto-post template settings that shape the wording, links,
+     * hashtag count and other generation knobs of every recommended post.
+     */
+    public function saveTemplate(): void
+    {
+        $post = fn (string $key, string $default = ''): string => trim((string) $this->request->post($key, $default));
+
+        AutoPosterConfig::saveTemplate([
+            'pattern'          => $post('pattern'),
+            'max_tags'         => $post('max_tags', '20'),
+            'max_length'       => $post('max_length', '280'),
+            'schedule_minutes' => $post('schedule_minutes', '60'),
+            'recent_days'      => $post('recent_days', '14'),
+            'max_media'        => $post('max_media', '4'),
+            'blur_percent'     => $post('blur_percent', '85'),
+            'screenshots'      => $post('screenshots', '3'),
+            'banned_words'     => $post('banned_words'),
+        ]);
+
+        $this->flash('success', 'Auto-post template saved — new recommendations use it.');
+        $this->redirect('/admin/auto-poster');
     }
 
     /**

@@ -52,9 +52,23 @@ class AutoPostQueue
     public const VIDEO_SCREENSHOTS = 3;
 
     /**
+     * The editable auto-post template used to generate a recommendation's text.
+     * Tokens (all optional):
+     *   {title}       the gallery title ("New upload" when it has none)
+     *   {sep}         a " — " separator, only when both title and description exist
+     *   {description} the gallery description (blank when it has none)
+     *   {hashtags}    the gallery's category hashtags, capped by the template's
+     *                 max_tags setting
+     * Everything else in the pattern is literal text — so the wording and any
+     * link/URL in the post are edited here directly.
+     */
+    public const DEFAULT_PATTERN = '{title}{sep}{description} {hashtags} come visit my site to see what else I get myself into!! amethyst2213.com';
+
+    /**
      * Words that must never appear in a recommended post. They are stripped
      * from the post text and offending category hashtags are dropped, but the
-     * gallery itself is still posted.
+     * gallery itself is still posted. Editable via the template settings
+     * (comma-separated); this constant is the fallback default.
      */
     public const BANNED_WORDS = ['nipple', 'nipples'];
 
@@ -66,7 +80,7 @@ class AutoPostQueue
     {
         $text = mb_strtolower($text);
 
-        foreach (self::BANNED_WORDS as $word) {
+        foreach (self::bannedWords() as $word) {
             if (preg_match('/(?<![a-z])' . preg_quote(mb_strtolower($word), '/') . '(?![a-z])/u', $text) === 1) {
                 return true;
             }
@@ -83,7 +97,7 @@ class AutoPostQueue
     {
         $result = $text;
 
-        foreach (self::BANNED_WORDS as $word) {
+        foreach (self::bannedWords() as $word) {
             $result = preg_replace(
                 '/(?<![a-z])' . preg_quote(mb_strtolower($word), '/') . '(?![a-z])/iu',
                 '',
@@ -94,6 +108,96 @@ class AutoPostQueue
         $result = preg_replace('/\s{2,}/u', ' ', $result) ?? $result;
 
         return trim($result);
+    }
+
+    /**
+     * The auto-post template settings (editable on the Auto Poster page),
+     * stored in the config file and filled with the class constants whenever a
+     * value is missing or out of range. Everything below is changeable without
+     * code edits: the post pattern/wording/link, how many category hashtags are
+     * used, the character budget, the default schedule lead time, the recent
+     * window, media count, blur strength, video screenshots and banned words.
+     */
+    public static function templateSettings(): array
+    {
+        $t = is_array(AutoPosterConfig::all()['template'] ?? null) ? AutoPosterConfig::all()['template'] : [];
+
+        return [
+            'pattern'          => self::clampPattern((string) ($t['pattern'] ?? '')),
+            'max_tags'         => self::clampInt($t['max_tags'] ?? null, 0, 60, self::MAX_TAGS),
+            'max_length'       => self::clampInt($t['max_length'] ?? null, 50, 280, 280),
+            'schedule_minutes' => self::clampInt($t['schedule_minutes'] ?? null, 1, 10080, self::DEFAULT_SCHEDULE_MINUTES),
+            'recent_days'      => self::clampInt($t['recent_days'] ?? null, 1, 90, self::RECENT_WINDOW_DAYS),
+            'max_media'        => self::clampInt($t['max_media'] ?? null, 1, self::MAX_ATTACHED_MEDIA, self::MAX_ATTACHED_MEDIA),
+            'blur_percent'     => self::clampInt($t['blur_percent'] ?? null, 0, 100, self::POST_IMAGE_BLUR_PERCENT),
+            'screenshots'      => self::clampInt($t['screenshots'] ?? null, 1, 4, self::VIDEO_SCREENSHOTS),
+            'banned_words'     => self::parseBannedWords(is_array($t['banned_words'] ?? null) ? implode(',', $t['banned_words']) : (string) ($t['banned_words'] ?? '')),
+        ];
+    }
+
+    /**
+     * The banned-word list in effect: the configured words when any were saved,
+     * otherwise the built-in default.
+     *
+     * @return list<string>
+     */
+    private static function bannedWords(): array
+    {
+        $words = self::templateSettings()['banned_words'];
+
+        return $words !== [] ? $words : self::BANNED_WORDS;
+    }
+
+    /**
+     * Parse a comma/space/newline separated banned-word list, keeping only
+     * clean lowercase words (1-40 chars, max 30 of them).
+     *
+     * @return list<string>
+     */
+    private static function parseBannedWords(string $raw): array
+    {
+        $words = preg_split('/[\s,]+/', mb_strtolower($raw), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $out   = [];
+
+        foreach ($words as $word) {
+            $word = trim($word);
+            if ($word === '' || mb_strlen($word) > 40) {
+                continue;
+            }
+            if (!in_array($word, $out, true)) {
+                $out[] = $word;
+            }
+            if (count($out) >= 30) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Clamp a numeric template value into $min..$max, falling back to $default
+     * when the stored value is missing or not numeric.
+     */
+    private static function clampInt($value, int $min, int $max, int $default): int
+    {
+        if (!is_numeric($value)) {
+            return $default;
+        }
+
+        return max($min, min($max, (int) $value));
+    }
+
+    /**
+     * The post pattern to compose recommendations from, defaulting to the
+     * built-in DEFAULT_PATTERN when blank or wonky. The pattern must stay short
+     * enough to leave room for real content, so it is capped at 2048 chars.
+     */
+    private static function clampPattern(string $pattern): string
+    {
+        $pattern = trim($pattern);
+
+        return $pattern === '' ? self::DEFAULT_PATTERN : mb_substr($pattern, 0, 2048);
     }
 
     /**
@@ -117,7 +221,7 @@ class AutoPostQueue
              JOIN gallery_photo gp ON gp.gallery_id = g.id
              JOIN photos p ON p.id = gp.photo_id
              WHERE g.deleted_at IS NULL
-               AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) self::RECENT_WINDOW_DAYS . " DAY)
+               AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) self::templateSettings()['recent_days'] . " DAY)
                AND NOT EXISTS (SELECT 1 FROM auto_poster_queue q WHERE q.gallery_id = g.id)
              GROUP BY g.id
              ORDER BY newest_media_at DESC, g.id DESC
@@ -140,23 +244,24 @@ class AutoPostQueue
     }
 
     /**
-     * Up to 4 of a gallery's most recent media files for attaching to a post.
-     * Only files uploaded within the recent window are candidates. When any of
-     * the newest files is a video the post falls back to a single attachment
-     * (X does not allow mixing images and videos in one tweet).
+     * Up to the template's max_media (default MAX_ATTACHED_MEDIA) of a
+     * gallery's most recent media files for attaching to a post. Only files
+     * uploaded within the recent window are candidates. When any of the newest
+     * files is a video the post falls back to a single attachment (X does not
+     * allow mixing images and videos in one tweet).
      *
      * @return array<int, array{id: int, filename: string, is_video: int, caption: string}>
      */
-    public static function galleryMedia(int $galleryId, int $limit = 4): array
+    public static function galleryMedia(int $galleryId, ?int $limit = null): array
     {
-        $limit = max(1, min(self::MAX_ATTACHED_MEDIA, $limit));
+        $limit = max(1, min((int) self::templateSettings()['max_media'], $limit ?? (int) self::templateSettings()['max_media']));
 
         $photos = Database::run(
             "SELECT p.id, p.filename, p.is_video, p.caption
              FROM photos p
              JOIN gallery_photo gp ON gp.photo_id = p.id
              WHERE gp.gallery_id = ?
-               AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) self::RECENT_WINDOW_DAYS . " DAY)
+               AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) self::templateSettings()['recent_days'] . " DAY)
              ORDER BY p.created_at DESC, p.id DESC
              LIMIT $limit",
             [$galleryId]
@@ -172,14 +277,15 @@ class AutoPostQueue
     }
 
     /**
-     * Up to MAX_TAGS of a gallery's categories as hashtag words (first 20 in
-     * the gallery's category list, so every post carries the site's labels).
+     * Up to the template's max_tags (default MAX_TAGS) of a gallery's
+     * categories as hashtag words (first N in the gallery's category list, so
+     * every post carries the site's labels).
      *
      * @return list<string>
      */
-    public static function categoryHashtags(int $galleryId, int $limit = self::MAX_TAGS): array
+    public static function categoryHashtags(int $galleryId, ?int $limit = null): array
     {
-        $limit = max(0, min(self::MAX_TAGS, $limit));
+        $limit = max(0, min(self::MAX_TAGS, $limit ?? (int) self::templateSettings()['max_tags']));
         $tags  = [];
 
         foreach (Gallery::categories($galleryId) as $category) {
@@ -199,85 +305,125 @@ class AutoPostQueue
     }
 
     /**
-     * Compose the 280-character post text for a gallery: starts with the
-     * gallery title, adds the gallery description, then the gallery's first
-     * MAX_TAGS categories as hashtags and ends with POST_CTA, which links back
-     * to the site. The gallery text is truncated (and, only if needed, trailing
-     * hashtags dropped) so the call-to-action is always the last line.
+     * Compose the post text for a gallery from the editable template pattern.
+     * Tokens are substituted in place ({title}, {sep}, {description},
+     * {hashtags}) and everything else in the pattern — the wording, separators
+     * and any link/URL — is kept verbatim, so the admin edits the actual post
+     * shape here without code changes. The finished text is bounded by the
+     * template's max_length (default 280): the content substitutions are
+     * truncated so the pattern (and any trailing link) is always kept.
      */
-    public static function buildText(array $gallery, array $tags = []): string
+    public static function buildText(array $gallery, array $tags = [], ?array $settings = null): string
     {
-        $title       = trim((string) ($gallery['gallery_title'] ?? ''));
-        $description = trim((string) ($gallery['caption'] ?? ''));
+        $settings = $settings ?? self::templateSettings();
 
-        $parts = [];
-        if ($title !== '') {
-            $parts[] = $title;
-        } else {
-            $parts[] = 'New upload';
-        }
-        if ($description !== '') {
-            $parts[] = $description;
+        $pattern = self::composePattern($settings['pattern'], $gallery);
+
+        // The compact title/description body (pre-hashtags), used to drop a
+        // redundant tits/titties hashtag that already appears in the text.
+        $mentionedBody = strtolower(
+            (string) str_replace('{hashtags}', '', $pattern)
+        );
+
+        $cleanTags = self::cleanHashtags($tags, (int) $settings['max_tags'], $mentionedBody);
+        $maxLength = (int) $settings['max_length'];
+
+        // Full text first; when it overflows, hashtags are dropped one at a
+        // time (cheapest to cut) before any of the pattern text is touched.
+        $count = count($cleanTags);
+        for ($n = $count; $n >= 0; $n--) {
+            $text = self::singleSpace(
+                (string) str_replace('{hashtags}', self::hashtagsBlock(array_slice($cleanTags, 0, $n)), $pattern)
+            );
+
+            if (mb_strlen($text) <= $maxLength) {
+                break;
+            }
         }
 
-        $base = preg_replace('/\s+/u', ' ', implode(' — ', $parts)) ?? '';
+        // Still over budget: truncate the tail of the composed text with an
+        // ellipsis so the word count is always respected.
+        if (mb_strlen($text) > $maxLength) {
+            $text = rtrim(mb_substr($text, 0, max(1, $maxLength - 1))) . '…';
+        }
 
         // Banned-word filter: strip offending words from the post body so the
         // word never appears, while still posting the gallery.
-        $base = self::stripBannedWords($base);
-        $base = preg_replace('/\s+/u', ' ', $base) ?? '';
-        $base = trim($base);
+        return trim(self::stripBannedWords($text));
+    }
 
-        $cleanTags = [];
+    /**
+     * Substitute the {title}, {sep} and {description} tokens of the pattern
+     * with the gallery's content, leaving {hashtags} in place for the caller.
+     */
+    private static function composePattern(string $pattern, array $gallery): string
+    {
+        $title       = self::singleSpace((string) ($gallery['gallery_title'] ?? ''));
+        $description = self::singleSpace((string) ($gallery['caption'] ?? ''));
+
+        $pattern = str_replace('{title}', $title !== '' ? $title : 'New upload', $pattern);
+        $pattern = str_replace('{sep}', $description !== '' ? ' — ' : '', $pattern);
+        $pattern = str_replace('{description}', $description, $pattern);
+
+        return $pattern;
+    }
+
+    /**
+     * The hashtags to include in a post: up to $limit cleaned category names,
+     * keeping to the X autoposter filter (no banned words; a tits/titties tag
+     * becomes "boobs" or is dropped when the word already appears in the body).
+     *
+     * @return list<string>
+     */
+    private static function cleanHashtags(array $tags, int $limit, string $mentionedBody): array
+    {
+        $clean = [];
         foreach ($tags as $tag) {
             $tag = trim((string) preg_replace('/[^A-Za-z0-9_]/', '', (string) $tag));
-            if ($tag !== '' && mb_strlen($tag) <= 40) {
-                // X autoposter filter: never post a "tits"/"titties" hashtag.
-                // When the word already appears in the title/description the
-                // hashtag is dropped as redundant; otherwise it is replaced
-                // with "boobs". Banned words (nipple/nipples) are always
-                // dropped so they never appear in a post's text.
-                $tagLower = mb_strtolower($tag);
-                if (self::containsBannedWord($tagLower)) {
+            if ($tag === '' || mb_strlen($tag) > 40) {
+                continue;
+            }
+            $tagLower = mb_strtolower($tag);
+            if (self::containsBannedWord($tagLower)) {
+                continue;
+            }
+            $isSensitive = mb_strpos($tagLower, 'tits') !== false
+                || mb_strpos($tagLower, 'titties') !== false;
+            if ($isSensitive) {
+                if (mb_strpos($mentionedBody, 'tits') !== false
+                    || mb_strpos($mentionedBody, 'titties') !== false) {
                     continue;
                 }
-                $isSensitive = mb_strpos($tagLower, 'tits') !== false
-                    || mb_strpos($tagLower, 'titties') !== false;
-                if ($isSensitive) {
-                    $baseLower = mb_strtolower($base);
-                    $mentioned = mb_strpos($baseLower, 'tits') !== false
-                        || mb_strpos($baseLower, 'titties') !== false;
-                    if ($mentioned) {
-                        continue;
-                    }
-                    $tag = 'boobs';
-                }
-                $cleanTags[] = $tag;
+                $tag = 'boobs';
             }
-            if (count($cleanTags) >= self::MAX_TAGS) {
+            $clean[] = $tag;
+            if (count($clean) >= $limit) {
                 break;
             }
         }
 
-        $cta    = self::POST_CTA;
-        $suffix = '';
-        foreach ($cleanTags as $tag) {
-            $candidate = $suffix === '' ? '#' . $tag : $suffix . ' #' . $tag;
-            if (mb_strlen(' ' . $candidate) + mb_strlen($cta) + 1 + self::MAX_TAGS > 280) {
-                break;
-            }
-            $suffix = $candidate;
-        }
-        $suffix = ($suffix !== '' ? ' ' . $suffix : '') . ' ' . $cta;
+        return $clean;
+    }
 
-        if (mb_strlen($base) + mb_strlen($suffix) > 280) {
-            $room = 280 - mb_strlen($suffix);
-            $base = $room > 3
-                ? rtrim(mb_substr($base, 0, $room - 1)) . '…'
-                : '…';
+    /**
+     * Render a list of tag names as the in-post hashtag text (" #a #b"), or an
+     * empty string when there are none.
+     */
+    private static function hashtagsBlock(array $tags): string
+    {
+        if ($tags === []) {
+            return '';
         }
 
-        return trim($base . $suffix);
+        return ' #' . implode(' #', $tags);
+    }
+
+    /**
+     * Squash whitespace in a piece of text.
+     */
+    private static function singleSpace(string $text): string
+    {
+        return trim((string) preg_replace('/\s+/u', ' ', $text));
     }
 
     /**
@@ -290,7 +436,7 @@ class AutoPostQueue
     {
         $from = $from ?? time();
         $dt   = (new DateTime('@' . $from))->setTimezone(self::schedulerTimezone());
-        $dt->modify('+' . self::DEFAULT_SCHEDULE_MINUTES . ' minutes');
+        $dt->modify('+' . (int) self::templateSettings()['schedule_minutes'] . ' minutes');
 
         return $dt->format('Y-m-d\TH:i');
     }
@@ -832,14 +978,14 @@ class AutoPostQueue
             // so a few random frames are captured, blurred with the same
             // preview blur, and posted as images instead of the video file.
             if (!$isVideo) {
-                $copy = create_blurred_copy($path, self::POST_IMAGE_BLUR_PERCENT);
+                $copy = create_blurred_copy($path, (int) self::templateSettings()['blur_percent']);
 
                 if ($copy !== null) {
                     $blurredTmp[] = $copy;
                     $path         = $copy;
                 }
             } else {
-                $frames = self::videoScreenshots($path, self::VIDEO_SCREENSHOTS);
+                 $frames = self::videoScreenshots($path, (int) self::templateSettings()['screenshots']);
 
                 if ($frames !== []) {
                     foreach ($frames as $frame) {
@@ -966,7 +1112,7 @@ class AutoPostQueue
             exec($cmd, $o, $rc);
 
             if ($rc === 0 && is_file($tmp) && (int) filesize($tmp) > 0) {
-                $blurred = create_blurred_copy($tmp, self::POST_IMAGE_BLUR_PERCENT);
+                $blurred = create_blurred_copy($tmp, (int) self::templateSettings()['blur_percent']);
                 @unlink($tmp);
 
                 if ($blurred !== null) {

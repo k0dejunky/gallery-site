@@ -372,6 +372,43 @@ class TestSuite
             }
         });
 
+        $add('autoposter.template', 'Auto Poster', 'Editable template controls post wording, link and hashtag count', function () {
+            try {
+                $default = \App\Models\AutoPostQueue::templateSettings();
+                $tags    = ['Amateur', 'Redhead', 'nipples', 'Tits'];
+                $gallery = ['gallery_title' => 'Summer Set', 'caption' => 'Fresh uploads'];
+
+                // Custom pattern/wording + reduced hashtag count + new link text.
+                $custom = $default;
+                $custom['pattern']      = '{title}: {description} — {hashtags} — check me out at amethyst2213.com/new';
+                $custom['max_tags']     = 2;
+                $custom['max_length']   = 200;
+                $custom['banned_words'] = ['nipple', 'nipples'];
+
+                $out = \App\Models\AutoPostQueue::buildText($gallery, $tags, $custom);
+
+                $hasTitle = strpos($out, 'Summer Set') !== false;
+                $hasDesc  = strpos($out, 'Fresh uploads') !== false;
+                $hasLink  = strpos($out, 'amethyst2213.com/new') !== false;
+                $tagCount = preg_match_all('/#\w+/', $out, $m);
+                $noBanned = stripos($out, 'nipple') === false;
+                $length   = mb_strlen($out) <= 200;
+
+                // Same gallery/tags with zero hashtags must emit no "#" at all.
+                $zero = $default;
+                $zero['pattern']    = '{title} — {description} (no tags)';
+                $zero['max_tags']   = 0;
+                $zero['max_length'] = 200;
+                $outZero = \App\Models\AutoPostQueue::buildText($gallery, $tags, $zero);
+                $noTags  = strpos($outZero, '#') === false && strpos($outZero, '(no tags)') !== false;
+
+                return ['pass' => $hasTitle && $hasDesc && $hasLink && $noBanned && $length && $noTags && $tagCount === 2,
+                    'detail' => json_encode(['tags' => $tagCount, 'output' => mb_substr($out, 0, 90)])];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         // ---------------------------------------------------------------- Video / Photo jobs
         $add('video.worker_bin', 'Video Jobs', 'video_export_worker.php exists', function () use ($root) {
             return ['pass' => is_file($root . '/bin/video_export_worker.php'), 'detail' => 'bin/video_export_worker.php'];

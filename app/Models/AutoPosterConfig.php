@@ -26,26 +26,29 @@ class AutoPosterConfig
 
     /**
      * Load the saved credentials. Returns an array with 'reddit' and 'twitter'
-     * sub-arrays (each may be empty) plus the validated 'timezone'.
+     * sub-arrays (each may be empty), the validated 'timezone' and the 'template'
+     * settings used to generate recommended post text (may be empty, in which
+     * case the encoder falls back to its built-in defaults).
      */
     public static function all(): array
     {
         $path = self::file();
 
         if (!is_file($path)) {
-            return ['reddit' => [], 'twitter' => [], 'timezone' => 'UTC'];
+            return ['reddit' => [], 'twitter' => [], 'timezone' => 'UTC', 'template' => []];
         }
 
         $data = json_decode((string) file_get_contents($path), true);
 
         if (!is_array($data)) {
-            return ['reddit' => [], 'twitter' => [], 'timezone' => 'UTC'];
+            return ['reddit' => [], 'twitter' => [], 'timezone' => 'UTC', 'template' => []];
         }
 
         return [
             'reddit'   => is_array($data['reddit'] ?? null) ? $data['reddit'] : [],
             'twitter'  => is_array($data['twitter'] ?? null) ? $data['twitter'] : [],
             'timezone' => self::validatedTimezone((string) ($data['timezone'] ?? 'UTC')),
+            'template' => is_array($data['template'] ?? null) ? $data['template'] : [],
         ];
     }
 
@@ -58,9 +61,11 @@ class AutoPosterConfig
     }
 
     /**
-     * Persist the credentials file. Creates storage/ if needed.
+     * Persist the credentials file. Creates storage/ if needed. When no template
+     * is passed the currently saved template settings are carried over, so a
+     * credentials-only save never wipes the post template.
      */
-    public static function save(array $reddit, array $twitter, string $timezone = 'UTC'): void
+    public static function save(array $reddit, array $twitter, string $timezone = 'UTC', ?array $template = null): void
     {
         $path = self::file();
         $dir  = dirname($path);
@@ -69,11 +74,27 @@ class AutoPosterConfig
             mkdir($dir, 0775, true);
         }
 
+        if ($template === null) {
+            $template = is_array(self::all()['template'] ?? null) ? self::all()['template'] : [];
+        }
+
         file_put_contents($path, json_encode([
             'reddit'   => $reddit,
             'twitter'  => $twitter,
             'timezone' => self::validatedTimezone($timezone),
+            'template' => $template,
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    /**
+     * Persist the auto-post template settings, preserving credentials and the
+     * timezone. The encoder reads these to build recommended post text.
+     */
+    public static function saveTemplate(array $template): void
+    {
+        $config = self::all();
+
+        self::save($config['reddit'], $config['twitter'], (string) $config['timezone'], $template);
     }
 
     /**
@@ -102,7 +123,7 @@ class AutoPosterConfig
             $config['reddit']['access_token'] = $accessToken;
         }
 
-        self::save($config['reddit'], $config['twitter']);
+        self::save($config['reddit'], $config['twitter'], (string) $config['timezone']);
     }
 
     /**
@@ -119,7 +140,7 @@ class AutoPosterConfig
             $config['twitter']['access_token'] = $accessToken;
         }
 
-        self::save($config['reddit'], $config['twitter']);
+        self::save($config['reddit'], $config['twitter'], (string) $config['timezone']);
     }
 
     /**

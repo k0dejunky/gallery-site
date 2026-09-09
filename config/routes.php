@@ -247,6 +247,7 @@ return [
     // Auto poster (admin only)
     ['GET', '/admin/auto-poster', 'AutoPosterController@index', 'autoposter'],
     ['POST', '/admin/auto-poster/settings', 'AutoPosterController@saveSettings', 'autoposter'],
+    ['POST', '/admin/auto-poster/template/save', 'AutoPosterController@saveTemplate', 'autoposter'],
     ['GET', '/admin/auto-poster/reddit/authorize', 'AutoPosterController@authorizeReddit', 'autoposter'],
     ['GET', '/admin/auto-poster/reddit/callback', 'AutoPosterController@callbackReddit', 'autoposter'],
     ['GET', '/admin/auto-poster/twitter/authorize', 'AutoPosterController@authorizeTwitter', 'autoposter'],

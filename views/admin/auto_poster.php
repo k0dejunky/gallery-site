@@ -4,6 +4,62 @@ $reddit  = $config['reddit'] ?? [];
 $twitter = $config['twitter'] ?? [];
 ?>
 
+<?php // ----- Auto-post template: the wording/link/hashtag blueprint ----- ?>
+<div class="stats-panel" style="margin-bottom:1rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+        <h2>Auto-post template</h2>
+        <span class="muted" style="font-size:.85rem;">The blueprint every recommended post is generated from. Edit the wording, link and how many hashtags are used — new recommendations pick it up immediately.</span>
+    </div>
+    <form method="post" action="<?= url('/admin/auto-poster/template/save') ?>" data-ap-template>
+        <?= csrf_field() ?>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-top:.75rem;" class="ap-template-grid">
+            <div>
+                <label for="ap-pattern"><strong>Post pattern</strong> <span class="muted" style="font-weight:400;">(everything outside the tokens is posted verbatim)</span></label>
+                <textarea name="pattern" id="ap-pattern" rows="4" maxlength="2048"
+                          style="width:100%;box-sizing:border-box;font-size:.9rem;padding:.5rem .6rem;border:1px solid #d1d5db;border-radius:4px;word-wrap:break-word;resize:vertical;"><?= e((string) $apTemplate['pattern']) ?></textarea>
+                <p class="muted" style="font-size:.78rem;margin-top:.3rem;">
+                    Tokens: <code>{title}</code> &middot; <code>{sep}</code> (a &ldquo;&mdash;&rdquo; only when both title and description exist) &middot; <code>{description}</code> &middot; <code>{hashtags}</code>. Put any link/URL you want in the pattern text itself (e.g. <code>see amethyst2213.com</code>).
+                </p>
+                <div style="display:flex;flex-wrap:wrap;gap:.75rem;margin-top:.75rem;">
+                    <label style="font-size:.85rem;"><span class="muted">Hashtags per post:</span><br>
+                        <input type="number" name="max_tags" min="0" max="60" value="<?= (int) $apTemplate['max_tags'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                    <label style="font-size:.85rem;"><span class="muted">Max characters:</span><br>
+                        <input type="number" name="max_length" min="50" max="280" value="<?= (int) $apTemplate['max_length'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                    <label style="font-size:.85rem;"><span class="muted">Default schedule (min):</span><br>
+                        <input type="number" name="schedule_minutes" min="1" max="10080" value="<?= (int) $apTemplate['schedule_minutes'] ?>" style="width:7rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                    <label style="font-size:.85rem;"><span class="muted">Recent window (days):</span><br>
+                        <input type="number" name="recent_days" min="1" max="90" value="<?= (int) $apTemplate['recent_days'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                    <label style="font-size:.85rem;"><span class="muted">Media per post:</span><br>
+                        <input type="number" name="max_media" min="1" max="4" value="<?= (int) $apTemplate['max_media'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                    <label style="font-size:.85rem;"><span class="muted">Video screenshots:</span><br>
+                        <input type="number" name="screenshots" min="1" max="4" value="<?= (int) $apTemplate['screenshots'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                    <label style="font-size:.85rem;"><span class="muted">Preview blur %:</span><br>
+                        <input type="number" name="blur_percent" min="0" max="100" value="<?= (int) $apTemplate['blur_percent'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                </div>
+                <p style="margin-top:.75rem;">
+                    <label class="muted" style="font-size:.85rem;display:block;">Banned words <span style="font-weight:400;">(never appear in a post; comma-separated, optional)</span><br>
+                        <input type="text" name="banned_words" value="<?= e(implode(', ', \App\Models\AutoPostQueue::templateSettings()['banned_words'] ?? [])) ?>" placeholder="nipple, nipples" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                    </label>
+                </p>
+            </div>
+            <div>
+                <div style="border:1px dashed #d1d5db;border-radius:6px;padding:.6rem .75rem;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <span class="muted" style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Live preview</span>
+                        <span id="ap-preview-count" class="muted" style="font-size:.75rem;font-variant-numeric:tabular-nums;">0/280</span>
+                    </div>
+                    <p id="ap-preview" style="font-size:.88rem;color:#374151;margin:.4rem 0 0;word-wrap:break-word;white-space:pre-wrap;">&mdash;</p>
+                </div>
+                <p class="muted" style="font-size:.75rem;margin-top:.5rem;">Preview shows how the pattern reads with sample content. The exact text is baked at queue time from each gallery&rsquo;s real title, description and categories.</p>
+            </div>
+        </div>
+        <div style="margin-top:.75rem;">
+            <button type="submit" class="btn">Save template</button>
+            <?php if (!empty($templatePreview)): ?><span class="muted" style="font-size:.78rem;margin-left:.5rem;">Current saved result: &ldquo;<?= e((string) $templatePreview) ?>&rdquo;</span><?php endif; ?>
+        </div>
+    </form>
+</div>
+
 <?php // ----- Recommended posts: generated from recent uploads ----- ?>
 <div class="stats-panel" style="margin-bottom:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
@@ -615,6 +671,51 @@ $twitter = $config['twitter'] ?? [];
                 btn.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
             });
         });
+    })();
+
+    // Live preview of the auto-post template: substitute the tokens with
+    // sample content so the admin sees the post shape while typing.
+    (function () {
+        var form = document.querySelector('form[data-ap-template]');
+        if (!form) { return; }
+        var patternEl = form.querySelector('#ap-pattern');
+        var previewEl = document.getElementById('ap-preview');
+        var countEl = document.getElementById('ap-preview-count');
+        var tagsEl = form.querySelector('input[name="max_tags"]');
+        var lengthEl = form.querySelector('input[name="max_length"]');
+
+        function blockTags() {
+            var n = parseInt(tagsEl.value, 10) || 0;
+            var out = [];
+            for (var i = 1; i <= n; i++) { out.push(' #tag' + i); }
+            return out.join('');
+        }
+
+        function render() {
+            var title = 'Example gallery';
+            var desc = 'Fresh uploads';
+            var pattern = patternEl.value
+                .replace('{title}', title)
+                .replace('{sep}', desc ? ' — ' : '')
+                .replace('{description}', desc)
+                .replace('{hashtags}', blockTags());
+            pattern = pattern.replace(/\s+/g, ' ').trim();
+
+            var max = parseInt(lengthEl.value, 10) || 280;
+            var shown;
+            if (pattern.length > max) {
+                shown = pattern.slice(0, Math.max(1, max - 1)) + '…';
+            } else {
+                shown = pattern;
+            }
+            previewEl.textContent = shown || '—';
+            countEl.textContent = shown.length + '/' + max;
+        }
+
+        patternEl.addEventListener('input', render);
+        tagsEl.addEventListener('input', render);
+        lengthEl.addEventListener('input', render);
+        render();
     })();
 })();
 </script>
