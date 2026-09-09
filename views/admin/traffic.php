@@ -39,8 +39,9 @@ document.addEventListener('DOMContentLoaded', trafficWireForm);
 <h2>Create a Traffic Link</h2>
 <p class="muted" style="margin-top:0">
     Generate a custom link (short <code>?c=code</code>, optionally with UTM tags) that records where
-    visitors come from and credits the source at signup. Terminating a link expires it: it stops
-    recording visits and stops being credited.
+    visitors come from and credits the source at signup. Every share link is
+    <strong>signed</strong> (<code>&amp;s=</code>), so forged <code>?c=</code> codes invented by
+    visitors are ignored. Terminating a link expires it: it stops recording visits and stops being credited.
 </p>
 <form id="traffic-create-form" method="post" action="<?= url('/admin/traffic/create') ?>" style="max-width:640px; margin:0 auto;">
     <?= csrf_field() ?>
@@ -58,6 +59,7 @@ document.addEventListener('DOMContentLoaded', trafficWireForm);
     </p>
 </form>
 <p id="traffic-preview" class="muted" style="text-align:center; word-break:break-all;"></p>
+<p class="muted" style="text-align:center; margin-top:0;">The <code>&amp;s=</code> signature is appended automatically once the link is created &mdash; use the Copy button in the table.</p>
 <input type="hidden" id="traffic-preview-base" value="<?= e(rtrim(env_value('APP_URL', url('/')), '/')) ?>">
 
 <h2>Links</h2>

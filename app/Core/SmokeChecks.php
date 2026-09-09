@@ -229,6 +229,26 @@ class SmokeChecks
                 ? $ok('code + utm payload')
                 : $bad('Traffic must persist the code together with utm_source/medium/campaign/content/term');
         });
+        $add('smoke.traffic.signed_links', 'Smoke · Traffic', 'Share links are signed (?c + &s= signature)', static function () use ($traf, $ok, $bad): array {
+            return strpos($traf, "'&s='") !== false && strpos($traf, 'function signCode') !== false
+                ? $ok('signed serialization')
+                : $bad('Traffic::buildUrl must append &s=<signature> so forged ?c= codes are rejected');
+        });
+        $add('smoke.traffic.sig_verify', 'Smoke · Traffic', 'Signatures verified in constant time', static function () use ($traf, $ok, $bad): array {
+            return strpos($traf, 'hash_hmac') !== false && strpos($traf, 'hash_equals') !== false && strpos($traf, 'preg_match(\'/\\A[a-f0-9]{64}\\z/\'') !== false
+                ? $ok('hmac + hash_equals')
+                : $bad('Traffic must authenticate codes with HMAC and compare via hash_equals(), rejecting non-hex signatures');
+        });
+        $add('smoke.traffic.reject_forge', 'Smoke · Traffic', 'Capture ignores unsigned/forged codes', static function () use ($traf, $ok, $bad): array {
+            return strpos($traf, '!self::validSignature($code, $sig)') !== false && strpos($traf, 'Forged/unsigned code') !== false
+                ? $ok('forged requests ignored')
+                : $bad('Traffic::capture must reject codes without a valid signature before recording a visit or setting a cookie');
+        });
+        $add('smoke.traffic.attribution_sig', 'Smoke · Traffic', 'Stored cookie signature re-verified at signup', static function () use ($traf, $ok, $bad): array {
+            return substr_count($traf, '!self::validSignature($code, $sig)') >= 2 && strpos($traf, 'Cookie tampered') !== false
+                ? $ok('signup verifies signature')
+                : $bad('Traffic::attribution must re-verify the cookie signature so a forged cookie is never credited');
+        });
         $add('smoke.traffic.view_copy', 'Smoke · Traffic', 'Traffic page offers one-click link copy', static function () use ($trafficView, $ok, $bad): array {
             return strpos($trafficView, 'navigator.clipboard') !== false ? $ok('copy button') : $bad('traffic view must provide a copy-to-clipboard link button');
         });

@@ -330,6 +330,22 @@ class TestSuite
             }
         });
 
+        // ---------------------------------------------------------------- Traffic
+        $add('traffic.signing', 'Traffic', 'Link codes are signed, tamper-proof serialization', function () {
+            try {
+                $sig = \App\Models\Traffic::signCode('abc123');
+                $valid   = \App\Models\Traffic::validSignature('abc123', $sig);
+                $tampered = \App\Models\Traffic::validSignature('abc124', $sig);
+                $badShape = \App\Models\Traffic::validSignature('abc123', 'not-a-hex-signature');
+                $empty    = \App\Models\Traffic::validSignature('', '');
+                $signedUrl = \App\Models\Traffic::buildUrl('/signup', 'abc123');
+                $urlOk = strpos($signedUrl, 'c=abc123') !== false && strpos($signedUrl, '&s=') !== false;
+                return ['pass' => $valid && !$tampered && !$badShape && !$empty && $urlOk, 'detail' => $valid && $urlOk ? 'signature round-trip OK, tampering rejected' : 'signature verification failed'];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         // ---------------------------------------------------------------- Auto-poster
         $add('autoposter.config', 'Auto Poster', 'Auto-poster config model loads', function () {
             try {

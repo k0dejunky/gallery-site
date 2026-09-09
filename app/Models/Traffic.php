@@ -30,10 +30,14 @@ class Traffic
 
     /**
      * Called from public/index.php for public GET requests. If the request
-     * carries ?c=<code> or any utm_* param, the source is remembered in a
-     * 30-day cookie; a matching active link also gets one daily visit row
-     * (deduped per link/day/visitor). Terminated links record nothing and
-     * expire any previously stored cookie.
+     * carries a ?c=<code> with a valid ?s=<hmac> signature (or any utm_* param),
+     * the source is remembered in a 30-day cookie; a matching active link also
+     * gets one daily visit row (deduped per link/day/visitor). Terminated links
+     * record nothing and expire any previously stored cookie.
+     *
+     * Every admin-generated share link now carries a signed serialization
+     * (?c=<code>&s=<signature>), so a guessed/forged code without a valid
+     * signature is ignored completely: no visit and no attribution cookie.
      */
     public static function capture(Request $request): void
     {
@@ -49,6 +53,7 @@ class Traffic
         }
 
         $code = trim((string) $request->query('c', ''));
+        $sig  = trim((string) $request->query('s', ''));
         $utm  = self::utmFromRequest($request);
 
         if ($code === '' && $utm === []) {
@@ -57,6 +62,12 @@ class Traffic
 
         $link = null;
         if ($code !== '') {
+            if (!self::validSignature($code, $sig)) {
+                // Forged/unsigned code: ignore the request entirely and keep
+                // any legitimate cookie already set by a previous visit.
+                return;
+            }
+
             $link = self::findActiveByCode($code);
             if ($link === null) {
                 // Unknown or terminated code: the link has expired, so drop
@@ -68,6 +79,7 @@ class Traffic
 
         $payload = [
             'c'  => $code,
+            's'  => $sig,
             'u'  => $utm['source'] ?? '',
             'm'  => $utm['medium'] ?? '',
             'ca' => $utm['campaign'] ?? '',
@@ -158,9 +170,16 @@ class Traffic
         }
 
         $code = trim((string) ($data['c'] ?? ''));
+        $sig  = trim((string) ($data['s'] ?? ''));
         $link = null;
 
         if ($code !== '') {
+            if (!self::validSignature($code, $sig)) {
+                // Cookie tampered with a forged code: expire it.
+                self::clearRefCookie();
+                return null;
+            }
+
             $link = self::findActiveByCode($code);
             if ($link === null) {
                 self::clearRefCookie();
@@ -387,12 +406,61 @@ class Traffic
     }
 
     /**
-     * The full shareable URL for a link, e.g.
-     * https://example.com/signup?c=summer2026
+     * The full shareable URL for a link. Every link is serialized with a
+     * signature (?c=<code>&s=<hmac>) so visitors cannot forge traffic by
+     * inventing codes — only links produced by Traffic::buildUrl() count.
+     *
+     * e.g. https://example.com/signup?c=summer2026&s=<64 hex>
      */
     public static function buildUrl(string $targetPath, string $code): string
     {
-        return absolute_url($targetPath) . '?c=' . rawurlencode($code);
+        return absolute_url($targetPath) . '?c=' . rawurlencode($code) . '&s=' . self::signCode($code);
+    }
+
+    // ------------------------------------------------------------------
+    // Link serialization (anti-forgery signature)
+    // ------------------------------------------------------------------
+
+    /**
+     * The HMAC secret used to sign ?c= codes. Prefer APP_KEY when present,
+     * otherwise the media key (both already secret server-side values, never
+     * code-reachable); the signed links can only be forged by someone who
+     * knows this secret.
+     */
+    private static function signatureKey(): string
+    {
+        static $key = null;
+
+        if ($key === null) {
+            $key = env_value('APP_KEY', '');
+            if ($key === '') {
+                $key = env_value('GALLERY_MEDIA_KEY', '');
+            }
+        }
+
+        return (string) $key;
+    }
+
+    /** HMAC-SHA256 signature for a ?c= code, as a 64-char hex string. */
+    public static function signCode(string $code): string
+    {
+        return hash_hmac('sha256', 'traffic-link:' . $code, self::signatureKey());
+    }
+
+    /**
+     * True when $signature authenticates $code. Compares in constant time
+     * and rejects anything that is not a 64-char hex signature.
+     */
+    public static function validSignature(string $code, string $signature): bool
+    {
+        if ($code === '' || $signature === '') {
+            return false;
+        }
+        if (preg_match('/\A[a-f0-9]{64}\z/', $signature) !== 1) {
+            return false;
+        }
+
+        return hash_equals(self::signCode($code), $signature);
     }
 
     /**
