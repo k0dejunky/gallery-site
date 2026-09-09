@@ -415,6 +415,13 @@ class SmokeChecks
                 ? $ok('validated timezone')
                 : $bad('auto-poster config must persist a validated timezone');
         });
+        $add('smoke.ap.log_scope', 'Smoke · Auto Poster', 'Log scoping maps x→twitter and keeps twitter/reddit', static function () use ($apc, $ok, $bad): array {
+            return strpos($apc, '$platform = $platform === \'x\' ? \'twitter\' : $platform;') !== false
+                && strpos($apc, "function logEntries(int \$limit = 100, ?string \$platform = null)") !== false
+                && strpos($apc, "function clearLog(?string \$platform = null)") !== false
+                ? $ok('log + clear scoped per platform')
+                : $bad('auto-poster logEntries/clearLog must map platform "x"→"twitter" and keep "twitter"/"reddit" unchanged, or the X page shows the other log');
+        });
         $twc = $read("$root/app/Models/TwitterClient.php");
         $add('smoke.ap.twitter_oauth1', 'Smoke · Auto Poster', 'X uploads signed with OAuth1.0a', static function () use ($twc, $ok, $bad): array {
             return strpos($twc, 'oauth1Header') !== false && strpos($twc, 'HMAC-SHA1') !== false

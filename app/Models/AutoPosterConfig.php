@@ -194,7 +194,7 @@ class AutoPosterConfig
         $bind  = [];
 
         if ($platform !== null && $platform !== '') {
-            $platform = $platform === 'x' ? 'twitter' : 'reddit';
+            $platform = $platform === 'x' ? 'twitter' : $platform;
             $where    = 'platform = ?';
             $bind[]   = $platform;
         }
@@ -211,7 +211,7 @@ class AutoPosterConfig
     public static function clearLog(?string $platform = null): void
     {
         if ($platform !== null && $platform !== '') {
-            $platform = $platform === 'x' ? 'twitter' : 'reddit';
+            $platform = $platform === 'x' ? 'twitter' : $platform;
             Database::run('DELETE FROM auto_poster_log WHERE platform = ?', [$platform]);
             return;
         }

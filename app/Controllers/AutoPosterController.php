@@ -391,7 +391,7 @@ class AutoPosterController extends Controller
 $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
             ? 'Posted to X: ' . ($result['url'] ?? '')
             : (empty($result['skipped']) ? 'Post failed: ' : 'Not sent — ') . ($result['error'] ?? 'Unknown error'));
-        $this->redirectItemPlatform($id);
+        $this->redirectPath('x');
     }
 
     /**
