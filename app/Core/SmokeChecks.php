@@ -248,6 +248,21 @@ class SmokeChecks
                 ? $ok('countdown present')
                 : $bad('auto-poster queue must show a live months/days/hours/minutes/seconds countdown');
         });
+        $add('smoke.ap.requeue_schedule', 'Smoke · Auto Poster', 'Repost/reschedule rows always get a real schedule', static function () use ($apq, $ok, $bad): array {
+            return strpos($apq, 'function requeueFrom') !== false && strpos($apq, '$scheduled = self::defaultSchedule();') !== false
+                ? $ok('defaults to +1h, never NULL')
+                : $bad('AutoPostQueue::requeueFrom must default empty/invalid schedules to defaultSchedule() so reposts are never queued with "no time"');
+        });
+        $add('smoke.ap.recent_prefill', 'Smoke · Auto Poster', 'Recent-posts Reschedule picker prefills +1h, not the old time', static function () use ($apv, $ok, $bad): array {
+            return substr_count($apv, '\App\Models\AutoPostQueue::defaultSchedule()') >= 2
+                ? $ok('both recent-post schedulers prefill default')
+                : $bad('recent-posts Reschedule/Repost pickers must prefill AutoPostQueue::defaultSchedule() (+1h) instead of the item\'s stale scheduled_at');
+        });
+        $add('smoke.ap.post_guarded', 'Smoke · Auto Poster', 'Client exceptions mark the row failed, never left queued', static function () use ($apq, $ok, $bad): array {
+            return strpos($apq, 'catch (\Throwable $e)') !== false && strpos($apq, 'thrown by the platform client') !== false
+                ? $ok('guard present')
+                : $bad('AutoPostQueue::post must catch platform-client exceptions and markFailed() them instead of leaving the row queued');
+        });
         $add('smoke.ap.view_log', 'Smoke · Auto Poster', 'Posting log renders pills + relative times', static function () use ($apv, $ok, $bad): array {
             return strpos($apv, 'ap-log') !== false && strpos($apv, 'ap-pill') !== false
                 && strpos($apv, 'ap-time-relative') !== false && strpos($apv, 'data-uts') !== false

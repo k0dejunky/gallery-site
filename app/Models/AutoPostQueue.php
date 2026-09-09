@@ -517,9 +517,11 @@ class AutoPostQueue
      * Copy a recorded post (posted/failed/skipped row) into a fresh queued
      * row so it can be reposted or rescheduled, preserving its text, media
      * set, gallery and platform. Pass an optional $text to override the stored
-     * wording (e.g. to edit a failed post before reposting). An empty schedule
-     * means "due immediately". Returns the new queue id, or 0 when the source
-     * row is missing.
+     * wording (e.g. to edit a failed post before reposting). An empty or
+     * invalid schedule falls back to the standard default (an hour from now),
+     * so a reposted/rescheduled row always lands in the queue with a real
+     * publish time. Returns the new queue id, or 0 when the source row is
+     * missing.
      */
     public static function requeueFrom(int $sourceId, ?string $scheduledAt = null, ?string $text = null): int
     {
@@ -532,7 +534,10 @@ class AutoPostQueue
             return 0;
         }
 
-        $scheduled = null;
+        // Never default to a NULL schedule: without one the worker treats the
+        // row as due immediately (posts "now") and the admin sees a blank
+        // schedule in the queue. Default to the standard one-hour-ahead time.
+        $scheduled = self::defaultSchedule();
         if (trim((string) $scheduledAt) !== '') {
             $scheduled = self::normalizeSchedule($scheduledAt) ?? self::defaultSchedule();
         }
@@ -861,11 +866,19 @@ class AutoPostQueue
 
         $config   = AutoPosterConfig::all();
 
-        $result = match ($platform) {
-            'twitter' => (new TwitterClient($config['twitter']))->post((string) $item['text'], $media),
-            'reddit'  => RedditBridge::publish((string) $item['text'], $media, $config['reddit']),
-            default   => ['ok' => false, 'error' => 'Unsupported platform: ' . $platform],
-        };
+        // A throwing platform client (network error, bad response, encoding
+        // failure) must never leave the row sitting 'queued' with no result —
+        // it would then be silently published by the next worker run. Record
+        // it as failed so it shows up in Recent posts for an explicit retry.
+        try {
+            $result = match ($platform) {
+                'twitter' => (new TwitterClient($config['twitter']))->post((string) $item['text'], $media),
+                'reddit'  => RedditBridge::publish((string) $item['text'], $media, $config['reddit']),
+                default   => ['ok' => false, 'error' => 'Unsupported platform: ' . $platform],
+            };
+        } catch (\Throwable $e) {
+            $result = ['ok' => false, 'error' => $e->getMessage() . ' (thrown by the platform client)'];
+        }
 
         if ($result['ok']) {
             $url = (string) ($result['url'] ?? '');

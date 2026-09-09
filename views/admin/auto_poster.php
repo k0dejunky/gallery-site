@@ -202,7 +202,7 @@ $twitter = $config['twitter'] ?? [];
                                     <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
                                 </form>
                                 <input type="datetime-local" name="scheduled_at" form="ap-edit-<?= (int) $rp['id'] ?>"
-                                       value="<?= e(\App\Models\AutoPostQueue::displaySchedule($rp['scheduled_at'] ?? null)) ?>"
+                                       value="<?= e(\App\Models\AutoPostQueue::defaultSchedule()) ?>"
                                        style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;width:9.5rem;"
                                        aria-label="Schedule repost time for post #<?= (int) $rp['id'] ?>">
                                 <button type="submit" name="action" value="repost" form="ap-edit-<?= (int) $rp['id'] ?>"
@@ -220,7 +220,7 @@ $twitter = $config['twitter'] ?? [];
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
                                     <input type="datetime-local" name="scheduled_at"
-                                           value="<?= e(\App\Models\AutoPostQueue::displaySchedule($rp['scheduled_at'] ?? null)) ?>"
+                                           value="<?= e(\App\Models\AutoPostQueue::defaultSchedule()) ?>"
                                            style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;width:9.5rem;"
                                            aria-label="Schedule repost time for post #<?= (int) $rp['id'] ?>">
                                     <button type="submit" class="btn btn-sm" title="Queue to publish again at the chosen time">Reschedule</button>
