@@ -62,7 +62,10 @@ $twitter = $config['twitter'] ?? [];
 <?php // ----- Pending queue ----- ?>
 <div class="stats-panel" style="margin-bottom:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
-        <h2>Posting queue</h2>
+        <div style="display:flex;align-items:center;gap:.5rem;">
+            <h2>Posting queue</h2>
+            <button type="button" class="btn btn-sm ap-queue-toggle" data-target="ap-queue-body" aria-expanded="true">Collapse</button>
+        </div>
         <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
             <span class="muted" style="font-size:.85rem;">
                 <?= number_format((int) $queueCounts['queued']) ?> queued &middot;
@@ -79,6 +82,7 @@ $twitter = $config['twitter'] ?? [];
             <?php endif; ?>
         </div>
     </div>
+    <div id="ap-queue-body">
     <?php if (empty($queue)): ?>
         <p class="muted">The queue is empty — add a recommended post above.</p>
     <?php else: ?>
@@ -141,6 +145,7 @@ $twitter = $config['twitter'] ?? [];
             </tbody>
         </table>
     <?php endif; ?>
+    </div>
 </div>
 
 <?php // ----- Recent posts: repost or reschedule a past post ----- ?>
@@ -597,6 +602,19 @@ $twitter = $config['twitter'] ?? [];
         }
         render();
         setInterval(render, 30000);
+    })();
+// Collapse/expand the Posting queue section.
+    (function () {
+        document.querySelectorAll('.ap-queue-toggle').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var body = document.getElementById(btn.getAttribute('data-target'));
+                if (!body) { return; }
+                var collapsed = body.style.display === 'none';
+                body.style.display = collapsed ? '' : 'none';
+                btn.textContent = collapsed ? 'Collapse' : 'Show queue';
+                btn.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
+            });
+        });
     })();
 })();
 </script>

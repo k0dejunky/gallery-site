@@ -380,11 +380,13 @@ class AutoPostQueue
 
     /**
      * Queued (awaiting-publish) posts, soonest-to-post first, joined to the
-     * cover photo and gallery for the media/thumbnail the view needs.
+     * cover photo and gallery for the media/thumbnail the view needs. By
+     * default every queued row is returned; pass a positive $limit to cap the
+     * number of rows (e.g. for the worker's bounded post-all burst).
      */
-    public static function queued(int $limit = 50): array
+    public static function queued(int $limit = 0): array
     {
-        $limit = max(1, min(200, $limit));
+        $limitSql = $limit > 0 ? ' LIMIT ' . max(1, $limit) : '';
 
         return Database::run(
             "SELECT q.*, p.filename, p.is_video AS is_photo_video,
@@ -393,8 +395,8 @@ class AutoPostQueue
              LEFT JOIN photos p ON p.id = q.photo_id
              LEFT JOIN galleries g ON g.id = q.gallery_id
              WHERE q.status = 'queued'
-             ORDER BY COALESCE(q.scheduled_at, q.created_at) ASC, q.id ASC
-             LIMIT $limit"
+             ORDER BY COALESCE(q.scheduled_at, q.created_at) ASC, q.id ASC"
+            . $limitSql
         )->fetchAll();
     }
 

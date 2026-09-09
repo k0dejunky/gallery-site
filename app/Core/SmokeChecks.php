@@ -263,6 +263,16 @@ class SmokeChecks
                 ? $ok('guard present')
                 : $bad('AutoPostQueue::post must catch platform-client exceptions and markFailed() them instead of leaving the row queued');
         });
+        $add('smoke.ap.queue_all', 'Smoke · Auto Poster', 'Queue lists every queued row by default', static function () use ($apq, $ok, $bad): array {
+            return strpos($apq, 'public static function queued(int $limit = 0)') !== false
+                ? $ok('no default cap')
+                : $bad('AutoPostQueue::queued must default to returning every queued row (0 = no limit)');
+        });
+        $add('smoke.ap.queue_collapse', 'Smoke · Auto Poster', 'Posting queue section is collapsable', static function () use ($apv, $ok, $bad): array {
+            return strpos($apv, 'ap-queue-toggle') !== false && strpos($apv, 'ap-queue-body') !== false
+                ? $ok('toggle wired')
+                : $bad('auto_poster view must render a collapse toggle for the Posting queue section');
+        });
         $add('smoke.ap.view_log', 'Smoke · Auto Poster', 'Posting log renders pills + relative times', static function () use ($apv, $ok, $bad): array {
             return strpos($apv, 'ap-log') !== false && strpos($apv, 'ap-pill') !== false
                 && strpos($apv, 'ap-time-relative') !== false && strpos($apv, 'data-uts') !== false

@@ -31,7 +31,7 @@ class AutoPosterController extends Controller
             'config'        => AutoPosterConfig::all(),
             'log'           => AutoPosterConfig::logEntries(),
             'recommended'   => AutoPostQueue::recommendations(8),
-            'queue'         => AutoPostQueue::queued(50),
+            'queue'         => AutoPostQueue::queued(),
             'queueCounts'   => AutoPostQueue::statusCounts(),
             'recentPosts'   => AutoPostQueue::recentPosts(20),
         ]);
