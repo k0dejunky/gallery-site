@@ -595,6 +595,13 @@ class SmokeChecks
                 ? $ok('card wired to $apiHealth')
                 : $bad('views/admin/system.php must render the API health card with per-API Test buttons and a Test all action');
         });
+        $add('smoke.apihealth.table_fit', 'Smoke · API health', 'API health table cannot overflow its card', static function () use ($sysView, $ok, $bad): array {
+            return strpos($sysView, 'sys-api-table') !== false
+                && strpos($sysView, 'table-layout: fixed') !== false
+                && strpos($sysView, 'overflow-wrap: anywhere') !== false
+                ? $ok('fixed layout + long-token wrapping')
+                : $bad('the API health table must use a fixed layout with overflow-wrap so long probe summaries never widen the card');
+        });
 
         // ------------------------------------------------- Security & Ops
         $health = $read("$root/app/Controllers/HealthController.php");

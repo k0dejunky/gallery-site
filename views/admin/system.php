@@ -12,6 +12,13 @@
     /* Table-backed cards get their own full-width row below the compact ones */
     .sys-stack { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
     .sys-stack .sys-card { width: 100%; }
+    /* API health table: fixed layout so long probe summaries never widen the card */
+    .sys-api-table { table-layout: fixed; }
+    .sys-api-table th, .sys-api-table td { overflow-wrap: anywhere; word-break: break-word; vertical-align: top; }
+    .sys-api-table .ap-integ-col { width: 26%; }
+    .sys-api-table .ap-status-col { width: 6.5rem; }
+    .sys-api-table .ap-summary-col { width: 50%; }
+    .sys-api-table .ap-test-col { width: 5.5rem; white-space: nowrap; text-align: right; }
 </style>
 
 <p class="muted">Disk free: <b><?= $diskFree !== false ? number_format((float) $diskFree / 1048576) . ' MB' : 'unknown' ?></b></p>
@@ -158,15 +165,15 @@
     <!-- API health -->
     <div class="sys-card" id="api-health">
         <h2>API health</h2>
-        <table style="width:100%;font-size:.85rem;">
+        <table class="sys-api-table" style="width:100%;font-size:.85rem;">
             <thead>
-                <tr><th style="text-align:left;">Integration</th><th style="text-align:left;">Status</th><th style="text-align:left;">Detail</th><th></th></tr>
+                <tr><th class="ap-integ-col" style="text-align:left;">Integration</th><th class="ap-status-col" style="text-align:left;">Status</th><th class="ap-summary-col" style="text-align:left;">Detail</th><th class="ap-test-col"></th></tr>
             </thead>
             <tbody>
                 <?php foreach ($apiHealth as $api): ?>
                     <tr>
-                        <td><?= e((string) $api['label']) ?></td>
-                        <td>
+                        <td class="ap-integ-col"><?= e((string) $api['label']) ?></td>
+                        <td class="ap-status-col">
                             <?php if ($api['status'] === 'ok'): ?>
                                 <span class="sys-ok">&#10003; ok</span>
                             <?php elseif ($api['status'] === 'bad'): ?>
@@ -177,8 +184,8 @@
                                 <span class="muted">untested</span>
                             <?php endif; ?>
                         </td>
-                        <td class="muted" style="font-size:.78rem;"><?= e((string) $api['summary']) ?></td>
-                        <td style="white-space:nowrap;">
+                        <td class="ap-summary-col muted" style="font-size:.78rem;"><?= e((string) $api['summary']) ?></td>
+                        <td class="ap-test-col">
                             <form class="inline" method="post" action="<?= url('/admin/system/api-test/' . rawurlencode((string) $api['id'])) ?>">
                                 <?= csrf_field() ?>
                                 <button class="btn btn-sm" type="submit">Test</button>
