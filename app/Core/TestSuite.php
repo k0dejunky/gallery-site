@@ -372,9 +372,9 @@ class TestSuite
             }
         });
 
-        $add('autoposter.template', 'Auto Poster', 'Editable template controls post wording, link and hashtag count', function () {
+        $add('autoposter.template', 'Auto Poster', 'Per-platform editable templates control post wording, link and hashtag count', function () {
             try {
-                $default = \App\Models\AutoPostQueue::templateSettings();
+                $default = \App\Models\AutoPostQueue::templateSettings('x');
                 $tags    = ['Amateur', 'Redhead', 'nipples', 'Tits'];
                 $gallery = ['gallery_title' => 'Summer Set', 'caption' => 'Fresh uploads'];
 
@@ -402,7 +402,15 @@ class TestSuite
                 $outZero = \App\Models\AutoPostQueue::buildText($gallery, $tags, $zero);
                 $noTags  = strpos($outZero, '#') === false && strpos($outZero, '(no tags)') !== false;
 
-                return ['pass' => $hasTitle && $hasDesc && $hasLink && $noBanned && $length && $noTags && $tagCount === 2,
+                // Both platforms expose their own settings; a Reddit-flavoured
+                // draft renders the Reddit template's wording.
+                $reddit = \App\Models\AutoPostQueue::templateSettings('reddit');
+                $reddit['pattern'] = 'From {title}: {description} — posted at amethyst2213.com [oc] {hashtags}';
+                $reddit['max_tags'] = 3;
+                $outReddit = \App\Models\AutoPostQueue::buildText($gallery, $tags, $reddit);
+                $redditOk  = strpos($outReddit, '[oc]') !== false && preg_match_all('/#\w+/', $outReddit) === 3;
+
+                return ['pass' => $hasTitle && $hasDesc && $hasLink && $noBanned && $length && $noTags && $tagCount === 2 && $redditOk,
                     'detail' => json_encode(['tags' => $tagCount, 'output' => mb_substr($out, 0, 90)])];
             } catch (\Throwable $ex) {
                 return ['pass' => false, 'detail' => $ex->getMessage()];

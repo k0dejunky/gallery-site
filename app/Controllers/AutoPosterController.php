@@ -28,41 +28,61 @@ class AutoPosterController extends Controller
     public function index(): void
     {
         $this->viewAdmin('auto_poster', [
-            'config'           => AutoPosterConfig::all(),
-            'log'              => AutoPosterConfig::logEntries(),
-            'recommended'      => AutoPostQueue::recommendations(8),
-            'queue'            => AutoPostQueue::queued(),
-            'queueCounts'      => AutoPostQueue::statusCounts(),
-            'recentPosts'      => AutoPostQueue::recentPosts(20),
-            'apTemplate'       => AutoPostQueue::templateSettings(),
-            'templatePreview'  => AutoPostQueue::buildText([
+            'config'            => AutoPosterConfig::all(),
+            'log'               => AutoPosterConfig::logEntries(),
+            'recommended'       => AutoPostQueue::recommendations(8),
+            'queue'             => AutoPostQueue::queued(),
+            'queueCounts'       => AutoPostQueue::statusCounts(),
+            'recentPosts'       => AutoPostQueue::recentPosts(20),
+            'apTemplateX'       => AutoPostQueue::templateSettings('x'),
+            'apTemplateReddit'  => AutoPostQueue::templateSettings('reddit'),
+            'templatePreviewX'  => AutoPostQueue::buildText([
                 'gallery_title' => 'Example gallery',
                 'caption'       => 'Fresh uploads',
-            ], ['amateur', 'redhead', 'new']),
+            ], ['amateur', 'redhead', 'new'], AutoPostQueue::templateSettings('x')),
+            'templatePreviewReddit' => AutoPostQueue::buildText([
+                'gallery_title' => 'Example gallery',
+                'caption'       => 'Fresh uploads',
+            ], ['amateur', 'redhead', 'new'], AutoPostQueue::templateSettings('reddit')),
         ]);
     }
 
     /**
-     * Save the auto-post template settings that shape the wording, links,
-     * hashtag count and other generation knobs of every recommended post.
+     * Save both platforms' auto-post template settings that shape the wording,
+     * links, hashtag count and other generation knobs of every post. The X
+     * ("twitter") panel drives the recommended-posts queue; the Reddit panel
+     * drives Reddit post drafts. Each save preserves the other platform's
+     * template and the stored credentials.
      */
     public function saveTemplate(): void
     {
         $post = fn (string $key, string $default = ''): string => trim((string) $this->request->post($key, $default));
 
         AutoPosterConfig::saveTemplate([
-            'pattern'          => $post('pattern'),
-            'max_tags'         => $post('max_tags', '20'),
-            'max_length'       => $post('max_length', '280'),
-            'schedule_minutes' => $post('schedule_minutes', '60'),
-            'recent_days'      => $post('recent_days', '14'),
-            'max_media'        => $post('max_media', '4'),
-            'blur_percent'     => $post('blur_percent', '85'),
-            'screenshots'      => $post('screenshots', '3'),
-            'banned_words'     => $post('banned_words'),
-        ]);
+            'pattern'          => $post('pattern_x'),
+            'max_tags'         => $post('max_tags_x', '20'),
+            'max_length'       => $post('max_length_x', '280'),
+            'schedule_minutes' => $post('schedule_minutes_x', '60'),
+            'recent_days'      => $post('recent_days_x', '14'),
+            'max_media'        => $post('max_media_x', '4'),
+            'blur_percent'     => $post('blur_percent_x', '85'),
+            'screenshots'      => $post('screenshots_x', '3'),
+            'banned_words'     => $post('banned_words_x'),
+        ], 'x');
 
-        $this->flash('success', 'Auto-post template saved — new recommendations use it.');
+        AutoPosterConfig::saveTemplate([
+            'pattern'          => $post('pattern_reddit'),
+            'max_tags'         => $post('max_tags_reddit', '20'),
+            'max_length'       => $post('max_length_reddit', '280'),
+            'schedule_minutes' => $post('schedule_minutes_reddit', '60'),
+            'recent_days'      => $post('recent_days_reddit', '14'),
+            'max_media'        => $post('max_media_reddit', '4'),
+            'blur_percent'     => $post('blur_percent_reddit', '85'),
+            'screenshots'      => $post('screenshots_reddit', '3'),
+            'banned_words'     => $post('banned_words_reddit'),
+        ], 'reddit');
+
+        $this->flash('success', 'Auto-post templates saved — new posts use them.');
         $this->redirect('/admin/auto-poster');
     }
 

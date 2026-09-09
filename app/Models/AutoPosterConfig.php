@@ -26,29 +26,34 @@ class AutoPosterConfig
 
     /**
      * Load the saved credentials. Returns an array with 'reddit' and 'twitter'
-     * sub-arrays (each may be empty), the validated 'timezone' and the 'template'
-     * settings used to generate recommended post text (may be empty, in which
-     * case the encoder falls back to its built-in defaults).
+     * sub-arrays (each may be empty), the validated 'timezone' and the separate
+     * 'template_x' / 'template_reddit' settings used to generate post text per
+     * platform (each may be empty, in which case the encoder falls back to its
+     * built-in defaults). A legacy single 'template' key is honoured as the
+     * starting point for both platforms until each is saved separately.
      */
     public static function all(): array
     {
         $path = self::file();
 
         if (!is_file($path)) {
-            return ['reddit' => [], 'twitter' => [], 'timezone' => 'UTC', 'template' => []];
+            return ['reddit' => [], 'twitter' => [], 'timezone' => 'UTC', 'template_x' => [], 'template_reddit' => []];
         }
 
         $data = json_decode((string) file_get_contents($path), true);
 
         if (!is_array($data)) {
-            return ['reddit' => [], 'twitter' => [], 'timezone' => 'UTC', 'template' => []];
+            return ['reddit' => [], 'twitter' => [], 'timezone' => 'UTC', 'template_x' => [], 'template_reddit' => []];
         }
 
+        $legacy = is_array($data['template'] ?? null) ? $data['template'] : [];
+
         return [
-            'reddit'   => is_array($data['reddit'] ?? null) ? $data['reddit'] : [],
-            'twitter'  => is_array($data['twitter'] ?? null) ? $data['twitter'] : [],
-            'timezone' => self::validatedTimezone((string) ($data['timezone'] ?? 'UTC')),
-            'template' => is_array($data['template'] ?? null) ? $data['template'] : [],
+            'reddit'          => is_array($data['reddit'] ?? null) ? $data['reddit'] : [],
+            'twitter'         => is_array($data['twitter'] ?? null) ? $data['twitter'] : [],
+            'timezone'        => self::validatedTimezone((string) ($data['timezone'] ?? 'UTC')),
+            'template_x'      => is_array($data['template_x'] ?? null) ? $data['template_x'] : $legacy,
+            'template_reddit' => is_array($data['template_reddit'] ?? null) ? $data['template_reddit'] : $legacy,
         ];
     }
 
@@ -61,11 +66,12 @@ class AutoPosterConfig
     }
 
     /**
-     * Persist the credentials file. Creates storage/ if needed. When no template
-     * is passed the currently saved template settings are carried over, so a
-     * credentials-only save never wipes the post template.
+     * Persist the credentials file. Creates storage/ if needed. When a template
+     * argument is null the corresponding currently saved template is carried
+     * over, so a credentials-only save never wipes either platform's post
+     * template.
      */
-    public static function save(array $reddit, array $twitter, string $timezone = 'UTC', ?array $template = null): void
+    public static function save(array $reddit, array $twitter, string $timezone = 'UTC', ?array $templateX = null, ?array $templateReddit = null): void
     {
         $path = self::file();
         $dir  = dirname($path);
@@ -74,27 +80,45 @@ class AutoPosterConfig
             mkdir($dir, 0775, true);
         }
 
-        if ($template === null) {
-            $template = is_array(self::all()['template'] ?? null) ? self::all()['template'] : [];
-        }
+        $current = self::all();
 
         file_put_contents($path, json_encode([
-            'reddit'   => $reddit,
-            'twitter'  => $twitter,
-            'timezone' => self::validatedTimezone($timezone),
-            'template' => $template,
+            'reddit'          => $reddit,
+            'twitter'         => $twitter,
+            'timezone'        => self::validatedTimezone($timezone),
+            'template_x'      => $templateX ?? ($current['template_x'] ?? []),
+            'template_reddit' => $templateReddit ?? ($current['template_reddit'] ?? []),
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
-     * Persist the auto-post template settings, preserving credentials and the
-     * timezone. The encoder reads these to build recommended post text.
+     * Persist one platform's auto-post template settings, preserving
+     * credentials, the timezone and the other platform's template. Valid
+     * platforms: 'x' (alias 'twitter') and 'reddit'.
      */
-    public static function saveTemplate(array $template): void
+    public static function saveTemplate(array $template, string $platform = 'x'): void
     {
         $config = self::all();
 
-        self::save($config['reddit'], $config['twitter'], (string) $config['timezone'], $template);
+        if (strtolower($platform) === 'reddit') {
+            self::save(
+                $config['reddit'],
+                $config['twitter'],
+                (string) $config['timezone'],
+                $config['template_x'] ?? [],
+                $template
+            );
+
+            return;
+        }
+
+        self::save(
+            $config['reddit'],
+            $config['twitter'],
+            (string) $config['timezone'],
+            $template,
+            $config['template_reddit'] ?? []
+        );
     }
 
     /**

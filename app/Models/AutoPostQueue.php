@@ -111,16 +111,20 @@ class AutoPostQueue
     }
 
     /**
-     * The auto-post template settings (editable on the Auto Poster page),
-     * stored in the config file and filled with the class constants whenever a
-     * value is missing or out of range. Everything below is changeable without
-     * code edits: the post pattern/wording/link, how many category hashtags are
-     * used, the character budget, the default schedule lead time, the recent
-     * window, media count, blur strength, video screenshots and banned words.
+     * The per-platform auto-post template settings (editable on the Auto Poster
+     * page under the X and Reddit tabs), stored in the config file and filled
+     * with the class constants whenever a value is missing or out of range.
+     * Everything below is changeable without code edits: the post
+     * pattern/wording/link, how many category hashtags are used, the character
+     * budget, the default schedule lead time, the recent window, media count,
+     * blur strength, video screenshots and banned words.
+     *
+     * @param string $platform 'x' (or 'twitter') or 'reddit'
      */
-    public static function templateSettings(): array
+    public static function templateSettings(string $platform = 'x'): array
     {
-        $t = is_array(AutoPosterConfig::all()['template'] ?? null) ? AutoPosterConfig::all()['template'] : [];
+        $platform = self::normalizePlatform($platform);
+        $t = is_array(AutoPosterConfig::all()['template_' . $platform] ?? null) ? AutoPosterConfig::all()['template_' . $platform] : [];
 
         return [
             'pattern'          => self::clampPattern((string) ($t['pattern'] ?? '')),
@@ -136,14 +140,24 @@ class AutoPostQueue
     }
 
     /**
-     * The banned-word list in effect: the configured words when any were saved,
-     * otherwise the built-in default.
+     * Canonicalise a platform name for the template store. Queue rows use
+     * 'twitter'/'reddit'; the template keys are 'x'/'reddit'.
+     */
+    private static function normalizePlatform(string $platform): string
+    {
+        return strtolower($platform) === 'reddit' ? 'reddit' : 'x';
+    }
+
+    /**
+     * The banned-word list in effect for the X template (the recommended-posts
+     * queue): the configured words when any were saved, otherwise the built-in
+     * default.
      *
      * @return list<string>
      */
     private static function bannedWords(): array
     {
-        $words = self::templateSettings()['banned_words'];
+        $words = self::templateSettings('x')['banned_words'];
 
         return $words !== [] ? $words : self::BANNED_WORDS;
     }
@@ -221,7 +235,7 @@ class AutoPostQueue
              JOIN gallery_photo gp ON gp.gallery_id = g.id
              JOIN photos p ON p.id = gp.photo_id
              WHERE g.deleted_at IS NULL
-               AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) self::templateSettings()['recent_days'] . " DAY)
+               AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) self::templateSettings('x')['recent_days'] . " DAY)
                AND NOT EXISTS (SELECT 1 FROM auto_poster_queue q WHERE q.gallery_id = g.id)
              GROUP BY g.id
              ORDER BY newest_media_at DESC, g.id DESC
@@ -254,14 +268,14 @@ class AutoPostQueue
      */
     public static function galleryMedia(int $galleryId, ?int $limit = null): array
     {
-        $limit = max(1, min((int) self::templateSettings()['max_media'], $limit ?? (int) self::templateSettings()['max_media']));
+        $limit = max(1, min((int) self::templateSettings('x')['max_media'], $limit ?? (int) self::templateSettings('x')['max_media']));
 
         $photos = Database::run(
             "SELECT p.id, p.filename, p.is_video, p.caption
              FROM photos p
              JOIN gallery_photo gp ON gp.photo_id = p.id
              WHERE gp.gallery_id = ?
-               AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) self::templateSettings()['recent_days'] . " DAY)
+               AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) self::templateSettings('x')['recent_days'] . " DAY)
              ORDER BY p.created_at DESC, p.id DESC
              LIMIT $limit",
             [$galleryId]
@@ -285,7 +299,7 @@ class AutoPostQueue
      */
     public static function categoryHashtags(int $galleryId, ?int $limit = null): array
     {
-        $limit = max(0, min(self::MAX_TAGS, $limit ?? (int) self::templateSettings()['max_tags']));
+        $limit = max(0, min(self::MAX_TAGS, $limit ?? (int) self::templateSettings('x')['max_tags']));
         $tags  = [];
 
         foreach (Gallery::categories($galleryId) as $category) {
@@ -315,7 +329,7 @@ class AutoPostQueue
      */
     public static function buildText(array $gallery, array $tags = [], ?array $settings = null): string
     {
-        $settings = $settings ?? self::templateSettings();
+        $settings = $settings ?? self::templateSettings('x');
 
         $pattern = self::composePattern($settings['pattern'], $gallery);
 
@@ -436,7 +450,7 @@ class AutoPostQueue
     {
         $from = $from ?? time();
         $dt   = (new DateTime('@' . $from))->setTimezone(self::schedulerTimezone());
-        $dt->modify('+' . (int) self::templateSettings()['schedule_minutes'] . ' minutes');
+        $dt->modify('+' . (int) self::templateSettings('x')['schedule_minutes'] . ' minutes');
 
         return $dt->format('Y-m-d\TH:i');
     }
@@ -978,14 +992,14 @@ class AutoPostQueue
             // so a few random frames are captured, blurred with the same
             // preview blur, and posted as images instead of the video file.
             if (!$isVideo) {
-                $copy = create_blurred_copy($path, (int) self::templateSettings()['blur_percent']);
+                $copy = create_blurred_copy($path, (int) self::templateSettings($platform)['blur_percent']);
 
                 if ($copy !== null) {
                     $blurredTmp[] = $copy;
                     $path         = $copy;
                 }
             } else {
-                 $frames = self::videoScreenshots($path, (int) self::templateSettings()['screenshots']);
+                 $frames = self::videoScreenshots($path, (int) self::templateSettings($platform)['screenshots'], $platform);
 
                 if ($frames !== []) {
                     foreach ($frames as $frame) {
@@ -1059,7 +1073,7 @@ class AutoPostQueue
      *
      * @return list<string>
      */
-    private static function videoScreenshots(string $path, int $count = 3): array
+    private static function videoScreenshots(string $path, int $count = 3, string $platform = 'x'): array
     {
         $ffmpeg  = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : null;
         $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : null;
@@ -1112,7 +1126,7 @@ class AutoPostQueue
             exec($cmd, $o, $rc);
 
             if ($rc === 0 && is_file($tmp) && (int) filesize($tmp) > 0) {
-                $blurred = create_blurred_copy($tmp, (int) self::templateSettings()['blur_percent']);
+                $blurred = create_blurred_copy($tmp, (int) self::templateSettings($platform)['blur_percent']);
                 @unlink($tmp);
 
                 if ($blurred !== null) {
