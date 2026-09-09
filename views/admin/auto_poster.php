@@ -1,119 +1,88 @@
-<?php $title = 'Auto Poster'; ?>
 <?php
-$reddit  = $config['reddit'] ?? [];
-$twitter = $config['twitter'] ?? [];
+$isReddit     = ($platform ?? 'x') === 'reddit';
+$platformName = $isReddit ? 'Reddit' : 'X (Twitter)';
+$title        = 'Auto Poster — ' . ($isReddit ? 'Reddit' : 'X');
+$reddit       = $config['reddit'] ?? [];
+$twitter      = $config['twitter'] ?? [];
 ?>
 
-<?php // ----- Auto-post template: separate blueprints for X and Reddit ----- ?>
+<?php // ----- Platform switch: the whole page is scoped to X or Reddit ----- ?>
 <div class="stats-panel" style="margin-bottom:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
-        <h2>Auto-post template</h2>
-        <span class="muted" style="font-size:.85rem;">Separate blueprints for <strong>X</strong> and <strong>Reddit</strong>. Use the selector to switch, then edit the wording, link and how many hashtags are used.</span>
+        <h2>Auto Poster</h2>
+        <div role="tablist" aria-label="Platform" id="ap-platform-switch" style="display:inline-flex;gap:.25rem;border:1px solid #d1d5db;border-radius:8px;padding:.25rem;">
+            <a role="tab" id="ap-tab-x" aria-selected="<?= $isReddit ? 'false' : 'true' ?>" href="<?= url('/admin/auto-poster') ?>"
+               style="padding:.35rem .9rem;border-radius:6px;text-decoration:none;font-size:.9rem;<?= $isReddit ? 'color:#374151;' : 'background:#4f46e5;color:#fff;font-weight:600;' ?>">X (Twitter)</a>
+            <a role="tab" id="ap-tab-reddit" aria-selected="<?= $isReddit ? 'true' : 'false' ?>" href="<?= url('/admin/auto-poster/reddit') ?>"
+               style="padding:.35rem .9rem;border-radius:6px;text-decoration:none;font-size:.9rem;<?= $isReddit ? 'background:#4f46e5;color:#fff;font-weight:600;' : 'color:#374151;' ?>">Reddit</a>
+        </div>
     </div>
+    <p class="muted" style="font-size:.85rem;margin:0;">
+        <?= $isReddit
+            ? 'Everything here belongs to Reddit: its post template, credentials, Post to Reddit, the Reddit queue and the Reddit posting log.'
+            : 'Everything here belongs to X (Twitter): its post template, credentials, recommended posts, the X queue and the X posting log.' ?>
+    </p>
+</div>
 
-    <div role="tablist" aria-label="Platform" id="ap-template-switch" style="display:inline-flex;gap:.25rem;margin-top:.75rem;border:1px solid #d1d5db;border-radius:8px;padding:.25rem;">
-        <button type="button" role="tab" id="ap-tab-x" aria-selected="true" class="ap-tpl-tab" data-target="ap-tpl-x" style="padding:.35rem .9rem;border-radius:6px;border:0;cursor:pointer;background:#4f46e5;color:#fff;font-weight:600;">X (Twitter)</button>
-        <button type="button" role="tab" id="ap-tab-reddit" aria-selected="false" class="ap-tpl-tab" data-target="ap-tpl-reddit" style="padding:.35rem .9rem;border-radius:6px;border:0;cursor:pointer;background:transparent;color:#374151;">Reddit</button>
+<?php // ----- Platform post template ----- ?>
+<div class="stats-panel" style="margin-bottom:1rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+        <h2><?= e($platformName) ?> post template</h2>
+        <span class="muted" style="font-size:.85rem;">The blueprint every <?= $isReddit ? 'Reddit' : 'X' ?> post is generated from. Edit the wording, link and how many hashtags are used — new posts pick it up immediately.</span>
     </div>
-
     <form method="post" action="<?= url('/admin/auto-poster/template/save') ?>" data-ap-template>
         <?= csrf_field() ?>
-
-        <div class="ap-tpl-panel" id="ap-tpl-x" data-platform="x" style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-top:.75rem;">
+        <input type="hidden" name="platform" value="<?= e($platform) ?>">
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-top:.75rem;">
             <div>
-                <p class="muted" style="font-size:.78rem;margin:0 0 .35rem;">X (Twitter) template &mdash; drives the recommended-posts queue.</p>
-                <label for="ap-pattern-x"><strong>Post pattern</strong> <span class="muted" style="font-weight:400;">(everything outside the tokens is posted verbatim)</span></label>
-                <textarea name="pattern_x" id="ap-pattern-x" rows="4" maxlength="2048"
-                          style="width:100%;box-sizing:border-box;font-size:.9rem;padding:.5rem .6rem;border:1px solid #d1d5db;border-radius:4px;word-wrap:break-word;resize:vertical;"><?= e((string) $apTemplateX['pattern']) ?></textarea>
+                <label for="ap-pattern"><strong>Post pattern</strong> <span class="muted" style="font-weight:400;">(everything outside the tokens is posted verbatim)</span></label>
+                <textarea name="pattern" id="ap-pattern" rows="4" maxlength="2048"
+                          style="width:100%;box-sizing:border-box;font-size:.9rem;padding:.5rem .6rem;border:1px solid #d1d5db;border-radius:4px;word-wrap:break-word;resize:vertical;"><?= e((string) $apTemplate['pattern']) ?></textarea>
                 <p class="muted" style="font-size:.78rem;margin-top:.3rem;">
-                    Tokens: <code>{title}</code> &middot; <code>{sep}</code> (a &ldquo;&mdash;&rdquo; only when both title and description exist) &middot; <code>{description}</code> &middot; <code>{hashtags}</code>. Put any link/URL you want in the pattern text itself (e.g. <code>see amethyst2213.com</code>).
+                    Tokens: <code>{title}</code> &middot; <code>{sep}</code> (a &ldquo;&mdash;&rdquo; only when both title and description exist) &middot; <code>{description}</code> &middot; <code>{hashtags}</code>. Put any link/URL you want in the pattern text itself (e.g. <code>amethyst2213.com</code>).
                 </p>
                 <div style="display:flex;flex-wrap:wrap;gap:.75rem;margin-top:.75rem;">
                     <label style="font-size:.85rem;"><span class="muted">Hashtags per post:</span><br>
-                        <input type="number" name="max_tags_x" min="0" max="60" value="<?= (int) $apTemplateX['max_tags'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="max_tags" min="0" max="60" value="<?= (int) $apTemplate['max_tags'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
                     <label style="font-size:.85rem;"><span class="muted">Max characters:</span><br>
-                        <input type="number" name="max_length_x" min="50" max="280" value="<?= (int) $apTemplateX['max_length'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="max_length" min="50" max="280" value="<?= (int) $apTemplate['max_length'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
                     <label style="font-size:.85rem;"><span class="muted">Default schedule (min):</span><br>
-                        <input type="number" name="schedule_minutes_x" min="1" max="10080" value="<?= (int) $apTemplateX['schedule_minutes'] ?>" style="width:7rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="schedule_minutes" min="1" max="10080" value="<?= (int) $apTemplate['schedule_minutes'] ?>" style="width:7rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
                     <label style="font-size:.85rem;"><span class="muted">Recent window (days):</span><br>
-                        <input type="number" name="recent_days_x" min="1" max="90" value="<?= (int) $apTemplateX['recent_days'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="recent_days" min="1" max="90" value="<?= (int) $apTemplate['recent_days'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
                     <label style="font-size:.85rem;"><span class="muted">Media per post:</span><br>
-                        <input type="number" name="max_media_x" min="1" max="4" value="<?= (int) $apTemplateX['max_media'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="max_media" min="1" max="4" value="<?= (int) $apTemplate['max_media'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
                     <label style="font-size:.85rem;"><span class="muted">Video screenshots:</span><br>
-                        <input type="number" name="screenshots_x" min="1" max="4" value="<?= (int) $apTemplateX['screenshots'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="screenshots" min="1" max="4" value="<?= (int) $apTemplate['screenshots'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
                     <label style="font-size:.85rem;"><span class="muted">Preview blur %:</span><br>
-                        <input type="number" name="blur_percent_x" min="0" max="100" value="<?= (int) $apTemplateX['blur_percent'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="blur_percent" min="0" max="100" value="<?= (int) $apTemplate['blur_percent'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
                 </div>
                 <p style="margin-top:.75rem;">
-                    <label class="muted" style="font-size:.85rem;display:block;">Banned words X <span style="font-weight:400;">(never appear in a post; comma-separated, optional)</span><br>
-                        <input type="text" name="banned_words_x" value="<?= e(implode(', ', $apTemplateX['banned_words'] ?? [])) ?>" placeholder="nipple, nipples" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                    <label class="muted" style="font-size:.85rem;display:block;">Banned words <span style="font-weight:400;">(never appear in a post; comma-separated, optional)</span><br>
+                        <input type="text" name="banned_words" value="<?= e(implode(', ', $apTemplate['banned_words'] ?? [])) ?>" placeholder="nipple, nipples" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
                     </label>
                 </p>
             </div>
             <div>
                 <div style="border:1px dashed #d1d5db;border-radius:6px;padding:.6rem .75rem;">
                     <div style="display:flex;align-items:center;justify-content:space-between;">
-                        <span class="muted" style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">X preview</span>
-                        <span id="ap-preview-count-x" class="muted" style="font-size:.75rem;font-variant-numeric:tabular-nums;">0/280</span>
+                        <span class="muted" style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Live preview</span>
+                        <span id="ap-preview-count" class="muted" style="font-size:.75rem;font-variant-numeric:tabular-nums;">0/280</span>
                     </div>
-                    <p id="ap-preview-x" style="font-size:.88rem;color:#374151;margin:.4rem 0 0;word-wrap:break-word;white-space:pre-wrap;">&mdash;</p>
+                    <p id="ap-preview" style="font-size:.88rem;color:#374151;margin:.4rem 0 0;word-wrap:break-word;white-space:pre-wrap;">&mdash;</p>
                 </div>
                 <p class="muted" style="font-size:.75rem;margin-top:.5rem;">The exact text is baked at queue time from each gallery&rsquo;s real title, description and categories.</p>
             </div>
         </div>
-
-        <div class="ap-tpl-panel" id="ap-tpl-reddit" data-platform="reddit" style="display:none;grid-template-columns:2fr 1fr;gap:1rem;margin-top:.75rem;">
-            <div>
-                <p class="muted" style="font-size:.78rem;margin:0 0 .35rem;">Reddit template &mdash; the wording/structure used for Reddit posts.</p>
-                <label for="ap-pattern-reddit"><strong>Post pattern</strong> <span class="muted" style="font-weight:400;">(everything outside the tokens is posted verbatim)</span></label>
-                <textarea name="pattern_reddit" id="ap-pattern-reddit" rows="4" maxlength="2048"
-                          style="width:100%;box-sizing:border-box;font-size:.9rem;padding:.5rem .6rem;border:1px solid #d1d5db;border-radius:4px;word-wrap:break-word;resize:vertical;"><?= e((string) $apTemplateReddit['pattern']) ?></textarea>
-                <p class="muted" style="font-size:.78rem;margin-top:.3rem;">
-                    Tokens: <code>{title}</code> &middot; <code>{sep}</code> &middot; <code>{description}</code> &middot; <code>{hashtags}</code>. Any link/URL goes in the pattern text itself (e.g. <code>posted at amethyst2213.com</code>).
-                </p>
-                <div style="display:flex;flex-wrap:wrap;gap:.75rem;margin-top:.75rem;">
-                    <label style="font-size:.85rem;"><span class="muted">Hashtags per post:</span><br>
-                        <input type="number" name="max_tags_reddit" min="0" max="60" value="<?= (int) $apTemplateReddit['max_tags'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
-                    <label style="font-size:.85rem;"><span class="muted">Max characters:</span><br>
-                        <input type="number" name="max_length_reddit" min="50" max="280" value="<?= (int) $apTemplateReddit['max_length'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
-                    <label style="font-size:.85rem;"><span class="muted">Default schedule (min):</span><br>
-                        <input type="number" name="schedule_minutes_reddit" min="1" max="10080" value="<?= (int) $apTemplateReddit['schedule_minutes'] ?>" style="width:7rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
-                    <label style="font-size:.85rem;"><span class="muted">Recent window (days):</span><br>
-                        <input type="number" name="recent_days_reddit" min="1" max="90" value="<?= (int) $apTemplateReddit['recent_days'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
-                    <label style="font-size:.85rem;"><span class="muted">Media per post:</span><br>
-                        <input type="number" name="max_media_reddit" min="1" max="4" value="<?= (int) $apTemplateReddit['max_media'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
-                    <label style="font-size:.85rem;"><span class="muted">Video screenshots:</span><br>
-                        <input type="number" name="screenshots_reddit" min="1" max="4" value="<?= (int) $apTemplateReddit['screenshots'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
-                    <label style="font-size:.85rem;"><span class="muted">Preview blur %:</span><br>
-                        <input type="number" name="blur_percent_reddit" min="0" max="100" value="<?= (int) $apTemplateReddit['blur_percent'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
-                </div>
-                <p style="margin-top:.75rem;">
-                    <label class="muted" style="font-size:.85rem;display:block;">Banned words Reddit <span style="font-weight:400;">(never appear in a post; comma-separated, optional)</span><br>
-                        <input type="text" name="banned_words_reddit" value="<?= e(implode(', ', $apTemplateReddit['banned_words'] ?? [])) ?>" placeholder="nipple, nipples" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
-                    </label>
-                </p>
-            </div>
-            <div>
-                <div style="border:1px dashed #d1d5db;border-radius:6px;padding:.6rem .75rem;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;">
-                        <span class="muted" style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Reddit preview</span>
-                        <span id="ap-preview-count-reddit" class="muted" style="font-size:.75rem;font-variant-numeric:tabular-nums;">0/280</span>
-                    </div>
-                    <p id="ap-preview-reddit" style="font-size:.88rem;color:#374151;margin:.4rem 0 0;word-wrap:break-word;white-space:pre-wrap;">&mdash;</p>
-                </div>
-                <p class="muted" style="font-size:.75rem;margin-top:.5rem;">The exact text is baked at queue time from each gallery&rsquo;s real title, description and categories.</p>
-            </div>
-        </div>
-
         <div style="margin-top:.75rem;">
-            <button type="submit" class="btn">Save templates</button>
-            <?php if (!empty($templatePreviewX)): ?><span class="muted" style="font-size:.78rem;margin-left:.5rem;">X (current): &ldquo;<?= e((string) $templatePreviewX) ?>&rdquo;</span><?php endif; ?>
-            <?php if (!empty($templatePreviewReddit)): ?><span class="muted" style="font-size:.78rem;margin-left:.5rem;">Reddit (current): &ldquo;<?= e((string) $templatePreviewReddit) ?>&rdquo;</span><?php endif; ?>
+            <button type="submit" class="btn">Save template</button>
+            <?php if (!empty($templatePreview)): ?><span class="muted" style="font-size:.78rem;margin-left:.5rem;">Current saved result: &ldquo;<?= e((string) $templatePreview) ?>&rdquo;</span><?php endif; ?>
         </div>
     </form>
 </div>
 
-<?php // ----- Recommended posts: generated from recent uploads ----- ?>
+<?php if (!$isReddit): ?>
+<?php // ----- Recommended posts: generated from recent uploads (X only) ----- ?>
 <div class="stats-panel" style="margin-bottom:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <h2>Recommended posts</h2>
@@ -167,8 +136,9 @@ $twitter = $config['twitter'] ?? [];
         </div>
     <?php endif; ?>
 </div>
+<?php endif; ?>
 
-<?php // ----- Pending queue ----- ?>
+<?php // ----- Pending queue (scoped to this platform) ----- ?>
 <div class="stats-panel" style="margin-bottom:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <div style="display:flex;align-items:center;gap:.5rem;">
@@ -184,8 +154,9 @@ $twitter = $config['twitter'] ?? [];
             </span>
             <?php if (!empty($queue) && count($queue) > 0): ?>
                 <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/post-all') ?>"
-                      onsubmit="return confirm('Post all <?= number_format(count($queue)) ?> queued item(s) to X now?');">
+                      onsubmit="return confirm('Post all <?= number_format(count($queue)) ?> queued item(s) to <?= e($platformName) ?> now?');">
                     <?= csrf_field() ?>
+                    <input type="hidden" name="platform" value="<?= e($platform) ?>">
                     <button type="submit" class="btn btn-sm">Post all queued</button>
                 </form>
             <?php endif; ?>
@@ -193,7 +164,7 @@ $twitter = $config['twitter'] ?? [];
     </div>
     <div id="ap-queue-body">
     <?php if (empty($queue)): ?>
-        <p class="muted">The queue is empty — add a recommended post above.</p>
+        <p class="muted">The queue is empty — <?= $isReddit ? 'post to Reddit above or repost a past Reddit post below.' : 'add a recommended post above.' ?></p>
     <?php else: ?>
         <table>
             <thead>
@@ -237,7 +208,7 @@ $twitter = $config['twitter'] ?? [];
                             </div>
                         </td>
                         <td style="text-align:right;white-space:nowrap;">
-                            <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/post') ?>">
+                            <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/post') ?>" onsubmit="return confirm('Post this now to <?= e($platformName) ?>?');">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
                                 <button type="submit" class="btn btn-sm">Post now</button>
@@ -257,14 +228,14 @@ $twitter = $config['twitter'] ?? [];
     </div>
 </div>
 
-<?php // ----- Recent posts: repost or reschedule a past post ----- ?>
+<?php // ----- Recent posts (scoped to this platform): repost or reschedule ----- ?>
 <div class="stats-panel" style="margin-bottom:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
-        <h2>Recent posts</h2>
-        <span class="muted" style="font-size:.85rem;">Re-publish a past post now, or schedule it to go out again later.</span>
+        <h2>Recent <?= e($platformName) ?> posts</h2>
+        <span class="muted" style="font-size:.85rem;">Re-publish a past <?= $isReddit ? 'Reddit' : 'X' ?> post now, or schedule it to go out again later.</span>
     </div>
     <?php if (empty($recentPosts)): ?>
-        <p class="muted">No posts recorded yet — posted, failed and skipped items will appear here.</p>
+        <p class="muted">No <?= $isReddit ? 'Reddit' : 'X' ?> posts recorded yet — posted, failed and skipped items will appear here.</p>
     <?php else: ?>
         <div style="overflow-x:auto;">
             <table class="ap-table">
@@ -325,7 +296,7 @@ $twitter = $config['twitter'] ?? [];
                                         class="btn btn-sm" title="Queue the edited text to publish at the chosen time">Reschedule</button>
                             <?php else: ?>
                                 <form class="inline" method="post" action="<?= url('/admin/auto-poster/history/repost') ?>"
-                                      onsubmit="return confirm('Repost #<?= (int) $rp['id'] ?> to X now?');">
+                                      onsubmit="return confirm('Repost #<?= (int) $rp['id'] ?> to <?= e($platformName) ?> now?');">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
                                     <button type="submit" class="btn btn-sm" title="Post the same content again right away">Repost</button>
@@ -350,11 +321,13 @@ $twitter = $config['twitter'] ?? [];
 </div>
 
 <div class="stats-grid">
-    <?php // ----- Reddit credentials ----- ?>
+    <?php // ----- Platform credentials ----- ?>
     <div class="stats-panel">
-        <h2>Reddit</h2>
+        <h2><?= e($platformName) ?> credentials</h2>
+        <?php if ($isReddit): ?>
         <form method="post" action="<?= url('/admin/auto-poster/settings') ?>">
             <?= csrf_field() ?>
+            <input type="hidden" name="platform" value="reddit">
             <p class="muted" style="font-size:0.85rem;">
                 Create a Reddit <strong>"web app"</strong> (not a script app) at
                 <a href="https://www.reddit.com/prefs/apps" target="_blank" rel="noopener">reddit.com/prefs/apps</a>,
@@ -387,13 +360,11 @@ $twitter = $config['twitter'] ?? [];
                 <a class="btn" href="<?= url('/admin/auto-poster/reddit/authorize') ?>">Authorize Reddit</a>
             <?php endif; ?>
         </p>
-    </div>
-
-    <?php // ----- X / Twitter credentials ----- ?>
-    <div class="stats-panel">
-        <h2>X (Twitter)</h2>
+        <p class="muted" style="font-size:0.8rem;margin-top:.5rem;">The schedule timezone is shared and set on the X page.</p>
+        <?php else: ?>
         <form method="post" action="<?= url('/admin/auto-poster/settings') ?>">
             <?= csrf_field() ?>
+            <input type="hidden" name="platform" value="x">
             <p class="muted" style="font-size:0.85rem;">
                 Create an app in the <a href="https://developer.x.com" target="_blank" rel="noopener">X developer portal</a>
                 and set its <strong>callback URL</strong> to
@@ -451,16 +422,16 @@ $twitter = $config['twitter'] ?? [];
                 <a class="btn" href="<?= url('/admin/auto-poster/twitter/authorize') ?>">Authorize X</a>
             <?php endif; ?>
         </p>
+        <?php endif; ?>
     </div>
-</div>
 
-<?php // ----- Compose posts ----- ?>
-<div class="stats-grid">
-    <?php // ----- Reddit post ----- ?>
+    <?php // ----- Compose a post on this platform ----- ?>
     <div class="stats-panel">
+        <?php if ($isReddit): ?>
         <h2>Post to Reddit</h2>
         <form method="post" action="<?= url('/admin/auto-poster/post/reddit') ?>" enctype="multipart/form-data">
             <?= csrf_field() ?>
+            <input type="hidden" name="platform" value="reddit">
             <p>
                 <label for="reddit_subreddit">Subreddit</label><br>
                 <input type="text" name="reddit_subreddit" id="reddit_subreddit" placeholder="e.g. pics" required style="width:100%;box-sizing:border-box;">
@@ -489,13 +460,11 @@ $twitter = $config['twitter'] ?? [];
             </p>
             <button type="submit" class="btn">Submit to Reddit</button>
         </form>
-    </div>
-
-    <?php // ----- X post ----- ?>
-    <div class="stats-panel">
+        <?php else: ?>
         <h2>Post to X (Twitter)</h2>
         <form method="post" action="<?= url('/admin/auto-poster/post/twitter') ?>" enctype="multipart/form-data">
             <?= csrf_field() ?>
+            <input type="hidden" name="platform" value="x">
             <p>
                 <label for="twitter_text">Text</label><br>
                 <textarea name="twitter_text" id="twitter_text" rows="5" maxlength="280" placeholder="Post content (max 280 characters)..." style="width:100%;box-sizing:border-box;"></textarea>
@@ -510,10 +479,11 @@ $twitter = $config['twitter'] ?? [];
             </p>
             <button type="submit" class="btn">Post to X</button>
         </form>
+        <?php endif; ?>
     </div>
 </div>
 
-<?php // ----- Log ----- ?>
+<?php // ----- Posting log (scoped to this platform) ----- ?>
 <style>
     .ap-log { margin-top: 1rem; }
     .ap-log-card { background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 10px; overflow: hidden; }
@@ -555,7 +525,7 @@ $twitter = $config['twitter'] ?? [];
     <details class="ap-log-card" open>
         <summary class="ap-log-head">
             <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
-                <h2>Posting log</h2>
+                <h2><?= e($platformName) ?> posting log</h2>
                 <?php $logCount  = count($log); ?>
                 <?php $logOk     = count(array_filter($log, fn($l) => ($l['status'] ?? '') === 'success')); ?>
                 <span class="ap-log-summary"><?= (int) $logCount ?> entries &middot; <?= (int) $logOk ?> succeeded &middot; <?= (int) ($logCount - $logOk) ?> failed</span>
@@ -563,7 +533,7 @@ $twitter = $config['twitter'] ?? [];
         </summary>
         <div class="ap-log-body">
         <?php if (empty($log)): ?>
-            <div class="ap-log-empty">No posts have been made yet.</div>
+            <div class="ap-log-empty">No <?= $isReddit ? 'Reddit' : 'X' ?> posts have been made yet.</div>
         <?php else: ?>
             <div style="overflow-x:auto;">
                 <table class="ap-table">
@@ -611,9 +581,10 @@ $twitter = $config['twitter'] ?? [];
             </div>
         <?php endif; ?>
             <div style="padding:.6rem 1.1rem;text-align:right;border-top:1px solid var(--pink-300);">
-                <form method="post" action="<?= url('/admin/auto-poster/clear-log') ?>" onsubmit="return confirm('Clear the entire posting log?');">
+                <form method="post" action="<?= url('/admin/auto-poster/clear-log') ?>" onsubmit="return confirm('Clear the <?= e($platformName) ?> posting log?');">
                     <?= csrf_field() ?>
-                    <button type="submit" class="btn btn-sm btn-danger">Clear Log</button>
+                    <input type="hidden" name="platform" value="<?= e($platform) ?>">
+                    <button type="submit" class="btn btn-sm btn-danger">Clear <?= e($platformName) ?> Log</button>
                 </form>
             </div>
         </div>
@@ -628,11 +599,13 @@ $twitter = $config['twitter'] ?? [];
     function updateType() {
         var self = document.querySelector('input[name="reddit_type"]:checked');
         var isSelf = self && self.value === 'self';
-        urlRow.style.display = isSelf ? 'none' : '';
-        textRow.style.display = isSelf ? '' : 'none';
+        if (urlRow) { urlRow.style.display = isSelf ? 'none' : ''; }
+        if (textRow) { textRow.style.display = isSelf ? '' : 'none'; }
     }
-    typeRadios.forEach(function (r) { r.addEventListener('change', updateType); });
-    updateType();
+    if (typeRadios.length) {
+        typeRadios.forEach(function (r) { r.addEventListener('change', updateType); });
+        updateType();
+    }
 
     var tInput = document.getElementById('twitter_text');
     var tCount = document.getElementById('twitter-count');
@@ -726,77 +699,44 @@ $twitter = $config['twitter'] ?? [];
         });
     })();
 
-    // Live preview of the auto-post templates (one per platform): substitute
-    // the tokens with sample content so the admin sees the post shape while
-    // typing. The X/Reddit selector shows one panel at a time.
+    // Live preview of the current platform's post template: substitute the
+    // tokens with sample content so the admin sees the post shape while typing.
     (function () {
         var form = document.querySelector('form[data-ap-template]');
         if (!form) { return; }
+        var patternEl = form.querySelector('#ap-pattern');
+        var previewEl = document.getElementById('ap-preview');
+        var countEl = document.getElementById('ap-preview-count');
+        var tagsEl = form.querySelector('input[name="max_tags"]');
+        var lengthEl = form.querySelector('input[name="max_length"]');
 
-        var panels = form.querySelectorAll('.ap-tpl-panel');
-        var tabs = document.querySelectorAll('.ap-tpl-tab');
-
-        function renderPanel(platform) {
-            var panel = document.getElementById('ap-tpl-' + platform);
-            if (!panel) { return; }
-            var patternEl = panel.querySelector('textarea[name="pattern_' + platform + '"]');
-            var previewEl = document.getElementById('ap-preview-' + platform);
-            var countEl = document.getElementById('ap-preview-count-' + platform);
-            var tagsEl = panel.querySelector('input[name="max_tags_' + platform + '"]');
-            var lengthEl = panel.querySelector('input[name="max_length_' + platform + '"]');
-            if (!patternEl || !previewEl || !countEl) { return; }
-
-            function blockTags() {
-                var n = parseInt(tagsEl.value, 10) || 0;
-                var out = [];
-                for (var i = 1; i <= n; i++) { out.push(' #tag' + i); }
-                return out.join('');
-            }
-
-            function render() {
-                var title = 'Example gallery';
-                var desc = 'Fresh uploads';
-                var text = patternEl.value
-                    .replace('{title}', title)
-                    .replace('{sep}', desc ? ' — ' : '')
-                    .replace('{description}', desc)
-                    .replace(/\{hashtags\}/g, blockTags());
-                text = text.replace(/\s+/g, ' ').trim();
-
-                var max = parseInt(lengthEl.value, 10) || 280;
-                var shown = text.length > max ? text.slice(0, Math.max(1, max - 1)) + '…' : text;
-                previewEl.textContent = shown || '—';
-                countEl.textContent = shown.length + '/' + max;
-            }
-
-            patternEl.addEventListener('input', render);
-            tagsEl.addEventListener('input', render);
-            lengthEl.addEventListener('input', render);
-            render();
+        function blockTags() {
+            var n = parseInt(tagsEl.value, 10) || 0;
+            var out = [];
+            for (var i = 1; i <= n; i++) { out.push(' #tag' + i); }
+            return out.join('');
         }
 
-        function showPlatform(platform) {
-            panels.forEach(function (panel) {
-                panel.style.display = panel.id === 'ap-tpl-' + platform
-                    ? 'grid'
-                    : 'none';
-            });
-            tabs.forEach(function (tab) {
-                var active = tab.getAttribute('data-target') === 'ap-tpl-' + platform;
-                tab.setAttribute('aria-selected', active ? 'true' : 'false');
-                tab.style.background = active ? '#4f46e5' : 'transparent';
-                tab.style.color = active ? '#fff' : '#374151';
-                tab.style.fontWeight = active ? '600' : '400';
-            });
+        function render() {
+            var title = 'Example gallery';
+            var desc = 'Fresh uploads';
+            var text = patternEl.value
+                .replace('{title}', title)
+                .replace('{sep}', desc ? ' — ' : '')
+                .replace('{description}', desc)
+                .replace(/\{hashtags\}/g, blockTags());
+            text = text.replace(/\s+/g, ' ').trim();
+
+            var max = parseInt(lengthEl.value, 10) || 280;
+            var shown = text.length > max ? text.slice(0, Math.max(1, max - 1)) + '…' : text;
+            previewEl.textContent = shown || '—';
+            countEl.textContent = shown.length + '/' + max;
         }
 
-        tabs.forEach(function (tab) {
-            tab.addEventListener('click', function () {
-                showPlatform(tab.getAttribute('data-target').replace('ap-tpl-', ''));
-            });
-        });
-
-        panels.forEach(function (panel) { renderPanel(panel.getAttribute('data-platform')); });
+        patternEl.addEventListener('input', render);
+        tagsEl.addEventListener('input', render);
+        lengthEl.addEventListener('input', render);
+        render();
     })();
 })();
 </script>

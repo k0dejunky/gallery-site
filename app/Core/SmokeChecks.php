@@ -330,12 +330,14 @@ class SmokeChecks
             $routes = $read("$root/config/routes.php");
             $ctrl   = $read("$root/app/Controllers/AutoPosterController.php");
             return strpos($routes, 'auto-poster/template/save') !== false
+                && strpos($routes, "'/admin/auto-poster/reddit'") !== false
+                    && strpos($routes, 'AutoPosterController@reddit') !== false
                 && strpos($ctrl, 'public function saveTemplate()') !== false
                     && strpos($ctrl, 'AutoPosterConfig::saveTemplate(') !== false
-                && strpos($ctrl, "'templatePreviewX'") !== false
-                    && strpos($ctrl, 'templateSettings(\'reddit\')') !== false
-                ? $ok('save route + controller wired for both platforms')
-                : $bad('the auto-poster template save route and controller action (with per-platform live previews) must exist');
+                && strpos($ctrl, 'private function renderPage(string $platform)') !== false
+                    && strpos($ctrl, "renderPage('x')") !== false && strpos($ctrl, "renderPage('reddit')") !== false
+                ? $ok('save route + controller wired for both pages')
+                : $bad('the auto-poster template save route/controller and the separate X + Reddit pages must exist');
         });
         $apw = $read("$root/bin/autopost_worker.php");
         $add('smoke.ap.worker_due', 'Smoke · Auto Poster', 'Worker publishes due queue rows', static function () use ($apw, $ok, $bad): array {
@@ -365,14 +367,16 @@ class SmokeChecks
                 ? $ok('countdown present')
                 : $bad('auto-poster queue must show a live months/days/hours/minutes/seconds countdown');
         });
-        $add('smoke.ap.template_view', 'Smoke · Auto Poster', 'Per-platform template editor rendered on the Auto Poster page', static function () use ($apv, $ok, $bad): array {
-            return strpos($apv, 'name="pattern_x"') !== false && strpos($apv, 'name="pattern_reddit"') !== false
-                && strpos($apv, 'ap-template-switch') !== false
-                && strpos($apv, 'ap-preview-x') !== false && strpos($apv, 'ap-preview-reddit') !== false
-                && strpos($apv, 'Auto-post template') !== false
+        $add('smoke.ap.template_view', 'Smoke · Auto Poster', 'One platform-editable template panel per page with live preview', static function () use ($apv, $ok, $bad): array {
+            return strpos($apv, 'name="pattern"') !== false
+                && strpos($apv, 'ap-platform-switch') !== false
+                && strpos($apv, 'ap-preview') !== false && strpos($apv, 'ap-preview-count') !== false
+                && strpos($apv, 'post template') !== false
                 && strpos($apv, 'data-ap-template') !== false
-                ? $ok('editor panels (X + Reddit) + selector + live previews present')
-                : $bad('auto-poster page must render a selector switch with an editable template panel and live preview for X and Reddit');
+                && strpos($apv, 'input type="hidden" name="platform"') !== false
+                && strpos($apv, 'url(\'/admin/auto-poster/reddit\')') !== false
+                ? $ok('platform switch + editable template panel + live preview present')
+                : $bad('auto-poster page must render an X|Reddit platform switch, an editable template panel with hidden platform and a live preview');
         });
         $add('smoke.ap.requeue_schedule', 'Smoke · Auto Poster', 'Repost/reschedule rows always get a real schedule', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'function requeueFrom') !== false && strpos($apq, '$scheduled = self::defaultSchedule();') !== false
@@ -390,9 +394,9 @@ class SmokeChecks
                 : $bad('AutoPostQueue::post must catch platform-client exceptions and markFailed() them instead of leaving the row queued');
         });
         $add('smoke.ap.queue_all', 'Smoke · Auto Poster', 'Queue lists every queued row by default', static function () use ($apq, $ok, $bad): array {
-            return strpos($apq, 'public static function queued(int $limit = 0)') !== false
-                ? $ok('no default cap')
-                : $bad('AutoPostQueue::queued must default to returning every queued row (0 = no limit)');
+            return strpos($apq, 'public static function queued(int $limit = 0, ?string $platform = null)') !== false
+                ? $ok('no default cap + platform scope')
+                : $bad('AutoPostQueue::queued must default to every queued row (0 = no limit) and accept a platform scope');
         });
         $add('smoke.ap.queue_collapse', 'Smoke · Auto Poster', 'Posting queue section is collapsable', static function () use ($apv, $ok, $bad): array {
             return strpos($apv, 'ap-queue-toggle') !== false && strpos($apv, 'ap-queue-body') !== false

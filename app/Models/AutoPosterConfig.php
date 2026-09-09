@@ -182,24 +182,40 @@ class AutoPosterConfig
     }
 
     /**
-     * The most recent log entries, newest first.
+     * The most recent log entries, newest first. Pass a platform ('x'/'twitter'
+     * or 'reddit') to show only that platform's entries.
      */
-    public static function logEntries(int $limit = 100): array
+    public static function logEntries(int $limit = 100, ?string $platform = null): array
     {
         // LIMIT cannot take a bound parameter in this PDO/MySQL mode, so inline
         // a clamped integer.
         $limit = max(1, min(500, $limit));
+        $where = '1 = 1';
+        $bind  = [];
+
+        if ($platform !== null && $platform !== '') {
+            $platform = $platform === 'x' ? 'twitter' : 'reddit';
+            $where    = 'platform = ?';
+            $bind[]   = $platform;
+        }
 
         return Database::run(
-            'SELECT * FROM auto_poster_log ORDER BY id DESC LIMIT ' . (int) $limit
+            'SELECT * FROM auto_poster_log WHERE ' . $where . ' ORDER BY id DESC LIMIT ' . (int) $limit,
+            $bind
         )->fetchAll();
     }
 
     /**
-     * Remove every log entry.
+     * Remove log entries. Pass a platform to clear only that platform's rows.
      */
-    public static function clearLog(): void
+    public static function clearLog(?string $platform = null): void
     {
+        if ($platform !== null && $platform !== '') {
+            $platform = $platform === 'x' ? 'twitter' : 'reddit';
+            Database::run('DELETE FROM auto_poster_log WHERE platform = ?', [$platform]);
+            return;
+        }
+
         Database::run('DELETE FROM auto_poster_log');
     }
 }

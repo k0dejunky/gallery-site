@@ -21,69 +21,74 @@ class AutoPosterController extends Controller
     }
 
     /**
-     * Show the Auto Poster admin page: credential settings, a posting form
-     * (Reddit + X), recommended posts generated from recent uploads, the
-     * pending queue and the posting history log.
+     * Show the X (Twitter) Auto Poster page: X template, X credentials, Post
+     * to X, recommended posts, the X queue and the X posting log.
      */
     public function index(): void
     {
+        $this->renderPage('x');
+    }
+
+    /**
+     * Show the Reddit Auto Poster page: Reddit template, Reddit credentials,
+     * Post to Reddit, the Reddit queue and the Reddit posting log.
+     */
+    public function reddit(): void
+    {
+        $this->renderPage('reddit');
+    }
+
+    /**
+     * Build the Auto Poster page for one platform. The queue, recent posts,
+     * status counts and posting log are all scoped to that platform, and the
+     * template panel shows only that platform's blueprint.
+     */
+    private function renderPage(string $platform): void
+    {
+        $isX       = $platform !== 'reddit';
+        $queueKey  = $isX ? 'twitter' : 'reddit';
+        $template  = AutoPostQueue::templateSettings($platform);
+
         $this->viewAdmin('auto_poster', [
-            'config'            => AutoPosterConfig::all(),
-            'log'               => AutoPosterConfig::logEntries(),
-            'recommended'       => AutoPostQueue::recommendations(8),
-            'queue'             => AutoPostQueue::queued(),
-            'queueCounts'       => AutoPostQueue::statusCounts(),
-            'recentPosts'       => AutoPostQueue::recentPosts(20),
-            'apTemplateX'       => AutoPostQueue::templateSettings('x'),
-            'apTemplateReddit'  => AutoPostQueue::templateSettings('reddit'),
-            'templatePreviewX'  => AutoPostQueue::buildText([
+            'platform'        => $isX ? 'x' : 'reddit',
+            'config'          => AutoPosterConfig::all(),
+            'apTemplate'      => $template,
+            'templatePreview' => AutoPostQueue::buildText([
                 'gallery_title' => 'Example gallery',
                 'caption'       => 'Fresh uploads',
-            ], ['amateur', 'redhead', 'new'], AutoPostQueue::templateSettings('x')),
-            'templatePreviewReddit' => AutoPostQueue::buildText([
-                'gallery_title' => 'Example gallery',
-                'caption'       => 'Fresh uploads',
-            ], ['amateur', 'redhead', 'new'], AutoPostQueue::templateSettings('reddit')),
+            ], ['amateur', 'redhead', 'new'], $template),
+            'recommended'     => $isX ? AutoPostQueue::recommendations(8) : [],
+            'queue'           => AutoPostQueue::queued(0, $queueKey),
+            'queueCounts'     => AutoPostQueue::statusCounts($queueKey),
+            'recentPosts'     => AutoPostQueue::recentPosts(20, $queueKey),
+            'log'             => AutoPosterConfig::logEntries(100, $queueKey),
         ]);
     }
 
     /**
-     * Save both platforms' auto-post template settings that shape the wording,
-     * links, hashtag count and other generation knobs of every post. The X
-     * ("twitter") panel drives the recommended-posts queue; the Reddit panel
-     * drives Reddit post drafts. Each save preserves the other platform's
-     * template and the stored credentials.
+     * Save the current page's auto-post template settings that shape the
+     * wording, links, hashtag count and other generation knobs of every post
+     * on that platform. The platform is picked from the page's hidden field.
      */
     public function saveTemplate(): void
     {
-        $post = fn (string $key, string $default = ''): string => trim((string) $this->request->post($key, $default));
+        $platform = $this->platformFromPost();
+        $post     = fn (string $key, string $default = ''): string => trim((string) $this->request->post($key, $default));
 
         AutoPosterConfig::saveTemplate([
-            'pattern'          => $post('pattern_x'),
-            'max_tags'         => $post('max_tags_x', '20'),
-            'max_length'       => $post('max_length_x', '280'),
-            'schedule_minutes' => $post('schedule_minutes_x', '60'),
-            'recent_days'      => $post('recent_days_x', '14'),
-            'max_media'        => $post('max_media_x', '4'),
-            'blur_percent'     => $post('blur_percent_x', '85'),
-            'screenshots'      => $post('screenshots_x', '3'),
-            'banned_words'     => $post('banned_words_x'),
-        ], 'x');
+            'pattern'          => $post('pattern'),
+            'max_tags'         => $post('max_tags', '20'),
+            'max_length'       => $post('max_length', '280'),
+            'schedule_minutes' => $post('schedule_minutes', '60'),
+            'recent_days'      => $post('recent_days', '14'),
+            'max_media'        => $post('max_media', '4'),
+            'blur_percent'     => $post('blur_percent', '85'),
+            'screenshots'      => $post('screenshots', '3'),
+            'banned_words'     => $post('banned_words'),
+        ], $platform);
 
-        AutoPosterConfig::saveTemplate([
-            'pattern'          => $post('pattern_reddit'),
-            'max_tags'         => $post('max_tags_reddit', '20'),
-            'max_length'       => $post('max_length_reddit', '280'),
-            'schedule_minutes' => $post('schedule_minutes_reddit', '60'),
-            'recent_days'      => $post('recent_days_reddit', '14'),
-            'max_media'        => $post('max_media_reddit', '4'),
-            'blur_percent'     => $post('blur_percent_reddit', '85'),
-            'screenshots'      => $post('screenshots_reddit', '3'),
-            'banned_words'     => $post('banned_words_reddit'),
-        ], 'reddit');
-
-        $this->flash('success', 'Auto-post templates saved — new posts use them.');
-        $this->redirect('/admin/auto-poster');
+        $this->flash('success', ($platform === 'reddit' ? 'Reddit' : 'X') . ' template saved — new posts use it.');
+        $this->redirectPath($platform);
     }
 
     /**
@@ -97,7 +102,7 @@ class AutoPosterController extends Controller
 
         if (!$reddit->isConfigured()) {
             $this->flash('error', 'Save your Reddit client credentials first.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectPath('reddit');
             return;
         }
 
@@ -122,7 +127,7 @@ class AutoPosterController extends Controller
 
         if ($error !== '') {
             $this->flash('error', 'Reddit authorization was cancelled or failed: ' . $error);
-            $this->redirect('/admin/auto-poster');
+            $this->redirectPath('reddit');
             return;
         }
 
@@ -131,13 +136,13 @@ class AutoPosterController extends Controller
 
         if ($state === '' || !hash_equals($expected, $state)) {
             $this->flash('error', 'Reddit authorization state mismatch. Please try again.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectPath('reddit');
             return;
         }
 
         if ($code === '') {
             $this->flash('error', 'Reddit did not return an authorization code.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectPath('reddit');
             return;
         }
 
@@ -149,14 +154,14 @@ class AutoPosterController extends Controller
 
         if (!$result['ok']) {
             $this->flash('error', $result['error'] ?? 'Reddit authorization failed.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectPath('reddit');
             return;
         }
 
         AutoPosterConfig::saveRedditToken($result['refresh_token'], $result['access_token'] ?? '');
 
         $this->flash('success', 'Reddit authorized successfully. You can now post to subreddits.');
-        $this->redirect('/admin/auto-poster');
+        $this->redirectPath('reddit');
     }
 
     /**
@@ -171,7 +176,7 @@ class AutoPosterController extends Controller
 
         if (!$twitter->isConfigured()) {
             $this->flash('error', 'Save your X client ID and secret first.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectPath('x');
             return;
         }
 
@@ -200,7 +205,7 @@ class AutoPosterController extends Controller
 
         if ($error !== '') {
             $this->flash('error', 'X authorization was cancelled or failed: ' . $error);
-            $this->redirect('/admin/auto-poster');
+            $this->redirectPath('x');
             return;
         }
 
@@ -209,7 +214,7 @@ class AutoPosterController extends Controller
 
         if ($state === '' || !hash_equals($expected, $state)) {
             $this->flash('error', 'X authorization state mismatch. Please try again.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectPath('x');
             return;
         }
 
@@ -218,7 +223,7 @@ class AutoPosterController extends Controller
 
         if ($code === '') {
             $this->flash('error', 'X did not return an authorization code.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectPath('x');
             return;
         }
 
@@ -230,14 +235,14 @@ class AutoPosterController extends Controller
 
         if (!$result['ok']) {
             $this->flash('error', $result['error'] ?? 'X authorization failed.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectPath('x');
             return;
         }
 
         AutoPosterConfig::saveTwitterToken($result['refresh_token'], $result['access_token'] ?? '');
 
         $this->flash('success', 'X authorized successfully. You can now post tweets.');
-        $this->redirect('/admin/auto-poster');
+        $this->redirectPath('x');
     }
 
     /**
@@ -249,60 +254,71 @@ class AutoPosterController extends Controller
     }
 
     /**
-     * Save the Reddit and X/Twitter API credentials.
+     * Save one platform's API credentials. The platform is picked from the
+     * page's hidden field, so saving the X settings never touches the Reddit
+     * credentials (and vice-versa); the scheduler timezone is only saved from
+     * the X page.
      */
     public function saveSettings(): void
     {
-        $config = AutoPosterConfig::all();
+        $platform = $this->platformFromPost();
+        $config   = AutoPosterConfig::all();
 
-        $reddit = [
-            'client_id'     => trim((string) $this->request->post('reddit_client_id', '')),
-            'client_secret' => trim((string) $this->request->post('reddit_client_secret', '')),
-            'username'      => trim((string) $this->request->post('reddit_username', '')),
-            'app_name'      => trim((string) $this->request->post('reddit_app_name', 'gallery-auto-poster')),
-            'app_version'   => trim((string) $this->request->post('reddit_app_version', '1.0')),
-        ];
+        // Start from the stored values so the other platform is untouched.
+        $reddit  = $config['reddit'];
+        $twitter = $config['twitter'];
 
-        // Keep existing secret if the field was left blank (masked in the form).
-        if ($reddit['client_secret'] === '' && !empty($config['reddit']['client_secret'])) {
-            $reddit['client_secret'] = $config['reddit']['client_secret'];
-        }
+        if ($platform === 'reddit') {
+            $reddit = [
+                'client_id'     => trim((string) $this->request->post('reddit_client_id', '')),
+                'client_secret' => trim((string) $this->request->post('reddit_client_secret', '')),
+                'username'      => trim((string) $this->request->post('reddit_username', '')),
+                'app_name'      => trim((string) $this->request->post('reddit_app_name', 'gallery-auto-poster')),
+                'app_version'   => trim((string) $this->request->post('reddit_app_version', '1.0')),
+            ];
 
-        $twitter = [
-            'client_id'          => trim((string) $this->request->post('twitter_client_id', '')),
-            'client_secret'      => trim((string) $this->request->post('twitter_client_secret', '')),
-            'consumer_key'       => trim((string) $this->request->post('twitter_consumer_key', '')),
-            'consumer_secret'    => trim((string) $this->request->post('twitter_consumer_secret', '')),
-            'oauth_token'        => trim((string) $this->request->post('twitter_oauth_token', '')),
-            'oauth_token_secret' => trim((string) $this->request->post('twitter_oauth_token_secret', '')),
-        ];
+            // Keep existing secret if the field was left blank (masked in the form).
+            if ($reddit['client_secret'] === '' && !empty($config['reddit']['client_secret'])) {
+                $reddit['client_secret'] = $config['reddit']['client_secret'];
+            }
+        } else {
+            $twitter = [
+                'client_id'          => trim((string) $this->request->post('twitter_client_id', '')),
+                'client_secret'      => trim((string) $this->request->post('twitter_client_secret', '')),
+                'consumer_key'       => trim((string) $this->request->post('twitter_consumer_key', '')),
+                'consumer_secret'    => trim((string) $this->request->post('twitter_consumer_secret', '')),
+                'oauth_token'        => trim((string) $this->request->post('twitter_oauth_token', '')),
+                'oauth_token_secret' => trim((string) $this->request->post('twitter_oauth_token_secret', '')),
+            ];
 
-        // Keep existing values if the fields were left blank (masked in the form).
-        foreach (['client_id', 'client_secret', 'consumer_key', 'consumer_secret', 'oauth_token', 'oauth_token_secret'] as $key) {
-            if ($twitter[$key] === '' && !empty($config['twitter'][$key])) {
-                $twitter[$key] = $config['twitter'][$key];
+            // Keep existing values if the fields were left blank (masked in the form).
+            foreach (['client_id', 'client_secret', 'consumer_key', 'consumer_secret', 'oauth_token', 'oauth_token_secret'] as $key) {
+                if ($twitter[$key] === '' && !empty($config['twitter'][$key])) {
+                    $twitter[$key] = $config['twitter'][$key];
+                }
+            }
+
+            // Preserve an existing authorization token across a settings save.
+            foreach (['refresh_token', 'access_token', 'bearer_token'] as $key) {
+                if (!empty($config['twitter'][$key])) {
+                    $twitter[$key] = $config['twitter'][$key];
+                }
             }
         }
 
-        // Preserve an existing authorization token across a settings save.
-        foreach (['refresh_token', 'access_token', 'bearer_token'] as $key) {
-            if (!empty($config['twitter'][$key])) {
-                $twitter[$key] = $config['twitter'][$key];
-            }
-        }
-
-        // Persist the scheduler timezone, falling back to UTC when the submitted
-        // value is not a valid PHP timezone identifier.
+        // Persist the scheduler timezone (X page only), falling back to UTC
+        // when the submitted value is not a valid PHP timezone identifier.
+        $timezone = (string) ($config['timezone'] ?? 'UTC');
         try {
-            $timezone = (new DateTimeZone(trim((string) $this->request->post('timezone', 'UTC'))))->getName();
+            $timezone = (new DateTimeZone(trim((string) $this->request->post('timezone', $timezone))))->getName();
         } catch (\Throwable $e) {
-            $timezone = 'UTC';
+            // keep the current timezone
         }
 
         AutoPosterConfig::save($reddit, $twitter, $timezone);
 
-        $this->flash('success', 'Auto Poster settings saved.');
-        $this->redirect('/admin/auto-poster');
+        $this->flash('success', ($platform === 'reddit' ? 'Reddit' : 'X') . ' settings saved.');
+        $this->redirectPath($platform);
     }
 
     /**
@@ -322,7 +338,7 @@ class AutoPosterController extends Controller
 
         if ($subreddit === '' || $title === '') {
             $this->flash('error', 'Subreddit and title are required.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectPath('reddit');
             return;
         }
 
@@ -346,7 +362,7 @@ class AutoPosterController extends Controller
         $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
             ? 'Posted to r/' . ltrim($subreddit, '/') . ': ' . ($result['url'] ?? '')
             : 'Reddit error: ' . ($result['error'] ?? 'Unknown error'));
-        $this->redirect('/admin/auto-poster');
+        $this->redirectPath('reddit');
     }
 
     /**
@@ -375,7 +391,7 @@ class AutoPosterController extends Controller
 $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
             ? 'Posted to X: ' . ($result['url'] ?? '')
             : (empty($result['skipped']) ? 'Post failed: ' : 'Not sent — ') . ($result['error'] ?? 'Unknown error'));
-        $this->redirect('/admin/auto-poster');
+        $this->redirectItemPlatform($id);
     }
 
     /**
@@ -389,14 +405,14 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
 
         if ($id <= 0 || $src === null) {
             $this->flash('error', 'Post not found.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectItemPlatform($id);
             return;
         }
 
         $newId = AutoPostQueue::requeueFrom($id);
         if ($newId <= 0) {
             $this->flash('error', 'Could not re-queue that post.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectItemPlatform($id);
             return;
         }
 
@@ -411,9 +427,9 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
         );
 
         $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
-            ? 'Reposted to X: ' . ($result['url'] ?? '')
+            ? 'Reposted to ' . $this->platformLabel((string) ($src['platform'] ?? '')) . ': ' . ($result['url'] ?? '')
             : (empty($result['skipped']) ? 'Repost failed: ' : 'Not reposted — ') . ($result['error'] ?? 'Unknown error'));
-        $this->redirect('/admin/auto-poster');
+        $this->redirectItemPlatform($id);
     }
 
     /**
@@ -432,7 +448,7 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
 
         if ($id <= 0 || $src === null) {
             $this->flash('error', 'Post not found.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectItemPlatform($id);
             return;
         }
 
@@ -441,7 +457,7 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
             $this->flash('error', $action === 'reschedule'
                 ? 'Could not schedule that post — use a valid date and time.'
                 : 'Could not re-queue that post.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectItemPlatform($id);
             return;
         }
 
@@ -454,7 +470,7 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
                 'Scheduled edited repost of #' . $id . ' as #' . $newId
             );
             $this->flash('success', 'Scheduled to publish again with your edited text — see the Posting queue.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectItemPlatform($id);
             return;
         }
 
@@ -469,9 +485,9 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
         );
 
         $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
-            ? 'Reposted to X: ' . ($result['url'] ?? '')
+            ? 'Reposted to ' . $this->platformLabel((string) ($src['platform'] ?? '')) . ': ' . ($result['url'] ?? '')
             : (empty($result['skipped']) ? 'Repost failed: ' : 'Not reposted — ') . ($result['error'] ?? 'Unknown error'));
-        $this->redirect('/admin/auto-poster');
+        $this->redirectItemPlatform($id);
     }
 
     /**
@@ -486,14 +502,14 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
 
         if ($id <= 0 || $src === null) {
             $this->flash('error', 'Post not found.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectItemPlatform($id);
             return;
         }
 
         $newId = AutoPostQueue::requeueFrom($id, $scheduledAt);
         if ($newId <= 0) {
             $this->flash('error', 'Could not schedule that post — use a valid date and time.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectItemPlatform($id);
             return;
         }
 
@@ -506,7 +522,7 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
         );
 
         $this->flash('success', 'Scheduled to publish again — see the Posting queue.');
-        $this->redirect('/admin/auto-poster');
+        $this->redirectItemPlatform($id);
     }
 
     /**
@@ -586,9 +602,10 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
      */
     public function clearLog(): void
     {
-        AutoPosterConfig::clearLog();
-        $this->flash('success', 'Auto Poster log cleared.');
-        $this->redirect('/admin/auto-poster');
+        $platform = $this->platformFromPost();
+        AutoPosterConfig::clearLog($platform);
+        $this->flash('success', ($platform === 'reddit' ? 'Reddit' : 'X') . ' posting log cleared.');
+        $this->redirectPath($platform);
     }
 
     /**
@@ -605,7 +622,7 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
 
         if ($queueId <= 0) {
             $this->flash('error', 'Gallery not found or not eligible.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectPath('x');
             return;
         }
 
@@ -618,7 +635,7 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
         );
 
         $this->flash('success', 'Added to the posting queue.');
-        $this->redirect('/admin/auto-poster');
+        $this->redirectPath('x');
     }
 
     /**
@@ -639,7 +656,7 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
 
         if ($id <= 0) {
             $this->flash('error', 'No gallery or queued item to post.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectPath('x');
             return;
         }
 
@@ -653,10 +670,10 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
             $result['ok'] ? 'Posted queued auto-post #' . $id : 'Failed queued auto-post #' . $id . ': ' . ($result['error'] ?? '')
         );
 
-        $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
-            ? 'Posted to X: ' . ($result['url'] ?? '')
+$this->flash($result['ok'] ? 'success' : 'error', $result['ok']
+            ? 'Posted to ' . $this->platformLabel($this->itemPlatform($id)) . ': ' . ($result['url'] ?? '')
             : (empty($result['skipped']) ? 'Post failed: ' : 'Not sent — ') . ($result['error'] ?? 'Unknown error'));
-        $this->redirect('/admin/auto-poster');
+        $this->redirectItemPlatform($id);
     }
 
     /**
@@ -670,13 +687,13 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
 
         if ($id <= 0 || AutoPostQueue::find($id) === null) {
             $this->flash('error', 'Queue item not found.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectItemPlatform($id);
             return;
         }
 
         if (!AutoPostQueue::reschedule($id, $scheduledAt)) {
             $this->flash('error', 'Could not update the schedule — use a valid date and time.');
-            $this->redirect('/admin/auto-poster');
+            $this->redirectItemPlatform($id);
             return;
         }
 
@@ -689,7 +706,7 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
         );
 
         $this->flash('success', 'Schedule updated.');
-        $this->redirect('/admin/auto-poster');
+        $this->redirectItemPlatform($id);
     }
 
     /**
@@ -698,9 +715,9 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
      */
     public function retryQueued(): void
     {
-        $redirectTo = $this->defaultRedirect();
-
-        $id = (int) $this->request->post('queue_id', 0);
+        $redirectTo = $this->resolveQueueRedirect();
+        $id         = (int) $this->request->post('queue_id', 0);
+        $platform   = $this->itemPlatform($id);
 
         if ($id <= 0 || !AutoPostQueue::requeue($id)) {
             $this->flash('error', 'Could not requeue that failed post.');
@@ -711,7 +728,7 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
         $result = AutoPostQueue::post($id);
 
         $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
-            ? 'Posted to X: ' . ($result['url'] ?? '')
+            ? 'Posted to ' . $this->platformLabel($platform) . ': ' . ($result['url'] ?? '')
             : (empty($result['skipped']) ? 'Post failed: ' : 'Not sent — ') . ($result['error'] ?? 'Unknown error'));
         $this->redirect($redirectTo);
     }
@@ -719,38 +736,89 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
     /**
      * Resolve where to send the user after a queue action. Prefers an explicit
      * redirect_to field (set by the dashboard so it stays on /admin instead of
-     * jumping to the Auto Poster page), falling back to the Auto Poster page.
+     * jumping to the Auto Poster page). When none was given, the queue row's
+     * own platform decides between the X and Reddit Auto Poster pages.
      */
-    private function defaultRedirect(): string
+    private function resolveQueueRedirect(): string
     {
         $redirectTo = trim((string) $this->request->post('redirect_to', ''));
 
-        if ($redirectTo === '') {
-            return '/admin/auto-poster';
+        if ($redirectTo !== '') {
+            $base = rtrim((string) config('app.base_path'), '/');
+            if ($base !== '' && strpos($redirectTo, $base) === 0) {
+                $redirectTo = substr($redirectTo, strlen($base));
+            }
+            if ($redirectTo !== '' && strpos($redirectTo, '/admin') === 0) {
+                return $redirectTo;
+            }
         }
 
-        $base = rtrim((string) config('app.base_path'), '/');
-        if ($base !== '' && strpos($redirectTo, $base) === 0) {
-            $redirectTo = substr($redirectTo, strlen($base));
-        }
-
-        if ($redirectTo === '' || strpos($redirectTo, '/admin') !== 0) {
-            return '/admin/auto-poster';
-        }
-
-        return $redirectTo;
+        return $this->platformPath($this->itemPlatform((int) $this->request->post('queue_id', 0)));
     }
 
     /**
-     * Publish every currently queued item, stopping at the first failure so a
-     * burst of posts cannot mask a systemic error (e.g. depleted credits).
+     * The queue row's platform ('twitter'/'reddit'), 'x' when unknown.
+     */
+    private function itemPlatform(int $id): string
+    {
+        $item = $id > 0 ? AutoPostQueue::find($id) : null;
+
+        return (string) ($item['platform'] ?? '');
+    }
+
+    /**
+     * The platform ("twitter"/"reddit") read from the page's hidden field.
+     */
+    private function platformFromPost(): string
+    {
+        return trim((string) $this->request->post('platform', 'x')) === 'reddit' ? 'reddit' : 'x';
+    }
+
+    /**
+     * The admin path for a platform: the X Auto Poster page or the Reddit one.
+     */
+    private function platformPath(string $platform): string
+    {
+        return ($platform === 'reddit') ? '/admin/auto-poster/reddit' : '/admin/auto-poster';
+    }
+
+    /**
+     * Redirect to the Auto Poster page that owns the given platform.
+     */
+    private function redirectPath(string $platform): void
+    {
+        $this->redirect($this->platformPath($platform));
+    }
+
+    /**
+     * Redirect to the Auto Poster page that owns a queue row (defaults to X).
+     */
+    private function redirectItemPlatform(int $id): void
+    {
+        $this->redirectPath($this->itemPlatform($id));
+    }
+
+    /**
+     * Human-friendly label for a queue platform ('X' for 'twitter', 'Reddit').
+     */
+    private function platformLabel(string $platform): string
+    {
+        return $platform === 'reddit' ? 'Reddit' : 'X';
+    }
+
+    /**
+     * Publish every queued item on the current page's platform, stopping at
+     * the first failure so a burst of posts cannot mask a systemic error
+     * (e.g. depleted credits).
      */
     public function postAllQueued(): void
     {
-        $items = AutoPostQueue::queued(50);
-        $posted  = 0;
-        $skipped = 0;
-        $failed  = 0;
+        $platform = $this->platformFromPost();
+        $queueKey = $platform === 'reddit' ? 'reddit' : 'twitter';
+        $items    = AutoPostQueue::queued(50, $queueKey);
+        $posted   = 0;
+        $skipped  = 0;
+        $failed   = 0;
 
         foreach ($items as $item) {
             $result = AutoPostQueue::post((int) $item['id']);
@@ -773,7 +841,7 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
         }
 
         $this->flash($failed === 0 ? 'success' : 'error', $summary);
-        $this->redirect('/admin/auto-poster');
+        $this->redirectPath($platform);
     }
 
     /**
@@ -782,7 +850,7 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
      */
     public function dismissQueued(): void
     {
-        $redirectTo = $this->defaultRedirect();
+        $redirectTo = $this->resolveQueueRedirect();
 
         $id = (int) $this->request->post('queue_id', 0);
 

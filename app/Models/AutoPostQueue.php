@@ -544,9 +544,16 @@ class AutoPostQueue
      * default every queued row is returned; pass a positive $limit to cap the
      * number of rows (e.g. for the worker's bounded post-all burst).
      */
-    public static function queued(int $limit = 0): array
+    public static function queued(int $limit = 0, ?string $platform = null): array
     {
         $limitSql = $limit > 0 ? ' LIMIT ' . max(1, $limit) : '';
+        $where    = "q.status = 'queued'";
+        $bind     = [];
+
+        if ($platform !== null && $platform !== '') {
+            $where .= ' AND q.platform = ?';
+            $bind[] = $platform;
+        }
 
         return Database::run(
             "SELECT q.*, p.filename, p.is_video AS is_photo_video,
@@ -554,9 +561,10 @@ class AutoPostQueue
              FROM auto_poster_queue q
              LEFT JOIN photos p ON p.id = q.photo_id
              LEFT JOIN galleries g ON g.id = q.gallery_id
-             WHERE q.status = 'queued'
+             WHERE $where
              ORDER BY COALESCE(q.scheduled_at, q.created_at) ASC, q.id ASC"
-            . $limitSql
+            . $limitSql,
+            $bind
         )->fetchAll();
     }
 
@@ -661,17 +669,25 @@ class AutoPostQueue
      * to their gallery so the admin can repost or reschedule them. Dismissed
      * rows are excluded.
      */
-    public static function recentPosts(int $limit = 20): array
+    public static function recentPosts(int $limit = 20, ?string $platform = null): array
     {
         $limit = max(1, min(100, $limit));
+        $where = "q.status IN ('posted', 'failed', 'skipped')";
+        $bind  = [];
+
+        if ($platform !== null && $platform !== '') {
+            $where .= ' AND q.platform = ?';
+            $bind[] = $platform;
+        }
 
         return Database::run(
             "SELECT q.*, COALESCE(g.title, '') AS gallery_title
              FROM auto_poster_queue q
              LEFT JOIN galleries g ON g.id = q.gallery_id
-             WHERE q.status IN ('posted', 'failed', 'skipped')
+             WHERE $where
              ORDER BY COALESCE(q.posted_at, q.created_at) DESC, q.id DESC
-             LIMIT $limit"
+             LIMIT $limit",
+            $bind
         )->fetchAll();
     }
 
@@ -800,10 +816,19 @@ class AutoPostQueue
      *
      * @return array{queued: int, posted: int, failed: int, dismissed: int, skipped: int}
      */
-    public static function statusCounts(): array
+    public static function statusCounts(?string $platform = null): array
     {
+        $where = '1 = 1';
+        $bind  = [];
+
+        if ($platform !== null && $platform !== '') {
+            $where = 'platform = ?';
+            $bind[] = $platform;
+        }
+
         $rows = Database::run(
-            'SELECT status, COUNT(*) AS c FROM auto_poster_queue GROUP BY status'
+            'SELECT status, COUNT(*) AS c FROM auto_poster_queue WHERE ' . $where . ' GROUP BY status',
+            $bind
         )->fetchAll();
 
         $counts = ['queued' => 0, 'posted' => 0, 'failed' => 0, 'dismissed' => 0, 'skipped' => 0];
