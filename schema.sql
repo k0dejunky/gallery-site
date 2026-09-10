@@ -480,6 +480,17 @@ CREATE TABLE IF NOT EXISTS content_views (
     INDEX idx_content_views_date (view_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- Unique-IP page-visit tracking for the view-trends section: one row per
+-- form page + IP + calendar day (INSERT IGNORE for repeated same-day IPs).
+CREATE TABLE IF NOT EXISTS page_ip_visits (
+    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    page       VARCHAR(16) NOT NULL,
+    ip         VARCHAR(45) NOT NULL,
+    visit_date DATE NOT NULL,
+    UNIQUE KEY uq_page_ip_visits_page_ip_date (page, ip, visit_date),
+    INDEX idx_page_ip_visits_date (visit_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- Traffic links & attribution: admin-generated custom links (short ?c= code,
 -- optionally carrying utm parcels) record where visitors come from and which
 -- source signed them up.

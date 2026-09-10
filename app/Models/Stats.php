@@ -525,54 +525,122 @@ class Stats
     }
 
     /**
-     * Daily total views of galleries and photos over the last $days days,
-     * for the dashboard view-trends sparkline/bar chart. Returns shared date
-     * labels plus separate gallery/photo/total series (Y-m-d => count).
+     * Total views of galleries and photos over the selected period, for the
+     * dashboard view-trends chart. Short periods (day/week/month) use daily
+     * buckets; year and all time are bucketed by calendar month so the series
+     * stays compact. Returns shared labels plus gallery/photo/total series.
      *
-     * @return array{labels: array<int,string>, gallery: array<int,int>, photo: array<int,int>, total: array<int,int>}
+     * @return array{labels: array<int,string>, gallery: array<int,int>, photo: array<int,int>, total: array<int,int>, granularity: string, period: string}
      */
-    public static function contentViewTrends(int $days = 30): array
+    public static function contentViewTrends(string $period = 'month'): array
     {
-        $days   = max(7, min(365, $days));
-        $since  = date('Y-m-d', time() - $days * 86400);
+        $periods = [
+            'day'   => ['days' => 1, 'gran' => 'day'],
+            'week'  => ['days' => 7, 'gran' => 'day'],
+            'month' => ['days' => 30, 'gran' => 'day'],
+            'year'  => ['days' => null, 'gran' => 'month'],
+            'all'   => ['days' => null, 'gran' => 'month'],
+        ];
+        $period = strtolower($period);
+        $cfg    = $periods[$period] ?? $periods['month'];
+        $gran   = $cfg['gran'];
+
+        $params = [];
+        $where  = '';
+        if ($cfg['days'] !== null) {
+            $where = 'WHERE view_date >= ?';
+            $params[] = date('Y-m-d', time() - $cfg['days'] * 86400);
+        }
 
         $rows = Database::run(
-            'SELECT entity_type, view_date, SUM(count) AS cnt
+            "SELECT entity_type, view_date, SUM(count) AS cnt
              FROM content_views
-             WHERE view_date >= ?
+             {$where}
              GROUP BY entity_type, view_date
-             ORDER BY view_date ASC',
-            [$since]
+             ORDER BY view_date ASC",
+            $params
         )->fetchAll();
 
         $byType = ['gallery' => [], 'photo' => []];
         foreach ($rows as $row) {
             $type = (string) $row['entity_type'];
-            if (isset($byType[$type])) {
-                $byType[$type][(string) $row['view_date']] = (int) $row['cnt'];
+            if (!isset($byType[$type])) {
+                continue;
             }
+
+            $key                  = $gran === 'month' ? date('Y-m', strtotime((string) $row['view_date'])) : (string) $row['view_date'];
+            $byType[$type][$key]  = ($byType[$type][$key] ?? 0) + (int) $row['cnt'];
         }
+
+        $keys = self::viewTrendAxis($gran, $period, $byType);
 
         $labels  = [];
         $gallery = [];
         $photo   = [];
         $total   = [];
-        for ($i = $days - 1; $i >= 0; $i--) {
-            $key      = date('Y-m-d', time() - $i * 86400);
-            $g        = $byType['gallery'][$key] ?? 0;
-            $p        = $byType['photo'][$key] ?? 0;
-            $labels[] = date('n/j', strtotime($key));
+        foreach ($keys as $key) {
+            $g         = $byType['gallery'][$key] ?? 0;
+            $p         = $byType['photo'][$key] ?? 0;
+            $labels[]  = $gran === 'month' ? date('M y', strtotime($key . '-01')) : date('n/j', strtotime($key));
             $gallery[] = $g;
             $photo[]   = $p;
             $total[]   = $g + $p;
         }
 
         return [
-            'labels'  => $labels,
-            'gallery' => $gallery,
-            'photo'   => $photo,
-            'total'   => $total,
+            'labels'      => $labels,
+            'gallery'     => $gallery,
+            'photo'       => $photo,
+            'total'       => $total,
+            'granularity' => $gran,
+            'period'      => $period,
         ];
+    }
+
+    /**
+     * Continuous axis of bucket keys for the view-trends period selector:
+     * the trailing N calendar days, or a run of calendar months (11 trailing
+     * months for "year", the recorded history for "all time"). Shared with the
+     * page-IP visit series so both charts draw the same baseline.
+     *
+     * @param array<string, array<string, int>> $byType
+     *
+     * @return array<int, string>
+     */
+    private static function viewTrendAxis(string $gran, string $period, array $byType): array
+    {
+        if ($gran === 'day') {
+            $days = ['day' => 1, 'week' => 7, 'month' => 30][$period] ?? 30;
+            $out  = [];
+            for ($i = $days - 1; $i >= 0; $i--) {
+                $out[] = date('Y-m-d', time() - $i * 86400);
+            }
+
+            return $out;
+        }
+
+        $known = array_keys($byType['gallery'] + $byType['photo']);
+        if ($period === 'all') {
+            $start = $known !== [] ? min($known) : date('Y-m');
+        } else {
+            $start = date('Y-m', strtotime('-11 months', mktime(0, 0, 0, (int) date('n'), 1, (int) date('Y'))));
+        }
+
+        $out   = [];
+        $ts    = mktime(0, 0, 0, (int) substr($start, 5, 2), 1, (int) substr($start, 0, 4));
+        $until = time();
+        $guard = 0;
+        while ($ts <= $until && $guard < 1200) {
+            $out[] = date('Y-m', $ts);
+            $ts    = strtotime('+1 month', $ts);
+            $guard++;
+        }
+
+        if (end($out) !== date('Y-m')) {
+            $out[] = date('Y-m');
+        }
+
+        return $out;
     }
 
     /**

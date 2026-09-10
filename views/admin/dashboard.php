@@ -345,25 +345,36 @@
     <?php endif; ?>
 </details>
 
-<?php // Daily view trends (from the content_views log) — gallery vs photo vs total. ?>
-<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="views" open>
-    <summary><h2 style="margin:0;">View trends — last 30 days</h2></summary>
-    <?php
-        $viewTotals = array_sum($viewTrends['total']);
-        $viewNow    = (int) end($viewTrends['total']);
-        $viewDw     = array_sum(array_slice($viewTrends['total'], -7));
-    ?>
-    <?php if ($viewTotals <= 0): ?>
-        <p class="muted">No tracked views yet — a logged-in visit to a gallery or photo records a daily count from now on.</p>
+<?php // View trends (content_views log + login/signup unique-IP page visits),
+    // with a selectable period like the storage trend. ?>
+<?php
+    $vtWinLabels = ['day' => 'today', 'week' => 'last 7 days', 'month' => 'last 30 days', 'year' => 'last 12 months', 'all' => 'all recorded history'];
+    $vtSumLabels = ['day' => 'today', 'week' => '7 days', 'month' => '30 days', 'year' => '12 months', 'all' => 'all time'];
+    $vtWin       = $vtWinLabels[$viewPeriod] ?? 'last 30 days';
+    $vtSum       = $vtSumLabels[$viewPeriod] ?? '30 days';
+    $viewTotals  = array_sum($viewTrends['total']);
+    $anyVisits   = $pageVisits['unique_login'] > 0 || $pageVisits['unique_signup'] > 0;
+?>
+<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="views" open id="view-trends">
+    <summary><h2 style="margin:0;">View trends — <?= e($vtWin) ?></h2></summary>
+    <div class="storage-periods" role="navigation" aria-label="View trends period" style="margin-top:var(--spacing-sm);">
+        <?php foreach (['day' => 'Day', 'week' => 'Week', 'month' => 'Month', 'year' => 'Year', 'all' => 'All time'] as $vp => $label): ?>
+            <a class="btn btn-sm<?= $viewPeriod === $vp ? ' storage-period-active' : '' ?>"
+               href="<?= e(url('/admin?vt=' . $vp . '#view-trends')) ?>"><?= e($label) ?></a>
+        <?php endforeach; ?>
+    </div>
+    <?php if ($viewTotals <= 0 && !$anyVisits): ?>
+        <p class="muted">No tracked views yet — a logged-in visit to a gallery or photo, and a visit to the login or signup page, record a daily count from now on.</p>
     <?php else: ?>
         <div class="stat-cards" style="margin:.75rem 0;">
-            <div class="stat-card"><span class="muted">Views (30 days)</span><b style="font-size:1.3rem;"><?= number_format($viewTotals) ?></b></div>
-            <div class="stat-card"><span class="muted">Views (last 7 days)</span><b style="font-size:1.3rem;"><?= number_format($viewDw) ?></b></div>
-            <div class="stat-card"><span class="muted">Views (yesterday)</span><b style="font-size:1.3rem;"><?= number_format($viewNow) ?></b></div>
+            <div class="stat-card"><span class="muted">Views (<?= e($vtSum) ?>)</span><b style="font-size:1.3rem;"><?= number_format($viewTotals) ?></b></div>
+            <div class="stat-card"><span class="muted">Unique IPs — login page</span><b style="font-size:1.3rem;"><?= number_format($pageVisits['unique_login']) ?></b></div>
+            <div class="stat-card"><span class="muted">Unique IPs — signup page</span><b style="font-size:1.3rem;"><?= number_format($pageVisits['unique_signup']) ?></b></div>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
             <div style="flex:2 1 400px;min-width:300px;">
                 <?= \App\Core\Charts::bars($viewTrends['labels'], $viewTrends['total'], 520, 140, '#0ea5e9', '%s') ?>
+                <p class="muted" style="margin:.15rem 0 0;font-size:.8rem;">Gallery + photo views</p>
             </div>
             <div style="flex:1 1 180px;min-width:160px;">
                 <p class="muted" style="margin:0 0 .35rem;font-size:.85rem;">Gallery vs photo views</p>
@@ -373,6 +384,27 @@
                 <p class="muted" style="margin:.15rem 0 0;font-size:.8rem;">Photos</p>
             </div>
         </div>
+
+        <h3 style="margin:1.1rem 0 .5rem;font-size:.95rem;">Unique visitors — login &amp; signup pages</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
+            <div style="flex:2 1 400px;min-width:300px;">
+                <?php if (!$anyVisits): ?>
+                    <p class="muted">No page visits tracked yet — a visit to the login or signup form records a unique-IP count from now on.</p>
+                <?php else: ?>
+                    <?= \App\Core\Charts::bars($pageVisits['labels'], $pageVisits['total'], 520, 140, '#2563eb', '%s') ?>
+                    <p class="muted" style="margin:.15rem 0 0;font-size:.8rem;">Unique IPs on the login + signup pages<?php if ($pageVisits['granularity'] === 'month'): ?> per month<?php endif; ?></p>
+                <?php endif; ?>
+            </div>
+            <div style="flex:1 1 180px;min-width:160px;">
+                <p class="muted" style="margin:0 0 .35rem;font-size:.85rem;">Login page uniques</p>
+                <?= \App\Core\Charts::sparkline($pageVisits['login'], 200, 44, '#2563eb') ?>
+                <p class="muted" style="margin:.15rem 0 .35rem;font-size:.8rem;">Signup page uniques</p>
+                <?= \App\Core\Charts::sparkline($pageVisits['signup'], 200, 44, '#a855f7') ?>
+            </div>
+        </div>
+        <?php if (!empty($pageVisits['first_visit'])): ?>
+            <p class="muted" style="margin:.5rem 0 0;font-size:.8rem;">Page-visit history begins <?= e(tzdate('n/j/Y', (string) $pageVisits['first_visit'] . ' UTC')) ?></p>
+        <?php endif; ?>
     <?php endif; ?>
 </details>
 

@@ -6,8 +6,9 @@ use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\Mailer;
 use App\Core\RateLimiter;
-use App\Models\Photo;
+use App\Models\PageVisit;
 use App\Models\PasswordReset;
+use App\Models\Photo;
 use App\Models\Traffic;
 use App\Models\User;
 
@@ -22,6 +23,8 @@ class AuthController extends Controller
         if (Auth::check() && empty($_GET['se'])) {
             $this->redirect(Auth::homePath() . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
         }
+
+        PageVisit::record('login', $this->request->ip());
 
         $this->view('auth/login', [
             // Only the most recent uploads are shown on the login page.
@@ -100,6 +103,8 @@ class AuthController extends Controller
         if (Auth::check()) {
             $this->redirect(Auth::homePath() . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
         }
+
+        PageVisit::record('signup', $this->request->ip());
 
         $this->view('auth/signup', [
             'recentImages' => Photo::recentImages(10),

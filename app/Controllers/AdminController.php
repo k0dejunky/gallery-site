@@ -7,6 +7,7 @@ use App\Core\Controller;
 use App\Core\Database;
 use App\Models\Category;
 use App\Models\Gallery;
+use App\Models\PageVisit;
 use App\Models\Photo;
 use App\Models\Stats;
 
@@ -56,6 +57,11 @@ class AdminController extends Controller
             $storagePeriod = 'week';
         }
 
+        $viewPeriod = (string) ($_GET['vt'] ?? 'month');
+        if (!in_array($viewPeriod, ['day', 'week', 'month', 'year', 'all'], true)) {
+            $viewPeriod = 'month';
+        }
+
         $this->viewAdmin('dashboard', [
             'summary'   => Stats::summary(),
             'growth'    => Stats::growth(),
@@ -70,7 +76,9 @@ class AdminController extends Controller
             'disk'       => $disk,
 
             // Additional statistics.
-            'viewTrends' => \App\Models\Stats::contentViewTrends(30),
+            'viewPeriod' => $viewPeriod,
+            'viewTrends' => \App\Models\Stats::contentViewTrends($viewPeriod),
+            'pageVisits' => \App\Models\PageVisit::uniqueTrends($viewPeriod),
             'growthSeries' => \App\Models\Stats::growthSeries(6),
             'topContentStats' => \App\Models\Stats::topContent(5),
             'planDistribution' => \App\Models\Stats::planDistribution(),

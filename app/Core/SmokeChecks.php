@@ -91,6 +91,8 @@ class SmokeChecks
             'app/Controllers/TrafficController.php',
             'views/admin/traffic.php',
             'views/admin/traffic_show.php',
+            'app/Models/PageVisit.php',
+            'database/migrations/015_page_ip_visits.sql',
         ];
         foreach ($files as $rel) {
             $slug = str_replace(['/', '.'], '_', $rel);
@@ -145,7 +147,7 @@ class SmokeChecks
         preg_match_all('/CREATE TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+`?([A-Za-z0-9_]+)`?/i', $schema, $m);
         $tables = array_map('strtolower', $m[1]);
 
-        foreach (['users', 'galleries', 'photos', 'subscriptions', 'storage_snapshots', 'support_replies', 'gallery_favorites', 'saved_searches', 'email_queue', 'content_views', 'auto_poster_queue', 'traffic_links', 'traffic_visits'] as $must) {
+        foreach (['users', 'galleries', 'photos', 'subscriptions', 'storage_snapshots', 'support_replies', 'gallery_favorites', 'saved_searches', 'email_queue', 'content_views', 'auto_poster_queue', 'traffic_links', 'traffic_visits', 'page_ip_visits'] as $must) {
             $add("smoke.schema.table.$must", 'Smoke · Schema', "schema.sql has table: $must", static function () use ($must, $tables, $ok, $bad): array {
                 return in_array($must, $tables, true) ? $ok('present') : $bad("schema.sql missing table: $must");
             });
@@ -186,6 +188,12 @@ class SmokeChecks
         });
         $add('smoke.schema.traffic_uq', 'Smoke · Schema', 'traffic_visits unique (link_id, ref_date, visitor_id)', static function () use ($schema, $ok, $bad): array {
             return strpos($schema, 'uq_traffic_visits') !== false ? $ok('daily dedupe key') : $bad('schema.sql: traffic_visits must carry the (link_id, ref_date, visitor_id) unique key');
+        });
+        $add('smoke.schema.page_ip_visits_table', 'Smoke · Schema', 'schema.sql has table: page_ip_visits', static function () use ($tables, $ok, $bad): array {
+            return in_array('page_ip_visits', $tables, true) ? $ok('present') : $bad('schema.sql missing table: page_ip_visits');
+        });
+        $add('smoke.schema.page_ip_visits_uq', 'Smoke · Schema', 'page_ip_visits unique (page, ip, visit_date)', static function () use ($schema, $ok, $bad): array {
+            return strpos($schema, 'uq_page_ip_visits_page_ip_date') !== false ? $ok('daily per-IP dedupe key') : $bad('schema.sql: page_ip_visits must carry the (page, ip, visit_date) unique key');
         });
 
         // --------------------------------------------------------------- Traffic
@@ -267,6 +275,38 @@ class SmokeChecks
             return strpos($trafficShow, 'Attributed Signups') !== false && strpos($trafficShow, 'Last 30 Days') !== false && strpos($trafficShow, 'sparkline') !== false
                 ? $ok('detail page present')
                 : $bad('traffic_show view must render the 30-day series, sparkline and attributed signups');
+        });
+
+        // ----------------------------------------------------- View trends
+        $statsModel   = $read("$root/app/Models/Stats.php");
+        $pageVisitMod = $read("$root/app/Models/PageVisit.php");
+        $adminCtrl    = $read("$root/app/Controllers/AdminController.php");
+        $dashboard    = $read("$root/views/admin/dashboard.php");
+        $add('smoke.views.login_record', 'Smoke · View trends', 'Login page records a unique-IP visit', static function () use ($authCtrl, $ok, $bad): array {
+            return strpos($authCtrl, "PageVisit::record('login'") !== false ? $ok('loginForm wired') : $bad('AuthController::loginForm must record a PageVisit for the login page');
+        });
+        $add('smoke.views.signup_record', 'Smoke · View trends', 'Signup page records a unique-IP visit', static function () use ($authCtrl, $ok, $bad): array {
+            return strpos($authCtrl, "PageVisit::record('signup'") !== false ? $ok('signupForm wired') : $bad('AuthController::signupForm must record a PageVisit for the signup page');
+        });
+        $add('smoke.views.dedupe', 'Smoke · View trends', 'Page-visit rows deduped per page/IP/day', static function () use ($pageVisitMod, $ok, $bad): array {
+            return strpos($pageVisitMod, 'INSERT IGNORE') !== false && strpos($pageVisitMod, 'CURDATE()') !== false && strpos($pageVisitMod, 'visit_date') !== false
+                ? $ok('INSERT IGNORE per page/IP/day')
+                : $bad('PageVisit::record must INSERT IGNORE a per-day (page, ip, visit_date) row');
+        });
+        $add('smoke.views.distinct_counts', 'Smoke · View trends', 'Uniques computed with COUNT(DISTINCT ip)', static function () use ($pageVisitMod, $ok, $bad): array {
+            return strpos($pageVisitMod, 'COUNT(DISTINCT ip)') !== false ? $ok('distinct IP counting') : $bad('PageVisit uniques must be computed via COUNT(DISTINCT ip)');
+        });
+        $add('smoke.views.periods', 'Smoke · View trends', 'View trends honor day/week/month/year/all time', static function () use ($statsModel, $pageVisitMod, $ok, $bad): array {
+            return strpos($statsModel, "'year'") !== false && strpos($statsModel, "'all'") !== false
+                && strpos($pageVisitMod, "'year'") !== false && strpos($pageVisitMod, "'all'") !== false
+                ? $ok('both series selectable')
+                : $bad('contentViewTrends and PageVisit must support day/week/month/year/all time periods');
+        });
+        $add('smoke.views.dashboard_wiring', 'Smoke · View trends', 'Dashboard renders the period selector and page-visit stats', static function () use ($dashboard, $adminCtrl, $ok, $bad): array {
+            return strpos($dashboard, "vt=") !== false && strpos($dashboard, "pageVisits['unique_login']") !== false
+                && strpos($adminCtrl, "'viewPeriod'") !== false
+                ? $ok('selector + stats wired')
+                : $bad('dashboard must expose the view-trends period selector and render login/signup unique-IP stats');
         });
 
         // ------------------------------------------------------ Auto Poster
