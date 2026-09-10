@@ -223,9 +223,12 @@ class AutoPostQueue
      *
      * @return array<int, array{gallery_id: int, gallery_title: string, gallery_description: string, newest_media_at: string, media: array<int, array{id: int, filename: string, is_video: int, caption: string}>, media_count: int, suggested_text: string, default_scheduled_at: string}>
      */
-    public static function recommendations(int $limit = 8): array
+    public static function recommendations(int $limit = 8, string $platform = 'x'): array
     {
         $limit = max(1, min(50, $limit));
+        $key   = self::normalizePlatform($platform);
+        $tpl   = self::templateSettings($key);
+        $dbKey = $key === 'reddit' ? 'reddit' : 'twitter';
 
         $rows = Database::run(
             "SELECT g.id AS gallery_id, g.title AS gallery_title,
@@ -235,22 +238,26 @@ class AutoPostQueue
              JOIN gallery_photo gp ON gp.gallery_id = g.id
              JOIN photos p ON p.id = gp.photo_id
              WHERE g.deleted_at IS NULL
-               AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) self::templateSettings('x')['recent_days'] . " DAY)
-               AND NOT EXISTS (SELECT 1 FROM auto_poster_queue q WHERE q.gallery_id = g.id)
+               AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) $tpl['recent_days'] . " DAY)
+               AND NOT EXISTS (SELECT 1 FROM auto_poster_queue q
+                               WHERE q.gallery_id = g.id
+                                 AND q.platform = '$dbKey'
+                                 AND q.status IN ('queued', 'dismissed'))
              GROUP BY g.id
              ORDER BY newest_media_at DESC, g.id DESC
              LIMIT $limit"
         )->fetchAll();
 
         foreach ($rows as &$row) {
-            $media              = self::galleryMedia((int) $row['gallery_id']);
+            $media              = self::galleryMedia((int) $row['gallery_id'], null, $key);
+            $row['platform']    = $dbKey;
             $row['media']       = $media;
             $row['media_count'] = count($media);
             $row['suggested_text'] = self::buildText([
                 'gallery_title' => (string) $row['gallery_title'],
                 'caption'       => (string) $row['gallery_description'],
-            ], self::categoryHashtags((int) $row['gallery_id']));
-            $row['default_scheduled_at'] = self::defaultSchedule();
+            ], self::categoryHashtags((int) $row['gallery_id'], null, $key), $tpl);
+            $row['default_scheduled_at'] = self::defaultSchedule(null, $key);
         }
         unset($row);
 
@@ -266,16 +273,18 @@ class AutoPostQueue
      *
      * @return array<int, array{id: int, filename: string, is_video: int, caption: string}>
      */
-    public static function galleryMedia(int $galleryId, ?int $limit = null): array
+    public static function galleryMedia(int $galleryId, ?int $limit = null, string $platform = 'x'): array
     {
-        $limit = max(1, min((int) self::templateSettings('x')['max_media'], $limit ?? (int) self::templateSettings('x')['max_media']));
+        $key   = self::normalizePlatform($platform);
+        $tpl   = self::templateSettings($key);
+        $limit = max(1, min((int) $tpl['max_media'], $limit ?? (int) $tpl['max_media']));
 
         $photos = Database::run(
             "SELECT p.id, p.filename, p.is_video, p.caption
              FROM photos p
              JOIN gallery_photo gp ON gp.photo_id = p.id
              WHERE gp.gallery_id = ?
-               AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) self::templateSettings('x')['recent_days'] . " DAY)
+               AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) $tpl['recent_days'] . " DAY)
              ORDER BY p.created_at DESC, p.id DESC
              LIMIT $limit",
             [$galleryId]
@@ -297,9 +306,11 @@ class AutoPostQueue
      *
      * @return list<string>
      */
-    public static function categoryHashtags(int $galleryId, ?int $limit = null): array
+    public static function categoryHashtags(int $galleryId, ?int $limit = null, string $platform = 'x'): array
     {
-        $limit = max(0, min(self::MAX_TAGS, $limit ?? (int) self::templateSettings('x')['max_tags']));
+        $key   = self::normalizePlatform($platform);
+        $tpl   = self::templateSettings($key);
+        $limit = max(0, min(self::MAX_TAGS, $limit ?? (int) $tpl['max_tags']));
         $tags  = [];
 
         foreach (Gallery::categories($galleryId) as $category) {
@@ -446,11 +457,11 @@ class AutoPostQueue
      * prefill the admin's schedule field so every post consistently starts
      * with a publish date/time.
      */
-    public static function defaultSchedule(?int $from = null): string
+    public static function defaultSchedule(?int $from = null, string $platform = 'x'): string
     {
         $from = $from ?? time();
         $dt   = (new DateTime('@' . $from))->setTimezone(self::schedulerTimezone());
-        $dt->modify('+' . (int) self::templateSettings('x')['schedule_minutes'] . ' minutes');
+        $dt->modify('+' . (int) self::templateSettings($platform)['schedule_minutes'] . ' minutes');
 
         return $dt->format('Y-m-d\TH:i');
     }
@@ -460,18 +471,18 @@ class AutoPostQueue
      * scheduler timezone for the admin picker. Missing/invalid values fall
      * back to the default schedule.
      */
-    public static function displaySchedule(?string $utc): string
+    public static function displaySchedule(?string $utc, string $platform = 'x'): string
     {
         $value = trim((string) $utc);
 
         if ($value === '') {
-            return self::defaultSchedule();
+            return self::defaultSchedule(null, $platform);
         }
 
         $dt = DateTime::createFromFormat('Y-m-d H:i:s', $value, new DateTimeZone('UTC'));
 
         if ($dt === false) {
-            return self::defaultSchedule();
+            return self::defaultSchedule(null, $platform);
         }
 
         return $dt->setTimezone(self::schedulerTimezone())->format('Y-m-d\TH:i');
@@ -487,7 +498,7 @@ class AutoPostQueue
      *                                 (Y-m-d\TH:i) — invalid values fall back
      *                                 to the default.
      */
-    public static function enqueue(int $galleryId, ?string $text = null, ?string $scheduledAt = null): int
+    public static function enqueue(int $galleryId, ?string $text = null, ?string $scheduledAt = null, string $platform = 'twitter'): int
     {
         $gallery = Database::run(
             'SELECT id, title, description FROM galleries
@@ -499,7 +510,11 @@ class AutoPostQueue
             return 0;
         }
 
-        $media = self::galleryMedia($galleryId);
+        $key   = self::normalizePlatform($platform);
+        $tpl   = self::templateSettings($key);
+        $dbKey = $key === 'reddit' ? 'reddit' : 'twitter';
+
+        $media = self::galleryMedia($galleryId, null, $key);
         $mediaIds = array_map(static function (array $photo): int {
             return (int) $photo['id'];
         }, $media);
@@ -508,9 +523,9 @@ class AutoPostQueue
             $text = self::buildText([
                 'gallery_title' => (string) $gallery['title'],
                 'caption'       => (string) $gallery['description'],
-            ], self::categoryHashtags($galleryId));
+            ], self::categoryHashtags($galleryId, null, $key), $tpl);
         } else {
-            $text = mb_substr(trim($text), 0, 280);
+            $text = mb_substr(trim($text), 0, $key === 'reddit' ? 40000 : 280);
         }
 
         // Banned-word filter: strip offending words from an admin-provided
@@ -518,14 +533,14 @@ class AutoPostQueue
         // gallery itself is still queued).
         $text = self::stripBannedWords($text);
 
-        $scheduled = self::normalizeSchedule($scheduledAt) ?? self::defaultSchedule();
+        $scheduled = self::normalizeSchedule($scheduledAt) ?? self::defaultSchedule(null, $key);
 
         Database::run(
             'INSERT INTO auto_poster_queue
                 (platform, photo_id, gallery_id, media_ids, text, status, created_at, scheduled_at)
              VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)',
             [
-                'twitter',
+                $dbKey,
                 !empty($mediaIds) ? $mediaIds[0] : null,
                 $galleryId,
                 !empty($mediaIds) ? json_encode(array_map(static fn (int $id): int => $id, $mediaIds)) : null,
@@ -712,16 +727,18 @@ class AutoPostQueue
             return 0;
         }
 
+        $key = self::normalizePlatform((string) $src['platform']);
+
         // Never default to a NULL schedule: without one the worker treats the
         // row as due immediately (posts "now") and the admin sees a blank
         // schedule in the queue. Default to the standard one-hour-ahead time.
-        $scheduled = self::defaultSchedule();
+        $scheduled = self::defaultSchedule(null, $key);
         if (trim((string) $scheduledAt) !== '') {
-            $scheduled = self::normalizeSchedule($scheduledAt) ?? self::defaultSchedule();
+            $scheduled = self::normalizeSchedule($scheduledAt) ?? self::defaultSchedule(null, $key);
         }
 
         $newText = ($text !== null && trim($text) !== '')
-            ? mb_substr(trim($text), 0, 280)
+            ? mb_substr(trim($text), 0, $key === 'reddit' ? 40000 : 280)
             : (string) $src['text'];
 
         Database::run(
@@ -921,7 +938,7 @@ class AutoPostQueue
      * so the gallery is never offered again. Inserts a dismissed row when the
      * gallery has none. Returns the queue row id or 0.
      */
-    public static function dismissGallery(int $galleryId): int
+    public static function dismissGallery(int $galleryId, string $platform = 'twitter'): int
     {
         $gallery = Database::run(
             'SELECT id, title, description FROM galleries
@@ -940,8 +957,8 @@ class AutoPostQueue
 
         if ($existing > 0) {
             Database::run(
-                'UPDATE auto_poster_queue SET status = ? WHERE gallery_id = ?',
-                ['dismissed', $galleryId]
+                'UPDATE auto_poster_queue SET status = ? WHERE gallery_id = ? AND platform = ?',
+                ['dismissed', $galleryId, $platform === 'reddit' ? 'reddit' : 'twitter']
             );
 
             $row = Database::run(
@@ -952,16 +969,18 @@ class AutoPostQueue
             return (int) ($row['id'] ?? 0);
         }
 
-        $text = self::buildText([
+        $key      = self::normalizePlatform($platform);
+        $dbKey    = $key === 'reddit' ? 'reddit' : 'twitter';
+        $text     = self::buildText([
             'gallery_title' => (string) $gallery['title'],
             'caption'       => (string) $gallery['description'],
-        ], self::categoryHashtags($galleryId));
+        ], self::categoryHashtags($galleryId, null, $key), self::templateSettings($key));
 
         Database::run(
             'INSERT INTO auto_poster_queue
                 (platform, gallery_id, text, status, created_at)
              VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
-            ['twitter', $galleryId, $text, 'dismissed']
+            [$dbKey, $galleryId, $text, 'dismissed']
         );
 
         return (int) Database::connection()->lastInsertId();

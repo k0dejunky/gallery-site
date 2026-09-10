@@ -274,8 +274,10 @@ class SmokeChecks
         $add('smoke.ap.domain', 'Smoke · Auto Poster', 'AutoPostQueue recommends the site domain', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'amethyst2213.com') !== false ? $ok('domain present') : $bad('auto-post recommendations must include the site domain');
         });
-        $add('smoke.ap.char_limit', 'Smoke · Auto Poster', 'Custom text capped at 280 characters', static function () use ($apq, $ok, $bad): array {
-            return strpos($apq, 'mb_substr(trim($text), 0, 280)') !== false ? $ok('280 cap') : $bad('auto-post queue must cap custom text at 280 characters');
+        $add('smoke.ap.char_limit', 'Smoke · Auto Poster', 'Custom text capped per platform (X 280 / Reddit 40000)', static function () use ($apq, $ok, $bad): array {
+            return strpos($apq, 'mb_substr(trim($text), 0, 280)') !== false || substr_count($apq, "? 40000 : 280)") >= 2
+                ? $ok('280 / 40000 caps')
+                : $bad('auto-post queue must cap custom text at 280 characters for X and 40000 for Reddit');
         });
         $add('smoke.ap.media_cap', 'Smoke · Auto Poster', 'Attachments capped at 4 media files', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'MAX_ATTACHED_MEDIA') !== false ? $ok('MAX_ATTACHED_MEDIA present') : $bad('auto-post queue must cap attachments at 4 media files');
@@ -379,14 +381,25 @@ class SmokeChecks
                 : $bad('auto-poster page must render an X|Reddit platform switch, an editable template panel with hidden platform and a live preview');
         });
         $add('smoke.ap.requeue_schedule', 'Smoke · Auto Poster', 'Repost/reschedule rows always get a real schedule', static function () use ($apq, $ok, $bad): array {
-            return strpos($apq, 'function requeueFrom') !== false && strpos($apq, '$scheduled = self::defaultSchedule();') !== false
+            return strpos($apq, 'function requeueFrom') !== false && strpos($apq, '$scheduled = self::defaultSchedule(null, $key);') !== false
                 ? $ok('defaults to +1h, never NULL')
                 : $bad('AutoPostQueue::requeueFrom must default empty/invalid schedules to defaultSchedule() so reposts are never queued with "no time"');
         });
         $add('smoke.ap.recent_prefill', 'Smoke · Auto Poster', 'Recent-posts Reschedule picker prefills +1h, not the old time', static function () use ($apv, $ok, $bad): array {
-            return substr_count($apv, '\App\Models\AutoPostQueue::defaultSchedule()') >= 2
+            return substr_count($apv, 'AutoPostQueue::defaultSchedule(') >= 2
                 ? $ok('both recent-post schedulers prefill default')
                 : $bad('recent-posts Reschedule/Repost pickers must prefill AutoPostQueue::defaultSchedule() (+1h) instead of the item\'s stale scheduled_at');
+        });
+        $add('smoke.ap.platform_recs', 'Smoke · Auto Poster', 'Recommended posts work per platform on both pages', static function () use ($apq, $apv, $root, $read, $ok, $bad): array {
+            $ctrl = $read("$root/app/Controllers/AutoPosterController.php");
+            return strpos($apq, 'public static function recommendations(int $limit = 8, string $platform') !== false
+                && strpos($apq, "q.status IN ('queued', 'dismissed')") !== false
+                && strpos($apq, 'public static function enqueue(int $galleryId, ?string $text = null, ?string $scheduledAt = null, string $platform') !== false
+                && strpos($ctrl, 'AutoPostQueue::recommendations(8, $isX ? \'x\' : \'reddit\')') !== false
+                && strpos($apv, 'queue/recommend') !== false
+                && strpos($apv, '<input type="hidden" name="platform" value="<?= e($platform) ?>">') !== false
+                ? $ok('per-platform recommendations on both pages')
+                : $bad('recommendations must be generated per platform on both X and Reddit pages, excluding only pending/dismissed galleries');
         });
         $add('smoke.ap.post_guarded', 'Smoke · Auto Poster', 'Client exceptions mark the row failed, never left queued', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'catch (\Throwable $e)') !== false && strpos($apq, 'thrown by the platform client') !== false

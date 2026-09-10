@@ -57,7 +57,7 @@ class AutoPosterController extends Controller
                 'gallery_title' => 'Example gallery',
                 'caption'       => 'Fresh uploads',
             ], ['amateur', 'redhead', 'new'], $template),
-            'recommended'     => $isX ? AutoPostQueue::recommendations(8) : [],
+            'recommended'     => AutoPostQueue::recommendations(8, $isX ? 'x' : 'reddit'),
             'queue'           => AutoPostQueue::queued(0, $queueKey),
             'queueCounts'     => AutoPostQueue::statusCounts($queueKey),
             'recentPosts'     => AutoPostQueue::recentPosts(20, $queueKey),
@@ -618,11 +618,13 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
         $galleryId   = (int) $this->request->post('gallery_id', 0);
         $text        = (string) $this->request->post('text', '');
         $scheduledAt = (string) $this->request->post('scheduled_at', '');
-        $queueId     = AutoPostQueue::enqueue($galleryId, $text, $scheduledAt);
+        $platform    = $this->platformFromPost();
+        $queueKey    = $platform === 'reddit' ? 'reddit' : 'twitter';
+        $queueId     = AutoPostQueue::enqueue($galleryId, $text, $scheduledAt, $queueKey);
 
         if ($queueId <= 0) {
             $this->flash('error', 'Gallery not found or not eligible.');
-            $this->redirectPath('x');
+            $this->redirectPath($platform);
             return;
         }
 
@@ -635,7 +637,7 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
         );
 
         $this->flash('success', 'Added to the posting queue.');
-        $this->redirectPath('x');
+        $this->redirectPath($platform);
     }
 
     /**
@@ -651,12 +653,13 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
         if ($id <= 0 && $galleryId > 0) {
             $text        = (string) $this->request->post('text', '');
             $scheduledAt = (string) $this->request->post('scheduled_at', '');
-            $id          = AutoPostQueue::enqueue($galleryId, $text, $scheduledAt);
+            $queueKey    = $this->platformFromPost() === 'reddit' ? 'reddit' : 'twitter';
+            $id          = AutoPostQueue::enqueue($galleryId, $text, $scheduledAt, $queueKey);
         }
 
         if ($id <= 0) {
             $this->flash('error', 'No gallery or queued item to post.');
-            $this->redirectPath('x');
+            $this->redirectPath($this->platformFromPost());
             return;
         }
 
@@ -856,7 +859,11 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
 
         $galleryId = (int) $this->request->post('gallery_id', 0);
         if ($id <= 0 && $galleryId > 0) {
-            $id = AutoPostQueue::dismissGallery($galleryId);
+            $queueKey = $this->platformFromPost() === 'reddit' ? 'reddit' : 'twitter';
+            $id       = AutoPostQueue::dismissGallery($galleryId, $queueKey);
+            // Recommendation cards carry no queue_id, so fall back to the
+            // submitting page's platform instead of the X page.
+            $redirectTo = $this->platformPath($this->platformFromPost());
         }
 
         if ($id <= 0 || AutoPostQueue::find($id) === null) {

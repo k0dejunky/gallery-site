@@ -81,15 +81,14 @@ $twitter      = $config['twitter'] ?? [];
     </form>
 </div>
 
-<?php if (!$isReddit): ?>
-<?php // ----- Recommended posts: generated from recent uploads (X only) ----- ?>
+<?php // ----- Recommended posts: generated from recent uploads (per platform) ----- ?>
 <div class="stats-panel" style="margin-bottom:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <h2>Recommended posts</h2>
-        <span class="muted" style="font-size:.85rem;">One post per gallery with uploads in the last 14 days, carrying 1&ndash;4 of its newest images (or a single video). Each gallery is offered once.</span>
+        <span class="muted" style="font-size:.85rem;">One post per <?= e($platformName) ?> gallery with uploads in the last <?= (int) ($apTemplate['recent_days'] ?? 14) ?> days, carrying up to <?= (int) ($apTemplate['max_media'] ?? 4) ?> of its newest images (or a single video). A gallery with a pending <?= e($platformName) ?> post, or one you dismissed here, isn&rsquo;t offered again.</span>
     </div>
     <?php if (empty($recommended)): ?>
-        <p class="muted">No recent uploads to recommend. Upload new media, or every recent gallery has already been queued/posted/dismissed.</p>
+        <p class="muted">No recently-updated galleries to recommend. Upload new media, or every recent gallery already has a pending post (or was dismissed).</p>
     <?php else: ?>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem;margin-top:.75rem;">
             <?php foreach ($recommended as $rec): ?>
@@ -114,8 +113,9 @@ $twitter      = $config['twitter'] ?? [];
                     <?php endif; ?>
                     <form method="post" action="<?= url('/admin/auto-poster/queue/recommend') ?>" style="display:flex;flex-direction:column;gap:.5rem;">
                         <?= csrf_field() ?>
+                        <input type="hidden" name="platform" value="<?= e($platform) ?>">
                         <input type="hidden" name="gallery_id" value="<?= (int) $rec['gallery_id'] ?>">
-                        <textarea name="text" rows="2" maxlength="280" style="font-size:.85rem;color:#374151;background:#fff;padding:.5rem .6rem;border-radius:4px;border:1px solid #d1d5db;word-wrap:break-word;resize:vertical;box-sizing:border-box;width:100%;"><?= e((string) $rec['suggested_text']) ?></textarea>
+                        <textarea name="text" rows="2" maxlength="<?= $isReddit ? 40000 : 280 ?>" style="font-size:.85rem;color:#374151;background:#fff;padding:.5rem .6rem;border-radius:4px;border:1px solid #d1d5db;word-wrap:break-word;resize:vertical;box-sizing:border-box;width:100%;"><?= e((string) $rec['suggested_text']) ?></textarea>
                         <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
                             <label for="sched_<?= (int) $rec['gallery_id'] ?>" class="muted" style="font-size:.8rem;">Publish</label>
                             <input type="datetime-local" name="scheduled_at" id="sched_<?= (int) $rec['gallery_id'] ?>" value="<?= e((string) $rec['default_scheduled_at']) ?>" style="font-size:.85rem;padding:.2rem .35rem;border:1px solid #d1d5db;border-radius:4px;">
@@ -125,7 +125,7 @@ $twitter      = $config['twitter'] ?? [];
                             <button type="submit" class="btn btn-sm">Add to queue</button>
                             <button type="submit" class="btn btn-sm" style="background:#0ea5e9;color:#fff;"
                                     formaction="<?= url('/admin/auto-poster/queue/post') ?>"
-                                    onclick="return confirm('Post this now to X?');">Post now</button>
+                                    onclick="return confirm('Post this now to <?= e($platformName) ?>?');">Post now</button>
                             <button type="submit" class="btn btn-sm btn-danger"
                                     formaction="<?= url('/admin/auto-poster/queue/dismiss') ?>"
                                     onclick="return confirm('Dismiss this recommended post?');">Dismiss</button>
@@ -136,7 +136,6 @@ $twitter      = $config['twitter'] ?? [];
         </div>
     <?php endif; ?>
 </div>
-<?php endif; ?>
 
 <?php // ----- Pending queue (scoped to this platform) ----- ?>
 <div class="stats-panel" style="margin-bottom:1rem;">
@@ -164,7 +163,7 @@ $twitter      = $config['twitter'] ?? [];
     </div>
     <div id="ap-queue-body">
     <?php if (empty($queue)): ?>
-        <p class="muted">The queue is empty — <?= $isReddit ? 'post to Reddit above or repost a past Reddit post below.' : 'add a recommended post above.' ?></p>
+        <p class="muted">The queue is empty — <?= $isReddit ? 'add a recommended post above or repost a past Reddit post below.' : 'add a recommended post above.' ?></p>
     <?php else: ?>
         <table>
             <thead>
@@ -195,7 +194,7 @@ $twitter      = $config['twitter'] ?? [];
                             <form method="post" action="<?= url('/admin/auto-poster/queue/schedule') ?>" class="inline">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
-                                <input type="datetime-local" name="scheduled_at" value="<?= e(\App\Models\AutoPostQueue::displaySchedule($item['scheduled_at'] ?? null)) ?>" style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;">
+                                <input type="datetime-local" name="scheduled_at" value="<?= e(\App\Models\AutoPostQueue::displaySchedule($item['scheduled_at'] ?? null, $platform)) ?>" style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;">
                                 <button type="submit" class="btn btn-sm">Set</button>
                             </form>
                             <div class="muted" style="font-size:.75rem;margin-top:.1rem;">
@@ -264,7 +263,7 @@ $twitter      = $config['twitter'] ?? [];
                         <?php if ($rpEditable): ?>
                             <?php // Failed posts: editable text so the wording can be fixed, then reposted/scheduled. ?>
                             <td style="max-width:340px;font-size:.85rem;" class="rp-edit">
-                                <textarea name="text" form="ap-edit-<?= (int) $rp['id'] ?>" maxlength="280" rows="2"
+                                <textarea name="text" form="ap-edit-<?= (int) $rp['id'] ?>" maxlength="<?= ((string) ($rp['platform'] ?? '') === 'reddit') ? 40000 : 280 ?>" rows="2"
                                           style="width:100%;box-sizing:border-box;font-size:.85rem;font-family:inherit;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;"
                                           aria-label="Editable text for post #<?= (int) $rp['id'] ?>"><?= e((string) $rp['text']) ?></textarea>
                                 <div class="muted" style="font-size:.72rem;margin-top:.15rem;">Edit the wording, then click Repost now or Reschedule.</div>
@@ -286,8 +285,8 @@ $twitter      = $config['twitter'] ?? [];
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
                                 </form>
-                                <input type="datetime-local" name="scheduled_at" form="ap-edit-<?= (int) $rp['id'] ?>"
-                                       value="<?= e(\App\Models\AutoPostQueue::defaultSchedule()) ?>"
+                                 <input type="datetime-local" name="scheduled_at" form="ap-edit-<?= (int) $rp['id'] ?>"
+                                        value="<?= e(\App\Models\AutoPostQueue::defaultSchedule(null, $platform)) ?>"
                                        style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;width:9.5rem;"
                                        aria-label="Schedule repost time for post #<?= (int) $rp['id'] ?>">
                                 <button type="submit" name="action" value="repost" form="ap-edit-<?= (int) $rp['id'] ?>"
@@ -304,8 +303,8 @@ $twitter      = $config['twitter'] ?? [];
                                 <form class="inline" method="post" action="<?= url('/admin/auto-poster/history/reschedule') ?>">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
-                                    <input type="datetime-local" name="scheduled_at"
-                                           value="<?= e(\App\Models\AutoPostQueue::defaultSchedule()) ?>"
+                                     <input type="datetime-local" name="scheduled_at"
+                                            value="<?= e(\App\Models\AutoPostQueue::defaultSchedule(null, $platform)) ?>"
                                            style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;width:9.5rem;"
                                            aria-label="Schedule repost time for post #<?= (int) $rp['id'] ?>">
                                     <button type="submit" class="btn btn-sm" title="Queue to publish again at the chosen time">Reschedule</button>
