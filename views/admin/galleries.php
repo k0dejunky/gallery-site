@@ -122,7 +122,7 @@ $levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill', 4 => 'pill-err']
                                 <span class="pill <?= $levelPill[$level] ?? 'pill' ?>"><?= $levelNames[$level] ?? 'Level ' . $level ?></span>
                             <?php endif; ?>
                         </td>
-                        <td class="mg-date"><?= e((string) ($gallery['created_at'] ?? '')) ?></td>
+                        <td class="mg-date"><?= !empty($gallery['created_at']) ? e(tzdate('Y-m-d H:i', $gallery['created_at'])) : '' ?></td>
                         <td>
                             <div class="mg-actions">
                                 <a class="btn btn-sm" href="<?= url('/admin/galleries/' . $gid) ?>">Manage</a>

@@ -5,9 +5,11 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\Request;
+use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\FavoriteCategory;
 use App\Models\Plan;
+use App\Models\SiteConfig;
 use App\Models\Subscription;
 use App\Models\Theme;
 use App\Models\User;
@@ -80,6 +82,8 @@ class SettingsController extends Controller
             'emailUnverified' => false,
             'user'            => $user,
             'siteEditorPreview' => $isPreview,
+            'siteTimezone'    => SiteConfig::timezone(),
+            'siteTimezones'   => site_timezones(),
         ];
 
         if (Auth::isAdmin() && !$isPreview) {
@@ -189,6 +193,33 @@ class SettingsController extends Controller
         Auth::logout();
         header('Location: ' . url('/login'));
         exit;
+    }
+
+    /**
+     * Change the site-wide display timezone. Admins only: every date shown
+     * across the site is translated to the configured offset.
+     */
+    public function updateTimezone(): void
+    {
+        if (!Auth::isAdmin()) {
+            $this->flash('error', 'Only administrators can change the site timezone.');
+            $this->redirect($this->settingsPath());
+            return;
+        }
+
+        $timezone = trim((string) $this->request->post('timezone', ''));
+        SiteConfig::setTimezone($timezone);
+
+        AuditLog::record(
+            (int) Auth::user()['id'],
+            'update',
+            'site_config',
+            0,
+            'Site timezone set to ' . SiteConfig::timezone()
+        );
+
+        $this->flash('success', 'Site timezone updated. Dates now display in ' . SiteConfig::timezone() . '.');
+        $this->redirect($this->settingsPath());
     }
 
     /**

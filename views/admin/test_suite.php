@@ -60,7 +60,7 @@
             <?php foreach ($runs as $r): ?>
                 <tr data-run="<?= e($r['id']) ?>">
                     <td class="mono"><?= e($r['id']) ?></td>
-                    <td><?= e($r['started_at'] ?? '') ?></td>
+                    <td><?= !empty($r['started_at']) ? e(tzdate('Y-m-d H:i', $r['started_at'])) : '' ?></td>
                     <td><span class="status-badge <?= ($r['status'] ?? '') === 'complete' ? ('ts-' . ($r['failed'] > 0 ? 'failed' : 'passed')) : 'ts-running' ?>"><?= e($r['status'] ?? '') ?></span></td>
                     <td class="detail-cell"><?= (int) ($r['passed'] ?? 0) ?> / <?= (int) ($r['total'] ?? 0) ?> passed, <?= (int) ($r['failed'] ?? 0) ?> failed</td>
                     <td><button type="button" class="btn btn-sm" data-view-run="<?= e($r['id']) ?>">View</button></td>

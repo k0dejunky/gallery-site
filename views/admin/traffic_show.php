@@ -111,7 +111,7 @@ function trafficCopy(el) {
             <?php foreach ($signups as $s): ?>
                 <tr>
                     <td><a href="<?= url('/admin/users/' . (int) $s['id']) ?>"><?= e($s['email']) ?></a></td>
-                    <td><?= e(date('M j, Y H:i', strtotime($s['created_at']))) ?></td>
+                    <td><?= e(tzdate('M j, Y H:i', $s['created_at'])) ?></td>
                     <td>
                         <?php
                             $parts = array_filter([$s['utm_source'], $s['utm_medium']], static fn ($v) => $v !== null && $v !== '');
@@ -141,7 +141,7 @@ function trafficCopy(el) {
         <tbody>
             <?php foreach ($visits as $v): ?>
                 <tr>
-                    <td><?= e(date('M j, Y H:i:s', strtotime($v['landed_at']))) ?></td>
+                    <td><?= e(tzdate('M j, Y H:i:s', $v['landed_at'])) ?></td>
                     <td><?= e($v['ref_date']) ?></td>
                     <td><?= $v['ip'] !== null ? e($v['ip']) : '<span class="muted">&mdash;</span>' ?></td>
                     <td class="muted"><?= $v['user_agent'] !== null ? e($v['user_agent']) : '&mdash;' ?></td>

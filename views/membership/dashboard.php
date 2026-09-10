@@ -5,7 +5,7 @@ $pendingSub = $pendingSub ?? null;
 $latestSub = $latestSub ?? null;
 $formatDate = static function (?string $date): string {
     $timestamp = $date !== null ? strtotime($date) : false;
-    return $timestamp !== false ? date('F j, Y', $timestamp) : '';
+    return $timestamp !== false ? e(tzdate('F j, Y', $timestamp)) : '';
 };
 $billingLabels = [
     'monthly' => 'Monthly',

@@ -35,7 +35,7 @@
                     <tr>
                         <td><?= (int) $g['id'] ?></td>
                         <td><?= e($g['title']) ?></td>
-                        <td><?= e($g['created_at']) ?></td>
+                        <td><?= e(tzdate('Y-m-d H:i', $g['created_at'])) ?></td>
                         <td><a class="btn btn-sm" href="<?= url('/admin/galleries/' . (int) $g['id']) ?>">Manage</a></td>
                     </tr>
                 <?php endforeach; ?>

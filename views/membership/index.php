@@ -30,7 +30,7 @@
             <p>
                 You have an active <strong><?= e($activeSub['plan_name']) ?></strong> membership.
                 <?php if (!empty($activeSub['expires_at'])): ?>
-                    It is valid until <strong><?= e(date('F j, Y', strtotime($activeSub['expires_at']))) ?></strong>.
+                    It is valid until <strong><?= e(tzdate('F j, Y', $activeSub['expires_at'])) ?></strong>.
                 <?php else: ?>
                     It never expires.
                 <?php endif; ?>

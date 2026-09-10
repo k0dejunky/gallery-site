@@ -7,7 +7,7 @@
     <tbody>
     <?php foreach ($pendingSubs as $sub): ?>
         <tr>
-            <td><?= e($sub['created_at']) ?></td>
+            <td><?= e(tzdate('M j, Y g:i', $sub['created_at'])) ?></td>
             <td><?= e($sub['user_email']) ?></td>
             <td><?= e($sub['plan_name']) ?></td>
             <td>$<?= number_format((float) $sub['price'], 2) ?> / <?= e(\App\Models\Plan::cycleLabel($sub['billing_cycle'])) ?></td>
@@ -33,7 +33,7 @@
     <tbody>
     <?php foreach ($pendingDeletes as $log): ?>
         <tr>
-            <td><?= e($log['created_at']) ?></td>
+            <td><?= e(tzdate('M j, Y g:i', $log['created_at'])) ?></td>
             <td><?= e($log['admin_email'] ?? 'Unknown') ?></td>
             <td><?= e($log['description']) ?></td>
             <td>
@@ -124,7 +124,7 @@
             }
             ?>
             <tr>
-                <td><?= e($log['created_at']) ?></td>
+                <td><?= e(tzdate('M j, Y g:i', $log['created_at'])) ?></td>
                 <td><?= e($log['admin_email'] ?? 'Unknown') ?></td>
                 <td><?= e($action) ?> <small>(<?= e($entityType) ?><?= $entityId ? ' #' . $entityId : '' ?>)</small></td>
                 <td>
@@ -142,7 +142,7 @@
                         </div>
                     <?php endif; ?>
                     <?php if ($isRolledBack): ?>
-                        <br><span class="muted">Rolled back <?= e($log['rolled_back_at']) ?></span>
+                        <br><span class="muted">Rolled back <?= e(tzdate('M j, Y g:i', $log['rolled_back_at'])) ?></span>
                     <?php endif; ?>
                 </td>
                 <td>

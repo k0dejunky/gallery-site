@@ -198,6 +198,7 @@ return [
     ['POST', '/settings/logout-everywhere', 'SettingsController@logoutEverywhere'],
     ['POST', '/settings/favorites', 'SettingsController@updateFavorites'],
     ['POST', '/settings/theme', 'SettingsController@updateTheme'],
+    ['POST', '/settings/timezone', 'SettingsController@updateTimezone'],
     ['GET', '/settings/two-factor/setup', 'SettingsController@twoFactorSetup'],
     ['POST', '/settings/two-factor/enable', 'SettingsController@twoFactorEnable'],
     ['POST', '/settings/two-factor/disable', 'SettingsController@twoFactorDisable'],

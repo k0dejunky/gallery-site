@@ -22,8 +22,8 @@ foreach ($messages as $supportMessage) {
     <div class="admin-ticket-list">
         <?php foreach ($messages as $supportMessage): ?>
             <a class="admin-ticket" href="<?= url('/admin/support/' . (int) $supportMessage['id']) ?>">
-                <div><h2>#<?= (int) $supportMessage['id'] ?> &middot; <?= e($supportMessage['subject']) ?></h2><div class="admin-ticket-details"><span><?= e($supportMessage['email']) ?></span><span><?= (int) $supportMessage['reply_count'] ?> repl<?= (int) $supportMessage['reply_count'] === 1 ? 'y' : 'ies' ?></span><span>Opened <?= e($supportMessage['created_at']) ?></span></div></div>
-                <div class="admin-ticket-side"><span class="status-badge support-status-<?= e($supportMessage['status']) ?>"><?= e(ucfirst($supportMessage['status'])) ?></span><small><?= e($supportMessage['updated_at'] ?? $supportMessage['created_at']) ?></small><span class="btn btn-sm btn-outline admin-ticket-open">Open ticket &rarr;</span></div>
+                <div><h2>#<?= (int) $supportMessage['id'] ?> &middot; <?= e($supportMessage['subject']) ?></h2><div class="admin-ticket-details"><span><?= e($supportMessage['email']) ?></span><span><?= (int) $supportMessage['reply_count'] ?> repl<?= (int) $supportMessage['reply_count'] === 1 ? 'y' : 'ies' ?></span><span>Opened <?= e(tzdate('M j, Y g:i', $supportMessage['created_at'])) ?></span></div></div>
+                <div class="admin-ticket-side"><span class="status-badge support-status-<?= e($supportMessage['status']) ?>"><?= e(ucfirst($supportMessage['status'])) ?></span><small><?= e(tzdate('M j, Y g:i', $supportMessage['updated_at'] ?? $supportMessage['created_at'])) ?></small><span class="btn btn-sm btn-outline admin-ticket-open">Open ticket &rarr;</span></div>
             </a>
         <?php endforeach; ?>
     </div>

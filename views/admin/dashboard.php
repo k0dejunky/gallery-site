@@ -340,7 +340,7 @@
         <p class="muted" style="margin:.35rem 0 0;font-size:.85rem;">
             <?= count($storageTrend['gb']) ?> <?= e($granLabels[$storageTrend['granularity']] ?? 'points') ?>
             · snapshots every ~15 min<?php if (!empty($storageTrend['first_snapshot'])): ?>
-            · history begins <?= e(date('n/j/Y', strtotime($storageTrend['first_snapshot']))) ?><?php endif; ?>
+            · history begins <?= e(tzdate('n/j/Y', $storageTrend['first_snapshot'])) ?><?php endif; ?>
         </p>
     <?php endif; ?>
 </details>

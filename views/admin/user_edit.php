@@ -52,7 +52,7 @@
     <p>
         <label><input type="checkbox" name="age_verified" value="1"<?= !empty($user['age_verified']) ? ' checked' : '' ?>> Age Verified</label>
         <?php if (!empty($user['age_verified_at'])): ?>
-            <span class="muted">(verified <?= e($user['age_verified_at']) ?>)</span>
+            <span class="muted">(verified <?= e(tzdate('Y-m-d H:i', $user['age_verified_at'])) ?>)</span>
         <?php endif; ?>
     </p>
     </div>

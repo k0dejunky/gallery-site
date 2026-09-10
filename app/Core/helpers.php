@@ -256,6 +256,56 @@ function config(string $key, $default = null)
 }
 
 /**
+ * The site-wide display timezone (set by admins on the settings page).
+ * Falls back to UTC when nothing has been configured.
+ */
+function site_timezone(): string
+{
+    return \App\Models\SiteConfig::timezone();
+}
+
+/**
+ * The timezone dropdown options used on the settings page: the common
+ * regions plus UTC (same set as the emailer's schedule timezone).
+ *
+ * @return array<int, array{0: string, 1: string}>
+ */
+function site_timezones(): array
+{
+    $tzs = [];
+
+    foreach (\DateTimeZone::listIdentifiers() as $tz) {
+        if (preg_match('/^((Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Europe|Indian|Pacific)\/)/', $tz) === 1) {
+            $tzs[] = [$tz, $tz];
+        }
+    }
+
+    return $tzs;
+}
+
+/**
+ * Format a date/time in the site-wide display timezone. Accepts a Unix
+ * timestamp (int) or a parseable datetime string. Strings are treated as
+ * UTC (storage is UTC throughout) and converted to the configured timezone,
+ * so a returned empty string only happens for unparseable input.
+ */
+function tzdate(string $format, $when = null): string
+{
+    if ($when === null) {
+        $when = time();
+    }
+
+    try {
+        $dt = is_int($when)
+            ? new \DateTimeImmutable('@' . $when)
+            : new \DateTimeImmutable((string) $when . ' UTC');
+        return $dt->setTimezone(new \DateTimeZone(site_timezone()))->format($format);
+    } catch (\Exception $e) {
+        return '';
+    }
+}
+
+/**
  * Read the EXIF Orientation tag from a JPEG (0-1 => none). Cameras and phones
  * store which way the photo was held; GD ignores this, so we must read it
  * ourselves or thumbnails would come out rotated.

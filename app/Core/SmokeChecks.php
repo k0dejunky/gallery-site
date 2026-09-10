@@ -581,6 +581,43 @@ class SmokeChecks
                 : $bad('views/admin/emailer.php must expose settings, sample count, timezone, test/send-now actions and queue retry');
         });
 
+        // ------------------------------------------------ Site timezone
+        $siteConfigC = $read("$root/app/Models/SiteConfig.php");
+        $helpers     = $read("$root/app/Core/helpers.php");
+        $settingsV   = $read("$root/views/settings.php");
+        $settingsC   = $read("$root/app/Controllers/SettingsController.php");
+        $add('smoke.settings.timezone_model', 'Smoke · Site timezone', 'SiteConfig persists a validated timezone', static function () use ($siteConfigC, $ok, $bad): array {
+            return strpos($siteConfigC, 'public static function timezone(') !== false
+                && strpos($siteConfigC, 'public static function setTimezone(') !== false
+                && strpos($siteConfigC, 'validatedTimezone') !== false
+                ? $ok('timezone persisted and validated')
+                : $bad('SiteConfig must expose timezone(), setTimezone() and a validatedTimezone() fallback');
+        });
+        $add('smoke.settings.timezone_helpers', 'Smoke · Site timezone', 'tzdate() + site_timezone() helpers expose the site-wide timezone', static function () use ($helpers, $ok, $bad): array {
+            return strpos($helpers, 'function site_timezone(') !== false
+                && strpos($helpers, 'function tzdate(') !== false
+                && strpos($helpers, 'new \\DateTimeZone(') !== false
+                ? $ok('helpers wired')
+                : $bad('helpers.php must expose site_timezone(), tzdate() and a timezone conversion');
+        });
+        $add('smoke.settings.timezone_route', 'Smoke · Site timezone', 'Settings registers POST /settings/timezone (admin-only)', static function () use ($routesSrc, $settingsC, $ok, $bad): array {
+            return strpos($routesSrc, "'/settings/timezone'") !== false
+                && strpos($routesSrc, 'SettingsController@updateTimezone') !== false
+                && strpos($settingsC, 'public function updateTimezone(') !== false
+                && strpos($settingsC, "Auth::isAdmin()") !== false
+                ? $ok('route wired and admin-gated')
+                : $bad('routes.php must register POST /settings/timezone against SettingsController@updateTimezone with an admin guard');
+        });
+        $add('smoke.settings.timezone_view', 'Smoke · Site timezone', 'Admin settings page exposes the site timezone selector', static function () use ($settingsV, $ok, $bad): array {
+            return strpos($settingsV, 'Site timezone') !== false
+                && strpos($settingsV, '<select name="timezone"') !== false
+                && strpos($settingsV, '$siteTimezone') !== false
+                && strpos($settingsV, '$siteTimezones') !== false
+                && strpos($settingsV, 'Auth::isAdmin()') !== false
+                ? $ok('selector rendered for admins')
+                : $bad('views/settings.php must render the admin-only site timezone selector using $siteTimezone and $siteTimezones');
+        });
+
         // ------------------------------------------------------- API health
         $sysCtrl  = $read("$root/app/Controllers/SystemController.php");
         $sysView  = $read("$root/views/admin/system.php");

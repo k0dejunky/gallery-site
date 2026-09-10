@@ -16,7 +16,7 @@
                     <?php else: ?>—<?php endif; ?>
                 </td>
                 <td><?= e($ev['ip'] ?? '—') ?></td>
-                <td><?= e($ev['created_at']) ?></td>
+                <td><?= e(tzdate('M j, Y g:i', $ev['created_at'])) ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>
@@ -53,7 +53,7 @@
         <tbody>
         <?php foreach ($paginator['items'] as $ev): ?>
             <tr>
-                <td><?= e($ev['created_at']) ?></td>
+                <td><?= e(tzdate('M j, Y g:i', $ev['created_at'])) ?></td>
                 <td><?= e($ev['user_email']) ?></td>
                 <td><?= e(ucfirst(str_replace('_', ' ', $ev['action']))) ?></td>
                 <td><?= e($ev['gallery_name'] ?: '—') ?></td>

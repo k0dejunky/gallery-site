@@ -14,7 +14,7 @@
         <?php $stale = (int) $rec['age_hours'] >= 24; ?>
         <tr<?= $stale ? ' style="background:rgba(220,38,38,.08);"' : '' ?>>
             <td><code>#<?= e((string) ($rec['membership_number'] ?? sprintf('%05d', (int) $rec['id']))) ?></code></td>
-            <td title="<?= e((string) $rec['created_at']) ?>"><?= (int) $rec['age_hours'] ?>h<?= $stale ? ' ⚠' : '' ?></td>
+            <td title="<?= e(tzdate('Y-m-d H:i', $rec['created_at'])) ?>"><?= (int) $rec['age_hours'] ?>h<?= $stale ? ' ⚠' : '' ?></td>
             <td><?= e((string) $rec['user_email']) ?></td>
             <td><?= e((string) $rec['plan_name']) ?> ($<?= number_format((float) $rec['price'], 2) ?>)</td>
             <td><?= !empty($rec['processor_name']) ? e($rec['processor_name']) : '—' ?></td>
@@ -84,9 +84,9 @@
                         <?php if (!empty($sub['transaction_ref'])): ?><br><span class="muted" style="font-size:var(--font-size-xs);"><?= e($sub['transaction_ref']) ?></span><?php endif; ?>
                     </td>
                     <td><?= e(\App\Models\Subscription::statusLabel($sub['status'])) ?></td>
-                    <td><?= !empty($sub['starts_at']) ? e($sub['starts_at']) : '&mdash;' ?></td>
-                    <td><?= !empty($sub['expires_at']) ? e($sub['expires_at']) : '&mdash;' ?></td>
-                    <td><?= e($sub['created_at']) ?></td>
+                    <td><?= !empty($sub['starts_at']) ? e(tzdate('Y-m-d', $sub['starts_at'])) : '&mdash;' ?></td>
+                    <td><?= !empty($sub['expires_at']) ? e(tzdate('Y-m-d', $sub['expires_at'])) : '&mdash;' ?></td>
+                    <td><?= e(tzdate('Y-m-d H:i', $sub['created_at'])) ?></td>
                     <td>
                         <?php if ($sub['status'] === 'pending'): ?>
                             <form class="inline" method="post" action="<?= url('/admin/subscriptions/' . (int) $sub['id'] . '/approve') ?>">

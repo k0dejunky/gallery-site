@@ -126,7 +126,7 @@
                             <span class="status-badge">active</span>
                         <?php endif; ?>
                     </td>
-                    <td class="user-date"><?= e($user['last_login_at'] ?? 'never') ?></td>
+                    <td class="user-date"><?= !empty($user['last_login_at']) ? e(tzdate('Y-m-d', $user['last_login_at'])) : 'never' ?></td>
                     <td>
                         <?php if (!empty($user['sub_status'])): ?>
                             <?= e($user['sub_plan']) ?> <span class="status-badge <?= e($user['sub_status']) ?>"><?= e($user['sub_status']) ?></span>
@@ -134,7 +134,7 @@
                             <span class="muted">None</span>
                         <?php endif; ?>
                     </td>
-                    <td class="user-date"><?= e($user['created_at']) ?></td>
+                    <td class="user-date"><?= e(tzdate('Y-m-d', $user['created_at'])) ?></td>
                     <td class="user-actions">
                         <a class="btn btn-sm" href="<?= url('/admin/users/' . (int) $user['id']) ?>">View</a>
                         <a class="btn btn-sm" href="<?= url('/admin/users/' . (int) $user['id'] . '/edit') ?>">Edit</a>

@@ -19,6 +19,9 @@
 # Emailer schedule & audience settings (never commit)
 /storage/emailer.json
 
+# Site-wide timezone (admin-selectable, never commit)
+/storage/site_config.json
+
 # Runtime log/lock files (created by workers and cron jobs)
 /storage/logs/
 

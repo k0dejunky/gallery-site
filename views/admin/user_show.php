@@ -45,8 +45,8 @@
     <div class="ud-card">
         <h3>Account</h3>
         <div class="ud-kv"><span>User ID</span><b>#<?= (int) $user['id'] ?></b></div>
-        <div class="ud-kv"><span>Created</span><b><?= e($user['created_at']) ?></b></div>
-        <div class="ud-kv"><span>Last login</span><b><?= e($user['last_login_at'] ?? 'never') ?></b></div>
+        <div class="ud-kv"><span>Created</span><b><?= e(tzdate('F j, Y g:i A', $user['created_at'])) ?></b></div>
+        <div class="ud-kv"><span>Last login</span><b><?= !empty($user['last_login_at']) ? e(tzdate('F j, Y g:i A', $user['last_login_at'])) : 'never' ?></b></div>
         <div class="ud-kv"><span>Status</span><b><?= e($user['status'] ?? 'active') ?></b></div>
     </div>
     <div class="ud-card">
@@ -120,8 +120,8 @@
                 <td><?= e((string) ($sub['processor_name'] ?? '—')) ?></td>
                 <td><span class="status-badge <?= e((string) $sub['status']) ?>"><?= e((string) $sub['status']) ?></span></td>
                 <td><code><?= e((string) ($sub['transaction_ref'] ?? '')) ?></code></td>
-                <td class="user-date"><?= e((string) $sub['created_at']) ?></td>
-                <td class="user-date"><?= e((string) ($sub['expires_at'] ?? '—')) ?></td>
+                <td class="user-date"><?= e(tzdate('Y-m-d H:i', $sub['created_at'])) ?></td>
+                <td class="user-date"><?= !empty($sub['expires_at']) ? e(tzdate('Y-m-d H:i', $sub['expires_at'])) : '—' ?></td>
             </tr>
         <?php endforeach; ?>
         <?php if (!$subscriptions): ?><tr><td colspan="6" class="muted">No membership history.</td></tr><?php endif; ?>
@@ -162,7 +162,7 @@
         <tbody>
         <?php foreach ($activity as $entry): ?>
             <tr>
-                <td class="user-date"><?= e((string) $entry['created_at']) ?></td>
+                <td class="user-date"><?= e(tzdate('Y-m-d H:i', $entry['created_at'])) ?></td>
                 <td><span class="role-badge"><?= e((string) $entry['action']) ?></span></td>
                 <td><?= e((string) $entry['entity_type']) ?>#<?= (int) $entry['entity_id'] ?></td>
                 <td><?= e((string) $entry['description']) ?></td>
@@ -191,7 +191,7 @@
         <tbody>
         <?php foreach ($notes as $note): ?>
             <tr>
-                <td class="user-date" style="white-space:nowrap;"><?= e((string) $note['created_at']) ?></td>
+                <td class="user-date" style="white-space:nowrap;"><?= e(tzdate('Y-m-d H:i', $note['created_at'])) ?></td>
                 <td><?= e((string) ($note['author'] ?? 'system')) ?></td>
                 <td style="white-space:pre-wrap;"><?= e((string) $note['body']) ?></td>
             </tr>

@@ -121,10 +121,10 @@
                     <div class="sale-price">$<?= number_format((float) $sale['sale_price'], 2) ?> <small class="muted">for <?= e($sale['plan_name']) ?></small></div>
                     <div class="sale-meta">
                         <?= $sale['max_subscriptions'] === null ? 'Unlimited subscriptions' : (int) $sale['reserved_count'] . ' of ' . (int) $sale['max_subscriptions'] . ' subscriptions reserved' ?><br>
-                        <?= !empty($sale['ends_at']) ? 'Ends ' . e(date('M j, Y g:i A', strtotime($sale['ends_at']))) : 'No end date' ?><br>
+                        <?= !empty($sale['ends_at']) ? 'Ends ' . e(tzdate('M j, Y g:i A', $sale['ends_at'])) : 'No end date' ?><br>
                         <?php foreach (($saleCodes[(int) $sale['id']] ?? []) as $code): ?>
                             <span class="sale-code"><?= e($code['code']) ?></span>
-                            <?= $code['max_uses'] === null ? 'unlimited uses' : (int) $code['used_count'] . ' / ' . (int) $code['max_uses'] . ' uses' ?> · <?= (int) $code['active'] === 1 ? 'Active' : 'Deactivated' ?> · created <?= e(date('Y-m-d H:i', strtotime($code['created_at']))) ?><br>
+                            <?= $code['max_uses'] === null ? 'unlimited uses' : (int) $code['used_count'] . ' / ' . (int) $code['max_uses'] . ' uses' ?> · <?= (int) $code['active'] === 1 ? 'Active' : 'Deactivated' ?> · created <?= e(tzdate('Y-m-d H:i', $code['created_at'])) ?><br>
                         <?php endforeach; ?>
                     </div>
                     <form class="inline" method="post" action="<?= url('/admin/sales/' . (int) $sale['id'] . '/toggle') ?>">

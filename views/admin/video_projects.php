@@ -35,7 +35,7 @@ $formatBytes = static function (?int $bytes): string {
                     <td><span style="color:<?= $ex['status'] === 'completed' ? 'var(--success,#2e7d32)' : ($ex['status'] === 'failed' ? 'var(--danger,#c62828)' : 'inherit') ?>"><?= $exportStatusLabel((string) $ex['status']) ?></span><?php if ((int) ($ex['progress'] ?? 0) > 0 && in_array($ex['status'], ['queued', 'running'], true)): ?> (<?= (int) $ex['progress'] ?>%)<?php endif; ?></td>
                     <td><?= htmlspecialchars((string) ($ex['output_file'] ?? '-')) ?></td>
                     <td><?= $formatBytes(isset($ex['file_size']) ? (int) $ex['file_size'] : null) ?></td>
-                    <td><?= htmlspecialchars((string) ($ex['created_at'] ?? '')) ?></td>
+                    <td><?= !empty($ex['created_at']) ? htmlspecialchars(tzdate('Y-m-d H:i', $ex['created_at'])) : '' ?></td>
                     <td>
                         <?php if ($ex['status'] === 'completed' && !empty($ex['output_file']) && !empty($ex['file_exists'])): ?>
                         <a class="btn small" href="<?= url('/admin/video-exports/' . (int) $ex['id'] . '/download') ?>">Download</a>
@@ -87,7 +87,7 @@ $formatBytes = static function (?int $bytes): string {
                     <td><?= htmlspecialchars((string) ($row['source_filename'] ?? '-')) ?></td>
                     <td><?= (int) ($row['version'] ?? 1) ?></td>
                     <td><?= (int) ($row['export_count'] ?? 0) ?></td>
-                    <td><?= htmlspecialchars((string) ($row['updated_at'] ?? '')) ?></td>
+                    <td><?= !empty($row['updated_at']) ? htmlspecialchars(tzdate('Y-m-d H:i', $row['updated_at'])) : '' ?></td>
                     <td>
                         <?php if (!empty($row['source_filename'])): ?>
                         <a class="btn small" href="<?= url('/admin/videos/' . (int) $row['source_photo_id'] . '/edit') ?>">Edit</a>

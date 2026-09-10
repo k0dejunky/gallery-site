@@ -408,7 +408,7 @@
                     <tr>
                         <td><code><?= e($backup['name']) ?></code></td>
                         <td><?= number_format($backup['size'] / 1048576, 1) ?> MB<?= !empty($backup['parts']) ? ' <span class="muted">(' . (int) $backup['parts'] . ' parts)</span>' : '' ?></td>
-                        <td><?= date('Y-m-d H:i', $backup['time']) ?></td>
+                        <td><?= e(tzdate('Y-m-d H:i', $backup['time'])) ?></td>
                         <td style="white-space:nowrap;">
                             <a class="btn btn-sm" href="<?= url('/admin/system/backups/' . rawurlencode($backup['name'])) ?>">Download</a>
                             <form class="inline" method="post" action="<?= url('/admin/system/backups/' . rawurlencode($backup['name']) . '/delete') ?>"

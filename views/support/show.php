@@ -9,11 +9,11 @@
 <div class="support-status-banner<?= $isClosed ? ' closed' : '' ?>"><strong><?= $isClosed ? 'Ticket closed' : 'Ticket status' ?></strong><span><?= $isClosed ? 'This conversation is no longer accepting replies.' : 'We will post updates and replies here.' ?></span></div>
 <section class="support-conversation" aria-labelledby="conversation-heading">
     <h2 id="conversation-heading">Conversation</h2>
-    <article class="support-message original"><div class="support-message-meta"><strong>Your original message</strong><small><?= e($ticket['created_at']) ?></small></div><div class="support-message-body"><?= nl2br(e($ticket['message'])) ?></div></article>
+    <article class="support-message original"><div class="support-message-meta"><strong>Your original message</strong><small><?= e(tzdate('M j, Y g:i A', $ticket['created_at'])) ?></small></div><div class="support-message-body"><?= nl2br(e($ticket['message'])) ?></div></article>
     <?php if (empty($replies)): ?><p class="muted">No replies yet. We will add updates to this conversation.</p><?php endif; ?>
     <?php foreach ($replies as $reply): ?>
         <article class="support-message <?= $reply['author_role'] === 'admin' ? 'admin' : 'user-reply' ?>">
-            <div class="support-message-meta"><strong><?= $reply['author_role'] === 'admin' ? 'Support team' : 'Your reply' ?></strong><small><?= e($reply['created_at']) ?></small></div>
+            <div class="support-message-meta"><strong><?= $reply['author_role'] === 'admin' ? 'Support team' : 'Your reply' ?></strong><small><?= e(tzdate('M j, Y g:i A', $reply['created_at'])) ?></small></div>
             <div class="support-message-body"><?= nl2br(e($reply['message'])) ?></div>
         </article>
     <?php endforeach; ?>

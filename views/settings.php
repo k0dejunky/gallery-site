@@ -19,6 +19,43 @@
     </form>
 </section>
 
+<?php if (\App\Core\Auth::isAdmin()): ?>
+<section class="card settings-card">
+    <h2 class="section-title">Site timezone</h2>
+    <p class="muted">Choose the timezone that dates and times across the site should be displayed in. Times are stored in UTC and converted to this timezone on display.</p>
+    <form method="post" action="<?= e(url('/settings/timezone')) ?>">
+        <?= csrf_field() ?>
+        <div class="settings-fields" style="grid-template-columns:minmax(0,1fr);">
+            <label>Timezone
+                <select name="timezone" id="site-timezone" style="min-width:220px;">
+                    <option value="UTC"<?= $siteTimezone === 'UTC' ? ' selected' : '' ?>>UTC (Coordinated Universal Time)</option>
+                    <?php foreach ($siteTimezones as [$value, $label]): ?>
+                        <option value="<?= e($value) ?>"<?= $siteTimezone === $value ? ' selected' : '' ?>><?= e($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+        </div>
+        <p class="muted">Current time in this timezone: <strong id="site-tz-now"><?= e(tzdate('Y-m-d H:i', null)) ?></strong></p>
+        <button type="submit" class="btn">Save timezone</button>
+    </form>
+    <script>
+    (function () {
+        var select = document.getElementById('site-timezone');
+        var now = document.getElementById('site-tz-now');
+        if (!select || !now) return;
+        function refresh() {
+            var tz = select.value === 'UTC' ? 'UTC' : select.value;
+            try {
+                var d = new Date();
+                now.textContent = d.toLocaleDateString('en-CA', { timeZone: tz }) + ' ' + d.toLocaleTimeString('en-GB', { timeZone: tz });
+            } catch (e) { /* keep the server-rendered value */ }
+        }
+        select.addEventListener('change', refresh);
+    }());
+    </script>
+</section>
+<?php endif; ?>
+
 <section class="card settings-card">
     <h2 class="section-title">Gallery display</h2>
     <div class="settings-fields" style="grid-template-columns:repeat(3,minmax(0,1fr))">
@@ -169,8 +206,8 @@
 <h2 class="section-title">Change password</h2>
 <section class="card settings-card security-card">
     <h2 class="section-title">Account security</h2>
-    <p><strong>Last login:</strong> <?= e($user['last_login_at'] ?? 'Not available') ?></p>
-    <p><strong>Last seen:</strong> <?= e($user['last_seen_at'] ?? 'Not available') ?></p>
+    <p><strong>Last login:</strong> <?= !empty($user['last_login_at']) ? e(tzdate('Y-m-d H:i', $user['last_login_at'])) : 'Not available' ?></p>
+    <p><strong>Last seen:</strong> <?= !empty($user['last_seen_at']) ? e(tzdate('Y-m-d H:i', $user['last_seen_at'])) : 'Not available' ?></p>
     <p class="muted">Use a unique password of at least 8 characters. Changing it does not automatically sign out other devices.</p>
     <form method="post" action="<?= e(url('/settings/logout-everywhere')) ?>" onsubmit="return confirm('Sign out every device connected to your account?');">
         <?= csrf_field() ?><button type="submit" class="btn btn-danger">Log out everywhere</button>

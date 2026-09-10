@@ -59,7 +59,7 @@ $cardId = 'card-' . (int) $gallery['id'];
             <p class="card-desc"><?= e($gallery['description']) ?></p>
         <?php endif; ?>
         <?php if ($createdAt !== false): ?>
-            <p class="muted card-date">Added <?= e(date('F j, Y', $createdAt)) ?></p>
+            <p class="muted card-date">Added <?= e(tzdate('F j, Y', $createdAt)) ?></p>
         <?php endif; ?>
         <div class="card-cats">
             <?php foreach ($galleryCategories as $cat): ?>

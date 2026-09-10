@@ -517,7 +517,7 @@ $paletteGrid = [
                             <?php $full = \App\Models\Theme::loadPreset($p['slug']); $swatches = $full ? array_slice($full['colors'] ?? [], 0, 10) : []; ?>
                             <div class="preset-card" data-preset-scope="<?= e($p['scope'] ?? 'site') ?>">
                                 <div class="preset-card-header"><span class="preset-card-name"><?= e($p['name']) ?></span><span class="preset-card-scope"><?= ($p['scope'] ?? 'site') === 'admin' ? 'Admin theme' : 'User theme' ?></span></div>
-                                <div class="preset-card-date"><?= e($p['created_at']) ?></div>
+                                <div class="preset-card-date"><?= e(tzdate('Y-m-d H:i', $p['created_at'])) ?></div>
                                 <?php if (!empty($swatches)): ?><div class="preset-card-swatches"><?php foreach ($swatches as $hex): ?><span style="background: <?= e($hex) ?>;" title="<?= e($hex) ?>"></span><?php endforeach; ?></div><?php endif; ?>
                                 <div class="preset-card-actions">
                                     <button type="button" class="btn btn-outline" onclick="loadPreset('<?= e($p['slug']) ?>')">Load</button>

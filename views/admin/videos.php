@@ -53,7 +53,7 @@
                     </td>
                     <td><?= number_format((int) $video['views']) ?></td>
                     <td><?= (int) $video['project_count'] ?></td>
-                    <td class="video-meta"><?= e($video['created_at']) ?></td>
+                    <td class="video-meta"><?= e(tzdate('Y-m-d H:i', $video['created_at'])) ?></td>
                     <td>
                         <a class="btn small" href="<?= url('/admin/videos/' . (int) $video['id'] . '/edit') ?>">Open Video Editor</a>
                     </td>

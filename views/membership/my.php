@@ -34,9 +34,9 @@
                 <strong><?= e($activeSub['plan_name']) ?></strong> &mdash;
                 <?php if (!empty($activeSub['expires_at'])): ?>
                     <?php if ($isRecurring): ?>
-                        renews automatically; access is available through <strong><?= e(date('F j, Y', strtotime($activeSub['expires_at']))) ?></strong>.
+                        renews automatically; access is available through <strong><?= e(tzdate('F j, Y', $activeSub['expires_at'])) ?></strong>.
                     <?php else: ?>
-                        access is available through <strong><?= e(date('F j, Y', strtotime($activeSub['expires_at']))) ?></strong>; it does not renew automatically.
+                        access is available through <strong><?= e(tzdate('F j, Y', $activeSub['expires_at'])) ?></strong>; it does not renew automatically.
                     <?php endif; ?>
                 <?php else: ?>
                     never expires.
@@ -106,8 +106,8 @@
                         <?php $historyStatus = $sub['status'] === 'active' && !empty($sub['expires_at']) && strtotime($sub['expires_at']) <= time() ? 'expired' : (string) $sub['status']; ?>
                         <td><span class="status-badge <?= e($historyStatus) ?>"><?= e(\App\Models\Subscription::statusLabel($historyStatus)) ?></span></td>
                         <td><?= (int) ($sub['access_level'] ?? 0) ?></td>
-                        <td><?= !empty($sub['starts_at']) ? e($sub['starts_at']) : '&mdash;' ?></td>
-                        <td><?= !empty($sub['expires_at']) ? e($sub['expires_at']) : '&mdash;' ?></td>
+                        <td><?= !empty($sub['starts_at']) ? e(tzdate('Y-m-d', $sub['starts_at'])) : '&mdash;' ?></td>
+                        <td><?= !empty($sub['expires_at']) ? e(tzdate('Y-m-d', $sub['expires_at'])) : '&mdash;' ?></td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>

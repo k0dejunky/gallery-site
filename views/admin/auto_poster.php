@@ -101,7 +101,7 @@ $twitter      = $config['twitter'] ?? [];
                         <?php endif; ?>
                         <div style="min-width:0;">
                             <div style="font-weight:600;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= e((string) $rec['gallery_title'] ?: 'Untitled gallery') ?></div>
-                            <div class="muted" style="font-size:.8rem;"><?= e(date('M j, Y', strtotime((string) $rec['newest_media_at']))) ?> &middot; <?= (int) $rec['media_count'] ?> file(s)</div>
+                            <div class="muted" style="font-size:.8rem;"><?= e(tzdate('M j, Y', $rec['newest_media_at'])) ?> &middot; <?= (int) $rec['media_count'] ?> file(s)</div>
                         </div>
                     </div>
                     <?php if (count($rec['media']) > 1): ?>
@@ -277,7 +277,7 @@ $twitter      = $config['twitter'] ?? [];
                                 <?php endif; ?>
                             </td>
                         <?php endif; ?>
-                        <td class="ap-time"><span class="muted"><?= $rpTs ? date('Y-m-d H:i', $rpTs) : '&mdash;' ?></span></td>
+                        <td class="ap-time"><span class="muted"><?= $rpTs ? e(tzdate('Y-m-d H:i', $rpTs)) : '&mdash;' ?></span></td>
                         <td style="text-align:right;white-space:nowrap;">
                             <?php if ($rpEditable): ?>
                                 <?php // One shared form; the textarea/schedule/buttons link to it via the HTML5 "form" attribute. ?>
@@ -557,7 +557,7 @@ $twitter      = $config['twitter'] ?? [];
                             <tr class="ap-row">
                                 <td class="ap-time">
                                     <span class="ap-time-relative" data-uts="<?= $apTs ?: 0 ?>">&mdash;</span>
-                                    <span class="ap-time-absolute"><?= $apTs ? date('Y-m-d H:i', $apTs) : '&mdash;' ?></span>
+                                    <span class="ap-time-absolute"><?= $apTs ? e(tzdate('Y-m-d H:i', $apTs)) : '&mdash;' ?></span>
                                 </td>
                                 <td><?= e(ucfirst((string) ($entry['platform'] ?? ''))) ?></td>
                                 <td class="ap-target"><?= e((string) ($entry['target'] ?? '')) ?></td>
