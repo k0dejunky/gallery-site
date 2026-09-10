@@ -401,16 +401,7 @@ $twitter      = $config['twitter'] ?? [];
                 <label for="twitter_oauth_token_secret">Access Token Secret</label><br>
                 <input type="password" name="twitter_oauth_token_secret" id="twitter_oauth_token_secret" value="" placeholder="<?= empty($twitter['oauth_token_secret']) ? '' : 'Leave blank to keep the saved secret' ?>" style="width:100%;box-sizing:border-box;">
             </p>
-            <p>
-                <label for="timezone">Schedule timezone</label><br>
-                <select name="timezone" id="timezone" style="width:100%;box-sizing:border-box;">
-                    <?php $tzs = preg_grep('/^((Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Europe|Indian|Pacific)\/)/', DateTimeZone::listIdentifiers()); ?>
-                    <?php foreach ($tzs as $tz): ?>
-                        <option value="<?= e($tz) ?>"<?= ($config['timezone'] ?? 'UTC') === $tz ? ' selected' : '' ?>><?= e($tz) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <span class="muted" style="font-size:0.8rem;">Defaults to the site timezone set on Settings; picking a different zone here overrides it for the auto-poster. Times in "Recommended posts" and the queue show in this zone; posting happens at the equivalent UTC moment.</span>
-            </p>
+            <span class="muted" style="font-size:0.8rem;">Schedule times use the site timezone set on Settings. Picking a schedule here is shown in that zone; posting happens at the equivalent UTC moment.</span>
             <button type="submit" class="btn">Save X Settings</button>
         </form>
         <p style="margin-top:0.75rem;">

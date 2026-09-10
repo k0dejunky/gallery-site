@@ -358,18 +358,19 @@ class SmokeChecks
         $add('smoke.ap.view_media', 'Smoke · Auto Poster', 'Queue displays attached media', static function () use ($apv, $ok, $bad): array {
             return strpos($apv, 'mediaFiles') !== false ? $ok('mediaFiles') : $bad('auto-poster queue must display attached media');
         });
-        $add('smoke.ap.view_tz', 'Smoke · Auto Poster', 'Schedule timezone selector exposed', static function () use ($apv, $ok, $bad): array {
-            return strpos($apv, 'Schedule timezone') !== false && strpos($apv, 'DateTimeZone::listIdentifiers') !== false
-                ? $ok('timezone selector')
-                : $bad('auto-poster settings must expose a schedule-timezone selector');
+        $add('smoke.ap.view_tz', 'Smoke · Auto Poster', 'No independent schedule-timezone selector (site timezone governs)', static function () use ($apv, $ok, $bad): array {
+            return strpos($apv, 'Schedule timezone') === false
+                && strpos($apv, 'site timezone set on Settings') !== false
+                ? $ok('scheduler uses the site timezone')
+                : $bad('auto-poster must not expose its own schedule-timezone selector; it must follow the site timezone set on Settings');
         });
-        $add('smoke.ap.site_tz_fallback', 'Smoke · Auto Poster', 'Scheduler follows the site timezone until overridden', static function () use ($root, $read, $ok, $bad): array {
+        $add('smoke.ap.site_tz_fallback', 'Smoke · Auto Poster', 'Scheduler reads the site timezone (no stored override wins)', static function () use ($root, $read, $ok, $bad): array {
             $apc = $read("$root/app/Models/AutoPosterConfig.php");
             return strpos($apc, 'function effectiveTimezone(') !== false
                 && strpos($apc, 'SiteConfig::timezone()') !== false
-                && strpos($apc, "strcasecmp(\$stored, 'UTC')") !== false
-                ? $ok('UTC/missing defers to the site timezone; explicit non-UTC overrides')
-                : $bad('AutoPosterConfig must defer to SiteConfig::timezone() unless an explicit non-UTC timezone is stored');
+                && strpos($apc, 'public static function timezone()') !== false
+                ? $ok('auto-poster scheduling always follows SiteConfig::timezone()')
+                : $bad('AutoPosterConfig::timezone() must delegate to SiteConfig::timezone() with no stored-value override');
         });
         $add('smoke.ap.view_countdown', 'Smoke · Auto Poster', 'Live mo/d/h/m/s countdown shown', static function () use ($apv, $ok, $bad): array {
             return strpos($apv, 'ap-countdown') !== false && strpos($apv, 'data-synced') !== false

@@ -58,15 +58,15 @@ class AutoPosterConfig
     }
 
     /**
-     * The timezone the scheduler displays and schedules in. Follows the
-     * site-wide timezone set on the Settings page whenever the auto-poster
-     * has never been given a timezone of its own (a missing, empty or UTC
-     * stored value all mean "not explicitly set"); a non-UTC pick in the
-     * auto-poster settings overrides the site zone.
+     * The timezone the scheduler displays and schedules in. The auto-poster
+     * has no timezone of its own: it always follows the site-wide timezone
+     * set on the Settings page, so every picker and the queue show the same
+     * zone the rest of the site uses. A legacy stored value (autoposter.json
+     * "timezone") is ignored for display.
      */
     public static function timezone(): string
     {
-        return self::all()['timezone'];
+        return SiteConfig::timezone();
     }
 
     /**
@@ -139,18 +139,13 @@ class AutoPosterConfig
     }
 
     /**
-     * The scheduler timezone to use for a given stored value: an explicit
-     * non-UTC pick is honoured as the poster's own override, anything else
-     * (missing, empty or UTC) defers to the site-wide timezone.
+     * The scheduler timezone to use: always the site-wide timezone. Kept as
+     * a narrow shim so callers read one consistent source (SiteConfig) and a
+     * legacy "timezone" stored in autoposter.json can never reintroduce an
+     * unrelated zone.
      */
     private static function effectiveTimezone(?string $stored): string
     {
-        $stored = trim((string) $stored);
-
-        if ($stored !== '' && strcasecmp($stored, 'UTC') !== 0) {
-            return self::validatedTimezone($stored);
-        }
-
         return SiteConfig::timezone();
     }
 
