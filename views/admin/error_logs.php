@@ -1,9 +1,6 @@
 <style>
-.error-log-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.error-log-message{max-width:760px;white-space:pre-wrap;word-break:break-word;font-family:monospace;font-size:12px}.error-log-source{font-weight:600;color:var(--text-heading)}
+.error-log-message{max-width:760px;white-space:pre-wrap;word-break:break-word;font-family:monospace;font-size:12px}.error-log-source{font-weight:600;color:var(--text-heading)}
 </style>
-<div class="error-log-toolbar">
-    <a class="btn" href="<?= url('/admin/video-projects') ?>">Video Projects</a>
-</div>
 <div class="card">
     <div class="table-responsive">
         <table>
