@@ -299,12 +299,12 @@
 </details>
 
 <?php // Storage growth trend (from housekeeping snapshots), selectable window. ?>
-<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="storage" open>
+<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="storage" open id="storage-trend">
     <summary><h2 style="margin:0;">Storage trend</h2></summary>
     <div class="storage-periods" role="navigation" aria-label="Storage trend period" style="margin-top:var(--spacing-sm);">
         <?php foreach (['day' => 'Day', 'week' => 'Week', 'month' => 'Month', 'year' => 'Year', 'all' => 'All time'] as $p => $label): ?>
             <a class="btn btn-sm<?= $storagePeriod === $p ? ' storage-period-active' : '' ?>"
-               href="<?= e(url('/admin?period=' . $p)) ?>"><?= e($label) ?></a>
+               href="<?= e(url('/admin?period=' . $p . '#storage-trend')) ?>"><?= e($label) ?></a>
         <?php endforeach; ?>
     </div>
     <style>
