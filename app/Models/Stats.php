@@ -748,7 +748,7 @@ class Stats
             ['active']
         )->fetchAll();
 
-        $tierNames  = [1 => 'Silver', 2 => 'Gold', 3 => 'Platinum', 4 => 'Diamond'];
+        $tierNames  = [1 => 'Silver', 2 => 'Gold', 3 => 'Platinum'];
         $byTier     = [];
         $totalMembers = 0;
 

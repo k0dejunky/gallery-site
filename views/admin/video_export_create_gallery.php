@@ -55,7 +55,6 @@
                 <option value="1" <?= ($prefill['min_level'] ?? 0) == 1 ? 'selected' : '' ?>>Level 1 (Silver)</option>
                 <option value="2" <?= ($prefill['min_level'] ?? 0) == 2 ? 'selected' : '' ?>>Level 2 (Gold)</option>
                 <option value="3" <?= ($prefill['min_level'] ?? 0) == 3 ? 'selected' : '' ?>>Level 3 (Platinum)</option>
-                <option value="4" <?= ($prefill['min_level'] ?? 0) == 4 ? 'selected' : '' ?>>Level 4 (Diamond)</option>
             </select>
             <span class="muted">Members below this level cannot view this gallery.</span>
         </div>

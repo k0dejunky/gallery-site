@@ -376,7 +376,7 @@ class GalleryController extends Controller
         $title       = $this->request->input('title');
         $description = $this->request->input('description');
         $type        = $this->request->input('type', 'images') === 'videos' ? 'videos' : 'images';
-        $minLevel    = max(0, min(4, (int) $this->request->input('min_level', '0')));
+        $minLevel    = max(0, min(3, (int) $this->request->input('min_level', '0')));
         $categoryIds = $this->request->post('categories', []);
         $categoryIds = is_array($categoryIds) ? $categoryIds : [];
 
@@ -386,7 +386,7 @@ class GalleryController extends Controller
             'categories'  => $categoryIds,
         ], [
             'title'      => 'required|max:255',
-            'min_level'  => 'numeric|min:0|max:4',
+            'min_level'  => 'numeric|min:0|max:3',
             'categories' => 'numeric',
         ]);
 
@@ -1168,7 +1168,7 @@ class GalleryController extends Controller
         $title       = $this->request->input('title');
         $description = $this->request->input('description');
         $type        = $this->request->input('type', 'images') === 'videos' ? 'videos' : 'images';
-        $minLevel    = max(0, min(4, (int) $this->request->input('min_level', '0')));
+        $minLevel    = max(0, min(3, (int) $this->request->input('min_level', '0')));
         $categoryIds = $this->request->post('categories', []);
         $categoryIds = is_array($categoryIds) ? $categoryIds : [];
 

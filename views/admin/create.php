@@ -148,7 +148,6 @@
                         <option value="1">Level 1 (Silver)</option>
                         <option value="2">Level 2 (Gold)</option>
                         <option value="3">Level 3 (Platinum)</option>
-                        <option value="4">Level 4 (Diamond)</option>
                     </select>
                 </div>
 

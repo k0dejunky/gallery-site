@@ -385,7 +385,7 @@ class VideoEditorController extends Controller
             $description = trim((string) $this->request->input('description', ''));
             $categoryIds = $this->request->post('categories', []);
             $categoryIds = is_array($categoryIds) ? $categoryIds : [];
-            $minLevel    = max(0, min(4, (int) $this->request->input('min_level', 0)));
+            $minLevel    = max(0, min(3, (int) $this->request->input('min_level', 0)));
 
             if ($title === '') {
                 $this->flash('error', 'Title is required.');

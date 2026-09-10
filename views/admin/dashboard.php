@@ -114,7 +114,6 @@
                     <tr><td><b>Silver</b></td><td style="text-align:right;"><?= number_format($galleryLevels['levels'][1]) ?></td></tr>
                     <tr><td><b>Gold</b></td><td style="text-align:right;"><?= number_format($galleryLevels['levels'][2]) ?></td></tr>
                     <tr><td><b>Platinum</b></td><td style="text-align:right;"><?= number_format($galleryLevels['levels'][3]) ?></td></tr>
-                    <tr><td><b>Diamond</b></td><td style="text-align:right;"><?= number_format($galleryLevels['levels'][4]) ?></td></tr>
                     <tr><td><b>Total</b></td><td style="text-align:right;"><?= number_format($galleryLevels['total']) ?></td></tr>
                 </tbody>
             </table>

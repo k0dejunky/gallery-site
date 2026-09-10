@@ -459,7 +459,6 @@ INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, le
     ('Silver', 'silver', 5.00, 'monthly', 'Full access for one month.', 1, 1, 1),
     ('Gold', 'gold', 10.00, 'monthly', 'Full access for one month.', 2, 2, 1),
     ('Platinum', 'platinum', 20.00, 'monthly', 'Full access for one month.', 3, 3, 1),
-    ('OnlyFans', 'onlyfans', 25.00, 'monthly', 'Full access for one month.', 4, 4, 1),
     ('Monthly', 'monthly', 9.99, 'monthly', 'Full access for one month.', 5, 1, 1),
     ('Yearly', 'yearly', 99.99, 'yearly', 'Full access for one year.', 6, 1, 1),
     ('Lifetime', 'lifetime', 249.99, 'lifetime', 'Full access forever.', 7, 1, 1)

@@ -25,7 +25,7 @@ class Gallery
 
         if (isset($filters['min_level']) && $filters['min_level'] !== '' && $filters['min_level'] !== null) {
             $minLevel = (int) $filters['min_level'];
-            if ($minLevel >= 0 && $minLevel <= 4) {
+            if ($minLevel >= 0 && $minLevel <= 3) {
                 $where[] = 'g.min_level = ?';
                 $params[] = $minLevel;
             }

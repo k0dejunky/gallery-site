@@ -109,7 +109,7 @@ class AdminController extends Controller
         }
 
         $level = ($levelKey === 'all' || !ctype_digit($levelKey)) ? null : (int) $levelKey;
-        if ($level !== null && $level >= 0 && $level <= 4) {
+        if ($level !== null && $level >= 0 && $level <= 3) {
             $filters['min_level'] = $level;
         } else {
             $level = null;

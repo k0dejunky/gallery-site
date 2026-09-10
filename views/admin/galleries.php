@@ -10,8 +10,8 @@ foreach ($galleries as $gallery) {
     $totalVideos += (int) ($gallery['video_count'] ?? 0);
     $totalViews  += (int) ($gallery['views'] ?? 0);
 }
-$levelNames = [0 => 'Free', 1 => 'Silver', 2 => 'Gold', 3 => 'Platinum', 4 => 'Diamond'];
-$levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill', 4 => 'pill-err'];
+$levelNames = [0 => 'Free', 1 => 'Silver', 2 => 'Gold', 3 => 'Platinum'];
+$levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill'];
 
 $filterType  = $filterType ?? 'all';
 $filterLevel = $filterLevel ?? null;
@@ -105,7 +105,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
             </div>
             <div class="mg-filter-group">
                 <span class="mg-filter-label">Level</span>
-                <?php foreach (['all' => 'All', '0' => 'Free', '1' => 'Silver', '2' => 'Gold', '3' => 'Platinum', '4' => 'Diamond'] as $l => $lLabel): ?>
+                <?php foreach (['all' => 'All', '0' => 'Free', '1' => 'Silver', '2' => 'Gold', '3' => 'Platinum'] as $l => $lLabel): ?>
                     <a class="btn btn-sm mg-filter-btn<?= $filterLevelKey === (string) $l ? ' mg-filter-active' : '' ?>"
                        href="<?= e($filterUrl($filterType, $l)) ?>"><?= e($lLabel) ?></a>
                 <?php endforeach; ?>
