@@ -180,7 +180,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                                 <a class="btn btn-sm" href="<?= url('/admin/galleries/' . $gid) ?>">Manage</a>
                                 <a class="btn btn-sm btn-outline" href="<?= url('/admin/galleries/' . $gid . '/edit') ?>">Edit</a>
                                 <form class="inline" method="post" action="<?= url('/admin/galleries/' . $gid . '/recommend') ?>"
-                                      title="Queue this gallery for a recommended auto-post on X">
+                                      title="Queue this gallery for a recommended auto-post on X and Reddit">
                                     <?= csrf_field() ?>
                                     <button type="submit" class="btn btn-sm">Recommend</button>
                                 </form>

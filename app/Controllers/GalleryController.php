@@ -1236,11 +1236,12 @@ class GalleryController extends Controller
 
     /**
      * Queue a gallery for a recommended auto-post without visiting the Auto
-     * Poster page. Handed to AutoPostQueue::enqueue it does what it does for
-     * any recommendation: resolve the gallery's media set, build the draft
-     * text from title/description + category hashtags, schedule the default
-     * publish time and insert an "X" queue row. Galleries that already have a
-     * queue row for that platform are skipped, mirroring recommendations().
+     * Poster page. Handed to AutoPostQueue::enqueue once per platform, it does
+     * what it does for any recommendation: resolve the gallery's media set,
+     * build the platform-appropriate draft text from title/description +
+     * category hashtags, schedule the default publish time and insert the
+     * queue row. Galleries that already have a queue row for a platform are
+     * skipped there, mirroring recommendations().
      */
     public function recommendPost(int $id): void
     {
@@ -1252,37 +1253,47 @@ class GalleryController extends Controller
             return;
         }
 
-        $alreadyQueued = Database::run(
-            'SELECT q.id FROM auto_poster_queue q
-             WHERE q.gallery_id = ? AND q.platform = ?
-               AND q.status IN (?, ?, ?, ?, ?)
-             LIMIT 1',
-            [$id, 'twitter', 'queued', 'posted', 'failed', 'skipped', 'dismissed']
-        )->fetch();
+        $queued    = [];
+        $duplicate = [];
+        foreach (['twitter' => 'X', 'reddit' => 'Reddit'] as $platform => $label) {
+            $alreadyQueued = Database::run(
+                'SELECT q.id FROM auto_poster_queue q
+                 WHERE q.gallery_id = ? AND q.platform = ?
+                   AND q.status IN (?, ?, ?, ?, ?)
+                 LIMIT 1',
+                [$id, $platform, 'queued', 'posted', 'failed', 'skipped', 'dismissed']
+            )->fetch();
 
-        if ($alreadyQueued) {
-            $this->flash('error', 'Gallery is already in the auto-post queue.');
-            $this->redirect('/admin/galleries');
-            return;
+            if ($alreadyQueued) {
+                $duplicate[] = $label;
+                continue;
+            }
+
+            $queueId = AutoPostQueue::enqueue($id, null, null, $platform);
+
+            if ($queueId > 0) {
+                $queued[] = $label;
+                AuditLog::record(
+                    (int) Auth::user()['id'],
+                    'create',
+                    'auto_post_queue',
+                    $queueId,
+                    'Queued gallery #' . $id . ' for a recommended post on ' . $label
+                );
+            }
         }
 
-        $queueId = AutoPostQueue::enqueue($id);
-
-        if ($queueId <= 0) {
+        if ($queued !== []) {
+            $message = 'Gallery queued for recommended posts on ' . implode(' and ', $queued) . '.';
+            if ($duplicate !== []) {
+                $message .= ' Already in the ' . implode(' and ', $duplicate) . ' auto-post queue — nothing duplicated.';
+            }
+            $this->flash('success', $message);
+        } elseif ($duplicate !== []) {
+            $this->flash('error', 'Gallery is already in the auto-post queue on ' . implode(' and ', $duplicate) . '.');
+        } else {
             $this->flash('error', 'Gallery could not be queued for a recommended post.');
-            $this->redirect('/admin/galleries');
-            return;
         }
-
-        AuditLog::record(
-            (int) Auth::user()['id'],
-            'create',
-            'auto_post_queue',
-            $queueId,
-            'Queued gallery #' . $id . ' for a recommended auto-post'
-        );
-
-        $this->flash('success', 'Gallery queued for a recommended post on X.');
         $this->redirect('/admin/galleries');
     }
 
