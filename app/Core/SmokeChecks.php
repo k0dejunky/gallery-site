@@ -393,7 +393,7 @@ class SmokeChecks
         $add('smoke.ap.platform_recs', 'Smoke · Auto Poster', 'Recommended posts work per platform on both pages', static function () use ($apq, $apv, $root, $read, $ok, $bad): array {
             $ctrl = $read("$root/app/Controllers/AutoPosterController.php");
             return strpos($apq, 'public static function recommendations(int $limit = 8, string $platform') !== false
-                && strpos($apq, "q.status IN ('queued', 'dismissed')") !== false
+                && strpos($apq, "q.status IN ('queued', 'posted', 'failed', 'skipped', 'dismissed')") !== false
                 && strpos($apq, 'public static function enqueue(int $galleryId, ?string $text = null, ?string $scheduledAt = null, string $platform') !== false
                 && strpos($ctrl, 'AutoPostQueue::recommendations(8, $isX ? \'x\' : \'reddit\')') !== false
                 && strpos($apv, 'queue/recommend') !== false

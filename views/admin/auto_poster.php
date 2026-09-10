@@ -85,7 +85,7 @@ $twitter      = $config['twitter'] ?? [];
 <div class="stats-panel" style="margin-bottom:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <h2>Recommended posts</h2>
-        <span class="muted" style="font-size:.85rem;">One post per <?= e($platformName) ?> gallery with uploads in the last <?= (int) ($apTemplate['recent_days'] ?? 14) ?> days, carrying up to <?= (int) ($apTemplate['max_media'] ?? 4) ?> of its newest images (or a single video). A gallery with a pending <?= e($platformName) ?> post, or one you dismissed here, isn&rsquo;t offered again.</span>
+        <span class="muted" style="font-size:.85rem;">One post per <?= e($platformName) ?> gallery with uploads in the last <?= (int) ($apTemplate['recent_days'] ?? 14) ?> days, carrying up to <?= (int) ($apTemplate['max_media'] ?? 4) ?> of its newest images (or a single video). A gallery already handled here&mdash;queued, posted, or dismissed&mdash;isn&rsquo;t offered again.</span>
     </div>
     <?php if (empty($recommended)): ?>
         <p class="muted">No recently-updated galleries to recommend. Upload new media, or every recent gallery already has a pending post (or was dismissed).</p>

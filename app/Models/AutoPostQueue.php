@@ -242,7 +242,7 @@ class AutoPostQueue
                AND NOT EXISTS (SELECT 1 FROM auto_poster_queue q
                                WHERE q.gallery_id = g.id
                                  AND q.platform = '$dbKey'
-                                 AND q.status IN ('queued', 'dismissed'))
+                                 AND q.status IN ('queued', 'posted', 'failed', 'skipped', 'dismissed'))
              GROUP BY g.id
              ORDER BY newest_media_at DESC, g.id DESC
              LIMIT $limit"
