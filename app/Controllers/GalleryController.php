@@ -4,8 +4,10 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\Database;
 use App\Core\ImageEditor;
 use App\Models\AuditLog;
+use App\Models\AutoPostQueue;
 use App\Models\Category;
 use App\Models\FavoriteCategory;
 use App\Models\Gallery;
@@ -1229,6 +1231,58 @@ class GalleryController extends Controller
         Gallery::softDelete($id);
 
         $this->flash('success', 'Gallery deleted. You can restore it from the admin logs.');
+        $this->redirect('/admin/galleries');
+    }
+
+    /**
+     * Queue a gallery for a recommended auto-post without visiting the Auto
+     * Poster page. Handed to AutoPostQueue::enqueue it does what it does for
+     * any recommendation: resolve the gallery's media set, build the draft
+     * text from title/description + category hashtags, schedule the default
+     * publish time and insert an "X" queue row. Galleries that already have a
+     * queue row for that platform are skipped, mirroring recommendations().
+     */
+    public function recommendPost(int $id): void
+    {
+        Auth::requirePermission('galleries');
+        $gallery = Gallery::find($id);
+
+        if ($gallery === null) {
+            $this->notFound();
+            return;
+        }
+
+        $alreadyQueued = Database::run(
+            'SELECT q.id FROM auto_poster_queue q
+             WHERE q.gallery_id = ? AND q.platform = ?
+               AND q.status IN (?, ?, ?, ?, ?)
+             LIMIT 1',
+            [$id, 'twitter', 'queued', 'posted', 'failed', 'skipped', 'dismissed']
+        )->fetch();
+
+        if ($alreadyQueued) {
+            $this->flash('error', 'Gallery is already in the auto-post queue.');
+            $this->redirect('/admin/galleries');
+            return;
+        }
+
+        $queueId = AutoPostQueue::enqueue($id);
+
+        if ($queueId <= 0) {
+            $this->flash('error', 'Gallery could not be queued for a recommended post.');
+            $this->redirect('/admin/galleries');
+            return;
+        }
+
+        AuditLog::record(
+            (int) Auth::user()['id'],
+            'create',
+            'auto_post_queue',
+            $queueId,
+            'Queued gallery #' . $id . ' for a recommended auto-post'
+        );
+
+        $this->flash('success', 'Gallery queued for a recommended post on X.');
         $this->redirect('/admin/galleries');
     }
 

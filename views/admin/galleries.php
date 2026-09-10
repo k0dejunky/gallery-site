@@ -179,6 +179,11 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                             <div class="mg-actions">
                                 <a class="btn btn-sm" href="<?= url('/admin/galleries/' . $gid) ?>">Manage</a>
                                 <a class="btn btn-sm btn-outline" href="<?= url('/admin/galleries/' . $gid . '/edit') ?>">Edit</a>
+                                <form class="inline" method="post" action="<?= url('/admin/galleries/' . $gid . '/recommend') ?>"
+                                      title="Queue this gallery for a recommended auto-post on X">
+                                    <?= csrf_field() ?>
+                                    <button type="submit" class="btn btn-sm">Recommend</button>
+                                </form>
                                 <form class="inline" method="post" action="<?= url('/admin/galleries/' . $gid . '/delete') ?>"
                                       onsubmit="return confirm('Delete gallery &quot;<?= e((string) $gallery['title']) ?>&quot;?');">
                                     <?= csrf_field() ?>

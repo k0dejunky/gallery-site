@@ -86,6 +86,7 @@ return [
     ['POST', '/admin/galleries/bulk', 'GalleryController@bulk', 'galleries'],
     ['POST', '/admin/galleries/{id}', 'GalleryController@update', 'galleries'],
     ['POST', '/admin/galleries/{id}/delete', 'GalleryController@destroy', 'galleries'],
+    ['POST', '/admin/galleries/{id}/recommend', 'GalleryController@recommendPost', 'galleries'],
     ['POST', '/admin/galleries/{galleryId}/photos', 'PhotoController@upload', 'galleries'],
     ['POST', '/admin/galleries/{galleryId}/photos/{photoId}/caption', 'PhotoController@updateCaption', 'galleries'],
     ['POST', '/admin/galleries/{galleryId}/photos/{photoId}/delete', 'PhotoController@destroy', 'galleries'],
