@@ -12,6 +12,9 @@
     /* Table-backed cards get their own full-width row below the compact ones */
     .sys-stack { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
     .sys-stack .sys-card { width: 100%; }
+    /* API health card spans two grid columns, giving the detail column room
+       to breathe so long probe summaries stay on fewer/one line per row. */
+    #api-health { grid-column: span 2; }
     /* API health table: fixed layout so long probe summaries never widen the card */
     .sys-api-table { table-layout: fixed; }
     .sys-api-table th, .sys-api-table td { overflow-wrap: anywhere; word-break: break-word; vertical-align: top; }
