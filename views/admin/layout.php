@@ -601,9 +601,30 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
             var parent = change.parentKey === 'body' ? document.body : null;
             if (change.parentOrigin) { parent = document.querySelector(change.parentOrigin) || parent; if (parent && change.parentKey) parent.setAttribute('data-se-move-key', change.parentKey); }
             if (!parent) return;
-            (change.items || []).map(findItem).filter(Boolean).forEach(function (item) {
-                parent.appendChild(item);
-            });
+            var items = (change.items || []).map(findItem).filter(Boolean);
+            // Only honour a stored order when it is a complete, current view of the
+            // parent's stable-keyed children. A saved order captured against an
+            // older layout (a menu item added/removed/renamed since it was saved)
+            // has missing keys and leaves those leftovers in their original slots,
+            // which scrambles the admin nav on every load. In that case fall back
+            // to the canonical HTML order instead of reordering.
+            if (parent !== document.body) {
+                var current = {}, currentCount = 0, seen = {}, missing = false;
+                for (var n = parent.firstChild; n; n = n.nextSibling) {
+                    if (n.nodeType === 1 && n.hasAttribute('data-se-move-key')) {
+                        current[n.getAttribute('data-se-move-key')] = true;
+                        currentCount += 1;
+                    }
+                }
+                items.forEach(function (el) {
+                    var k = el.getAttribute('data-se-move-key');
+                    if (!k) return;
+                    if (!current[k]) missing = true;
+                    seen[k] = true;
+                });
+                if (missing || Object.keys(seen).length !== currentCount) return;
+            }
+            items.forEach(function (item) { parent.appendChild(item); });
         }
         changes.forEach(function (change) {
             try {
