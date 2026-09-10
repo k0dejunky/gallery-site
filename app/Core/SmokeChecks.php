@@ -615,6 +615,12 @@ class SmokeChecks
                 ? $ok('fixed layout + long-token wrapping')
                 : $bad('the API health table must use a fixed layout with overflow-wrap so long probe summaries never widen the card');
         });
+        $validator = $read("$root/app/Core/Validator.php");
+        $add('smoke.validator.numeric_arrays', 'Smoke · Validator', 'numeric rule accepts empty and numeric arrays (gallery categories)', static function () use ($validator, $ok, $bad): array {
+            return strpos($validator, 'is_array($value)') !== false && strpos($validator, 'foreach ($value as $item)') !== false
+                ? $ok('numeric arrays pass, non-numeric items rejected')
+                : $bad('Validator::check must treat an array under the numeric rule as "every value numeric", so optional checkbox fields (e.g. gallery categories) can be empty and still save');
+        });
 
         // ------------------------------------------------- Security & Ops
         $health = $read("$root/app/Controllers/HealthController.php");

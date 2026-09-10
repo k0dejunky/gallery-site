@@ -80,8 +80,18 @@ class Validator
                 break;
 
             case 'numeric':
-                if ($value !== null && !is_numeric($value)) {
-                    return ucfirst($name) . ' must be a number.';
+                if ($value !== null) {
+                    if (is_array($value)) {
+                        // Multi-value fields (e.g. checkbox category IDs):
+                        // every value must be numeric; an empty array passes.
+                        foreach ($value as $item) {
+                            if (!is_numeric($item)) {
+                                return ucfirst($name) . ' must be a number.';
+                            }
+                        }
+                    } elseif (!is_numeric($value)) {
+                        return ucfirst($name) . ' must be a number.';
+                    }
                 }
                 break;
 
