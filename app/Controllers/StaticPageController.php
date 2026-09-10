@@ -31,7 +31,7 @@ class StaticPageController extends Controller
             'title'            => 'Terms of Service',
             'siteName'         => (string) config('app.site_name'),
             'supportEmail'     => 'support@' . (string) config('app.site_name') . '.com',
-            'lastUpdated'      => 'August 31, 2026',
+            'lastUpdated'      => 'September 10, 2026',
         ]);
     }
 

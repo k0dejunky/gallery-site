@@ -4,7 +4,7 @@
 // renders the top nav for guests on non-auth pages.
 $siteName     = $siteName ?? config('app.site_name');
 $supportEmail = $supportEmail ?? ('support@' . config('app.site_name') . '.com');
-$lastUpdated  = $lastUpdated ?? 'August 31, 2026';
+$lastUpdated  = $lastUpdated ?? 'September 10, 2026';
 $t = 'var(--purple-800)';
 ?>
 <div class="card" style="max-width:820px;margin:0 auto;padding:var(--spacing-lg);">
@@ -59,12 +59,13 @@ $t = 'var(--purple-800)';
     grants you any right, title, or interest in such intellectual property.</p>
 
     <h2>6. Payments and Refunds</h2>
-    <p>Membership is billed in advance via our payment processors. Unless otherwise stated in an
-    applicable billing notice or required by law, payments are non-refundable and no refunds or
-    credits will be provided for partial membership periods, with the exception of automatic renewals
-    cancelled before the renewal charge, or as otherwise required by consumer-protection law in your
-    jurisdiction. Please contact <a href="mailto:<?= e($supportEmail) ?>"><?= e($supportEmail) ?></a>
-    with any billing questions.</p>
+    <p>Membership is billed in advance via our payment processors. <strong>No refunds will be given and
+    no refunds will be processed</strong>, regardless of the remaining length of your current paid
+    period. You may cancel your membership at any time; cancellation stops any future renewal charges
+    and the remainder of your already-paid subscription period remains available through its expiry
+    date, but you will not receive a refund or credit for any unused portion. These terms apply unless
+    required otherwise by the applicable consumer-protection law in your jurisdiction. Please contact
+    <a href="mailto:<?= e($supportEmail) ?>"><?= e($supportEmail) ?></a> with any billing questions.</p>
 
     <h2>7. Third-Party Services</h2>
     <p>The Site may use third-party services (including payment processors, analytics, and content
