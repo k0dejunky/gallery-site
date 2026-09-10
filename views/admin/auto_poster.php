@@ -409,7 +409,7 @@ $twitter      = $config['twitter'] ?? [];
                         <option value="<?= e($tz) ?>"<?= ($config['timezone'] ?? 'UTC') === $tz ? ' selected' : '' ?>><?= e($tz) ?></option>
                     <?php endforeach; ?>
                 </select>
-                <span class="muted" style="font-size:0.8rem;">Times in "Recommended posts" and the queue show in this zone; posting happens at the equivalent UTC moment.</span>
+                <span class="muted" style="font-size:0.8rem;">Defaults to the site timezone set on Settings; picking a different zone here overrides it for the auto-poster. Times in "Recommended posts" and the queue show in this zone; posting happens at the equivalent UTC moment.</span>
             </p>
             <button type="submit" class="btn">Save X Settings</button>
         </form>

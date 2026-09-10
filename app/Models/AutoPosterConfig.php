@@ -37,13 +37,13 @@ class AutoPosterConfig
         $path = self::file();
 
         if (!is_file($path)) {
-            return ['reddit' => [], 'twitter' => [], 'timezone' => 'UTC', 'template_x' => [], 'template_reddit' => []];
+            return ['reddit' => [], 'twitter' => [], 'timezone' => self::effectiveTimezone(null), 'template_x' => [], 'template_reddit' => []];
         }
 
         $data = json_decode((string) file_get_contents($path), true);
 
         if (!is_array($data)) {
-            return ['reddit' => [], 'twitter' => [], 'timezone' => 'UTC', 'template_x' => [], 'template_reddit' => []];
+            return ['reddit' => [], 'twitter' => [], 'timezone' => self::effectiveTimezone(null), 'template_x' => [], 'template_reddit' => []];
         }
 
         $legacy = is_array($data['template'] ?? null) ? $data['template'] : [];
@@ -51,14 +51,18 @@ class AutoPosterConfig
         return [
             'reddit'          => is_array($data['reddit'] ?? null) ? $data['reddit'] : [],
             'twitter'         => is_array($data['twitter'] ?? null) ? $data['twitter'] : [],
-            'timezone'        => self::validatedTimezone((string) ($data['timezone'] ?? 'UTC')),
+            'timezone'        => self::effectiveTimezone($data['timezone'] ?? null),
             'template_x'      => is_array($data['template_x'] ?? null) ? $data['template_x'] : $legacy,
             'template_reddit' => is_array($data['template_reddit'] ?? null) ? $data['template_reddit'] : $legacy,
         ];
     }
 
     /**
-     * The scheduler timezone (falls back to UTC when unset or invalid).
+     * The timezone the scheduler displays and schedules in. Follows the
+     * site-wide timezone set on the Settings page whenever the auto-poster
+     * has never been given a timezone of its own (a missing, empty or UTC
+     * stored value all mean "not explicitly set"); a non-UTC pick in the
+     * auto-poster settings overrides the site zone.
      */
     public static function timezone(): string
     {
@@ -132,6 +136,22 @@ class AutoPosterConfig
         }
 
         return 'UTC';
+    }
+
+    /**
+     * The scheduler timezone to use for a given stored value: an explicit
+     * non-UTC pick is honoured as the poster's own override, anything else
+     * (missing, empty or UTC) defers to the site-wide timezone.
+     */
+    private static function effectiveTimezone(?string $stored): string
+    {
+        $stored = trim((string) $stored);
+
+        if ($stored !== '' && strcasecmp($stored, 'UTC') !== 0) {
+            return self::validatedTimezone($stored);
+        }
+
+        return SiteConfig::timezone();
     }
 
     /**

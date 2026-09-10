@@ -363,6 +363,14 @@ class SmokeChecks
                 ? $ok('timezone selector')
                 : $bad('auto-poster settings must expose a schedule-timezone selector');
         });
+        $add('smoke.ap.site_tz_fallback', 'Smoke · Auto Poster', 'Scheduler follows the site timezone until overridden', static function () use ($root, $read, $ok, $bad): array {
+            $apc = $read("$root/app/Models/AutoPosterConfig.php");
+            return strpos($apc, 'function effectiveTimezone(') !== false
+                && strpos($apc, 'SiteConfig::timezone()') !== false
+                && strpos($apc, "strcasecmp(\$stored, 'UTC')") !== false
+                ? $ok('UTC/missing defers to the site timezone; explicit non-UTC overrides')
+                : $bad('AutoPosterConfig must defer to SiteConfig::timezone() unless an explicit non-UTC timezone is stored');
+        });
         $add('smoke.ap.view_countdown', 'Smoke · Auto Poster', 'Live mo/d/h/m/s countdown shown', static function () use ($apv, $ok, $bad): array {
             return strpos($apv, 'ap-countdown') !== false && strpos($apv, 'data-synced') !== false
                 && strpos($apv, 'mo') !== false && strpos($apv, 'setInterval(tick, 1000)') !== false
