@@ -542,8 +542,9 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
         });
 
         // --- Keep the admin's scroll position when a button submits a form
-        // and the page reloads. The position is saved per URL so a same-page
-        // submit (toggle, delete, approve, save) lands back where the admin
+        // or a dashboard period selector is clicked and the page reloads.
+        // The position is saved per URL so a same-page reload (toggle,
+        // delete, approve, save, period change) lands back where the admin
         // was instead of snapping to the top.
         var scrollKey = 'admin-scroll-pos';
         if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
@@ -559,16 +560,24 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
                 }
             }
         } catch (ignore) {}
+        function rememberScrollFor(targetUrl) {
+            try {
+                var url = new URL(targetUrl, location.href);
+                sessionStorage.setItem(scrollKey, JSON.stringify({
+                    p: url.pathname + url.search,
+                    y: window.scrollY || 0
+                }));
+            } catch (ignore) {}
+        }
         document.addEventListener('submit', function (e) {
             var form = e.target;
             if (!form || !form.matches('form')) return;
             if (form.getAttribute('data-no-scroll-restore') !== null) return;
-            try {
-                sessionStorage.setItem(scrollKey, JSON.stringify({
-                    p: location.pathname + location.search,
-                    y: window.scrollY || 0
-                }));
-            } catch (ignore) {}
+            rememberScrollFor(location.href);
+        }, true);
+        document.addEventListener('click', function (e) {
+            var link = e.target && e.target.closest ? e.target.closest('a[data-collapse-preserve]') : null;
+            if (link) rememberScrollFor(link.href);
         }, true);
     })();
     </script>

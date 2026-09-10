@@ -304,7 +304,8 @@
     <div class="storage-periods" role="navigation" aria-label="Storage trend period" style="margin-top:var(--spacing-sm);">
         <?php foreach (['day' => 'Day', 'week' => 'Week', 'month' => 'Month', 'year' => 'Year', 'all' => 'All time'] as $p => $label): ?>
             <a class="btn btn-sm<?= $storagePeriod === $p ? ' storage-period-active' : '' ?>"
-               href="<?= e(url('/admin?period=' . $p . '#storage-trend')) ?>"><?= e($label) ?></a>
+               data-collapse-preserve
+               href="<?= e(url('/admin?period=' . $p)) ?>"><?= e($label) ?></a>
         <?php endforeach; ?>
     </div>
     <style>
@@ -360,7 +361,8 @@
     <div class="storage-periods" role="navigation" aria-label="View trends period" style="margin-top:var(--spacing-sm);">
         <?php foreach (['day' => 'Day', 'week' => 'Week', 'month' => 'Month', 'year' => 'Year', 'all' => 'All time'] as $vp => $label): ?>
             <a class="btn btn-sm<?= $viewPeriod === $vp ? ' storage-period-active' : '' ?>"
-               href="<?= e(url('/admin?vt=' . $vp . '#view-trends')) ?>"><?= e($label) ?></a>
+               data-collapse-preserve
+               href="<?= e(url('/admin?vt=' . $vp)) ?>"><?= e($label) ?></a>
         <?php endforeach; ?>
     </div>
     <?php if ($viewTotals <= 0 && !$anyVisits): ?>
