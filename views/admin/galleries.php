@@ -12,6 +12,24 @@ foreach ($galleries as $gallery) {
 }
 $levelNames = [0 => 'Free', 1 => 'Silver', 2 => 'Gold', 3 => 'Platinum', 4 => 'Diamond'];
 $levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill', 4 => 'pill-err'];
+
+$filterType  = $filterType ?? 'all';
+$filterLevel = $filterLevel ?? null;
+$hasFilter   = $filterType !== 'all' || $filterLevel !== null;
+
+$filterUrl = static function (string $type, string $level): string {
+    $q = [];
+    if ($type !== 'all') {
+        $q[] = 'type=' . rawurlencode($type);
+    }
+    if ($level !== 'all') {
+        $q[] = 'level=' . rawurlencode($level);
+    }
+
+    return url('/admin/galleries' . ($q ? '?' . implode('&', $q) : ''));
+};
+
+$filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
 ?>
 
 <style>
@@ -36,11 +54,20 @@ $levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill', 4 => 'pill-err']
 
     .mg-actions { display: flex; gap: .35rem; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
 
+    .mg-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin: .75rem 0; }
+    .mg-filters { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; }
+    .mg-filter-group { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
+    .mg-filter-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--purple-700); margin-right: .2rem; }
+    .mg-filter-btn { background: var(--pink-100); color: var(--purple-800); border: 1px solid var(--pink-300); }
+    .mg-filter-btn:hover { background: var(--pink-200); border-color: var(--pink-400); }
+    .mg-filter-active, .mg-filter-active:hover { background: var(--purple-700); color: #fff; border-color: var(--purple-700); }
+    .mg-filter-clear { font-size: .8rem; color: var(--purple-700); text-decoration: none; }
+
     .mg-empty { padding: 2.5rem 1rem; text-align: center; color: var(--purple-800); }
     .mg-empty .btn { margin-top: .75rem; }
 </style>
 
-<?php if (empty($galleries)): ?>
+<?php if (empty($galleries) && !$hasFilter): ?>
     <div class="mg-empty">
         <p>No galleries yet.</p>
         <a class="btn btn-sm" href="<?= url('/admin/galleries/create') ?>">Create your first gallery</a>
@@ -67,10 +94,35 @@ $levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill', 4 => 'pill-err']
         </div>
     </div>
 
-    <div style="display:flex;justify-content:flex-end;margin:.75rem 0;">
+    <div class="mg-toolbar">
+        <div class="mg-filters">
+            <div class="mg-filter-group">
+                <span class="mg-filter-label">Type</span>
+                <?php foreach (['all' => 'All', 'images' => 'Images', 'videos' => 'Videos'] as $t => $tLabel): ?>
+                    <a class="btn btn-sm mg-filter-btn<?= $filterType === $t ? ' mg-filter-active' : '' ?>"
+                       href="<?= e($filterUrl($t, $filterLevelKey)) ?>"><?= e($tLabel) ?></a>
+                <?php endforeach; ?>
+            </div>
+            <div class="mg-filter-group">
+                <span class="mg-filter-label">Level</span>
+                <?php foreach (['all' => 'All', '0' => 'Free', '1' => 'Silver', '2' => 'Gold', '3' => 'Platinum', '4' => 'Diamond'] as $l => $lLabel): ?>
+                    <a class="btn btn-sm mg-filter-btn<?= $filterLevelKey === (string) $l ? ' mg-filter-active' : '' ?>"
+                       href="<?= e($filterUrl($filterType, $l)) ?>"><?= e($lLabel) ?></a>
+                <?php endforeach; ?>
+            </div>
+            <?php if ($hasFilter): ?>
+                <a class="mg-filter-clear" href="<?= url('/admin/galleries') ?>">Clear filters</a>
+            <?php endif; ?>
+        </div>
         <a class="btn btn-sm" href="<?= url('/admin/galleries/create') ?>">New Gallery</a>
     </div>
 
+    <?php if (empty($galleries)): ?>
+        <div class="mg-empty">
+            <p>No galleries match the selected filters.</p>
+            <a class="btn btn-sm" href="<?= url('/admin/galleries') ?>">Clear filters</a>
+        </div>
+    <?php else: ?>
     <div class="mg-table-wrap">
         <table>
             <thead>
@@ -139,4 +191,5 @@ $levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill', 4 => 'pill-err']
             </tbody>
         </table>
     </div>
+    <?php endif; ?>
 <?php endif; ?>

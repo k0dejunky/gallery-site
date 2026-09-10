@@ -97,13 +97,33 @@ class AdminController extends Controller
     public function galleries(): void
     {
         Auth::requirePermission('galleries');
-        $galleries = Gallery::all();
+
+        $type      = (string) ($_GET['type'] ?? 'all');
+        $levelKey  = (string) ($_GET['level'] ?? 'all');
+        $filters   = [];
+
+        if (in_array($type, ['images', 'videos'], true)) {
+            $filters['type'] = $type;
+        } else {
+            $type = 'all';
+        }
+
+        $level = ($levelKey === 'all' || !ctype_digit($levelKey)) ? null : (int) $levelKey;
+        if ($level !== null && $level >= 0 && $level <= 4) {
+            $filters['min_level'] = $level;
+        } else {
+            $level = null;
+        }
+
+        $galleries = Gallery::all($filters);
 
         $galleryIds = array_map('intval', array_column($galleries, 'id'));
 
         $this->viewAdmin('galleries', [
-            'galleries' => $galleries,
-            'covers'    => Gallery::firstPhotos($galleryIds),
+            'galleries'   => $galleries,
+            'covers'      => Gallery::firstPhotos($galleryIds),
+            'filterType'  => $type,
+            'filterLevel' => $level,
         ]);
     }
 

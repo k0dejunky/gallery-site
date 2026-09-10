@@ -13,15 +13,32 @@ class Gallery
     /**
      * Every gallery newest first, each with its image and video counts.
      */
-    public static function all(): array
+    public static function all(array $filters = []): array
     {
+        $where  = ['g.deleted_at IS NULL'];
+        $params = [];
+
+        if (!empty($filters['type']) && in_array($filters['type'], ['images', 'videos'], true)) {
+            $where[] = 'g.type = ?';
+            $params[] = $filters['type'];
+        }
+
+        if (isset($filters['min_level']) && $filters['min_level'] !== '' && $filters['min_level'] !== null) {
+            $minLevel = (int) $filters['min_level'];
+            if ($minLevel >= 0 && $minLevel <= 4) {
+                $where[] = 'g.min_level = ?';
+                $params[] = $minLevel;
+            }
+        }
+
         return Database::run(
             'SELECT g.*, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
              FROM galleries g
              LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
-             WHERE g.deleted_at IS NULL
+             WHERE ' . implode(' AND ', $where) . '
              GROUP BY g.id
-             ORDER BY g.created_at DESC'
+             ORDER BY g.created_at DESC',
+            $params
         )->fetchAll();
     }
 
