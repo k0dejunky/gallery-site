@@ -22,7 +22,7 @@ switch ($config['mode'] ?? 'daily') {
         <?php if (!empty($config['enabled'])): ?>
             <p class="muted" style="margin:.25rem 0;">
                 <span style="color:var(--success,#2e7d32);font-weight:600;">&#10003; Enabled</span> &middot;
-                sends <strong><?= e($scheduleLabel) ?></strong> in <strong><?= e((string) ($config['timezone'] ?? 'UTC')) ?></strong>.
+                sends <strong><?= e($scheduleLabel) ?></strong> in <strong><?= e(site_timezone()) ?></strong>.
             </p>
         <?php else: ?>
             <p class="muted" style="margin:.25rem 0;">
@@ -30,8 +30,8 @@ switch ($config['mode'] ?? 'daily') {
             </p>
         <?php endif; ?>
         <p class="muted" style="margin:.4rem 0;">
-            Next send: <strong><?= $nextSend !== null ? e($nextSend) . ' (' . e((string) ($config['timezone'] ?? 'UTC')) . ')' : '—' ?></strong><br>
-            Last sent: <strong><?= !empty($config['last_sent_at']) ? e((string) $config['last_sent_at']) . ' UTC' : 'never' ?></strong><br>
+            Next send: <strong><?= $nextSend !== null ? e($nextSend) . ' (' . e(site_timezone()) . ')' : '—' ?></strong><br>
+            Last sent: <strong><?= !empty($config['last_sent_at']) ? e(tzdate('Y-m-d H:i', $config['last_sent_at'])) . ' (' . e(site_timezone()) . ')' : 'never' ?></strong><br>
             Last watermark photo: <strong>#<?= (int) ($config['last_sent_photo_id'] ?? 0) ?></strong>
         </p>
         <p class="muted" style="margin:0;">
@@ -123,12 +123,7 @@ switch ($config['mode'] ?? 'daily') {
         </p>
 
         <p>
-            <label for="timezone">Schedule timezone</label><br>
-            <select name="timezone" id="timezone" style="min-width:200px;">
-                <?php foreach ($timezones as [$value, $label]): ?>
-                    <option value="<?= e($value) ?>"<?= ($config['timezone'] ?? 'UTC') === $value ? ' selected' : '' ?>><?= e($label) ?></option>
-                <?php endforeach; ?>
-            </select>
+            <span class="muted" style="font-size:0.8rem;">Schedule times follow the site timezone set on Settings, so the digest sends at the configured clock time in that zone.</span>
         </p>
 
         <p>
@@ -198,7 +193,7 @@ switch ($config['mode'] ?? 'daily') {
                             <?php if (!empty($row['error'])): ?>
                                 <span class="muted"><?= e((string) $row['error']) ?></span>
                             <?php else: ?>
-                                <span class="muted"><?= e((string) ($row['sent_at'] ?: $row['created_at'])) ?></span>
+                                <span class="muted"><?= e(tzdate('Y-m-d H:i', (string) ($row['sent_at'] ?: $row['created_at']))) ?></span>
                             <?php endif; ?>
                         </td>
                         <td style="text-align:right;white-space:nowrap;">

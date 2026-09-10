@@ -494,11 +494,12 @@ class SmokeChecks
                 ? $ok('schedule engine present')
                 : $bad('EmailerConfig must expose MAX_SAMPLE and the due()/nextSendAt() schedule engine');
         });
-        $add('smoke.email.config_timezone', 'Smoke · Emailer', 'EmailerConfig converts schedule times to a timezone', static function () use ($ecfg, $ok, $bad): array {
+        $add('smoke.email.config_timezone', 'Smoke · Emailer', 'EmailerConfig evaluates the schedule in the site timezone', static function () use ($ecfg, $ok, $bad): array {
             return strpos($ecfg, 'DateTimeImmutable') !== false && strpos($ecfg, 'setTimezone') !== false
-                && strpos($ecfg, 'validatedTimezone') !== false && strpos($ecfg, 'DateTimeZone::listIdentifiers()') !== false
-                ? $ok('timezone-aware schedule')
-                : $bad('EmailerConfig must evaluate the schedule in a configured timezone');
+                && strpos($ecfg, 'SiteConfig::timezone()') !== false
+                && strpos($ecfg, 'DateTimeZone::listIdentifiers()') !== false
+                ? $ok('schedule runs on the site-wide timezone')
+                : $bad('EmailerConfig::timezone() must delegate to the site-wide SiteConfig::timezone() (no emailer-specific zone)');
         });
         $add('smoke.email.digest_templates', 'Smoke · Emailer', 'Digest renders subscriber + non-subscriber templates', static function () use ($eq, $ok, $bad): array {
             return strpos($eq, "render_email('newsletter'") !== false && strpos($eq, "render_email('newsletter.text'") !== false
@@ -582,12 +583,14 @@ class SmokeChecks
                 ? $ok('nav item gated')
                 : $bad('views/admin/layout.php must link the Emailer page behind the membership permission');
         });
-        $add('smoke.email.admin_view', 'Smoke · Emailer', 'Admin emailer view exposes settings/test/send-now/queue', static function () use ($ecv, $ok, $bad): array {
+        $add('smoke.email.admin_view', 'Smoke · Emailer', 'Admin emailer view exposes settings/test/send-now/queue (site timezone, no per-emailer zone)', static function () use ($ecv, $ok, $bad): array {
             return strpos($ecv, 'send-now') !== false && strpos($ecv, 'name="sample_count"') !== false
-                && strpos($ecv, 'timezone') !== false && strpos($ecv, 'retry') !== false
-                && strpos($ecv, 'audience') !== false
-                ? $ok('view wired')
-                : $bad('views/admin/emailer.php must expose settings, sample count, timezone, test/send-now actions and queue retry');
+                && strpos($ecv, 'name="timezone"') === false
+                && strpos($ecv, 'site timezone set on Settings') !== false
+                && strpos($ecv, 'tzdate(') !== false
+                && strpos($ecv, 'retry') !== false && strpos($ecv, 'audience') !== false
+                ? $ok('view wired; no per-emailer timezone selector')
+                : $bad('views/admin/emailer.php must expose settings, sample count, test/send-now actions and queue retry, display times via tzdate(), and have no own timezone selector');
         });
 
         // ------------------------------------------------ Site timezone

@@ -100,11 +100,14 @@ class EmailerConfig
     }
 
     /**
-     * The scheduler timezone (falls back to UTC when unset or invalid).
+     * The timezone the scheduler evaluates in. The emailer has no timezone of
+     * its own: it always runs on the site-wide timezone set on Settings, the
+     * same zone every other schedule and clock on the site uses. A stored
+     * "timezone" value is kept for compatibility but ignored for scheduling.
      */
     public static function timezone(array $config): string
     {
-        return self::validatedTimezone((string) ($config['timezone'] ?? 'UTC'));
+        return SiteConfig::timezone();
     }
 
     /**
@@ -122,7 +125,7 @@ class EmailerConfig
         $d['day_of_week']             = max(0, min(6, (int) ($in['day_of_week'] ?? 1)));
         $d['hour']                    = max(0, min(23, (int) ($in['hour'] ?? 9)));
         $d['minute']                  = max(0, min(59, (int) ($in['minute'] ?? 0)));
-        $d['timezone']                = self::validatedTimezone($timezone);
+        $d['timezone']                = SiteConfig::timezone();
         $d['sample_count']            = max(1, min(self::MAX_SAMPLE, (int) ($in['sample_count'] ?? 6)));
         $d['include_non_subscribers'] = !empty($in['include_non_subscribers']);
         $d['subject_subscriber']      = trim((string) ($in['subject_subscriber'] ?? ''));

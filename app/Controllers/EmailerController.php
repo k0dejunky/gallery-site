@@ -8,8 +8,6 @@ use App\Core\Mailer;
 use App\Core\Request;
 use App\Models\EmailerConfig;
 use App\Models\EmailQueue;
-use DateTimeImmutable;
-use DateTimeZone;
 
 /**
  * Admin page for the auto-emailer: schedule + audience settings, digest
@@ -51,7 +49,6 @@ class EmailerController extends Controller
             'samples'             => $samples,
             'queueCounts'         => EmailQueue::statusCounts(),
             'recent'              => EmailQueue::recent(50),
-            'timezones'           => self::timezoneList(),
         ]);
     }
 
@@ -61,8 +58,6 @@ class EmailerController extends Controller
      */
     public function save(): void
     {
-        $timezone = self::readTimezone();
-
         EmailerConfig::save([
             'enabled'                 => $this->request->post('enabled') !== null,
             'mode'                    => (string) $this->request->post('mode', 'daily'),
@@ -74,7 +69,7 @@ class EmailerController extends Controller
             'include_non_subscribers' => $this->request->post('include_non_subscribers') !== null,
             'subject_subscriber'      => (string) $this->request->post('subject_subscriber', ''),
             'subject_non_subscriber'  => (string) $this->request->post('subject_non_subscriber', ''),
-        ], $timezone);
+        ]);
 
         $this->flash('success', 'Emailer settings saved.');
         $this->redirect('/admin/emailer');
@@ -170,33 +165,5 @@ class EmailerController extends Controller
 
         $this->flash('success', 'Email #' . $id . ' moved back to the sending queue.');
         $this->redirect('/admin/emailer');
-    }
-
-    /**
-     * The submit timezone, validated as a real IANA identifier (UTC fallback).
-     */
-    private static function readTimezone(): string
-    {
-        try {
-            return (new DateTimeZone(trim((string) ($_POST['timezone'] ?? 'UTC'))))->getName();
-        } catch (\Throwable $e) {
-            return 'UTC';
-        }
-    }
-
-    /**
-     * The timezone dropdown options: the common regions plus UTC.
-     */
-    private static function timezoneList(): array
-    {
-        $list = [['UTC', 'UTC (UTC)']];
-
-        foreach (DateTimeZone::listIdentifiers() as $tz) {
-            if (preg_match('/^((Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Europe|Indian|Pacific)\/)/', $tz) === 1) {
-                $list[] = [$tz, $tz];
-            }
-        }
-
-        return $list;
     }
 }
