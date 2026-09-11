@@ -140,6 +140,7 @@ var moveParents=[];
 var bulkSelected=[];
 var bulkRoots=[],bulkPlaceholders=[],bulkOrigParents=[],bulkOrigStyles=[],bulkVisStyles=[],bulkRects=[];
 var bulkDragging=false,bulkBlockRelocated=false,bulkDragGhost=null,bulkDragLabel=null,bulkGrabX=0,bulkGrabY=0, bulkOrigSnap=null;
+var bulkSingleParent=false;
 var templates=<?= json_encode($templates) ?>;
 var activeTpl=<?= json_encode($activeTemplate) ?>;
 if(activeTpl&&activeTpl.config_json){try{changes=JSON.parse(activeTpl.config_json);if(!Array.isArray(changes))changes=[];}catch(e){changes=[];}}
@@ -347,7 +348,7 @@ function startBulkDrag(anchorEl,sx,sy){
   if(bulkSelected.indexOf(anchorEl)<0)ensureBulkSelected(anchorEl);
   if(!bulkSelected.length)return;
   bulkRoots=bulkSelected.slice();
-  bulkPlaceholders=[];bulkOrigParents=[];bulkOrigStyles=[];bulkVisStyles=[];bulkRects=[];
+  bulkPlaceholders=[];bulkOrigParents=[];bulkOrigStyles=[];bulkVisStyles=[];bulkRects=[];bulkOrigIndex=[];
   moveParents=[];
   bulkOrigSnap=new Map();
   bulkRoots.forEach(function(t,i){
@@ -355,6 +356,7 @@ function startBulkDrag(anchorEl,sx,sy){
     if(!p)return;
     if(!bulkOrigSnap.has(p))bulkOrigSnap.set(p,Array.prototype.map.call(p.children,function(c){return c;}));
     bulkOrigParents.push(p);
+    bulkOrigIndex.push(Array.prototype.indexOf.call(p.children,t));
     bulkOrigStyles.push(t.getAttribute('style')||'');
     var vs=captureVisualStyle(t);
     delete vs.outline;
@@ -365,6 +367,9 @@ function startBulkDrag(anchorEl,sx,sy){
     if(p&&moveParents.indexOf(p)<0){moveParents.push(p);}
     moveMeta(t);
   });
+  if(!bulkOrigParents.length)return;
+  bulkSingleParent=true;
+  for(var sp=1;sp<bulkOrigParents.length;sp++){if(bulkOrigParents[sp]!==bulkOrigParents[0]){bulkSingleParent=false;break;}}
   var gi=bulkRoots.indexOf(anchorEl);
   var ap=bulkOrigParents[gi]||iBody;
   var an=anchorEl.nextElementSibling;
@@ -372,16 +377,27 @@ function startBulkDrag(anchorEl,sx,sy){
   bulkRoots.forEach(function(t){if(t.parentNode)t.parentNode.removeChild(t);});
   var stage=an&&ap.contains(an)?an:null;
   bulkPlaceholders=[];
-  bulkRoots.forEach(function(t,i){
+  var mkPh=function(i){
     var r=bulkRects[i];
     var ph=iDoc.createElement('div');
     ph.className='se-drag-placeholder';
     ph.style.width=r.width+'px';ph.style.height=r.height+'px';
     ph.style.flex='0 0 '+r.width+'px';ph.style.visibility='hidden';ph.style.pointerEvents='none';
-    if(stage)ap.insertBefore(ph,stage);
-    else ap.appendChild(ph);
     bulkPlaceholders.push(ph);
-  });
+    return ph;
+  };
+  if(bulkSingleParent){
+    bulkRoots.forEach(function(t,i){
+      var ph=mkPh(i);
+      if(stage)ap.insertBefore(ph,stage);
+      else ap.appendChild(ph);
+    });
+  }else{
+    var orderByIdx=bulkRoots.map(function(t,i){
+      return{idx:bulkOrigParents[i]?bulkOrigIndex[i]:0,pi:bulkOrigParents[i]||null,i:i};
+    }).filter(function(o){return o.pi;}).sort(function(a,b){return a.idx-b.idx;});
+    orderByIdx.forEach(function(o){placePhAt(o.pi,mkPh(o.i),o.idx);});
+  }
   var ghost=bulkRoots[gi].cloneNode(true);
   iBody.appendChild(ghost);
   ghost.style.position='fixed';ghost.style.left=anchorRect.left+'px';ghost.style.top=anchorRect.top+'px';
@@ -396,6 +412,18 @@ function startBulkDrag(anchorEl,sx,sy){
   bulkGrabX=sx-anchorRect.left;bulkGrabY=sy-anchorRect.top;
   bulkDragging=true;bulkBlockRelocated=false;
   showMsg('Dragging '+bulkRoots.length+' elements onto a container');
+}
+function liveChildrenP(p){
+  var out=[];
+  Array.prototype.forEach.call(p.children,function(c){if(bulkPlaceholders.indexOf(c)<0&&bulkRoots.indexOf(c)<0)out.push(c);});
+  return out;
+}
+function placePhAt(p,ph,idx){
+  var live=liveChildrenP(p);
+  var k=Math.min(Math.max(idx,0),live.length);
+  var ref=live[k]||null;
+  if(ref)p.insertBefore(ph,ref);
+  else p.appendChild(ph);
 }
 function resolveBulkDrop(ev){
   var hit=iDoc.elementFromPoint(ev.clientX,ev.clientY);
@@ -414,23 +442,52 @@ function bulkDragMove(ev){
   bulkDragLabel.style.left=(ev.clientX-bulkGrabX+16)+'px';bulkDragLabel.style.top=(ev.clientY-bulkGrabY-20)+'px';
   var res=resolveBulkDrop(ev);
   if(!res)return;
-  var ref=null;
-  if(res.canContain){
-    var insertBefore=null;
-    var direct=res.hit;
-    while(direct&&direct.parentElement!==res.candidate)direct=direct.parentElement;
-    if(direct&&bulkRoots.indexOf(direct)<0&&bulkPlaceholders.indexOf(direct)<0)insertBefore=direct;
-    ref=insertBefore;
+  if(bulkSingleParent){
+    var ref=null;
+    if(res.canContain){
+      var direct=res.hit;
+      while(direct&&direct.parentElement!==res.candidate)direct=direct.parentElement;
+      if(direct&&bulkRoots.indexOf(direct)<0&&bulkPlaceholders.indexOf(direct)<0)ref=direct;
+    }else{
+      var crb=res.candidate.getBoundingClientRect();
+      var rowb=getComputedStyle(res.dropParent).display==='flex'&&getComputedStyle(res.dropParent).flexDirection==='row';
+      var before2=rowb?ev.clientX<crb.left+crb.width/2:ev.clientY<crb.top+crb.height/2;
+      ref=before2?res.candidate:res.candidate.nextSibling;
+      while(ref&&bulkPlaceholders.indexOf(ref)>=0)ref=ref.nextSibling;
+    }
+    for(var bi=0;bi<bulkPlaceholders.length;bi++){
+      if(ref)res.dropParent.insertBefore(bulkPlaceholders[bi],ref);
+      else res.dropParent.appendChild(bulkPlaceholders[bi]);
+    }
   }else{
-    var cr=res.candidate.getBoundingClientRect();
-    var row=getComputedStyle(res.dropParent).display==='flex'&&getComputedStyle(res.dropParent).flexDirection==='row';
-    var before=row?ev.clientX<cr.left+cr.width/2:ev.clientY<cr.top+cr.height/2;
-    ref=before?res.candidate:res.candidate.nextSibling;
-    while(ref&&bulkPlaceholders.indexOf(ref)>=0)ref=ref.nextSibling;
-  }
-  for(var bi=0;bi<bulkPlaceholders.length;bi++){
-    if(ref)res.dropParent.insertBefore(bulkPlaceholders[bi],ref);
-    else res.dropParent.appendChild(bulkPlaceholders[bi]);
+    var live=liveChildrenP(res.dropParent);
+    var refLive=null;
+    if(res.canContain){
+      var direct2=res.hit;
+      while(direct2&&direct2.parentElement!==res.candidate)direct2=direct2.parentElement;
+      if(direct2&&bulkRoots.indexOf(direct2)<0&&bulkPlaceholders.indexOf(direct2)<0)refLive=direct2;
+    }else{
+      var cr2=res.candidate.getBoundingClientRect();
+      var row2=getComputedStyle(res.dropParent).display==='flex'&&getComputedStyle(res.dropParent).flexDirection==='row';
+      var before3=row2?ev.clientX<cr2.left+cr2.width/2:ev.clientY<cr2.top+cr2.height/2;
+      refLive=before3?res.candidate:res.candidate.nextSibling;
+      while(refLive&&bulkPlaceholders.indexOf(refLive)>=0)refLive=refLive.nextSibling;
+    }
+    var targetIdx=refLive&&live.indexOf(refLive)>=0?live.indexOf(refLive):live.length;
+    var seenP=new Set();
+    bulkRoots.forEach(function(t,i){
+      var p=bulkOrigParents[i];
+      if(!p)return;
+      if(seenP.has(p))return;
+      seenP.add(p);
+      var inParent=[];
+      bulkPlaceholders.forEach(function(ph,j){if(bulkOrigParents[j]===p)inParent.push(ph);});
+      inParent.forEach(function(ph){if(ph.parentNode)ph.parentNode.removeChild(ph);});
+      inParent.forEach(function(ph){placePhAt(p,ph,targetIdx);});
+      liveChildrenP(p).forEach(function(c){moveMeta(c);});
+      if(p!==iBody)moveMeta(p);
+      if(moveParents.indexOf(p)<0)moveParents.push(p);
+    });
   }
   Array.prototype.forEach.call(res.dropParent.children,function(child){if(bulkRoots.indexOf(child)<0&&bulkPlaceholders.indexOf(child)<0)moveMeta(child);});
   if(res.dropParent!==iBody)moveMeta(res.dropParent);
