@@ -553,6 +553,9 @@ function attachHandlers(){
   iDoc.addEventListener('scroll',function(){iframeRectCache=null;},true);
   iDoc.defaultView.addEventListener('resize',function(){iframeRectCache=null;});
 
+  iDoc.addEventListener('click',function(ce){
+    if(mode==='bulk-move'){ce.preventDefault();ce.stopPropagation();}
+  },true);
   iDoc.addEventListener('pointerdown',function(e){
     if(!iBody)return;
     if(justDropped){justDropped=false;e.preventDefault();e.stopPropagation();return;}
