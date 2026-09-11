@@ -349,11 +349,11 @@ function startBulkDrag(anchorEl,sx,sy){
   bulkRoots=bulkSelected.slice();
   bulkPlaceholders=[];bulkOrigParents=[];bulkOrigStyles=[];bulkVisStyles=[];bulkRects=[];
   moveParents=[];
-  bulkOrigSnap={};
+  bulkOrigSnap=new Map();
   bulkRoots.forEach(function(t,i){
     var p=t.parentElement;
     if(!p)return;
-    if(!(p in bulkOrigSnap))bulkOrigSnap[p]=Array.prototype.map.call(p.children,function(c){return c;});
+    if(!bulkOrigSnap.has(p))bulkOrigSnap.set(p,Array.prototype.map.call(p.children,function(c){return c;}));
     bulkOrigParents.push(p);
     bulkOrigStyles.push(t.getAttribute('style')||'');
     var vs=captureVisualStyle(t);
@@ -458,12 +458,12 @@ function finishBulkDrag(){
     showMsg('Moved '+bulkRoots.length+' element'+(bulkRoots.length>1?'s':''));
     clearBulkSelect();
   }else{
-    var seenP={};
+    var seenP=new Set();
     bulkRoots.forEach(function(t,i){
       var p=bulkOrigParents[i];
-      if(!p||seenP[p])return;
-      seenP[p]=1;
-      var snap=bulkOrigSnap[p]||[];
+      if(!p||seenP.has(p))return;
+      seenP.add(p);
+      var snap=bulkOrigSnap.get(p)||[];
       for(var s=snap.length-1;s>=0;s--){
         var elInSnap=snap[s];
         var ri=bulkRoots.indexOf(elInSnap);
