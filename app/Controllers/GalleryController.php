@@ -253,7 +253,7 @@ class GalleryController extends Controller
     {
         Auth::requireLogin();
 
-        $gallery = Gallery::findPublic($id);
+        $gallery = Gallery::find($id);
 
         if ($gallery === null) {
             $this->notFound();
@@ -307,7 +307,7 @@ class GalleryController extends Controller
     {
         Auth::requireLogin();
 
-        $gallery = Gallery::findPublic($id);
+        $gallery = Gallery::find($id);
 
         if ($gallery === null) {
             $this->notFound();
@@ -397,21 +397,7 @@ class GalleryController extends Controller
             $this->redirect('/admin/galleries/create');
         }
 
-        $publishBad   = false;
-        $publishNote = '';
-
-        $publishLaterRaw = (string) $this->request->post('publish_later', '');
-
-        if ($publishLaterRaw === '1') {
-            $publishAtRaw = (string) $this->request->post('publish_at', '');
-            if (!Gallery::validPublishSchedule($publishAtRaw)) {
-                $publishBad  = true;
-                $publishNote = ' The schedule was missing or not in the future, so the gallery was saved as immediately visible.';
-            }
-        }
-
-        $publishedAt = Gallery::normalizePublishAt((string) $this->request->post('publish_at', ''));
-        $galleryId   = Gallery::create($title, $description, $type, $minLevel, $publishedAt);
+        $galleryId = Gallery::create($title, $description, $type, $minLevel);
         Gallery::setCategories($galleryId, $categoryIds);
 
         $count = $this->finalizePending($galleryId, $type);
