@@ -121,7 +121,7 @@ class RedditBridge
      *
      * @return array{0: string, 1: string}
      */
-    private static function splitForReddit(string $text): array
+    public static function splitForReddit(string $text): array
     {
         $text = trim((string) $text);
 
@@ -156,7 +156,7 @@ class RedditBridge
     /**
      * Normalize a subreddit name (strip r/ prefix, whitespace, url-id chars).
      */
-    private static function cleanSubreddit(string $sub): string
+    public static function cleanSubreddit(string $sub): string
     {
         $sub = trim((string) preg_replace('#^r/#i', '', trim($sub)));
         $sub = (string) preg_replace('/[^A-Za-z0-9_]/', '', $sub);

@@ -489,6 +489,23 @@ class AutoPostQueue
     }
 
     /**
+     * Whether the admin's submitted datetime (datetime-local, scheduler
+     * timezone) is a valid schedule that lies strictly in the future. Used to
+     * reject past/blank/invalid times when saving a gallery and its scheduled
+     * auto-post.
+     */
+    public static function validFutureSchedule(?string $value): bool
+    {
+        $utc = self::normalizeSchedule($value);
+
+        if ($utc === null) {
+            return false;
+        }
+
+        return $utc > gmdate('Y-m-d H:i:s');
+    }
+
+    /**
      * Insert a new queued post for a gallery recommendation. Resolves the
      * gallery's media set, generates the draft text when none was supplied and
      * stores the publish schedule (defaults to DEFAULT_SCHEDULE_MINUTES ahead).
@@ -588,16 +605,26 @@ class AutoPostQueue
      * scheduled_at has passed. Rows without a schedule (legacy/unscheduled)
      * are also considered due. Ordered oldest schedule first so the worker
      * publishes in the order the admin scheduled them.
+     *
+     * When Reddit pull mode is enabled the reddit rows are excluded: the
+     * Devvit polling app claims and publishes those itself (via the
+     * /webhooks/reddit/next + report endpoints), so the local worker must
+     * never post them too or each queue item would be double-published.
      */
     public static function due(int $limit = 20): array
     {
         $limit = max(1, min(100, $limit));
+        $where = "q.status = 'queued'
+                  AND (q.scheduled_at IS NULL OR q.scheduled_at <= CURRENT_TIMESTAMP)";
+
+        if (self::redditPullEnabled()) {
+            $where .= " AND q.platform <> 'reddit'";
+        }
 
         return Database::run(
             "SELECT q.*
              FROM auto_poster_queue q
-             WHERE q.status = 'queued'
-               AND (q.scheduled_at IS NULL OR q.scheduled_at <= CURRENT_TIMESTAMP)
+             WHERE $where
              ORDER BY COALESCE(q.scheduled_at, q.created_at) ASC, q.id ASC
              LIMIT $limit"
         )->fetchAll();
@@ -764,9 +791,10 @@ class AutoPostQueue
      * posting. Twitter/Reddit-OAuth require their credentials AND the OAuth
      * user authorization (refresh token). Reddit via the Devvit bridge is
      * authorized when its bridge endpoint + shared secret are configured (it
-     * does not need Reddit OAuth credentials). Unauthorized platforms are
-     * skipped by the worker instead of being attempted (and failing) every
-     * cron tick.
+     * does not need Reddit OAuth credentials) — or, in pull mode, when the
+     * polling bridge's shared secret + target subreddit are configured.
+     * Unauthorized platforms are skipped by the worker instead of being
+     * attempted (and failing) every cron tick.
      */
     public static function platformAuthorized(string $platform): bool
     {
@@ -775,8 +803,11 @@ class AutoPostQueue
 
         if ($platform === 'reddit') {
             // Bridge-driven reddit: no OAuth client needed, just the bridge.
-            return trim((string) ($cfg['devvit_endpoint'] ?? '')) !== ''
-                && trim((string) ($cfg['bridge_secret'] ?? '')) !== ''
+            $pushReady = trim((string) ($cfg['devvit_endpoint'] ?? '')) !== ''
+                && trim((string) ($cfg['bridge_secret'] ?? '')) !== '';
+            $pullReady = self::redditPullEnabled();
+
+            return ($pushReady || $pullReady)
                 && trim((string) ($cfg['subreddit'] ?? '')) !== '';
         }
 
@@ -786,6 +817,20 @@ class AutoPostQueue
         };
 
         return $client !== null && $client->isConfigured() && $client->isUserAuthorized();
+    }
+
+    /**
+     * Whether the Reddit bridge is running in pull mode: the Devvit polling
+     * app contacts the site for queued reddit rows instead of the site
+     * pushing to it. Enabled when a pull shared secret and a target
+     * subreddit are configured.
+     */
+    public static function redditPullEnabled(): bool
+    {
+        $cfg = AutoPosterConfig::all()['reddit'] ?? [];
+
+        return trim((string) ($cfg['pull_secret'] ?? '')) !== ''
+            && trim((string) ($cfg['subreddit'] ?? '')) !== '';
     }
 
     /**
@@ -920,6 +965,152 @@ class AutoPostQueue
     }
 
     /**
+     * Atomically claim the next due reddit queue row for the pull bridge,
+     * so two polling app instances can never hand the same row out twice.
+     * A row whose claim has expired (crashed poll cycle / lost report) is
+     * claimable again. Returns the claimed row with picked_by set to the
+     * claim token the bridge must echo back, or null when nothing is due.
+     *
+     * @param int    $claimSeconds how long a claim may stay outstanding
+     * @param string $instance     claimer identifier (an audit hint)
+     */
+    public static function nextRedditPending(int $claimSeconds = 600, string $instance = 'devvit'): ?array
+    {
+        if (!self::redditPullEnabled()) {
+            return null;
+        }
+
+        $claimSeconds = max(1, min(3600, $claimSeconds));
+        $claim = bin2hex(random_bytes(12));
+
+        // UPDATE ... JOIN (...) picks the oldest unclaimed/due-for-retry row
+        // and stamps it in one atomic statement (single row, LIMIT 1).
+        $stamp = Database::run(
+            "UPDATE auto_poster_queue q
+             JOIN (
+                 SELECT id
+                 FROM auto_poster_queue
+                 WHERE status = 'queued'
+                   AND platform = 'reddit'
+                   AND (picked_at IS NULL OR picked_at < (CURRENT_TIMESTAMP - INTERVAL $claimSeconds SECOND))
+                   AND (scheduled_at IS NULL OR scheduled_at <= CURRENT_TIMESTAMP)
+                 ORDER BY COALESCE(scheduled_at, created_at) ASC, id ASC
+                 LIMIT 1
+             ) c ON c.id = q.id
+             SET picked_at = CURRENT_TIMESTAMP, picked_by = ?",
+            [$claim]
+        );
+
+        if ($stamp->rowCount() !== 1) {
+            return null;
+        }
+
+        // Re-find the exact row we claimed via the unique claim token: if a
+        // concurrent poller stamped over this claim (won the race on the same
+        // row), the lookup finds nothing and exactly one instance delivers.
+        $row = Database::run(
+            'SELECT * FROM auto_poster_queue WHERE picked_by = ? LIMIT 1',
+            [$claim]
+        )->fetch();
+
+        if (!$row) {
+            return null;
+        }
+
+        $row['picked_by'] = $claim;
+        $row['_instance'] = $instance;
+
+        return $row;
+    }
+
+    /**
+     * The base64 data-URL for the first image of a queue row, as the Devvit
+     * pull bridge uploads it. Uses the same web-optimized / blurred variant
+     * as the push path (videos become a single blurred frame) and returns
+     * null when the row has no usable media.
+     *
+     * @return array{name: string, type: string, b64: string}|null
+     */
+    public static function redditMediaDataUrl(array $item): ?array
+    {
+        foreach (self::mediaFiles($item) as $photo) {
+            $path = self::preferredMediaPath((string) $photo['filename']);
+
+            if ($path === null) {
+                continue;
+            }
+
+            $tmp = null;
+
+            if ((int) $photo['is_video'] === 1) {
+                $frames = self::videoScreenshots($path, 1, 'reddit');
+                if ($frames !== []) {
+                    $tmp = $frames[0];
+                }
+            } else {
+                $tmp = create_blurred_copy($path, (int) self::templateSettings('reddit')['blur_percent']);
+            }
+
+            $final = $tmp ?? $path;
+            $data  = base64_encode((string) file_get_contents($final));
+
+            if ($tmp !== null) {
+                @unlink($tmp);
+            }
+
+            if ($data === '') {
+                continue;
+            }
+
+            return [
+                'name' => basename((string) $final),
+                'type' => (string) (mime_content_type($final) ?: 'image/png'),
+                'b64'  => $data,
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Settle a reddit queue row from the pull bridge's report: clear the
+     * claim and mark the row posted (with the reddit URL) or failed (with
+     * the error), so a requeued row is immediately claimable again. When a
+     * claim token is supplied it must match the row's outstanding claim,
+     * otherwise the report is ignored (stale/lost-race report).
+     */
+    public static function reportRedditResult(int $id, bool $ok, string $url = '', string $error = '', ?string $claim = null): bool
+    {
+        if ($claim !== null && trim((string) $claim) !== '') {
+            $current = Database::run(
+                'SELECT picked_by FROM auto_poster_queue WHERE id = ? LIMIT 1',
+                [$id]
+            )->fetchColumn();
+
+            if ($current === false || (string) $current !== trim((string) $claim)) {
+                return false;
+            }
+        }
+
+        if ($ok) {
+            $url    = trim((string) $url);
+            $stored = $url !== '' ? $url : 'https://www.reddit.com/r/' . trim((string) (AutoPosterConfig::all()['reddit']['subreddit'] ?? '')) . '/comments';
+            $updated = self::markPosted($id, $stored);
+        } else {
+            $updated = self::markFailed($id, mb_substr(trim((string) $error) !== '' ? 'Reddit: ' . trim((string) $error) : 'Reddit bridge reported a failure without details', 0, 500));
+        }
+
+        if ($updated) {
+            Database::run(
+                'UPDATE auto_poster_queue SET picked_at = NULL, picked_by = NULL WHERE id = ?',
+                [$id]
+            );
+        }
+
+        return $updated;
+    }
+
+    /**
      * Dismiss a queue row so its gallery is never recommended again but the
      * decision is still recorded.
      */
@@ -1008,6 +1199,13 @@ class AutoPostQueue
         }
 
         $platform = (string) $item['platform'];
+
+        // Pull-mode reddit rows are claimed and published by the Devvit
+        // polling bridge, not by this posting path (which serves the push
+        // bridge). Leave the row queued so the bridge picks it up.
+        if ($platform === 'reddit' && self::redditPullEnabled()) {
+            return ['ok' => false, 'skipped' => true, 'error' => 'Reddit is in pull mode: the Devvit bridge publishes reddit queue rows.'];
+        }
 
         // Only send to platforms with an authorized API connection. An
         // unauthorized platform is skipped (recorded, never attempted) rather

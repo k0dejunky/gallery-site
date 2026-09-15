@@ -151,6 +151,16 @@
                     </select>
                 </div>
 
+                <div class="field" id="publish-later-fields">
+                    <label class="toggle-line">
+                        <input type="checkbox" name="publish_later" id="publish_later" value="1">
+                        <span>Publish later on this site …</span>
+                    </label>
+                    <label for="publish_at" class="visually-hidden">Publish date and time</label>
+                    <input type="datetime-local" name="publish_at" id="publish_at" value="<?= e(Gallery::defaultPublishAt()) ?>" class="publish-at-input">
+                    <p class="field-note mg-muted">Leave unchecked to make the gallery visible immediately. Pick a time in the future to keep it hidden from the public site until that moment.</p>
+                </div>
+
                 <div class="create-actions">
                     <button type="submit" class="btn" id="save-btn">Save Gallery</button>
                     <a class="btn btn-outline" href="<?= url('/admin/galleries') ?>">Cancel</a>

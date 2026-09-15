@@ -15,8 +15,38 @@
   },
   "permissions": {
     "media": true,
+    "http": {
+      "enable": true,
+      "domains": [
+        "amethyst2213.com"
+      ]
+    },
     "reddit": {
       "enable": true
+    }
+  },
+  "scheduler": {
+    "tasks": {
+      "pollQueue": {
+        "endpoint": "/internal/scheduler/poll-queue",
+        "cron": "*/5 * * * *"
+      }
+    }
+  },
+  "settings": {
+    "global": {
+      "galleryBaseUrl": {
+        "type": "string",
+        "label": "Gallery base URL",
+        "placeholder": "https://amethyst2213.com",
+        "defaultValue": "https://amethyst2213.com"
+      },
+      "pullSecret": {
+        "type": "string",
+        "label": "Reddit pull secret",
+        "isSecret": true,
+        "helpText": "Shared secret between this app and the gallery site's storage/autoposter.json reddit block (pull_secret). Must match exactly."
+      }
     }
   },
   "dev": {

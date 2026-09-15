@@ -281,6 +281,16 @@ class AutoPosterController extends Controller
             if ($reddit['client_secret'] === '' && !empty($config['reddit']['client_secret'])) {
                 $reddit['client_secret'] = $config['reddit']['client_secret'];
             }
+
+            // Preserve the Devvit bridge keys: pull mode needs subreddit +
+            // pull_secret, push mode needs devvit_endpoint + bridge_secret.
+            // No admin form fields edit these yet, so they must survive any
+            // credentials save until the pull bridge has real settings UI.
+            foreach (['devvit_endpoint', 'bridge_secret', 'subreddit', 'pull_secret'] as $key) {
+                if (!empty($config['reddit'][$key])) {
+                    $reddit[$key] = $config['reddit'][$key];
+                }
+            }
         } else {
             $twitter = [
                 'client_id'          => trim((string) $this->request->post('twitter_client_id', '')),

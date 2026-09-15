@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Core\Database;
+use DateTime;
+use DateTimeZone;
 
 /**
  * Data access for galleries, including their photo counts, category links,
@@ -10,6 +12,69 @@ use App\Core\Database;
  */
 class Gallery
 {
+    /**
+     * The SQL condition restricting a query to galleries that are live on the
+     * public site: not soft-deleted and either never scheduled or already
+     * past its scheduled publish time. Admin-only queries deliberately do
+     * not apply this so scheduled galleries stay manageable.
+     */
+    public static function publishedVisibleSql(string $alias = 'g'): string
+    {
+        return "($alias.deleted_at IS NULL AND ($alias.published_at IS NULL OR $alias.published_at <= CURRENT_TIMESTAMP))";
+    }
+
+    /**
+     * Whether a datetime-local value (site timezone) is a valid publish
+     * schedule that lies strictly in the future. Blank/invalid/past times
+     * are rejected so a gallery cannot be accidentally scheduled for a
+     * moment that has already passed.
+     */
+    public static function validPublishSchedule(?string $value): bool
+    {
+        $utc = self::normalizePublishAt($value);
+
+        return $utc !== null && $utc > gmdate('Y-m-d H:i:s');
+    }
+
+    /**
+     * Normalize a datetime-local publish moment (site timezone) to its UTC
+     * storage string, or null when the value is blank/unparseable.
+     */
+    public static function normalizePublishAt(?string $value): ?string
+    {
+        $v = trim((string) $value);
+        if ($v === '') {
+            return null;
+        }
+
+        $v = str_replace('T', ' ', $v);
+        if (preg_match('/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2})(:\d{2})?$/', $v, $m)) {
+            $parsed = $m[1] . (isset($m[2]) ? $m[2] : ':00');
+            $dt = DateTime::createFromFormat('Y-m-d H:i:s', $parsed, new DateTimeZone(site_timezone()));
+            if ($dt === false) {
+                return null;
+            }
+
+            return $dt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+        }
+
+        return null;
+    }
+
+    /**
+     * The next default publish moment (datetime-local, site timezone) for the
+     * admin's schedule picker: one hour ahead of now.
+     */
+    public static function defaultPublishAt(?int $from = null): string
+    {
+        $from = $from ?? time();
+        $dt   = new DateTime('@' . $from);
+        $dt->setTimezone(new DateTimeZone(site_timezone()));
+        $dt->modify('+1 hour');
+
+        return $dt->format('Y-m-d\TH:i');
+    }
+
     /**
      * Every gallery newest first, each with its image and video counts.
      */
@@ -124,6 +189,7 @@ class Gallery
         }
 
         $where[] = 'g.deleted_at IS NULL';
+        $where[] = '(g.published_at IS NULL OR g.published_at <= CURRENT_TIMESTAMP)';
         $whereSql = ' WHERE ' . implode(' AND ', $where);
 
         $total = (int) Database::run(
@@ -181,7 +247,8 @@ class Gallery
              FROM galleries g
              INNER JOIN gallery_category gc ON gc.gallery_id = g.id
              LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
-             WHERE gc.category_id IN (' . $placeholders . ') AND g.deleted_at IS NULL' . $typeCondition . $levelCondition . '
+             WHERE gc.category_id IN (' . $placeholders . ') AND g.deleted_at IS NULL
+               AND (g.published_at IS NULL OR g.published_at <= CURRENT_TIMESTAMP)' . $typeCondition . $levelCondition . '
              GROUP BY g.id, gc.category_id
              ORDER BY g.created_at DESC',
             $ids
@@ -212,6 +279,7 @@ class Gallery
              FROM galleries g
              LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
              WHERE g.deleted_at IS NULL
+               AND (g.published_at IS NULL OR g.published_at <= CURRENT_TIMESTAMP)
                AND NOT EXISTS (SELECT 1 FROM gallery_category gc WHERE gc.gallery_id = g.id)' . $typeCondition . $levelCondition . '
              GROUP BY g.id
              ORDER BY g.created_at DESC'
@@ -327,6 +395,24 @@ class Gallery
     }
 
     /**
+     * Fetch a gallery for the public site: only live galleries that are not
+     * still awaiting a scheduled future publication. Admin flows keep using
+     * find()/findIncludingDeleted() so scheduled galleries stay manageable.
+     */
+    public static function findPublic(int $id): ?array
+    {
+        $gallery = Database::run(
+            'SELECT * FROM galleries
+             WHERE id = ?
+               AND deleted_at IS NULL
+               AND (published_at IS NULL OR published_at <= CURRENT_TIMESTAMP)',
+            [$id]
+        )->fetch();
+
+        return $gallery ?: null;
+    }
+
+    /**
      * Fetch a gallery by id including soft-deleted ones, or null when it
      * does not exist at all (used by the permanent-purge flow).
      */
@@ -405,13 +491,13 @@ class Gallery
     /**
      * Insert a new gallery (image or video gallery) and return its id.
      */
-    public static function create(string $title, string $description, string $type = 'images', int $minLevel = 0): int
+    public static function create(string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null): int
     {
         $type = $type === 'videos' ? 'videos' : 'images';
 
         Database::run(
-            'INSERT INTO galleries (title, description, type, min_level, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
-            [$title, $description, $type, $minLevel]
+            'INSERT INTO galleries (title, description, type, min_level, published_at, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+            [$title, $description, $type, $minLevel, $publishedAt !== '' ? $publishedAt : null]
         );
 
         return (int) Database::connection()->lastInsertId();
@@ -420,13 +506,25 @@ class Gallery
     /**
      * Update a gallery's title, description and type.
      */
-    public static function update(int $id, string $title, string $description, string $type = 'images', int $minLevel = 0): void
+    public static function update(int $id, string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null): void
     {
         $type = $type === 'videos' ? 'videos' : 'images';
 
         Database::run(
-            'UPDATE galleries SET title = ?, description = ?, type = ?, min_level = ? WHERE id = ?',
-            [$title, $description, $type, $minLevel, $id]
+            'UPDATE galleries SET title = ?, description = ?, type = ?, min_level = ?, published_at = ? WHERE id = ?',
+            [$title, $description, $type, $minLevel, $publishedAt !== '' ? $publishedAt : null, $id]
+        );
+    }
+
+    /**
+     * Publish a scheduled gallery right now by clearing its future publish
+     * time. Used by the admin's "Publish now" action on the manage page.
+     */
+    public static function publishNow(int $id): void
+    {
+        Database::run(
+            'UPDATE galleries SET published_at = NULL WHERE id = ?',
+            [$id]
         );
     }
 
@@ -694,6 +792,7 @@ class Gallery
              INNER JOIN galleries g ON g.id = gv.gallery_id
              LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
              WHERE gv.user_id = ? AND g.deleted_at IS NULL
+               AND (g.published_at IS NULL OR g.published_at <= CURRENT_TIMESTAMP)
              GROUP BY g.id
              ORDER BY gv.viewed_at DESC
              LIMIT ' . (int) $limit,
@@ -764,6 +863,7 @@ class Gallery
              INNER JOIN galleries g ON g.id = gf.gallery_id
              LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
              WHERE gf.user_id = ? AND g.deleted_at IS NULL
+               AND (g.published_at IS NULL OR g.published_at <= CURRENT_TIMESTAMP)
              GROUP BY g.id, gf.created_at
              ORDER BY gf.created_at DESC
              LIMIT ' . max(1, (int) $limit),

@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "amethyst2213nsfw",
-  "version": "0.0.0",
+  "version": "0.0.3",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "typecheck": "tsc --build src/server"
   },
   "devDependencies": {
-    "@devvit/web": "0.14.2",
+    "@devvit/web": "^0.14.3",
     "@types/node": "^24.0.0",
     "esbuild": "^0.28.0",
     "typescript": "^7.0.0"
