@@ -866,8 +866,16 @@ class AutoPostQueue
             default   => null,
         };
 
-        return $client !== null && $client->isConfigured() && $client->isUserAuthorized()
-            && trim((string) ($cfg['subreddit'] ?? '')) !== '';
+        if ($client === null || !$client->isConfigured() || !$client->isUserAuthorized()) {
+            return false;
+        }
+
+        // Reddit posting additionally requires a target subreddit.
+        if ($platform === 'reddit') {
+            return trim((string) ($cfg['subreddit'] ?? '')) !== '';
+        }
+
+        return true;
     }
 
     /**
