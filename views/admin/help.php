@@ -192,7 +192,6 @@ gallery-mvc/
 │       ├── AutoPosterConfig.php  Reddit/X credentials + scheduler timezone
 │       ├── TwitterClient.php     X (Twitter) media upload + post via OAuth1.0a
 │       ├── RedditClient.php      Reddit OAuth2 client
-│       ├── RedditBridge.php      Devvit external-endpoint bridge for subreddit posting
 │       ├── SupportMessage.php    Member support tickets
 │       ├── VideoProject.php      Video editor projects/exports
 │       ├── SavedSearch.php       Saved gallery searches

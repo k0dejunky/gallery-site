@@ -23,10 +23,6 @@ return [
     ['GET', '/webhooks/{provider}', 'WebhookController@handle'],
     ['POST', '/webhooks/{provider}', 'WebhookController@handle'],
 
-    // Reddit pull bridge (Devvit polls these; no session, shared-secret auth)
-    ['GET', '/webhooks/reddit/next', 'RedditBridgeController@next'],
-    ['POST', '/webhooks/reddit/report', 'RedditBridgeController@report'],
-
     // Auth
     ['GET', '/login', 'AuthController@loginForm'],
     ['POST', '/login', 'AuthController@login'],

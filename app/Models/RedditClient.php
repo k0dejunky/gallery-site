@@ -333,6 +333,59 @@ class RedditClient
     }
 
     /**
+     * Split the X-style post text into a Reddit title and self-text body.
+     *
+     * The queue text is "<title> — <description> #hashtags CTA". Reddit titles
+     * are <= 300 chars and shouldn't carry hashtag walls, so the part before
+     * the first " — " becomes the title (cleaned + truncated), and the rest
+     * (description + hashtags + CTA + link) becomes the self-text body.
+     *
+     * @return array{0: string, 1: string}
+     */
+    public static function splitForReddit(string $text): array
+    {
+        $text = trim((string) $text);
+
+        $title     = $text;
+        $remainder = '';
+        if (($pos = strpos($text, '—')) !== false) {
+            $title     = trim(mb_substr($text, 0, $pos));
+            $remainder = trim(mb_substr($text, $pos + 1));
+        }
+
+        // Drop hashtag-style noise that reads badly at the end of a title.
+        $cleanTitle = trim((string) preg_replace('/\s+#[A-Za-z0-9_]+\b/u', ' ', $title));
+        $cleanTitle = rtrim((string) preg_replace('/\s+/u', ' ', $cleanTitle));
+
+        if (mb_strlen($cleanTitle) > 300) {
+            $cleanTitle = rtrim(mb_substr($cleanTitle, 0, 299)) . '…';
+        }
+        if ($cleanTitle === '') {
+            $cleanTitle = 'New upload';
+        }
+
+        $body = trim($remainder);
+        $body = (string) preg_replace('/\s+/u', ' ', $body);
+        if ($body !== '') {
+            $body .= "\n\n";
+        }
+        $body .= '[View on site](https://' . AutoPostQueue::POST_DOMAIN . ')';
+
+        return [$cleanTitle, $body];
+    }
+
+    /**
+     * Normalize a subreddit name (strip r/ prefix, whitespace, url-id chars).
+     */
+    public static function cleanSubreddit(string $sub): string
+    {
+        $sub = trim((string) preg_replace('#^r/#i', '', trim($sub)));
+        $sub = (string) preg_replace('/[^A-Za-z0-9_]/', '', $sub);
+
+        return mb_substr($sub, 0, 21);
+    }
+
+    /**
      * The user-agent Reddit requires (a unique descriptive UA).
      */
     private function userAgent(): string

@@ -282,11 +282,9 @@ class AutoPosterController extends Controller
                 $reddit['client_secret'] = $config['reddit']['client_secret'];
             }
 
-            // Preserve the Devvit bridge keys: pull mode needs subreddit +
-            // pull_secret, push mode needs devvit_endpoint + bridge_secret.
-            // No admin form fields edit these yet, so they must survive any
-            // credentials save until the pull bridge has real settings UI.
-            foreach (['devvit_endpoint', 'bridge_secret', 'subreddit', 'pull_secret'] as $key) {
+            // Preserve fields not edited by the form: the target subreddit and
+            // the OAuth tokens obtained through the authorize flow.
+            foreach (['subreddit', 'refresh_token', 'access_token'] as $key) {
                 if (!empty($config['reddit'][$key])) {
                     $reddit[$key] = $config['reddit'][$key];
                 }
