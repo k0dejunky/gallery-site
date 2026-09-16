@@ -752,6 +752,49 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
     }
 
     /**
+     * Edit a queued auto-post's text and/or schedule in place. Only queued
+     * rows can be edited (posted rows use the repost/history flow). The
+     * platform is preserved; the new text is truncated to the platform's
+     * limit and the schedule is validated as a future moment.
+     */
+    public function editQueued(): void
+    {
+        $id          = (int) $this->request->post('queue_id', 0);
+        $text        = (string) $this->request->post('text', '');
+        $scheduledAt = (string) $this->request->post('scheduled_at', '');
+        $item        = AutoPostQueue::find($id);
+
+        if ($id <= 0 || $item === null) {
+            $this->flash('error', 'Queue item not found.');
+            $this->redirectItemPlatform($id);
+            return;
+        }
+
+        if (trim($text) === '') {
+            $this->flash('error', 'The post text cannot be empty.');
+            $this->redirectItemPlatform($id);
+            return;
+        }
+
+        if (!AutoPostQueue::updateQueued($id, $text, $scheduledAt)) {
+            $this->flash('error', 'Could not update the post — use a valid future schedule (or leave the time blank to publish on the next worker run).');
+            $this->redirectItemPlatform($id);
+            return;
+        }
+
+        AuditLog::record(
+            (int) Auth::user()['id'],
+            'update',
+            'auto_post_queue',
+            $id,
+            'Edited queued auto-post #' . $id
+        );
+
+        $this->flash('success', 'Queued post updated.');
+        $this->redirectItemPlatform($id);
+    }
+
+    /**
      * Requeue a failed post and publish it right away. Used by the dashboard's
      * failed-posts list and the Auto Poster page retry button.
      */

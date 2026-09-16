@@ -207,6 +207,7 @@ $twitter      = $config['twitter'] ?? [];
                             </div>
                         </td>
                         <td style="text-align:right;white-space:nowrap;">
+                            <button type="button" class="btn btn-sm btn-outline" data-edit-queue="<?= (int) $item['id'] ?>" aria-expanded="false">Edit</button>
                             <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/post') ?>" onsubmit="return confirm('Post this now to <?= e($platformName) ?>?');">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
@@ -217,6 +218,29 @@ $twitter      = $config['twitter'] ?? [];
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
                                 <button type="submit" class="btn btn-sm btn-danger">Dismiss</button>
+                            </form>
+                        </td>
+                    </tr>
+                    <?php // Inline editor for a queued post: change the text and/or schedule. ?>
+                    <tr class="ap-queue-edit-row" id="ap-queue-edit-<?= (int) $item['id'] ?>" style="display:none;">
+                        <td colspan="5" style="background:var(--pink-100,#fdf2f8);border:1px solid var(--pink-300,#f9a8d4);border-radius:8px;">
+                            <form method="post" action="<?= url('/admin/auto-poster/queue/edit') ?>" style="display:flex;flex-direction:column;gap:.5rem;">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
+                                <div>
+                                    <label class="muted" style="display:block;margin-bottom:.2rem;font-size:.8rem;">Post text</label>
+                                    <textarea name="text" rows="3" maxlength="<?= ((string) $item['platform'] === 'reddit') ? 40000 : 280 ?>"
+                                              style="width:100%;box-sizing:border-box;font-size:.85rem;font-family:inherit;padding:.4rem .5rem;border:1px solid #d1d5db;border-radius:4px;"
+                                              aria-label="Editable text for queued post #<?= (int) $item['id'] ?>"><?= e((string) $item['text']) ?></textarea>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+                                    <label class="muted" style="font-size:.8rem;">Schedule:</label>
+                                    <input type="datetime-local" name="scheduled_at" value="<?= e(\App\Models\AutoPostQueue::displaySchedule($item['scheduled_at'] ?? null, $platform)) ?>" style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;">
+                                    <span class="muted" style="font-size:.72rem;">leave blank to clear the schedule (publish on next worker run)</span>
+                                    <span style="flex:1"></span>
+                                    <button type="submit" class="btn btn-sm">Save changes</button>
+                                    <button type="button" class="btn btn-sm btn-outline" data-cancel-edit="<?= (int) $item['id'] ?>">Cancel</button>
+                                </div>
                             </form>
                         </td>
                     </tr>
@@ -729,6 +753,38 @@ $twitter      = $config['twitter'] ?? [];
                 body.style.display = collapsed ? '' : 'none';
                 btn.textContent = collapsed ? 'Collapse' : 'Show queue';
                 btn.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
+            });
+        });
+    })();
+
+// Show/hide the inline editor for a queued post.
+    (function () {
+        function rowFor(id) { return document.getElementById('ap-queue-edit-' + id); }
+        function btnFor(id) { return document.querySelector('[data-edit-queue="' + id + '"]'); }
+
+        document.querySelectorAll('[data-edit-queue]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var id = btn.getAttribute('data-edit-queue');
+                var row = rowFor(id);
+                if (!row) { return; }
+                var hidden = row.style.display === 'none';
+                row.style.display = hidden ? '' : 'none';
+                btn.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+                btn.textContent = hidden ? 'Hide edit' : 'Edit';
+                if (hidden) {
+                    var ta = row.querySelector('textarea[name="text"]');
+                    if (ta) { ta.focus(); ta.scrollIntoView({ block: 'center' }); }
+                }
+            });
+        });
+
+        document.querySelectorAll('[data-cancel-edit]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var id = btn.getAttribute('data-cancel-edit');
+                var row = rowFor(id);
+                if (row) { row.style.display = 'none'; }
+                var ebtn = btnFor(id);
+                if (ebtn) { ebtn.textContent = 'Edit'; ebtn.setAttribute('aria-expanded', 'false'); }
             });
         });
     })();

@@ -266,6 +266,7 @@ return [
     ['POST', '/admin/auto-poster/history/edit', 'AutoPosterController@editPosted'],
     ['POST', '/admin/auto-poster/queue/post-all', 'AutoPosterController@postAllQueued'],
     ['POST', '/admin/auto-poster/queue/schedule', 'AutoPosterController@rescheduleQueued'],
+    ['POST', '/admin/auto-poster/queue/edit', 'AutoPosterController@editQueued'],
     ['POST', '/admin/auto-poster/queue/dismiss', 'AutoPosterController@dismissQueued'],
     ['POST', '/admin/auto-poster/clear-log', 'AutoPosterController@clearLog'],
 

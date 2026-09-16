@@ -1059,6 +1059,43 @@ class AutoPostQueue
     }
 
     /**
+     * Update the text and/or schedule of a queued auto-post row in place.
+     * Only rows still queued can be edited; already-posted rows keep their
+     * history and are edited via requeueFrom() instead. A blank schedule
+     * clears the publish time (row becomes due immediately). Returns true
+     * when the row was found and updated.
+     */
+    public static function updateQueued(int $id, string $text, ?string $scheduledAt): bool
+    {
+        $row = Database::run(
+            'SELECT id, platform FROM auto_poster_queue WHERE id = ? AND status = ? LIMIT 1',
+            [$id, 'queued']
+        )->fetch();
+
+        if (!$row) {
+            return false;
+        }
+
+        $key  = strtolower((string) $row['platform']) === 'reddit' ? 'reddit' : 'x';
+        $text = mb_substr(trim($text), 0, $key === 'reddit' ? 40000 : 280);
+
+        $scheduled = null;
+        if (trim((string) $scheduledAt) !== '') {
+            $scheduled = self::normalizeSchedule($scheduledAt);
+            if ($scheduled === null) {
+                return false;
+            }
+        }
+
+        $stmt = Database::run(
+            'UPDATE auto_poster_queue SET text = ?, scheduled_at = ? WHERE id = ? AND status = ?',
+            [$text, $scheduled, $id, 'queued']
+        );
+
+        return true;
+    }
+
+    /**
      * Mark a queue row posted. Returns true when the row existed.
      */
     public static function markPosted(int $id, string $url): bool
