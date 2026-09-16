@@ -893,6 +893,7 @@ function create_image_variants(string $src, string $webDest, string $thumbDest, 
 
         $cmd = escapeshellarg('/usr/bin/ffmpeg')
             . ' -y -hide_banner -loglevel error -i ' . escapeshellarg($src)
+            . ' -map_metadata -1'
             . ' -filter_complex "' . $filters . '"'
             . ' -map "[w]" -frames:v 1 -q:v 4 ' . escapeshellarg($webDest)
             . ' -map "[t]" -frames:v 1 -q:v 5 ' . escapeshellarg($thumbDest)
