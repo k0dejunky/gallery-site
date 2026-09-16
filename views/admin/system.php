@@ -48,11 +48,11 @@
     <?php if (!empty($slowQueries)): ?>
     <!-- Slow queries -->
     <div class="sys-card">
-        <h2>Slow queries (this request)</h2>
+        <h2>Slow queries (recent, across requests)</h2>
         <table>
             <thead><tr><th>Seconds</th><th>At</th><th>Query</th></tr></thead>
             <tbody>
-                <?php foreach ($slowQueries as $sq): ?>
+                <?php foreach (array_slice($slowQueries, 0, 50) as $sq): ?>
                     <tr>
                         <td class="sys-bad"><?= (float) $sq['seconds'] ?>s</td>
                         <td><?= e((string) $sq['at']) ?></td>
@@ -61,7 +61,7 @@
                 <?php endforeach; ?>
             </tbody>
         </table>
-        <p class="muted" style="font-size:.8rem;margin:.5rem 0 0;">Queries slower than 1 second are logged to the server error log as <code>[db-slow]</code>.</p>
+        <p class="muted" style="font-size:.8rem;margin:.5rem 0 0;">Queries slower than 1 second are logged to <code>storage/logs/slow-queries.json</code> (last 50) and the server error log as <code>[db-slow]</code>.</p>
     </div>
     <?php endif; ?>
 
