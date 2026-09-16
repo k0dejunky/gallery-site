@@ -266,11 +266,6 @@ class BraintreeGateway
         return $this->request('GET', $path);
     }
 
-    private function put(string $path, array $data): array
-    {
-        return $this->request('PUT', $path, $data);
-    }
-
     private function request(string $method, string $path, ?array $data = null): array
     {
         $url = $this->baseUrl . $path;

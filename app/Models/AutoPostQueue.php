@@ -248,20 +248,59 @@ class AutoPostQueue
              LIMIT $limit"
         )->fetchAll();
 
+        if ($rows === []) {
+            return [];
+        }
+
+        // Batch the per-gallery media + category lookups into two queries so
+        // the loop below never issues N+1 queries per recommendation.
+        $galleryIds = array_map('intval', array_column($rows, 'gallery_id'));
+        $mediaByGid = self::galleryMediaBulk($galleryIds, $key);
+        $catsByGid  = \App\Models\Gallery::categoriesBulk($galleryIds);
+        $maxTags    = max(0, (int) $tpl['max_tags']);
+
         foreach ($rows as &$row) {
-            $media              = self::galleryMedia((int) $row['gallery_id'], null, $key);
-            $row['platform']    = $dbKey;
-            $row['media']       = $media;
+            $gid              = (int) $row['gallery_id'];
+            $media            = $mediaByGid[$gid] ?? [];
+            $row['platform']  = $dbKey;
+            $row['media']     = $media;
             $row['media_count'] = count($media);
             $row['suggested_text'] = self::buildText([
                 'gallery_title' => (string) $row['gallery_title'],
                 'caption'       => (string) $row['gallery_description'],
-            ], self::categoryHashtags((int) $row['gallery_id'], null, $key), $tpl);
+            ], self::hashtagsFromCategories($catsByGid[$gid] ?? [], $maxTags), $tpl);
             $row['default_scheduled_at'] = self::defaultSchedule(null, $key);
         }
         unset($row);
 
         return $rows;
+    }
+
+    /**
+     * Convert category rows to hashtag words (shared by the single-gallery
+     * and batched paths). Categories are name-sorted by the query; the first
+     * $limit usable names become hashtags.
+     *
+     * @param array<int, array{id:int, name:string, slug:string}> $categories
+     * @return list<string>
+     */
+    private static function hashtagsFromCategories(array $categories, int $limit): array
+    {
+        $tags = [];
+        foreach ($categories as $category) {
+            $name = trim((string) ($category['name'] ?? ''));
+            $tag  = ucwords(str_replace(['-', '_'], ' ', $name));
+            $tag  = trim((string) preg_replace('/[^A-Za-z0-9_]/', '', $tag));
+            if ($tag === '' || mb_strlen($tag) > 40) {
+                continue;
+            }
+            $tags[] = $tag;
+            if (count($tags) >= $limit) {
+                break;
+            }
+        }
+
+        return $tags;
     }
 
     /**
@@ -300,6 +339,69 @@ class AutoPostQueue
     }
 
     /**
+     * Batch variant of galleryMedia(): fetches each gallery's most recent
+     * media (bounded by max_media) in a single query for many gallery ids.
+     * Returns a map of gallery_id => [photo, ...] in the same shape
+     * galleryMedia() produces per gallery (video galleries fall back to a
+     * single attachment).
+     *
+     * @param array<int> $galleryIds
+     * @return array<int, array<int, array{id:int, filename:string, is_video:int, caption:string}>>
+     */
+    public static function galleryMediaBulk(array $galleryIds, string $platform = 'x'): array
+    {
+        $galleryIds = array_values(array_map('intval', array_filter($galleryIds, 'is_numeric')));
+        if ($galleryIds === []) {
+            return [];
+        }
+
+        $key   = self::normalizePlatform($platform);
+        $tpl   = self::templateSettings($key);
+        $limit = max(1, (int) $tpl['max_media']);
+
+        $placeholders = implode(',', array_fill(0, count($galleryIds), '?'));
+        $rows = Database::run(
+            "SELECT gp.gallery_id AS gid, p.id, p.filename, p.is_video, p.caption,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY gp.gallery_id
+                        ORDER BY p.created_at DESC, p.id DESC
+                    ) AS rn
+             FROM photos p
+             JOIN gallery_photo gp ON gp.photo_id = p.id
+             WHERE gp.gallery_id IN ($placeholders)
+               AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) $tpl['recent_days'] . " DAY)
+             ORDER BY gp.gallery_id, p.created_at DESC, p.id DESC",
+            $galleryIds
+        )->fetchAll();
+
+        $media = [];
+        foreach ($galleryIds as $gid) {
+            $media[$gid] = [];
+        }
+        foreach ($rows as $row) {
+            $gid = (int) $row['gid'];
+            $photo = [
+                'id'       => (int) $row['id'],
+                'filename' => (string) $row['filename'],
+                'is_video' => (int) $row['is_video'],
+                'caption'  => (string) $row['caption'],
+            ];
+            // Video galleries: single attachment (no mixing images+videos).
+            if ($photo['is_video'] === 1) {
+                if ($media[$gid] === []) {
+                    $media[$gid][] = $photo;
+                }
+                continue;
+            }
+            if (count($media[$gid]) < $limit) {
+                $media[$gid][] = $photo;
+            }
+        }
+
+        return $media;
+    }
+
+    /**
      * Up to the template's max_tags (default MAX_TAGS) of a gallery's
      * categories as hashtag words (first N in the gallery's category list, so
      * every post carries the site's labels).
@@ -311,22 +413,8 @@ class AutoPostQueue
         $key   = self::normalizePlatform($platform);
         $tpl   = self::templateSettings($key);
         $limit = max(0, min(self::MAX_TAGS, $limit ?? (int) $tpl['max_tags']));
-        $tags  = [];
 
-        foreach (Gallery::categories($galleryId) as $category) {
-            $name = trim((string) ($category['name'] ?? ''));
-            $tag  = ucwords(str_replace(['-', '_'], ' ', $name));
-            $tag  = trim((string) preg_replace('/[^A-Za-z0-9_]/', '', $tag));
-            if ($tag === '' || mb_strlen($tag) > 40) {
-                continue;
-            }
-            $tags[] = $tag;
-            if (count($tags) >= $limit) {
-                break;
-            }
-        }
-
-        return $tags;
+        return self::hashtagsFromCategories(Gallery::categories($galleryId), $limit);
     }
 
     /**
