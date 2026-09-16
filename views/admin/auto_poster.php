@@ -352,8 +352,17 @@ $twitter      = $config['twitter'] ?? [];
             <button type="submit" class="btn">Save Reddit Settings</button>
         </form>
         <p style="margin-top:0.75rem;">
-            <?php if (!empty($reddit['refresh_token'])): ?>
-                <span style="color:var(--success,#2e7d32);font-weight:600;">&#10003; Authorized — you can post to subreddits.</span>
+            <?php if (!empty($authHealth)): ?>
+                <?php if ($authHealth['ok']): ?>
+                    <span style="color:var(--success,#2e7d32);font-weight:600;">&#10003; Authorized — <?= e((string) $authHealth['note']) ?></span>
+                <?php else: ?>
+                    <span style="color:var(--danger,#c62828);font-weight:600;">&#9888; Token invalid — <?= e((string) $authHealth['note']) ?></span><br>
+                    <span class="muted" style="display:block;margin:.4rem 0 .5rem;">The stored token is rejected by Reddit. Re-authorize below to restore posting.</span>
+                    <a class="btn" href="<?= url('/admin/auto-poster/reddit/authorize') ?>">Re-authorize Reddit</a>
+                <?php endif; ?>
+            <?php elseif (!empty($reddit['refresh_token'])): ?>
+                <span class="muted" style="display:block;margin-bottom:0.5rem;">Authorization state unknown — could not verify the token.</span>
+                <a class="btn" href="<?= url('/admin/auto-poster/reddit/authorize') ?>">Re-authorize Reddit</a>
             <?php else: ?>
                 <span class="muted" style="display:block;margin-bottom:0.5rem;">Not authorized yet. Complete the flow below to enable posting.</span>
                 <a class="btn" href="<?= url('/admin/auto-poster/reddit/authorize') ?>">Authorize Reddit</a>
@@ -405,8 +414,17 @@ $twitter      = $config['twitter'] ?? [];
             <button type="submit" class="btn">Save X Settings</button>
         </form>
         <p style="margin-top:0.75rem;">
-            <?php if (!empty($twitter['refresh_token'])): ?>
-                <span style="color:var(--success,#2e7d32);font-weight:600;">&#10003; Authorized — you can post tweets.</span>
+            <?php if (!empty($authHealth)): ?>
+                <?php if ($authHealth['ok']): ?>
+                    <span style="color:var(--success,#2e7d32);font-weight:600;">&#10003; Authorized — <?= e((string) $authHealth['note']) ?></span>
+                <?php else: ?>
+                    <span style="color:var(--danger,#c62828);font-weight:600;">&#9888; Token invalid — <?= e((string) $authHealth['note']) ?></span><br>
+                    <span class="muted" style="display:block;margin:.4rem 0 .5rem;">The stored token is rejected by X. Re-authorize below to restore posting.</span>
+                    <a class="btn" href="<?= url('/admin/auto-poster/twitter/authorize') ?>">Re-authorize X</a>
+                <?php endif; ?>
+            <?php elseif (!empty($twitter['refresh_token'])): ?>
+                <span class="muted" style="display:block;margin-bottom:0.5rem;">Authorization state unknown — could not verify the token.</span>
+                <a class="btn" href="<?= url('/admin/auto-poster/twitter/authorize') ?>">Re-authorize X</a>
             <?php else: ?>
                 <span class="muted" style="display:block;margin-bottom:0.5rem;">Not authorized yet. Complete the flow below to enable posting.</span>
                 <a class="btn" href="<?= url('/admin/auto-poster/twitter/authorize') ?>">Authorize X</a>

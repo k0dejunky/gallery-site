@@ -48,10 +48,35 @@ class AutoPosterController extends Controller
         $isX       = $platform !== 'reddit';
         $queueKey  = $isX ? 'twitter' : 'reddit';
         $template  = AutoPostQueue::templateSettings($platform);
+        $config    = AutoPosterConfig::all();
+
+        // Live authorization health: the page's "Authorized" indicator must
+        // reflect whether the stored token actually works, not just that a
+        // token string exists. A dead/expired token shows a warning + the
+        // re-authorize button instead of a false green checkmark.
+        $authHealth = null;
+        if ($isX) {
+            $twitter = new TwitterClient($config['twitter']);
+            if ($twitter->isConfigured() && $twitter->isUserAuthorized()) {
+                $ping  = $twitter->ping();
+                $authHealth = $ping['ok']
+                    ? ['ok' => true,  'note' => (string) ($ping['note'] ?? 'connected')]
+                    : ['ok' => false, 'note' => (string) ($ping['error'] ?? 'token invalid')];
+            }
+        } else {
+            $reddit = new RedditClient($config['reddit']);
+            if ($reddit->isConfigured() && $reddit->isUserAuthorized()) {
+                $ping  = $reddit->ping();
+                $authHealth = $ping['ok']
+                    ? ['ok' => true,  'note' => (string) ($ping['note'] ?? 'connected')]
+                    : ['ok' => false, 'note' => (string) ($ping['error'] ?? 'token invalid')];
+            }
+        }
 
         $this->viewAdmin('auto_poster', [
             'platform'        => $isX ? 'x' : 'reddit',
-            'config'          => AutoPosterConfig::all(),
+            'config'          => $config,
+            'authHealth'      => $authHealth,
             'apTemplate'      => $template,
             'templatePreview' => AutoPostQueue::buildText([
                 'gallery_title' => 'Example gallery',
