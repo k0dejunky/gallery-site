@@ -73,6 +73,9 @@ class AutoPosterController extends Controller
             }
         }
 
+        $recentPage = max(1, (int) $this->request->query('page', '1'));
+        $recentPosts = AutoPostQueue::recentPostsPage($recentPage, 100, $queueKey);
+
         $this->viewAdmin('auto_poster', [
             'platform'        => $isX ? 'x' : 'reddit',
             'config'          => $config,
@@ -85,7 +88,10 @@ class AutoPosterController extends Controller
             'recommended'     => AutoPostQueue::recommendations(8, $isX ? 'x' : 'reddit'),
             'queue'           => AutoPostQueue::queued(0, $queueKey),
             'queueCounts'     => AutoPostQueue::statusCounts($queueKey),
-            'recentPosts'     => AutoPostQueue::recentPosts(20, $queueKey),
+            'recentPosts'     => $recentPosts['items'],
+            'recentTotal'     => $recentPosts['total'],
+            'recentPage'      => $recentPosts['page'],
+            'recentPages'     => $recentPosts['pages'],
             'log'             => AutoPosterConfig::logEntries(100, $queueKey),
         ]);
     }

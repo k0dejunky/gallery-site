@@ -316,6 +316,32 @@ $twitter      = $config['twitter'] ?? [];
                 </tbody>
             </table>
         </div>
+        <?php // Pagination for the recent-posts list (100 per page). ?>
+        <?php if (($recentPages ?? 1) > 1): ?>
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-top:.75rem;">
+                <span class="muted" style="font-size:.8rem;">Page <?= (int) ($recentPage ?? 1) ?> of <?= (int) $recentPages ?> &middot; <?= number_format((int) ($recentTotal ?? 0)) ?> recorded post<?= ((int) ($recentTotal ?? 0)) === 1 ? '' : 's' ?></span>
+                <span style="display:flex;gap:.35rem;flex-wrap:wrap;">
+                    <?php
+                    $recentBase = $isReddit ? url('/admin/auto-poster/reddit') : url('/admin/auto-poster');
+                    $recentCur  = (int) ($recentPage ?? 1);
+                    $recentMax  = (int) $recentPages;
+                    $window     = 5;
+                    $recentLo   = max(1, $recentCur - $window);
+                    $recentHi   = min($recentMax, $recentCur + $window);
+                    ?>
+                    <?php if ($recentCur > 1): ?>
+                        <a class="btn btn-sm btn-outline" href="<?= e($recentBase . '?page=' . ($recentCur - 1)) ?>">&laquo; Newer</a>
+                    <?php endif; ?>
+                    <?php for ($rp = $recentLo; $rp <= $recentHi; $rp++): ?>
+                        <a class="btn btn-sm <?= $rp === $recentCur ? 'btn' : 'btn-outline' ?>"
+                           href="<?= e($recentBase . '?page=' . $rp) ?>"><?= $rp ?></a>
+                    <?php endfor; ?>
+                    <?php if ($recentCur < $recentMax): ?>
+                        <a class="btn btn-sm btn-outline" href="<?= e($recentBase . '?page=' . ($recentCur + 1)) ?>">Older &raquo;</a>
+                    <?php endif; ?>
+                </span>
+            </div>
+        <?php endif; ?>
     <?php endif; ?>
 </div>
 

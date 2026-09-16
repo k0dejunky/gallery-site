@@ -797,6 +797,47 @@ class AutoPostQueue
     }
 
     /**
+     * Paginated recent posts (posted/failed/skipped) for one platform,
+     * newest first. Returns items plus paging metadata so the Auto Poster
+     * page can show up to $perPage posts per page and page through the rest.
+     *
+     * @return array{items: array, total: int, page: int, pages: int, perPage: int}
+     */
+    public static function recentPostsPage(int $page = 1, int $perPage = 100, ?string $platform = null): array
+    {
+        $page    = max(1, $page);
+        $perPage = max(10, min(200, $perPage));
+        $where   = "q.status IN ('posted', 'failed', 'skipped')";
+        $bind    = [];
+
+        if ($platform !== null && $platform !== '') {
+            $where .= ' AND q.platform = ?';
+            $bind[] = $platform;
+        }
+
+        $total = (int) Database::run(
+            'SELECT COUNT(*) FROM auto_poster_queue q WHERE ' . $where,
+            $bind
+        )->fetchColumn();
+
+        $pages  = max(1, (int) ceil($total / $perPage));
+        $page   = min($page, $pages);
+        $offset = ($page - 1) * $perPage;
+
+        $items = Database::run(
+            "SELECT q.*, COALESCE(g.title, '') AS gallery_title
+             FROM auto_poster_queue q
+             LEFT JOIN galleries g ON g.id = q.gallery_id
+             WHERE $where
+             ORDER BY COALESCE(q.posted_at, q.created_at) DESC, q.id DESC
+             LIMIT $perPage OFFSET $offset",
+            $bind
+        )->fetchAll();
+
+        return compact('items', 'total', 'page', 'pages', 'perPage');
+    }
+
+    /**
      * Copy a recorded post (posted/failed/skipped row) into a fresh queued
      * row so it can be reposted or rescheduled, preserving its text, media
      * set, gallery and platform. Pass an optional $text to override the stored
