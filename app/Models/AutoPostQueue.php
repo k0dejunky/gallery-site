@@ -489,6 +489,42 @@ class AutoPostQueue
     }
 
     /**
+     * The default reschedule moment for a platform: one hour after the most
+     * recent auto-post (posted, failed, skipped or queued). When there is no
+     * prior post yet, falls back to the standard default schedule. Returns a
+     * datetime-local string in the scheduler timezone.
+     */
+    public static function rescheduleDefault(string $platform = 'x'): string
+    {
+        // Match the stored platform value: 'twitter'/'reddit' (normalizePlatform
+        // maps to 'x'/'reddit', which would not match the queue rows).
+        $dbKey = strtolower($platform) === 'reddit' ? 'reddit' : 'twitter';
+        $sched = strtolower($platform) === 'reddit' ? 'reddit' : 'x';
+
+        $latest = Database::run(
+            'SELECT COALESCE(posted_at, scheduled_at, created_at) AS last_at
+             FROM auto_poster_queue
+             WHERE platform = ? AND status IN (?, ?, ?, ?)
+             ORDER BY COALESCE(posted_at, scheduled_at, created_at) DESC, id DESC
+             LIMIT 1',
+            [$dbKey, 'queued', 'posted', 'failed', 'skipped']
+        )->fetchColumn();
+
+        if ($latest === false || $latest === null) {
+            return self::defaultSchedule(null, $sched);
+        }
+
+        $dt = DateTime::createFromFormat('Y-m-d H:i:s', (string) $latest, new DateTimeZone('UTC'));
+        if ($dt === false) {
+            return self::defaultSchedule(null, $sched);
+        }
+
+        $dt->modify('+1 hour');
+
+        return $dt->setTimezone(self::schedulerTimezone())->format('Y-m-d\TH:i');
+    }
+
+    /**
      * Whether the admin's submitted datetime (datetime-local, scheduler
      * timezone) is a valid schedule that lies strictly in the future. Used to
      * reject past/blank/invalid times when saving a gallery and its scheduled

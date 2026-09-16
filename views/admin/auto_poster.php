@@ -286,7 +286,7 @@ $twitter      = $config['twitter'] ?? [];
                                     <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
                                 </form>
                                  <input type="datetime-local" name="scheduled_at" form="ap-edit-<?= (int) $rp['id'] ?>"
-                                        value="<?= e(\App\Models\AutoPostQueue::defaultSchedule(null, $platform)) ?>"
+                                        value="<?= e(\App\Models\AutoPostQueue::rescheduleDefault($platform)) ?>"
                                        style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;width:9.5rem;"
                                        aria-label="Schedule repost time for post #<?= (int) $rp['id'] ?>">
                                 <button type="submit" name="action" value="repost" form="ap-edit-<?= (int) $rp['id'] ?>"
@@ -304,7 +304,7 @@ $twitter      = $config['twitter'] ?? [];
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
                                      <input type="datetime-local" name="scheduled_at"
-                                            value="<?= e(\App\Models\AutoPostQueue::defaultSchedule(null, $platform)) ?>"
+                                            value="<?= e(\App\Models\AutoPostQueue::rescheduleDefault($platform)) ?>"
                                            style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;width:9.5rem;"
                                            aria-label="Schedule repost time for post #<?= (int) $rp['id'] ?>">
                                     <button type="submit" class="btn btn-sm" title="Queue to publish again at the chosen time">Reschedule</button>
@@ -316,7 +316,7 @@ $twitter      = $config['twitter'] ?? [];
                 </tbody>
             </table>
         </div>
-        <?php // Pagination for the recent-posts list (100 per page). ?>
+        <?php // Pagination for the recent-posts list (25 per page). ?>
         <?php if (($recentPages ?? 1) > 1): ?>
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-top:.75rem;">
                 <span class="muted" style="font-size:.8rem;">Page <?= (int) ($recentPage ?? 1) ?> of <?= (int) $recentPages ?> &middot; <?= number_format((int) ($recentTotal ?? 0)) ?> recorded post<?= ((int) ($recentTotal ?? 0)) === 1 ? '' : 's' ?></span>

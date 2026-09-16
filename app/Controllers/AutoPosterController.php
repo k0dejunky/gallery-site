@@ -74,7 +74,7 @@ class AutoPosterController extends Controller
         }
 
         $recentPage = max(1, (int) $this->request->query('page', '1'));
-        $recentPosts = AutoPostQueue::recentPostsPage($recentPage, 100, $queueKey);
+        $recentPosts = AutoPostQueue::recentPostsPage($recentPage, 25, $queueKey);
 
         $this->viewAdmin('auto_poster', [
             'platform'        => $isX ? 'x' : 'reddit',
