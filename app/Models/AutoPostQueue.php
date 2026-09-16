@@ -571,6 +571,78 @@ class AutoPostQueue
     }
 
     /**
+     * Enqueue a recommended X + Reddit post for a gallery (the same "queue
+     * for a recommended post" flow as the Recommend button) with an explicit
+     * schedule. Rows for a platform that already has a live/posted row for
+     * the gallery are skipped as duplicates so nothing is ever double-posted.
+     *
+     * @param string|null $scheduledAtSiteTz datetime-local value (site timezone),
+     *                                        or null for the default per-platform
+     *                                        schedule. enqueue() normalizes it to UTC.
+     * @return array{queued: list<string>, duplicate: list<string>}
+     */
+    public static function enqueueGalleryPosts(int $galleryId, ?string $scheduledAtSiteTz = null): array
+    {
+        $queued    = [];
+        $duplicate = [];
+
+        foreach (['twitter' => 'X', 'reddit' => 'Reddit'] as $platform => $label) {
+            $alreadyQueued = Database::run(
+                'SELECT q.id FROM auto_poster_queue q
+                 WHERE q.gallery_id = ? AND q.platform = ?
+                   AND q.status IN (?, ?, ?, ?, ?)
+                 LIMIT 1',
+                [$galleryId, $platform, 'queued', 'posted', 'failed', 'skipped', 'dismissed']
+            )->fetch();
+
+            if ($alreadyQueued) {
+                $duplicate[] = $label;
+                continue;
+            }
+
+            $queueId = self::enqueue($galleryId, null, $scheduledAtSiteTz, $platform);
+            if ($queueId > 0) {
+                $queued[] = $label;
+            }
+        }
+
+        return compact('queued', 'duplicate');
+    }
+
+    /**
+     * Resync the X/Reddit auto-post rows of a gallery to a new publish
+     * moment. Only rows still queued (not yet posted/failed/skipped/dismissed)
+     * are moved; rows already published stay as-is. Passing null publishes
+     * the pending rows immediately (publish-now / schedule-cleared).
+     */
+    public static function rescheduleGalleryPosts(int $galleryId, ?string $scheduledAtUtc): void
+    {
+        if ($scheduledAtUtc === null) {
+            self::advanceGalleryPosts($galleryId);
+            return;
+        }
+
+        Database::run(
+            'UPDATE auto_poster_queue SET scheduled_at = ?
+             WHERE gallery_id = ? AND platform IN (?, ?) AND status = ?',
+            [$scheduledAtUtc, $galleryId, 'twitter', 'reddit', 'queued']
+        );
+    }
+
+    /**
+     * Make a gallery's pending X/Reddit auto-post rows due immediately
+     * (used by publish-now and schedule-cleared flows).
+     */
+    public static function advanceGalleryPosts(int $galleryId): void
+    {
+        Database::run(
+            'UPDATE auto_poster_queue SET scheduled_at = CURRENT_TIMESTAMP
+             WHERE gallery_id = ? AND platform IN (?, ?) AND status = ?',
+            [$galleryId, 'twitter', 'reddit', 'queued']
+        );
+    }
+
+    /**
      * Queued (awaiting-publish) posts, soonest-to-post first, joined to the
      * cover photo and gallery for the media/thumbnail the view needs. By
      * default every queued row is returned; pass a positive $limit to cap the

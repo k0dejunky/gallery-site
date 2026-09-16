@@ -117,6 +117,40 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
         <a class="btn btn-sm" href="<?= url('/admin/galleries/create') ?>">New Gallery</a>
     </div>
 
+    <?php // Collapsible gallery queue: galleries waiting for a future publish moment. ?>
+    <details style="border:1px solid var(--pink-300);border-radius:var(--card-radius,8px);padding:1rem 1.25rem;background:var(--pink-100);margin-bottom:1rem;">
+        <summary style="cursor:pointer;font-weight:600;">Gallery queue (<?= count($queuedGalleries ?? []) ?>)</summary>
+        <?php if (empty($queuedGalleries)): ?>
+            <p class="muted" style="margin-top:.75rem;">No galleries are scheduled for a future publication.</p>
+        <?php else: ?>
+            <table style="width:100%;border-collapse:collapse;margin-top:.75rem;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;padding:.4rem .5rem;">Gallery</th>
+                        <th style="text-align:left;padding:.4rem .5rem;">Scheduled</th>
+                        <th style="text-align:right;padding:.4rem .5rem;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($queuedGalleries as $queued): ?>
+                        <tr>
+                            <td style="padding:.4rem .5rem;">
+                                <a href="<?= url('/admin/galleries/' . (int) $queued['id']) ?>"><?= e((string) $queued['title']) ?></a>
+                            </td>
+                            <td style="padding:.4rem .5rem;" class="muted"><?= e(tzdate('Y-m-d H:i', (string) $queued['published_at'])) ?></td>
+                            <td style="padding:.4rem .5rem;text-align:right;">
+                                <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $queued['id'] . '/publish-now') ?>">
+                                    <?= csrf_field() ?>
+                                    <button type="submit" class="btn btn-sm">Publish now</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </details>
+
     <?php if (empty($galleries)): ?>
         <div class="mg-empty">
             <p>No galleries match the selected filters.</p>
@@ -151,6 +185,9 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                         </td>
                         <td>
                             <a class="mg-title" href="<?= url('/admin/galleries/' . $gid) ?>"><?= e((string) $gallery['title']) ?></a>
+                            <?php if (!empty($gallery['published_at']) && $gallery['published_at'] > gmdate('Y-m-d H:i:s')): ?>
+                                <span class="pill pill-warn" title="Hidden from the public site until the scheduled time">Scheduled</span>
+                            <?php endif; ?>
                             <?php if (trim((string) ($gallery['description'] ?? '')) !== ''): ?>
                                 <div class="mg-desc"><?= e((string) $gallery['description']) ?></div>
                             <?php endif; ?>

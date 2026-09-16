@@ -151,8 +151,15 @@
                     </select>
                 </div>
 
+                <div class="field" id="publish-later-fields">
+                    <label for="publish_at">Publish on this site at</label>
+                    <input type="datetime-local" name="publish_at" id="publish_at" value="<?= e(\App\Models\Gallery::defaultPublishAt()) ?>">
+                    <span class="muted">Used by "Add to gallery queue": the gallery stays hidden from the public site until this date and time, then appears automatically and its recommended X / Reddit posts are scheduled for the same moment. Leave as-is and use "Save Gallery" to publish immediately.</span>
+                </div>
+
                 <div class="create-actions">
-                    <button type="submit" class="btn" id="save-btn">Save Gallery</button>
+                    <button type="submit" name="submit_action" value="save" class="btn" id="save-btn">Save Gallery</button>
+                    <button type="submit" name="submit_action" value="queue" class="btn btn-outline" id="queue-btn">Add to gallery queue</button>
                     <a class="btn btn-outline" href="<?= url('/admin/galleries') ?>">Cancel</a>
                 </div>
             </form>
@@ -173,6 +180,40 @@
             <div class="pending-tiles" id="pending-tiles"></div>
         </section>
     </div>
+
+    <?php // Collapsible gallery queue: galleries waiting for a future publish moment. ?>
+    <details class="create-form-card" style="margin-top:1.5rem;" data-gallery-queue>
+        <summary style="cursor:pointer;font-weight:600;">Gallery queue (<?= count($queuedGalleries ?? []) ?>)</summary>
+        <?php if (empty($queuedGalleries)): ?>
+            <p class="muted" style="margin-top:.75rem;">No galleries are scheduled for a future publication.</p>
+        <?php else: ?>
+            <table style="width:100%;border-collapse:collapse;margin-top:.75rem;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;padding:.4rem .5rem;">Gallery</th>
+                        <th style="text-align:left;padding:.4rem .5rem;">Scheduled</th>
+                        <th style="text-align:right;padding:.4rem .5rem;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($queuedGalleries as $queued): ?>
+                        <tr>
+                            <td style="padding:.4rem .5rem;">
+                                <a href="<?= url('/admin/galleries/' . (int) $queued['id']) ?>"><?= e((string) $queued['title']) ?></a>
+                            </td>
+                            <td style="padding:.4rem .5rem;" class="muted"><?= e(tzdate('Y-m-d H:i', (string) $queued['published_at'])) ?></td>
+                            <td style="padding:.4rem .5rem;text-align:right;">
+                                <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $queued['id'] . '/publish-now') ?>">
+                                    <?= csrf_field() ?>
+                                    <button type="submit" class="btn btn-sm">Publish now</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </details>
 </div>
 
 <script>

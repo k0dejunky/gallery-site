@@ -88,7 +88,7 @@ class FavoriteController extends Controller
     public function toggleGallery(int $galleryId): void
     {
         Auth::requireLogin();
-        $gallery = Gallery::find($galleryId);
+        $gallery = Gallery::findPublic($galleryId);
         if ($gallery === null) {
             $this->notFound();
             return;

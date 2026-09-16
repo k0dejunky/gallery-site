@@ -47,10 +47,62 @@
         <span class="muted">Members below this level cannot view this gallery.</span>
     </p>
     <p>
+        <label for="publish_at">Publish on this site at</label><br>
+        <input type="datetime-local" name="publish_at" id="publish_at"
+               value="<?= !empty($gallery['published_at']) && $gallery['published_at'] > gmdate('Y-m-d H:i:s')
+                   ? e(\App\Models\Gallery::defaultPublishAt(strtotime((string) $gallery['published_at'])))
+                   : '' ?>">
+        <span class="muted">Leave blank to keep the current schedule; pick a future time to reschedule (the gallery's pending X / Reddit posts move to that moment).</span>
+    </p>
+    <p>
+        <label class="chip <?= empty($gallery['published_at']) ? 'active' : '' ?>">
+            <input type="radio" name="publish_action" value="keep" <?= empty($gallery['published_at']) ? 'checked' : '' ?>>
+            Keep current schedule
+        </label>
+        <label class="chip <?= !empty($gallery['published_at']) ? 'active' : '' ?>">
+            <input type="radio" name="publish_action" value="now" <?= !empty($gallery['published_at']) ? 'checked' : '' ?>>
+            Publish now / clear schedule
+        </label>
+    </p>
+    <p>
         <button type="submit" class="btn">Save Changes</button>
         <a class="btn btn-sm" href="<?= url('/admin/galleries/' . (int) $gallery['id']) ?>">Cancel</a>
     </p>
 </form>
+
+<?php // Collapsible gallery queue: galleries waiting for a future publish moment. ?>
+<details class="create-form-card" style="margin-top:1.5rem;border:1px solid var(--card-border,#ddd);border-radius:var(--card-radius,8px);padding:1.25rem;background:var(--card-bg,#fff);" data-gallery-queue>
+    <summary style="cursor:pointer;font-weight:600;">Gallery queue (<?= count($queuedGalleries ?? []) ?>)</summary>
+    <?php if (empty($queuedGalleries)): ?>
+        <p class="muted" style="margin-top:.75rem;">No galleries are scheduled for a future publication.</p>
+    <?php else: ?>
+        <table style="width:100%;border-collapse:collapse;margin-top:.75rem;">
+            <thead>
+                <tr>
+                    <th style="text-align:left;padding:.4rem .5rem;">Gallery</th>
+                    <th style="text-align:left;padding:.4rem .5rem;">Scheduled</th>
+                    <th style="text-align:right;padding:.4rem .5rem;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($queuedGalleries as $queued): ?>
+                    <tr>
+                        <td style="padding:.4rem .5rem;">
+                            <a href="<?= url('/admin/galleries/' . (int) $queued['id']) ?>"><?= e((string) $queued['title']) ?></a>
+                        </td>
+                        <td style="padding:.4rem .5rem;" class="muted"><?= e(tzdate('Y-m-d H:i', (string) $queued['published_at'])) ?></td>
+                        <td style="padding:.4rem .5rem;text-align:right;">
+                            <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $queued['id'] . '/publish-now') ?>">
+                                <?= csrf_field() ?>
+                                <button type="submit" class="btn btn-sm">Publish now</button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
+</details>
 
 <?php // Show every file already in this gallery so admins see the current contents. Videos show a short clip + poster; images show their thumbnail. ?>
 <h2>Files in this gallery (<?= count($photos) ?>)</h2>

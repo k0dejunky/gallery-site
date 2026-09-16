@@ -124,6 +124,7 @@ class AdminController extends Controller
             'covers'      => Gallery::firstPhotos($galleryIds),
             'filterType'  => $type,
             'filterLevel' => $level,
+            'queuedGalleries' => Gallery::queuedForPublishing(),
         ]);
     }
 
@@ -166,6 +167,7 @@ class AdminController extends Controller
                 Gallery::categories($id)
             ),
             'activeEditJob' => \App\Models\PhotoJob::latestForGallery($id),
+            'queuedGalleries' => Gallery::queuedForPublishing(),
         ]);
     }
 

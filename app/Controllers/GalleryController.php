@@ -253,7 +253,7 @@ class GalleryController extends Controller
     {
         Auth::requireLogin();
 
-        $gallery = Gallery::find($id);
+        $gallery = Gallery::findPublic($id);
 
         if ($gallery === null) {
             $this->notFound();
@@ -307,7 +307,7 @@ class GalleryController extends Controller
     {
         Auth::requireLogin();
 
-        $gallery = Gallery::find($id);
+        $gallery = Gallery::findPublic($id);
 
         if ($gallery === null) {
             $this->notFound();
@@ -364,6 +364,7 @@ class GalleryController extends Controller
             'categories'   => Category::all(),
             'galleryType'  => 'images',
             'pendingFiles' => $this->pendingListMeta(),
+            'queuedGalleries' => Gallery::queuedForPublishing(),
         ]);
     }
 
@@ -397,7 +398,22 @@ class GalleryController extends Controller
             $this->redirect('/admin/galleries/create');
         }
 
-        $galleryId = Gallery::create($title, $description, $type, $minLevel);
+        // "Add to gallery queue" schedules a future publication; "Save
+        // Gallery" publishes immediately. A queue schedule must be a valid
+        // future moment, otherwise the gallery is rejected.
+        $queue     = (string) $this->request->post('submit_action', 'save') === 'queue';
+        $publishedAt = null;
+
+        if ($queue) {
+            $publishAtRaw = (string) $this->request->post('publish_at', '');
+            if (!Gallery::validPublishSchedule($publishAtRaw)) {
+                $this->flash('error', 'A valid future publish date and time is required to add the gallery to the queue.');
+                $this->redirect('/admin/galleries/create');
+            }
+            $publishedAt = Gallery::normalizePublishAt($publishAtRaw);
+        }
+
+        $galleryId = Gallery::create($title, $description, $type, $minLevel, $publishedAt);
         Gallery::setCategories($galleryId, $categoryIds);
 
         $count = $this->finalizePending($galleryId, $type);
@@ -407,9 +423,19 @@ class GalleryController extends Controller
             'min_level' => $minLevel,
             'categories' => array_map('intval', $categoryIds),
             'photos' => $count,
+            'published_at' => $publishedAt,
         ]);
 
-        $this->flash('success', 'Gallery created with ' . $count . ' file(s).');
+        // A queued gallery schedules its recommended X + Reddit posts for the
+        // publish moment so they go out the moment the gallery goes live.
+        // enqueue() normalizes the site-tz picker value to UTC itself.
+        if ($queue && $publishedAt !== null) {
+            $siteTzValue = str_replace('T', ' ', (string) $this->request->post('publish_at', ''));
+            AutoPostQueue::enqueueGalleryPosts($galleryId, $siteTzValue);
+            $this->flash('success', 'Gallery created with ' . $count . ' file(s) and added to the gallery queue.');
+        } else {
+            $this->flash('success', 'Gallery created with ' . $count . ' file(s).');
+        }
         $this->redirect('/admin/galleries/' . $galleryId);
     }
 
@@ -1149,6 +1175,7 @@ class GalleryController extends Controller
                 static fn (array $category) => (int) $category['id'],
                 Gallery::categories($id)
             ),
+            'queuedGalleries' => Gallery::queuedForPublishing(),
         ]);
     }
 
@@ -1174,18 +1201,46 @@ class GalleryController extends Controller
         $categoryIds = $this->request->post('categories', []);
         $categoryIds = is_array($categoryIds) ? $categoryIds : [];
 
+        // Publication schedule handling: a non-empty publish_at picker value sets
+// or updates the schedule (validated future-only). An explicit "publish
+// now" / "clear schedule" action with an empty picker clears it. Otherwise
+// the gallery's existing schedule is kept untouched.
+$publishAction = (string) $this->request->post('publish_action', '');
+$publishAtRaw  = trim((string) $this->request->post('publish_at', ''));
+$publishedAt   = null;
+
+if ($publishAtRaw !== '') {
+    if (!Gallery::validPublishSchedule($publishAtRaw)) {
+        $this->flash('error', 'The publish schedule must be a valid time in the future.');
+        $this->redirect('/admin/galleries/' . $id . '/edit');
+    }
+    $publishedAt = Gallery::normalizePublishAt($publishAtRaw);
+} elseif ($publishAction === 'now' || $publishAction === 'clear') {
+    $publishedAt = null;
+} else {
+    // No schedule control on this form (e.g. the manage page): keep the
+    // gallery's existing schedule untouched.
+    $publishedAt = $gallery['published_at'] ?? null;
+}
+
         if ($title === '') {
             $this->flash('error', 'Title is required.');
             $this->redirect('/admin/galleries/' . $id . '/edit');
         }
 
-        Gallery::update($id, $title, $description, $type, $minLevel);
+        Gallery::update($id, $title, $description, $type, $minLevel, $publishedAt);
         Gallery::setCategories($id, $categoryIds);
+
+        // Resync pending X/Reddit auto-post rows to the new publish moment so
+        // the posts go out when the gallery goes live (or immediately when the
+        // schedule was cleared / published now).
+        AutoPostQueue::rescheduleGalleryPosts($id, $publishedAt);
 
         $after = [
             'title' => $title, 'description' => $description, 'type' => $type,
             'min_level' => $minLevel,
             'categories' => array_map('intval', $categoryIds),
+            'published_at' => $publishedAt,
         ];
         $before = [
             'title' => $gallery['title'] ?? '',
@@ -1193,6 +1248,7 @@ class GalleryController extends Controller
             'type' => $gallery['type'] ?? 'images',
             'min_level' => (int) ($gallery['min_level'] ?? 0),
             'categories' => $beforeCategories,
+            'published_at' => $gallery['published_at'] ?? null,
         ];
 
         if ($before !== $after) {
@@ -1201,6 +1257,35 @@ class GalleryController extends Controller
 
         $this->flash('success', 'Gallery updated.');
         $this->redirect('/admin/galleries/' . $id);
+    }
+
+    /**
+     * Admin: force a queued gallery to publish immediately, clearing its
+     * schedule and making its pending X/Reddit auto-post rows due now.
+     */
+    public function publishNow(int $id): void
+    {
+        Auth::requirePermission('galleries');
+        $gallery = Gallery::find($id);
+
+        if ($gallery === null) {
+            $this->notFound();
+            return;
+        }
+
+        Gallery::publishNow($id);
+        AutoPostQueue::advanceGalleryPosts($id);
+
+        AuditLog::record(
+            (int) Auth::user()['id'],
+            'update',
+            'gallery',
+            $id,
+            'Published queued gallery "' . ($gallery['title'] ?? '') . '" now'
+        );
+
+        $this->flash('success', 'Gallery published now.');
+        $this->redirect('/admin/galleries');
     }
 
     /**
