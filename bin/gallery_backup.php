@@ -86,7 +86,7 @@ DUMP=\$(mktemp /tmp/gallery-dump-XXXXXX.sql)
 {$mysqldump} > "\$DUMP"
 TARGET={$target}
 SQLT={$sqlt}
-tar czf "\$TARGET" --warning=no-file-changed --ignore-failed-read -C {$root} storage/uploads
+tar czf "\$TARGET" --warning=no-file-changed --ignore-failed-read -C {$root} storage/uploads storage/*.json .env
 test \$? -le 1
 gzip -c "\$DUMP" > "\$SQLT"
 rm -f "\$DUMP"

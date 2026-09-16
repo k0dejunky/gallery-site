@@ -126,7 +126,14 @@ class StorageController extends Controller
 
         header('Content-Type: ' . $mime);
         header('Accept-Ranges: bytes');
-        header('Cache-Control: public, max-age=86400');
+
+        // Variants (web_/thumb_/blur_) are content-addressed: the derived file
+        // is regenerated and given a new name when the source changes, so the
+        // URL is permanently immutable and can be cached forever in the
+        // browser. Originals keep a shorter public cache (files could be
+        // rotated/replaced with the same name).
+        $isVariant = in_array($size, ['thumb', 'web', 'blur'], true);
+        header('Cache-Control: ' . ($isVariant ? 'public, max-age=31536000, immutable' : 'public, max-age=86400'));
 
         // Offload file streaming to Apache via X-SendFile (mod_xsendfile).
         // Apache natively supports HTTP Range requests, so browsers can seek
