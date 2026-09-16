@@ -48,6 +48,21 @@ try {
         $applied[$row['filename']] = $row;
     }
 
+    // Prune recorded migrations whose file no longer exists (e.g. a feature
+    // was retired and its migration deleted). Keeping the row would leave the
+    // tracking table permanently out of sync with the file list.
+    if (!$statusOnly) {
+        $knownFiles = array_map('basename', $files);
+        $orphans = array_diff(array_keys($applied), $knownFiles);
+        if ($orphans !== []) {
+            $stmt = $pdo->prepare('DELETE FROM schema_migrations WHERE filename = ?');
+            foreach ($orphans as $orphan) {
+                $stmt->execute([$orphan]);
+                fwrite(STDOUT, "Pruned removed migration {$orphan}\n");
+            }
+        }
+    }
+
     foreach ($files as $file) {
         $filename = basename($file);
         $checksum = hash_file('sha256', $file);
