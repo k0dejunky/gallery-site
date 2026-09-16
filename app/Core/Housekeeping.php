@@ -34,6 +34,9 @@ class Housekeeping
         self::watchBackupSync($root);
         self::watchRestoreDrill($root);
 
+        // One-off abandoned-signup recovery emails (max once per day).
+        $out['recovery_emails'] = self::sendRecoveryEmails($root);
+
         // Auto-approve paid PayPal memberships whose webhook was missed.
         $reconciled = self::reconcilePayPalSubscriptions();
         $out['paypal_reconciled'] = $reconciled['activated']; // activations are the headline number
@@ -336,6 +339,72 @@ class Housekeeping
         }
 
         return $bytes;
+    }
+
+    /**
+     * Send one-off "finish setting up your account" emails to users who
+     * signed up but never verified their email (a proxy for abandonment),
+     * at most once per day. Each user is emailed at most once (guarded by
+     * the recovery_email_sent_at column). Respects marketing opt-out.
+     *
+     * @return int number of recovery emails sent this run
+     */
+    private static function sendRecoveryEmails(string $root): int
+    {
+        $stateFile = $root . '/storage/logs/recovery-sent.state';
+        $last      = is_file($stateFile) ? (int) @file_get_contents($stateFile) : 0;
+
+        // Run at most once per day regardless of the 15-minute cron cadence.
+        if (time() - $last < 86400) {
+            return 0;
+        }
+
+        $rows = Database::run(
+            "SELECT id, email FROM users
+             WHERE email_verified_at IS NULL
+               AND recovery_email_sent_at IS NULL
+               AND marketing_opt_out = 0
+               AND status = 'active'
+               AND created_at <= (CURRENT_TIMESTAMP - INTERVAL 3 DAY)
+             LIMIT 50"
+        )->fetchAll();
+
+        if ($rows === []) {
+            @file_put_contents($stateFile, (string) time());
+            return 0;
+        }
+
+        $sent = 0;
+        foreach ($rows as $user) {
+            $id    = (int) $user['id'];
+            $email = (string) $user['email'];
+
+            $token = \App\Models\User::createVerificationToken($id);
+            $verifyUrl = rtrim((string) env_value('APP_URL', ''), '/')
+                . '/verify-email?token=' . rawurlencode($token);
+
+            $ok = \App\Core\Mailer::send(
+                $email,
+                'Complete your ' . config('app.site_name') . ' account',
+                "You created an account with " . config('app.site_name') . " a few days ago "
+                . "but haven't verified your email yet.\n\n"
+                . "Finish setting up by opening this link:\n"
+                . $verifyUrl . "\n\n"
+                . "If you didn't create this account, you can ignore this email."
+            );
+
+            if ($ok) {
+                Database::run(
+                    'UPDATE users SET recovery_email_sent_at = CURRENT_TIMESTAMP WHERE id = ?',
+                    [$id]
+                );
+                $sent++;
+            }
+        }
+
+        @file_put_contents($stateFile, (string) time());
+
+        return $sent;
     }
 
     /**
