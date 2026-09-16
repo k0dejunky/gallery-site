@@ -501,6 +501,12 @@ class AutoPostQueue
         $dbKey = strtolower($platform) === 'reddit' ? 'reddit' : 'twitter';
         $sched = strtolower($platform) === 'reddit' ? 'reddit' : 'x';
 
+        // The base for the default is the most recent of "now" and the last
+        // auto-post: with a recent post the reschedule lands one hour after
+        // it (no collision); with no recent posts (or none at all) the
+        // plain now+1h default is used.
+        $base = new \DateTimeImmutable('now', new DateTimeZone('UTC'));
+
         $latest = Database::run(
             'SELECT COALESCE(posted_at, scheduled_at, created_at) AS last_at
              FROM auto_poster_queue
@@ -510,18 +516,14 @@ class AutoPostQueue
             [$dbKey, 'queued', 'posted', 'failed', 'skipped']
         )->fetchColumn();
 
-        if ($latest === false || $latest === null) {
-            return self::defaultSchedule(null, $sched);
+        if ($latest !== false && $latest !== null) {
+            $lastDt = DateTime::createFromFormat('Y-m-d H:i:s', (string) $latest, new DateTimeZone('UTC'));
+            if ($lastDt !== false && $lastDt > $base) {
+                $base = new \DateTimeImmutable('@' . $lastDt->getTimestamp());
+            }
         }
 
-        $dt = DateTime::createFromFormat('Y-m-d H:i:s', (string) $latest, new DateTimeZone('UTC'));
-        if ($dt === false) {
-            return self::defaultSchedule(null, $sched);
-        }
-
-        $dt->modify('+1 hour');
-
-        return $dt->setTimezone(self::schedulerTimezone())->format('Y-m-d\TH:i');
+        return $base->modify('+1 hour')->setTimezone(self::schedulerTimezone())->format('Y-m-d\TH:i');
     }
 
     /**
