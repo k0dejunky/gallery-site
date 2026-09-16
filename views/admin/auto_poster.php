@@ -115,7 +115,8 @@ $twitter      = $config['twitter'] ?? [];
                         <?= csrf_field() ?>
                         <input type="hidden" name="platform" value="<?= e($platform) ?>">
                         <input type="hidden" name="gallery_id" value="<?= (int) $rec['gallery_id'] ?>">
-                        <textarea name="text" rows="2" maxlength="<?= $isReddit ? 40000 : 280 ?>" style="font-size:.85rem;color:#374151;background:#fff;padding:.5rem .6rem;border-radius:4px;border:1px solid #d1d5db;word-wrap:break-word;resize:vertical;box-sizing:border-box;width:100%;"><?= e((string) $rec['suggested_text']) ?></textarea>
+                        <textarea name="text" rows="2" maxlength="<?= $isReddit ? 40000 : 280 ?>" data-char-count data-char-count-id="rec-<?= (int) $rec['gallery_id'] ?>" style="font-size:.85rem;color:#374151;background:#fff;padding:.5rem .6rem;border-radius:4px;border:1px solid #d1d5db;word-wrap:break-word;resize:vertical;box-sizing:border-box;width:100%;"><?= e((string) $rec['suggested_text']) ?></textarea>
+                        <div class="muted" style="font-size:.72rem;text-align:right;"><span data-char-count-out="rec-<?= (int) $rec['gallery_id'] ?>">0</span>/<?= $isReddit ? 40000 : 280 ?></div>
                         <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
                             <label for="sched_<?= (int) $rec['gallery_id'] ?>" class="muted" style="font-size:.8rem;">Publish</label>
                             <input type="datetime-local" name="scheduled_at" id="sched_<?= (int) $rec['gallery_id'] ?>" value="<?= e((string) $rec['default_scheduled_at']) ?>" style="font-size:.85rem;padding:.2rem .35rem;border:1px solid #d1d5db;border-radius:4px;">
@@ -229,9 +230,10 @@ $twitter      = $config['twitter'] ?? [];
                                 <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
                                 <div>
                                     <label class="muted" style="display:block;margin-bottom:.2rem;font-size:.8rem;">Post text</label>
-                                    <textarea name="text" rows="3" maxlength="<?= ((string) $item['platform'] === 'reddit') ? 40000 : 280 ?>"
+                                    <textarea name="text" rows="3" maxlength="<?= ((string) $item['platform'] === 'reddit') ? 40000 : 280 ?>" data-char-count data-char-count-id="qedit-<?= (int) $item['id'] ?>"
                                               style="width:100%;box-sizing:border-box;font-size:.85rem;font-family:inherit;padding:.4rem .5rem;border:1px solid #d1d5db;border-radius:4px;"
                                               aria-label="Editable text for queued post #<?= (int) $item['id'] ?>"><?= e((string) $item['text']) ?></textarea>
+                                <div class="muted" style="font-size:.72rem;text-align:right;"><span data-char-count-out="qedit-<?= (int) $item['id'] ?>">0</span>/<?= ((string) $item['platform'] === 'reddit') ? 40000 : 280 ?></div>
                                 </div>
                                 <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
                                     <label class="muted" style="font-size:.8rem;">Schedule:</label>
@@ -287,10 +289,10 @@ $twitter      = $config['twitter'] ?? [];
                         <?php if ($rpEditable): ?>
                             <?php // Failed posts: editable text so the wording can be fixed, then reposted/scheduled. ?>
                             <td style="max-width:340px;font-size:.85rem;" class="rp-edit">
-                                <textarea name="text" form="ap-edit-<?= (int) $rp['id'] ?>" maxlength="<?= ((string) ($rp['platform'] ?? '') === 'reddit') ? 40000 : 280 ?>" rows="2"
+                                <textarea name="text" form="ap-edit-<?= (int) $rp['id'] ?>" maxlength="<?= ((string) ($rp['platform'] ?? '') === 'reddit') ? 40000 : 280 ?>" rows="2" data-char-count data-char-count-id="rp-<?= (int) $rp['id'] ?>"
                                           style="width:100%;box-sizing:border-box;font-size:.85rem;font-family:inherit;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;"
                                           aria-label="Editable text for post #<?= (int) $rp['id'] ?>"><?= e((string) $rp['text']) ?></textarea>
-                                <div class="muted" style="font-size:.72rem;margin-top:.15rem;">Edit the wording, then click Repost now or Reschedule.</div>
+                                <div class="muted" style="font-size:.72rem;margin-top:.15rem;text-align:right;"><span data-char-count-out="rp-<?= (int) $rp['id'] ?>">0</span>/<?= ((string) ($rp['platform'] ?? '') === 'reddit') ? 40000 : 280 ?> &middot; Edit the wording, then click Repost now or Reschedule.</div>
                             </td>
                         <?php else: ?>
                             <td style="max-width:320px;font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?= e((string) $rp['text']) ?>">
@@ -514,7 +516,8 @@ $twitter      = $config['twitter'] ?? [];
             </p>
             <p id="reddit-text-row" style="display:none;">
                 <label for="reddit_text">Text</label><br>
-                <textarea name="reddit_text" id="reddit_text" rows="4" style="width:100%;box-sizing:border-box;"></textarea>
+                <textarea name="reddit_text" id="reddit_text" rows="4" data-char-count data-char-count-id="reddit-compose" style="width:100%;box-sizing:border-box;"></textarea>
+                <span class="muted" style="font-size:0.8rem;"><span data-char-count-out="reddit-compose">0</span>/40000</span>
             </p>
             <button type="submit" class="btn">Submit to Reddit</button>
         </form>
@@ -525,8 +528,8 @@ $twitter      = $config['twitter'] ?? [];
             <input type="hidden" name="platform" value="x">
             <p>
                 <label for="twitter_text">Text</label><br>
-                <textarea name="twitter_text" id="twitter_text" rows="5" maxlength="280" placeholder="Post content (max 280 characters)..." style="width:100%;box-sizing:border-box;"></textarea>
-                <span class="muted" style="font-size:0.8rem;"><span id="twitter-count">0</span>/280</span>
+                <textarea name="twitter_text" id="twitter_text" rows="5" maxlength="280" data-char-count data-char-count-id="twitter-compose" placeholder="Post content (max 280 characters)..." style="width:100%;box-sizing:border-box;"></textarea>
+                <span class="muted" style="font-size:0.8rem;"><span data-char-count-out="twitter-compose">0</span>/280</span>
             </p>
             <p>
                 <label for="twitter_media">Images / video (optional)</label><br>
@@ -665,11 +668,22 @@ $twitter      = $config['twitter'] ?? [];
         updateType();
     }
 
-    var tInput = document.getElementById('twitter_text');
-    var tCount = document.getElementById('twitter-count');
-    if (tInput && tCount) {
-        tInput.addEventListener('input', function () { tCount.textContent = tInput.value.length; });
-    }
+    // Real-time character counters for every post-text field (recommended
+    // posts, queue edits, recent-post edits, and the X/Reddit compose boxes).
+    // The textarea carries data-char-count + a unique id; its matching
+    // counter output is data-char-count-out=<id>.
+    (function () {
+        var fields = document.querySelectorAll('textarea[data-char-count]');
+        function update(ta) {
+            var id = ta.getAttribute('data-char-count-id');
+            var out = document.querySelector('[data-char-count-out="' + id + '"]');
+            if (out) { out.textContent = ta.value.length; }
+        }
+        fields.forEach(function (ta) {
+            update(ta);
+            ta.addEventListener('input', function () { update(ta); });
+        });
+    })();
 
     // Live countdown to each queued post's publish time. The server stamps
     // the target (data-until) and its own clock (data-synced) so the client
