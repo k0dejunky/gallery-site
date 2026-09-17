@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.6",
-  "versionCode": 17,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.6.apk",
-  "changelog": "Users list now refreshes automatically every few seconds, so new-message badges appear live without reloading.",
+  "latestVersion": "2.7",
+  "versionCode": 18,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.7.apk",
+  "changelog": "Push-style notifications via a live SSE events stream: new member messages notify instantly and badges update immediately (polling kept as fallback).",
   "publishedAt": "2026-09-17"
 }

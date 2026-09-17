@@ -197,6 +197,80 @@ class ChatBridgeController extends Controller
     }
 
     /**
+     * Server-Sent Events stream of new MEMBER messages across all open
+     * conversations (for the operator app's push notifications). Emits an
+     * event whenever a member (sender_role = 'user') writes a message with
+     * id > ?since. Holds the connection open up to ~30s.
+     *
+     *   GET /webhooks/chat/events?since=N
+     *   data: {"ok":true,"events":[{id,conversation_id,user_id,username,message,created_at}],"latestId":N}
+     */
+    public function events(): void
+    {
+        $since = max(0, (int) $this->request->query('since', 0));
+
+        header('Content-Type: text/event-stream');
+        header('Cache-Control: no-cache');
+        header('X-Accel-Buffering: no');
+
+        // Ensure PHP streams rather than buffering the whole response.
+        @ini_set('output_buffering', 'off');
+        @ini_set('zlib.output_compression', 'off');
+        while (ob_get_level() > 0) {
+            @ob_end_flush();
+        }
+
+        $new = $this->memberEvents($since);
+        if ($new !== []) {
+            $latestId = max(array_column($new, 'id'));
+            echo 'data: ' . json_encode(['ok' => true, 'events' => $new, 'latestId' => $latestId]) . "\n\n";
+            flush();
+            $since = $latestId;
+        }
+
+        $start = time();
+        while (time() - $start < 30) {
+            $new = $this->memberEvents($since);
+            if ($new !== []) {
+                $latestId = max(array_column($new, 'id'));
+                echo 'data: ' . json_encode(['ok' => true, 'events' => $new, 'latestId' => $latestId]) . "\n\n";
+                flush();
+                $since = $latestId;
+                continue;
+            }
+
+            echo ": keepalive\n\n";
+            flush();
+            usleep(1500000);
+        }
+
+        exit;
+    }
+
+    /**
+     * Member messages (sender_role = 'user') newer than $since, joined with
+     * the member's username. Returns rows or [].
+     */
+    private function memberEvents(int $since): array
+    {
+        $rows = \App\Core\Database::run(
+            "SELECT m.id, m.conversation_id, c.user_id,
+                    SUBSTRING_INDEX(u.email, '@', 1) AS username,
+                    m.message, m.created_at
+             FROM chat_messages m
+             JOIN chat_conversations c ON c.id = m.conversation_id
+             JOIN users u ON u.id = c.user_id
+             WHERE m.sender_role = 'user'
+               AND m.id > ?
+             ORDER BY m.id ASC
+             LIMIT 50",
+            [$since]
+        )->fetchAll();
+
+        return $rows ?: [];
+    }
+
+    /**
      * Append a reply from the Android app. sender_role is 'operator' when a
      * human replied live (harvested into the training corpus) or 'model' when
      * the server/AI produced it. Returns the new message id.
