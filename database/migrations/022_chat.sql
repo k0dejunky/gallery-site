@@ -37,9 +37,9 @@ CREATE TABLE IF NOT EXISTS chat_training_pairs (
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Grant chat to the plans the admin designates: Platinum-yearly (Yearly),
--- Lifetime, and the Chat add-on. Matched by name/billing_cycle where the
--- add-on is name 'Chat add-on'.
+-- Grant chat to the plans the admin designates: Platinum, Platinum-yearly
+-- (Yearly), Lifetime, and the Chat add-on.
 UPDATE plans SET can_chat = 1
-WHERE (billing_cycle IN ('yearly','lifetime') AND level >= 3)
-   OR name = 'Chat add-on';
+WHERE name = 'Platinum'
+   OR name = 'Chat add-on'
+   OR (billing_cycle IN ('yearly','lifetime') AND level >= 3);

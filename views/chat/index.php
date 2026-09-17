@@ -13,9 +13,15 @@
 </style>
 
 <div class="chat-page">
-    <?php if (!empty($denied)): ?>
+    <?php if (empty($eligible)): ?>
         <h1>Chat</h1>
-        <p class="muted">Chat is available to members on the <strong>Platinum yearly</strong>, <strong>Lifetime</strong>, or <strong>Chat add-on</strong> plans. Upgrade in <a href="<?= url('/membership') ?>">Membership</a> to start chatting.</p>
+        <?php if (trim((string) $dailyMessage) !== ''): ?>
+            <div style="border:1px solid var(--pink-300,#f9a8d4);border-radius:var(--card-radius,8px);background:var(--pink-100,#fdf2f8);padding:1rem;margin-bottom:1rem;">
+                <strong>Message from the site</strong>
+                <p style="margin:.5rem 0 0;white-space:pre-wrap;"><?= e((string) $dailyMessage) ?></p>
+            </div>
+        <?php endif; ?>
+        <p class="muted">Chat is available to members on the <strong>Platinum</strong>, <strong>Yearly</strong>, <strong>Lifetime</strong>, or <strong>Chat add-on</strong> plans. Upgrade in <a href="<?= url('/membership') ?>">Membership</a> to start chatting.</p>
     <?php else: ?>
         <h1>Chat</h1>
         <p class="chat-status">Messages are answered as quickly as possible.</p>

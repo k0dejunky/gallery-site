@@ -196,6 +196,8 @@ return [
     ['POST', '/admin/chat/{id}/mode', 'AdminChatController@mode', 'chat'],
     ['POST', '/admin/chat/{id}/reply', 'AdminChatController@operatorReply', 'chat'],
     ['POST', '/admin/chat/settings', 'AdminChatController@saveSettings', 'chat'],
+    ['POST', '/admin/chat/ai-toggle', 'AdminChatController@toggleAi', 'chat'],
+    ['POST', '/admin/chat/daily-message', 'AdminChatController@saveDailyMessage', 'chat'],
     ['POST', '/admin/chat/export-training', 'AdminChatController@exportTraining', 'chat'],
     ['GET', '/admin/trends', 'TrendsController@index', 'trends'],
     ['POST', '/admin/trends/promote', 'TrendsController@approvePromotion', 'trends'],

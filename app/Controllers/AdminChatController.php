@@ -61,7 +61,7 @@ class AdminChatController extends Controller
         )->fetchAll();
 
         $ai = ChatAi::ping();
-        $state = $this->state();
+        $state = \App\Core\ChatSettings::all();
 
         $this->viewAdmin('chat', [
             'title'        => 'Chat Admin',
@@ -142,15 +142,46 @@ class AdminChatController extends Controller
             $defaultMode = ChatMessage::MODE_RETRIEVAL;
         }
 
-        $state = $this->state();
+        $state = \App\Core\ChatSettings::all();
         $state['default_ai_mode'] = $defaultMode;
         $state['model']           = ChatAi::BASE_MODEL;
         $state['finetuned_model'] = ChatAi::FINETUNED_MODEL;
 
-        $file = dirname(__DIR__, 2) . '/storage/chat.json';
-        @file_put_contents($file, (string) json_encode($state, JSON_PRETTY_PRINT), LOCK_EX);
+        \App\Core\ChatSettings::save($state);
 
         $this->flash('success', 'Chat settings saved.');
+        $this->redirect('/admin/chat');
+    }
+
+    /** Toggle the master AI switch on/off (off = operator-only across the site). */
+    public function toggleAi(): void
+    {
+        $state = \App\Core\ChatSettings::all();
+        $state['ai_enabled'] = !(bool) ($state['ai_enabled'] ?? true);
+
+        \App\Core\ChatSettings::save($state);
+
+        $this->flash('success', 'Chat AI turned ' . ($state['ai_enabled'] ? 'on' : 'off') . '.');
+        $this->redirect('/admin/chat');
+    }
+
+    /** Save the admin's daily broadcast shown to users without the chat feature. */
+    public function saveDailyMessage(): void
+    {
+        $message = trim((string) $this->request->post('daily_message', ''));
+        if (mb_strlen($message) > 5000) {
+            $this->flash('error', 'Daily message must be 5,000 characters or fewer.');
+            $this->redirect('/admin/chat');
+            return;
+        }
+
+        $state = \App\Core\ChatSettings::all();
+        $state['daily_message']    = $message;
+        $state['daily_message_at'] = date('Y-m-d H:i:s');
+
+        \App\Core\ChatSettings::save($state);
+
+        $this->flash('success', 'Daily message ' . ($message === '' ? 'cleared' : 'saved') . '.');
         $this->redirect('/admin/chat');
     }
 
@@ -206,11 +237,4 @@ class AdminChatController extends Controller
         return mb_substr($text, 0, 2000);
     }
 
-    private function state(): array
-    {
-        $file = dirname(__DIR__, 2) . '/storage/chat.json';
-        $data = is_file($file) ? json_decode((string) @file_get_contents($file), true) : null;
-
-        return is_array($data) ? $data : ['default_ai_mode' => 'retrieval'];
     }
-}

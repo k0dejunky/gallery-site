@@ -20,20 +20,12 @@ class ChatController extends Controller
         $user = Auth::user();
         $userId = (int) $user['id'];
 
-        if (!ChatMessage::canChat($userId)) {
-            http_response_code(403);
-            $this->view('chat/index', [
-                'title'     => 'Chat',
-                'denied'    => true,
-                'conversation' => null,
-                'messages'  => [],
-                'latestId'  => 0,
-                'aiStatus'  => null,
-            ]);
-            return;
-        }
+        $eligible = ChatMessage::canChat($userId);
 
-        $conv = ChatMessage::forUser($userId);
+        // The chat feature is visible to every logged-in user. Users without
+        // the chat plan see the admin's daily message (read-only) and an
+        // upgrade prompt; they cannot send messages (the composer is hidden).
+        $conv = $eligible ? ChatMessage::forUser($userId) : null;
         if ($conv === null) {
             $conv = ['id' => 0, 'ai_mode' => 'retrieval', 'status' => 'open'];
         }
@@ -42,7 +34,9 @@ class ChatController extends Controller
 
         $this->view('chat/index', [
             'title'        => 'Chat',
-            'denied'       => false,
+            'eligible'     => $eligible,
+            'dailyMessage' => \App\Core\ChatSettings::dailyMessage(),
+            'aiEnabled'    => \App\Core\ChatSettings::aiEnabled(),
             'conversation' => $conv,
             'messages'     => $messages,
             'latestId'     => $conv['id'] > 0 ? ChatMessage::latestId((int) $conv['id']) : 0,
@@ -84,7 +78,12 @@ class ChatController extends Controller
         // In operator mode the message waits for a human via the Android app
         // or admin panel.
         $convMode = (string) ($conv['ai_mode'] ?? ChatMessage::MODE_RETRIEVAL);
-        if (ChatMessage::isAiMode($convMode)) {
+
+        // Respect the site-wide AI master switch: when it's off, no AI reply
+        // regardless of the conversation's AI mode (operator answers instead).
+        $aiEnabled = \App\Core\ChatSettings::aiEnabled();
+
+        if ($aiEnabled && ChatMessage::isAiMode($convMode)) {
             $aiReply = ChatAi::reply(
                 $convMode,
                 $message,
@@ -100,7 +99,7 @@ class ChatController extends Controller
                 $result['ai_pending'] = true; // model down; operator can respond via the Android app
             }
         } else {
-            $result['awaiting_operator'] = true; // operator-only mode
+            $result['awaiting_operator'] = true; // AI off or operator-only mode
         }
 
         $this->json($result);

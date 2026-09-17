@@ -4,10 +4,15 @@
     <h1 style="margin:0;">Chat</h1>
     <div>
         <span class="muted" style="font-size:.85rem;">
+            AI master switch: <strong><?= !empty($state['ai_enabled']) ? 'ON' : 'OFF' ?></strong> &middot;
             Training: <strong><?= (int) ($trainingCount ?? 0) ?></strong> pairs (<?= (int) ($cleanedCount ?? 0) ?> cleaned) &middot;
             <?php if (!empty($ai['hasBase'])): ?>AI base online<?php else: ?>AI base <span style="color:var(--danger,#c62828);">offline</span><?php endif; ?>
             <?php if (!empty($ai['hasFine'])): ?> &middot; fine-tuned loaded (<?= e((string) $finetunedModel) ?>)<?php elseif (!empty($adapterInstalled)): ?> &middot; adapter installed — model <span style="color:var(--danger,#c62828);">not built yet</span><?php else: ?> &middot; no adapter installed (retrieval mode only)<?php endif; ?>
         </span>
+        <form class="inline" method="post" action="<?= url('/admin/chat/ai-toggle') ?>" style="display:inline;">
+            <?= csrf_field() ?>
+            <button type="submit" class="btn btn-sm <?= !empty($state['ai_enabled']) ? '' : 'btn-outline' ?>"><?= !empty($state['ai_enabled']) ? 'Turn AI off' : 'Turn AI on' ?></button>
+        </form>
         <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat/export-training') ?>" onclick="return confirm('Write the cleaned training export?');">Export training</a>
     </div>
 </div>
@@ -22,6 +27,14 @@
         <option value="operator" <?= ($state['default_ai_mode'] ?? '') === 'operator' ? 'selected' : '' ?>>Operator only (no AI)</option>
     </select>
     <button type="submit" class="btn btn-sm">Save default</button>
+</form>
+
+<?php // Daily broadcast to users without the chat feature ?>
+<form method="post" action="<?= url('/admin/chat/daily-message') ?>" style="display:flex;flex-direction:column;gap:.35rem;margin-bottom:1rem;max-width:640px;">
+    <?= csrf_field() ?>
+    <label class="muted" style="font-size:.85rem;">Daily message to users without the chat feature (shown on their Chat page; they cannot reply until they add the chat plan):</label>
+    <textarea name="daily_message" rows="3" maxlength="5000" placeholder="e.g. Chat is available on Platinum, Yearly, Lifetime, or the Chat add-on plan."><?= e((string) ($state['daily_message'] ?? '')) ?></textarea>
+    <div><button type="submit" class="btn btn-sm">Save daily message</button></div>
 </form>
 
 <?php // Conversation list filter ?>

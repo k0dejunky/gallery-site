@@ -40,3 +40,4 @@
 # Editor / OS junk
 .DS_Store
 *.swp
+storage/chat.json
