@@ -41,3 +41,4 @@
 .DS_Store
 *.swp
 storage/chat.json
+/chat-operator-app/
