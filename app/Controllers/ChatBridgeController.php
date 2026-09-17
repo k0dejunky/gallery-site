@@ -360,6 +360,7 @@ class ChatBridgeController extends Controller
     public function attachment(): void
     {
         $mid = max(0, (int) $this->request->query('message', 0));
+        $thumb = (int) $this->request->query('thumb', 0) === 1;
         if ($mid <= 0) {
             $this->json(['ok' => false, 'error' => 'Message id required.']);
             return;
@@ -380,11 +381,74 @@ class ChatBridgeController extends Controller
         $name = (string) ($msg['attachment_name'] ?? basename($path));
         $mime = (string) ($msg['attachment_type'] ?? (mime_content_type($path) ?: 'application/octet-stream'));
 
+        // Image attachments can be requested as a small thumbnail.
+        if ($thumb && str_starts_with($mime, 'image/')) {
+            $out = $this->makeThumbnail($path);
+            if ($out !== null) {
+                header('Content-Type: image/jpeg');
+                header('Content-Length: ' . (string) filesize($out));
+                readfile($out);
+                exit;
+            }
+        }
+
         header('Content-Type: ' . $mime);
         header('Content-Disposition: inline; filename="' . addcslashes($name, '"') . '"');
         header('Content-Length: ' . (string) filesize($path));
         readfile($path);
         exit;
+    }
+
+    /**
+     * Generate (and cache) a JPEG thumbnail no wider than 320px for an image
+     * file. Returns the cached thumb path, or null on any failure.
+     */
+    private function makeThumbnail(string $path): ?string
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            return null;
+        }
+
+        $key = 'thumb_' . hash('sha1', (string) filesize($path) . '_' . filemtime($path)) . '.jpg';
+        $thumbsDir = dirname(__DIR__, 2) . '/storage/uploads/chat/thumbs';
+        if (!is_dir($thumbsDir)) {
+            @mkdir($thumbsDir, 0775, true);
+        }
+        $out = $thumbsDir . '/' . $key;
+        if (is_file($out) && filemtime($out) >= filemtime($path)) {
+            return $out;
+        }
+
+        $img = @imagecreatefromstring((string) file_get_contents($path));
+        if ($img === false) {
+            return null;
+        }
+
+        $w = imagesx($img);
+        $h = imagesy($img);
+        if ($w <= 0 || $h <= 0) {
+            imagedestroy($img);
+            return null;
+        }
+
+        $maxW = 320;
+        if ($w > $maxW) {
+            $scale = $maxW / $w;
+            $nw = $maxW;
+            $nh = max(1, (int) round($h * $scale));
+        } else {
+            $nw = $w;
+            $nh = $h;
+        }
+
+        $thumb = imagecreatetruecolor($nw, $nh);
+        imagecopyresampled($thumb, $img, 0, 0, 0, 0, $nw, $nh, $w, $h);
+        imagedestroy($img);
+
+        imagejpeg($thumb, $out, 82);
+        imagedestroy($thumb);
+
+        return $out;
     }
 
     private function rawBody(): string
@@ -401,6 +465,9 @@ class ChatBridgeController extends Controller
         foreach ($messages as &$m) {
             $m['attachment_url'] = !empty($m['attachment_path'])
                 ? url('/webhooks/chat/attachment?message=' . (int) $m['id'])
+                : null;
+            $m['attachment_thumb_url'] = !empty($m['attachment_path']) && $m['attachment_type'] !== null && str_starts_with((string) $m['attachment_type'], 'image/')
+                ? url('/webhooks/chat/attachment?message=' . (int) $m['id'] . '&thumb=1')
                 : null;
         }
         unset($m);

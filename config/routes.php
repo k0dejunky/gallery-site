@@ -59,6 +59,7 @@ return [
     ['POST', '/chat', 'ChatController@send'],
     ['GET', '/chat/messages', 'ChatController@poll'],
     ['GET', '/chat/stream', 'ChatController@stream'],
+    ['GET', '/chat/attachment', 'ChatController@attachment'],
 
     // Chat bridge webhooks (Android app + training PC; Bearer GALLERY_CHAT_KEY)
     ['GET', '/webhooks/chat/config', 'ChatBridgeController@config'],
