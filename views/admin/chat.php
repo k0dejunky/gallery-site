@@ -6,7 +6,7 @@
         <span class="muted" style="font-size:.85rem;">
             Training: <strong><?= (int) ($trainingCount ?? 0) ?></strong> pairs (<?= (int) ($cleanedCount ?? 0) ?> cleaned) &middot;
             <?php if (!empty($ai['hasBase'])): ?>AI base online<?php else: ?>AI base <span style="color:var(--danger,#c62828);">offline</span><?php endif; ?>
-            <?php if (!empty($ai['hasFine'])): ?> &middot; fine-tuned loaded<?php endif; ?>
+            <?php if (!empty($ai['hasFine'])): ?> &middot; fine-tuned loaded (<?= e((string) $finetunedModel) ?>)<?php elseif (!empty($adapterInstalled)): ?> &middot; adapter installed — model <span style="color:var(--danger,#c62828);">not built yet</span><?php else: ?> &middot; no adapter installed (retrieval mode only)<?php endif; ?>
         </span>
         <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat/export-training') ?>" onclick="return confirm('Write the cleaned training export?');">Export training</a>
     </div>

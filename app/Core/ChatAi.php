@@ -22,7 +22,7 @@ class ChatAi
     /** Retrieval-mode model (base, no adapter). */
     public const BASE_MODEL = 'llama3.2:3b';
 
-    /** Fine-tuned model name built from the Modelfile + LoRA adapter. */
+    /** Default fine-tuned model name (built from the Modelfile + LoRA adapter). */
     public const FINETUNED_MODEL = 'chat-finetuned';
 
     private static function baseUrl(): string
@@ -40,7 +40,9 @@ class ChatAi
      */
     public static function reply(string $mode, string $message, array $history = [], array $fewShot = []): array
     {
-        $model = $mode === \App\Models\ChatMessage::MODE_FINETUNED ? self::FINETUNED_MODEL : self::BASE_MODEL;
+        $model = $mode === \App\Models\ChatMessage::MODE_FINETUNED
+            ? self::currentFineTunedModel()
+            : self::BASE_MODEL;
 
         $system = "You are the chat assistant for an adult content gallery site. "
             . "Be warm, flirty, and human. Stay in character and respond naturally. "
@@ -67,6 +69,24 @@ class ChatAi
         $prompt .= "member: " . $message . "\nassistant:";
 
         return self::generate($model, $prompt);
+    }
+
+    /**
+     * The fine-tuned model name to use. Prefers the versioned name recorded
+     * by ChatModel::rebuild() when an adapter has been installed; falls back
+     * to the default FINETUNED_MODEL name.
+     */
+    public static function currentFineTunedModel(): string
+    {
+        $stateFile = dirname(__DIR__, 2) . '/storage/chat.json';
+        if (is_file($stateFile)) {
+            $data = json_decode((string) @file_get_contents($stateFile), true);
+            if (is_array($data) && !empty($data['finetuned']['created'])) {
+                return (string) $data['finetuned']['created'];
+            }
+        }
+
+        return self::FINETUNED_MODEL;
     }
 
     private static function generate(string $model, string $prompt): array

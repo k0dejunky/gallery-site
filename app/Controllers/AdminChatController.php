@@ -73,6 +73,8 @@ class AdminChatController extends Controller
             'filterMode'   => $mode,
             'ai'           => $ai,
             'state'        => $state,
+            'finetunedModel' => \App\Core\ChatAi::currentFineTunedModel(),
+            'adapterInstalled' => \App\Core\ChatModel::adapterPath() !== null,
             'trainingCount'=> ChatMessage::trainingPairCount(),
             'cleanedCount' => ChatMessage::cleanedPairCount(),
         ]);

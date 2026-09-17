@@ -218,7 +218,18 @@ class ChatBridgeController extends Controller
         $state['finetuned'] = $meta;
         @file_put_contents($stateFile, (string) json_encode($state, JSON_PRETTY_PRINT), LOCK_EX);
 
-        $this->json(['ok' => true, 'checksum' => $checksum, 'stored' => basename($dest)]);
+        // Rebuild the Ollama fine-tuned model from the new adapter. If it
+        // fails, the model is left unchanged (versioned create + smoke test).
+        $rebuild = \App\Core\ChatModel::rebuild();
+        if (!empty($rebuild['ok'])) {
+            $state['finetuned']['created'] = $rebuild['created'];
+            @file_put_contents($stateFile, (string) json_encode($state, JSON_PRETTY_PRINT), LOCK_EX);
+            $meta['created'] = $rebuild['created'];
+        } else {
+            $meta['rebuild_error'] = $rebuild['error'] ?? 'unknown';
+        }
+
+        $this->json(['ok' => true, 'checksum' => $checksum, 'stored' => basename($dest), 'model' => $meta]);
     }
 
     private function rawBody(): string
