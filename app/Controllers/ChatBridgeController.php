@@ -138,6 +138,62 @@ class ChatBridgeController extends Controller
     }
 
     /**
+     * Server-Sent Events stream for the Android app: pushes new messages for a
+     * conversation in real time (no polling / refresh). Authenticated with the
+     * same Bearer token; keeps the connection open up to ~30s.
+     *
+     *   GET /webhooks/chat/stream?conversation=ID&since=N
+     *   data: {"ok":true,"messages":[...],"latestId":N}
+     */
+    public function stream(): void
+    {
+        $cid = max(0, (int) $this->request->query('conversation', 0));
+        $since = max(0, (int) $this->request->query('since', 0));
+        $conv = $cid > 0 ? ChatMessage::find($cid) : null;
+        if ($conv === null) {
+            header('Content-Type: text/event-stream');
+            echo "data: {\"ok\":false,\"error\":\"Conversation not found.\"}\n\n";
+            exit;
+        }
+
+        header('Content-Type: text/event-stream');
+        header('Cache-Control: no-cache');
+        header('X-Accel-Buffering: no');
+
+        // Ensure PHP streams rather than buffering the whole response.
+        @ini_set('output_buffering', 'off');
+        @ini_set('zlib.output_compression', 'off');
+        while (ob_get_level() > 0) {
+            @ob_end_flush();
+        }
+
+        $latestId = ChatMessage::latestId($cid);
+        $new = ChatMessage::messages($cid, $since);
+        if ($new !== []) {
+            echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'conversation' => $cid]) . "\n\n";
+            flush();
+            $since = $latestId;
+        }
+
+        $start = time();
+        while (time() - $start < 30) {
+            $new = ChatMessage::messages($cid, $since);
+            if ($new !== []) {
+                $latestId = ChatMessage::latestId($cid);
+                echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'conversation' => $cid]) . "\n\n";
+                flush();
+                $since = $latestId;
+                continue;
+            }
+            echo ": keepalive\n\n";
+            flush();
+            usleep(1500000);
+        }
+
+        exit;
+    }
+
+    /**
      * Append a reply from the Android app. sender_role is 'operator' when a
      * human replied live (harvested into the training corpus) or 'model' when
      * the server/AI produced it. Returns the new message id.

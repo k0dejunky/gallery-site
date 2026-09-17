@@ -74,6 +74,14 @@
         thread.scrollTop = thread.scrollHeight;
     }
 
+    function handleIncoming(messages) {
+        if (!messages) { return; }
+        messages.forEach(function (m) {
+            if ((m.id || 0) > latestId) { append(m); }
+            if ((m.id || 0) > latestId) { latestId = m.id; }
+        });
+    }
+
     form.addEventListener('submit', function (e) {
         e.preventDefault();
         var text = input.value.trim();
@@ -86,29 +94,23 @@
             .then(function (r) { return r.json(); })
             .then(function (res) {
                 if (!res.ok) { alert(res.error || 'Could not send.'); input.value = text; return; }
-                // server appended user msg + (likely) AI reply; refresh
-                poll(true);
             })
             .catch(function () { alert('Network error.'); });
     });
 
-    function poll(force) {
-        var url = '<?= url('/chat/messages') ?>?since=' + latestId;
-        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(function (r) { return r.json(); })
-            .then(function (res) {
-                if (!res.ok || !res.messages) { return; }
-                res.messages.forEach(function (m) {
-                    if ((m.id || 0) > latestId) { append(m); }
-                });
-                latestId = res.latestId || latestId;
-                if (force) { thread.scrollTop = thread.scrollHeight; }
-            })
-            .catch(function () { /* transient; retry next tick */ });
-    }
-
-    // Poll every 4s so AI/operator responses appear live.
-    setInterval(poll, 4000);
-    poll(true);
+    // Real-time push via Server-Sent Events (no manual refresh / polling).
+    var es = new EventSource('<?= url('/chat/stream') ?>?since=' + latestId);
+    es.onmessage = function (e) {
+        try {
+            var data = JSON.parse(e.data);
+            if (data && data.messages) {
+                handleIncoming(data.messages);
+                latestId = data.latestId || latestId;
+            }
+        } catch (err) { /* ignore malformed */ }
+    };
+    es.onerror = function () {
+        // EventSource auto-reconnects; nothing to do here.
+    };
 })();
 </script>
