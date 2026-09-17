@@ -5,6 +5,17 @@
 <h1>Settings</h1>
 <p class="settings-back"><a class="btn btn-outline" href="<?= e(url('/account')) ?>">&larr; Back to dashboard</a></p>
 
+<?php // Super admins see the operator chat bridge connection details. ?>
+<?php if (!empty($chatBridge) && !empty($chatBridge['visible'])): ?>
+<section class="card settings-card" style="border-left:4px solid var(--purple-500);">
+    <h2 class="section-title">Operator chat bridge</h2>
+    <p class="muted">Enter these in the Operator Chat Android app to connect as an operator.</p>
+    <p><strong>Server URL</strong><br><code style="word-break:break-all;"><?= e((string) $chatBridge['server_url']) ?></code></p>
+    <p><strong>Bridge token</strong><br><code style="word-break:break-all;"><?= e((string) $chatBridge['bridge_token']) ?></code></p>
+    <p class="muted" style="font-size:.8rem;">Keep the token private — it grants operator reply and training-data access.</p>
+</section>
+<?php endif; ?>
+
 <section class="card settings-card">
     <h2 class="section-title">Profile and billing details</h2>
     <p class="muted">These details are used for your account and future billing. Your email and permissions are managed separately.</p>

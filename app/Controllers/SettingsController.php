@@ -84,6 +84,8 @@ class SettingsController extends Controller
             'siteEditorPreview' => $isPreview,
             'siteTimezone'    => SiteConfig::timezone(),
             'siteTimezones'   => site_timezones(),
+            // Super admins see the operator chat bridge connection details.
+            'chatBridge'      => $this->chatBridgeForAdmin($isPreview),
         ];
 
         if (Auth::isAdmin() && !$isPreview) {
@@ -308,5 +310,30 @@ class SettingsController extends Controller
 
         $this->flash('success', 'Two-factor authentication is now disabled.');
         $this->redirect('/settings?se=admin#two-factor');
+    }
+
+    /**
+     * Operator chat bridge connection details, shown only to super admins on
+     * their settings page (the Android app needs these to connect).
+     *
+     * @return array{visible: bool, server_url: string, bridge_token: string}|null
+     */
+    private function chatBridgeForAdmin(bool $isPreview): ?array
+    {
+        if ($isPreview) {
+            return null;
+        }
+
+        $user = Auth::user();
+        $isSuperAdmin = $user !== null && ($user['role'] ?? '') === 'super_admin';
+        if (!$isSuperAdmin) {
+            return null;
+        }
+
+        return [
+            'visible'      => true,
+            'server_url'   => rtrim((string) env_value('APP_URL', url('/')), '/'),
+            'bridge_token' => (string) env_value('GALLERY_CHAT_KEY', ''),
+        ];
     }
 }
