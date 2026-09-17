@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.5",
-  "versionCode": 16,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.5.apk",
-  "changelog": "No notification when there are no new messages: the poller primes its high-water marks on start and only alerts on genuinely new member messages.",
+  "latestVersion": "2.6",
+  "versionCode": 17,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.6.apk",
+  "changelog": "Users list now refreshes automatically every few seconds, so new-message badges appear live without reloading.",
   "publishedAt": "2026-09-17"
 }
