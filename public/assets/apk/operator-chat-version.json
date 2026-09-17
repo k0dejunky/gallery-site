@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.4",
-  "versionCode": 15,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.4.apk",
-  "changelog": "Sent images now render inline in the chat (no download link); member web chat shows images inline without download ability.",
+  "latestVersion": "2.5",
+  "versionCode": 16,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.5.apk",
+  "changelog": "No notification when there are no new messages: the poller primes its high-water marks on start and only alerts on genuinely new member messages.",
   "publishedAt": "2026-09-17"
 }
