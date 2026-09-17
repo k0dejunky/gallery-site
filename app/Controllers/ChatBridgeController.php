@@ -89,6 +89,55 @@ class ChatBridgeController extends Controller
     }
 
     /**
+     * The operator inbox: every conversation with the member's email, mode,
+     * status, last message preview, and how many member messages are awaiting
+     * a reply. Newest activity first. No chat id required.
+     */
+    public function inbox(): void
+    {
+        $rows = \App\Core\Database::run(
+            "SELECT c.id, c.user_id, c.ai_mode, c.status, c.updated_at,
+                    u.email AS user_email,
+                    (SELECT m.message FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_message,
+                    (SELECT m.sender_role FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_sender,
+                    (SELECT COUNT(*) FROM chat_messages m WHERE m.conversation_id = c.id AND m.sender_role = 'user') AS member_count,
+                    (SELECT COUNT(*) FROM chat_messages m WHERE m.conversation_id = c.id AND m.sender_role = 'user' AND m.id > COALESCE((SELECT MAX(x.id) FROM chat_messages x WHERE x.conversation_id = c.id AND x.sender_role IN ('model','operator')),0)) AS unread_replyable
+             FROM chat_conversations c
+             JOIN users u ON u.id = c.user_id
+             WHERE c.status = 'open'
+             ORDER BY c.updated_at DESC, c.id DESC
+             LIMIT 100"
+        )->fetchAll();
+
+        $this->json(['ok' => true, 'conversations' => $rows]);
+    }
+
+    /**
+     * Full message history for one conversation (oldest first) so the app can
+     * render the whole thread like a messenger. Includes the member email.
+     */
+    public function thread(): void
+    {
+        $cid = max(0, (int) $this->request->query('conversation', 0));
+        $conv = $cid > 0 ? ChatMessage::find($cid) : null;
+        if ($conv === null) {
+            $this->json(['ok' => false, 'error' => 'Conversation not found.']);
+            return;
+        }
+
+        $user = \App\Core\Database::run('SELECT email FROM users WHERE id = ?', [(int) $conv['user_id']])->fetch();
+
+        $this->json([
+            'ok'           => true,
+            'conversation' => $cid,
+            'ai_mode'      => (string) $conv['ai_mode'],
+            'status'       => (string) $conv['status'],
+            'user_email'   => $user['email'] ?? ('user#' . $conv['user_id']),
+            'messages'     => ChatMessage::messages($cid, 0, true),
+        ]);
+    }
+
+    /**
      * Append a reply from the Android app. sender_role is 'operator' when a
      * human replied live (harvested into the training corpus) or 'model' when
      * the server/AI produced it. Returns the new message id.
