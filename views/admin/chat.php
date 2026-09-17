@@ -13,7 +13,7 @@
             <?= csrf_field() ?>
             <button type="submit" class="btn btn-sm <?= !empty($state['ai_enabled']) ? '' : 'btn-outline' ?>"><?= !empty($state['ai_enabled']) ? 'Turn AI off' : 'Turn AI on' ?></button>
         </form>
-        <a class="btn btn-sm" href="<?= url('/assets/apk/OperatorChat-v1.1.apk') ?>" download>Download operator app (Android APK v1.1)</a>
+        <a class="btn btn-sm" href="<?= url('/assets/apk/OperatorChat-v1.2.apk') ?>" download>Download operator app (Android APK v1.2)</a>
         <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat/export-training') ?>" onclick="return confirm('Write the cleaned training export?');">Export training</a>
     </div>
 </div>
