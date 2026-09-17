@@ -18,16 +18,7 @@
         <p class="muted">Chat is available to members on the <strong>Platinum yearly</strong>, <strong>Lifetime</strong>, or <strong>Chat add-on</strong> plans. Upgrade in <a href="<?= url('/membership') ?>">Membership</a> to start chatting.</p>
     <?php else: ?>
         <h1>Chat</h1>
-        <p class="chat-status">
-            <?php if (!empty($conversation['ai_mode'])): ?>
-                AI mode: <strong><?= e((string) $conversation['ai_mode']) ?></strong>
-            <?php endif; ?>
-            <?php if (isset($aiStatus) && is_array($aiStatus) && !empty($aiStatus['hasBase'])): ?>
-                &middot; <span style="color:var(--success,#2e7d32);">AI online</span>
-            <?php elseif (isset($aiStatus) && is_array($aiStatus) && !empty($aiStatus['ok'])): ?>
-                &middot; <span style="color:var(--danger,#c62828);">AI model not loaded — an operator will answer</span>
-            <?php endif; ?>
-        </p>
+        <p class="chat-status">Messages are answered as quickly as possible.</p>
 
         <div class="chat-thread" id="chat-thread">
             <?php if (empty($messages)): ?>
@@ -35,7 +26,9 @@
             <?php else: ?>
                 <?php foreach ($messages as $m): ?>
                     <div class="chat-msg <?= e((string) $m['sender_role']) ?>">
-                        <span class="who"><?= $m['sender_role'] === 'user' ? 'You' : (($m['sender_role'] === 'model') ? 'AI' : 'Operator') ?></span>
+                        <?php if ($m['sender_role'] === 'user'): ?>
+                            <span class="who">You</span>
+                        <?php endif; ?>
                         <?= e((string) $m['message']) ?>
                     </div>
                 <?php endforeach; ?>
@@ -68,9 +61,9 @@
 
     function append(msg) {
         var div = document.createElement('div');
-        var who = msg.sender_role === 'user' ? 'You' : (msg.sender_role === 'model' ? 'AI' : 'Operator');
+        var isUser = msg.sender_role === 'user';
         div.className = 'chat-msg ' + esc(msg.sender_role);
-        div.innerHTML = '<span class="who">' + esc(who) + '</span>' + esc(msg.message);
+        div.innerHTML = (isUser ? '<span class="who">You</span>' : '') + esc(msg.message);
         thread.appendChild(div);
         thread.scrollTop = thread.scrollHeight;
     }
