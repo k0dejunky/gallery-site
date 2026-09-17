@@ -1,7 +1,7 @@
 <?php $title = 'Chat'; ?>
 
 <style>
-    .chat-page { max-width: 760px; margin: 0 auto; }
+    .chat-page { width: 100%; max-width: none; }
     .chat-thread { display: flex; flex-direction: column; gap: .6rem; padding: 1rem 0; max-height: 60vh; overflow-y: auto; }
     .chat-msg { max-width: 78%; padding: .6rem .9rem; border-radius: 12px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
     .chat-msg.user { align-self: flex-end; background: var(--purple-600, #9333ea); color: #fff; border-bottom-right-radius: 3px; }
