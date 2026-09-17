@@ -92,10 +92,28 @@ class AdminChatController extends Controller
 
         $messages = ChatMessage::messages($id);
         foreach ($messages as &$m) {
+            $type = (string) ($m['attachment_type'] ?? '');
+            // Self-heal: phone uploads sometimes arrive as octet-stream even
+            // for images; sniff the real type so thumbnails render.
+            if (!str_starts_with($type, 'image/') && !empty($m['attachment_path'])) {
+                $full = dirname(__DIR__, 2) . '/' . ltrim((string) $m['attachment_path'], '/');
+                if (is_file($full)) {
+                    if (function_exists('finfo_open')) {
+                        $fi = finfo_open(FILEINFO_MIME_TYPE);
+                        $t = $fi !== false ? finfo_file($fi, $full) : false;
+                        if (is_resource($fi)) {
+                            finfo_close($fi);
+                        }
+                        if (is_string($t) && str_starts_with($t, 'image/')) {
+                            $type = $t;
+                        }
+                    }
+                }
+            }
             $m['attachment_url'] = !empty($m['attachment_path'])
                 ? url('/admin/chat/attachment?message=' . (int) $m['id'])
                 : null;
-            $m['attachment_thumb_url'] = !empty($m['attachment_path']) && !empty($m['attachment_type']) && str_starts_with((string) $m['attachment_type'], 'image/')
+            $m['attachment_thumb_url'] = !empty($m['attachment_path']) && str_starts_with($type, 'image/')
                 ? url('/admin/chat/attachment?message=' . (int) $m['id'] . '&thumb=1')
                 : null;
         }
@@ -278,6 +296,23 @@ class AdminChatController extends Controller
 
         $name = (string) ($msg['attachment_name'] ?? basename($path));
         $mime = (string) ($msg['attachment_type'] ?? (mime_content_type($path) ?: 'application/octet-stream'));
+
+        // Phone uploads may be stored as octet-stream even for images: sniff
+        // the real type from the file content so thumbnails still work.
+        if (!str_starts_with($mime, 'image/')) {
+            $full = dirname(__DIR__, 2) . '/' . ltrim((string) $msg['attachment_path'], '/');
+            if (is_file($full)) {
+                $real = function_exists('finfo_open') && ($fi = finfo_open(FILEINFO_MIME_TYPE)) !== false
+                    ? finfo_file($fi, $full)
+                    : (mime_content_type($full) ?: '');
+                if (is_resource($fi)) {
+                    finfo_close($fi);
+                }
+                if (is_string($real) && str_starts_with($real, 'image/')) {
+                    $mime = $real;
+                }
+            }
+        }
 
         if ($thumb && str_starts_with($mime, 'image/')) {
             $out = $this->makeThumbnail($path);

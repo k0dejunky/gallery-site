@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.9",
-  "versionCode": 20,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.9.apk",
-  "changelog": "Fix crash on open on Android 14+: the chat-event broadcast receiver is now registered with RECEIVER_NOT_EXPORTED (plain registerReceiver throws SecurityException on targetSdk 35).",
+  "latestVersion": "2.10",
+  "versionCode": 21,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.10.apk",
+  "changelog": "Fix chat images not displaying: phone uploads were stored as octet-stream (no extension detected), so images never rendered. Server now sniffs the real file type and self-heals old attachments; the app detects image/video types from file content.",
   "publishedAt": "2026-09-17"
 }

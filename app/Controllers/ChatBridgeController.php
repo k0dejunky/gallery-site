@@ -532,6 +532,15 @@ class ChatBridgeController extends Controller
         $name = (string) ($msg['attachment_name'] ?? basename($path));
         $mime = (string) ($msg['attachment_type'] ?? (mime_content_type($path) ?: 'application/octet-stream'));
 
+        // Phone uploads may be stored as octet-stream even for images: sniff
+        // the real type from the file content so thumbnails still work.
+        if (!str_starts_with($mime, 'image/')) {
+            $real = $this->sniffAttachmentType((string) $msg['attachment_path']);
+            if (str_starts_with($real, 'image/')) {
+                $mime = $real;
+            }
+        }
+
         // Image attachments can be requested as a small thumbnail.
         if ($thumb && str_starts_with($mime, 'image/')) {
             $out = $this->makeThumbnail($path);
@@ -614,16 +623,46 @@ class ChatBridgeController extends Controller
     private function decorateMessages(array $messages): array
     {
         foreach ($messages as &$m) {
+            $type = (string) ($m['attachment_type'] ?? '');
+            // Self-heal: phone uploads sometimes arrive as octet-stream even
+            // for images; sniff the real type so thumbnails render.
+            if (!str_starts_with($type, 'image/') && !empty($m['attachment_path'])) {
+                $real = $this->sniffAttachmentType((string) $m['attachment_path']);
+                if (str_starts_with($real, 'image/')) {
+                    $type = $real;
+                    $m['attachment_type'] = $real;
+                }
+            }
             $m['attachment_url'] = !empty($m['attachment_path'])
                 ? url('/webhooks/chat/attachment?message=' . (int) $m['id'])
                 : null;
-            $m['attachment_thumb_url'] = !empty($m['attachment_path']) && $m['attachment_type'] !== null && str_starts_with((string) $m['attachment_type'], 'image/')
+            $m['attachment_thumb_url'] = !empty($m['attachment_path']) && str_starts_with($type, 'image/')
                 ? url('/webhooks/chat/attachment?message=' . (int) $m['id'] . '&thumb=1')
                 : null;
         }
         unset($m);
 
         return $messages;
+    }
+
+    /** Sniff a stored attachment's real MIME type from its content. */
+    private function sniffAttachmentType(string $path): string
+    {
+        $full = dirname(__DIR__, 2) . '/' . ltrim($path, '/');
+        if (!is_file($full)) {
+            return '';
+        }
+        if (function_exists('finfo_open')) {
+            $fi = finfo_open(FILEINFO_MIME_TYPE);
+            $t = $fi !== false ? finfo_file($fi, $full) : false;
+            if (is_resource($fi)) {
+                finfo_close($fi);
+            }
+            if (is_string($t) && $t !== '') {
+                return $t;
+            }
+        }
+        return mime_content_type($full) ?: '';
     }
 
     /**
@@ -655,9 +694,33 @@ class ChatBridgeController extends Controller
             }
         }
 
+        // Sniff the real type from the file's content — the client-sent type
+        // is unreliable (phone gallery images often arrive as
+        // application/octet-stream because they have no recognisable
+        // extension). Prefer finfo; fall back to the client type.
+        $detected = null;
+        if (function_exists('finfo_open')) {
+            $fi = finfo_open(FILEINFO_MIME_TYPE);
+            $detected = $fi !== false ? finfo_file($fi, $dest) : null;
+            if (is_resource($fi)) {
+                finfo_close($fi);
+            }
+        }
+        $realType = $detected ?: mime_content_type($dest) ?: '';
+
+        // Normalise to image/* when the client said octet-stream but the
+        // content is clearly a photo.
+        if (str_starts_with($realType, 'image/')) {
+            $type = $realType;
+        } elseif (str_starts_with((string) ($file['type'] ?? ''), 'image/')) {
+            $type = (string) $file['type'];
+        } else {
+            $type = $realType !== '' ? $realType : 'application/octet-stream';
+        }
+
         return [
             'name' => $safeName,
-            'type' => (string) ($file['type'] ?? (mime_content_type($dest) ?: 'application/octet-stream')),
+            'type' => $type,
             'path' => str_replace(dirname(__DIR__, 2) . '/', '', $dest),
         ];
     }
