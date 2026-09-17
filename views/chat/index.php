@@ -71,6 +71,8 @@
 
     var csrf = document.querySelector('#chat-form input[name="_token"]').value;
     var latestId = <?= (int) ($latestId ?? 0) ?>;
+    // Messages we optimistically rendered that the stream has not yet echoed.
+    var pendingSends = [];
 
     function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -98,6 +100,15 @@
     function handleIncoming(messages) {
         if (!messages) { return; }
         messages.forEach(function (m) {
+            // Skip the stream echo of a message we already rendered optimistically.
+            if (m.sender_role === 'user') {
+                var idx = pendingSends.indexOf(m.message);
+                if (idx >= 0) {
+                    pendingSends.splice(idx, 1);
+                    latestId = Math.max(latestId, m.id);
+                    return;
+                }
+            }
             if ((m.id || 0) > latestId) { append(m); }
             if ((m.id || 0) > latestId) { latestId = m.id; }
         });
@@ -111,6 +122,10 @@
         body.append('_token', csrf);
         body.append('message', text);
         input.value = '';
+        // Optimistic: show your message immediately, don't wait for the POST.
+        append({ id: 0, sender_role: 'user', message: text, attachment_name: null, attachment_url: null, attachment_thumb_url: null });
+        pendingSends.push(text);
+        hideBadge();
         fetch('<?= url('/chat') ?>', { method: 'POST', body: body })
             .then(function (r) { return r.json(); })
             .then(function (res) {
@@ -118,6 +133,14 @@
             })
             .catch(function () { alert('Network error.'); });
     });
+
+    // Clear the sidebar unread badge once the member is reading the chat.
+    function hideBadge() {
+        document.querySelectorAll('.nav-item[href$="/chat"] .nav-unread, .nav-unread').forEach(function (b) {
+            if (b && b.closest('a') && /\/chat$/.test(b.closest('a').getAttribute('href') || '')) { b.remove(); }
+        });
+    }
+    hideBadge();
 
     // Real-time push via Server-Sent Events (no manual refresh / polling).
     var es = new EventSource('<?= url('/chat/stream') ?>?since=' + latestId);

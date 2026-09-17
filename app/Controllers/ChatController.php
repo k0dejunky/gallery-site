@@ -32,6 +32,11 @@ class ChatController extends Controller
 
         $messages = $conv['id'] > 0 ? $this->decorateMessages(ChatMessage::messages((int) $conv['id'])) : [];
 
+        // Opening the chat page counts as reading: clear the sidebar badge.
+        if ($conv['id'] > 0) {
+            ChatMessage::markRead((int) $conv['id'], ChatMessage::latestId((int) $conv['id']));
+        }
+
         $this->view('chat/index', [
             'title'        => 'Chat',
             'eligible'     => $eligible,
@@ -181,6 +186,11 @@ class ChatController extends Controller
         header('Cache-Control: no-cache');
         header('X-Accel-Buffering: no');
 
+        // Release the session lock: this SSE connection lives for up to 30s
+        // and would otherwise block the member's send() request (PHP session
+        // files are single-writer), delaying messages by the whole window.
+        session_write_close();
+
         // Ensure PHP streams rather than buffering the whole response.
         @ini_set('output_buffering', 'off');
         @ini_set('zlib.output_compression', 'off');
@@ -203,6 +213,7 @@ class ChatController extends Controller
             echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'mode' => (string) ($conv['ai_mode'] ?? 'retrieval')]) . "\n\n";
             flush();
             $since = $latestId;
+            ChatMessage::markRead($cid, $latestId);
         }
 
         // Long-poll loop: hold the connection, emit when a new message lands.
@@ -214,6 +225,7 @@ class ChatController extends Controller
                 echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'mode' => (string) ($conv['ai_mode'] ?? 'retrieval')]) . "\n\n";
                 flush();
                 $since = $latestId;
+                ChatMessage::markRead($cid, $latestId);
                 continue;
             }
 

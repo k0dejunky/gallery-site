@@ -171,19 +171,40 @@ class ChatMessage
             return 0;
         }
 
-        $lastUser = (int) Database::run(
-            "SELECT MAX(id) FROM chat_messages WHERE conversation_id = ? AND sender_role = 'user'",
-            [(int) $conv['id']]
-        )->fetchColumn();
+        $lastRead = (int) ($conv['last_read_message_id'] ?? 0);
 
-        if ($lastUser <= 0) {
-            return 0;
+        // Fall back to the legacy behaviour when nothing has been read yet:
+        // count replies after the member's last message.
+        if ($lastRead <= 0) {
+            $lastUser = (int) Database::run(
+                "SELECT MAX(id) FROM chat_messages WHERE conversation_id = ? AND sender_role = 'user'",
+                [(int) $conv['id']]
+            )->fetchColumn();
+            $lastRead = $lastUser;
         }
 
         return (int) Database::run(
-            "SELECT COUNT(*) FROM chat_messages WHERE conversation_id = ? AND id > ? AND sender_role IN ('model','operator')",
-            [(int) $conv['id'], $lastUser]
+            'SELECT COUNT(*) FROM chat_messages WHERE conversation_id = ? AND id > ? AND sender_role IN (?, ?)',
+            [(int) $conv['id'], $lastRead, self::ROLE_MODEL, self::ROLE_OPERATOR]
         )->fetchColumn();
+    }
+
+    /**
+     * Record that the member has read up to (at least) $messageId in this
+     * conversation. Only ever moves forward; never regresses.
+     */
+    public static function markRead(int $conversationId, int $messageId): void
+    {
+        if ($conversationId <= 0 || $messageId <= 0) {
+            return;
+        }
+
+        Database::run(
+            'UPDATE chat_conversations
+                SET last_read_message_id = GREATEST(COALESCE(last_read_message_id, 0), ?)
+              WHERE id = ?',
+            [$messageId, $conversationId]
+        );
     }
 
     public static function setMode(int $conversationId, string $mode): bool
