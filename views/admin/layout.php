@@ -402,6 +402,9 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             <?php if (\App\Core\Auth::can('support')): ?>
                 <a class="nav-item <?= $navActive('/admin/support') ?>" href="<?= url('/admin/support') ?>" data-se-move-key="nav-support">Support</a>
             <?php endif; ?>
+            <?php if (\App\Core\Auth::can('chat')): ?>
+                <a class="nav-item <?= $navActive('/admin/chat') ?>" href="<?= url('/admin/chat') ?>" data-se-move-key="nav-chat">Chat</a>
+            <?php endif; ?>
             <div class="nav-sep" data-se-move-key="nav-sep"></div>
             <a class="nav-item" href="<?= url('/galleries') ?>" data-se-move-key="nav-view-site">View Site</a>
             <a class="nav-item <?= $navActive('/settings') ?>" href="<?= url('/settings') ?>" data-se-move-key="nav-settings">Settings</a>

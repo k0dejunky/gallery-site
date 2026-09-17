@@ -30,6 +30,7 @@ class Controller
         $data['sidebarNav'] = $data['sidebarNav'] ?? Auth::check();
         if (Auth::check()) {
             $data['supportUnreadCount'] = SupportMessage::unreadCountForUser((int) Auth::user()['id']);
+            $data['chatUnreadCount']    = \App\Models\ChatMessage::unreadCountForUser((int) Auth::user()['id']);
         }
 
         if ($data['sidebarNav'] && !isset($data['navCategories'])) {

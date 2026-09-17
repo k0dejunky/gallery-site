@@ -54,6 +54,19 @@ return [
     ['GET', '/support/{id}', 'SupportController@show'],
     ['POST', '/support/{id}/reply', 'SupportController@reply'],
 
+    // Member chat (eligibility gated in the controller)
+    ['GET', '/chat', 'ChatController@index'],
+    ['POST', '/chat', 'ChatController@send'],
+    ['GET', '/chat/messages', 'ChatController@poll'],
+
+    // Chat bridge webhooks (Android app + training PC; Bearer GALLERY_CHAT_KEY)
+    ['GET', '/webhooks/chat/config', 'ChatBridgeController@config'],
+    ['GET', '/webhooks/chat/pending', 'ChatBridgeController@pending'],
+    ['POST', '/webhooks/chat/reply', 'ChatBridgeController@reply'],
+    ['GET', '/webhooks/chat/context', 'ChatBridgeController@context'],
+    ['GET', '/webhooks/chat/training-data', 'ChatBridgeController@trainingData'],
+    ['POST', '/webhooks/chat/training-upload', 'ChatBridgeController@trainingUpload'],
+
     // Admin
     // GET /admin is the admin entry point: it renders the login form for
     // anonymous visitors and the dashboard for logged-in admins, so it must
@@ -178,6 +191,12 @@ return [
     ['POST', '/admin/support/{id}/reply', 'SupportController@adminReply', 'support'],
     ['POST', '/admin/support/{id}/status', 'SupportController@status', 'support'],
     ['POST', '/admin/support/{id}/delete', 'SupportController@delete', 'support'],
+    ['GET', '/admin/chat', 'AdminChatController@index', 'chat'],
+    ['GET', '/admin/chat/{id}', 'AdminChatController@show', 'chat'],
+    ['POST', '/admin/chat/{id}/mode', 'AdminChatController@mode', 'chat'],
+    ['POST', '/admin/chat/{id}/reply', 'AdminChatController@operatorReply', 'chat'],
+    ['POST', '/admin/chat/settings', 'AdminChatController@saveSettings', 'chat'],
+    ['POST', '/admin/chat/export-training', 'AdminChatController@exportTraining', 'chat'],
     ['GET', '/admin/trends', 'TrendsController@index', 'trends'],
     ['POST', '/admin/trends/promote', 'TrendsController@approvePromotion', 'trends'],
     ['POST', '/admin/trends/dismiss', 'TrendsController@dismissPromotion', 'trends'],

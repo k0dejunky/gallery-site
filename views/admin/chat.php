@@ -1,0 +1,69 @@
+<?php $title = 'Chat Admin'; ?>
+
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem;">
+    <h1 style="margin:0;">Chat</h1>
+    <div>
+        <span class="muted" style="font-size:.85rem;">
+            Training: <strong><?= (int) ($trainingCount ?? 0) ?></strong> pairs (<?= (int) ($cleanedCount ?? 0) ?> cleaned) &middot;
+            <?php if (!empty($ai['hasBase'])): ?>AI base online<?php else: ?>AI base <span style="color:var(--danger,#c62828);">offline</span><?php endif; ?>
+            <?php if (!empty($ai['hasFine'])): ?> &middot; fine-tuned loaded<?php endif; ?>
+        </span>
+        <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat/export-training') ?>" onclick="return confirm('Write the cleaned training export?');">Export training</a>
+    </div>
+</div>
+
+<?php // AI settings (site default mode) ?>
+<form method="post" action="<?= url('/admin/chat/settings') ?>" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+    <?= csrf_field() ?>
+    <label class="muted" style="font-size:.85rem;">Default AI mode for new conversations:</label>
+    <select name="default_ai_mode">
+        <option value="retrieval" <?= ($state['default_ai_mode'] ?? 'retrieval') === 'retrieval' ? 'selected' : '' ?>>Retrieval (few-shot over operator replies)</option>
+        <option value="finetuned" <?= ($state['default_ai_mode'] ?? '') === 'finetuned' ? 'selected' : '' ?>>Fine-tuned (LoRA adapter)</option>
+    </select>
+    <button type="submit" class="btn btn-sm">Save default</button>
+</form>
+
+<?php // Conversation list filter ?>
+<form method="get" action="<?= url('/admin/chat') ?>" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem;">
+    <label>Search<br><input type="text" name="q" value="<?= e($filterQ) ?>" placeholder="email or #id" size="24"></label>
+    <label>Mode<br>
+        <select name="mode">
+            <option value="">— all —</option>
+            <option value="retrieval" <?= $filterMode === 'retrieval' ? 'selected' : '' ?>>Retrieval</option>
+            <option value="finetuned" <?= $filterMode === 'finetuned' ? 'selected' : '' ?>>Fine-tuned</option>
+        </select>
+    </label>
+    <button type="submit" class="btn btn-sm">Filter</button>
+</form>
+
+<?php if (empty($conversations)): ?>
+    <p class="muted">No conversations yet.</p>
+<?php else: ?>
+    <table>
+        <thead>
+            <tr><th>#</th><th>User</th><th>Mode</th><th>Status</th><th>Messages</th><th>Updated</th><th style="text-align:right;">Actions</th></tr>
+        </thead>
+        <tbody>
+            <?php foreach ($conversations as $c): ?>
+                <tr>
+                    <td>#<?= (int) $c['id'] ?></td>
+                    <td><?= e((string) $c['user_email']) ?></td>
+                    <td><span class="pill <?= $c['ai_mode'] === 'finetuned' ? 'pill-info' : 'pill-muted' ?>"><?= e((string) $c['ai_mode']) ?></span></td>
+                    <td><?= e((string) $c['status']) ?></td>
+                    <td><?= (int) $c['message_count'] ?> (<?= (int) $c['user_count'] ?> user)</td>
+                    <td class="muted"><?= e(tzdate('M j, Y g:i A', (string) $c['updated_at'])) ?></td>
+                    <td style="text-align:right;">
+                        <a class="btn btn-sm" href="<?= url('/admin/chat/' . (int) $c['id']) ?>">Open</a>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+    <?php if ($pages > 1): ?>
+        <div style="display:flex;gap:.35rem;margin-top:.75rem;">
+            <?php for ($p = 1; $p <= $pages; $p++): ?>
+                <a class="btn btn-sm <?= $p === $page ? 'btn' : 'btn-outline' ?>" href="<?= e(url('/admin/chat?page=' . $p . ($filterQ !== '' ? '&q=' . rawurlencode($filterQ) : '') . ($filterMode !== '' ? '&mode=' . rawurlencode($filterMode) : ''))) ?>"><?= $p ?></a>
+            <?php endfor; ?>
+        </div>
+    <?php endif; ?>
+<?php endif; ?>
