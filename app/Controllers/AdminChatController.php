@@ -90,11 +90,22 @@ class AdminChatController extends Controller
 
         $user = Database::run('SELECT email FROM users WHERE id = ?', [(int) $conv['user_id']])->fetch();
 
+        $messages = ChatMessage::messages($id);
+        foreach ($messages as &$m) {
+            $m['attachment_url'] = !empty($m['attachment_path'])
+                ? url('/admin/chat/attachment?message=' . (int) $m['id'])
+                : null;
+            $m['attachment_thumb_url'] = !empty($m['attachment_path']) && !empty($m['attachment_type']) && str_starts_with((string) $m['attachment_type'], 'image/')
+                ? url('/admin/chat/attachment?message=' . (int) $m['id'] . '&thumb=1')
+                : null;
+        }
+        unset($m);
+
         $this->viewAdmin('chat_show', [
             'title'      => 'Chat #' . $id,
             'conversation' => $conv,
             'user_email' => $user['email'] ?? 'user#' . $conv['user_id'],
-            'messages'   => ChatMessage::messages($id),
+            'messages'   => $messages,
         ]);
     }
 
@@ -235,6 +246,96 @@ class AdminChatController extends Controller
         $text = (string) preg_replace('/\s+/u', ' ', $text);
 
         return mb_substr($text, 0, 2000);
+    }
+
+    /**
+     * Serve a chat attachment to the admin (session-authenticated via the
+     * 'chat' route permission). Supports ?thumb=1 for image previews.
+     */
+    public function attachment(): void
+    {
+        $mid = max(0, (int) $this->request->query('message', 0));
+        $thumb = (int) $this->request->query('thumb', 0) === 1;
+
+        $msg = $mid > 0
+            ? Database::run('SELECT * FROM chat_messages WHERE id = ? LIMIT 1', [$mid])->fetch()
+            : null;
+
+        if (!$msg || empty($msg['attachment_path'])) {
+            http_response_code(404);
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => false, 'error' => 'Attachment not found.']);
+            exit;
+        }
+
+        $path = dirname(__DIR__, 2) . '/' . $msg['attachment_path'];
+        if (!is_file($path)) {
+            http_response_code(404);
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => false, 'error' => 'Attachment file missing.']);
+            exit;
+        }
+
+        $name = (string) ($msg['attachment_name'] ?? basename($path));
+        $mime = (string) ($msg['attachment_type'] ?? (mime_content_type($path) ?: 'application/octet-stream'));
+
+        if ($thumb && str_starts_with($mime, 'image/')) {
+            $out = $this->makeThumbnail($path);
+            if ($out !== null) {
+                header('Content-Type: image/jpeg');
+                header('Content-Length: ' . (string) filesize($out));
+                readfile($out);
+                exit;
+            }
+        }
+
+        header('Content-Type: ' . $mime);
+        header('Content-Disposition: inline; filename="' . addcslashes($name, '"') . '"');
+        header('Content-Length: ' . (string) filesize($path));
+        readfile($path);
+        exit;
+    }
+
+    /** Cached 320px JPEG thumbnail for image attachments. */
+    private function makeThumbnail(string $path): ?string
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            return null;
+        }
+
+        $key = 'thumb_' . hash('sha1', (string) filesize($path) . '_' . filemtime($path)) . '.jpg';
+        $thumbsDir = dirname(__DIR__, 2) . '/storage/uploads/chat/thumbs';
+        if (!is_dir($thumbsDir)) {
+            @mkdir($thumbsDir, 0775, true);
+        }
+        $out = $thumbsDir . '/' . $key;
+        if (is_file($out) && filemtime($out) >= filemtime($path)) {
+            return $out;
+        }
+
+        $img = @imagecreatefromstring((string) file_get_contents($path));
+        if ($img === false) {
+            return null;
+        }
+
+        $w = imagesx($img);
+        $h = imagesy($img);
+        if ($w <= 0 || $h <= 0) {
+            imagedestroy($img);
+            return null;
+        }
+
+        $maxW = 320;
+        $nw = min($maxW, $w);
+        $nh = max(1, (int) round($h * ($nw / $w)));
+
+        $thumb = imagecreatetruecolor($nw, $nh);
+        imagecopyresampled($thumb, $img, 0, 0, 0, 0, $nw, $nh, $w, $h);
+        imagedestroy($img);
+        imagejpeg($thumb, $out, 82);
+        imagedestroy($thumb);
+
+        return $out;
     }
 
     }

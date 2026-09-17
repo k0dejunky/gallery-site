@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.1",
-  "versionCode": 12,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.1.apk",
-  "changelog": "Favourite users, All Users menu section (25 most recent, unique), reading/reply clears new-message state.",
+  "latestVersion": "2.2",
+  "versionCode": 13,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.2.apk",
+  "changelog": "Fix attachments not displaying in the app (double /gallery path) and on the admin web chat (thumbnail + link rendering).",
   "publishedAt": "2026-09-17"
 }

@@ -201,6 +201,7 @@ return [
     ['POST', '/admin/support/{id}/delete', 'SupportController@delete', 'support'],
     ['GET', '/admin/chat', 'AdminChatController@index', 'chat'],
     ['GET', '/admin/chat/{id}', 'AdminChatController@show', 'chat'],
+    ['GET', '/admin/chat/attachment', 'AdminChatController@attachment', 'chat'],
     ['POST', '/admin/chat/{id}/mode', 'AdminChatController@mode', 'chat'],
     ['POST', '/admin/chat/{id}/reply', 'AdminChatController@operatorReply', 'chat'],
     ['POST', '/admin/chat/settings', 'AdminChatController@saveSettings', 'chat'],

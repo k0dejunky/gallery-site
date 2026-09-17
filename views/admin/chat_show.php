@@ -25,6 +25,15 @@
                     <?= $m['sender_role'] === 'user' ? 'Member' : ($m['sender_role'] === 'model' ? 'AI' : 'Operator') ?> &middot; <?= e(tzdate('g:i A', (string) $m['created_at'])) ?>
                 </small>
                 <?= e((string) $m['message']) ?>
+                <?php if (!empty($m['attachment_name']) && !empty($m['attachment_url'])): ?>
+                    <?php if (!empty($m['attachment_thumb_url'])): ?>
+                        <a href="<?= e($m['attachment_url']) ?>" target="_blank" rel="noopener" style="display:block;margin-top:.5rem;border-radius:8px;overflow:hidden;border:1px solid rgba(0,0,0,.08);background:#fff;">
+                            <img src="<?= e($m['attachment_thumb_url']) ?>" alt="<?= e($m['attachment_name']) ?>" style="display:block;max-width:220px;max-height:220px;width:auto;height:auto;">
+                        </a>
+                    <?php else: ?>
+                        <a href="<?= e($m['attachment_url']) ?>" target="_blank" rel="noopener" style="display:inline-block;margin-top:.5rem;">📎 <?= e($m['attachment_name']) ?></a>
+                    <?php endif; ?>
+                <?php endif; ?>
             </div>
         <?php endforeach; ?>
     <?php endif; ?>
