@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.7",
-  "versionCode": 18,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.7.apk",
-  "changelog": "Push-style notifications via a live SSE events stream: new member messages notify instantly and badges update immediately (polling kept as fallback).",
+  "latestVersion": "2.8",
+  "versionCode": 19,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.8.apk",
+  "changelog": "Fix in-app update failing with a connection error (duplicated /gallery base path when building the APK download URL).",
   "publishedAt": "2026-09-17"
 }
