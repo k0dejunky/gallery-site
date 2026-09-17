@@ -17,8 +17,9 @@
     <?= csrf_field() ?>
     <label class="muted" style="font-size:.85rem;">Default AI mode for new conversations:</label>
     <select name="default_ai_mode">
-        <option value="retrieval" <?= ($state['default_ai_mode'] ?? 'retrieval') === 'retrieval' ? 'selected' : '' ?>>Retrieval (few-shot over operator replies)</option>
-        <option value="finetuned" <?= ($state['default_ai_mode'] ?? '') === 'finetuned' ? 'selected' : '' ?>>Fine-tuned (LoRA adapter)</option>
+        <option value="retrieval" <?= ($state['default_ai_mode'] ?? 'retrieval') === 'retrieval' ? 'selected' : '' ?>>Retrieval (AI, few-shot over operator replies)</option>
+        <option value="finetuned" <?= ($state['default_ai_mode'] ?? '') === 'finetuned' ? 'selected' : '' ?>>Fine-tuned (AI, LoRA adapter)</option>
+        <option value="operator" <?= ($state['default_ai_mode'] ?? '') === 'operator' ? 'selected' : '' ?>>Operator only (no AI)</option>
     </select>
     <button type="submit" class="btn btn-sm">Save default</button>
 </form>
@@ -31,6 +32,7 @@
             <option value="">— all —</option>
             <option value="retrieval" <?= $filterMode === 'retrieval' ? 'selected' : '' ?>>Retrieval</option>
             <option value="finetuned" <?= $filterMode === 'finetuned' ? 'selected' : '' ?>>Fine-tuned</option>
+            <option value="operator" <?= $filterMode === 'operator' ? 'selected' : '' ?>>Operator only</option>
         </select>
     </label>
     <button type="submit" class="btn btn-sm">Filter</button>
@@ -48,7 +50,7 @@
                 <tr>
                     <td>#<?= (int) $c['id'] ?></td>
                     <td><?= e((string) $c['user_email']) ?></td>
-                    <td><span class="pill <?= $c['ai_mode'] === 'finetuned' ? 'pill-info' : 'pill-muted' ?>"><?= e((string) $c['ai_mode']) ?></span></td>
+                    <td><span class="pill <?= $c['ai_mode'] === 'finetuned' ? 'pill-info' : ($c['ai_mode'] === 'operator' ? 'pill-warn' : 'pill-muted') ?>"><?= e((string) $c['ai_mode']) ?></span></td>
                     <td><?= e((string) $c['status']) ?></td>
                     <td><?= (int) $c['message_count'] ?> (<?= (int) $c['user_count'] ?> user)</td>
                     <td class="muted"><?= e(tzdate('M j, Y g:i A', (string) $c['updated_at'])) ?></td>

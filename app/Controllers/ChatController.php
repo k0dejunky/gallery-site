@@ -80,20 +80,27 @@ class ChatController extends Controller
 
         $result = ['ok' => true, 'user_message_id' => ChatMessage::latestId($cid)];
 
-        // Synchronous AI reply (per decision: reply immediately).
-        $aiReply = ChatAi::reply(
-            (string) ($conv['ai_mode'] ?? 'retrieval'),
-            $message,
-            ChatMessage::messages($cid, 0, false),
-            ChatMessage::similarContext($message)
-        );
+        // Synchronous AI reply only in AI modes (retrieval/finetuned).
+        // In operator mode the message waits for a human via the Android app
+        // or admin panel.
+        $convMode = (string) ($conv['ai_mode'] ?? ChatMessage::MODE_RETRIEVAL);
+        if (ChatMessage::isAiMode($convMode)) {
+            $aiReply = ChatAi::reply(
+                $convMode,
+                $message,
+                ChatMessage::messages($cid, 0, false),
+                ChatMessage::similarContext($message)
+            );
 
-        if ($aiReply['ok']) {
-            ChatMessage::addMessage($cid, ChatMessage::ROLE_MODEL, (string) $aiReply['reply']);
-            $result['ai_reply'] = $aiReply['reply'];
-            $result['ai_reply_id'] = ChatMessage::latestId($cid);
+            if ($aiReply['ok']) {
+                ChatMessage::addMessage($cid, ChatMessage::ROLE_MODEL, (string) $aiReply['reply']);
+                $result['ai_reply'] = $aiReply['reply'];
+                $result['ai_reply_id'] = ChatMessage::latestId($cid);
+            } else {
+                $result['ai_pending'] = true; // model down; operator can respond via the Android app
+            }
         } else {
-            $result['ai_pending'] = true; // model down; operator can respond via the Android app
+            $result['awaiting_operator'] = true; // operator-only mode
         }
 
         $this->json($result);

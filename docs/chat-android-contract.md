@@ -17,12 +17,16 @@ All requests send: `Authorization: Bearer <GALLERY_CHAT_KEY>`
 {
   "ok": true,
   "conversation": 12,
-  "ai_mode": "retrieval",          // "retrieval" | "finetuned"
+  "ai_mode": "retrieval",          // "retrieval" | "finetuned" | "operator"
   "status": "open",                // "open" | "closed"
   "pending": 3,                    // member messages awaiting reply
   "user_id": 42
 }
 ```
+
+`ai_mode` meaning for the thin client:
+- `retrieval` / `finetuned` — AI mode: the server replies automatically; the app only displays messages.
+- `operator` — operator-only mode: **no AI**. The app must surface a notification and let the human operator reply via `POST /webhooks/chat/reply`.
 
 ### 2. Fetch member messages awaiting a reply
 `GET /webhooks/chat/pending?conversation=<ID>`

@@ -32,7 +32,7 @@ class AdminChatController extends Controller
         $where  = ['1 = 1'];
         $params = [];
 
-        if ($mode === 'retrieval' || $mode === 'finetuned') {
+        if ($mode === 'retrieval' || $mode === 'finetuned' || $mode === 'operator') {
             $where[]  = 'c.ai_mode = ?';
             $params[] = $mode;
         }
@@ -138,7 +138,7 @@ class AdminChatController extends Controller
     public function saveSettings(): void
     {
         $defaultMode = (string) $this->request->post('default_ai_mode', 'retrieval');
-        if (!in_array($defaultMode, [ChatMessage::MODE_RETRIEVAL, ChatMessage::MODE_FINETUNED], true)) {
+        if (!in_array($defaultMode, [ChatMessage::MODE_RETRIEVAL, ChatMessage::MODE_FINETUNED, ChatMessage::MODE_OPERATOR], true)) {
             $defaultMode = ChatMessage::MODE_RETRIEVAL;
         }
 

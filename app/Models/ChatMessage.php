@@ -24,6 +24,9 @@ class ChatMessage
 
     public const MODE_RETRIEVAL = 'retrieval';
     public const MODE_FINETUNED = 'finetuned';
+    public const MODE_OPERATOR  = 'operator';
+
+    public const AI_MODES = [self::MODE_RETRIEVAL, self::MODE_FINETUNED];
 
     public const MAX_MESSAGE_LENGTH = 2000;
 
@@ -78,9 +81,13 @@ class ChatMessage
             return $id;
         }
 
+        $mode = in_array($mode, [self::MODE_RETRIEVAL, self::MODE_FINETUNED, self::MODE_OPERATOR], true)
+            ? $mode
+            : self::MODE_RETRIEVAL;
+
         Database::run(
             "INSERT INTO chat_conversations (user_id, ai_mode) VALUES (?, ?)",
-            [$userId, $mode === self::MODE_FINETUNED ? self::MODE_FINETUNED : self::MODE_RETRIEVAL]
+            [$userId, $mode]
         );
 
         return (int) Database::connection()->lastInsertId();
@@ -171,7 +178,7 @@ class ChatMessage
 
     public static function setMode(int $conversationId, string $mode): bool
     {
-        if (!in_array($mode, [self::MODE_RETRIEVAL, self::MODE_FINETUNED], true)) {
+        if (!in_array($mode, [self::MODE_RETRIEVAL, self::MODE_FINETUNED, self::MODE_OPERATOR], true)) {
             return false;
         }
 
@@ -181,6 +188,15 @@ class ChatMessage
         );
 
         return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Whether a conversation mode uses the AI to reply. Operator mode is
+     * answered only by a human via the Android app / admin panel.
+     */
+    public static function isAiMode(string $mode): bool
+    {
+        return in_array($mode, self::AI_MODES, true);
     }
 
     public static function close(int $conversationId): bool
