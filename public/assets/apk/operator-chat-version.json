@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "1.9",
-  "versionCode": 10,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v1.9.apk",
-  "changelog": "Added navigation menu, users list with message-count badges, per-chat settings (mode + notification tone), and in-app updates.",
+  "latestVersion": "2.0",
+  "versionCode": 11,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.0.apk",
+  "changelog": "Stay logged in, hide login form when connected, toolbar below the status bar (menu buttons now work).",
   "publishedAt": "2026-09-17"
 }
