@@ -20,7 +20,7 @@
 <?php // AI settings (site default mode) ?>
 <form method="post" action="<?= url('/admin/chat/settings') ?>" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;">
     <?= csrf_field() ?>
-    <label class="muted" style="font-size:.85rem;">Default AI mode for new conversations:</label>
+    <label class="muted" style="font-size:.85rem;">Default mode for <strong>new</strong> conversations (existing ones keep their own mode):</label>
     <select name="default_ai_mode">
         <option value="retrieval" <?= ($state['default_ai_mode'] ?? 'retrieval') === 'retrieval' ? 'selected' : '' ?>>Retrieval (AI, few-shot over operator replies)</option>
         <option value="finetuned" <?= ($state['default_ai_mode'] ?? '') === 'finetuned' ? 'selected' : '' ?>>Fine-tuned (AI, LoRA adapter)</option>

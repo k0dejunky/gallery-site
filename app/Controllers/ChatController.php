@@ -67,7 +67,13 @@ class ChatController extends Controller
         }
 
         $conv = ChatMessage::forUser($userId);
-        $cid  = $conv !== null ? (int) $conv['id'] : ChatMessage::openFor($userId, 'retrieval');
+        if ($conv === null) {
+            // New conversations start in the admin's saved default mode.
+            $defaultMode = (string) (\App\Core\ChatSettings::all()['default_ai_mode'] ?? ChatMessage::MODE_RETRIEVAL);
+            $cid = ChatMessage::openFor($userId, $defaultMode);
+        } else {
+            $cid = (int) $conv['id'];
+        }
         $conv = ChatMessage::find($cid);
 
         ChatMessage::addMessage($cid, ChatMessage::ROLE_USER, $message);
