@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.2",
-  "versionCode": 13,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.2.apk",
-  "changelog": "Fix attachments not displaying in the app (double /gallery path) and on the admin web chat (thumbnail + link rendering).",
+  "latestVersion": "2.3",
+  "versionCode": 14,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.3.apk",
+  "changelog": "Fix blank band over the app content: toolbar now spans behind the status bar on all screens, and status/loading text is always visible.",
   "publishedAt": "2026-09-17"
 }
