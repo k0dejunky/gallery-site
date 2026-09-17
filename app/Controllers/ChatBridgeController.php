@@ -98,6 +98,7 @@ class ChatBridgeController extends Controller
         $rows = \App\Core\Database::run(
             "SELECT c.id, c.user_id, c.ai_mode, c.status, c.updated_at,
                     u.email AS user_email,
+                    SUBSTRING_INDEX(u.email, '@', 1) AS username,
                     (SELECT m.message FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_message,
                     (SELECT m.sender_role FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_sender,
                     (SELECT COUNT(*) FROM chat_messages m WHERE m.conversation_id = c.id AND m.sender_role = 'user') AS member_count,
@@ -351,6 +352,37 @@ class ChatBridgeController extends Controller
         }
 
         $this->json(['ok' => true, 'checksum' => $checksum, 'stored' => basename($dest), 'model' => $meta]);
+    }
+
+    /**
+     * Change a conversation's AI mode from the Android app. Accepts JSON or
+     * form fields: conversation_id + ai_mode (retrieval|finetuned|operator).
+     */
+    public function mode(): void
+    {
+        $data = json_decode($this->rawBody(), true);
+        if (!is_array($data)) {
+            $data = [];
+        }
+
+        $cid  = (int) ($data['conversation_id'] ?? $this->request->post('conversation_id', 0));
+        $mode = (string) ($data['ai_mode'] ?? $this->request->post('ai_mode', ''));
+
+        if ($cid <= 0 || ChatMessage::find($cid) === null) {
+            $this->json(['ok' => false, 'error' => 'Conversation not found.']);
+            return;
+        }
+
+        if (!in_array($mode, [ChatMessage::MODE_RETRIEVAL, ChatMessage::MODE_FINETUNED, ChatMessage::MODE_OPERATOR], true)) {
+            $this->json(['ok' => false, 'error' => 'Invalid mode.']);
+            return;
+        }
+
+        if (ChatMessage::setMode($cid, $mode)) {
+            $this->json(['ok' => true, 'conversation' => $cid, 'ai_mode' => $mode]);
+        }
+
+        $this->json(['ok' => false, 'error' => 'Could not update mode.']);
     }
 
     /**

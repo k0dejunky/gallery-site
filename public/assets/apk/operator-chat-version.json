@@ -1,0 +1,8 @@
+{
+  "app": "operator-chat",
+  "latestVersion": "1.9",
+  "versionCode": 10,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v1.9.apk",
+  "changelog": "Added navigation menu, users list with message-count badges, per-chat settings (mode + notification tone), and in-app updates.",
+  "publishedAt": "2026-09-17"
+}
