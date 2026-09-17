@@ -36,6 +36,9 @@
                             <span class="who">You</span>
                         <?php endif; ?>
                         <?= e((string) $m['message']) ?>
+                        <?php if (!empty($m['attachment_name']) && !empty($m['attachment_url'])): ?>
+                            <a class="chat-attachment" target="_blank" rel="noopener" href="<?= e($m['attachment_url']) ?>">📎 <?= e($m['attachment_name']) ?></a>
+                        <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
             <?php endif; ?>
@@ -69,7 +72,11 @@
         var div = document.createElement('div');
         var isUser = msg.sender_role === 'user';
         div.className = 'chat-msg ' + esc(msg.sender_role);
-        div.innerHTML = (isUser ? '<span class="who">You</span>' : '') + esc(msg.message);
+        var html = (isUser ? '<span class="who">You</span>' : '') + esc(msg.message);
+        if (msg.attachment_name && msg.attachment_url) {
+            html += ' <a class="chat-attachment" target="_blank" rel="noopener" href="' + esc(msg.attachment_url) + '">📎 ' + esc(msg.attachment_name) + '</a>';
+        }
+        div.innerHTML = html;
         thread.appendChild(div);
         thread.scrollTop = thread.scrollHeight;
     }

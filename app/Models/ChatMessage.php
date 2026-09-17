@@ -113,17 +113,27 @@ class ChatMessage
 
     /**
      * Add a message to a conversation. Returns the new message id.
+     *
+     * @param array{name:string, type:string, path:string}|null $attachment
      */
-    public static function addMessage(int $conversationId, string $role, string $message): int
+    public static function addMessage(int $conversationId, string $role, string $message, ?array $attachment = null): int
     {
         $message = mb_substr(trim($message), 0, self::MAX_MESSAGE_LENGTH);
-        if ($message === '') {
+        if ($message === '' && $attachment === null) {
             return 0;
         }
 
         Database::run(
-            'INSERT INTO chat_messages (conversation_id, sender_role, message) VALUES (?, ?, ?)',
-            [$conversationId, $role, $message]
+            'INSERT INTO chat_messages (conversation_id, sender_role, message, attachment_name, attachment_type, attachment_path)
+             VALUES (?, ?, ?, ?, ?, ?)',
+            [
+                $conversationId,
+                $role,
+                $message,
+                $attachment['name'] ?? null,
+                $attachment['type'] ?? null,
+                $attachment['path'] ?? null,
+            ]
         );
 
         return (int) Database::connection()->lastInsertId();

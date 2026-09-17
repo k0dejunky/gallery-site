@@ -65,6 +65,7 @@ return [
     ['GET', '/webhooks/chat/inbox', 'ChatBridgeController@inbox'],
     ['GET', '/webhooks/chat/thread', 'ChatBridgeController@thread'],
     ['GET', '/webhooks/chat/stream', 'ChatBridgeController@stream'],
+    ['GET', '/webhooks/chat/attachment', 'ChatBridgeController@attachment'],
     ['GET', '/webhooks/chat/pending', 'ChatBridgeController@pending'],
     ['POST', '/webhooks/chat/reply', 'ChatBridgeController@reply'],
     ['GET', '/webhooks/chat/context', 'ChatBridgeController@context'],

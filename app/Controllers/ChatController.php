@@ -30,7 +30,7 @@ class ChatController extends Controller
             $conv = ['id' => 0, 'ai_mode' => 'retrieval', 'status' => 'open'];
         }
 
-        $messages = $conv['id'] > 0 ? ChatMessage::messages((int) $conv['id']) : [];
+        $messages = $conv['id'] > 0 ? $this->decorateMessages(ChatMessage::messages((int) $conv['id'])) : [];
 
         $this->view('chat/index', [
             'title'        => 'Chat',
@@ -135,7 +135,7 @@ class ChatController extends Controller
             return;
         }
 
-        $messages = ChatMessage::messages($cid, $since);
+        $messages = $this->decorateMessages(ChatMessage::messages($cid, $since));
 
         $this->json([
             'ok'       => true,
@@ -198,7 +198,7 @@ class ChatController extends Controller
         $latestId = ChatMessage::latestId($cid);
 
         // Initial snapshot of anything already newer than the client.
-        $new = ChatMessage::messages($cid, $since);
+        $new = $this->decorateMessages(ChatMessage::messages($cid, $since));
         if ($new !== []) {
             echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'mode' => (string) ($conv['ai_mode'] ?? 'retrieval')]) . "\n\n";
             flush();
@@ -208,7 +208,7 @@ class ChatController extends Controller
         // Long-poll loop: hold the connection, emit when a new message lands.
         $start = time();
         while (time() - $start < 30) {
-            $new = ChatMessage::messages($cid, $since);
+            $new = $this->decorateMessages(ChatMessage::messages($cid, $since));
             if ($new !== []) {
                 $latestId = ChatMessage::latestId($cid);
                 echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'mode' => (string) ($conv['ai_mode'] ?? 'retrieval')]) . "\n\n";
@@ -224,5 +224,21 @@ class ChatController extends Controller
         }
 
         exit;
+    }
+
+    /**
+     * Add an attachment_url to each message row that has an attachment, so the
+     * web chat can render a download link.
+     */
+    private function decorateMessages(array $messages): array
+    {
+        foreach ($messages as &$m) {
+            $m['attachment_url'] = !empty($m['attachment_path'])
+                ? url('/webhooks/chat/attachment?message=' . (int) $m['id'])
+                : null;
+        }
+        unset($m);
+
+        return $messages;
     }
 }

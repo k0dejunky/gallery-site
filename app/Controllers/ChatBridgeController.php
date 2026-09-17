@@ -133,7 +133,7 @@ class ChatBridgeController extends Controller
             'ai_mode'      => (string) $conv['ai_mode'],
             'status'       => (string) $conv['status'],
             'user_email'   => $user['email'] ?? ('user#' . $conv['user_id']),
-            'messages'     => ChatMessage::messages($cid, 0, true),
+            'messages'     => $this->decorateMessages(ChatMessage::messages($cid, 0, true)),
         ]);
     }
 
@@ -168,7 +168,7 @@ class ChatBridgeController extends Controller
         }
 
         $latestId = ChatMessage::latestId($cid);
-        $new = ChatMessage::messages($cid, $since);
+        $new = $this->decorateMessages(ChatMessage::messages($cid, $since));
         if ($new !== []) {
             echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'conversation' => $cid]) . "\n\n";
             flush();
@@ -177,7 +177,7 @@ class ChatBridgeController extends Controller
 
         $start = time();
         while (time() - $start < 30) {
-            $new = ChatMessage::messages($cid, $since);
+            $new = $this->decorateMessages(ChatMessage::messages($cid, $since));
             if ($new !== []) {
                 $latestId = ChatMessage::latestId($cid);
                 echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'conversation' => $cid]) . "\n\n";
@@ -200,10 +200,15 @@ class ChatBridgeController extends Controller
      */
     public function reply(): void
     {
+        // Support both JSON (text only) and multipart (text + optional file).
         $data = json_decode($this->rawBody(), true);
-        $cid  = (int) ($data['conversation_id'] ?? 0);
-        $msg  = trim((string) ($data['message'] ?? ''));
-        $role = (string) ($data['sender_role'] ?? 'operator');
+        if (!is_array($data)) {
+            $data = [];
+        }
+
+        $cid  = (int) ($data['conversation_id'] ?? $this->request->post('conversation_id', 0));
+        $msg  = trim((string) ($data['message'] ?? $this->request->post('message', '')));
+        $role = (string) ($data['sender_role'] ?? $this->request->post('sender_role', 'operator'));
 
         if (!in_array($role, [ChatMessage::ROLE_OPERATOR, ChatMessage::ROLE_MODEL], true)) {
             $role = ChatMessage::ROLE_OPERATOR;
@@ -214,9 +219,20 @@ class ChatBridgeController extends Controller
             return;
         }
 
-        $id = ChatMessage::addMessage($cid, $role, $msg);
+        // Optional attachment from a multipart upload.
+        $attachment = null;
+        $file = $this->request->file('attachment');
+        if ($file !== null && !empty($file['tmp_name']) && is_file($file['tmp_name'])) {
+            $attachment = $this->storeChatAttachment($file);
+            if ($attachment === null) {
+                $this->json(['ok' => false, 'error' => 'Attachment could not be stored.']);
+                return;
+            }
+        }
+
+        $id = ChatMessage::addMessage($cid, $role, $msg, $attachment);
         if ($id <= 0) {
-            $this->json(['ok' => false, 'error' => 'Message is empty or too long.']);
+            $this->json(['ok' => false, 'error' => 'Message is empty (or too long) with no attachment.']);
             return;
         }
 
@@ -337,9 +353,95 @@ class ChatBridgeController extends Controller
         $this->json(['ok' => true, 'checksum' => $checksum, 'stored' => basename($dest), 'model' => $meta]);
     }
 
+    /**
+     * Download a chat attachment by message id (Bearer auth). Streams the
+     * stored file so the Android app can render images / open files.
+     */
+    public function attachment(): void
+    {
+        $mid = max(0, (int) $this->request->query('message', 0));
+        if ($mid <= 0) {
+            $this->json(['ok' => false, 'error' => 'Message id required.']);
+            return;
+        }
+
+        $msg = \App\Core\Database::run('SELECT * FROM chat_messages WHERE id = ? LIMIT 1', [$mid])->fetch();
+        if (!$msg || empty($msg['attachment_path'])) {
+            $this->json(['ok' => false, 'error' => 'No attachment on that message.']);
+            return;
+        }
+
+        $path = dirname(__DIR__, 2) . '/' . $msg['attachment_path'];
+        if (!is_file($path)) {
+            $this->json(['ok' => false, 'error' => 'Attachment file missing.']);
+            return;
+        }
+
+        $name = (string) ($msg['attachment_name'] ?? basename($path));
+        $mime = (string) ($msg['attachment_type'] ?? (mime_content_type($path) ?: 'application/octet-stream'));
+
+        header('Content-Type: ' . $mime);
+        header('Content-Disposition: inline; filename="' . addcslashes($name, '"') . '"');
+        header('Content-Length: ' . (string) filesize($path));
+        readfile($path);
+        exit;
+    }
+
     private function rawBody(): string
     {
         return (string) file_get_contents('php://input');
+    }
+
+    /**
+     * Add an attachment_url to each message row that has an attachment, so
+     * the Android app can render/download the file.
+     */
+    private function decorateMessages(array $messages): array
+    {
+        foreach ($messages as &$m) {
+            $m['attachment_url'] = !empty($m['attachment_path'])
+                ? url('/webhooks/chat/attachment?message=' . (int) $m['id'])
+                : null;
+        }
+        unset($m);
+
+        return $messages;
+    }
+
+    /**
+     * Store an uploaded chat attachment under storage/uploads/chat/ and return
+     * the metadata to persist on the message row, or null on failure.
+     *
+     * @param array{tmp_name:string, name:string, type:string, size:int} $file
+     * @return array{name:string, type:string, path:string}|null
+     */
+    private function storeChatAttachment(array $file): ?array
+    {
+        $dir = dirname(__DIR__, 2) . '/storage/uploads/chat';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+
+        $name = trim((string) ($file['name'] ?? ''));
+        if ($name === '' || $name !== basename($name)) {
+            $name = 'attachment-' . bin2hex(random_bytes(6));
+        }
+
+        // Sanitize the stored filename (keep the extension, drop path chars).
+        $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', $name) ?: 'attachment';
+        $dest = $dir . '/' . bin2hex(random_bytes(6)) . '_' . $safeName;
+
+        if (!@move_uploaded_file((string) $file['tmp_name'], $dest)) {
+            if (!@copy((string) $file['tmp_name'], $dest)) {
+                return null;
+            }
+        }
+
+        return [
+            'name' => $safeName,
+            'type' => (string) ($file['type'] ?? (mime_content_type($dest) ?: 'application/octet-stream')),
+            'path' => str_replace(dirname(__DIR__, 2) . '/', '', $dest),
+        ];
     }
 
     private function json(array $data): void
