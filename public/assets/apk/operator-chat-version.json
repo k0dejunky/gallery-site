@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.3",
-  "versionCode": 14,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.3.apk",
-  "changelog": "Fix blank band over the app content: toolbar now spans behind the status bar on all screens, and status/loading text is always visible.",
+  "latestVersion": "2.4",
+  "versionCode": 15,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.4.apk",
+  "changelog": "Sent images now render inline in the chat (no download link); member web chat shows images inline without download ability.",
   "publishedAt": "2026-09-17"
 }
