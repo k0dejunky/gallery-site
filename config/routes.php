@@ -70,6 +70,7 @@ return [
     ['GET', '/webhooks/chat/pending', 'ChatBridgeController@pending'],
     ['POST', '/webhooks/chat/reply', 'ChatBridgeController@reply'],
     ['POST', '/webhooks/chat/mode', 'ChatBridgeController@mode'],
+    ['POST', '/webhooks/chat/read', 'ChatBridgeController@read'],
     ['GET', '/webhooks/chat/context', 'ChatBridgeController@context'],
     ['GET', '/webhooks/chat/training-data', 'ChatBridgeController@trainingData'],
     ['POST', '/webhooks/chat/training-upload', 'ChatBridgeController@trainingUpload'],

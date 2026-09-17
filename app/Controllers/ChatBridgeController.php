@@ -97,12 +97,14 @@ class ChatBridgeController extends Controller
     {
         $rows = \App\Core\Database::run(
             "SELECT c.id, c.user_id, c.ai_mode, c.status, c.updated_at,
+                    c.operator_read_through_id,
                     u.email AS user_email,
                     SUBSTRING_INDEX(u.email, '@', 1) AS username,
                     (SELECT m.message FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_message,
                     (SELECT m.sender_role FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_sender,
+                    (SELECT m.created_at FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_message_at,
                     (SELECT COUNT(*) FROM chat_messages m WHERE m.conversation_id = c.id AND m.sender_role = 'user') AS member_count,
-                    (SELECT COUNT(*) FROM chat_messages m WHERE m.conversation_id = c.id AND m.sender_role = 'user' AND m.id > COALESCE((SELECT MAX(x.id) FROM chat_messages x WHERE x.conversation_id = c.id AND x.sender_role IN ('model','operator')),0)) AS unread_replyable
+                    (SELECT COUNT(*) FROM chat_messages m WHERE m.conversation_id = c.id AND m.sender_role = 'user' AND m.id > c.operator_read_through_id) AS unread_replyable
              FROM chat_conversations c
              JOIN users u ON u.id = c.user_id
              WHERE c.status = 'open'
@@ -250,6 +252,14 @@ class ChatBridgeController extends Controller
             }
         }
 
+        // Replying implies the operator has read the thread: clear unread.
+        \App\Core\Database::run(
+            'UPDATE chat_conversations
+                SET operator_read_through_id = GREATEST(COALESCE(operator_read_through_id, 0), ?)
+              WHERE id = ?',
+            [ChatMessage::latestId($cid), $cid]
+        );
+
         $this->json(['ok' => true, 'id' => $id]);
     }
 
@@ -383,6 +393,41 @@ class ChatBridgeController extends Controller
         }
 
         $this->json(['ok' => false, 'error' => 'Could not update mode.']);
+    }
+
+    /**
+     * Mark a conversation as read by the operator up to a given message id
+     * (or the latest message when none is given). This clears the user's
+     * new-message state so they stop appearing in the unread list.
+     */
+    public function read(): void
+    {
+        $data = json_decode($this->rawBody(), true);
+        if (!is_array($data)) {
+            $data = [];
+        }
+
+        $cid = (int) ($data['conversation_id'] ?? $this->request->post('conversation_id', 0));
+        $through = max(0, (int) ($data['message_id'] ?? $this->request->post('message_id', 0)));
+
+        $conv = $cid > 0 ? ChatMessage::find($cid) : null;
+        if ($conv === null) {
+            $this->json(['ok' => false, 'error' => 'Conversation not found.']);
+            return;
+        }
+
+        if ($through <= 0) {
+            $through = ChatMessage::latestId($cid);
+        }
+
+        \App\Core\Database::run(
+            'UPDATE chat_conversations
+                SET operator_read_through_id = GREATEST(COALESCE(operator_read_through_id, 0), ?)
+              WHERE id = ?',
+            [$through, $cid]
+        );
+
+        $this->json(['ok' => true, 'conversation' => $cid, 'operator_read_through_id' => $through]);
     }
 
     /**

@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.0",
-  "versionCode": 11,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.0.apk",
-  "changelog": "Stay logged in, hide login form when connected, toolbar below the status bar (menu buttons now work).",
+  "latestVersion": "2.1",
+  "versionCode": 12,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.1.apk",
+  "changelog": "Favourite users, All Users menu section (25 most recent, unique), reading/reply clears new-message state.",
   "publishedAt": "2026-09-17"
 }
