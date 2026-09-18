@@ -42,7 +42,7 @@
 </div>
 
 <h2>Reply as operator</h2>
-<form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/reply') ?>" enctype="multipart/form-data" id="reply-form">
+<form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/reply') ?>" enctype="multipart/form-data" id="reply-form" data-no-progress>
     <?= csrf_field() ?>
 
     <div id="emoji-bar" style="display:none;flex-wrap:wrap;gap:.2rem;margin-bottom:.5rem;padding:.4rem;border:1px solid var(--pink-300,#f9a8d4);border-radius:8px;background:var(--pink-100,#fdf2f8);max-width:520px;">
