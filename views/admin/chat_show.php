@@ -19,11 +19,11 @@
         <p class="muted">No messages yet.</p>
     <?php else: ?>
         <?php foreach ($messages as $m): ?>
-            <div style="display:flex;flex-direction:column;gap:.2rem;width:fit-content;max-width:80%;<?= $m['sender_role'] === 'user' ? 'align-self:flex-end;align-items:flex-end;' : 'align-self:flex-start;align-items:flex-start;' ?>">
-                <small style="font-size:.7rem;opacity:.7;text-transform:uppercase;letter-spacing:.04em;max-width:100%;">
+            <div style="align-self:<?= $m['sender_role'] === 'user' ? 'flex-end' : 'flex-start' ?>;max-width:80%;text-align:<?= $m['sender_role'] === 'user' ? 'right' : 'left' ?>;">
+                <small style="display:block;font-size:.7rem;opacity:.7;text-transform:uppercase;letter-spacing:.04em;">
                     <?= $m['sender_role'] === 'user' ? 'Member' : ($m['sender_role'] === 'model' ? 'AI' : 'Operator') ?> &middot; <?= e(tzdate('g:i A', (string) $m['created_at'])) ?>
                 </small>
-                <div style="width:fit-content;max-width:100%;padding:2px 7px;border-radius:12px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;
+                <div style="display:inline-block;text-align:left;max-width:100%;padding:2px 7px;border-radius:12px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;
                      <?= $m['sender_role'] === 'user' ? 'background:var(--purple-600,#9333ea);color:#fff;border-bottom-right-radius:3px;' : 'background:var(--pink-100,#fdf2f8);color:var(--purple-900,#4a044e);border:1px solid var(--pink-300,#f9a8d4);border-bottom-left-radius:3px;' ?>">
                     <?= e((string) $m['message']) ?>
                     <?php if (!empty($m['attachment_name']) && !empty($m['attachment_url'])): ?>
@@ -106,13 +106,12 @@
 
     function appendOlderMessage(m) {
         var wrap = document.createElement('div');
-        wrap.style.cssText = 'display:flex;flex-direction:column;gap:.2rem;width:fit-content;max-width:80%;' +
-            (m.sender_role === 'user' ? 'align-self:flex-end;align-items:flex-end;' : 'align-self:flex-start;align-items:flex-start;');
+        wrap.style.cssText = 'align-self:' + (m.sender_role === 'user' ? 'flex-end' : 'flex-start') + ';max-width:80%;text-align:' + (m.sender_role === 'user' ? 'right' : 'left') + ';';
         var who = m.sender_role === 'user' ? 'Member' : (m.sender_role === 'model' ? 'AI' : 'Operator');
         var time = (m.created_at || '').replace('T', ' ').substring(0, 16);
         wrap.innerHTML =
-            '<small style="font-size:.7rem;opacity:.7;text-transform:uppercase;letter-spacing:.04em;max-width:100%;">' + esc(who) + ' &middot; ' + esc(time) + '</small>' +
-            '<div style="width:fit-content;max-width:100%;padding:2px 7px;border-radius:12px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;' +
+            '<small style="display:block;font-size:.7rem;opacity:.7;text-transform:uppercase;letter-spacing:.04em;">' + esc(who) + ' &middot; ' + esc(time) + '</small>' +
+            '<div style="display:inline-block;text-align:left;max-width:100%;padding:2px 7px;border-radius:12px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;' +
             (m.sender_role === 'user' ? 'background:var(--purple-600,#9333ea);color:#fff;border-bottom-right-radius:3px;' : 'background:var(--pink-100,#fdf2f8);color:var(--purple-900,#4a044e);border:1px solid var(--pink-300,#f9a8d4);border-bottom-left-radius:3px;') +
             '">' + esc(m.message) +
             (m.attachment_name ? '<div style="margin-top:.3rem;">📎 ' + esc(m.attachment_name) + '</div>' : '') +

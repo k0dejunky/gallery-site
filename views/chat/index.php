@@ -3,7 +3,7 @@
 <style>
     .chat-page { width: 100%; max-width: none; }
     .chat-thread { display: flex; flex-direction: column; gap: .3rem; padding: .5rem 0; max-height: 60vh; overflow-y: auto; }
-    .chat-msg { width: fit-content; max-width: 78%; padding: 2px 7px; border-radius: 12px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
+    .chat-msg { max-width: 78%; padding: 2px 7px; border-radius: 12px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
     .chat-msg.user { align-self: flex-end; background: var(--purple-600, #9333ea); color: #fff; border-bottom-right-radius: 3px; }
     .chat-msg.model, .chat-msg.operator { align-self: flex-start; background: var(--pink-100, #fdf2f8); color: var(--purple-900, #4a044e); border: 1px solid var(--pink-300, #f9a8d4); border-bottom-left-radius: 3px; }
     .chat-msg .who { display: block; font-size: .68rem; opacity: .7; margin-bottom: .05rem; text-transform: uppercase; letter-spacing: .04em; }
