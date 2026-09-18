@@ -14,7 +14,7 @@
     </form>
 </div>
 
-<div style="display:flex;flex-direction:column;gap:.6rem;margin-bottom:1rem;">
+<div id="chat-thread" style="display:flex;flex-direction:column;gap:.6rem;margin-bottom:1rem;">
     <?php if (empty($messages)): ?>
         <p class="muted">No messages yet.</p>
     <?php else: ?>
@@ -42,7 +42,7 @@
 </div>
 
 <h2>Reply as operator</h2>
-<form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/reply') ?>" enctype="multipart/form-data" id="reply-form">
+<form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/reply') ?>" enctype="multipart/form-data" id="reply-form" data-no-scroll-restore>
     <?= csrf_field() ?>
 
     <div id="emoji-bar" style="display:none;flex-wrap:wrap;gap:.2rem;margin-bottom:.5rem;padding:.4rem;border:1px solid var(--pink-300,#f9a8d4);border-radius:8px;background:var(--pink-100,#fdf2f8);max-width:520px;">
@@ -88,14 +88,26 @@
             ? attachInput.files[0].name
             : '';
     });
-    replyForm.addEventListener('submit', function () {
+    replyForm.addEventListener('submit', function (ev) {
         var hasText = replyText.value.trim() !== '';
         var hasFile = attachInput.files && attachInput.files.length > 0;
         if (!hasText && !hasFile) {
             alert('Type a reply or attach a file.');
-            event.preventDefault();
+            ev.preventDefault();
         }
     });
+
+    // Always show the newest message: after a reply the page reloads at the
+    // top, which can leave the thread scrolled out of view.
+    var thread = document.getElementById('chat-thread');
+    if (thread) {
+        var lastMsg = thread.querySelector('div:last-child');
+        if (lastMsg) {
+            setTimeout(function () {
+                lastMsg.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+            }, 50);
+        }
+    }
 })();
 </script>
 
