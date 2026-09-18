@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.13",
-  "versionCode": 24,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.13.apk",
-  "changelog": "Tighten chat bubble padding so bubbles hug the text/images/emoji (a few px, not 10-14dp).",
-  "publishedAt": "2026-09-17"
+  "latestVersion": "2.14",
+  "versionCode": 25,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.14.apk",
+  "changelog": "Secure credential storage, improved notification deep links, persisted event cursors, refresh cancellation, and refreshed light/dark visual styling.",
+  "publishedAt": "2026-09-18"
 }
