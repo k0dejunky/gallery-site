@@ -674,55 +674,7 @@ class ChatBridgeController extends Controller
      */
     private function storeChatAttachment(array $file): ?array
     {
-        $dir = dirname(__DIR__, 2) . '/storage/uploads/chat';
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0775, true);
-        }
-
-        $name = trim((string) ($file['name'] ?? ''));
-        if ($name === '' || $name !== basename($name)) {
-            $name = 'attachment-' . bin2hex(random_bytes(6));
-        }
-
-        // Sanitize the stored filename (keep the extension, drop path chars).
-        $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', $name) ?: 'attachment';
-        $dest = $dir . '/' . bin2hex(random_bytes(6)) . '_' . $safeName;
-
-        if (!@move_uploaded_file((string) $file['tmp_name'], $dest)) {
-            if (!@copy((string) $file['tmp_name'], $dest)) {
-                return null;
-            }
-        }
-
-        // Sniff the real type from the file's content — the client-sent type
-        // is unreliable (phone gallery images often arrive as
-        // application/octet-stream because they have no recognisable
-        // extension). Prefer finfo; fall back to the client type.
-        $detected = null;
-        if (function_exists('finfo_open')) {
-            $fi = finfo_open(FILEINFO_MIME_TYPE);
-            $detected = $fi !== false ? finfo_file($fi, $dest) : null;
-            if (is_resource($fi)) {
-                finfo_close($fi);
-            }
-        }
-        $realType = $detected ?: mime_content_type($dest) ?: '';
-
-        // Normalise to image/* when the client said octet-stream but the
-        // content is clearly a photo.
-        if (str_starts_with($realType, 'image/')) {
-            $type = $realType;
-        } elseif (str_starts_with((string) ($file['type'] ?? ''), 'image/')) {
-            $type = (string) $file['type'];
-        } else {
-            $type = $realType !== '' ? $realType : 'application/octet-stream';
-        }
-
-        return [
-            'name' => $safeName,
-            'type' => $type,
-            'path' => str_replace(dirname(__DIR__, 2) . '/', '', $dest),
-        ];
+        return ChatMessage::storeAttachment($file);
     }
 
     private function json(array $data): void

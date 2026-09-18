@@ -143,13 +143,31 @@ class AdminChatController extends Controller
     public function operatorReply(int $id): void
     {
         $message = trim((string) $this->request->input('message'));
-        if ($message === '' || mb_strlen($message) > ChatMessage::MAX_MESSAGE_LENGTH) {
+
+        // Optional attachment (image / video / text / etc.).
+        $attachment = null;
+        $file = $this->request->file('attachment');
+        if ($file !== null && !empty($file['tmp_name']) && is_file($file['tmp_name'])) {
+            $attachment = ChatMessage::storeAttachment($file);
+            if ($attachment === null) {
+                $this->flash('error', 'Attachment could not be stored.');
+                $this->redirect('/admin/chat/' . $id);
+                return;
+            }
+        }
+
+        if ($message === '' && $attachment === null) {
+            $this->flash('error', 'Reply must be 1–' . ChatMessage::MAX_MESSAGE_LENGTH . ' characters.');
+            $this->redirect('/admin/chat/' . $id);
+            return;
+        }
+        if ($message !== '' && mb_strlen($message) > ChatMessage::MAX_MESSAGE_LENGTH) {
             $this->flash('error', 'Reply must be 1–' . ChatMessage::MAX_MESSAGE_LENGTH . ' characters.');
             $this->redirect('/admin/chat/' . $id);
             return;
         }
 
-        $newId = ChatMessage::addMessage($id, ChatMessage::ROLE_OPERATOR, $message);
+        $newId = ChatMessage::addMessage($id, ChatMessage::ROLE_OPERATOR, $message, $attachment);
 
         $userMsg = Database::run(
             "SELECT message FROM chat_messages WHERE conversation_id = ? AND sender_role = 'user' ORDER BY id DESC LIMIT 1",

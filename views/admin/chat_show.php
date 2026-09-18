@@ -40,10 +40,61 @@
 </div>
 
 <h2>Reply as operator</h2>
-<form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/reply') ?>">
+<form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/reply') ?>" enctype="multipart/form-data" id="reply-form">
     <?= csrf_field() ?>
-    <textarea name="message" rows="3" maxlength="2000" placeholder="Operator reply (harvested into training data)…" style="width:100%;box-sizing:border-box;"></textarea>
+
+    <div id="emoji-bar" style="display:none;flex-wrap:wrap;gap:.2rem;margin-bottom:.5rem;padding:.4rem;border:1px solid var(--pink-300,#f9a8d4);border-radius:8px;background:var(--pink-100,#fdf2f8);max-width:520px;">
+        <?php foreach (['😀','😍','😘','❤️','🔥','🥵','😈','💋','👅','😉','👍','🙈','💦','🤤','✨','😊','🖤','🌹','💯','😁','😂','🤗','😎','😏'] as $emoji): ?>
+            <button type="button" class="btn btn-sm btn-outline emoji-btn" data-emoji="<?= e($emoji) ?>"><?= e($emoji) ?></button>
+        <?php endforeach; ?>
+    </div>
+
+    <textarea name="message" id="reply-text" rows="3" maxlength="2000" placeholder="Type an operator reply (emojis welcome)…" style="width:100%;box-sizing:border-box;"></textarea>
+
+    <div style="display:flex;gap:.5rem;margin-top:.5rem;align-items:center;flex-wrap:wrap;">
+        <button type="button" class="btn btn-sm btn-outline" id="emoji-toggle">😊 Emoji</button>
+        <label class="btn btn-sm btn-outline" style="cursor:pointer;">
+            📎 Attach file
+            <input type="file" name="attachment" id="attachment-input" style="display:none;" accept="image/*,video/*,text/*,.pdf,.txt,.csv,.log">
+        </label>
+        <span id="attach-name" class="muted" style="font-size:.85rem;"></span>
+    </div>
+
     <button type="submit" class="btn" style="margin-top:.5rem;">Send operator reply</button>
 </form>
+
+<script>
+(function () {
+    var emojiToggle = document.getElementById('emoji-toggle');
+    var emojiBar = document.getElementById('emoji-bar');
+    var replyText = document.getElementById('reply-text');
+    var attachInput = document.getElementById('attachment-input');
+    var attachName = document.getElementById('attach-name');
+    var replyForm = document.getElementById('reply-form');
+
+    emojiToggle.addEventListener('click', function () {
+        emojiBar.style.display = emojiBar.style.display === 'none' ? 'flex' : 'none';
+    });
+    emojiBar.querySelectorAll('.emoji-btn').forEach(function (b) {
+        b.addEventListener('click', function () {
+            replyText.value += b.getAttribute('data-emoji');
+            replyText.focus();
+        });
+    });
+    attachInput.addEventListener('change', function () {
+        attachName.textContent = attachInput.files && attachInput.files[0]
+            ? attachInput.files[0].name
+            : '';
+    });
+    replyForm.addEventListener('submit', function () {
+        var hasText = replyText.value.trim() !== '';
+        var hasFile = attachInput.files && attachInput.files.length > 0;
+        if (!hasText && !hasFile) {
+            alert('Type a reply or attach a file.');
+            event.preventDefault();
+        }
+    });
+})();
+</script>
 
 <p style="margin-top:.75rem;"><a class="btn btn-sm btn-outline" href="<?= url('/admin/chat') ?>">Back to conversations</a></p>

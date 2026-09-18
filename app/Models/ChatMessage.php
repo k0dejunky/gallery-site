@@ -140,6 +140,67 @@ class ChatMessage
     }
 
     /**
+     * Store an uploaded chat attachment under storage/uploads/chat/ and
+     * return metadata to persist on the message row, or null on failure.
+     * The real MIME type is sniffed from the file content (finfo) because
+     * phone uploads often arrive as application/octet-stream.
+     *
+     * @param array{tmp_name:string, name:string, type:string, size:int} $file
+     * @return array{name:string, type:string, path:string}|null
+     */
+    public static function storeAttachment(array $file): ?array
+    {
+        $dir = dirname(__DIR__, 2) . '/storage/uploads/chat';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+
+        $name = trim((string) ($file['name'] ?? ''));
+        if ($name === '' || $name !== basename($name)) {
+            $name = 'attachment-' . bin2hex(random_bytes(6));
+        }
+
+        $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', $name) ?: 'attachment';
+        $dest = $dir . '/' . bin2hex(random_bytes(6)) . '_' . $safeName;
+
+        if (!@move_uploaded_file((string) $file['tmp_name'], $dest)) {
+            if (!@copy((string) $file['tmp_name'], $dest)) {
+                return null;
+            }
+        }
+
+        $realType = '';
+        if (function_exists('finfo_open')) {
+            $fi = finfo_open(FILEINFO_MIME_TYPE);
+            $t = $fi !== false ? finfo_file($fi, $dest) : false;
+            if (is_resource($fi)) {
+                finfo_close($fi);
+            }
+            if (is_string($t) && $t !== '') {
+                $realType = $t;
+            }
+        }
+        if ($realType === '') {
+            $realType = mime_content_type($dest) ?: '';
+        }
+
+        $sent = (string) ($file['type'] ?? '');
+        if (str_starts_with($realType, 'image/')) {
+            $type = $realType;
+        } elseif (str_starts_with($sent, 'image/')) {
+            $type = $sent;
+        } else {
+            $type = $realType !== '' ? $realType : 'application/octet-stream';
+        }
+
+        return [
+            'name' => $safeName,
+            'type' => $type,
+            'path' => str_replace(dirname(__DIR__, 2) . '/', '', $dest),
+        ];
+    }
+
+    /**
      * Messages in a conversation, optionally only those with id > sinceId
      * (for polling). Newest first, or oldest-first when fetching history.
      */
