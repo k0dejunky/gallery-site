@@ -42,7 +42,7 @@
 </div>
 
 <h2>Reply as operator</h2>
-<form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/reply') ?>" enctype="multipart/form-data" id="reply-form" data-no-scroll-restore>
+<form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/reply') ?>" enctype="multipart/form-data" id="reply-form">
     <?= csrf_field() ?>
 
     <div id="emoji-bar" style="display:none;flex-wrap:wrap;gap:.2rem;margin-bottom:.5rem;padding:.4rem;border:1px solid var(--pink-300,#f9a8d4);border-radius:8px;background:var(--pink-100,#fdf2f8);max-width:520px;">
@@ -96,18 +96,6 @@
             ev.preventDefault();
         }
     });
-
-    // Always show the newest message: after a reply the page reloads at the
-    // top, which can leave the thread scrolled out of view.
-    var thread = document.getElementById('chat-thread');
-    if (thread) {
-        var lastMsg = thread.querySelector('div:last-child');
-        if (lastMsg) {
-            setTimeout(function () {
-                lastMsg.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-            }, 50);
-        }
-    }
 })();
 </script>
 
