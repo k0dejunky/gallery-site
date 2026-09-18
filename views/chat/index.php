@@ -167,7 +167,12 @@
         // Optimistic: show your message immediately, don't wait for the POST.
         append({ id: 0, sender_role: 'user', message: text, attachment_name: null, attachment_url: null, attachment_thumb_url: null });
         pendingSends.push(text);
-        hideBadge();
+hideBadge();
+
+    // Start scrolled to the bottom so the newest messages are visible.
+    setTimeout(function () {
+        thread.scrollTop = thread.scrollHeight;
+    }, 50);
         fetch('<?= url('/chat') ?>', { method: 'POST', body: body })
             .then(function (r) { return r.json(); })
             .then(function (res) {

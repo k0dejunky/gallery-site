@@ -146,6 +146,11 @@
         if (thread.scrollTop < 60) loadOlder();
     });
 
+    // Start scrolled to the bottom so the newest messages are visible.
+    setTimeout(function () {
+        thread.scrollTop = thread.scrollHeight;
+    }, 50);
+
     function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
             return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
