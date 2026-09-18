@@ -95,6 +95,27 @@ class ChatBridgeController extends Controller
      */
     public function inbox(): void
     {
+        $limit = max(1, min(100, (int) $this->request->query('limit', 50)));
+        $search = trim((string) $this->request->query('q', ''));
+        $where = ["c.status = 'open'"];
+        $params = [];
+        $cursor = (string) $this->request->query('cursor', '');
+
+        if ($cursor !== '') {
+            $decoded = json_decode(base64_decode(strtr($cursor, '-_', '+/')), true);
+            if (is_array($decoded) && !empty($decoded['updated_at']) && isset($decoded['id'])) {
+                $where[] = '(c.updated_at < ? OR (c.updated_at = ? AND c.id < ?))';
+                $params[] = (string) $decoded['updated_at'];
+                $params[] = (string) $decoded['updated_at'];
+                $params[] = (int) $decoded['id'];
+            }
+        }
+
+        if ($search !== '') {
+            $where[] = 'u.email LIKE ?';
+            $params[] = '%' . $search . '%';
+        }
+
         $rows = \App\Core\Database::run(
             "SELECT c.id, c.user_id, c.ai_mode, c.status, c.updated_at,
                     c.operator_read_through_id,
@@ -107,12 +128,29 @@ class ChatBridgeController extends Controller
                     (SELECT COUNT(*) FROM chat_messages m WHERE m.conversation_id = c.id AND m.sender_role = 'user' AND m.id > c.operator_read_through_id) AS unread_replyable
              FROM chat_conversations c
              JOIN users u ON u.id = c.user_id
-             WHERE c.status = 'open'
-             ORDER BY c.updated_at DESC, c.id DESC
-             LIMIT 100"
+              WHERE " . implode(' AND ', $where) . "
+              ORDER BY c.updated_at DESC, c.id DESC
+              LIMIT " . ($limit + 1),
+            $params
         )->fetchAll();
 
-        $this->json(['ok' => true, 'conversations' => $rows]);
+        $hasMore = count($rows) > $limit;
+        if ($hasMore) array_pop($rows);
+        $nextCursor = null;
+        if ($hasMore && $rows !== []) {
+            $last = $rows[count($rows) - 1];
+            $nextCursor = rtrim(strtr(base64_encode(json_encode([
+                'updated_at' => (string) $last['updated_at'],
+                'id' => (int) $last['id'],
+            ])), '+/', '-_'), '=');
+        }
+
+        $this->json([
+            'ok' => true,
+            'conversations' => $rows,
+            'has_more' => $hasMore,
+            'next_cursor' => $nextCursor,
+        ]);
     }
 
     /**
@@ -321,6 +359,14 @@ class ChatBridgeController extends Controller
         $cid  = (int) ($data['conversation_id'] ?? $this->request->post('conversation_id', 0));
         $msg  = trim((string) ($data['message'] ?? $this->request->post('message', '')));
         $role = (string) ($data['sender_role'] ?? $this->request->post('sender_role', 'operator'));
+        $idempotencyKey = trim((string) ($data['idempotency_key']
+            ?? $this->request->post('idempotency_key', '')
+            ?: $this->request->header('Idempotency-Key', '')));
+
+        if ($idempotencyKey !== '' && !preg_match('/\A[A-Za-z0-9._:-]{8,128}\z/', $idempotencyKey)) {
+            $this->json(['ok' => false, 'error' => 'Invalid idempotency key.']);
+            return;
+        }
 
         if (!in_array($role, [ChatMessage::ROLE_OPERATOR, ChatMessage::ROLE_MODEL], true)) {
             $role = ChatMessage::ROLE_OPERATOR;
@@ -331,12 +377,38 @@ class ChatBridgeController extends Controller
             return;
         }
 
+        $db = \App\Core\Database::connection();
+        if ($idempotencyKey !== '') {
+            $db->beginTransaction();
+            $existing = \App\Core\Database::run(
+                'SELECT conversation_id, message_id FROM chat_reply_idempotency WHERE idempotency_key = ? FOR UPDATE',
+                [$idempotencyKey]
+            )->fetch();
+            if ($existing !== false && $existing !== null && (int) $existing['conversation_id'] !== $cid) {
+                $db->rollBack();
+                $this->json(['ok' => false, 'error' => 'Idempotency key is already used for another conversation.']);
+                return;
+            }
+            if ($existing !== false && $existing !== null && $existing['message_id'] !== null) {
+                $db->commit();
+                $this->json(['ok' => true, 'id' => (int) $existing['message_id'], 'idempotent' => true]);
+                return;
+            }
+            if ($existing === false) {
+                \App\Core\Database::run(
+                    'INSERT INTO chat_reply_idempotency (idempotency_key, conversation_id) VALUES (?, ?)',
+                    [$idempotencyKey, $cid]
+                );
+            }
+        }
+
         // Optional attachment from a multipart upload.
         $attachment = null;
         $file = $this->request->file('attachment');
         if ($file !== null && !empty($file['tmp_name']) && is_file($file['tmp_name'])) {
             $attachment = $this->storeChatAttachment($file);
             if ($attachment === null) {
+                if ($idempotencyKey !== '' && $db->inTransaction()) $db->rollBack();
                 $this->json(['ok' => false, 'error' => 'Attachment could not be stored.']);
                 return;
             }
@@ -344,8 +416,17 @@ class ChatBridgeController extends Controller
 
         $id = ChatMessage::addMessage($cid, $role, $msg, $attachment);
         if ($id <= 0) {
+            if ($idempotencyKey !== '' && $db->inTransaction()) $db->rollBack();
             $this->json(['ok' => false, 'error' => 'Message is empty (or too long) with no attachment.']);
             return;
+        }
+
+        if ($idempotencyKey !== '') {
+            \App\Core\Database::run(
+                'UPDATE chat_reply_idempotency SET message_id = ? WHERE idempotency_key = ?',
+                [$id, $idempotencyKey]
+            );
+            $db->commit();
         }
 
         // Harvest operator replies into the training corpus so the AI learns
