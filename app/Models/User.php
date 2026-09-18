@@ -93,6 +93,14 @@ class User
         return Database::run($sql, $params)->fetchAll();
     }
 
+    /** Active user accounts for the secret-gallery allow-list selector. */
+    public static function allForGalleryAccess(): array
+    {
+        return Database::run(
+            "SELECT id, email FROM users WHERE status = 'active' AND role = 'user' ORDER BY email"
+        )->fetchAll();
+    }
+
     /**
      * Register a new account with a bcrypt-hashed password.
      */

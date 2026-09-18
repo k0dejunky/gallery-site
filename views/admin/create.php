@@ -151,6 +151,22 @@
                     </select>
                 </div>
 
+                <?php if (\App\Core\Auth::isSuperAdmin()): ?>
+                <div class="field">
+                    <label><input type="checkbox" name="is_secret" value="1" id="is-secret"> Secret gallery</label>
+                    <span class="muted">Only selected users can see this gallery. Membership level does not grant access.</span>
+                </div>
+                <div class="field">
+                    <label for="allowed-users">Allowed users</label>
+                    <select name="allowed_users[]" id="allowed-users" multiple size="6" style="width:100%;">
+                        <?php foreach (($accessUsers ?? []) as $accessUser): ?>
+                            <option value="<?= (int) $accessUser['id'] ?>"><?= e($accessUser['email']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <span class="muted">Hold Ctrl/Cmd to select multiple users.</span>
+                </div>
+                <?php endif; ?>
+
                 <div class="field" id="publish-later-fields">
                     <label for="publish_at">Publish on this site at</label>
                     <input type="datetime-local" name="publish_at" id="publish_at" value="<?= e(\App\Models\Gallery::defaultPublishAt()) ?>">

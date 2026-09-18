@@ -54,10 +54,31 @@ class StorageController extends Controller
             if ($photo === null) {
                 Auth::requireSubscription();
             } else {
-                Auth::requireGalleryLevel(
-                    Photo::minimumGalleryLevel((int) $photo['id']),
-                    'A membership is required to view that file.'
-                );
+                $user = Auth::user();
+                if ($user === null || !Photo::userCanView((int) $photo['id'], (int) $user['id'])) {
+                    $this->notFound();
+                    return;
+                }
+                if (!Photo::hasPublicGallery((int) $photo['id'])) {
+                    // A secret-only photo is authorized by its allow-list;
+                    // membership level never grants access to it.
+                } else {
+                    Auth::requireGalleryLevel(
+                        Photo::minimumGalleryLevel((int) $photo['id']),
+                        'A membership is required to view that file.'
+                    );
+                }
+            }
+        }
+
+        if (in_array($size, ['thumb', 'blur'], true)) {
+            $photo = Photo::findByFilename($file);
+            if ($photo !== null && !Photo::hasPublicGallery((int) $photo['id'])) {
+                $user = Auth::user();
+                if ($user === null || !Photo::userCanView((int) $photo['id'], (int) $user['id'])) {
+                    $this->notFound();
+                    return;
+                }
             }
         }
 

@@ -56,7 +56,7 @@ class GalleryController extends Controller
         $categories = Category::all();
 
         if ($q === '') {
-            $byCategory = Gallery::inCategories(array_column($categories, 'id'), $type, $maxLevel);
+            $byCategory = Gallery::inCategories(array_column($categories, 'id'), $type, $maxLevel, $user !== null ? (int) $user['id'] : 0);
 
             foreach ($categories as $cat) {
                 $galleries = [];
@@ -76,7 +76,7 @@ class GalleryController extends Controller
             }
 
             $uncategorized = array_values(array_filter(
-                Gallery::withoutCategory($type, $maxLevel),
+                Gallery::withoutCategory($type, $maxLevel, $user !== null ? (int) $user['id'] : 0),
                 static fn (array $gallery): bool => !isset($seen[(int) $gallery['id']])
             ));
 
@@ -104,6 +104,9 @@ class GalleryController extends Controller
         }
 
         $filters = ['q' => $q, 'max_level' => $maxLevel];
+        if ($user !== null) {
+            $filters['user_id'] = (int) $user['id'];
+        }
         if ($catId > 0) {
             $filters['category'] = $catId;
         }
@@ -200,7 +203,7 @@ class GalleryController extends Controller
             ? (string) $this->request->query('sort')
             : '';
 
-        $filters       = ['q' => $q, 'category' => (int) $category['id'], 'max_level' => Auth::effectiveLevel()];
+        $filters       = ['q' => $q, 'category' => (int) $category['id'], 'max_level' => Auth::effectiveLevel(), 'user_id' => (int) $user['id']];
         if ($sort !== '') {
             $filters['sort'] = $sort;
         }
@@ -253,17 +256,19 @@ class GalleryController extends Controller
     {
         Auth::requireLogin();
 
-        $gallery = Gallery::findPublic($id);
+        $gallery = Gallery::findPublic($id, (int) Auth::user()['id']);
 
         if ($gallery === null) {
             $this->notFound();
             return;
         }
 
-        Auth::requireGalleryLevel(
-            (int) ($gallery['min_level'] ?? 0),
-            'A membership is required to view that gallery.'
-        );
+        if (empty($gallery['is_secret'])) {
+            Auth::requireGalleryLevel(
+                (int) ($gallery['min_level'] ?? 0),
+                'A membership is required to view that gallery.'
+            );
+        }
 
         $user = Auth::user();
 
@@ -307,17 +312,19 @@ class GalleryController extends Controller
     {
         Auth::requireLogin();
 
-        $gallery = Gallery::findPublic($id);
+        $gallery = Gallery::findPublic($id, (int) Auth::user()['id']);
 
         if ($gallery === null) {
             $this->notFound();
             return;
         }
 
-        Auth::requireGalleryLevel(
-            (int) ($gallery['min_level'] ?? 0),
-            'A membership is required to view that gallery.'
-        );
+        if (empty($gallery['is_secret'])) {
+            Auth::requireGalleryLevel(
+                (int) ($gallery['min_level'] ?? 0),
+                'A membership is required to view that gallery.'
+            );
+        }
 
         $pageSize = max(1, (int) config('app.gallery_page_size', 48));
         $offset   = max(0, (int) $this->request->query('offset', 0));
@@ -364,7 +371,8 @@ class GalleryController extends Controller
             'categories'   => Category::all(),
             'galleryType'  => 'images',
             'pendingFiles' => $this->pendingListMeta(),
-            'queuedGalleries' => Gallery::queuedForPublishing(),
+            'queuedGalleries' => Gallery::queuedForPublishing(Auth::isSuperAdmin()),
+            'accessUsers' => Auth::isSuperAdmin() ? \App\Models\User::allForGalleryAccess() : [],
         ]);
     }
 
@@ -380,6 +388,9 @@ class GalleryController extends Controller
         $description = $this->request->input('description');
         $type        = $this->request->input('type', 'images') === 'videos' ? 'videos' : 'images';
         $minLevel    = max(0, min(3, (int) $this->request->input('min_level', '0')));
+        $isSecret    = Auth::isSuperAdmin() && $this->request->post('is_secret') === '1';
+        $allowedUsers = $this->request->post('allowed_users', []);
+        $allowedUsers = is_array($allowedUsers) ? $allowedUsers : [];
         $categoryIds = $this->request->post('categories', []);
         $categoryIds = is_array($categoryIds) ? $categoryIds : [];
 
@@ -413,8 +424,11 @@ class GalleryController extends Controller
             $publishedAt = Gallery::normalizePublishAt($publishAtRaw);
         }
 
-        $galleryId = Gallery::create($title, $description, $type, $minLevel, $publishedAt);
+        $galleryId = Gallery::create($title, $description, $type, $minLevel, $publishedAt, $isSecret);
         Gallery::setCategories($galleryId, $categoryIds);
+        if ($isSecret) {
+            Gallery::setAllowedUsers($galleryId, $allowedUsers);
+        }
 
         $count = $this->finalizePending($galleryId, $type);
 
@@ -424,6 +438,8 @@ class GalleryController extends Controller
             'categories' => array_map('intval', $categoryIds),
             'photos' => $count,
             'published_at' => $publishedAt,
+            'is_secret' => $isSecret,
+            'allowed_users' => array_map('intval', $allowedUsers),
         ]);
 
         // A queued gallery schedules its recommended X + Reddit posts for the
@@ -1167,6 +1183,11 @@ class GalleryController extends Controller
             return;
         }
 
+        if (!empty($gallery['is_secret']) && !Auth::isSuperAdmin()) {
+            $this->notFound();
+            return;
+        }
+
         $this->viewAdmin('edit', [
             'gallery'      => $gallery,
             'photos'       => Gallery::photos($id),
@@ -1175,7 +1196,9 @@ class GalleryController extends Controller
                 static fn (array $category) => (int) $category['id'],
                 Gallery::categories($id)
             ),
-            'queuedGalleries' => Gallery::queuedForPublishing(),
+            'queuedGalleries' => Gallery::queuedForPublishing(Auth::isSuperAdmin()),
+            'allowedUsers' => !empty($gallery['is_secret']) ? Gallery::allowedUsers($id) : [],
+            'accessUsers' => Auth::isSuperAdmin() ? \App\Models\User::allForGalleryAccess() : [],
         ]);
     }
 
@@ -1192,12 +1215,20 @@ class GalleryController extends Controller
             return;
         }
 
+        if (!empty($gallery['is_secret']) && !Auth::isSuperAdmin()) {
+            $this->notFound();
+            return;
+        }
+
         $beforeCategories = array_column(Gallery::categories($id), 'id');
 
         $title       = $this->request->input('title');
         $description = $this->request->input('description');
         $type        = $this->request->input('type', 'images') === 'videos' ? 'videos' : 'images';
         $minLevel    = max(0, min(3, (int) $this->request->input('min_level', '0')));
+        $isSecret    = Auth::isSuperAdmin() && $this->request->post('is_secret') === '1';
+        $allowedUsers = $this->request->post('allowed_users', []);
+        $allowedUsers = is_array($allowedUsers) ? $allowedUsers : [];
         $categoryIds = $this->request->post('categories', []);
         $categoryIds = is_array($categoryIds) ? $categoryIds : [];
 
@@ -1228,8 +1259,9 @@ if ($publishAtRaw !== '') {
             $this->redirect('/admin/galleries/' . $id . '/edit');
         }
 
-        Gallery::update($id, $title, $description, $type, $minLevel, $publishedAt);
+        Gallery::update($id, $title, $description, $type, $minLevel, $publishedAt, $isSecret);
         Gallery::setCategories($id, $categoryIds);
+        Gallery::setAllowedUsers($id, $isSecret ? $allowedUsers : []);
 
         // Resync pending X/Reddit auto-post rows to the new publish moment so
         // the posts go out when the gallery goes live (or immediately when the
@@ -1241,6 +1273,8 @@ if ($publishAtRaw !== '') {
             'min_level' => $minLevel,
             'categories' => array_map('intval', $categoryIds),
             'published_at' => $publishedAt,
+            'is_secret' => $isSecret,
+            'allowed_users' => array_map('intval', $allowedUsers),
         ];
         $before = [
             'title' => $gallery['title'] ?? '',
@@ -1249,6 +1283,8 @@ if ($publishAtRaw !== '') {
             'min_level' => (int) ($gallery['min_level'] ?? 0),
             'categories' => $beforeCategories,
             'published_at' => $gallery['published_at'] ?? null,
+            'is_secret' => !empty($gallery['is_secret']),
+            'allowed_users' => array_map('intval', array_column(Gallery::allowedUsers($id), 'id')),
         ];
 
         if ($before !== $after) {
@@ -1272,6 +1308,8 @@ if ($publishAtRaw !== '') {
             $this->notFound();
             return;
         }
+
+        $this->guardSecretAdmin($gallery);
 
         Gallery::publishNow($id);
         AutoPostQueue::advanceGalleryPosts($id);
@@ -1301,6 +1339,8 @@ if ($publishAtRaw !== '') {
             $this->notFound();
             return;
         }
+
+        $this->guardSecretAdmin($gallery);
 
         if ($gallery['deleted_at'] === null) {
             $beforeCategories = array_column(Gallery::categories($id), 'id');
@@ -1337,6 +1377,8 @@ if ($publishAtRaw !== '') {
             $this->notFound();
             return;
         }
+
+        $this->guardSecretAdmin($gallery);
 
         $queued    = [];
         $duplicate = [];
@@ -1414,6 +1456,10 @@ if ($publishAtRaw !== '') {
                 continue;
             }
 
+            if (!empty($gallery['is_secret']) && !Auth::isSuperAdmin()) {
+                continue;
+            }
+
             if ($action === 'delete') {
                 if ($gallery['deleted_at'] === null) {
                     AuditLog::record($adminId, 'delete', 'gallery', $id,
@@ -1434,6 +1480,14 @@ if ($publishAtRaw !== '') {
 
         $this->flash('success', ucfirst($action === 'delete' ? 'Deleted' : 'Recategorized') . " {$done} gallery(ies).");
         $this->redirect('/admin');
+    }
+
+    private function guardSecretAdmin(?array $gallery): void
+    {
+        if ($gallery !== null && !empty($gallery['is_secret']) && !Auth::isSuperAdmin()) {
+            $this->notFound();
+            exit;
+        }
     }
 
     /**

@@ -185,6 +185,9 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                         </td>
                         <td>
                             <a class="mg-title" href="<?= url('/admin/galleries/' . $gid) ?>"><?= e((string) $gallery['title']) ?></a>
+                            <?php if (!empty($gallery['is_secret'])): ?>
+                                <span class="pill pill-warn">Secret</span>
+                            <?php endif; ?>
                             <?php if (!empty($gallery['published_at']) && $gallery['published_at'] > gmdate('Y-m-d H:i:s')): ?>
                                 <span class="pill pill-warn" title="Hidden from the public site until the scheduled time">Scheduled</span>
                             <?php endif; ?>

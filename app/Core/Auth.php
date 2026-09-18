@@ -280,6 +280,13 @@ class Auth
         return $user !== null && in_array($user['role'], self::ADMIN_ROLES, true);
     }
 
+    public static function isSuperAdmin(): bool
+    {
+        $user = self::user();
+
+        return $user !== null && ($user['role'] ?? '') === 'super_admin';
+    }
+
     public static function can(string $permission): bool
     {
         $user = self::user();
@@ -296,6 +303,22 @@ class Auth
         }
         if (!self::can($permission)) {
             Flash::set('error', 'You do not have permission to do that.');
+            header('Location: ' . url('/admin'));
+            exit;
+        }
+    }
+
+    /** Require the super-admin role for highly sensitive content controls. */
+    public static function requireSuperAdmin(): void
+    {
+        if (!self::check()) {
+            header('Location: ' . url('/admin'));
+            exit;
+        }
+
+        $user = self::user();
+        if (($user['role'] ?? '') !== 'super_admin') {
+            Flash::set('error', 'Only super administrators can manage secret galleries.');
             header('Location: ' . url('/admin'));
             exit;
         }

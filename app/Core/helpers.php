@@ -23,7 +23,14 @@ function env_value(string $key, string $default = ''): string
 
     if ($env === null) {
         $file = dirname(__DIR__, 2) . '/.env';
-        $env  = is_readable($file) ? (parse_ini_file($file, false, INI_SCANNER_RAW) ?: []) : [];
+        $env  = [];
+        if (is_readable($file)) {
+            $contents = file_get_contents($file);
+            if ($contents !== false) {
+                $contents = preg_replace('/^\s*#.*$/m', '', $contents) ?? $contents;
+                $env = parse_ini_string($contents, false, INI_SCANNER_RAW) ?: [];
+            }
+        }
     }
 
     $value = $env[$key] ?? getenv($key);

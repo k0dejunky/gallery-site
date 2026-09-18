@@ -88,16 +88,18 @@ class FavoriteController extends Controller
     public function toggleGallery(int $galleryId): void
     {
         Auth::requireLogin();
-        $gallery = Gallery::findPublic($galleryId);
+        $gallery = Gallery::findPublic($galleryId, (int) $_SESSION['user_id']);
         if ($gallery === null) {
             $this->notFound();
             return;
         }
 
-        Auth::requireMembershipLevel(
-            Plan::SILVER_LEVEL,
-            'Selecting favorite galleries requires at least a Silver level membership.'
-        );
+        if (empty($gallery['is_secret'])) {
+            Auth::requireMembershipLevel(
+                Plan::SILVER_LEVEL,
+                'Selecting favorite galleries requires at least a Silver level membership.'
+            );
+        }
 
         $favorited = Gallery::toggleFavorite((int) $_SESSION['user_id'], $galleryId);
 

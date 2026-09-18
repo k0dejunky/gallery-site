@@ -1,7 +1,17 @@
 <?php
 
 $envFile = __DIR__ . '/../.env';
-$env     = is_readable($envFile) ? (parse_ini_file($envFile, false, INI_SCANNER_RAW) ?: []) : [];
+$env     = [];
+if (is_readable($envFile)) {
+    $contents = file_get_contents($envFile);
+    if ($contents !== false) {
+        // .env files in this project use shell-style comments. PHP's INI
+        // parser only accepts semicolon comments, so strip full-line hashes
+        // before parsing instead of losing all settings on a warning.
+        $contents = preg_replace('/^\s*#.*$/m', '', $contents) ?? $contents;
+        $env = parse_ini_string($contents, false, INI_SCANNER_RAW) ?: [];
+    }
+}
 
 $value = static function (string $key, string $default = '') use ($env): string {
     $value = $env[$key] ?? getenv($key);

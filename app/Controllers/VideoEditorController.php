@@ -18,6 +18,12 @@ class VideoEditorController extends Controller
     {
         parent::__construct($request);
         Auth::requirePermission('videos');
+
+        if (preg_match('#/admin/videos/(\d+)(?:/|$)#', $request->uri(), $match)
+            && Photo::hasSecretGallery((int) $match[1]) && !Auth::isSuperAdmin()) {
+            http_response_code(404);
+            exit;
+        }
     }
 
     public function edit(int $id): void

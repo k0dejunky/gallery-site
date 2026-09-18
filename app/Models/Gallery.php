@@ -23,6 +23,30 @@ class Gallery
         return "($alias.deleted_at IS NULL AND ($alias.published_at IS NULL OR $alias.published_at <= CURRENT_TIMESTAMP))";
     }
 
+    /** SQL visibility condition for the current user on the user-facing site. */
+    public static function userVisibleSql(int $userId, string $alias = 'g'): array
+    {
+        return [
+            "($alias.is_secret = 0 OR EXISTS (SELECT 1 FROM gallery_user_access gua WHERE gua.gallery_id = $alias.id AND gua.user_id = ?))",
+            [$userId],
+        ];
+    }
+
+    public static function userCanView(int $galleryId, int $userId): bool
+    {
+        if ($userId <= 0) return false;
+
+        return (bool) Database::run(
+            'SELECT 1 FROM galleries g
+             WHERE g.id = ? AND ' . self::publishedVisibleSql('g') . '
+               AND (g.is_secret = 0 OR EXISTS (
+                   SELECT 1 FROM gallery_user_access gua
+                   WHERE gua.gallery_id = g.id AND gua.user_id = ?
+               )) LIMIT 1',
+            [$galleryId, $userId]
+        )->fetchColumn();
+    }
+
     /**
      * Whether a datetime-local value (site timezone) is a valid publish
      * schedule that lies strictly in the future. Blank/invalid/past times
@@ -80,11 +104,18 @@ class Gallery
      * still awaiting a scheduled future publication. Admin flows keep using
      * find()/findIncludingDeleted() so scheduled galleries stay manageable.
      */
-    public static function findPublic(int $id): ?array
+    public static function findPublic(int $id, ?int $userId = null): ?array
     {
+        $access = ' AND galleries.is_secret = 0';
+        $params = [$id];
+        if ($userId !== null) {
+            [$condition, $conditionParams] = self::userVisibleSql($userId, 'galleries');
+            $access = ' AND ' . $condition;
+            $params = array_merge($params, $conditionParams);
+        }
         $gallery = Database::run(
-            'SELECT * FROM galleries WHERE id = ? AND ' . self::publishedVisibleSql('galleries'),
-            [$id]
+            'SELECT * FROM galleries WHERE id = ? AND ' . self::publishedVisibleSql('galleries') . $access,
+            $params
         )->fetch();
 
         return $gallery ?: null;
@@ -105,14 +136,15 @@ class Gallery
      * Galleries queued for a future publication, soonest schedule first.
      * Admin-only (used to render the collapsible "gallery queue" section).
      */
-    public static function queuedForPublishing(): array
+    public static function queuedForPublishing(bool $includeSecret = false): array
     {
+        $secretCondition = $includeSecret ? '' : ' AND is_secret = 0';
         return Database::run(
             'SELECT id, title, type, min_level, published_at, created_at
              FROM galleries
              WHERE deleted_at IS NULL
                AND published_at IS NOT NULL
-               AND published_at > CURRENT_TIMESTAMP
+               AND published_at > CURRENT_TIMESTAMP' . $secretCondition . '
              ORDER BY published_at ASC, id ASC'
         )->fetchAll();
     }
@@ -124,6 +156,10 @@ class Gallery
     {
         $where  = ['g.deleted_at IS NULL'];
         $params = [];
+
+        if (empty($filters['include_secret'])) {
+            $where[] = 'g.is_secret = 0';
+        }
 
         if (!empty($filters['type']) && in_array($filters['type'], ['images', 'videos'], true)) {
             $where[] = 'g.type = ?';
@@ -161,6 +197,14 @@ class Gallery
         $page    = max(1, $page);
         $where   = [];
         $params  = [];
+
+        if (isset($filters['user_id'])) {
+            [$condition, $conditionParams] = self::userVisibleSql((int) $filters['user_id'], 'g');
+            $where[] = $condition;
+            $params = array_merge($params, $conditionParams);
+        } else {
+            $where[] = 'g.is_secret = 0';
+        }
 
         if (!empty($filters['q'])) {
             $like = '%' . $filters['q'] . '%';
@@ -216,7 +260,7 @@ class Gallery
         if (array_key_exists('max_level', $filters)) {
             $maxLevel = (int) $filters['max_level'];
             if ($maxLevel < PHP_INT_MAX) {
-                $where[]  = 'g.min_level <= ?';
+                $where[]  = '(g.is_secret = 1 OR g.min_level <= ?)';
                 $params[] = $maxLevel;
             }
         }
@@ -261,7 +305,7 @@ class Gallery
      * category it belongs to; callers deduplicate across categories. This
      * avoids the N+1 pattern of one query per category.
      */
-    public static function inCategories(array $categoryIds, string $type = '', int $maxLevel = PHP_INT_MAX): array
+    public static function inCategories(array $categoryIds, string $type = '', int $maxLevel = PHP_INT_MAX, ?int $userId = null): array
     {
         $result = [];
 
@@ -281,17 +325,23 @@ class Gallery
             $typeCondition = ' AND ' . self::mediaTypeCondition($type);
         }
 
-        $levelCondition = $maxLevel < PHP_INT_MAX ? ' AND g.min_level <= ' . (int) $maxLevel : '';
+        $levelCondition = $maxLevel < PHP_INT_MAX ? ' AND (g.is_secret = 1 OR g.min_level <= ' . (int) $maxLevel . ')' : '';
+        $accessCondition = ' AND g.is_secret = 0';
+        $accessParams = [];
+        if ($userId !== null) {
+            [$condition, $accessParams] = self::userVisibleSql($userId, 'g');
+            $accessCondition = ' AND ' . $condition;
+        }
 
         $rows = Database::run(
             'SELECT g.*, gc.category_id, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
              FROM galleries g
              INNER JOIN gallery_category gc ON gc.gallery_id = g.id
              LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
-             WHERE gc.category_id IN (' . $placeholders . ') AND ' . self::publishedVisibleSql('g') . $typeCondition . $levelCondition . '
+             WHERE gc.category_id IN (' . $placeholders . ') AND ' . self::publishedVisibleSql('g') . $accessCondition . $typeCondition . $levelCondition . '
              GROUP BY g.id, gc.category_id
              ORDER BY g.created_at DESC',
-            $ids
+            array_merge($ids, $accessParams)
         )->fetchAll();
 
         foreach ($rows as $row) {
@@ -305,23 +355,30 @@ class Gallery
      * Galleries tagged with no category at all (shown in the catch-all
      * "Uncategorized" section of the full listing).
      */
-    public static function withoutCategory(string $type = '', int $maxLevel = PHP_INT_MAX): array
+    public static function withoutCategory(string $type = '', int $maxLevel = PHP_INT_MAX, ?int $userId = null): array
     {
         $typeCondition = '';
         if (in_array($type, ['images', 'videos'], true)) {
             $typeCondition = ' AND ' . self::mediaTypeCondition($type);
         }
 
-        $levelCondition = $maxLevel < PHP_INT_MAX ? ' AND g.min_level <= ' . (int) $maxLevel : '';
+        $levelCondition = $maxLevel < PHP_INT_MAX ? ' AND (g.is_secret = 1 OR g.min_level <= ' . (int) $maxLevel . ')' : '';
+        $accessCondition = ' AND g.is_secret = 0';
+        $accessParams = [];
+        if ($userId !== null) {
+            [$condition, $accessParams] = self::userVisibleSql($userId, 'g');
+            $accessCondition = ' AND ' . $condition;
+        }
 
         return Database::run(
             'SELECT g.*, NULL AS category_id, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
              FROM galleries g
              LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
-             WHERE ' . self::publishedVisibleSql('g') . '
+             WHERE ' . self::publishedVisibleSql('g') . $accessCondition . '
                AND NOT EXISTS (SELECT 1 FROM gallery_category gc WHERE gc.gallery_id = g.id)' . $typeCondition . $levelCondition . '
              GROUP BY g.id
-             ORDER BY g.created_at DESC'
+             ORDER BY g.created_at DESC',
+            $accessParams
         )->fetchAll();
     }
 
@@ -512,13 +569,13 @@ class Gallery
     /**
      * Insert a new gallery (image or video gallery) and return its id.
      */
-    public static function create(string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null): int
+    public static function create(string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, bool $isSecret = false): int
     {
         $type = $type === 'videos' ? 'videos' : 'images';
 
         Database::run(
-            'INSERT INTO galleries (title, description, type, min_level, published_at, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-            [$title, $description, $type, $minLevel, $publishedAt]
+            'INSERT INTO galleries (title, description, type, min_level, is_secret, published_at, created_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+            [$title, $description, $type, $minLevel, $isSecret ? 1 : 0, $publishedAt]
         );
 
         return (int) Database::connection()->lastInsertId();
@@ -527,14 +584,44 @@ class Gallery
     /**
      * Update a gallery's title, description and type.
      */
-    public static function update(int $id, string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null): void
+    public static function update(int $id, string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, ?bool $isSecret = null): void
     {
         $type = $type === 'videos' ? 'videos' : 'images';
 
+        if ($isSecret === null) {
+            Database::run(
+                'UPDATE galleries SET title = ?, description = ?, type = ?, min_level = ?, published_at = ? WHERE id = ?',
+                [$title, $description, $type, $minLevel, $publishedAt, $id]
+            );
+            return;
+        }
+
         Database::run(
-            'UPDATE galleries SET title = ?, description = ?, type = ?, min_level = ?, published_at = ? WHERE id = ?',
-            [$title, $description, $type, $minLevel, $publishedAt, $id]
+            'UPDATE galleries SET title = ?, description = ?, type = ?, min_level = ?, is_secret = ?, published_at = ? WHERE id = ?',
+            [$title, $description, $type, $minLevel, $isSecret ? 1 : 0, $publishedAt, $id]
         );
+    }
+
+    public static function allowedUsers(int $galleryId): array
+    {
+        return Database::run(
+            'SELECT u.id, u.email FROM users u
+             INNER JOIN gallery_user_access gua ON gua.user_id = u.id
+             WHERE gua.gallery_id = ? ORDER BY u.email',
+            [$galleryId]
+        )->fetchAll();
+    }
+
+    public static function setAllowedUsers(int $galleryId, array $userIds): void
+    {
+        Database::run('DELETE FROM gallery_user_access WHERE gallery_id = ?', [$galleryId]);
+        foreach (array_unique(array_filter(array_map('intval', $userIds), static fn (int $id): bool => $id > 0)) as $userId) {
+            Database::run(
+                "INSERT INTO gallery_user_access (gallery_id, user_id)
+                 SELECT ?, id FROM users WHERE id = ? AND status = 'active' AND role = 'user'",
+                [$galleryId, $userId]
+            );
+        }
     }
 
     /**
@@ -795,16 +882,18 @@ class Gallery
             return [];
         }
 
+        [$accessCondition, $accessParams] = self::userVisibleSql($userId, 'g');
+
         return Database::run(
             'SELECT g.*, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
              FROM gallery_viewers gv
              INNER JOIN galleries g ON g.id = gv.gallery_id
              LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
-             WHERE gv.user_id = ? AND ' . self::publishedVisibleSql('g') . '
+             WHERE gv.user_id = ? AND ' . self::publishedVisibleSql('g') . ' AND ' . $accessCondition . '
              GROUP BY g.id
              ORDER BY gv.viewed_at DESC
              LIMIT ' . (int) $limit,
-            [$userId]
+            array_merge([$userId], $accessParams)
         )->fetchAll();
     }
 
@@ -865,16 +954,18 @@ class Gallery
             return [];
         }
 
+        [$accessCondition, $accessParams] = self::userVisibleSql($userId, 'g');
+
         $galleries = Database::run(
             'SELECT g.*, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
              FROM gallery_favorites gf
              INNER JOIN galleries g ON g.id = gf.gallery_id
              LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
-             WHERE gf.user_id = ? AND ' . self::publishedVisibleSql('g') . '
+             WHERE gf.user_id = ? AND ' . self::publishedVisibleSql('g') . ' AND ' . $accessCondition . '
              GROUP BY g.id, gf.created_at
              ORDER BY gf.created_at DESC
              LIMIT ' . max(1, (int) $limit),
-            [$userId]
+            array_merge([$userId], $accessParams)
         )->fetchAll();
 
         $covers = self::firstPhotos(array_map('intval', array_column($galleries, 'id')));

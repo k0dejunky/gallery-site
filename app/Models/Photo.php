@@ -85,6 +85,44 @@ class Photo
         return $photo ?: null;
     }
 
+    /** Whether the photo belongs to at least one gallery visible to the user. */
+    public static function userCanView(int $photoId, int $userId): bool
+    {
+        if ($userId <= 0) return false;
+
+        return (bool) Database::run(
+            'SELECT 1 FROM gallery_photo gp
+             INNER JOIN galleries g ON g.id = gp.gallery_id
+             WHERE gp.photo_id = ? AND ' . Gallery::publishedVisibleSql('g') . '
+               AND (g.is_secret = 0 OR EXISTS (
+                   SELECT 1 FROM gallery_user_access gua
+                   WHERE gua.gallery_id = g.id AND gua.user_id = ?
+               )) LIMIT 1',
+            [$photoId, $userId]
+        )->fetchColumn();
+    }
+
+    public static function hasPublicGallery(int $photoId): bool
+    {
+        return (bool) Database::run(
+            'SELECT 1 FROM gallery_photo gp
+             INNER JOIN galleries g ON g.id = gp.gallery_id
+             WHERE gp.photo_id = ? AND ' . Gallery::publishedVisibleSql('g') . '
+               AND g.is_secret = 0 LIMIT 1',
+            [$photoId]
+        )->fetchColumn();
+    }
+
+    public static function hasSecretGallery(int $photoId): bool
+    {
+        return (bool) Database::run(
+            'SELECT 1 FROM gallery_photo gp
+             INNER JOIN galleries g ON g.id = gp.gallery_id
+             WHERE gp.photo_id = ? AND g.is_secret = 1 LIMIT 1',
+            [$photoId]
+        )->fetchColumn();
+    }
+
     /**
      * Insert a new photo record and return its id. The media type (image vs
      * video) is derived from the filename's extension and stored in
@@ -203,12 +241,19 @@ class Photo
         $limitSql = $limit > 0 ? ' LIMIT ' . (int) $limit : '';
 
         return Database::run(
-            "SELECT p.id, p.filename, p.created_at,
+            'SELECT p.id, p.filename, p.created_at,
                     (SELECT gp.gallery_id FROM gallery_photo gp
-                      WHERE gp.photo_id = p.id ORDER BY gp.gallery_id LIMIT 1) AS gallery_id
+                      INNER JOIN galleries g ON g.id = gp.gallery_id
+                      WHERE gp.photo_id = p.id AND g.is_secret = 0
+                        AND ' . Gallery::publishedVisibleSql('g') . '
+                      ORDER BY gp.gallery_id LIMIT 1) AS gallery_id
              FROM photos p
              WHERE p.is_video = ?
-             ORDER BY p.created_at DESC, p.id DESC" . $limitSql,
+               AND EXISTS (SELECT 1 FROM gallery_photo gp_public
+                   INNER JOIN galleries g_public ON g_public.id = gp_public.gallery_id
+                   WHERE gp_public.photo_id = p.id AND g_public.is_secret = 0
+                     AND ' . Gallery::publishedVisibleSql('g_public') . ')
+             ORDER BY p.created_at DESC, p.id DESC' . $limitSql,
             [$isVideo]
         )->fetchAll();
     }

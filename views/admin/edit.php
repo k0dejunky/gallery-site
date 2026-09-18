@@ -46,6 +46,22 @@
         </select>
         <span class="muted">Members below this level cannot view this gallery.</span>
     </p>
+    <?php if (\App\Core\Auth::isSuperAdmin()): ?>
+    <?php $allowedIds = array_map('intval', array_column($allowedUsers ?? [], 'id')); ?>
+    <p>
+        <label><input type="checkbox" name="is_secret" value="1" <?= !empty($gallery['is_secret']) ? 'checked' : '' ?>> Secret gallery</label><br>
+        <span class="muted">Only selected users can see this gallery. Membership level does not grant access.</span>
+    </p>
+    <p>
+        <label for="allowed-users">Allowed users</label><br>
+        <select name="allowed_users[]" id="allowed-users" multiple size="6" style="min-width:280px;">
+            <?php foreach (($accessUsers ?? []) as $accessUser): ?>
+                <option value="<?= (int) $accessUser['id'] ?>"<?= in_array((int) $accessUser['id'], $allowedIds, true) ? ' selected' : '' ?>><?= e($accessUser['email']) ?></option>
+            <?php endforeach; ?>
+        </select><br>
+        <span class="muted">Hold Ctrl/Cmd to select multiple users.</span>
+    </p>
+    <?php endif; ?>
     <p>
         <label for="publish_at">Publish on this site at</label><br>
         <input type="datetime-local" name="publish_at" id="publish_at"

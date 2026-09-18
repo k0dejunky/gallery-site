@@ -22,6 +22,20 @@ class PhotoController extends Controller
     {
         parent::__construct($request);
         Auth::requirePermission('galleries');
+
+        if (preg_match('#/admin/galleries/(\d+)(?:/|$)#', $request->uri(), $match)) {
+            $gallery = Gallery::find((int) $match[1]);
+            if ($gallery !== null && !empty($gallery['is_secret']) && !Auth::isSuperAdmin()) {
+                http_response_code(404);
+                exit;
+            }
+        }
+
+        if (preg_match('#/admin/photos/(\d+)(?:/|$)#', $request->uri(), $match)
+            && Photo::hasSecretGallery((int) $match[1]) && !Auth::isSuperAdmin()) {
+            http_response_code(404);
+            exit;
+        }
     }
 
     /**

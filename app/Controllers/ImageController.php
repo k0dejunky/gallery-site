@@ -35,13 +35,19 @@ class ImageController extends Controller
 
         $galleryId = Photo::firstGalleryId($id);
         $gallery   = $galleryId !== null ? Gallery::find($galleryId) : null;
+        $user      = Auth::user();
 
-        Auth::requireGalleryLevel(
-            Photo::minimumGalleryLevel($id),
-            'A membership is required to view that media.'
-        );
+        if ($user === null || !Photo::userCanView($id, (int) $user['id'])) {
+            $this->notFound();
+            return;
+        }
 
-        $user = Auth::user();
+        if (Photo::hasPublicGallery($id)) {
+            Auth::requireGalleryLevel(
+                Photo::minimumGalleryLevel($id),
+                'A membership is required to view that media.'
+            );
+        }
 
         if ($user !== null) {
             Photo::recordView($id, (int) $user['id']);

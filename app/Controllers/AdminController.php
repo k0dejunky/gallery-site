@@ -115,6 +115,9 @@ class AdminController extends Controller
             $level = null;
         }
 
+        if (Auth::isSuperAdmin()) {
+            $filters['include_secret'] = true;
+        }
         $galleries = Gallery::all($filters);
 
         $galleryIds = array_map('intval', array_column($galleries, 'id'));
@@ -124,7 +127,7 @@ class AdminController extends Controller
             'covers'      => Gallery::firstPhotos($galleryIds),
             'filterType'  => $type,
             'filterLevel' => $level,
-            'queuedGalleries' => Gallery::queuedForPublishing(),
+            'queuedGalleries' => Gallery::queuedForPublishing(Auth::isSuperAdmin()),
         ]);
     }
 
@@ -158,6 +161,11 @@ class AdminController extends Controller
             return;
         }
 
+        if (!empty($gallery['is_secret']) && !Auth::isSuperAdmin()) {
+            $this->notFound();
+            return;
+        }
+
         $this->viewAdmin('manage', [
             'gallery'   => $gallery,
             'photos'    => Gallery::photos($id),
@@ -167,7 +175,9 @@ class AdminController extends Controller
                 Gallery::categories($id)
             ),
             'activeEditJob' => \App\Models\PhotoJob::latestForGallery($id),
-            'queuedGalleries' => Gallery::queuedForPublishing(),
+            'queuedGalleries' => Gallery::queuedForPublishing(Auth::isSuperAdmin()),
+            'allowedUsers' => !empty($gallery['is_secret']) ? Gallery::allowedUsers($id) : [],
+            'accessUsers' => Auth::isSuperAdmin() ? \App\Models\User::allForGalleryAccess() : [],
         ]);
     }
 
@@ -181,7 +191,7 @@ class AdminController extends Controller
 
         $this->viewAdmin('abandoned', [
             'uploads' => Photo::abandonedPending(),
-            'galleries' => Gallery::all(),
+            'galleries' => Gallery::all(['include_secret' => Auth::isSuperAdmin()]),
         ]);
     }
 
@@ -343,6 +353,11 @@ class AdminController extends Controller
         if ($gallery === null) {
             $this->flash('error', 'Select a valid gallery.');
             $this->redirect('/admin/abandoned-uploads');
+        }
+
+        if (!empty($gallery['is_secret']) && !Auth::isSuperAdmin()) {
+            $this->notFound();
+            return;
         }
 
         if ($session === '' || !preg_match('/^[A-Za-z0-9_,-]+$/', $session)

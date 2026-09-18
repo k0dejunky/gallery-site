@@ -87,11 +87,22 @@ CREATE TABLE IF NOT EXISTS galleries (
     description  TEXT,
     type         VARCHAR(10) NOT NULL DEFAULT 'images',
     min_level    INT UNSIGNED NOT NULL DEFAULT 0,
+    is_secret    TINYINT(1) NOT NULL DEFAULT 0,
     views        INT UNSIGNED NOT NULL DEFAULT 0,
     unique_views INT UNSIGNED NOT NULL DEFAULT 0,
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at   DATETIME NULL,
     FULLTEXT KEY ft_search (title, description)
+);
+
+CREATE TABLE IF NOT EXISTS gallery_user_access (
+    gallery_id INT UNSIGNED NOT NULL,
+    user_id    INT UNSIGNED NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (gallery_id, user_id),
+    INDEX idx_gallery_user_access_user (user_id),
+    FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS photos (

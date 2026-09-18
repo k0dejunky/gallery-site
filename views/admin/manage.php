@@ -35,6 +35,21 @@
         </select>
         <span class="muted">Members below this level cannot view the gallery.</span>
     </p>
+    <?php if (\App\Core\Auth::isSuperAdmin()): ?>
+    <?php $allowedIds = array_map('intval', array_column($allowedUsers ?? [], 'id')); ?>
+    <p>
+        <label><input type="checkbox" name="is_secret" value="1" <?= !empty($gallery['is_secret']) ? 'checked' : '' ?>> Secret gallery</label>
+        <span class="muted">Only selected users can see this gallery, regardless of membership level.</span>
+    </p>
+    <p>
+        <label for="manage-allowed-users">Allowed users</label>
+        <select name="allowed_users[]" id="manage-allowed-users" multiple size="6" style="min-width:280px;">
+            <?php foreach (($accessUsers ?? []) as $accessUser): ?>
+                <option value="<?= (int) $accessUser['id'] ?>"<?= in_array((int) $accessUser['id'], $allowedIds, true) ? ' selected' : '' ?>><?= e($accessUser['email']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </p>
+    <?php endif; ?>
     <?php if (empty($categories)): ?>
         <p class="muted">No categories available.</p>
     <?php else: ?>
