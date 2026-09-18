@@ -215,10 +215,75 @@ class ChatMessage
         )->fetchAll();
     }
 
+    /**
+     * The most recent $limit messages, ordered oldest-first (so the client can
+     * render them top-to-bottom). Used as the initial page of a thread.
+     */
+    public static function messagesLatest(int $conversationId, int $limit = 50): array
+    {
+        $limit = max(1, min(200, $limit));
+
+        $rows = Database::run(
+            'SELECT * FROM chat_messages WHERE conversation_id = ?
+             ORDER BY id DESC LIMIT ' . $limit,
+            [$conversationId]
+        )->fetchAll();
+
+        return array_reverse($rows);
+    }
+
+    /**
+     * Up to $limit messages with id < $beforeId (older than a cursor), ordered
+     * oldest-first. Returns [] when there is nothing older. Used for lazy /
+     * batch loading when the user scrolls up.
+     */
+    public static function messagesBefore(int $conversationId, int $beforeId, int $limit = 50): array
+    {
+        if ($beforeId <= 0) {
+            return [];
+        }
+        $limit = max(1, min(200, $limit));
+
+        $rows = Database::run(
+            'SELECT * FROM chat_messages WHERE conversation_id = ? AND id < ?
+             ORDER BY id DESC LIMIT ' . $limit,
+            [$conversationId, $beforeId]
+        )->fetchAll();
+
+        return array_reverse($rows);
+    }
+
+    /** Whether any message exists with id < $beforeId (more history to load). */
+    public static function hasOlder(int $conversationId, int $beforeId): bool
+    {
+        if ($beforeId <= 0) {
+            return false;
+        }
+
+        $id = Database::run(
+            'SELECT id FROM chat_messages WHERE conversation_id = ? AND id < ?
+             ORDER BY id ASC LIMIT 1',
+            [$conversationId, $beforeId]
+        )->fetchColumn();
+
+        return $id !== false && $id !== null;
+    }
+
     public static function latestId(int $conversationId): int
     {
         $id = Database::run(
             'SELECT MAX(id) FROM chat_messages WHERE conversation_id = ?',
+            [$conversationId]
+        )->fetchColumn();
+
+        return (int) $id;
+    }
+
+    /** The earliest message id in a conversation, or 0 when empty. */
+    public static function firstId(int $conversationId): int
+    {
+        $id = Database::run(
+            'SELECT MIN(id) FROM chat_messages WHERE conversation_id = ?',
             [$conversationId]
         )->fetchColumn();
 

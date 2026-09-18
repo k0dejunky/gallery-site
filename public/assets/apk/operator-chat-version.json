@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.11",
-  "versionCode": 22,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.11.apk",
-  "changelog": "Expanded the emoji picker (100+ emoji across smileys, gestures, hearts, symbols, food, nature and animals) in the chat and the admin web chat.",
+  "latestVersion": "2.12",
+  "versionCode": 23,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.12.apk",
+  "changelog": "Lazy-load past chat messages: batches of 50 load as you scroll up, on the app and web chats, instead of loading the full history at once.",
   "publishedAt": "2026-09-17"
 }

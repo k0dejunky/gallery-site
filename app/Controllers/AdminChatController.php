@@ -90,7 +90,10 @@ class AdminChatController extends Controller
 
         $user = Database::run('SELECT email FROM users WHERE id = ?', [(int) $conv['user_id']])->fetch();
 
-        $messages = ChatMessage::messages($id);
+        $messages = ChatMessage::messagesLatest($id, 50);
+        $hasMore = !empty($messages)
+            ? ChatMessage::hasOlder($id, (int) $messages[0]['id'])
+            : false;
         foreach ($messages as &$m) {
             $type = (string) ($m['attachment_type'] ?? '');
             // Self-heal: phone uploads sometimes arrive as octet-stream even
@@ -124,7 +127,55 @@ class AdminChatController extends Controller
             'conversation' => $conv,
             'user_email' => $user['email'] ?? 'user#' . $conv['user_id'],
             'messages'   => $messages,
+            'hasMore'    => $hasMore,
         ]);
+    }
+
+    /**
+     * Batch-load older messages for the admin chat (lazy scroll-up).
+     *
+     *   GET /admin/chat/history?conversation=ID&before=N&limit=50
+     */
+    public function history(): void
+    {
+        $cid = max(0, (int) $this->request->query('conversation', 0));
+        $before = max(0, (int) $this->request->query('before', 0));
+        $limit = max(1, min(200, (int) $this->request->query('limit', 50)));
+
+        $conv = ChatMessage::find($cid);
+        if ($conv === null) {
+            $this->json(['ok' => false, 'error' => 'Conversation not found.']);
+            return;
+        }
+
+        $messages = ChatMessage::messagesBefore($cid, $before, $limit);
+        $hasMore = !empty($messages)
+            ? ChatMessage::hasOlder($cid, (int) $messages[0]['id'])
+            : false;
+
+        foreach ($messages as &$m) {
+            $m['attachment_url'] = !empty($m['attachment_path'])
+                ? url('/admin/chat/attachment?message=' . (int) $m['id'])
+                : null;
+            $m['attachment_thumb_url'] = !empty($m['attachment_path']) && !empty($m['attachment_type']) && str_starts_with((string) $m['attachment_type'], 'image/')
+                ? url('/admin/chat/attachment?message=' . (int) $m['id'] . '&thumb=1')
+                : null;
+        }
+        unset($m);
+
+        $this->json([
+            'ok'       => true,
+            'conversation' => $cid,
+            'messages' => $messages,
+            'has_more' => $hasMore,
+        ]);
+    }
+
+    private function json(array $data): void
+    {
+        header('Content-Type: application/json');
+        echo json_encode($data);
+        exit;
     }
 
     /** Toggle a conversation's AI mode. */

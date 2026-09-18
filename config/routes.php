@@ -58,6 +58,7 @@ return [
     ['GET', '/chat', 'ChatController@index'],
     ['POST', '/chat', 'ChatController@send'],
     ['GET', '/chat/messages', 'ChatController@poll'],
+    ['GET', '/chat/history', 'ChatController@history'],
     ['GET', '/chat/stream', 'ChatController@stream'],
     ['GET', '/chat/attachment', 'ChatController@attachment'],
 
@@ -65,6 +66,7 @@ return [
     ['GET', '/webhooks/chat/config', 'ChatBridgeController@config'],
     ['GET', '/webhooks/chat/inbox', 'ChatBridgeController@inbox'],
     ['GET', '/webhooks/chat/thread', 'ChatBridgeController@thread'],
+    ['GET', '/webhooks/chat/history', 'ChatBridgeController@history'],
     ['GET', '/webhooks/chat/stream', 'ChatBridgeController@stream'],
     ['GET', '/webhooks/chat/events', 'ChatBridgeController@events'],
     ['GET', '/webhooks/chat/attachment', 'ChatBridgeController@attachment'],
@@ -203,6 +205,7 @@ return [
     ['GET', '/admin/chat', 'AdminChatController@index', 'chat'],
     ['GET', '/admin/chat/{id}', 'AdminChatController@show', 'chat'],
     ['GET', '/admin/chat/attachment', 'AdminChatController@attachment', 'chat'],
+    ['GET', '/admin/chat/history', 'AdminChatController@history', 'chat'],
     ['POST', '/admin/chat/{id}/mode', 'AdminChatController@mode', 'chat'],
     ['POST', '/admin/chat/{id}/reply', 'AdminChatController@operatorReply', 'chat'],
     ['POST', '/admin/chat/settings', 'AdminChatController@saveSettings', 'chat'],

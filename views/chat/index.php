@@ -69,6 +69,10 @@
     var latestId = <?= (int) ($latestId ?? 0) ?>;
     // Messages we optimistically rendered that the stream has not yet echoed.
     var pendingSends = [];
+    // Oldest message id currently rendered; used for lazy scroll-up loading.
+    var oldestId = <?= !empty($messages) ? (int) $messages[0]['id'] : 0 ?>;
+    var hasMore = <?= !empty($hasMore) ? 'true' : 'false' ?>;
+    var loadingOlder = false;
 
     function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -76,7 +80,7 @@
         });
     }
 
-    function append(msg) {
+    function append(msg, atTop) {
         var div = document.createElement('div');
         var isUser = msg.sender_role === 'user';
         div.className = 'chat-msg ' + esc(msg.sender_role);
@@ -89,9 +93,51 @@
             }
         }
         div.innerHTML = html;
-        thread.appendChild(div);
-        thread.scrollTop = thread.scrollHeight;
+        if (atTop) {
+            thread.insertBefore(div, thread.firstChild);
+        } else {
+            thread.appendChild(div);
+            thread.scrollTop = thread.scrollHeight;
+        }
     }
+
+    /** Prepend a batch of older messages, keeping the scroll position stable. */
+    function prependOlder(messages) {
+        if (!messages || messages.length === 0) return;
+        var prevHeight = thread.scrollHeight;
+        var first = thread.firstChild;
+        messages.forEach(function (m) {
+            if ((m.id || 0) < oldestId || oldestId === 0) {
+                append(m, true);
+            }
+        });
+        oldestId = messages[0].id || oldestId;
+        // Restore scroll so the view doesn't jump.
+        thread.scrollTop += thread.scrollHeight - prevHeight;
+        return first;
+    }
+
+    /** Lazy-load older messages when the user scrolls to the top. */
+    function loadOlder() {
+        if (loadingOlder || !hasMore || oldestId <= 0) return;
+        loadingOlder = true;
+        fetch('<?= url('/chat/history') ?>?before=' + oldestId + '&limit=50', {
+            headers: { 'Accept': 'application/json' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (res && res.messages && res.messages.length) {
+                    prependOlder(res.messages);
+                }
+                hasMore = !!(res && res.has_more);
+            })
+            .catch(function () { /* transient; allow retry */ })
+            .finally(function () { loadingOlder = false; });
+    }
+
+    thread.addEventListener('scroll', function () {
+        if (thread.scrollTop < 60) loadOlder();
+    });
 
     function handleIncoming(messages) {
         if (!messages) { return; }

@@ -130,13 +130,48 @@ class ChatBridgeController extends Controller
 
         $user = \App\Core\Database::run('SELECT email FROM users WHERE id = ?', [(int) $conv['user_id']])->fetch();
 
+        $messages = $this->decorateMessages(ChatMessage::messagesLatest($cid, 50));
+        $oldest = !empty($messages) ? (int) $messages[0]['id'] : 0;
+
         $this->json([
             'ok'           => true,
             'conversation' => $cid,
             'ai_mode'      => (string) $conv['ai_mode'],
             'status'       => (string) $conv['status'],
             'user_email'   => $user['email'] ?? ('user#' . $conv['user_id']),
-            'messages'     => $this->decorateMessages(ChatMessage::messages($cid, 0, true)),
+            'messages'     => $messages,
+            'has_more'     => $oldest > 0 && ChatMessage::hasOlder($cid, $oldest),
+        ]);
+    }
+
+    /**
+     * Batch-load older messages for a conversation (lazy scrolling). Returns
+     * up to 50 messages with id < before, ordered oldest-first.
+     *
+     *   GET /webhooks/chat/history?conversation=ID&before=N&limit=50
+     */
+    public function history(): void
+    {
+        $cid = max(0, (int) $this->request->query('conversation', 0));
+        $before = max(0, (int) $this->request->query('before', 0));
+        $limit = max(1, min(200, (int) $this->request->query('limit', 50)));
+
+        $conv = $cid > 0 ? ChatMessage::find($cid) : null;
+        if ($conv === null) {
+            $this->json(['ok' => false, 'error' => 'Conversation not found.']);
+            return;
+        }
+
+        $messages = $this->decorateMessages(ChatMessage::messagesBefore($cid, $before, $limit));
+        $older = !empty($messages)
+            ? ChatMessage::hasOlder($cid, (int) $messages[0]['id'])
+            : false;
+
+        $this->json([
+            'ok'           => true,
+            'conversation' => $cid,
+            'messages'     => $messages,
+            'has_more'     => $older,
         ]);
     }
 

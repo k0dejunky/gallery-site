@@ -30,7 +30,10 @@ class ChatController extends Controller
             $conv = ['id' => 0, 'ai_mode' => 'retrieval', 'status' => 'open'];
         }
 
-        $messages = $conv['id'] > 0 ? $this->decorateMessages(ChatMessage::messages((int) $conv['id'])) : [];
+        $messages = $conv['id'] > 0 ? $this->decorateMessages(ChatMessage::messagesLatest((int) $conv['id'], 50)) : [];
+        $hasMore = $conv['id'] > 0 && !empty($messages)
+            ? ChatMessage::hasOlder((int) $conv['id'], (int) $messages[0]['id'])
+            : false;
 
         // Opening the chat page counts as reading: clear the sidebar badge.
         if ($conv['id'] > 0) {
@@ -44,6 +47,7 @@ class ChatController extends Controller
             'aiEnabled'    => \App\Core\ChatSettings::aiEnabled(),
             'conversation' => $conv,
             'messages'     => $messages,
+            'hasMore'      => $hasMore,
             'latestId'     => $conv['id'] > 0 ? ChatMessage::latestId((int) $conv['id']) : 0,
             'aiStatus'     => ChatAi::ping(),
         ]);
@@ -147,6 +151,46 @@ class ChatController extends Controller
             'messages' => $messages,
             'latestId' => ChatMessage::latestId($cid),
             'mode'     => (string) ($conv['ai_mode'] ?? 'retrieval'),
+        ]);
+    }
+
+    /**
+     * Batch-load older messages for the member's chat (lazy scroll-up).
+     * Returns up to 50 messages with id < before, ordered oldest-first.
+     *
+     *   GET /chat/history?before=N&limit=50
+     */
+    public function history(): void
+    {
+        Auth::requireLogin();
+        $user = Auth::user();
+        $userId = (int) $user['id'];
+
+        if (!ChatMessage::canChat($userId)) {
+            $this->json(['ok' => false, 'error' => 'Forbidden']);
+            return;
+        }
+
+        $before = max(0, (int) $this->request->query('before', 0));
+        $limit = max(1, min(200, (int) $this->request->query('limit', 50)));
+
+        $conv = ChatMessage::forUser($userId);
+        $cid = $conv !== null ? (int) $conv['id'] : 0;
+
+        if ($cid <= 0 || $before <= 0) {
+            $this->json(['ok' => true, 'messages' => [], 'has_more' => false]);
+            return;
+        }
+
+        $messages = $this->decorateMessages(ChatMessage::messagesBefore($cid, $before, $limit));
+        $older = !empty($messages)
+            ? ChatMessage::hasOlder($cid, (int) $messages[0]['id'])
+            : false;
+
+        $this->json([
+            'ok'       => true,
+            'messages' => $messages,
+            'has_more' => $older,
         ]);
     }
 
