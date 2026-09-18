@@ -435,9 +435,9 @@ class SmokeChecks
                 : $bad('AutoPostQueue::requeueFrom must default empty/invalid schedules to defaultSchedule() so reposts are never queued with "no time"');
         });
         $add('smoke.ap.recent_prefill', 'Smoke · Auto Poster', 'Recent-posts Reschedule picker prefills +1h, not the old time', static function () use ($apv, $ok, $bad): array {
-            return substr_count($apv, 'AutoPostQueue::defaultSchedule(') >= 2
-                ? $ok('both recent-post schedulers prefill default')
-                : $bad('recent-posts Reschedule/Repost pickers must prefill AutoPostQueue::defaultSchedule() (+1h) instead of the item\'s stale scheduled_at');
+            return substr_count($apv, 'AutoPostQueue::rescheduleDefault(') >= 2
+                ? $ok('both recent-post schedulers prefill the latest-post-aware default')
+                : $bad('recent-posts Reschedule/Repost pickers must prefill AutoPostQueue::rescheduleDefault() instead of the item\'s stale scheduled_at');
         });
         $add('smoke.ap.platform_recs', 'Smoke · Auto Poster', 'Recommended posts work per platform on both pages', static function () use ($apq, $apv, $root, $read, $ok, $bad): array {
             $ctrl = $read("$root/app/Controllers/AutoPosterController.php");
