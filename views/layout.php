@@ -211,9 +211,9 @@ $isAuthPage = $isLoginPage
     </nav>
     <?php endif; ?>
 
-    <?php foreach ($flash as $flashType => $messages): ?>
-        <?php foreach ($messages as $message): ?>
-            <div class="flash <?= e($flashType) ?>"><?= e($message) ?></div>
+    <?php foreach ($flash as $flashType => $flashMessages): ?>
+        <?php foreach ($flashMessages as $flashMessage): ?>
+            <div class="flash <?= e($flashType) ?>"><?= e($flashMessage) ?></div>
         <?php endforeach; ?>
     <?php endforeach; ?>
 

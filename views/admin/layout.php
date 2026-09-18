@@ -420,10 +420,10 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
                        aria-label="Global admin search">
             </form>
             <div class="flash-stack" role="status" aria-live="polite">
-            <?php foreach ($flash as $flashType => $messages): ?>
-                <?php foreach ($messages as $message): ?>
+            <?php foreach ($flash as $flashType => $flashMessages): ?>
+                <?php foreach ($flashMessages as $flashMessage): ?>
                     <div class="flash-toast <?= e($flashType) ?>">
-                        <span><?= e($message) ?></span>
+                        <span><?= e($flashMessage) ?></span>
                         <button type="button" class="flash-close" aria-label="Dismiss notification">&times;</button>
                     </div>
                 <?php endforeach; ?>

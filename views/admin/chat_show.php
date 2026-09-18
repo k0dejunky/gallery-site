@@ -19,7 +19,7 @@
         <p class="muted">No messages yet.</p>
     <?php else: ?>
         <?php foreach ($messages as $m): ?>
-            <div style="display:flex;flex-direction:column;gap:.2rem;max-width:80%;<?= $m['sender_role'] === 'user' ? 'align-self:flex-end;align-items:flex-end;' : 'align-self:flex-start;align-items:flex-start;' ?>">
+            <div style="display:flex;flex-direction:column;gap:.2rem;width:fit-content;max-width:80%;<?= $m['sender_role'] === 'user' ? 'align-self:flex-end;align-items:flex-end;' : 'align-self:flex-start;align-items:flex-start;' ?>">
                 <small style="font-size:.7rem;opacity:.7;text-transform:uppercase;letter-spacing:.04em;">
                     <?= $m['sender_role'] === 'user' ? 'Member' : ($m['sender_role'] === 'model' ? 'AI' : 'Operator') ?> &middot; <?= e(tzdate('g:i A', (string) $m['created_at'])) ?>
                 </small>
