@@ -2,11 +2,11 @@
 
 <style>
     .chat-page { width: 100%; max-width: none; }
-    .chat-thread { display: flex; flex-direction: column; gap: .6rem; padding: 1rem 0; max-height: 60vh; overflow-y: auto; }
-    .chat-msg { width: fit-content; max-width: 78%; padding: .3rem .65rem; border-radius: 12px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
+    .chat-thread { display: flex; flex-direction: column; gap: .3rem; padding: .5rem 0; max-height: 60vh; overflow-y: auto; }
+    .chat-msg { width: fit-content; max-width: 78%; padding: 2px 7px; border-radius: 12px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
     .chat-msg.user { align-self: flex-end; background: var(--purple-600, #9333ea); color: #fff; border-bottom-right-radius: 3px; }
     .chat-msg.model, .chat-msg.operator { align-self: flex-start; background: var(--pink-100, #fdf2f8); color: var(--purple-900, #4a044e); border: 1px solid var(--pink-300, #f9a8d4); border-bottom-left-radius: 3px; }
-    .chat-msg .who { display: block; font-size: .7rem; opacity: .7; margin-bottom: .15rem; text-transform: uppercase; letter-spacing: .04em; }
+    .chat-msg .who { display: block; font-size: .68rem; opacity: .7; margin-bottom: .05rem; text-transform: uppercase; letter-spacing: .04em; }
     .chat-attachment { display: inline-block; margin-top: .45rem; color: inherit; text-decoration: none; font-size: .85rem; }
     .chat-image { display: block; max-width: 100%; max-height: 420px; width: auto; height: auto; margin-top: .5rem; border-radius: 10px; border: 1px solid rgba(0,0,0,.08); background: #fff; object-fit: contain; user-select: none; -webkit-user-drag: none; pointer-events: none; }
     .chat-composer { display: flex; gap: .5rem; margin-top: .75rem; }

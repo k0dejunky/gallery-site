@@ -14,7 +14,7 @@
     </form>
 </div>
 
-<div id="chat-thread" style="display:flex;flex-direction:column;gap:.6rem;margin-bottom:1rem;max-height:60vh;overflow-y:auto;padding:.5rem;">
+<div id="chat-thread" style="display:flex;flex-direction:column;gap:.3rem;margin-bottom:1rem;max-height:60vh;overflow-y:auto;padding:.5rem;">
     <?php if (empty($messages)): ?>
         <p class="muted">No messages yet.</p>
     <?php else: ?>
@@ -23,7 +23,7 @@
                 <small style="font-size:.7rem;opacity:.7;text-transform:uppercase;letter-spacing:.04em;">
                     <?= $m['sender_role'] === 'user' ? 'Member' : ($m['sender_role'] === 'model' ? 'AI' : 'Operator') ?> &middot; <?= e(tzdate('g:i A', (string) $m['created_at'])) ?>
                 </small>
-                <div style="padding:.3rem .65rem;border-radius:12px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;
+                <div style="padding:2px 7px;border-radius:12px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;
                      <?= $m['sender_role'] === 'user' ? 'background:var(--purple-600,#9333ea);color:#fff;border-bottom-right-radius:3px;' : 'background:var(--pink-100,#fdf2f8);color:var(--purple-900,#4a044e);border:1px solid var(--pink-300,#f9a8d4);border-bottom-left-radius:3px;' ?>">
                     <?= e((string) $m['message']) ?>
                     <?php if (!empty($m['attachment_name']) && !empty($m['attachment_url'])): ?>
@@ -112,7 +112,7 @@
         var time = (m.created_at || '').replace('T', ' ').substring(0, 16);
         wrap.innerHTML =
             '<small style="font-size:.7rem;opacity:.7;text-transform:uppercase;letter-spacing:.04em;">' + esc(who) + ' &middot; ' + esc(time) + '</small>' +
-            '<div style="padding:.3rem .65rem;border-radius:12px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;' +
+            '<div style="padding:2px 7px;border-radius:12px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;' +
             (m.sender_role === 'user' ? 'background:var(--purple-600,#9333ea);color:#fff;border-bottom-right-radius:3px;' : 'background:var(--pink-100,#fdf2f8);color:var(--purple-900,#4a044e);border:1px solid var(--pink-300,#f9a8d4);border-bottom-left-radius:3px;') +
             '">' + esc(m.message) +
             (m.attachment_name ? '<div style="margin-top:.5rem;">📎 ' + esc(m.attachment_name) + '</div>' : '') +
