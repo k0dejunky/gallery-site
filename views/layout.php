@@ -264,17 +264,19 @@ $isAuthPage = $isLoginPage
                 <button type="submit" class="btn btn-sm btn-danger">Logout</button>
             </form>
             <div class="nav-sep"></div>
-            <div class="nav-section-label">Favorite categories</div>
-            <?php if (empty($navCategories)): ?>
-                <p class="muted nav-empty">No favorite categories yet.</p>
-            <?php else: ?>
-                <?php foreach ($navCategories as $cat): ?>
-                    <?php // Keep the current type filter (images/videos) on the category link. ?>
-                    <?php $isActive = (int) $cat['id'] === $activeCategoryId; ?>
-                    <a class="nav-item<?= $isActive ? ' active' : '' ?>" href="<?= url('/galleries/category/' . e($cat['slug']) . $typeSuffix) ?>"><?= e($cat['name']) ?></a>
-                <?php endforeach; ?>
+            <?php if (strpos($currentPath, url('/chat')) !== 0): ?>
+                <div class="nav-section-label">Favorite categories</div>
+                <?php if (empty($navCategories)): ?>
+                    <p class="muted nav-empty">No favorite categories yet.</p>
+                <?php else: ?>
+                    <?php foreach ($navCategories as $cat): ?>
+                        <?php // Keep the current type filter (images/videos) on the category link. ?>
+                        <?php $isActive = (int) $cat['id'] === $activeCategoryId; ?>
+                        <a class="nav-item<?= $isActive ? ' active' : '' ?>" href="<?= url('/galleries/category/' . e($cat['slug']) . $typeSuffix) ?>"><?= e($cat['name']) ?></a>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+                <div class="nav-sep"></div>
             <?php endif; ?>
-            <div class="nav-sep"></div>
         </nav>
         </div>
         <main class="home-main">
