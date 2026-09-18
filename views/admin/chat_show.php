@@ -19,21 +19,23 @@
         <p class="muted">No messages yet.</p>
     <?php else: ?>
         <?php foreach ($messages as $m): ?>
-            <div style="max-width:80%;padding:.6rem .9rem;border-radius:12px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word;
-                 <?= $m['sender_role'] === 'user' ? 'align-self:flex-end;background:var(--purple-600,#9333ea);color:#fff;' : 'align-self:flex-start;background:var(--pink-100,#fdf2f8);color:var(--purple-900,#4a044e);border:1px solid var(--pink-300,#f9a8d4);' ?>">
-                <small style="display:block;font-size:.7rem;opacity:.7;margin-bottom:.15rem;text-transform:uppercase;">
+            <div style="display:flex;flex-direction:column;gap:.2rem;max-width:80%;<?= $m['sender_role'] === 'user' ? 'align-self:flex-end;align-items:flex-end;' : 'align-self:flex-start;align-items:flex-start;' ?>">
+                <small style="font-size:.7rem;opacity:.7;text-transform:uppercase;letter-spacing:.04em;">
                     <?= $m['sender_role'] === 'user' ? 'Member' : ($m['sender_role'] === 'model' ? 'AI' : 'Operator') ?> &middot; <?= e(tzdate('g:i A', (string) $m['created_at'])) ?>
                 </small>
-                <?= e((string) $m['message']) ?>
-                <?php if (!empty($m['attachment_name']) && !empty($m['attachment_url'])): ?>
-                    <?php if (!empty($m['attachment_thumb_url'])): ?>
-                        <a href="<?= e($m['attachment_url']) ?>" target="_blank" rel="noopener" style="display:block;margin-top:.5rem;border-radius:8px;overflow:hidden;border:1px solid rgba(0,0,0,.08);background:#fff;">
-                            <img src="<?= e($m['attachment_thumb_url']) ?>" alt="<?= e($m['attachment_name']) ?>" style="display:block;max-width:220px;max-height:220px;width:auto;height:auto;">
-                        </a>
-                    <?php else: ?>
-                        <a href="<?= e($m['attachment_url']) ?>" target="_blank" rel="noopener" style="display:inline-block;margin-top:.5rem;">📎 <?= e($m['attachment_name']) ?></a>
+                <div style="padding:.6rem .9rem;border-radius:12px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word;
+                     <?= $m['sender_role'] === 'user' ? 'background:var(--purple-600,#9333ea);color:#fff;border-bottom-right-radius:3px;' : 'background:var(--pink-100,#fdf2f8);color:var(--purple-900,#4a044e);border:1px solid var(--pink-300,#f9a8d4);border-bottom-left-radius:3px;' ?>">
+                    <?= e((string) $m['message']) ?>
+                    <?php if (!empty($m['attachment_name']) && !empty($m['attachment_url'])): ?>
+                        <?php if (!empty($m['attachment_thumb_url'])): ?>
+                            <a href="<?= e($m['attachment_url']) ?>" target="_blank" rel="noopener" style="display:block;margin-top:.5rem;border-radius:8px;overflow:hidden;border:1px solid rgba(0,0,0,.08);background:#fff;">
+                                <img src="<?= e($m['attachment_thumb_url']) ?>" alt="<?= e($m['attachment_name']) ?>" style="display:block;max-width:220px;max-height:220px;width:auto;height:auto;">
+                            </a>
+                        <?php else: ?>
+                            <a href="<?= e($m['attachment_url']) ?>" target="_blank" rel="noopener" style="display:inline-block;margin-top:.5rem;">📎 <?= e($m['attachment_name']) ?></a>
+                        <?php endif; ?>
                     <?php endif; ?>
-                <?php endif; ?>
+                </div>
             </div>
         <?php endforeach; ?>
     <?php endif; ?>
