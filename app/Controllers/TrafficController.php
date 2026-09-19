@@ -203,6 +203,41 @@ class TrafficController extends Controller
     }
 
     /**
+     * Remove a user's traffic attribution ("mark as direct signup") so a
+     * signup that was credited by a stale long-lived cookie is corrected.
+     */
+    public function clearSignup(int $userId): void
+    {
+        $user = \App\Models\User::find($userId);
+
+        if ($user === null) {
+            $this->flash('error', 'That user does not exist.');
+            $this->redirect('/admin/traffic');
+        }
+
+        $linkId = Traffic::clearSignup($userId);
+
+        if ($linkId === null) {
+            $this->flash('error', 'That user has no traffic attribution.');
+            $this->redirect('/admin/traffic');
+        }
+
+        $link = Traffic::find($linkId);
+        $code = $link['code'] ?? '?';
+
+        AuditLog::record(
+            (int) Auth::user()['id'],
+            'update',
+            'user',
+            $userId,
+            'Marked user "' . $user['email'] . '" as a direct signup (removed traffic link "' . $code . '" attribution)'
+        );
+
+        $this->flash('success', 'Marked "' . $user['email'] . '" as a direct signup — attribution to "' . $code . '" removed.');
+        $this->redirect('/admin/traffic');
+    }
+
+    /**
      * Normalize a target path to a leading-slash site path with no query
      * string. Defaults to /signup when blank or invalid.
      */

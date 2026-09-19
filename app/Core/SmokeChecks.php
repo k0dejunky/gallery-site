@@ -297,6 +297,13 @@ class SmokeChecks
                 ? $ok('full-detail columns present')
                 : $bad('traffic views must show plan/status and UTM content/term for each attributed signup');
         });
+        $add('smoke.traffic.mark_direct', 'Smoke · Traffic', 'Admins can correct a mis-attributed signup', static function () use ($trafficView, $routes, $trafficCtrl, $ok, $bad): array {
+            return strpos($trafficView, 'Mark direct') !== false
+                && in_array(['POST', '/admin/traffic/signups/{id}/direct', 'TrafficController@clearSignup', 'traffic'], $routes, true)
+                && strpos($trafficCtrl, 'function clearSignup') !== false
+                ? $ok('mark-direct wired')
+                : $bad('traffic must expose a mark-as-direct action backed by a controller route');
+        });
 
         // ----------------------------------------------------- View trends
         $statsModel   = $read("$root/app/Models/Stats.php");

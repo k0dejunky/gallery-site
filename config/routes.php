@@ -222,6 +222,7 @@ return [
     ['GET', '/admin/user-monitor', 'UserMonitorController@index', 'user_monitor'],
     ['GET', '/admin/traffic', 'TrafficController@index', 'traffic'],
     ['POST', '/admin/traffic/create', 'TrafficController@create', 'traffic'],
+    ['POST', '/admin/traffic/signups/{id}/direct', 'TrafficController@clearSignup', 'traffic'],
     ['POST', '/admin/traffic/{id}/update', 'TrafficController@update', 'traffic'],
     ['POST', '/admin/traffic/{id}/toggle', 'TrafficController@toggle', 'traffic'],
     ['GET', '/admin/traffic/{id}', 'TrafficController@show', 'traffic'],

@@ -110,6 +110,7 @@ function trafficCopy(el) {
                 <th>Campaign</th>
                 <th>Content</th>
                 <th>Term</th>
+                <th>Action</th>
             </tr>
         </thead>
         <tbody>
@@ -128,6 +129,13 @@ function trafficCopy(el) {
                     <td><?= !empty($s['utm_campaign']) ? e($s['utm_campaign']) : '<span class="muted">&mdash;</span>' ?></td>
                     <td><?= !empty($s['utm_content']) ? e($s['utm_content']) : '<span class="muted">&mdash;</span>' ?></td>
                     <td><?= !empty($s['utm_term']) ? e($s['utm_term']) : '<span class="muted">&mdash;</span>' ?></td>
+                    <td>
+                        <form class="inline" method="post" action="<?= url('/admin/traffic/signups/' . (int) $s['id'] . '/direct') ?>"
+                              onsubmit="return confirm('Mark <?= e($s['email']) ?> as a direct signup and remove this attribution?');">
+                            <?= csrf_field() ?>
+                            <button type="submit" class="btn btn-sm btn-outline">Mark direct</button>
+                        </form>
+                    </td>
                 </tr>
             <?php endforeach; ?>
         </tbody>

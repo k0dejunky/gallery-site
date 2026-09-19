@@ -483,6 +483,34 @@ class Traffic
         )->fetchAll();
     }
 
+    /**
+     * Remove a user's traffic attribution (mark as a direct signup): clears the
+     * credited link and every stored UTM parcel. Returns the removed link id,
+     * or null when the user had no attribution (or does not exist).
+     */
+    public static function clearSignup(int $userId): ?int
+    {
+        $row = Database::run(
+            'SELECT signup_source_link_id FROM users WHERE id = ? LIMIT 1',
+            [$userId]
+        )->fetch();
+
+        if ($row === false || $row['signup_source_link_id'] === null) {
+            return null;
+        }
+
+        $linkId = (int) $row['signup_source_link_id'];
+        Database::run(
+            'UPDATE users
+             SET signup_source_link_id = NULL, utm_source = NULL, utm_medium = NULL,
+                 utm_campaign = NULL, utm_content = NULL, utm_term = NULL
+             WHERE id = ?',
+            [$userId]
+        );
+
+        return $linkId;
+    }
+
     /** Column list shared by every attributed-signup query. */
     private static function signupSelect(): string
     {
