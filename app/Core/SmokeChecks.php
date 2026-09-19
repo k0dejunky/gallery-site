@@ -93,6 +93,9 @@ class SmokeChecks
             'views/admin/traffic_show.php',
             'app/Models/PageVisit.php',
             'database/migrations/015_page_ip_visits.sql',
+            'app/Models/ChatBroadcast.php',
+            'bin/daily_chat_worker.php',
+            'database/migrations/029_chat_daily_broadcast.sql',
         ];
         foreach ($files as $rel) {
             $slug = str_replace(['/', '.'], '_', $rel);
@@ -303,6 +306,45 @@ class SmokeChecks
                 && strpos($trafficCtrl, 'function clearSignup') !== false
                 ? $ok('mark-direct wired')
                 : $bad('traffic must expose a mark-as-direct action backed by a controller route');
+        });
+
+        // ----------------------------------------------------- Daily chat
+        $chatAdmin    = $read("$root/app/Controllers/AdminChatController.php");
+        $chatView     = $read("$root/views/admin/chat.php");
+        $applyCron    = $read("$root/bin/apply_cron.php");
+        $chatBroadcast = $read("$root/app/Models/ChatBroadcast.php");
+        $add('smoke.chat_daily.model', 'Smoke · Daily chat', 'Broadcast model delivers to eligible members', static function () use ($chatBroadcast, $ok, $bad): array {
+            return strpos($chatBroadcast, 'function send') !== false
+                && strpos($chatBroadcast, 'function eligibleUserIds') !== false
+                && strpos($chatBroadcast, 'function due') !== false
+                ? $ok('send + eligibility + due present')
+                : $bad('ChatBroadcast must provide send(), eligibleUserIds() and due()');
+        });
+        $add('smoke.chat_daily.actions', 'Smoke · Daily chat', 'Admin can create/schedule/send/cancel a broadcast', static function () use ($chatAdmin, $ok, $bad): array {
+            return strpos($chatAdmin, 'function createDailyBroadcast') !== false
+                && strpos($chatAdmin, 'function runDailyBroadcast') !== false
+                && strpos($chatAdmin, 'function cancelDailyBroadcast') !== false
+                ? $ok('broadcast actions present')
+                : $bad('AdminChatController must expose create/run/cancel daily broadcast actions');
+        });
+        $add('smoke.chat_daily.routes', 'Smoke · Daily chat', 'Daily chat routes registered', static function () use ($routes, $ok, $bad): array {
+            return in_array(['POST', '/admin/chat/daily-broadcast', 'AdminChatController@createDailyBroadcast', 'chat'], $routes, true)
+                && in_array(['POST', '/admin/chat/daily-broadcast/{id}/send', 'AdminChatController@runDailyBroadcast', 'chat'], $routes, true)
+                && in_array(['POST', '/admin/chat/daily-broadcast/{id}/cancel', 'AdminChatController@cancelDailyBroadcast', 'chat'], $routes, true)
+                ? $ok('routes wired')
+                : $bad('daily-broadcast admin routes must be registered');
+        });
+        $add('smoke.chat_daily.view', 'Smoke · Daily chat', 'Admin chat page has a daily-chat form and send log', static function () use ($chatView, $ok, $bad): array {
+            return strpos($chatView, 'Daily Chat Send Log') !== false
+                && strpos($chatView, 'daily-broadcast') !== false
+                && strpos($chatView, '$broadcasts') !== false
+                ? $ok('form + send log present')
+                : $bad('admin chat view must render the daily chat form and send log');
+        });
+        $add('smoke.chat_daily.cron', 'Smoke · Daily chat', 'Scheduled broadcasts run via cron', static function () use ($applyCron, $ok, $bad): array {
+            return strpos($applyCron, 'gallery-daily-chat') !== false && strpos($applyCron, 'daily_chat_worker.php') !== false
+                ? $ok('cron entry wired')
+                : $bad('apply_cron.php must schedule the daily chat worker');
         });
 
         // ----------------------------------------------------- View trends

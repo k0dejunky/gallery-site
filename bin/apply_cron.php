@@ -59,6 +59,7 @@ $intOr = static function ($v, int $default): int {
 $everyMin = $clamp($intOr($json['housekeeping']['every_minutes'] ?? null, 15), 1, 1440);
 $postMin  = $clamp($intOr($json['autopost'      ]['every_minutes'] ?? null, 1), 1, 1440);
 $ppMin    = $clamp($intOr($json['paypal-reconcile']['every_minutes'] ?? null, 5), 1, 1440);
+$dcMin    = $clamp($intOr($json['daily_chat'      ]['every_minutes'] ?? null, 5), 1, 1440);
 $backupH  = $clamp($intOr($json['backup']['hour']   ?? null, 3), 0, 23);
 $backupM  = $clamp($intOr($json['backup']['minute'] ?? null, 0), 0, 59);
 $drillD   = $clamp($intOr($json['restore-drill']['dow']      ?? null, 0), 0, 6);
@@ -76,6 +77,8 @@ $crond['gallery-autopost'] =
     "*/{$postMin} * * * * {$php}/bin/autopost_worker.php --once >> " . SITE_ROOT . "/storage/logs/autopost.log 2>&1\n";
 $crond['gallery-emailer'] =
     "*/5 * * * * {$php}/bin/email_worker.php --once >> " . SITE_ROOT . "/storage/logs/emailer.log 2>&1\n";
+$crond['gallery-daily-chat'] =
+    "*/{$dcMin} * * * * {$php}/bin/daily_chat_worker.php --once >> " . SITE_ROOT . "/storage/logs/daily-chat.log 2>&1\n";
 $crond['gallery-backup'] =
     "{$backupM} {$backupH} * * * {$php}/bin/gallery_backup.php >> " . SITE_ROOT . "/storage/logs/backup.log 2>&1\n";
 $crond['gallery-restore-drill'] =
@@ -95,5 +98,5 @@ foreach ($crond as $name => $content) {
 $ok($svcRc === 0, 'systemctl restart of worker services failed');
 
 // Cron daemon picks up /etc/cron.d changes automatically; nothing else to do.
-echo "apply_cron: wrote 6 /etc/cron.d entries and restarted worker services\n";
+echo "apply_cron: wrote 7 /etc/cron.d entries and restarted worker services\n";
 exit(0);

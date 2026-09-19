@@ -6,7 +6,11 @@ use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\ChatAi;
 use App\Core\Database;
+use App\Models\AuditLog;
+use App\Models\ChatBroadcast;
 use App\Models\ChatMessage;
+use DateTime;
+use DateTimeZone;
 
 /**
  * Admin chat management: list conversations, toggle each conversation between
@@ -77,6 +81,7 @@ class AdminChatController extends Controller
             'adapterInstalled' => \App\Core\ChatModel::adapterPath() !== null,
             'trainingCount'=> ChatMessage::trainingPairCount(),
             'cleanedCount' => ChatMessage::cleanedPairCount(),
+            'broadcasts'   => ChatBroadcast::log(50),
         ]);
     }
 
@@ -283,6 +288,99 @@ class AdminChatController extends Controller
         $this->redirect('/admin/chat');
     }
 
+    /** Create a daily chat broadcast: schedule it or send it now. */
+    public function createDailyBroadcast(): void
+    {
+        $message = trim((string) $this->request->input('message'));
+        if ($message === '' || mb_strlen($message) > ChatBroadcast::MAX_MESSAGE_LENGTH) {
+            $this->flash('error', 'Daily chat message must be 1–' . ChatBroadcast::MAX_MESSAGE_LENGTH . ' characters.');
+            $this->redirect('/admin/chat');
+            return;
+        }
+
+        $action = (string) $this->request->post('action', 'now');
+        $scheduledAt = null;
+        $raw = trim((string) $this->request->post('scheduled_at', ''));
+
+        if ($action === 'schedule') {
+            if ($raw === '') {
+                $this->flash('error', 'Pick a schedule time, or use "Send now".');
+                $this->redirect('/admin/chat');
+                return;
+            }
+            $scheduledAt = self::normalizeSchedule($raw);
+            if ($scheduledAt === null || $scheduledAt <= gmdate('Y-m-d H:i:s')) {
+                $this->flash('error', 'The schedule must be a valid time in the future.');
+                $this->redirect('/admin/chat');
+                return;
+            }
+        }
+
+        $adminId = (int) Auth::user()['id'];
+        $id = ChatBroadcast::create($message, $scheduledAt, $adminId);
+
+        if ($scheduledAt === null) {
+            $result = ChatBroadcast::send($id);
+            if ($result['ok']) {
+                AuditLog::record($adminId, 'create', 'chat_daily_broadcast', $id,
+                    'Sent daily chat broadcast #' . $id . ' now to ' . ($result['sent'] ?? 0) . ' recipient(s)');
+                $this->flash('success', 'Daily chat sent now: ' . ($result['sent'] ?? 0) . ' of ' . ($result['recipients'] ?? 0) . ' recipient(s).');
+            } else {
+                $this->flash('error', 'Daily chat could not be sent: ' . ($result['error'] ?? 'unknown'));
+            }
+        } else {
+            AuditLog::record($adminId, 'create', 'chat_daily_broadcast', $id,
+                'Scheduled daily chat broadcast #' . $id . ' for ' . $scheduledAt . ' UTC');
+            $this->flash('success', 'Daily chat scheduled for ' . tzdate('M j, Y H:i', $scheduledAt) . '.');
+        }
+
+        $this->redirect('/admin/chat');
+    }
+
+    /** Send a scheduled daily chat immediately. */
+    public function runDailyBroadcast(int $id): void
+    {
+        $b = ChatBroadcast::find($id);
+        if ($b === null) {
+            $this->flash('error', 'That daily chat broadcast does not exist.');
+            $this->redirect('/admin/chat');
+            return;
+        }
+
+        if (in_array($b['status'], [ChatBroadcast::STATUS_SENT, ChatBroadcast::STATUS_SENDING], true)) {
+            $this->flash('error', 'That broadcast was already sent (or is sending).');
+            $this->redirect('/admin/chat');
+            return;
+        }
+
+        Database::run('UPDATE chat_daily_broadcasts SET scheduled_at = NULL WHERE id = ?', [$id]);
+
+        $result = ChatBroadcast::send($id);
+        if ($result['ok']) {
+            AuditLog::record((int) Auth::user()['id'], 'update', 'chat_daily_broadcast', $id,
+                'Sent scheduled daily chat broadcast #' . $id . ' manually to ' . ($result['sent'] ?? 0) . ' recipient(s)');
+            $this->flash('success', 'Daily chat sent: ' . ($result['sent'] ?? 0) . ' of ' . ($result['recipients'] ?? 0) . ' recipient(s).');
+        } else {
+            $this->flash('error', 'Daily chat could not be sent: ' . ($result['error'] ?? 'unknown'));
+        }
+
+        $this->redirect('/admin/chat');
+    }
+
+    /** Cancel a scheduled daily chat that has not been delivered yet. */
+    public function cancelDailyBroadcast(int $id): void
+    {
+        if (ChatBroadcast::cancel($id)) {
+            AuditLog::record((int) Auth::user()['id'], 'delete', 'chat_daily_broadcast', $id,
+                'Cancelled scheduled daily chat broadcast #' . $id);
+            $this->flash('success', 'Scheduled daily chat cancelled.');
+        } else {
+            $this->flash('error', 'That broadcast is not pending (already sent or cancelled).');
+        }
+
+        $this->redirect('/admin/chat');
+    }
+
     /** Write the cleaned training export (JSONL) ready for the training PC. */
     public function exportTraining(): void
     {
@@ -333,6 +431,28 @@ class AdminChatController extends Controller
         $text = (string) preg_replace('/\s+/u', ' ', $text);
 
         return mb_substr($text, 0, 2000);
+    }
+
+    /** Normalize a datetime-local schedule (site timezone) to UTC, or null. */
+    private static function normalizeSchedule(?string $value): ?string
+    {
+        $v = trim((string) $value);
+        if ($v === '') {
+            return null;
+        }
+
+        $v = str_replace('T', ' ', $v);
+        if (!preg_match('/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2})(:\d{2})?$/', $v, $m)) {
+            return null;
+        }
+
+        $parsed = $m[1] . (isset($m[2]) ? $m[2] : ':00');
+        $dt = DateTime::createFromFormat('Y-m-d H:i:s', $parsed, new DateTimeZone(site_timezone()));
+        if ($dt === false) {
+            return null;
+        }
+
+        return $dt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
     }
 
     /**

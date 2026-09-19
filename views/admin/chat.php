@@ -38,6 +38,59 @@
     <div><button type="submit" class="btn btn-sm">Save daily message</button></div>
 </form>
 
+<?php // Daily chat broadcast: schedule or send now, plus the send log ?>
+<form method="post" action="<?= url('/admin/chat/daily-broadcast') ?>" style="display:flex;flex-direction:column;gap:.35rem;margin-bottom:.5rem;max-width:640px;">
+    <?= csrf_field() ?>
+    <label class="muted" style="font-size:.85rem;">Daily chat broadcast — deliver this message to every chat-eligible member's conversation now, or schedule it for later:</label>
+    <textarea name="message" rows="3" maxlength="5000" placeholder="e.g. Good morning! New content is live — open today's galleries and tell me what you think."></textarea>
+    <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+        <input type="datetime-local" name="scheduled_at">
+        <button type="submit" name="action" value="now" class="btn btn-sm">Send now</button>
+        <button type="submit" name="action" value="schedule" class="btn btn-sm btn-outline">Schedule</button>
+    </div>
+</form>
+
+<h3>Daily Chat Send Log</h3>
+<?php if (empty($broadcasts)): ?>
+    <p class="muted" style="margin-top:0;">No daily chat broadcasts yet.</p>
+<?php else: ?>
+    <table>
+        <thead>
+            <tr><th>#</th><th>Message</th><th>Status</th><th>Scheduled</th><th>Sent</th><th>Recipients</th><th>Created by</th><th style="text-align:right;">Actions</th></tr>
+        </thead>
+        <tbody>
+            <?php foreach ($broadcasts as $b): ?>
+                <tr>
+                    <td>#<?= (int) $b['id'] ?></td>
+                    <td style="max-width:320px;"><?= e(mb_strimwidth((string) $b['message'], 0, 90, '…')) ?></td>
+                    <td><span class="pill <?= $b['status'] === 'sent' ? '' : ($b['status'] === 'partial' ? 'pill-warn' : ($b['status'] === 'cancelled' ? 'pill-muted' : 'pill-info')) ?>"><?= e((string) $b['status']) ?></span></td>
+                    <td class="muted"><?= !empty($b['scheduled_at']) ? e(tzdate('M j, Y H:i', (string) $b['scheduled_at'])) : '<span class="muted">&mdash;</span>' ?></td>
+                    <td class="muted"><?= !empty($b['sent_at']) ? e(tzdate('M j, Y H:i', (string) $b['sent_at'])) : '<span class="muted">&mdash;</span>' ?></td>
+                    <td><?= (int) $b['sent_count'] ?> / <?= (int) $b['recipients'] ?></td>
+                    <td class="muted"><?= e((string) ($b['created_by_email'] ?? '—')) ?></td>
+                    <td style="text-align:right;">
+                        <?php if (in_array($b['status'], ['scheduled', 'failed'], true)): ?>
+                            <form class="inline" method="post" action="<?= url('/admin/chat/daily-broadcast/' . (int) $b['id'] . '/send') ?>" onsubmit="return confirm('Send this daily chat now?');">
+                                <?= csrf_field() ?>
+                                <button type="submit" class="btn btn-sm">Send now</button>
+                            </form>
+                        <?php endif; ?>
+                        <?php if (in_array($b['status'], ['scheduled', 'sending'], true)): ?>
+                            <form class="inline" method="post" action="<?= url('/admin/chat/daily-broadcast/' . (int) $b['id'] . '/cancel') ?>" onsubmit="return confirm('Cancel this scheduled daily chat?');">
+                                <?= csrf_field() ?>
+                                <button type="submit" class="btn btn-sm btn-danger">Cancel</button>
+                            </form>
+                        <?php endif; ?>
+                        <?php if (!empty($b['error'])): ?>
+                            <span class="muted" title="<?= e((string) $b['error']) ?>">⚠</span>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+<?php endif; ?>
+
 <?php // Conversation list filter ?>
 <form method="get" action="<?= url('/admin/chat') ?>" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem;">
     <label>Search<br><input type="text" name="q" value="<?= e($filterQ) ?>" placeholder="email or #id" size="24"></label>

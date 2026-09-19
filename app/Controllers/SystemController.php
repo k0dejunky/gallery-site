@@ -621,6 +621,10 @@ class SystemController extends Controller
         $ppNote = $this->lastLineSummary($logs . '/paypal-reconcile.log');
         $ppFresh = $ppTs !== null && ($now - $ppTs) <= 90 * 60;
 
+        [$dcTs, $dcAt] = $lastRun($logs . '/daily-chat.log');
+        $dcNote = $this->lastLineSummary($logs . '/daily-chat.log');
+        $dcFresh = $dcTs !== null && ($now - $dcTs) <= 90 * 60;
+
         $jobs = [
             [
                 'id'       => 'housekeeping',
@@ -648,6 +652,15 @@ class SystemController extends Controller
                 'lastAgo'  => $this->relativeAge($ppTs),
                 'ok'       => $ppFresh,
                 'note'     => $ppNote,
+            ],
+            [
+                'id'       => 'daily-chat',
+                'schedule' => 'every 5 minutes',
+                'desc'     => 'Deliver scheduled daily chat broadcasts to chat-eligible members',
+                'lastRun'  => $dcAt,
+                'lastAgo'  => $this->relativeAge($dcTs),
+                'ok'       => $dcFresh,
+                'note'     => $dcNote,
             ],
             [
                 'id'       => 'backup',
@@ -741,6 +754,7 @@ class SystemController extends Controller
             'housekeeping'   => ['every_minutes' => 15],
             'autopost'       => ['every_minutes' => 1],
             'paypal-reconcile' => ['every_minutes' => 5],
+            'daily_chat'     => ['every_minutes' => 5],
             'backup'         => ['hour' => 3, 'minute' => 0],
             'restore-drill'  => ['dow' => 0, 'hour' => 4, 'minute' => 0],
         ];
@@ -777,7 +791,7 @@ class SystemController extends Controller
             $this->redirect('/admin/system');
         }
 
-        $valid = ['housekeeping', 'autopost', 'paypal-reconcile', 'backup', 'restore-drill'];
+        $valid = ['housekeeping', 'autopost', 'paypal-reconcile', 'daily-chat', 'backup', 'restore-drill'];
         if (!in_array($job, $valid, true)) {
             $this->flash('error', 'Unknown cron job.');
             $this->redirect('/admin/system');
@@ -796,6 +810,9 @@ class SystemController extends Controller
                 break;
             case 'paypal-reconcile':
                 $sched['paypal-reconcile'] = ['every_minutes' => $clamp((int) $req->post('cron_paypal_reconcile_min', 5), 1, 1440)];
+                break;
+            case 'daily-chat':
+                $sched['daily_chat'] = ['every_minutes' => $clamp((int) $req->post('cron_daily_chat_min', 5), 1, 1440)];
                 break;
             case 'backup':
                 $sched['backup'] = [
@@ -838,14 +855,16 @@ class SystemController extends Controller
             'housekeeping'    => 'Housekeeping',
             'autopost'        => 'Auto-poster',
             'paypal-reconcile' => 'PayPal reconciliation',
+            'daily-chat'      => 'Daily chat',
             'backup'          => 'Backup',
             'restore-drill'   => 'Restore drill',
         ];
         $label = $labels[$job] ?? $job;
+        $schedKey = $job === 'daily-chat' ? 'daily_chat' : $job;
 
         if ($rc === 0) {
             AuditLog::record($user['id'] ?? null, 'update', 'system_cron_schedule', null,
-                'Cron schedule saved + applied for ' . $job . ': ' . json_encode($sched[$job]));
+                'Cron schedule saved + applied for ' . $job . ': ' . json_encode($sched[$schedKey]));
             $this->flash('success', $label . ' schedule saved and applied. Workers restarted.');
         } else {
             $this->flash('error', 'Schedule saved but could NOT be applied — ' . trim(implode(' ', $outLines))
