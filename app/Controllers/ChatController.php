@@ -43,6 +43,7 @@ class ChatController extends Controller
         $this->view('chat/index', [
             'title'        => 'Chat',
             'eligible'     => $eligible,
+            'replyEnabled' => $conv['id'] > 0 ? ChatMessage::memberReplyEnabled((int) $conv['id']) : $eligible,
             'dailyMessage' => \App\Core\ChatSettings::dailyMessage(),
             'aiEnabled'    => \App\Core\ChatSettings::aiEnabled(),
             'conversation' => $conv,
@@ -65,6 +66,12 @@ class ChatController extends Controller
 
         if (!ChatMessage::canChat($userId)) {
             $this->json(['ok' => false, 'error' => 'You are not eligible to chat.']);
+            return;
+        }
+
+        $existing = ChatMessage::forUser($userId);
+        if ($existing !== null && !ChatMessage::memberReplyEnabled((int) $existing['id'])) {
+            $this->json(['ok' => false, 'error' => 'Replies are disabled for this conversation.']);
             return;
         }
 

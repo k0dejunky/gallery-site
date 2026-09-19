@@ -118,9 +118,14 @@ class ChatBridgeController extends Controller
 
         $rows = \App\Core\Database::run(
             "SELECT c.id, c.user_id, c.ai_mode, c.status, c.updated_at,
-                    c.operator_read_through_id,
+                    c.operator_read_through_id, c.member_reply_enabled,
                     u.email AS user_email,
                     SUBSTRING_INDEX(u.email, '@', 1) AS username,
+                    (SELECT 1 FROM subscriptions s JOIN plans p ON p.id = s.plan_id
+                      WHERE s.user_id = c.user_id AND p.can_chat = 1
+                        AND s.status IN ('active', 'cancelled')
+                        AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
+                      LIMIT 1) AS can_chat,
                     (SELECT m.message FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_message,
                     (SELECT m.sender_role FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_sender,
                     (SELECT m.created_at FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_message_at,
@@ -177,6 +182,7 @@ class ChatBridgeController extends Controller
             'ai_mode'      => (string) $conv['ai_mode'],
             'status'       => (string) $conv['status'],
             'user_email'   => $user['email'] ?? ('user#' . $conv['user_id']),
+            'member_reply_enabled' => (int) ChatMessage::memberReplyEnabled($cid),
             'messages'     => $messages,
             'has_more'     => $oldest > 0 && ChatMessage::hasOlder($cid, $oldest),
         ]);
@@ -451,6 +457,100 @@ class ChatBridgeController extends Controller
         );
 
         $this->json(['ok' => true, 'id' => $id]);
+    }
+
+    /**
+     * Search users the operator may message: id, email, username, chat
+     * eligibility, and the existing conversation (if any) with its reply flag.
+     * Non-admin accounts only, newest first.
+     *
+     *   GET /webhooks/chat/users?q=term
+     */
+    public function users(): void
+    {
+        $q = trim((string) $this->request->query('q', ''));
+        $where = "u.role NOT IN ('super_admin', 'admin', 'editor', 'moderator', 'viewer')";
+        $params = [];
+        if ($q !== '') {
+            $where .= ' AND (u.email LIKE ? OR SUBSTRING_INDEX(u.email, \'@\', 1) LIKE ?)';
+            $params[] = '%' . $q . '%';
+            $params[] = '%' . $q . '%';
+        }
+
+        $rows = \App\Core\Database::run(
+            "SELECT u.id, u.email, SUBSTRING_INDEX(u.email, '@', 1) AS username,
+                    (SELECT 1 FROM subscriptions s JOIN plans p ON p.id = s.plan_id
+                      WHERE s.user_id = u.id AND p.can_chat = 1
+                        AND s.status IN ('active', 'cancelled')
+                        AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
+                      LIMIT 1) AS can_chat,
+                    (SELECT c.id FROM chat_conversations c WHERE c.user_id = u.id ORDER BY c.id DESC LIMIT 1) AS conversation_id,
+                    (SELECT c.member_reply_enabled FROM chat_conversations c WHERE c.user_id = u.id ORDER BY c.id DESC LIMIT 1) AS member_reply_enabled
+             FROM users u
+             WHERE $where
+             ORDER BY u.created_at DESC, u.id DESC
+             LIMIT 25",
+            $params
+        )->fetchAll();
+
+        $this->json(['ok' => true, 'users' => $rows]);
+    }
+
+    /**
+     * Open (or reuse) a conversation for a user so the operator can message
+     * them. Returns the conversation id and the user's chat state.
+     *
+     *   POST /webhooks/chat/start {user_id}
+     */
+    public function start(): void
+    {
+        $data = json_decode($this->rawBody(), true);
+        if (!is_array($data)) {
+            $data = [];
+        }
+        $userId = (int) ($data['user_id'] ?? $this->request->post('user_id', 0));
+
+        $user = \App\Core\Database::run('SELECT id, email FROM users WHERE id = ? LIMIT 1', [$userId])->fetch();
+        if ($user === false || $user === null) {
+            $this->json(['ok' => false, 'error' => 'User not found.']);
+            return;
+        }
+
+        $cid = ChatMessage::openFor($userId);
+
+        $this->json([
+            'ok'                  => true,
+            'conversation_id'     => $cid,
+            'user_email'          => (string) $user['email'],
+            'username'            => (string) \App\Core\Database::run('SELECT SUBSTRING_INDEX(email, \'@\', 1) FROM users WHERE id = ?', [$userId])->fetchColumn(),
+            'member_reply_enabled'=> (int) ChatMessage::memberReplyEnabled($cid),
+            'can_chat'            => ChatMessage::canChat($userId) ? 1 : 0,
+        ]);
+    }
+
+    /**
+     * Toggle whether the member may reply in a conversation.
+     *
+     *   POST /webhooks/chat/reply-toggle {conversation_id, enabled}
+     */
+    public function replyToggle(): void
+    {
+        $data = json_decode($this->rawBody(), true);
+        if (!is_array($data)) {
+            $data = [];
+        }
+        $cid = (int) ($data['conversation_id'] ?? $this->request->post('conversation_id', 0));
+        $enabled = (bool) ($data['enabled'] ?? false);
+
+        $conv = $cid > 0 ? ChatMessage::find($cid) : null;
+        if ($conv === null) {
+            $this->json(['ok' => false, 'error' => 'Conversation not found.']);
+            return;
+        }
+
+        ChatMessage::setMemberReply($cid, $enabled);
+
+        $this->json(['ok' => true, 'conversation_id' => $cid, 'enabled' => $enabled]);
     }
 
     /** Recent conversation + few-shot context (for the app/AI to build a reply). */

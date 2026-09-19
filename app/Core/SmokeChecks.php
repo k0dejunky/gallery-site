@@ -347,6 +347,38 @@ class SmokeChecks
                 : $bad('apply_cron.php must schedule the daily chat worker');
         });
 
+        // ----------------------------------------------------- Operator messaging
+        $chatMessage = $read("$root/app/Models/ChatMessage.php");
+        $chatCtrl    = $read("$root/app/Controllers/ChatController.php");
+        $bridgeCtrl  = $read("$root/app/Controllers/ChatBridgeController.php");
+        $add('smoke.chat_reply_toggle.model', 'Smoke · Operator messaging', 'Reply toggle helpers exist and gate member sends', static function () use ($chatMessage, $chatCtrl, $ok, $bad): array {
+            return strpos($chatMessage, 'function memberReplyEnabled') !== false
+                && strpos($chatMessage, 'function setMemberReply') !== false
+                && strpos($chatCtrl, 'memberReplyEnabled') !== false
+                ? $ok('toggle + member gate present')
+                : $bad('ChatMessage must expose memberReplyEnabled()/setMemberReply() and ChatController::send must honour the toggle');
+        });
+        $add('smoke.chat_operator_message.admin', 'Smoke · Operator messaging', 'Admin can message any user and toggle replies', static function () use ($chatAdmin, $chatView, $routes, $ok, $bad): array {
+            return strpos($chatAdmin, 'function newConversation') !== false
+                && strpos($chatAdmin, 'function toggleReply') !== false
+                && strpos($chatView, 'Message any user') !== false
+                && strpos($chatView, 'reply-toggle') !== false
+                && in_array(['POST', '/admin/chat/new', 'AdminChatController@newConversation', 'chat'], $routes, true)
+                && in_array(['POST', '/admin/chat/{id}/reply-toggle', 'AdminChatController@toggleReply', 'chat'], $routes, true)
+                ? $ok('admin message-any-user + reply toggle wired')
+                : $bad('admin chat must support messaging any user and toggling member replies');
+        });
+        $add('smoke.chat_operator_message.webhooks', 'Smoke · Operator messaging', 'App webhooks for user search/start/reply toggle exist', static function () use ($bridgeCtrl, $routes, $ok, $bad): array {
+            return strpos($bridgeCtrl, 'function users') !== false
+                && strpos($bridgeCtrl, 'function start') !== false
+                && strpos($bridgeCtrl, 'function replyToggle') !== false
+                && in_array(['GET', '/webhooks/chat/users', 'ChatBridgeController@users'], $routes, true)
+                && in_array(['POST', '/webhooks/chat/start', 'ChatBridgeController@start'], $routes, true)
+                && in_array(['POST', '/webhooks/chat/reply-toggle', 'ChatBridgeController@replyToggle'], $routes, true)
+                ? $ok('webhooks wired')
+                : $bad('chat bridge must expose user search, start, and reply-toggle webhooks');
+        });
+
         // ----------------------------------------------------- View trends
         $statsModel   = $read("$root/app/Models/Stats.php");
         $pageVisitMod = $read("$root/app/Models/PageVisit.php");

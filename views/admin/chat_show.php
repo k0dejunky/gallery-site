@@ -2,16 +2,24 @@
 
 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
     <h1 style="margin:0;">Chat #<?= (int) $conversation['id'] ?> &middot; <?= e((string) $user_email) ?></h1>
-    <form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/mode') ?>" style="display:flex;align-items:center;gap:.5rem;">
-        <?= csrf_field() ?>
-        <label class="muted" style="font-size:.85rem;">AI mode:</label>
-        <select name="ai_mode">
-            <option value="retrieval" <?= ($conversation['ai_mode'] ?? '') === 'retrieval' ? 'selected' : '' ?>>Retrieval (AI)</option>
-            <option value="finetuned" <?= ($conversation['ai_mode'] ?? '') === 'finetuned' ? 'selected' : '' ?>>Fine-tuned (AI)</option>
-            <option value="operator" <?= ($conversation['ai_mode'] ?? '') === 'operator' ? 'selected' : '' ?>>Operator only (no AI)</option>
-        </select>
-        <button type="submit" class="btn btn-sm">Set mode</button>
-    </form>
+    <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+        <form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/reply-toggle') ?>">
+            <?= csrf_field() ?>
+            <button type="submit" class="btn btn-sm <?= !empty($member_reply_enabled) ? '' : 'btn-outline' ?>">
+                Member replies: <?= !empty($member_reply_enabled) ? 'ON' : 'OFF' ?>
+            </button>
+        </form>
+        <form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/mode') ?>" style="display:flex;align-items:center;gap:.5rem;">
+            <?= csrf_field() ?>
+            <label class="muted" style="font-size:.85rem;">AI mode:</label>
+            <select name="ai_mode">
+                <option value="retrieval" <?= ($conversation['ai_mode'] ?? '') === 'retrieval' ? 'selected' : '' ?>>Retrieval (AI)</option>
+                <option value="finetuned" <?= ($conversation['ai_mode'] ?? '') === 'finetuned' ? 'selected' : '' ?>>Fine-tuned (AI)</option>
+                <option value="operator" <?= ($conversation['ai_mode'] ?? '') === 'operator' ? 'selected' : '' ?>>Operator only (no AI)</option>
+            </select>
+            <button type="submit" class="btn btn-sm">Set mode</button>
+        </form>
+    </div>
 </div>
 
 <div id="chat-thread" style="display:flex;flex-direction:column;gap:.3rem;margin-bottom:1rem;max-height:60vh;overflow-y:auto;padding:.5rem;">

@@ -347,6 +347,28 @@ class ChatMessage
         return $stmt->rowCount() > 0;
     }
 
+    /** Whether the member may currently send replies in this conversation. */
+    public static function memberReplyEnabled(int $conversationId): bool
+    {
+        $value = Database::run(
+            'SELECT member_reply_enabled FROM chat_conversations WHERE id = ? LIMIT 1',
+            [$conversationId]
+        )->fetchColumn();
+
+        return $value === false || $value === null || (int) $value === 1;
+    }
+
+    /** Toggle the member reply flag for a conversation. */
+    public static function setMemberReply(int $conversationId, bool $enabled): bool
+    {
+        $stmt = Database::run(
+            'UPDATE chat_conversations SET member_reply_enabled = ? WHERE id = ?',
+            [$enabled ? 1 : 0, $conversationId]
+        );
+
+        return $stmt->rowCount() > 0;
+    }
+
     /**
      * Whether a conversation mode uses the AI to reply. Operator mode is
      * answered only by a human via the Android app / admin panel.

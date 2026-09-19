@@ -13,7 +13,7 @@
             <?= csrf_field() ?>
             <button type="submit" class="btn btn-sm <?= !empty($state['ai_enabled']) ? '' : 'btn-outline' ?>"><?= !empty($state['ai_enabled']) ? 'Turn AI off' : 'Turn AI on' ?></button>
         </form>
-        <a class="btn btn-sm" href="<?= url('/assets/apk/OperatorChat-v2.15.apk') ?>" download>Download operator app (Android APK v2.15)</a>
+        <a class="btn btn-sm" href="<?= url('/assets/apk/OperatorChat-v2.16.apk') ?>" download>Download operator app (Android APK v2.16)</a>
         <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat/export-training') ?>" onclick="return confirm('Write the cleaned training export?');">Export training</a>
     </div>
 </div>
@@ -91,6 +91,15 @@
     </table>
 <?php endif; ?>
 
+<?php // Message any user: open a conversation with any account and send an operator message ?>
+<form method="post" action="<?= url('/admin/chat/new') ?>" style="display:flex;flex-direction:column;gap:.35rem;margin-bottom:1.25rem;max-width:640px;">
+    <?= csrf_field() ?>
+    <label class="muted" style="font-size:.85rem;">Message any user — start (or continue) a conversation with an account and send an operator message:</label>
+    <input type="email" name="user_email" placeholder="user@example.com" required>
+    <textarea name="message" rows="2" maxlength="2000" placeholder="Message to send…" required></textarea>
+    <div><button type="submit" class="btn btn-sm">Send to this user</button></div>
+</form>
+
 <?php // Conversation list filter ?>
 <form method="get" action="<?= url('/admin/chat') ?>" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem;">
     <label>Search<br><input type="text" name="q" value="<?= e($filterQ) ?>" placeholder="email or #id" size="24"></label>
@@ -110,10 +119,11 @@
 <?php else: ?>
     <table>
         <thead>
-            <tr><th>#</th><th>User</th><th>Mode</th><th>Status</th><th>Messages</th><th>Updated</th><th style="text-align:right;">Actions</th></tr>
+            <tr><th>#</th><th>User</th><th>Mode</th><th>Status</th><th>Messages</th><th>Updated</th><th style="text-align:center;">Member replies</th><th style="text-align:right;">Actions</th></tr>
         </thead>
         <tbody>
             <?php foreach ($conversations as $c): ?>
+                <?php $replyEnabled = (int) ($c['member_reply_enabled'] ?? 1) === 1; ?>
                 <tr>
                     <td>#<?= (int) $c['id'] ?></td>
                     <td><?= e((string) $c['user_email']) ?></td>
@@ -121,6 +131,15 @@
                     <td><?= e((string) $c['status']) ?></td>
                     <td><?= (int) $c['message_count'] ?> (<?= (int) $c['user_count'] ?> user)</td>
                     <td class="muted"><?= e(tzdate('M j, Y g:i A', (string) $c['updated_at'])) ?></td>
+                    <td style="text-align:center;">
+                        <form class="inline" method="post" action="<?= url('/admin/chat/' . (int) $c['id'] . '/reply-toggle') ?>">
+                            <?= csrf_field() ?>
+                            <button type="submit" class="btn btn-sm <?= $replyEnabled ? '' : 'btn-outline' ?>"
+                                    title="<?= $replyEnabled ? 'Member can reply — click to disable' : 'Member cannot reply — click to enable' ?>">
+                                <?= $replyEnabled ? 'ON' : 'OFF' ?>
+                            </button>
+                        </form>
+                    </td>
                     <td style="text-align:right;">
                         <a class="btn btn-sm" href="<?= url('/admin/chat/' . (int) $c['id']) ?>">Open</a>
                     </td>

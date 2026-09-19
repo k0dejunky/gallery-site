@@ -130,6 +130,7 @@ class AdminChatController extends Controller
         $this->viewAdmin('chat_show', [
             'title'      => 'Chat #' . $id,
             'conversation' => $conv,
+            'member_reply_enabled' => (int) ($conv['member_reply_enabled'] ?? 1),
             'user_email' => $user['email'] ?? 'user#' . $conv['user_id'],
             'messages'   => $messages,
             'hasMore'    => $hasMore,
@@ -192,6 +193,70 @@ class AdminChatController extends Controller
         } else {
             $this->flash('success', 'Conversation mode set to ' . $mode . '.');
         }
+        $this->redirect('/admin/chat/' . $id);
+    }
+
+    /** Message any user: open (or reuse) their conversation and send an operator message. */
+    public function newConversation(): void
+    {
+        $email   = trim((string) $this->request->input('user_email'));
+        $message = trim((string) $this->request->input('message'));
+
+        $user = $email !== ''
+            ? Database::run('SELECT id, email FROM users WHERE email = ? LIMIT 1', [$email])->fetch()
+            : false;
+
+        if ($user === false || $user === null) {
+            $this->flash('error', 'No account found with that email.');
+            $this->redirect('/admin/chat');
+            return;
+        }
+
+        if ($message === '' || mb_strlen($message) > ChatMessage::MAX_MESSAGE_LENGTH) {
+            $this->flash('error', 'Message must be 1–' . ChatMessage::MAX_MESSAGE_LENGTH . ' characters.');
+            $this->redirect('/admin/chat');
+            return;
+        }
+
+        $cid = ChatMessage::openFor((int) $user['id']);
+        ChatMessage::addMessage($cid, ChatMessage::ROLE_OPERATOR, $message, null);
+
+        AuditLog::record(
+            (int) Auth::user()['id'],
+            'create',
+            'chat_message',
+            null,
+            'Operator messaged ' . $user['email'] . ' (conversation #' . $cid . ')'
+        );
+
+        $this->flash('success', 'Message sent to ' . $user['email'] . '.');
+        $this->redirect('/admin/chat/' . $cid);
+    }
+
+    /** Toggle whether the member may reply in a conversation. */
+    public function toggleReply(int $id): void
+    {
+        $conv = ChatMessage::find($id);
+        if ($conv === null) {
+            $this->flash('error', 'That conversation does not exist.');
+            $this->redirect('/admin/chat');
+            return;
+        }
+
+        $enabled = !ChatMessage::memberReplyEnabled($id);
+        ChatMessage::setMemberReply($id, $enabled);
+
+        $user = Database::run('SELECT email FROM users WHERE id = ?', [(int) $conv['user_id']])->fetch();
+
+        AuditLog::record(
+            (int) Auth::user()['id'],
+            'update',
+            'chat_conversation',
+            $id,
+            ($enabled ? 'Enabled' : 'Disabled') . ' member replies for ' . ($user['email'] ?? ('user #' . $conv['user_id']))
+        );
+
+        $this->flash('success', 'Member replies ' . ($enabled ? 'enabled' : 'disabled') . '.');
         $this->redirect('/admin/chat/' . $id);
     }
 

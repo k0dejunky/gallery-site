@@ -50,11 +50,15 @@
             <?php endif; ?>
         </div>
 
+        <?php if (!empty($replyEnabled)): ?>
         <form class="chat-composer" id="chat-form">
             <?= csrf_field() ?>
             <textarea id="chat-input" rows="2" maxlength="2000" placeholder="Type a message…"></textarea>
             <button type="submit" class="btn" id="chat-send">Send</button>
         </form>
+        <?php else: ?>
+        <p class="muted">Replies are currently disabled for this conversation. Messages from the site will still appear here.</p>
+        <?php endif; ?>
     <?php endif; ?>
 </div>
 

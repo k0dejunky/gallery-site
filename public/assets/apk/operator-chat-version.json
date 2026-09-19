@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.15",
-  "versionCode": 26,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.15.apk",
-  "changelog": "Adds inbox search, durable reply drafts, retry-safe replies, cursor-aware inbox loading, and safer failed-send recovery.",
+  "latestVersion": "2.16",
+  "versionCode": 27,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.16.apk",
+  "changelog": "Message any user from the app (search + start a chat), toggle whether a member may reply, and surface reply state per conversation.",
   "publishedAt": "2026-09-18"
 }
