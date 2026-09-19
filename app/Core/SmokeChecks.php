@@ -276,6 +276,27 @@ class SmokeChecks
                 ? $ok('detail page present')
                 : $bad('traffic_show view must render the 30-day series, sparkline and attributed signups');
         });
+        $add('smoke.traffic.view_expandable', 'Smoke · Traffic', 'Summary page expands each link to its signups', static function () use ($trafficView, $ok, $bad): array {
+            return strpos($trafficView, 'trafficToggleSignups') !== false && strpos($trafficView, 'traffic-signups-') !== false
+                ? $ok('expandable signup rows')
+                : $bad('traffic view must expose an inline expandable signups list per link');
+        });
+        $add('smoke.traffic.view_recent', 'Smoke · Traffic', 'Summary page lists recent signups across links', static function () use ($trafficView, $ok, $bad): array {
+            return strpos($trafficView, 'Recent Signups') !== false && strpos($trafficView, '$recentSignups') !== false
+                ? $ok('recent signups section')
+                : $bad('traffic view must render a recent signups section fed by the controller');
+        });
+        $add('smoke.traffic.model_signup_lists', 'Smoke · Traffic', 'Model exposes per-link and recent signup lists', static function () use ($traf, $ok, $bad): array {
+            return strpos($traf, 'function signupsByLink') !== false && strpos($traf, 'function recentSignups') !== false
+                ? $ok('batch signup queries present')
+                : $bad('Traffic model must provide signupsByLink() and recentSignups() for the admin pages');
+        });
+        $add('smoke.traffic.view_signup_columns', 'Smoke · Traffic', 'Signup lists include status/plan/UTM detail', static function () use ($trafficView, $trafficShow, $ok, $bad): array {
+            return strpos($trafficView, 'utm_content') !== false && strpos($trafficView, 'utm_term') !== false
+                && strpos($trafficShow, 'utm_content') !== false && strpos($trafficShow, 'utm_term') !== false
+                ? $ok('full-detail columns present')
+                : $bad('traffic views must show plan/status and UTM content/term for each attributed signup');
+        });
 
         // ----------------------------------------------------- View trends
         $statsModel   = $read("$root/app/Models/Stats.php");

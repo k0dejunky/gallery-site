@@ -11,6 +11,10 @@ function trafficCopy(el) {
 function trafficSlugify(s) {
     return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
 }
+function trafficToggleSignups(id) {
+    const row = document.getElementById('traffic-signups-' + id);
+    if (row) row.style.display = (row.style.display === 'none') ? '' : 'none';
+}
 function trafficWireForm() {
     const form = document.getElementById('traffic-create-form');
     if (!form) return;
@@ -99,6 +103,7 @@ document.addEventListener('DOMContentLoaded', trafficWireForm);
                     <td style="text-align:right;"><?= $rate ?>%</td>
                     <td>
                         <button type="button" class="btn btn-sm btn-outline" data-link="<?= e($share) ?>" onclick="trafficCopy(this)">Copy</button>
+                        <button type="button" class="btn btn-sm btn-outline" onclick="trafficToggleSignups(<?= (int) $link['id'] ?>)">Signups</button>
                         <a class="btn btn-sm" href="<?= url('/admin/traffic/' . (int) $link['id']) ?>">Detail</a>
                         <form class="inline" method="post" action="<?= url('/admin/traffic/' . (int) $link['id'] . '/toggle') ?>">
                             <?= csrf_field() ?>
@@ -112,6 +117,94 @@ document.addEventListener('DOMContentLoaded', trafficWireForm);
                             <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                         </form>
                     </td>
+                </tr>
+                <?php $linkSignupRows = $linkSignups[(int) $link['id']] ?? []; ?>
+                <tr id="traffic-signups-<?= (int) $link['id'] ?>" style="display:none;">
+                    <td colspan="7" style="background:var(--card-bg,#fff);">
+                        <div class="muted" style="margin:.25rem 0 .5rem;"><?= count($linkSignupRows) ?> attributed signup<?= count($linkSignupRows) === 1 ? '' : 's' ?> — <a href="<?= url('/admin/traffic/' . (int) $link['id']) ?>">open detail</a></div>
+                        <?php if (empty($linkSignupRows)): ?>
+                            <p class="muted" style="margin:0;">No signups attributed to this link yet.</p>
+                        <?php else: ?>
+                            <table style="margin:0;">
+                                <thead>
+                                    <tr>
+                                        <th>Account</th>
+                                        <th>Signed up</th>
+                                        <th>Status</th>
+                                        <th>Plan</th>
+                                        <th>Source</th>
+                                        <th>Campaign</th>
+                                        <th>Content</th>
+                                        <th>Term</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($linkSignupRows as $s): ?>
+                                        <tr>
+                                            <td><a href="<?= url('/admin/users/' . (int) $s['id']) ?>"><?= e($s['email']) ?></a></td>
+                                            <td><?= e(tzdate('M j, Y H:i', $s['created_at'])) ?></td>
+                                            <td><span class="status-badge <?= ($s['status'] ?? 'active') === 'suspended' ? 'cancelled' : '' ?>"><?= e($s['status'] ?? 'active') ?></span></td>
+                                            <td><?= !empty($s['plan']) ? e($s['plan']) : '<span class="muted">&mdash;</span>' ?></td>
+                                            <td>
+                                                <?php
+                                                    $parts = array_filter([$s['utm_source'], $s['utm_medium']], static fn ($v) => $v !== null && $v !== '');
+                                                    echo $parts === [] ? '<span class="muted">direct</span>' : e(implode(' / ', $parts));
+                                                ?>
+                                            </td>
+                                            <td><?= !empty($s['utm_campaign']) ? e($s['utm_campaign']) : '<span class="muted">&mdash;</span>' ?></td>
+                                            <td><?= !empty($s['utm_content']) ? e($s['utm_content']) : '<span class="muted">&mdash;</span>' ?></td>
+                                            <td><?= !empty($s['utm_term']) ? e($s['utm_term']) : '<span class="muted">&mdash;</span>' ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+<?php endif; ?>
+
+<h2>Recent Signups</h2>
+<p class="muted" style="margin-top:0">The newest accounts attributed to any traffic link (newest first).</p>
+<?php if (empty($recentSignups)): ?>
+    <p class="muted">No signups have been attributed to any traffic link yet.</p>
+<?php else: ?>
+    <table>
+        <thead>
+            <tr>
+                <th>Account</th>
+                <th>Link</th>
+                <th>Signed up</th>
+                <th>Status</th>
+                <th>Plan</th>
+                <th>Source</th>
+                <th>Campaign</th>
+                <th>Content</th>
+                <th>Term</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($recentSignups as $s): ?>
+                <tr>
+                    <td><a href="<?= url('/admin/users/' . (int) $s['id']) ?>"><?= e($s['email']) ?></a></td>
+                    <td>
+                        <strong><?= e($s['link_code'] ?? '—') ?></strong>
+                        <?php if (!empty($s['link_name'])): ?><br><span class="muted"><?= e($s['link_name']) ?></span><?php endif; ?>
+                    </td>
+                    <td><?= e(tzdate('M j, Y H:i', $s['created_at'])) ?></td>
+                    <td><span class="status-badge <?= ($s['status'] ?? 'active') === 'suspended' ? 'cancelled' : '' ?>"><?= e($s['status'] ?? 'active') ?></span></td>
+                    <td><?= !empty($s['plan']) ? e($s['plan']) : '<span class="muted">&mdash;</span>' ?></td>
+                    <td>
+                        <?php
+                            $parts = array_filter([$s['utm_source'], $s['utm_medium']], static fn ($v) => $v !== null && $v !== '');
+                            echo $parts === [] ? '<span class="muted">direct</span>' : e(implode(' / ', $parts));
+                        ?>
+                    </td>
+                    <td><?= !empty($s['utm_campaign']) ? e($s['utm_campaign']) : '<span class="muted">&mdash;</span>' ?></td>
+                    <td><?= !empty($s['utm_content']) ? e($s['utm_content']) : '<span class="muted">&mdash;</span>' ?></td>
+                    <td><?= !empty($s['utm_term']) ? e($s['utm_term']) : '<span class="muted">&mdash;</span>' ?></td>
                 </tr>
             <?php endforeach; ?>
         </tbody>

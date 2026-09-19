@@ -382,8 +382,9 @@ class Traffic
         }
 
         $attributed = Database::run(
-            'SELECT u.id, u.email, u.created_at, u.utm_source, u.utm_medium, u.utm_campaign, u.utm_content, u.utm_term
+            'SELECT ' . self::signupSelect() . '
              FROM users u
+             ' . self::signupJoins() . '
              WHERE u.signup_source_link_id = ?
              ORDER BY u.created_at DESC, u.id DESC
              LIMIT 100',
@@ -405,6 +406,99 @@ class Traffic
             'signups'=> $attributed,
             'visits' => $recentVisits,
         ];
+    }
+
+    /**
+     * Batch-load attributed signups grouped by link id (used by the summary
+     * table so every row can expand to its signups without an N+1 query).
+     * Each link's list is capped to keep large campaigns responsive.
+     *
+     * @param int[] $linkIds
+     * @return array<int, array<int, array>>
+     */
+    public static function signupsByLink(array $linkIds, int $limitPerLink = 25): array
+    {
+        $map = [];
+        $ids = array_values(array_filter(
+            array_map('intval', $linkIds),
+            static fn (int $id): bool => $id > 0
+        ));
+        if ($ids === []) {
+            return $map;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $rows = Database::run(
+            'SELECT ' . self::signupSelect() . '
+             FROM users u
+             ' . self::signupJoins() . "
+             WHERE u.signup_source_link_id IN ($placeholders)
+             ORDER BY u.created_at DESC, u.id DESC",
+            $ids
+        )->fetchAll();
+
+        foreach ($rows as $row) {
+            $linkId = (int) $row['signup_source_link_id'];
+            $map[$linkId] = $map[$linkId] ?? [];
+            if (count($map[$linkId]) < $limitPerLink) {
+                $map[$linkId][] = $row;
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * The newest signups attributed to any traffic link, with the link's code
+     * and name attached. Optionally filtered to one link and/or a search term.
+     *
+     * @return array<int, array>
+     */
+    public static function recentSignups(int $limit = 100, ?int $linkId = null, string $search = ''): array
+    {
+        $where  = ['u.signup_source_link_id IS NOT NULL'];
+        $params = [];
+
+        if ($linkId !== null && $linkId > 0) {
+            $where[]  = 'u.signup_source_link_id = ?';
+            $params[] = $linkId;
+        }
+
+        if ($search !== '') {
+            $where[]  = 'u.email LIKE ?';
+            $params[] = '%' . $search . '%';
+        }
+
+        $limit = max(1, min(500, (int) $limit));
+
+        return Database::run(
+            'SELECT ' . self::signupSelect() . ', l.code AS link_code, l.name AS link_name
+             FROM users u
+             ' . self::signupJoins() . '
+             LEFT JOIN traffic_links l ON l.id = u.signup_source_link_id
+             WHERE ' . implode(' AND ', $where) . '
+             ORDER BY u.created_at DESC, u.id DESC
+             LIMIT ' . $limit,
+            $params
+        )->fetchAll();
+    }
+
+    /** Column list shared by every attributed-signup query. */
+    private static function signupSelect(): string
+    {
+        return 'u.id, u.email, u.status, u.role, u.created_at,
+                u.utm_source, u.utm_medium, u.utm_campaign, u.utm_content, u.utm_term,
+                u.signup_source_link_id,
+                p.name AS plan';
+    }
+
+    /** Plan join shared by every attributed-signup query (mirrors User::all). */
+    private static function signupJoins(): string
+    {
+        return 'LEFT JOIN subscriptions s ON s.id = (
+                    SELECT MAX(s2.id) FROM subscriptions s2 WHERE s2.user_id = u.id
+                )
+                LEFT JOIN plans p ON p.id = s.plan_id';
     }
 
     /**

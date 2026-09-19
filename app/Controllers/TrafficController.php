@@ -21,12 +21,18 @@ class TrafficController extends Controller
 
     /**
      * Summary table: every link with its visits, unique visitors, signups and
-     * signup rate, plus the create form and copy-ready share links.
+     * signup rate, plus the create form and copy-ready share links. Each link
+     * row can expand to its attributed signups; the page also ends with the
+     * newest signups across all links.
      */
     public function index(): void
     {
+        $links = Traffic::linksWithStats();
+
         $this->viewAdmin('traffic', [
-            'links' => Traffic::linksWithStats(),
+            'links'        => $links,
+            'linkSignups'  => Traffic::signupsByLink(array_column($links, 'id')),
+            'recentSignups'=> Traffic::recentSignups(100),
         ]);
     }
 
