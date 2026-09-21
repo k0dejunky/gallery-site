@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.16",
-  "versionCode": 27,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.16.apk",
-  "changelog": "Message any user from the app (search + start a chat), toggle whether a member may reply, and surface reply state per conversation.",
+  "latestVersion": "2.17",
+  "versionCode": 28,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.17.apk",
+  "changelog": "Battery-friendly: adaptive SSE backoff, low-frequency fallback polling only when the stream is down, Doze/metered awareness, lifecycle-aware badge refresh, cached thumbnail loading, and efficient inbox list updates.",
   "publishedAt": "2026-09-18"
 }
