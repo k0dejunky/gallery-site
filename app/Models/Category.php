@@ -20,13 +20,22 @@ class Category
         $search = trim($search);
 
         if ($search === '') {
-            return Database::run(
-                'SELECT c.*, COUNT(gc.gallery_id) AS gallery_count
-                 FROM categories c
-                 LEFT JOIN gallery_category gc ON gc.category_id = c.id
-                 GROUP BY c.id
-                 ORDER BY c.name ASC'
-            )->fetchAll();
+            $cached = \App\Core\Cache::rememberGen(
+                'category',
+                'all',
+                \App\Models\ServerOptimizations::cacheTtl('category'),
+                static fn (): string => json_encode(Database::run(
+                    'SELECT c.*, COUNT(gc.gallery_id) AS gallery_count
+                     FROM categories c
+                     LEFT JOIN gallery_category gc ON gc.category_id = c.id
+                     GROUP BY c.id
+                     ORDER BY c.name ASC'
+                )->fetchAll())
+            );
+
+            $decoded = json_decode($cached, true);
+
+            return is_array($decoded) ? $decoded : [];
         }
 
         return Database::run(
@@ -89,6 +98,9 @@ class Category
             [$name, slugify($name)]
         );
 
+        \App\Core\Cache::bump('category');
+        \App\Core\Cache::bump('gallery');
+
         return (int) Database::connection()->lastInsertId();
     }
 
@@ -101,6 +113,9 @@ class Category
             'UPDATE categories SET name = ?, slug = ? WHERE id = ?',
             [$name, slugify($name), $id]
         );
+
+        \App\Core\Cache::bump('category');
+        \App\Core\Cache::bump('gallery');
     }
 
     /**
@@ -110,5 +125,8 @@ class Category
     public static function delete(int $id): void
     {
         Database::run('DELETE FROM categories WHERE id = ?', [$id]);
+
+        \App\Core\Cache::bump('category');
+        \App\Core\Cache::bump('gallery');
     }
 }

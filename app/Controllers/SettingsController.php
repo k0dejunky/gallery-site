@@ -9,6 +9,7 @@ use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\FavoriteCategory;
 use App\Models\Plan;
+use App\Models\ServerOptimizations;
 use App\Models\SiteConfig;
 use App\Models\Subscription;
 use App\Models\Theme;
@@ -86,6 +87,10 @@ class SettingsController extends Controller
             'siteTimezones'   => site_timezones(),
             // Super admins see the operator chat bridge connection details.
             'chatBridge'      => $this->chatBridgeForAdmin($isPreview),
+            // Super admins can tune server optimizations (shown on /settings).
+            'serverOpt'       => $isPreview ? [] : ServerOptimizations::all(),
+            'serverOptStatus' => $isPreview ? null : $this->serverOptimizationStatus(),
+            'serverOptCanApply' => !$isPreview && ($user['role'] ?? '') === 'super_admin',
         ];
 
         if (Auth::isAdmin() && !$isPreview) {
@@ -222,6 +227,101 @@ class SettingsController extends Controller
 
         $this->flash('success', 'Site timezone updated. Dates now display in ' . SiteConfig::timezone() . '.');
         $this->redirect($this->settingsPath());
+    }
+
+    /**
+     * Save server optimization settings (super admins only). Stores the
+     * desired values; nothing touches the live server until "Apply".
+     */
+    public function updateServerOptimizations(): void
+    {
+        $user = Auth::user();
+        if (($user['role'] ?? '') !== 'super_admin') {
+            $this->flash('error', 'Only super administrators can change server optimizations.');
+            $this->redirect('/settings');
+            return;
+        }
+
+        $incoming = [];
+        foreach (ServerOptimizations::defaults() as $key => $default) {
+            if ($this->request->post($key) !== null) {
+                $incoming[$key] = $this->request->post($key);
+            }
+        }
+
+        if ($incoming === []) {
+            $this->flash('error', 'No settings submitted.');
+            $this->redirect('/settings');
+            return;
+        }
+
+        ServerOptimizations::save($incoming);
+
+        AuditLog::record(
+            (int) $user['id'],
+            'update',
+            'server_optimizations',
+            0,
+            'Server optimization settings saved: ' . json_encode(ServerOptimizations::all())
+        );
+
+        $this->flash('success', 'Server optimization settings saved. Click "Apply to server" to activate them.');
+        $this->redirect('/settings');
+    }
+
+    /**
+     * Apply saved server optimization settings via the scoped root helper
+     * (super admins only). Reloads services and records a status file.
+     */
+    public function applyServerOptimizations(): void
+    {
+        $user = Auth::user();
+        if (($user['role'] ?? '') !== 'super_admin') {
+            $this->flash('error', 'Only super administrators can apply server optimizations.');
+            $this->redirect('/settings');
+            return;
+        }
+
+        $phpBin = PHP_BINARY;
+        $script = dirname(__DIR__, 2) . '/bin/apply_server_optimizations.php';
+        $cmd = 'sudo -n ' . escapeshellarg($phpBin) . ' ' . escapeshellarg($script) . ' 2>&1';
+        $out = [];
+        $rc = 0;
+        exec($cmd, $out, $rc);
+        $summary = trim(implode(' ', $out));
+
+        AuditLog::record(
+            (int) $user['id'],
+            'update',
+            'server_optimizations',
+            0,
+            'Applied server optimizations (rc=' . $rc . '): ' . $summary
+        );
+
+        if ($rc === 0) {
+            $this->flash('success', 'Server optimizations applied: ' . $summary);
+        } else {
+            $this->flash('error', 'Server optimizations could NOT be applied (rc=' . $rc . ') — ' . $summary
+                . ' (check the www-data sudoers rule for apply_server_optimizations.php).');
+        }
+
+        $this->redirect('/settings');
+    }
+
+    /**
+     * The last apply result (storage/server_optimizations.status.json), or
+     * null when the settings have never been applied.
+     */
+    private function serverOptimizationStatus(): ?array
+    {
+        $path = dirname(__DIR__, 2) . '/storage/server_optimizations.status.json';
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $decoded = json_decode((string) file_get_contents($path), true);
+
+        return is_array($decoded) ? $decoded : null;
     }
 
     /**

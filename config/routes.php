@@ -244,6 +244,8 @@ return [
     ['POST', '/settings/favorites', 'SettingsController@updateFavorites'],
     ['POST', '/settings/theme', 'SettingsController@updateTheme'],
     ['POST', '/settings/timezone', 'SettingsController@updateTimezone'],
+    ['POST', '/settings/server-optimizations', 'SettingsController@updateServerOptimizations'],
+    ['POST', '/settings/server-optimizations/apply', 'SettingsController@applyServerOptimizations'],
     ['GET', '/settings/two-factor/setup', 'SettingsController@twoFactorSetup'],
     ['POST', '/settings/two-factor/enable', 'SettingsController@twoFactorEnable'],
     ['POST', '/settings/two-factor/disable', 'SettingsController@twoFactorDisable'],

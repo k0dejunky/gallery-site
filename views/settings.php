@@ -67,6 +67,73 @@
 </section>
 <?php endif; ?>
 
+<?php // Super admins can tune server optimization settings. ?>
+<?php if (!empty($serverOptCanApply)): ?>
+<section class="card settings-card" style="border-left:4px solid var(--purple-500);">
+    <h2 class="section-title">Server optimizations</h2>
+    <p class="muted">Tune server-level performance. Save stores the values; "Apply to server" writes the config and reloads services (Apache, PHP-FPM, MySQL) via a scoped root helper. No site functionality or layout changes.</p>
+    <?php if (!empty($serverOptStatus) && !empty($serverOptStatus['applied_at'])): ?>
+        <p class="muted" style="font-size:.8rem;">
+            Last applied: <strong><?= e((string) $serverOptStatus['applied_at']) ?></strong>
+            <?php if (!empty($serverOptStatus['notes'])): ?>&middot; <?= e(implode(' · ', $serverOptStatus['notes'])) ?><?php endif; ?>
+        </p>
+    <?php endif; ?>
+    <form method="post" action="<?= e(url('/settings/server-optimizations')) ?>" class="settings-form">
+        <?= csrf_field() ?>
+        <div class="settings-fields" style="grid-template-columns:repeat(2,minmax(0,1fr));">
+            <label>Brotli compression
+                <input type="hidden" name="brotli_enabled" value="0">
+                <input type="checkbox" name="brotli_enabled" value="1"<?= !empty($serverOpt['brotli_enabled']) ? ' checked' : '' ?>>
+                <span class="muted">Enable mod_brotli (gzip fallback stays active)</span>
+            </label>
+            <label>Compress JSON responses
+                <input type="hidden" name="compress_json" value="0">
+                <input type="checkbox" name="compress_json" value="1"<?= !empty($serverOpt['compress_json']) ? ' checked' : '' ?>>
+                <span class="muted">Add application/json to compression</span>
+            </label>
+            <label>OPcache revalidate frequency (s)
+                <input type="number" name="opcache_revalidate_freq" min="2" max="3600" value="<?= (int) $serverOpt['opcache_revalidate_freq'] ?>">
+                <span class="muted">How often PHP re-checks script files (2–3600)</span>
+            </label>
+            <label>MySQL InnoDB buffer pool (GB)
+                <input type="number" name="mysql_buffer_pool_gb" step="0.5" min="0.5" max="8" value="<?= (float) $serverOpt['mysql_buffer_pool_gb'] ?>">
+                <span class="muted">In-memory cache for data + indexes (0.5–8 GB)</span>
+            </label>
+            <label>MySQL flush log at commit
+                <select name="mysql_flush_log_trx">
+                    <option value="1"<?= (int) $serverOpt['mysql_flush_log_trx'] === 1 ? ' selected' : '' ?>>1 — Durable (recommended)</option>
+                    <option value="2"<?= (int) $serverOpt['mysql_flush_log_trx'] === 2 ? ' selected' : '' ?>>2 — Faster writes (small durability tradeoff)</option>
+                </select>
+            </label>
+            <label>Slow query log
+                <input type="hidden" name="mysql_slow_query_log" value="0">
+                <input type="checkbox" name="mysql_slow_query_log" value="1"<?= !empty($serverOpt['mysql_slow_query_log']) ? ' checked' : '' ?>>
+                <span class="muted">Log queries slower than the threshold</span>
+            </label>
+            <label>Slow query threshold (s)
+                <input type="number" name="mysql_long_query_time" step="0.1" min="0.1" max="30" value="<?= (float) $serverOpt['mysql_long_query_time'] ?>">
+            </label>
+            <label>Category cache TTL (s)
+                <input type="number" name="cache_category_ttl" min="60" max="86400" value="<?= (int) $serverOpt['cache_category_ttl'] ?>">
+            </label>
+            <label>Listing/search cache TTL (s)
+                <input type="number" name="cache_listing_ttl" min="15" max="3600" value="<?= (int) $serverOpt['cache_listing_ttl'] ?>">
+            </label>
+            <label>Recent-media cache TTL (s)
+                <input type="number" name="cache_recent_ttl" min="15" max="3600" value="<?= (int) $serverOpt['cache_recent_ttl'] ?>">
+            </label>
+        </div>
+        <div style="display:flex;gap:.5rem;margin-top:.5rem;flex-wrap:wrap;">
+            <button type="submit" class="btn">Save settings</button>
+        </div>
+    </form>
+    <form method="post" action="<?= e(url('/settings/server-optimizations/apply')) ?>" style="margin-top:.5rem;" onsubmit="return confirm('Apply server optimizations now (writes config, reloads Apache/PHP-FPM/MySQL)?');">
+        <?= csrf_field() ?>
+        <button type="submit" class="btn btn-outline">Apply to server</button>
+    </form>
+</section>
+<?php endif; ?>
+
 <section class="card settings-card">
     <h2 class="section-title">Gallery display</h2>
     <div class="settings-fields" style="grid-template-columns:repeat(3,minmax(0,1fr))">

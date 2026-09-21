@@ -63,20 +63,79 @@ class Cache
         self::$local[$key] = $value;
     }
 
-    /**
-     * Remove a key (used when the cached value's source data changes).
-     */
-    public static function forget(string $key): void
-    {
-        $redis = self::connection();
+/**
+ * Remove a key (used when the cached value's source data changes).
+ */
+public static function forget(string $key): void
+{
+    $redis = self::connection();
 
-        if ($redis !== null) {
-            $redis->del($key);
-            return;
-        }
-
-        unset(self::$local[$key]);
+    if ($redis !== null) {
+        $redis->del($key);
+        return;
     }
+
+    unset(self::$local[$key]);
+}
+
+/**
+ * A monotonically increasing generation counter for a data bucket
+ * (e.g. 'gallery', 'category', 'media'). Cache keys built with
+ * generation() are invalidated atomically by bump() — no wildcard
+ * deletes needed, and the cache never serves stale data after a write.
+ */
+public static function generation(string $bucket): int
+{
+    $value = self::get('gen:' . $bucket);
+
+    if ($value === null || $value === '' || !ctype_digit($value)) {
+        return 1;
+    }
+
+    return (int) $value;
+}
+
+/** Invalidate every cache key built under a data bucket. */
+public static function bump(string $bucket): void
+{
+    $next = self::generation($bucket) + 1;
+    $redis = self::connection();
+
+    if ($redis !== null) {
+        $redis->setex('gen:' . $bucket, 86400 * 30, (string) $next);
+        return;
+    }
+
+    self::$local['gen:' . $bucket] = (string) $next;
+}
+
+/**
+ * A cache key namespaced by a bucket's generation, so bump($bucket)
+ * automatically invalidates it.
+ */
+public static function genKey(string $bucket, string $key): string
+{
+    return 'gen' . self::generation($bucket) . ':' . $bucket . ':' . $key;
+}
+
+/**
+ * Cache a value under a generation-scoped key. Returns the cached string,
+ * or computes + stores the callback result when missing.
+ */
+public static function rememberGen(string $bucket, string $key, int $ttl, callable $callback): string
+{
+    $cacheKey = self::genKey($bucket, $key);
+    $hit = self::get($cacheKey);
+
+    if ($hit !== null) {
+        return $hit;
+    }
+
+    $value = (string) $callback();
+    self::set($cacheKey, $value, $ttl);
+
+    return $value;
+}
 
     /**
      * Shared Redis connection, or null when unavailable.

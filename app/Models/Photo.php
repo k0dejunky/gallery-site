@@ -136,6 +136,9 @@ class Photo
             [$filename, is_video($filename) ? 1 : 0, $hash]
         );
 
+        \App\Core\Cache::bump('media');
+        \App\Core\Cache::bump('gallery');
+
         return (int) Database::connection()->lastInsertId();
     }
 
@@ -239,23 +242,36 @@ class Photo
     {
         $isVideo = $kind === 'video' ? 1 : 0;
         $limitSql = $limit > 0 ? ' LIMIT ' . (int) $limit : '';
+        $bucket = 'media';
+        $key = $kind . ':' . (int) $limit;
 
-        return Database::run(
-            'SELECT p.id, p.filename, p.created_at,
-                    (SELECT gp.gallery_id FROM gallery_photo gp
-                      INNER JOIN galleries g ON g.id = gp.gallery_id
-                      WHERE gp.photo_id = p.id AND g.is_secret = 0
-                        AND ' . Gallery::publishedVisibleSql('g') . '
-                      ORDER BY gp.gallery_id LIMIT 1) AS gallery_id
-             FROM photos p
-             WHERE p.is_video = ?
-               AND EXISTS (SELECT 1 FROM gallery_photo gp_public
-                   INNER JOIN galleries g_public ON g_public.id = gp_public.gallery_id
-                   WHERE gp_public.photo_id = p.id AND g_public.is_secret = 0
-                     AND ' . Gallery::publishedVisibleSql('g_public') . ')
-             ORDER BY p.created_at DESC, p.id DESC' . $limitSql,
-            [$isVideo]
-        )->fetchAll();
+        $cached = \App\Core\Cache::rememberGen(
+            $bucket,
+            $key,
+            \App\Models\ServerOptimizations::cacheTtl('recent'),
+            static function () use ($isVideo, $limitSql, $kind, $limit): string {
+                return json_encode(Database::run(
+                    'SELECT p.id, p.filename, p.created_at,
+                            (SELECT gp.gallery_id FROM gallery_photo gp
+                              INNER JOIN galleries g ON g.id = gp.gallery_id
+                              WHERE gp.photo_id = p.id AND g.is_secret = 0
+                                AND ' . Gallery::publishedVisibleSql('g') . '
+                              ORDER BY gp.gallery_id LIMIT 1) AS gallery_id
+                     FROM photos p
+                     WHERE p.is_video = ?
+                       AND EXISTS (SELECT 1 FROM gallery_photo gp_public
+                           INNER JOIN galleries g_public ON g_public.id = gp_public.gallery_id
+                           WHERE gp_public.photo_id = p.id AND g_public.is_secret = 0
+                             AND ' . Gallery::publishedVisibleSql('g_public') . ')
+                     ORDER BY p.created_at DESC, p.id DESC' . $limitSql,
+                    [$isVideo]
+                )->fetchAll());
+            }
+        );
+
+        $decoded = json_decode($cached, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     /**
@@ -332,5 +348,8 @@ class Photo
         }
 
         Database::run('DELETE FROM photos WHERE id = ?', [$photoId]);
+
+        \App\Core\Cache::bump('media');
+        \App\Core\Cache::bump('gallery');
     }
 }

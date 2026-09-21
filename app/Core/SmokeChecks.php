@@ -96,6 +96,8 @@ class SmokeChecks
             'app/Models/ChatBroadcast.php',
             'bin/daily_chat_worker.php',
             'database/migrations/029_chat_daily_broadcast.sql',
+            'app/Models/ServerOptimizations.php',
+            'bin/apply_server_optimizations.php',
         ];
         foreach ($files as $rel) {
             $slug = str_replace(['/', '.'], '_', $rel);
@@ -377,6 +379,55 @@ class SmokeChecks
                 && in_array(['POST', '/webhooks/chat/reply-toggle', 'ChatBridgeController@replyToggle'], $routes, true)
                 ? $ok('webhooks wired')
                 : $bad('chat bridge must expose user search, start, and reply-toggle webhooks');
+        });
+
+        // ----------------------------------------------------- Server optimizations
+        $serverOptModel = $read("$root/app/Models/ServerOptimizations.php");
+        $applyServer    = $read("$root/bin/apply_server_optimizations.php");
+        $cacheCore      = $read("$root/app/Core/Cache.php");
+        $settingsCtrl   = $read("$root/app/Controllers/SettingsController.php");
+        $settingsView   = $read("$root/views/settings.php");
+        $catModel       = $read("$root/app/Models/Category.php");
+        $photoModel     = $read("$root/app/Models/Photo.php");
+        $galleryModel   = $read("$root/app/Models/Gallery.php");
+        $add('smoke.serveropt.model', 'Smoke · Server optimizations', 'Settings model validates + persists values', static function () use ($serverOptModel, $ok, $bad): array {
+            return strpos($serverOptModel, 'function defaults') !== false
+                && strpos($serverOptModel, 'function save') !== false
+                && strpos($serverOptModel, 'function cacheTtl') !== false
+                ? $ok('model present')
+                : $bad('ServerOptimizations must expose defaults(), save() and cacheTtl()');
+        });
+        $add('smoke.serveropt.apply_script', 'Smoke · Server optimizations', 'Scoped-root apply script exists and is additive', static function () use ($applyServer, $ok, $bad): array {
+            return strpos($applyServer, 'gallery-optimizations.conf') !== false
+                && strpos($applyServer, '99-gallery-optimizations.ini') !== false
+                && strpos($applyServer, '99-gallery-optimizations.cnf') !== false
+                && strpos($applyServer, 'SET GLOBAL') !== false
+                ? $ok('apply script wired')
+                : $bad('apply_server_optimizations.php must write additive Apache/PHP/MySQL configs and apply MySQL SET GLOBAL');
+        });
+        $add('smoke.serveropt.controller', 'Smoke · Server optimizations', 'Settings page save/apply actions exist', static function () use ($settingsCtrl, $routes, $ok, $bad): array {
+            return strpos($settingsCtrl, 'function updateServerOptimizations') !== false
+                && strpos($settingsCtrl, 'function applyServerOptimizations') !== false
+                && in_array(['POST', '/settings/server-optimizations', 'SettingsController@updateServerOptimizations'], $routes, true)
+                && in_array(['POST', '/settings/server-optimizations/apply', 'SettingsController@applyServerOptimizations'], $routes, true)
+                ? $ok('controller + routes wired')
+                : $bad('settings must expose save/apply server-optimization actions');
+        });
+        $add('smoke.serveropt.view', 'Smoke · Server optimizations', 'Settings page renders the optimization section', static function () use ($settingsView, $ok, $bad): array {
+            return strpos($settingsView, 'Server optimizations') !== false
+                && strpos($settingsView, 'server-optimizations') !== false
+                && strpos($settingsView, 'serverOptCanApply') !== false
+                ? $ok('view section present')
+                : $bad('settings view must render the super-admin Server optimizations card');
+        });
+        $add('smoke.serveropt.cache', 'Smoke · Server optimizations', 'Hot reads cached with generation invalidation', static function () use ($cacheCore, $catModel, $photoModel, $galleryModel, $ok, $bad): array {
+            return strpos($cacheCore, 'function rememberGen') !== false
+                && strpos($cacheCore, 'function bump') !== false
+                && strpos($catModel, 'rememberGen') !== false
+                && strpos($photoModel, 'rememberGen') !== false
+                && strpos($galleryModel, 'rememberGen') !== false
+                ? $ok('cache helpers + hot paths wired')
+                : $bad('Cache must expose rememberGen()/bump() and Category/Photo/Gallery hot reads must use it');
         });
 
         // ----------------------------------------------------- View trends

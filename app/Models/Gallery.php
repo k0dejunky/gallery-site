@@ -130,6 +130,7 @@ class Gallery
             'UPDATE galleries SET published_at = NULL WHERE id = ?',
             [$id]
         );
+        \App\Core\Cache::bump('gallery');
     }
 
     /**
@@ -277,26 +278,39 @@ class Gallery
         $where[] = self::publishedVisibleSql('g');
         $whereSql = ' WHERE ' . implode(' AND ', $where);
 
-        $total = (int) Database::run(
-            'SELECT COUNT(*) FROM galleries g' . $whereSql,
-            $params
-        )->fetchColumn();
+        $key = 'page:' . md5(json_encode([$page, $perPage, $filters], JSON_UNESCAPED_SLASHES));
 
-        $pages  = max(1, (int) ceil($total / $perPage));
-        $offset = ($page - 1) * $perPage;
+        $cached = \App\Core\Cache::rememberGen(
+            'gallery',
+            $key,
+            \App\Models\ServerOptimizations::cacheTtl('listing'),
+            static function () use ($whereSql, $params, $orderBy, $page, $perPage): string {
+                $total = (int) Database::run(
+                    'SELECT COUNT(*) FROM galleries g' . $whereSql,
+                    $params
+                )->fetchColumn();
 
-        $items = Database::run(
-            'SELECT g.*, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
-             FROM galleries g
-             LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id'
-             . $whereSql . '
-             GROUP BY g.id
-             ORDER BY ' . $orderBy . '
-             LIMIT ' . (int) $perPage . ' OFFSET ' . (int) $offset,
-            $params
-        )->fetchAll();
+                $pages  = max(1, (int) ceil($total / $perPage));
+                $offset = ($page - 1) * $perPage;
 
-        return compact('items', 'total', 'page', 'pages', 'perPage');
+                $items = Database::run(
+                    'SELECT g.*, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
+                     FROM galleries g
+                     LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id'
+                     . $whereSql . '
+                     GROUP BY g.id
+                     ORDER BY ' . $orderBy . '
+                     LIMIT ' . (int) $perPage . ' OFFSET ' . (int) $offset,
+                    $params
+                )->fetchAll();
+
+                return json_encode(compact('items', 'total', 'page', 'pages', 'perPage'));
+            }
+        );
+
+        $decoded = json_decode($cached, true);
+
+        return is_array($decoded) ? $decoded : compact('items', 'total', 'page', 'pages', 'perPage');
     }
 
     /**
@@ -410,6 +424,9 @@ class Gallery
                 [$galleryId, (int) $categoryId]
             );
         }
+
+        \App\Core\Cache::bump('gallery');
+        \App\Core\Cache::bump('category');
     }
 
     /**
@@ -514,6 +531,7 @@ class Gallery
             'UPDATE galleries SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL',
             [$id]
         );
+        \App\Core\Cache::bump('gallery');
     }
 
     /**
@@ -525,6 +543,7 @@ class Gallery
             'UPDATE galleries SET deleted_at = NULL WHERE id = ?',
             [$id]
         );
+        \App\Core\Cache::bump('gallery');
     }
 
     /**
@@ -578,6 +597,8 @@ class Gallery
             [$title, $description, $type, $minLevel, $isSecret ? 1 : 0, $publishedAt]
         );
 
+        \App\Core\Cache::bump('gallery');
+
         return (int) Database::connection()->lastInsertId();
     }
 
@@ -593,6 +614,7 @@ class Gallery
                 'UPDATE galleries SET title = ?, description = ?, type = ?, min_level = ?, published_at = ? WHERE id = ?',
                 [$title, $description, $type, $minLevel, $publishedAt, $id]
             );
+            \App\Core\Cache::bump('gallery');
             return;
         }
 
@@ -600,6 +622,7 @@ class Gallery
             'UPDATE galleries SET title = ?, description = ?, type = ?, min_level = ?, is_secret = ?, published_at = ? WHERE id = ?',
             [$title, $description, $type, $minLevel, $isSecret ? 1 : 0, $publishedAt, $id]
         );
+        \App\Core\Cache::bump('gallery');
     }
 
     public static function allowedUsers(int $galleryId): array
@@ -622,6 +645,8 @@ class Gallery
                 [$galleryId, $userId]
             );
         }
+
+        \App\Core\Cache::bump('gallery');
     }
 
     /**
@@ -643,6 +668,9 @@ class Gallery
         foreach ($photoIds as $photoId) {
             Photo::deleteIfOrphan((int) $photoId);
         }
+
+        \App\Core\Cache::bump('gallery');
+        \App\Core\Cache::bump('media');
     }
 
     /**
@@ -801,6 +829,9 @@ class Gallery
             'INSERT INTO gallery_photo (gallery_id, photo_id, position) VALUES (?, ?, ?)',
             [$galleryId, $photoId, $position]
         );
+
+        \App\Core\Cache::bump('gallery');
+        \App\Core\Cache::bump('media');
     }
 
     /**
