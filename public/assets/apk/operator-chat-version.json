@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.19",
-  "versionCode": 30,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.19.apk",
-  "changelog": "Attachment size limits and upload progress, full-screen in-app image viewer, inbox load-more, notification Direct Reply + Mark read + Mute actions with grouping, and a diagnostics panel in settings.",
+  "latestVersion": "2.20",
+  "versionCode": 31,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.20.apk",
+  "changelog": "Efficiency: shared HTTP connection pool, cached Keystore access, durable Mark read actions, cleaner service shutdown, and reduced per-request overhead.",
   "publishedAt": "2026-09-18"
 }

@@ -151,7 +151,7 @@ public static function rememberGen(string $bucket, string $key, int $ttl, callab
 
             try {
                 self::$redis = new \Redis();
-                self::$redis->connect('127.0.0.1', 6379, 0.5);
+                self::$redis->pconnect('127.0.0.1', 6379, 0.5, 'gallery-cache');
                 self::$redis->ping();
             } catch (\Throwable $e) {
                 self::$redis = null;
