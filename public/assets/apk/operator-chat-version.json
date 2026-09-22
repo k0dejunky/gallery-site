@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.20",
-  "versionCode": 31,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.20.apk",
-  "changelog": "Efficiency: shared HTTP connection pool, cached Keystore access, durable Mark read actions, cleaner service shutdown, and reduced per-request overhead.",
+  "latestVersion": "2.21",
+  "versionCode": 32,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.21.apk",
+  "changelog": "Efficiency: automatic temporary-attachment cache cleanup and reduced app resource buildup; previous power and connection optimizations retained.",
   "publishedAt": "2026-09-18"
 }

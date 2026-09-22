@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS gallery_user_access (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE INDEX IF NOT EXISTS idx_galleries_listing ON galleries (deleted_at, created_at);
+
 CREATE TABLE IF NOT EXISTS photos (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     filename     VARCHAR(255) NOT NULL,
@@ -51,6 +53,8 @@ CREATE TABLE IF NOT EXISTS photos (
     unique_views INTEGER NOT NULL DEFAULT 0,
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_photos_media_created ON photos (is_video, created_at);
 
 CREATE TABLE IF NOT EXISTS gallery_photo (
     gallery_id INTEGER NOT NULL,
@@ -84,6 +88,8 @@ CREATE TABLE IF NOT EXISTS gallery_category (
     FOREIGN KEY (gallery_id)  REFERENCES galleries(id)  ON DELETE CASCADE,
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_gallery_category_category ON gallery_category (category_id);
 
 CREATE TABLE IF NOT EXISTS user_favorite_categories (
     user_id     INTEGER NOT NULL,

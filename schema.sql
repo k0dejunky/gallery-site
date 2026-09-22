@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS galleries (
     unique_views INT UNSIGNED NOT NULL DEFAULT 0,
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at   DATETIME NULL,
+    INDEX idx_galleries_listing (deleted_at, published_at, created_at),
     FULLTEXT KEY ft_search (title, description)
 );
 
@@ -114,7 +115,8 @@ CREATE TABLE IF NOT EXISTS photos (
     link         VARCHAR(500) NOT NULL DEFAULT '',
     views        INT UNSIGNED NOT NULL DEFAULT 0,
     unique_views INT UNSIGNED NOT NULL DEFAULT 0,
-    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_photos_media_created (is_video, created_at)
 );
 
 CREATE TABLE IF NOT EXISTS gallery_photo (
@@ -166,6 +168,7 @@ CREATE TABLE IF NOT EXISTS gallery_category (
     gallery_id  INT UNSIGNED NOT NULL,
     category_id INT UNSIGNED NOT NULL,
     PRIMARY KEY (gallery_id, category_id),
+    INDEX idx_gallery_category_category (category_id),
     FOREIGN KEY (gallery_id)  REFERENCES galleries(id)  ON DELETE CASCADE,
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
 );
