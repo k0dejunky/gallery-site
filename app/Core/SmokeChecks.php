@@ -98,6 +98,8 @@ class SmokeChecks
             'database/migrations/029_chat_daily_broadcast.sql',
             'app/Models/ServerOptimizations.php',
             'bin/apply_server_optimizations.php',
+            'app/Models/OperatorToken.php',
+            'database/migrations/031_operator_tokens.sql',
         ];
         foreach ($files as $rel) {
             $slug = str_replace(['/', '.'], '_', $rel);
@@ -428,6 +430,32 @@ class SmokeChecks
                 && strpos($galleryModel, 'rememberGen') !== false
                 ? $ok('cache helpers + hot paths wired')
                 : $bad('Cache must expose rememberGen()/bump() and Category/Photo/Gallery hot reads must use it');
+        });
+
+        // ----------------------------------------------------- Operator tokens
+        $tokenModel = $read("$root/app/Models/OperatorToken.php");
+        $add('smoke.operator_tokens.model', 'Smoke · Operator tokens', 'Per-device token model stores only hashes', static function () use ($tokenModel, $ok, $bad): array {
+            return strpos($tokenModel, 'function create') !== false
+                && strpos($tokenModel, 'function authenticate') !== false
+                && strpos($tokenModel, 'function revoke') !== false
+                && strpos($tokenModel, "hash('sha256'") !== false
+                ? $ok('model present')
+                : $bad('OperatorToken must expose create/authenticate/revoke and hash tokens');
+        });
+        $add('smoke.operator_tokens.bridge', 'Smoke · Operator tokens', 'Bridge accepts device tokens or shared key', static function () use ($bridgeCtrl, $ok, $bad): array {
+            return strpos($bridgeCtrl, 'OperatorToken::authenticate') !== false
+                && strpos($bridgeCtrl, 'GALLERY_CHAT_KEY') !== false
+                ? $ok('dual auth wired')
+                : $bad('ChatBridgeController::authorized must accept operator tokens (or the legacy shared key)');
+        });
+        $add('smoke.operator_tokens.admin', 'Smoke · Operator tokens', 'Admin can create and revoke tokens', static function () use ($chatAdmin, $chatView, $routes, $ok, $bad): array {
+            return strpos($chatAdmin, 'function createToken') !== false
+                && strpos($chatAdmin, 'function revokeToken') !== false
+                && strpos($chatView, 'Operator device tokens') !== false
+                && in_array(['POST', '/admin/chat/tokens', 'AdminChatController@createToken', 'chat'], $routes, true)
+                && in_array(['POST', '/admin/chat/tokens/{id}/revoke', 'AdminChatController@revokeToken', 'chat'], $routes, true)
+                ? $ok('admin create/revoke wired')
+                : $bad('admin chat must expose operator token create/revoke actions and a management section');
         });
 
         // ----------------------------------------------------- View trends

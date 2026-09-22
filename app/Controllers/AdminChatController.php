@@ -9,6 +9,7 @@ use App\Core\Database;
 use App\Models\AuditLog;
 use App\Models\ChatBroadcast;
 use App\Models\ChatMessage;
+use App\Models\OperatorToken;
 use DateTime;
 use DateTimeZone;
 
@@ -82,6 +83,7 @@ class AdminChatController extends Controller
             'trainingCount'=> ChatMessage::trainingPairCount(),
             'cleanedCount' => ChatMessage::cleanedPairCount(),
             'broadcasts'   => ChatBroadcast::log(50),
+            'tokens'       => OperatorToken::all(),
         ]);
     }
 
@@ -441,6 +443,62 @@ class AdminChatController extends Controller
             $this->flash('success', 'Scheduled daily chat cancelled.');
         } else {
             $this->flash('error', 'That broadcast is not pending (already sent or cancelled).');
+        }
+
+        $this->redirect('/admin/chat');
+    }
+
+    /** Create a per-device operator token and show the raw value once. */
+    public function createToken(): void
+    {
+        $label = trim((string) $this->request->input('label'));
+        if ($label === '' || mb_strlen($label) > 120) {
+            $this->flash('error', 'A token label (1–120 chars) is required.');
+            $this->redirect('/admin/chat');
+            return;
+        }
+
+        $expiresAt = null;
+        $days = max(0, (int) $this->request->post('expires_days', '0'));
+        if ($days > 0) {
+            $expiresAt = gmdate('Y-m-d H:i:s', time() + $days * 86400);
+        }
+
+        $raw = OperatorToken::create($label, (int) Auth::user()['id'], $expiresAt);
+
+        AuditLog::record(
+            (int) Auth::user()['id'],
+            'create',
+            'operator_token',
+            0,
+            'Created operator token "' . $label . '"' . ($expiresAt ? ' expiring ' . $expiresAt . ' UTC' : '')
+        );
+
+        $this->flash('success', 'Token created for "' . $label . '". Copy it now (shown only once): ' . $raw);
+        $this->redirect('/admin/chat');
+    }
+
+    /** Revoke a per-device operator token. */
+    public function revokeToken(int $id): void
+    {
+        $token = OperatorToken::find($id);
+        if ($token === null) {
+            $this->flash('error', 'That token does not exist.');
+            $this->redirect('/admin/chat');
+            return;
+        }
+
+        if (OperatorToken::revoke($id)) {
+            AuditLog::record(
+                (int) Auth::user()['id'],
+                'delete',
+                'operator_token',
+                $id,
+                'Revoked operator token "' . $token['label'] . '"'
+            );
+            $this->flash('success', 'Token "' . $token['label'] . '" revoked. The device can no longer connect.');
+        } else {
+            $this->flash('error', 'That token was already revoked.');
         }
 
         $this->redirect('/admin/chat');

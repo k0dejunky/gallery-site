@@ -220,6 +220,8 @@ return [
     ['POST', '/admin/chat/daily-broadcast/{id}/send', 'AdminChatController@runDailyBroadcast', 'chat'],
     ['POST', '/admin/chat/daily-broadcast/{id}/cancel', 'AdminChatController@cancelDailyBroadcast', 'chat'],
     ['POST', '/admin/chat/export-training', 'AdminChatController@exportTraining', 'chat'],
+    ['POST', '/admin/chat/tokens', 'AdminChatController@createToken', 'chat'],
+    ['POST', '/admin/chat/tokens/{id}/revoke', 'AdminChatController@revokeToken', 'chat'],
     ['GET', '/admin/trends', 'TrendsController@index', 'trends'],
     ['POST', '/admin/trends/promote', 'TrendsController@approvePromotion', 'trends'],
     ['POST', '/admin/trends/dismiss', 'TrendsController@dismissPromotion', 'trends'],

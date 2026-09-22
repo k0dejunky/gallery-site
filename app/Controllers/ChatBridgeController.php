@@ -23,16 +23,22 @@ class ChatBridgeController extends Controller
     private function authorized(): bool
     {
         $expected = \env_value('GALLERY_CHAT_KEY', '');
-        if ($expected === '') {
-            return false;
-        }
 
         $given = trim((string) $this->request->header('Authorization', ''));
         if (stripos($given, 'bearer ') === 0) {
             $given = trim(substr($given, 7));
         }
+        if ($given === '') {
+            return false;
+        }
 
-        return hash_equals($expected, $given);
+        // Accept a valid per-device operator token (primary), or the legacy
+        // shared key during migration.
+        if (\App\Models\OperatorToken::authenticate($given) !== null) {
+            return true;
+        }
+
+        return $expected !== '' && hash_equals($expected, $given);
     }
 
     public function __construct($request)

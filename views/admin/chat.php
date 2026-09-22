@@ -13,9 +13,53 @@
             <?= csrf_field() ?>
             <button type="submit" class="btn btn-sm <?= !empty($state['ai_enabled']) ? '' : 'btn-outline' ?>"><?= !empty($state['ai_enabled']) ? 'Turn AI off' : 'Turn AI on' ?></button>
         </form>
-        <a class="btn btn-sm" href="<?= url('/assets/apk/OperatorChat-v2.17.apk') ?>" download>Download operator app (Android APK v2.17)</a>
+        <a class="btn btn-sm" href="<?= url('/assets/apk/OperatorChat-v2.18.apk') ?>" download>Download operator app (Android APK v2.18)</a>
         <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat/export-training') ?>" onclick="return confirm('Write the cleaned training export?');">Export training</a>
     </div>
+</div>
+
+<?php // Operator device tokens (per-device auth for the Android app) ?>
+<div class="card" style="border-left:4px solid var(--purple-500);padding:1rem;margin-bottom:1.25rem;">
+    <h2 class="section-title">Operator device tokens</h2>
+    <p class="muted" style="margin-top:0;">Per-device tokens replace the shared bridge key for the Android app. Only the hash is stored; revoking a token immediately blocks that device. The legacy shared key still works during migration.</p>
+    <form method="post" action="<?= url('/admin/chat/tokens') ?>" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem;">
+        <?= csrf_field() ?>
+        <input type="text" name="label" placeholder="Device label, e.g. Operator phone" required style="flex:1;min-width:180px;">
+        <label class="muted" style="font-size:.85rem;">Expires in
+            <input type="number" name="expires_days" min="0" max="3650" value="0" style="width:4.5rem;"> days (0 = never)
+        </label>
+        <button type="submit" class="btn btn-sm">Create token</button>
+    </form>
+    <?php if (empty($tokens)): ?>
+        <p class="muted">No device tokens yet.</p>
+    <?php else: ?>
+        <table>
+            <thead>
+                <tr><th>Label</th><th>Scopes</th><th>Expires</th><th>Last used</th><th>Created by</th><th>Status</th><th style="text-align:right;">Action</th></tr>
+            </thead>
+            <tbody>
+                <?php foreach ($tokens as $t): ?>
+                    <?php $revoked = !empty($t['revoked']); ?>
+                    <tr>
+                        <td><strong><?= e((string) $t['label']) ?></strong></td>
+                        <td class="muted"><?= e((string) $t['scopes']) ?></td>
+                        <td class="muted"><?= !empty($t['expires_at']) ? e(tzdate('M j, Y', (string) $t['expires_at'])) : '<span class="muted">never</span>' ?></td>
+                        <td class="muted"><?= !empty($t['last_used_at']) ? e(tzdate('M j, Y g:i A', (string) $t['last_used_at'])) : '<span class="muted">never</span>' ?></td>
+                        <td class="muted"><?= e((string) ($t['created_by_email'] ?? '—')) ?></td>
+                        <td><span class="pill <?= $revoked ? 'pill-muted' : '' ?>"><?= $revoked ? 'revoked' : 'active' ?></span></td>
+                        <td style="text-align:right;">
+                            <?php if (!$revoked): ?>
+                                <form class="inline" method="post" action="<?= url('/admin/chat/tokens/' . (int) $t['id'] . '/revoke') ?>" onsubmit="return confirm('Revoke token &quot;<?= e((string) $t['label']) ?>&quot;?');">
+                                    <?= csrf_field() ?>
+                                    <button type="submit" class="btn btn-sm btn-danger">Revoke</button>
+                                </form>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
 </div>
 
 <?php // AI settings (site default mode) ?>
