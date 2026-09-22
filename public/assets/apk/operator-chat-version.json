@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.18",
-  "versionCode": 29,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.18.apk",
-  "changelog": "Framework upgrade (AGP 8.6 / Kotlin 2.1, ViewModel + StateFlow inbox, per-device operator tokens, biometric lock, offline send queue, notification mute action + quiet hours, inbox pagination, accessibility targets, new release signing key — reinstall required).",
+  "latestVersion": "2.19",
+  "versionCode": 30,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.19.apk",
+  "changelog": "Attachment size limits and upload progress, full-screen in-app image viewer, inbox load-more, notification Direct Reply + Mark read + Mute actions with grouping, and a diagnostics panel in settings.",
   "publishedAt": "2026-09-18"
 }
