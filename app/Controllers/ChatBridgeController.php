@@ -594,8 +594,10 @@ class ChatBridgeController extends Controller
     {
         $since = max(0, (int) $this->request->query('since_id', 0));
 
+        // Only serve cleaned pairs (operator-curated); test/junk pairs from
+        // development are excluded so the LoRA never learns from them.
         $rows = \App\Core\Database::run(
-            'SELECT id, user_message, operator_reply, created_at FROM chat_training_pairs WHERE id > ? ORDER BY id ASC LIMIT 5000',
+            'SELECT id, user_message, operator_reply, created_at FROM chat_training_pairs WHERE cleaned = 1 AND id > ? ORDER BY id ASC LIMIT 5000',
             [$since]
         )->fetchAll();
 

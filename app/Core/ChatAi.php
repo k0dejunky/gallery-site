@@ -19,8 +19,9 @@ namespace App\Core;
  */
 class ChatAi
 {
-    /** Retrieval-mode model (base, no adapter). */
-    public const BASE_MODEL = 'llama3.2:3b';
+    /** Retrieval-mode model (base, no adapter). Abliterated so it engages
+     *  adult conversation instead of refusing (the stock llama3.2:3b refuses). */
+    public const BASE_MODEL = 'llama3.2-3b-abliterated';
 
     /** Default fine-tuned model name (built from the Modelfile + LoRA adapter). */
     public const FINETUNED_MODEL = 'chat-finetuned';
@@ -43,6 +44,14 @@ class ChatAi
         $model = $mode === \App\Models\ChatMessage::MODE_FINETUNED
             ? self::currentFineTunedModel()
             : self::BASE_MODEL;
+
+        // If the requested fine-tuned model isn't installed (no adapter yet or
+        // a rebuild hasn't completed), fall back to the base model so chat
+        // still answers instead of going ai_pending. The base is the abliterated
+        // model, which engages adult conversation.
+        if ($model !== self::BASE_MODEL && !self::modelExists($model)) {
+            $model = self::BASE_MODEL;
+        }
 
         $system = "You are the chat assistant for an adult content gallery site. "
             . "Be warm, flirty, and human. Stay in character and respond naturally. "
@@ -120,6 +129,31 @@ class ChatAi
         }
 
         return ['ok' => true, 'reply' => mb_substr($text, 0, \App\Models\ChatMessage::MAX_MESSAGE_LENGTH)];
+    }
+
+    /**
+     * Whether a model with the given name is installed (or its :latest tag).
+     */
+    private static function modelExists(string $name): bool
+    {
+        [$status, , $body] = \App\Models\Http::request(self::baseUrl() . '/api/tags', [
+            'method'  => 'GET',
+            'timeout' => 5,
+        ]);
+
+        if ($status < 200 || $status >= 300) {
+            return false;
+        }
+
+        $data = json_decode($body, true);
+        foreach (($data['models'] ?? []) as $m) {
+            $n = (string) ($m['name'] ?? '');
+            if ($n === $name || $n === $name . ':latest') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

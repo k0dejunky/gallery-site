@@ -5,12 +5,12 @@ namespace App\Core;
 /**
  * Manages the self-hosted Ollama models used by chat:
  *
- *  - The base model (llama3.2:3b) is used for retrieval mode.
+ *  - The base model (llama3.2-3b-abliterated) is used for retrieval mode.
  *  - A fine-tuned model ('chat-finetuned') is built from a Modelfile that
  *    loads a LoRA adapter trained on operator replies:
  *
- *        FROM llama3.2:3b
- *        ADAPTER /var/www/gallery/storage/training/chat-lora.gguf
+ *        FROM llama3.2-3b-abliterated
+ *        ADAPTER /var/www/gallery/storage/training/chat-lora
  *
  * When a new adapter is uploaded (via the training-upload webhook), the site
  * swaps the Modelfile and rebuilds 'chat-finetuned' with `ollama create`.
@@ -20,8 +20,10 @@ namespace App\Core;
  */
 class ChatModel
 {
-    /** Base model (no adapter) used for retrieval mode. */
-    public const BASE = 'llama3.2:3b';
+    /** Base model (no adapter) used for retrieval mode. Abliterated variant
+     *  so the fine-tuned model is built on top of it (stock llama3.2:3b
+     *  refuses adult conversation, which the site's chat needs to allow). */
+    public const BASE = 'llama3.2-3b-abliterated';
 
     /** The live fine-tuned model name used by ChatAi::FINETUNED_MODEL. */
     public const FINETUNED = 'chat-finetuned';

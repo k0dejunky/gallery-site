@@ -25,7 +25,7 @@ import urllib.error
 # ------------------------------------------------------------------ config
 SERVER_BASE = os.environ.get("CHAT_SERVER", "https://amethyst2213.com/gallery")
 BRIDGE_TOKEN = os.environ.get("CHAT_BRIDGE_TOKEN", "REPLACE_WITH_GALLERY_CHAT_KEY")
-MODEL_DIR = os.environ.get("MODEL_DIR", r"D:\llama-3.2-3b-hf")
+MODEL_DIR = os.environ.get("MODEL_DIR", r"D:\llama-3.2-3b-hf-ab")
 OUTPUT_ADAPTER = os.environ.get("OUTPUT_ADAPTER", r"C:\work\chat-lora.safetensors")
 POLL_SECONDS = int(os.environ.get("POLL_SECONDS", "600"))
 MIN_NEW_PAIRS = int(os.environ.get("MIN_NEW_PAIRS", "20"))
@@ -86,13 +86,33 @@ def fetch_training_data(since_id: int):
                 continue
     return pairs
 
+JUNK_WORDS = {
+    "test", "testing", "tests", "dbg", "dbg-test", "sup", "hi", "hello", "hey",
+    "h", "asdf", "khgkghkjghkjhg", "hdjdjfjfj", "pic", "tits", "pussy",
+}
+
+def _is_junk(text: str) -> bool:
+    """Heuristic junk filter: empty, tiny, or pure test/placeholder text."""
+    t = text.strip().lower()
+    if not t:
+        return True
+    # single emoji / symbol-only replies
+    if len(t) <= 2 and not t.isalnum():
+        return True
+    words = t.split()
+    if len(words) <= 1 and (t in JUNK_WORDS or t.isdigit()):
+        return True
+    return False
+
 def build_training_records(pairs):
-    """Convert pairs to list of {text: <chat-format>} records."""
+    """Convert pairs to list of {text: <chat-format>} records, dropping junk."""
     records = []
     for p in pairs:
         user = (p.get("user_message") or "").strip()
         reply = (p.get("operator_reply") or "").strip()
         if not user or not reply:
+            continue
+        if _is_junk(user) or _is_junk(reply):
             continue
         text = (
             "<|start_header_id|>user<|end_header_id|>\n\n"
