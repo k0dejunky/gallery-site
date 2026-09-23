@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.21",
-  "versionCode": 32,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.21.apk",
-  "changelog": "Efficiency: automatic temporary-attachment cache cleanup and reduced app resource buildup; previous power and connection optimizations retained.",
-  "publishedAt": "2026-09-18"
+  "latestVersion": "2.22",
+  "versionCode": 33,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.22.apk",
+  "changelog": "Camera: take a photo or record a video with the system camera and attach it to a chat message (choose Camera from the paperclip menu).",
+  "publishedAt": "2026-09-23"
 }
