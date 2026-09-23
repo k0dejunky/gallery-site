@@ -60,7 +60,7 @@ class PlanController extends Controller
         $desc     = trim($this->request->input('description'));
         $sort     = (int) $this->request->input('sort_order', 0);
         $level    = (int) $this->request->input('level', Plan::SILVER_LEVEL);
-        $active   = (bool) $this->request->input('active', false);
+        $active   = $this->request->input('active') === '1';
 
         $error = $this->validate($name, $cycle, $price, $level);
 
@@ -111,7 +111,7 @@ class PlanController extends Controller
         $desc     = trim($this->request->input('description'));
         $sort     = (int) $this->request->input('sort_order', 0);
         $level    = (int) $this->request->input('level', $plan['level'] ?? Plan::SILVER_LEVEL);
-        $active   = (bool) $this->request->input('active', false);
+        $active   = $this->request->input('active') === '1';
 
         $error = $this->validate($name, $cycle, $price, $level);
 

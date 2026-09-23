@@ -1318,7 +1318,6 @@ PHP;
             . ' -h ' . escapeshellarg((string) ($db['host'] ?? '127.0.0.1'))
             . ' -P ' . (int) ($db['port'] ?? 3306)
             . ' -u ' . escapeshellarg((string) ($db['username'] ?? ''))
-            . ' -p' . escapeshellarg((string) ($db['password'] ?? ''))
             . ' ' . escapeshellarg((string) ($db['database'] ?? ''));
 
         $script = sys_get_temp_dir() . '/gallery-backup.sh';
@@ -1331,7 +1330,7 @@ cd {ROOT}
 trap 'rm -f {BACKUPDIR}/.running; if [ ! -f {BACKUPDIR}/.last_ok ]; then echo "\$(date "+%F %T") backup aborted (dump/tar/verify failed)" >> {BACKUPDIR}/.failed; fi' EXIT
 rm -f {BACKUPDIR}/.failed {BACKUPDIR}/.last_ok
 DUMP=\$(mktemp /tmp/gallery-dump-XXXXXX.sql)
-{MYSQLDUMP} > "\$DUMP"
+MYSQL_PWD={DBPASS} {MYSQLDUMP} > "\$DUMP"
 TARGET={BACKUPDIR}/gallery-backup-{STAMP}.tar.gz
 SQLT={BACKUPDIR}/gallery-db-{STAMP}.sql.gz
 tar czf "\$TARGET" --warning=no-file-changed --ignore-failed-read -C {ROOT} storage/uploads
@@ -1360,8 +1359,8 @@ BASH;
             ? 'if [ -n "{SYNCCMD}" ]; then' . "\n" . '  {SYNCCMD} || SYNC_RC=$?' . "\n" . 'fi'
             : ':';
         $body = str_replace(
-            ['{MYSQLDUMP}', '{BACKUPDIR}', '{STAMP}', '{ROOT}', '{SYNCBLOCK}', '{SYNCCMD}'],
-            [$mysqldump, escapeshellarg($this->backupDir), $stamp, escapeshellarg($this->root), $syncBlock, $syncCmd],
+            ['{MYSQLDUMP}', '{BACKUPDIR}', '{STAMP}', '{ROOT}', '{SYNCBLOCK}', '{SYNCCMD}', '{DBPASS}'],
+            [$mysqldump, escapeshellarg($this->backupDir), $stamp, escapeshellarg($this->root), $syncBlock, $syncCmd, escapeshellarg((string) ($db['password'] ?? ''))],
             $body
         );
         file_put_contents($script, $body);

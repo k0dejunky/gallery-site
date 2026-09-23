@@ -84,7 +84,39 @@ class AdminChatController extends Controller
             'cleanedCount' => ChatMessage::cleanedPairCount(),
             'broadcasts'   => ChatBroadcast::log(50),
             'tokens'       => OperatorToken::all(),
+            'latestApk'    => $this->latestApkVersion(),
         ]);
+    }
+
+    /**
+     * Resolve the newest published operator APK from the version manifest so
+     * the admin "Download app" button never points at a stale build.
+     */
+    private function latestApkVersion(): array
+    {
+        $fallback = ['version' => '', 'file' => ''];
+        $manifest = dirname(__DIR__, 2) . '/public/assets/apk/operator-chat-version.json';
+
+        if (!is_file($manifest)) {
+            return $fallback;
+        }
+
+        try {
+            $data = json_decode((string) file_get_contents($manifest), true);
+        } catch (\Throwable $e) {
+            return $fallback;
+        }
+
+        if (!is_array($data) || empty($data['latestVersion'])) {
+            return $fallback;
+        }
+
+        $file = 'OperatorChat-v' . preg_replace('/[^0-9.]/', '', (string) $data['latestVersion']) . '.apk';
+
+        return [
+            'version' => (string) $data['latestVersion'],
+            'file'    => $file,
+        ];
     }
 
     public function show(int $id): void
@@ -518,6 +550,10 @@ class AdminChatController extends Controller
         )->fetchAll();
 
         $fh = fopen($out, 'w');
+        if ($fh === false) {
+            $this->flash('error', 'Could not open the training export file for writing.');
+            $this->redirect('/admin/chat');
+        }
         $written = 0;
         foreach ($rows as $row) {
             $u = $this->clean((string) $row['user_message']);
@@ -525,12 +561,14 @@ class AdminChatController extends Controller
             if ($u === '' || $r === '') {
                 continue;
             }
-            fwrite($fh, json_encode([
+            if (fwrite($fh, json_encode([
                 'messages' => [
                     ['role' => 'user', 'content' => $u],
                     ['role' => 'assistant', 'content' => $r],
                 ],
-            ]) . "\n");
+            ]) . "\n") === false) {
+                break;
+            }
             $written++;
         }
         fclose($fh);

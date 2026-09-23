@@ -1,6 +1,11 @@
 CREATE DATABASE IF NOT EXISTS gallery_mvc;
 USE gallery_mvc;
 
+-- Allow forward references: several tables carry foreign keys to tables
+-- defined later in this file (e.g. subscriptions -> payment_processors).
+-- Re-enabled at the end so a full import ends in the default state.
+SET FOREIGN_KEY_CHECKS = 0;
+
 CREATE TABLE IF NOT EXISTS users (
     id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     email         VARCHAR(255) NOT NULL UNIQUE,
@@ -38,6 +43,10 @@ CREATE TABLE IF NOT EXISTS users (
     card_exp_year  SMALLINT NULL DEFAULT NULL,
     flag          VARCHAR(32) NULL DEFAULT NULL,
     theme_preset  VARCHAR(120) NULL,
+    totp_secret   CHAR(64) NULL DEFAULT NULL,
+    totp_enabled  TINYINT(1) NOT NULL DEFAULT 0,
+    totp_verified_at DATETIME NULL DEFAULT NULL,
+    recovery_email_sent_at DATETIME NULL,
     INDEX idx_users_email_verification_token (email_verification_token)
 );
 
@@ -265,6 +274,7 @@ CREATE TABLE IF NOT EXISTS plans (
     can_download       TINYINT(1) NOT NULL DEFAULT 0,
     can_comment        TINYINT(1) NOT NULL DEFAULT 0,
     can_comment_guest  TINYINT(1) NOT NULL DEFAULT 0,
+    can_chat           TINYINT(1) NOT NULL DEFAULT 0,
     max_upload_size_mb INT UNSIGNED NOT NULL DEFAULT 100,
     max_favorites      INT UNSIGNED NOT NULL DEFAULT 10
 );
@@ -274,7 +284,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     membership_number VARCHAR(20) NULL UNIQUE,
     user_id     INT UNSIGNED NOT NULL,
     plan_id     INT UNSIGNED NOT NULL,
-    status      ENUM('pending', 'active', 'cancelled', 'expired') NOT NULL DEFAULT 'pending',
+    status      ENUM('pending', 'active', 'cancelled', 'expired', 'past_due') NOT NULL DEFAULT 'pending',
     starts_at   DATETIME NULL,
     expires_at  DATETIME NULL,
     sale_id     INT UNSIGNED NULL,
@@ -557,3 +567,88 @@ CREATE TABLE IF NOT EXISTS user_activity (
     INDEX idx_ua_created (created_at),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Chat: members chat with a self-hosted AI model (or a human operator via the
+-- Android app). Eligibility is gated by a per-plan can_chat flag. ai_mode is
+-- 'retrieval' (few-shot over operator replies), 'finetuned' (LoRA adapter), or
+-- 'operator' (no AI; answered only by a human operator). Net state of
+-- migrations 022-030.
+CREATE TABLE IF NOT EXISTS chat_conversations (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT UNSIGNED NOT NULL,
+    ai_mode     ENUM('retrieval','finetuned','operator') NOT NULL DEFAULT 'retrieval',
+    status      ENUM('open','closed') NOT NULL DEFAULT 'open',
+    member_reply_enabled TINYINT(1) NOT NULL DEFAULT 1,
+    last_read_message_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    operator_read_through_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_chat_conv_user (user_id),
+    KEY idx_chat_conv_status (status),
+    CONSTRAINT fk_chat_conv_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    conversation_id BIGINT UNSIGNED NOT NULL,
+    sender_role     ENUM('user','model','operator') NOT NULL,
+    message         TEXT NOT NULL,
+    attachment_name VARCHAR(255) NULL,
+    attachment_type VARCHAR(60) NULL,
+    attachment_path VARCHAR(255) NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_chat_msg_conv_date (conversation_id, created_at),
+    CONSTRAINT fk_chat_msg_conv FOREIGN KEY (conversation_id)
+        REFERENCES chat_conversations(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS chat_training_pairs (
+    id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_message  TEXT NOT NULL,
+    operator_reply TEXT NOT NULL,
+    cleaned       TINYINT(1) NOT NULL DEFAULT 0,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE chat_reply_idempotency (
+    idempotency_key VARCHAR(128) NOT NULL PRIMARY KEY,
+    conversation_id BIGINT UNSIGNED NOT NULL,
+    message_id BIGINT UNSIGNED NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_chat_reply_idempotency_conversation (conversation_id),
+    FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS chat_daily_broadcasts (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    message     TEXT NOT NULL,
+    scheduled_at DATETIME NULL,
+    status      ENUM('scheduled','sending','sent','partial','failed','cancelled') NOT NULL DEFAULT 'scheduled',
+    recipients  INT UNSIGNED NOT NULL DEFAULT 0,
+    sent_count  INT UNSIGNED NOT NULL DEFAULT 0,
+    error       VARCHAR(500) NULL,
+    created_by  INT UNSIGNED NULL,
+    sent_at     DATETIME NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_chat_daily_broadcasts_status (status, scheduled_at),
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Per-device operator tokens: scoped, revocable, expiring device tokens for
+-- the operator app. Only the SHA-256 hash is stored.
+CREATE TABLE IF NOT EXISTS operator_tokens (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    label       VARCHAR(120) NOT NULL,
+    token_hash  CHAR(64) NOT NULL UNIQUE,
+    scopes      VARCHAR(255) NOT NULL DEFAULT 'chat',
+    expires_at  DATETIME NULL,
+    revoked     TINYINT(1) NOT NULL DEFAULT 0,
+    last_used_at DATETIME NULL,
+    created_by  INT UNSIGNED NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_operator_tokens_revoked (revoked),
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+SET FOREIGN_KEY_CHECKS = 1;

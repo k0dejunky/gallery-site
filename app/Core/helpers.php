@@ -567,6 +567,10 @@ function _load_image(string $src)
         $prescaled = tempnam(sys_get_temp_dir(), 'imgload');
 
         if ($prescaled !== false) {
+            // ffmpeg needs a recognisable extension (or an explicit -f) to
+            // pick the output muxer; tempnam() returns an extension-less path.
+            $prescaled .= '.jpg';
+
             $scale = $maxWorking / max($info[0], $info[1]);
             $destW  = max(1, (int) round($info[0] * $scale));
             $destH  = max(1, (int) round($info[1] * $scale));

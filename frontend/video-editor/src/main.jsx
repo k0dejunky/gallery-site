@@ -145,7 +145,7 @@ function Editor() {
   /* ── Playback ── */
   useEffect(() => { const v = videoRef.current; if (!v) return; v.playbackRate = project.speed || 1; v.volume = audio.muted ? 0 : clamp(Number(audio.volume ?? 1), 0, 2); }, [project.speed, audio.volume, audio.muted]);
 
-  const onTimeUpdate = useCallback(() => { const v = videoRef.current; if (!v) return; setCurrentTime(v.currentTime); if (v.currentTime >= clipEnd) { if (loopRef.current) { v.currentTime = clipStart; } else { v.pause(); v.currentTime = clipStart; setPlaying(false); } } }, [clipStart, clipEnd]);
+  const onTimeUpdate = useCallback(() => { const v = videoRef.current; if (!v) return; setCurrentTime(v.currentTime); const endKnown = (isFinite(Number(clip.end)) && Number(clip.end) > clipStart) || (isFinite(v.duration) && v.duration > 0); if (!endKnown) return; const boundary = Number(clip.end) > clipStart ? clipEnd : v.duration; if (v.currentTime >= boundary) { if (loopRef.current) { v.currentTime = clipStart; } else { v.pause(); v.currentTime = clipStart; setPlaying(false); } } }, [clipStart, clipEnd]);
 
   const playPause = useCallback(() => { const v = videoRef.current; if (!v) return; if (v.paused) { if (v.currentTime < clipStart || v.currentTime >= clipEnd) v.currentTime = clipStart; v.play(); setPlaying(true); } else { v.pause(); setPlaying(false); } }, [clipStart, clipEnd]);
 
@@ -158,7 +158,7 @@ function Editor() {
 
   const onTimelinePointer = useCallback((e) => {
     if (e.target.dataset.handle) { dragState.current = { type: e.target.dataset.handle, itemIdx: Number(e.target.dataset.idx), itemTarget: e.target.dataset.target }; e.target.setPointerCapture(e.pointerId); return; }
-    if (tool === 'razor') { const t = timeFromEvent(e); updateProject((next) => { for (const item of next.text_overlays) { if (t > item.start + 0.1 && t < item.end - 0.1) { next.text_overlays.push({ ...structuredClone(item), start: Number(t.toFixed(2)), end: item.end }); item.end = Number(t.toFixed(2)); } } for (const item of captionTrack.items) { if (t > item.start + 0.1 && t < item.end - 0.1) { const ci = next.tracks.find((x) => x.type === 'captions'); ci.items.push({ ...structuredClone(item), start: Number(t.toFixed(2)), end: item.end }); item.end = Number(t.toFixed(2)); } } }); return; }
+    if (tool === 'razor') { const t = timeFromEvent(e); updateProject((next) => { for (const item of next.text_overlays) { if (t > item.start + 0.1 && t < item.end - 0.1) { next.text_overlays.push({ ...structuredClone(item), start: Number(t.toFixed(2)), end: item.end }); item.end = Number(t.toFixed(2)); } } const ci = next.tracks.find((x) => x.type === 'captions'); for (const item of ci.items) { if (t > item.start + 0.1 && t < item.end - 0.1) { ci.items.push({ ...structuredClone(item), start: Number(t.toFixed(2)), end: item.end }); item.end = Number(t.toFixed(2)); } } }); return; }
     if (tool === 'marker') { const t = timeFromEvent(e); updateProject((next) => { next.markers.push({ time: Number(t.toFixed(2)), label: 'Marker ' + (next.markers.length + 1) }); }); return; }
     const t = timeFromEvent(e); seekTo(t);
   }, [tool, timeFromEvent, seekTo, updateProject, captionTrack]);
@@ -193,14 +193,16 @@ function Editor() {
       const x = Math.min(startX, endX), y = Math.min(startY, endY);
       const w = Math.abs(endX - startX), h = Math.abs(endY - startY);
       if (w < 0.005 || h < 0.005) return;
-      const existing = project.blur_regions.find((r) => r.id === tmpId);
-      if (existing) { Object.assign(existing, { x, y, w, h }); setProject((c) => structuredClone(c)); }
-      else { updateProject((n) => { n.blur_regions.push({ id: tmpId, x, y, w, h, strength: blurDraft.strength, start: Number(currentTime.toFixed(2)), end: Number(Math.min(currentTime + 5, clipEnd).toFixed(2)) }); }); }
+      updateProject((n) => {
+        const existing = n.blur_regions.find((r) => r.id === tmpId);
+        if (existing) { Object.assign(existing, { x, y, w, h }); }
+        else { n.blur_regions.push({ id: tmpId, x, y, w, h, strength: blurDraft.strength, start: Number(currentTime.toFixed(2)), end: Number(Math.min(currentTime + 5, clipEnd).toFixed(2)) }); }
+      }, true);
     };
     const up = () => { blurDraw.current = null; window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
-  }, [tool, project.blur_regions, blurDraft.strength, currentTime, clipEnd, updateProject]);
+  }, [tool, blurDraft.strength, currentTime, clipEnd, updateProject]);
 
   /* ── Overlay pointer on stage ── */
   const onOverlayPointerDown = useCallback((idx, e) => { e.preventDefault(); setSelection({ type: 'overlay', idx }); const st = stageRef.current.getBoundingClientRect(); const move = (ev) => { const x = clamp((ev.clientX - st.left) / st.width, 0, 1); const y = clamp((ev.clientY - st.top) / st.height, 0, 1); updateProject((n) => { n.text_overlays[idx].x = x; n.text_overlays[idx].y = y; }, true); }; const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); }; window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); }, [updateProject]);
@@ -223,8 +225,8 @@ function Editor() {
       else if (ctrl && e.code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); setProject(h.undo); }
       else if (ctrl && (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey))) { e.preventDefault(); setProject(h.redo); }
       else if (ctrl && e.code === 'KeyS') { e.preventDefault(); save(false); }
-      else if (e.code === 'Delete' || e.code === 'Backspace') { if (selection) { e.preventDefault(); updateProject((n) => { const list = selection.type === 'overlay' ? n.text_overlays : n.tracks.find((x) => x.type === 'captions').items; list.splice(selection.idx, 1); }); setSelection(null); } }
-      else if (ctrl && e.code === 'KeyD' && selection) { e.preventDefault(); updateProject((n) => { const list = selection.type === 'overlay' ? n.text_overlays : n.tracks.find((x) => x.type === 'captions').items; const item = structuredClone(list[selection.idx]); const dur = item.end - item.start; item.start = clamp(item.end, 0, clipEnd - dur); item.end = clamp(item.end + dur, 0, clipEnd); list.splice(selection.idx + 1, 0, item); }); }
+      else if (e.code === 'Delete' || e.code === 'Backspace') { if (selection) { e.preventDefault(); updateProject((n) => { const list = selection.type === 'overlay' ? n.text_overlays : selection.type === 'blur' ? n.blur_regions : n.tracks.find((x) => x.type === 'captions').items; list.splice(selection.idx, 1); }); setSelection(null); } }
+      else if (ctrl && e.code === 'KeyD' && selection) { e.preventDefault(); updateProject((n) => { const list = selection.type === 'overlay' ? n.text_overlays : selection.type === 'blur' ? n.blur_regions : n.tracks.find((x) => x.type === 'captions').items; const item = structuredClone(list[selection.idx]); const dur = item.end - item.start; item.start = clamp(item.end, 0, clipEnd - dur); item.end = clamp(item.end + dur, 0, clipEnd); list.splice(selection.idx + 1, 0, item); }); }
       else if (e.code === 'Equal' || e.code === 'NumpadAdd') { e.preventDefault(); setTimelineZoom((z) => clamp(z * 1.25, 0.2, 5)); }
       else if (e.code === 'Minus' || e.code === 'NumpadSubtract') { e.preventDefault(); setTimelineZoom((z) => clamp(z / 1.25, 0.2, 5)); }
       else if (e.code === 'KeyF') { e.preventDefault(); setPreviewFullscreen((f) => !f); }
@@ -260,7 +262,7 @@ function Editor() {
   const selectedItem = selection ? (selection.type === 'overlay' ? project.text_overlays[selection.idx] : selection.type === 'blur' ? project.blur_regions[selection.idx] : captionTrack.items[selection.idx]) : null;
 
   /* ── Export ── */
-  const exportVideo = useCallback(async (selectionOnly) => { setExportStatus('Starting export...'); setExportLink(''); await save(true); const body = { _token: config.token }; if (saveOverOriginal) body.save_over_original = '1'; if (selectionOnly) { body.export_start = Number(currentTime.toFixed(2)); body.export_end = clipEnd; } const r = await fetch(config.exportUrl, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(body) }); const d = await r.json(); if (!r.ok || !d.job_id) { setExportStatus(d.error || 'Export failed'); return; } const poll = async () => { const s = await fetch(config.statusUrl.replace('__JOB__', d.job_id), { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then((x) => x.json()); if (s.status === 'completed') { setExportStatus('Export complete'); setExportLink(config.downloadUrl.replace('__JOB__', d.job_id)); } else if (s.status === 'failed') setExportStatus(s.error || 'Failed'); else { setExportStatus(`${s.status} ${s.progress}%`); setTimeout(poll, 1000); } }; poll(); }, [save, saveOverOriginal, currentTime, clipEnd]);
+  const exportVideo = useCallback(async (selectionOnly) => { setExportStatus('Starting export...'); setExportLink(''); clearTimeout(saveTimer.current); await save(true); const body = { _token: config.token }; if (saveOverOriginal) body.save_over_original = '1'; if (selectionOnly) { body.export_start = Number(currentTime.toFixed(2)); body.export_end = clipEnd; } const r = await fetch(config.exportUrl, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(body) }); let d = {}; try { d = await r.json(); } catch (e) { d = {}; } if (!r.ok || !d.job_id) { setExportStatus(d.error || 'Export failed'); return; } const poll = async () => { let s = {}; try { const resp = await fetch(config.statusUrl.replace('__JOB__', d.job_id), { headers: { 'X-Requested-With': 'XMLHttpRequest' } }); s = await resp.json(); } catch (e) { setExportStatus('Export status unavailable'); return; } if (s.status === 'completed') { setExportStatus('Export complete'); setExportLink(config.downloadUrl.replace('__JOB__', d.job_id)); } else if (s.status === 'failed') { setExportStatus(s.error || 'Failed'); } else if (s.status === 'queued' || s.status === 'running') { setExportStatus(`${s.status} ${s.progress ?? 0}%`); setTimeout(poll, 1000); } else { setExportStatus(s.error || (s.status ? 'Unknown export status: ' + s.status : 'Export status unavailable')); } }; poll(); }, [save, saveOverOriginal, currentTime, clipEnd]);
 
   const markers = useMemo(() => Array.from({ length: Math.floor(total / (total / (10 * timelineZoom))) + 1 }, (_, i) => (total / (Math.floor(total / (total / (10 * timelineZoom))) || 1)) * i), [total, timelineZoom]);
 

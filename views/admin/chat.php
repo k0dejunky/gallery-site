@@ -13,7 +13,9 @@
             <?= csrf_field() ?>
             <button type="submit" class="btn btn-sm <?= !empty($state['ai_enabled']) ? '' : 'btn-outline' ?>"><?= !empty($state['ai_enabled']) ? 'Turn AI off' : 'Turn AI on' ?></button>
         </form>
-        <a class="btn btn-sm" href="<?= url('/assets/apk/OperatorChat-v2.21.apk') ?>" download>Download operator app (Android APK v2.21)</a>
+        <?php if (!empty($latestApk['file'])): ?>
+            <a class="btn btn-sm" href="<?= url('/assets/apk/' . e($latestApk['file'])) ?>" download>Download operator app (Android APK v<?= e($latestApk['version']) ?>)</a>
+        <?php endif; ?>
         <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat/export-training') ?>" onclick="return confirm('Write the cleaned training export?');">Export training</a>
     </div>
 </div>
@@ -43,8 +45,8 @@
                     <tr>
                         <td><strong><?= e((string) $t['label']) ?></strong></td>
                         <td class="muted"><?= e((string) $t['scopes']) ?></td>
-                        <td class="muted"><?= !empty($t['expires_at']) ? e(tzdate('M j, Y', (string) $t['expires_at'])) : '<span class="muted">never</span>' ?></td>
-                        <td class="muted"><?= !empty($t['last_used_at']) ? e(tzdate('M j, Y g:i A', (string) $t['last_used_at'])) : '<span class="muted">never</span>' ?></td>
+                        <td class="muted"><?= !empty($t['expires_at']) ? e(tzdate('M j, Y', (string) $t['expires_at'])) : 'never' ?></td>
+                        <td class="muted"><?= !empty($t['last_used_at']) ? e(tzdate('M j, Y g:i A', (string) $t['last_used_at'])) : 'never' ?></td>
                         <td class="muted"><?= e((string) ($t['created_by_email'] ?? '—')) ?></td>
                         <td><span class="pill <?= $revoked ? 'pill-muted' : '' ?>"><?= $revoked ? 'revoked' : 'active' ?></span></td>
                         <td style="text-align:right;">
