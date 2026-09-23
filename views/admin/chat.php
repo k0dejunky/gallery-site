@@ -20,6 +20,21 @@
     </div>
 </div>
 
+<?php // Training-corpus import: paste pairs or upload a file. Pairs are cleaned,
+// junk-filtered and stored as cleaned so the training PC picks them up. ?>
+<div class="card" style="border-left:4px solid var(--purple-500);padding:1rem;margin-bottom:1.25rem;">
+    <h2 class="section-title">Import training pairs</h2>
+    <p class="muted" style="margin-top:0;">Add operator-style reply pairs for the AI trainer. Data is cleaned on import (emails/phones stripped, whitespace normalized, junk filtered) and marked ready — the training PC picks it up on its next poll (needs &ge;20 new pairs). Formats: JSONL, CSV/TSV, or Q:/A: lines.</p>
+    <form method="post" action="<?= url('/admin/chat/import-training') ?>" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:.5rem;">
+        <?= csrf_field() ?>
+        <textarea name="training_text" rows="6" placeholder="Q: hi babe&#10;A: hey handsome, welcome back 😘&#10;&#10;or paste JSONL lines..."></textarea>
+        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+            <input type="file" name="training_file" accept=".jsonl,.csv,.tsv,.txt" style="flex:1;min-width:180px;">
+            <button type="submit" class="btn btn-sm">Import pairs</button>
+        </div>
+    </form>
+</div>
+
 <?php // Operator device tokens (per-device auth for the Android app) ?>
 <div class="card" style="border-left:4px solid var(--purple-500);padding:1rem;margin-bottom:1.25rem;">
     <h2 class="section-title">Operator device tokens</h2>

@@ -556,8 +556,8 @@ class AdminChatController extends Controller
         }
         $written = 0;
         foreach ($rows as $row) {
-            $u = $this->clean((string) $row['user_message']);
-            $r = $this->clean((string) $row['operator_reply']);
+            $u = \App\Models\ChatTraining::clean((string) $row['user_message']);
+            $r = \App\Models\ChatTraining::clean((string) $row['operator_reply']);
             if ($u === '' || $r === '') {
                 continue;
             }
@@ -584,14 +584,150 @@ class AdminChatController extends Controller
         $this->redirect('/admin/chat');
     }
 
-    private function clean(string $text): string
+    /**
+     * Import operator-style training pairs from a pasted block or an uploaded
+     * file (JSONL / CSV / TSV / plain Q&A). Pairs are cleaned, junk-filtered,
+     * deduped and stored with cleaned = 1 so the training PC picks them up on
+     * its next poll.
+     */
+    public function importTraining(): void
     {
-        $text = trim($text);
-        $text = (string) preg_replace('/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/', '[email]', $text);
-        $text = (string) preg_replace('/\b\d{3}[-.)]?\d{3}[-.]?\d{4}\b/', '[phone]', $text);
-        $text = (string) preg_replace('/\s+/u', ' ', $text);
+        $text   = trim((string) $this->request->post('training_text', ''));
+        $file   = $this->request->file('training_file');
+        $maxPasted = 500;
 
-        return mb_substr($text, 0, 2000);
+        $raw = [];
+
+        if ($text !== '') {
+            $lines = preg_split('/\r?\n/', $text) ?: [];
+            $user  = null;
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if ($line === '') {
+                    continue;
+                }
+                if (preg_match('/^Q:\s*(.+)$/i', $line, $m)) {
+                    $user = trim($m[1]);
+                } elseif (preg_match('/^A:\s*(.+)$/i', $line, $m)) {
+                    $reply = trim($m[1]);
+                    if ($user !== null) {
+                        $raw[] = [$user, $reply];
+                        $user = null;
+                    }
+                } elseif ($user === null) {
+                    $user = $line;
+                } else {
+                    $raw[] = [$user, $line];
+                    $user = null;
+                }
+            }
+            $raw = array_slice($raw, 0, $maxPasted);
+        }
+
+        if (is_array($file) && !empty($file['tmp_name']) && is_uploaded_file($file['tmp_name'])) {
+            $raw = [];
+            $content = (string) file_get_contents($file['tmp_name']);
+            $name = strtolower((string) ($file['name'] ?? ''));
+            $ext  = pathinfo($name, PATHINFO_EXTENSION);
+
+            if ($ext === 'jsonl') {
+                foreach (preg_split('/\r?\n/', $content) ?: [] as $line) {
+                    $line = trim($line);
+                    if ($line === '') {
+                        continue;
+                    }
+                    $decoded = json_decode($line, true);
+                    if (!is_array($decoded)) {
+                        continue;
+                    }
+                    if (isset($decoded['user_message'], $decoded['operator_reply'])) {
+                        $raw[] = [(string) $decoded['user_message'], (string) $decoded['operator_reply']];
+                        continue;
+                    }
+                    if (isset($decoded['messages']) && is_array($decoded['messages'])) {
+                        $user = $assistant = '';
+                        foreach ($decoded['messages'] as $m) {
+                            $role = (string) ($m['role'] ?? '');
+                            $content2 = (string) ($m['content'] ?? '');
+                            if ($role === 'user') {
+                                $user = $content2;
+                            } elseif ($role === 'assistant') {
+                                $assistant = $content2;
+                            }
+                        }
+                        if ($user !== '' && $assistant !== '') {
+                            $raw[] = [$user, $assistant];
+                        }
+                    }
+                }
+            } elseif ($ext === 'csv' || $ext === 'tsv') {
+                $delim = $ext === 'tsv' ? "\t" : ',';
+                $first = true;
+                foreach (preg_split('/\r?\n/', $content) ?: [] as $line) {
+                    $line = trim($line);
+                    if ($line === '') {
+                        continue;
+                    }
+                    $parts = str_getcsv($line, $delim);
+                    if (count($parts) < 2) {
+                        continue;
+                    }
+                    if ($first && strtolower((string) $parts[0]) === 'user_message') {
+                        $first = false;
+                        continue;
+                    }
+                    $first = false;
+                    $raw[] = [trim((string) $parts[0]), trim((string) $parts[1])];
+                }
+            } elseif ($ext === 'txt') {
+                $lines = preg_split('/\r?\n/', $content) ?: [];
+                $user = null;
+                foreach ($lines as $line) {
+                    $line = trim($line);
+                    if ($line === '') {
+                        continue;
+                    }
+                    if (preg_match('/^Q:\s*(.+)$/i', $line, $m)) {
+                        $user = trim($m[1]);
+                    } elseif (preg_match('/^A:\s*(.+)$/i', $line, $m)) {
+                        $reply = trim($m[1]);
+                        if ($user !== null) {
+                            $raw[] = [$user, $reply];
+                            $user = null;
+                        }
+                    } elseif ($user === null) {
+                        $user = $line;
+                    } else {
+                        $raw[] = [$user, $line];
+                        $user = null;
+                    }
+                }
+            } else {
+                $this->flash('error', 'Unsupported file type. Use .jsonl, .csv, .tsv or .txt.');
+                $this->redirect('/admin/chat');
+            }
+        }
+
+        if ($raw === []) {
+            $this->flash('error', 'No training pairs found in the input.');
+            $this->redirect('/admin/chat');
+        }
+
+        $normalized = [];
+        foreach ($raw as $p) {
+            $n = \App\Models\ChatTraining::normalizePair((string) $p[0], (string) $p[1]);
+            if ($n !== null) {
+                $normalized[] = $n;
+            }
+        }
+
+        $result = \App\Models\ChatTraining::insertPairs($normalized);
+        $this->flash(
+            'success',
+            "Imported {$result['inserted']} training pair(s), skipped {$result['skipped']} (junk/duplicate). "
+            . "Marked cleaned — the trainer picks them up on its next poll (needs ≥20 new)."
+        );
+        $this->redirect('/admin/chat');
     }
 
     /** Normalize a datetime-local schedule (site timezone) to UTC, or null. */
