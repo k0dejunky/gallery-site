@@ -81,6 +81,40 @@ ls gallery-db-*.sql.gz >/dev/null 2>&1 \
     || tar -tzf "$VERIFY" | grep -q 'gallery-db-.*\.sql\.gz' \
     || fail "no database dump found in run" "$STAMP"
 
+# --- 4. prove the DB dump really imports -------------------------------------
+# A gzip-valid dump can still be internally corrupt (truncated mid-statement).
+# Import it into a disposable scratch database and sanity-count a few core
+# tables, then drop it. This is what "the backup restores" actually means.
+DBGZ=$(ls gallery-db-*.sql.gz 2>/dev/null | head -1)
+if [ -z "$DBGZ" ]; then
+    DBGZ=$(tar -tzf "$VERIFY" | grep -oE 'gallery-db-[0-9]{8}-[0-9]{6}\.sql\.gz' | head -1)
+    tar -xzf "$VERIFY" -C "$DRILL_DIR" "$DBGZ" 2>/dev/null
+fi
+
+DBNAME="gallery_drill_$(date +%s)"
+[ -n "$DBGZ" ] || fail "could not locate db dump for import" "$STAMP"
+
+if ! mysql -u root -e "DROP DATABASE IF EXISTS \`$DBNAME\`; CREATE DATABASE \`$DBNAME\`;" 2>/dev/null; then
+    fail "could not create scratch database (mysql root via socket?)" "$STAMP"
+fi
+
+if ! gzip -dc "$DBGZ" | mysql -u root "$DBNAME" 2>/dev/null; then
+    mysql -u root -e "DROP DATABASE IF EXISTS \`$DBNAME\`;" 2>/dev/null
+    rm -rf "$DRILL_DIR"
+    fail "database dump import failed" "$STAMP"
+fi
+
+for table in users galleries photos subscriptions; do
+    COUNT=$(mysql -u root -N -e "SELECT COUNT(*) FROM \`$DBNAME\`.\`$table\`;" 2>/dev/null || echo 'ERR')
+    if [ "$COUNT" = 'ERR' ]; then
+        mysql -u root -e "DROP DATABASE IF EXISTS \`$DBNAME\`;" 2>/dev/null
+        rm -rf "$DRILL_DIR"
+        fail "imported dump missing expected table $table" "$STAMP"
+    fi
+done
+
+mysql -u root -e "DROP DATABASE IF EXISTS \`$DBNAME\`;" 2>/dev/null
+
 rm -rf "$DRILL_DIR"
-write_status true "$STAMP" "OK from $SOURCE: archive readable ($FILES entries), checksums verified"
-echo "restore-drill: OK ($STAMP from $SOURCE, $FILES entries)"
+write_status true "$STAMP" "OK from $SOURCE: archive readable ($FILES entries), checksums verified, DB import + table checks passed"
+echo "restore-drill: OK ($STAMP from $SOURCE, $FILES entries, DB import verified)"

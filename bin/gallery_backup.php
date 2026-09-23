@@ -10,7 +10,7 @@
 declare(strict_types=1);
 
 $root = dirname(__DIR__);
-require $root . '/app/Core/helpers.php';
+require $root . '/app/bootstrap.php';
 
 $envFile = $root . '/.env';
 if (!is_file($envFile)) {
@@ -59,7 +59,6 @@ $mysqldump = 'mysqldump --single-transaction --quick --no-tablespaces'
     . ' -h ' . escapeshellarg($dbHost)
     . ' -P ' . (int) $dbPort
     . ' -u ' . escapeshellarg($dbUser)
-    . ' -p' . escapeshellarg($dbPass)
     . ' ' . escapeshellarg($dbName);
 
 // Build the bash backup script
@@ -83,10 +82,13 @@ cd {$root}
 trap 'rm -f {$backupDir}/.running; if [ ! -f {$backupDir}/.last_ok ]; then echo "\$(date "+%F %T") backup aborted (dump/tar/verify failed)" >> {$backupDir}/.failed; fi' EXIT
 rm -f {$backupDir}/.failed {$backupDir}/.last_ok
 DUMP=\$(mktemp /tmp/gallery-dump-XXXXXX.sql)
-{$mysqldump} > "\$DUMP"
+# DB password goes via MYSQL_PWD (not -p) so it never shows in ps.
+MYSQL_PWD='{$dbPass}' {$mysqldump} > "\$DUMP"
 TARGET={$target}
 SQLT={$sqlt}
-tar czf "\$TARGET" --warning=no-file-changed --ignore-failed-read -C {$root} storage/uploads storage/*.json .env
+# .env deliberately excluded: it holds DB/mail/cron secrets. Back it up
+# separately in the secrets vault so a leaked archive cannot expose them.
+tar czf "\$TARGET" --warning=no-file-changed --ignore-failed-read -C {$root} storage/uploads storage/*.json
 test \$? -le 1
 gzip -c "\$DUMP" > "\$SQLT"
 rm -f "\$DUMP"

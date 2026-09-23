@@ -610,12 +610,7 @@ class TestSuite
 }
 
 if (PHP_SAPI === 'cli') {
-    // Keep the CLI scope identical to the web scope by also loading the
-    // classes referenced above through the app's autoloader.
-    spl_autoload_register(function (string $class): void {
-        $prefix = 'App\\';
-        if (strncmp($class, $prefix, strlen($prefix)) !== 0) return;
-        $path = dirname(__DIR__) . '/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
-        if (is_file($path)) require $path;
-    });
+    // Keep the CLI scope identical to the web scope by loading the app's
+    // shared bootstrap (helpers + autoloader).
+    require_once dirname(__DIR__) . '/bootstrap.php';
 }

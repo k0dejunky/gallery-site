@@ -9,17 +9,7 @@ declare(strict_types=1);
  * upload outliving the next cron tick).
  */
 
-require __DIR__ . '/../app/Core/helpers.php';
-spl_autoload_register(function (string $class): void {
-    $prefix = 'App\\';
-    if (strncmp($class, $prefix, strlen($prefix)) !== 0) {
-        return;
-    }
-    $path = __DIR__ . '/../app/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
-    if (is_file($path)) {
-        require $path;
-    }
-});
+require __DIR__ . '/../app/bootstrap.php';
 
 use App\Models\AutoPostQueue;
 

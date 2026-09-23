@@ -391,6 +391,72 @@ if [[ $BUILD_FRONTEND -eq 1 && -d "$SOURCE_DIR/frontend/video-editor" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Operational baseline: security headers, background workers, cron, sudoers,
+# logrotate, restore-drill. These used to be manual steps (docs/MIGRATION.md);
+# a fresh install is now fully hardened.
+# ---------------------------------------------------------------------------
+log "Installing security headers (gallery-headers.conf)..."
+if [[ -f "$INSTALL_DIR/config/gallery-headers.conf" ]]; then
+    cp "$INSTALL_DIR/config/gallery-headers.conf" /etc/apache2/conf-available/gallery-headers.conf
+    a2enconf gallery-headers.conf 2>/dev/null || true
+    ok "Security headers installed."
+else
+    warn "gallery-headers.conf not found; skipping."
+fi
+
+log "Installing logrotate..."
+if [[ -f "$INSTALL_DIR/config/logrotate-gallery.conf" ]]; then
+    cp "$INSTALL_DIR/config/logrotate-gallery.conf" /etc/logrotate.d/gallery
+    ok "Logrotate installed."
+else
+    warn "logrotate-gallery.conf not found; skipping."
+fi
+
+log "Installing background worker services..."
+if [[ -f "$INSTALL_DIR/config/gallery-video-export.service" && -f "$INSTALL_DIR/config/gallery-photo-edit.service" ]]; then
+    cp "$INSTALL_DIR/config/gallery-video-export.service" /etc/systemd/system/
+    cp "$INSTALL_DIR/config/gallery-photo-edit.service" /etc/systemd/system/
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl enable gallery-video-export.service gallery-photo-edit.service 2>/dev/null || true
+    ok "Worker services installed (started after first migration run)."
+else
+    warn "worker .service files not found; skipping."
+fi
+
+log "Installing restore-drill helper..."
+if [[ -f "$INSTALL_DIR/scripts/restore-drill.sh" ]]; then
+    cp "$INSTALL_DIR/scripts/restore-drill.sh" /usr/local/bin/restore-drill
+    chmod 700 /usr/local/bin/restore-drill
+    ok "restore-drill installed at /usr/local/bin/restore-drill."
+else
+    warn "restore-drill.sh not found; skipping."
+fi
+
+log "Installing scoped sudoers rules..."
+if [[ -d /etc/sudoers.d ]]; then
+    if [[ -f "$INSTALL_DIR/bin/apply_cron.php" ]]; then
+        printf 'www-data ALL=(root) NOPASSWD: /usr/bin/php %s/bin/apply_cron.php\n' "$INSTALL_DIR" \
+            > /etc/sudoers.d/gallery-apply-cron
+        chmod 440 /etc/sudoers.d/gallery-apply-cron
+    fi
+    if [[ -f "$INSTALL_DIR/bin/mail_admin.php" ]]; then
+        printf 'www-data ALL=(root) NOPASSWD: /usr/bin/php %s/bin/mail_admin.php\n' "$INSTALL_DIR" \
+            > /etc/sudoers.d/gallery-mail-admin
+        chmod 440 /etc/sudoers.d/gallery-mail-admin
+    fi
+    ok "Sudoers rules installed."
+else
+    warn "sudoers.d missing; skipping sudoers rules."
+fi
+
+log "Applying initial cron schedule..."
+if [[ -f "$INSTALL_DIR/bin/apply_cron.php" && -n "${GALLERY_CRON_KEY:-}" ]]; then
+    php "$INSTALL_DIR/bin/apply_cron.php" >/dev/null 2>&1 \
+        && ok "Initial cron schedule applied." \
+        || warn "apply_cron.php could not run as root; apply cron manually."
+fi
+
+# ---------------------------------------------------------------------------
 # Restart Apache
 # ---------------------------------------------------------------------------
 log "Restarting Apache..."

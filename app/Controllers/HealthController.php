@@ -22,7 +22,26 @@ class HealthController extends Controller
         $storage = count(array_filter($directories, static function (string $directory): bool {
             return is_dir($directory) && is_readable($directory) && is_writable($directory);
         })) === count($directories);
+
+        // Core readiness stays DB + storage. The rest is surfaced as data so
+        // an external monitor can alert on it without taking the site down.
         $ok = $db && $storage;
+
+        $backupDir = dirname(__DIR__, 2) . '/storage/backups';
+        $lastOk  = is_file($backupDir . '/.last_ok') ? @filemtime($backupDir . '/.last_ok') : 0;
+        $running = is_file($backupDir . '/.running');
+
+        $redis = false;
+        try {
+            $redis = \App\Core\Cache::connection() !== null;
+        } catch (\Throwable $error) {
+            $redis = false;
+        }
+
+        // Housekeeping runs every few minutes; the cron log mtime is a cheap
+        // proxy for "is the scheduled job actually firing".
+        $cronLog = dirname(__DIR__, 2) . '/storage/logs/cron.log';
+        $lastHousekeeping = is_file($cronLog) ? @filemtime($cronLog) : 0;
 
         http_response_code($ok ? 200 : 503);
         header('Content-Type: application/json; charset=utf-8');
@@ -31,6 +50,13 @@ class HealthController extends Controller
             'ok' => $ok,
             'app' => (string) config('app.site_name', 'gallery'),
             'db' => $db,
+            'storage' => $storage,
+            'redis' => $redis,
+            'backup' => [
+                'running' => $running,
+                'last_ok_age_sec' => $lastOk > 0 ? time() - $lastOk : null,
+            ],
+            'housekeeping_age_sec' => $lastHousekeeping > 0 ? time() - $lastHousekeeping : null,
             'time' => gmdate('c'),
         ], JSON_UNESCAPED_SLASHES);
     }
