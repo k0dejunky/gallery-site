@@ -127,12 +127,15 @@ These are controlled via env vars in `run_chat_trainer.bat`
 
 ## Desktop GUI (ChatTrainerUI.exe)
 
-A native Windows GUI that mirrors the web UI, built with Tkinter and packaged
-with PyInstaller. It talks to the control server over localhost (`:8790`) so it
-works even if the box's firewall blocks the LAN.
+The desktop app now lives in its own repo: **https://github.com/k0dejunky/chat-trainer-ui**
+(mirrors of these files). A native Windows GUI that mirrors the web UI, built
+with Tkinter and packaged with PyInstaller. It talks to the control server over
+localhost (`:8790`) so it works even if the box's firewall blocks the LAN.
 
 - **Trainer tab** — live status + working **Pause / Resume / Stop / Restart AI /
-  Train now** buttons, and a scrolling log tail.
+  Train now** buttons, a live **training-run progress bar** (step N/total +
+  loss, fed by `ProgressCallback` in `chat_trainer.py`), and a scrolling log
+  tail.
 - **Admin tab** — edit every trainer setting and Save (restarts the trainer to
   apply), plus the run-at-logon toggle.
 
