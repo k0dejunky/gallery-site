@@ -12,18 +12,7 @@ use App\Models\ChatBroadcast;
 // It finds every broadcast that is scheduled and due (schedule passed, or a
 // manual "send now" entry) and delivers it. Each run logs one summary line.
 
-require __DIR__ . '/../app/Core/helpers.php';
-
-spl_autoload_register(function (string $class): void {
-    $prefix = 'App\\';
-    if (strncmp($class, $prefix, strlen($prefix)) !== 0) {
-        return;
-    }
-    $path = __DIR__ . '/../app/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
-    if (is_file($path)) {
-        require $path;
-    }
-});
+require __DIR__ . '/../app/bootstrap.php';
 
 $logDir = __DIR__ . '/../storage/logs';
 if (!is_dir($logDir)) {
@@ -31,8 +20,18 @@ if (!is_dir($logDir)) {
 }
 $log = $logDir . '/daily-chat.log';
 
+// Single-instance lock: overlapping runs (cron + an admin "send now") must
+// not double-deliver. The broadcast claim in ChatBroadcast::send() is the
+// authoritative guard; the flock just prevents wasted parallel work.
+$lockHandle = fopen($logDir . '/daily-chat.lock', 'c');
+if ($lockHandle === false || !flock($lockHandle, LOCK_EX | LOCK_NB)) {
+    exit(0);
+}
+
 $due = ChatBroadcast::due();
 if ($due === []) {
+    flock($lockHandle, LOCK_UN);
+    fclose($lockHandle);
     exit(0);
 }
 
@@ -51,3 +50,6 @@ foreach ($due as $broadcast) {
     @file_put_contents($log, $line . "\n", FILE_APPEND | LOCK_EX);
     echo $line . "\n";
 }
+
+flock($lockHandle, LOCK_UN);
+fclose($lockHandle);

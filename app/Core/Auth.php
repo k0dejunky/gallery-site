@@ -14,6 +14,9 @@ use App\Models\UserActivity;
  */
 class Auth
 {
+    public const REMEMBER_COOKIE = 'gallery_remember';
+    public const REMEMBER_DAYS = 30;
+
     public const ADMIN_ROLES = ['super_admin', 'admin', 'editor', 'moderator', 'viewer'];
     public const PERMISSIONS = [
         'super_admin' => ['*'],
@@ -30,6 +33,13 @@ class Auth
     {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
+        }
+
+        // No session yet but a valid remember-me cookie exists: silently
+        // restore the login so a closed-then-reopened browser stays signed
+        // in (the actual "remember me" behaviour).
+        if (!isset($_SESSION['user_id'])) {
+            self::restoreRememberedLogin();
         }
 
         if (isset($_SESSION['user_id'])) {
@@ -83,7 +93,7 @@ class Auth
      * caller must complete Auth::completeTwoFactor() with a valid TOTP code.
      * Returns the string '2fa' in that case.
      */
-    public static function attempt(string $email, string $password, string $ip)
+    public static function attempt(string $email, string $password, string $ip, bool $remember = false)
     {
         if (self::tooManyAttempts($email, $ip)) {
             return 'Too many failed attempts. Please try again later.';
@@ -105,12 +115,14 @@ class Auth
             // but login completes only after a valid TOTP code is supplied.
             if (!empty($user['totp_enabled'])) {
                 $_SESSION['2fa_pending_user_id'] = (int) $user['id'];
+                $_SESSION['2fa_remember'] = $remember ? 1 : 0;
+                $_SESSION['2fa_pending_at'] = time();
                 self::start();
 
                 return '2fa';
             }
 
-            self::loginUser((int) $user['id']);
+            self::loginUser((int) $user['id'], $remember);
 
             return true;
         }
@@ -126,6 +138,15 @@ class Auth
     public static function twoFactorPending(): bool
     {
         self::start();
+
+        // The two-factor step must be completed within a short window.
+        if (isset($_SESSION['2fa_pending_user_id'])) {
+            $pendingAt = (int) ($_SESSION['2fa_pending_at'] ?? 0);
+            if ($pendingAt > 0 && time() - $pendingAt > 300) {
+                unset($_SESSION['2fa_pending_user_id'], $_SESSION['2fa_pending_at'], $_SESSION['2fa_remember']);
+                return false;
+            }
+        }
 
         return isset($_SESSION['2fa_pending_user_id']);
     }
@@ -195,7 +216,91 @@ class Auth
             [$userId]
         );
 
+        if ($remember) {
+            self::issueRememberCookie($userId);
+        }
+
         UserActivity::record($userId, UserActivity::ACTION_LOGIN, null, null, self::clientIp());
+    }
+
+    /**
+     * Store a fresh selector:validator pair for persistent login and set the
+     * long-lived secure cookie. Only the SHA-256 validator hash is stored.
+     */
+    private static function issueRememberCookie(int $userId): void
+    {
+        $selector  = bin2hex(random_bytes(16));
+        $validator = bin2hex(random_bytes(32));
+        $expires   = time() + self::REMEMBER_DAYS * 86400;
+
+        Database::run(
+            'INSERT INTO remember_tokens (user_id, selector, validator_hash, expires_at, created_at)
+             VALUES (?, ?, ?, FROM_UNIXTIME(?), CURRENT_TIMESTAMP)',
+            [$userId, $selector, hash('sha256', $validator), $expires]
+        );
+
+        $path = rtrim((string) config('app.base_path'), '/') ?: '/';
+        $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+
+        setcookie(self::REMEMBER_COOKIE, $selector . ':' . $validator, [
+            'expires' => $expires,
+            'path' => $path,
+            'secure' => $secure,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    }
+
+    /**
+     * When a remember-me cookie is present and valid, restore the login
+     * without credentials. Rotates the token on each successful use and
+     * silently drops invalid/expired cookies.
+     */
+    private static function restoreRememberedLogin(): void
+    {
+        if (empty($_COOKIE[self::REMEMBER_COOKIE])) {
+            return;
+        }
+
+        $pair = explode(':', (string) $_COOKIE[self::REMEMBER_COOKIE], 2);
+        if (count($pair) !== 2 || !preg_match('/\A[a-f0-9]{32}\z/', $pair[0]) || !preg_match('/\A[a-f0-9]{64}\z/', $pair[1])) {
+            self::clearRememberCookie();
+            return;
+        }
+
+        [$selector, $validator] = $pair;
+        $row = Database::run(
+            'SELECT * FROM remember_tokens WHERE selector = ? LIMIT 1',
+            [$selector]
+        )->fetch();
+
+        if ($row === false
+            || strtotime((string) $row['expires_at']) < time()
+            || !hash_equals((string) $row['validator_hash'], hash('sha256', $validator))) {
+            Database::run('DELETE FROM remember_tokens WHERE selector = ?', [$selector]);
+            self::clearRememberCookie();
+            return;
+        }
+
+        $user = User::find((int) $row['user_id']);
+        if ($user === null || (isset($user['status']) && $user['status'] !== 'active')) {
+            Database::run('DELETE FROM remember_tokens WHERE selector = ?', [$selector]);
+            self::clearRememberCookie();
+            return;
+        }
+
+        // Rotate: the used token is consumed here; loginUser(..., true)
+        // below issues a fresh one for the new session.
+        Database::run('DELETE FROM remember_tokens WHERE id = ?', [(int) $row['id']]);
+
+        self::loginUser((int) $row['user_id'], true);
+    }
+
+    private static function clearRememberCookie(): void
+    {
+        $path = rtrim((string) config('app.base_path'), '/') ?: '/';
+        setcookie(self::REMEMBER_COOKIE, '', ['expires' => 1, 'path' => $path, 'httponly' => true, 'samesite' => 'Lax']);
     }
 
     /**
@@ -225,6 +330,17 @@ class Auth
     }
 
     private static ?array $userCache = null;
+    /** Request-scope cache of active subscription rows by user id. */
+    private static array $activeSubCache = [];
+
+    private static function activeSubscriptionFor(int $userId): ?array
+    {
+        if (!array_key_exists($userId, self::$activeSubCache)) {
+            self::$activeSubCache[$userId] = Subscription::activeFor($userId);
+        }
+
+        return self::$activeSubCache[$userId];
+    }
 
     /**
      * The logged-in user row (fresh from the database) or null if anonymous.
@@ -364,7 +480,7 @@ class Auth
 
         $user = self::user();
         if ($user === null) return false;
-        $active = Subscription::activeFor((int) $user['id']);
+        $active = self::activeSubscriptionFor((int) $user['id']);
         return $active !== null && (int) ($active['plan_level'] ?? 0) >= 3;
     }
 
@@ -425,7 +541,7 @@ class Auth
             return PHP_INT_MAX;
         }
 
-        $active = Subscription::activeFor((int) $user['id']);
+        $active = self::activeSubscriptionFor((int) $user['id']);
 
         return $active !== null ? (int) $active['plan_level'] : 0;
     }
@@ -518,8 +634,9 @@ class Auth
             return 'Current password is incorrect.';
         }
 
-        if (strlen($new) < 8) {
-            return 'New password must be at least 8 characters.';
+        $policyError = self::passwordError($new, (string) ($user['email'] ?? ''));
+        if ($policyError !== null) {
+            return $policyError;
         }
 
         User::updatePassword($userId, password_hash($new, PASSWORD_DEFAULT));
@@ -536,6 +653,38 @@ class Auth
     }
 
     /**
+     * Central password policy: at least 8 chars, no longer than bcrypt's
+     * 72-byte truncation limit, must not equal/contain the account email, and
+     * must not be a trivially common password.
+     */
+    public static function passwordError(string $password, string $email = ''): ?string
+    {
+        if (strlen($password) < 8) {
+            return 'Password must be at least 8 characters.';
+        }
+
+        if (strlen($password) > 72) {
+            return 'Password must be 72 characters or fewer.';
+        }
+
+        $normalizedEmail = strtolower(trim($email));
+        if ($normalizedEmail !== '' && $normalizedEmail !== '@' && stripos($password, $normalizedEmail) !== false) {
+            return 'Password must not contain your email address.';
+        }
+
+        $common = [
+            'password', 'password1', 'password123', '12345678', '123456789',
+            '1234567890', 'qwerty123', 'qwertyuiop', 'letmein', 'welcome1',
+            'admin123', 'changeme', 'iloveyou', '11111111', 'abc12345',
+        ];
+        if (in_array(strtolower($password), $common, true)) {
+            return 'That password is too common. Please choose a stronger one.';
+        }
+
+        return null;
+    }
+
+    /**
      * End the session completely so a logged-out user has no lingering state.
      */
     public static function logout(): void
@@ -544,10 +693,17 @@ class Auth
 
         $userId = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : 0;
 
+        if ($userId > 0) {
+            Database::run('DELETE FROM remember_tokens WHERE user_id = ?', [$userId]);
+        }
+
+        self::clearRememberCookie();
+
         UserActivity::record($userId, UserActivity::ACTION_LOGOUT, null, null, self::clientIp());
 
         $_SESSION = [];
         session_destroy();
+        session_regenerate_id(true);
     }
 
     /**
@@ -563,6 +719,7 @@ class Auth
     public static function logoutEverywhere(int $userId): void
     {
         Database::run('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [$userId]);
+        Database::run('DELETE FROM remember_tokens WHERE user_id = ?', [$userId]);
     }
 
     /**

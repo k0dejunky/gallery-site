@@ -31,14 +31,21 @@ return static function (): bool {
     }
 
     $environment = strtolower(env_value('APP_ENV', ''));
-    if (in_array($environment, ['production', 'prod'], true)) {
+    $isProd      = in_array($environment, ['production', 'prod'], true);
+
+    if ($isProd) {
         $debug = strtolower(env_value('APP_DEBUG', 'false'));
         if (in_array($debug, ['1', 'true', 'yes', 'on'], true)) {
             $errors[] = 'APP_DEBUG must be disabled in production';
         }
-        if (ini_get('display_errors')) {
-            $errors[] = 'display_errors must be disabled in production';
-        }
+    }
+
+    // PHP warnings/notices must never be printed inline, regardless of
+    // environment — they leak internals and corrupt HTML/JSON/SSE output.
+    // index.php also forces display_errors off, but this guard catches a
+    // php.ini override and any environment that skips index.php.
+    if (PHP_SAPI !== 'cli' && ini_get('display_errors')) {
+        $errors[] = 'display_errors must be disabled for web requests';
     }
 
     // These integrations are optional, but their absence is useful in logs.

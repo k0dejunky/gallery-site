@@ -7,14 +7,13 @@ use App\Core\Request;
 use App\Core\Router;
 use App\Models\Traffic;
 
-require __DIR__ . '/../app/Core/helpers.php';
+require __DIR__ . '/../app/bootstrap.php';
 
-spl_autoload_register(function (string $class): void {
-    $prefix = 'App\\';
-    if (strncmp($class, $prefix, strlen($prefix)) !== 0) return;
-    $path = __DIR__ . '/../app/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
-    if (is_file($path)) require $path;
-});
+// Never print PHP warnings/notices inline (they corrupt HTML/JSON/SSE and
+// leak internals). The error handler below still records them to the app log.
+if (PHP_SAPI !== 'cli') {
+    ini_set('display_errors', '0');
+}
 
 // Global error/exception handling: log structured details to the app log and
 // render a safe, non-leaking 500 page. Without this, an uncaught Throwable in
@@ -63,7 +62,9 @@ set_error_handler(function (int $severity, string $message, string $file, int $l
         sprintf("[%s] PHP error [%d]: %s in %s:%d\n", date('Y-m-d H:i:s'), $severity, $message, $file, $line),
         FILE_APPEND | LOCK_EX
     );
-    return false; // keep the normal PHP handling too
+    // Return true: we have logged the error and suppressed the normal PHP
+    // pipeline so nothing is echoed into the response.
+    return true;
 });
 
 $configurationValid = (require __DIR__ . '/../config/validate.php')();
@@ -76,14 +77,17 @@ if (!$configurationValid) {
 }
 
 if (session_status() === PHP_SESSION_NONE) {
+    $sessionPath = rtrim((string) config('app.base_path'), '/') ?: '/';
+    $isSecure    = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+
     session_set_cookie_params([
         'lifetime' => 0,
-        'path' => '/',
-        'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+        'path' => $sessionPath,
+        'secure' => $isSecure,
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
-    if (isset($_GET['se']) && in_array($_GET['se'], ['1', 'user'], true)) session_name('GALLERY_USER_PREVIEW');
 }
 
 Auth::start();

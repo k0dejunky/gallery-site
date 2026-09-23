@@ -51,37 +51,63 @@ class GalleryController extends Controller
         // once, under its first category (alphabetical order); untagged
         // galleries land in a catch-all "Uncategorized" section. Search
         // still uses the paginated results grid below.
+        // The listing is cached by the gallery generation bucket, which is
+        // bumped on every gallery/media write, so it never goes stale. The
+        // cache key is per-type and per-access-class (not per user) so the
+        // common no-secret case is shared across all sessions.
         $sections   = [];
         $seen       = [];
         $categories = Category::all();
 
         if ($q === '') {
-            $byCategory = Gallery::inCategories(array_column($categories, 'id'), $type, $maxLevel, $user !== null ? (int) $user['id'] : 0);
+            $listingKey = 'home:' . $type . ':level' . ($maxLevel >= PHP_INT_MAX ? 'all' : (string) $maxLevel)
+                . ($user !== null ? ':u' . (int) $user['id'] : '');
 
-            foreach ($categories as $cat) {
-                $galleries = [];
+            $listingJson = \App\Core\Cache::rememberGen(
+                'gallery',
+                $listingKey,
+                \App\Models\ServerOptimizations::cacheTtl('listing'),
+                static function () use ($categories, $type, $maxLevel, $user): string {
+                    $sections = [];
+                    $seen     = [];
+                    $byCategory = Gallery::inCategories(array_column($categories, 'id'), $type, $maxLevel, $user !== null ? (int) $user['id'] : 0);
 
-                foreach (($byCategory[(int) $cat['id']] ?? []) as $gallery) {
-                    if (isset($seen[(int) $gallery['id']])) {
-                        continue;
+                    foreach ($categories as $cat) {
+                        $galleries = [];
+
+                        foreach (($byCategory[(int) $cat['id']] ?? []) as $gallery) {
+                            if (isset($seen[(int) $gallery['id']])) {
+                                continue;
+                            }
+
+                            $seen[(int) $gallery['id']] = true;
+                            $galleries[]                = $gallery;
+                        }
+
+                        if ($galleries !== []) {
+                            $sections[] = ['category' => $cat, 'galleries' => $galleries];
+                        }
                     }
 
-                    $seen[(int) $gallery['id']] = true;
-                    $galleries[]                = $gallery;
+                    $uncategorized = array_values(array_filter(
+                        Gallery::withoutCategory($type, $maxLevel, $user !== null ? (int) $user['id'] : 0),
+                        static fn (array $gallery): bool => !isset($seen[(int) $gallery['id']])
+                    ));
+
+                    if ($uncategorized !== []) {
+                        $sections[] = ['category' => ['id' => 0, 'name' => 'Uncategorized', 'slug' => ''], 'galleries' => $uncategorized];
+                    }
+
+                    return json_encode($sections, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
                 }
+            );
 
-                if ($galleries !== []) {
-                    $sections[] = ['category' => $cat, 'galleries' => $galleries];
+            $sections = json_decode($listingJson, true) ?: [];
+
+            foreach ($sections as $section) {
+                foreach ($section['galleries'] as $g) {
+                    $seen[(int) $g['id']] = true;
                 }
-            }
-
-            $uncategorized = array_values(array_filter(
-                Gallery::withoutCategory($type, $maxLevel, $user !== null ? (int) $user['id'] : 0),
-                static fn (array $gallery): bool => !isset($seen[(int) $gallery['id']])
-            ));
-
-            if ($uncategorized !== []) {
-                $sections[] = ['category' => ['id' => 0, 'name' => 'Uncategorized', 'slug' => ''], 'galleries' => $uncategorized];
             }
 
             if ($sort !== '') {
@@ -117,7 +143,12 @@ class GalleryController extends Controller
             $filters['sort'] = $sort;
         }
 
-        $paginator = Gallery::paginate($page, 6, $filters);
+        // The paginated grid is only used for search results; the full
+        // listing above already covers the browse path, so skip the two
+        // paginator queries (COUNT + SELECT) unless actually needed.
+        $paginator = ($q !== '')
+            ? Gallery::paginate($page, 6, $filters)
+            : ['items' => [], 'total' => 0, 'page' => $page, 'pages' => 1];
 
         // A search that found nothing is tracked as a missed search.
         if ($q !== '' && (int) $paginator['total'] === 0 && $user !== null) {
@@ -1095,6 +1126,23 @@ class GalleryController extends Controller
             }
 
             return null;
+        }
+
+        // Videos are probed with ffprobe so a corrupt or polyglot file with a
+        // video MIME is rejected at upload time instead of failing later at
+        // thumbnail/export time.
+        $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
+        $probe = [];
+        $rc = 0;
+        @exec(
+            escapeshellarg($ffprobe) . ' -v error -select_streams v:0 -show_entries stream=codec_type -of csv=p=0 '
+            . escapeshellarg($files['tmp_name'][$index]) . ' 2>/dev/null',
+            $probe,
+            $rc
+        );
+
+        if ($rc !== 0 || trim(implode('', $probe)) !== 'video') {
+            return 'File is not a valid video.';
         }
 
         return null;

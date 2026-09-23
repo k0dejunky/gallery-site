@@ -101,10 +101,17 @@ class ChatBroadcast
             return ['ok' => false, 'error' => 'Broadcast already sent (or is sending).'];
         }
 
-        Database::run(
-            'UPDATE chat_daily_broadcasts SET status = ? WHERE id = ?',
-            [self::STATUS_SENDING, $broadcastId]
+        // Atomic claim: only one caller may move a scheduled broadcast to
+        // 'sending', so overlapping cron runs / a cron plus an admin "send
+        // now" can never double-deliver.
+        $claimed = Database::run(
+            'UPDATE chat_daily_broadcasts SET status = ? WHERE id = ? AND status = ?',
+            [self::STATUS_SENDING, $broadcastId, self::STATUS_SCHEDULED]
         );
+
+        if ((int) $claimed->rowCount() !== 1) {
+            return ['ok' => false, 'error' => 'Broadcast already claimed by another run.'];
+        }
 
         $message    = trim((string) $b['message']);
         $userIds    = self::eligibleUserIds();

@@ -2,18 +2,30 @@
 # Deploy selected files with local/remote validation and rollback on failure.
 set -euo pipefail
 
-HOST="${DEPLOY_HOST:-k0dejunky@192.168.1.110}"
-PASS="${DEPLOY_PASS:-Km011758!!}"
+: "${DEPLOY_HOST:?DEPLOY_HOST must be set (user@host)}"
+HOST="${DEPLOY_HOST}"
+PASS="${DEPLOY_PASS:-}"
 REMOTE_ROOT="${DEPLOY_ROOT:-/var/www/gallery}"
+
+# Prefer SSH keys; fall back to sshpass only when DEPLOY_PASS is provided.
+if [[ -n "$PASS" ]]; then
+    ssh() { sshpass -p "$PASS" ssh -o StrictHostKeyChecking=no "$@"; }
+    scp() { sshpass -p "$PASS" scp -o StrictHostKeyChecking=no "$@"; }
+else
+    ssh() { ssh -o StrictHostKeyChecking=no "$@"; }
+    scp() { scp -o StrictHostKeyChecking=no "$@"; }
+fi
 SNAP_BASE="${DEPLOY_SNAP_DIR:-/tmp/gallery-pre-deploy}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
 [[ $# -ge 1 ]] || { echo "usage: $0 <file> [<file>...]" >&2; exit 1; }
-ssh() { sshpass -p "$PASS" ssh -o StrictHostKeyChecking=no "$@"; }
-scp() { sshpass -p "$PASS" scp -o StrictHostKeyChecking=no "$@"; }
 remote() {
-    { printf '%s\n' "$PASS"; printf '%s\n' "$1"; } |
-        ssh "$HOST" "sudo -S -p '' bash -s"
+    if [[ -n "$PASS" ]]; then
+        { printf '%s\n' "$PASS"; printf '%s\n' "$1"; } |
+            ssh "$HOST" "sudo -S -p '' bash -s"
+    else
+        printf '%s\n' "$1" | ssh "$HOST" "sudo bash -s"
+    fi
 }
 
 FILES=()
@@ -31,6 +43,11 @@ PHP_FILES=("$REPO_ROOT"/*.php "$REPO_ROOT"/**/*.php)
 for file in "${PHP_FILES[@]}"; do
     php -l "$file" >/dev/null || { echo "local PHP lint failed: $file" >&2; exit 1; }
 done
+
+# Run the smoke suite before touching the server. A deploy that passes lint
+# but fails the static checks (route/schema drift) is aborted here.
+php "$REPO_ROOT/tests/smoke.php" >/dev/null \
+    || { echo "local smoke suite failed; aborting deploy" >&2; exit 1; }
 
 STAMP="$(date +%Y%m%d-%H%M%S)-$$"
 SNAP="$SNAP_BASE-$STAMP"
@@ -87,6 +104,14 @@ if [[ "${DEPLOY_NO_RELOAD:-0}" != 1 ]]; then
     remote "systemctl reload php7.4-fpm 2>/dev/null || true
 systemctl reload php8.3-fpm 2>/dev/null || true
 "
+fi
+
+# Opt-in schema migrations: set DEPLOY_MIGRATE=1 to run scripts/migrate.php
+# on the remote after files land (snapshot already taken above, so a failed
+# migration can be rolled back by hand).
+if [[ "${DEPLOY_MIGRATE:-0}" == 1 ]]; then
+    echo ">> running remote migrations"
+    remote "php '$REMOTE_ROOT/scripts/migrate.php'"
 fi
 
 ROLLBACK_NEEDED=0

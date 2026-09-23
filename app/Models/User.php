@@ -123,10 +123,15 @@ class User
         $token = bin2hex(random_bytes(32));
         Database::run(
             'UPDATE users SET email_verification_token = ?, email_verified_at = NULL WHERE id = ?',
-            [$token, $id]
+            [self::hashToken($token), $id]
         );
 
         return $token;
+    }
+
+    private static function hashToken(string $token): string
+    {
+        return hash('sha256', $token);
     }
 
     /**
@@ -139,10 +144,20 @@ class User
             return null;
         }
 
+        // Match the SHA-256 hash first; fall back to a raw match so an
+        // in-flight verification email works during the transition to
+        // hashed tokens.
         $user = Database::run(
             'SELECT * FROM users WHERE email_verification_token = ? AND email_verified_at IS NULL LIMIT 1',
-            [$token]
+            [self::hashToken($token)]
         )->fetch();
+
+        if ($user === false) {
+            $user = Database::run(
+                'SELECT * FROM users WHERE email_verification_token = ? AND email_verified_at IS NULL LIMIT 1',
+                [$token]
+            )->fetch();
+        }
 
         return $user ?: null;
     }

@@ -136,7 +136,7 @@ class AdminController extends Controller
         $email    = $this->request->input('email');
         $password = (string) $this->request->post('password', '');
         $remember = $this->request->post('remember_me', null) !== null;
-        $result   = Auth::attempt($email, $password, $this->request->ip());
+        $result   = Auth::attempt($email, $password, $this->request->ip(), $remember);
 
         if ($result === '2fa') {
             $_SESSION['2fa_remember'] = $remember ? 1 : 0;

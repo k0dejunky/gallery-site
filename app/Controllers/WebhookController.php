@@ -68,6 +68,44 @@ class WebhookController extends Controller
     private function ccbill(): void
     {
         $responseCode = (string) $this->payload('responseCode', '');
+        $txnPost      = (string) ($this->payload('subscription_id', '') ?: $this->payload('transaction_id', ''));
+
+        // Fail-closed signature verification. CCBill's responseDigest is
+        // MD5(subscriptionId + responseCode + salt); without a configured
+        // dynamic-pricing salt the postback cannot be trusted and is
+        // rejected rather than accepted (a self-submitted postback would
+        // otherwise activate a membership without payment).
+        $processors = $this->processorRows('ccbill');
+        $salt       = '';
+
+        foreach ($processors as $row) {
+            $cfg = PaymentProcessor::decodeConfig($row);
+            if ((string) ($cfg['dynamic_salt'] ?? '') !== '') {
+                $salt = (string) $cfg['dynamic_salt'];
+                break;
+            }
+        }
+
+        if ($salt === '') {
+            error_log('[webhooks/ccbill] post rejected: no dynamic-pricing salt configured');
+            $this->adminAlert('CCBill postback rejected', 'A CCBill postback was received but no dynamic-pricing salt is configured, so it cannot be verified.');
+            http_response_code(400);
+            echo 'unverified postback';
+            return;
+        }
+
+        if ($txnPost !== '' && $this->looksLikeCancellation()) {
+            // Cancellation digests use responseCode 0 for the declined branch
+            // below; approved-style cancellations carry responseCode 1.
+            $digest = strtolower((string) $this->payload('responseDigest', $this->payload('dynamicPricingValidationDigest', '')));
+            if ($digest === '' || !hash_equals(md5($txnPost . '1' . $salt), $digest)) {
+                error_log('[webhooks/ccbill] cancellation postback with invalid digest rejected');
+                http_response_code(400);
+                echo 'bad digest';
+                return;
+            }
+        }
+
         $subscription = $this->pendingForProvider('ccbill', [
             (string) $this->payload('X-ref', ''),
             (string) $this->payload('x-ref', ''),
@@ -80,7 +118,7 @@ class WebhookController extends Controller
         if ($this->looksLikeCancellation()) {
             $cancelled = $this->cancelByTransactionPrefix(
                 'CCBILL-',
-                [(string) $this->payload('subscription_id', ''), (string) $this->payload('transaction_id', '')]
+                [$txnPost, (string) $this->payload('transaction_id', '')]
             );
 
             if ($cancelled > 0) {
@@ -105,13 +143,24 @@ class WebhookController extends Controller
             return;
         }
 
+        // Approved postbacks must carry a valid responseDigest for the
+        // subscription id + salt, or they are not accepted.
+        $digest = strtolower((string) $this->payload('responseDigest', $this->payload('dynamicPricingValidationDigest', '')));
+        $expected = $txnPost !== '' ? md5($txnPost . '1' . $salt) : '';
+
+        if ($digest === '' || $expected === '' || !hash_equals($expected, $digest)) {
+            error_log('[webhooks/ccbill] approved postback with missing/invalid digest rejected');
+            http_response_code(400);
+            echo 'bad digest';
+            return;
+        }
+
         if ($subscription === null) {
             echo 'no matching pending signup';
             return;
         }
 
-        $txn = (string) ($this->payload('subscription_id', '') ?: $this->payload('transaction_id', ''));
-        $ref = $txn !== '' ? 'CCBILL-' . $txn : (string) $subscription['transaction_ref'];
+        $ref = $txnPost !== '' ? 'CCBILL-' . $txnPost : (string) $subscription['transaction_ref'];
 
         Subscription::activateWithTransaction(
             (int) $subscription['id'],
@@ -174,7 +223,12 @@ class WebhookController extends Controller
                 return;
             }
         } else {
-            error_log('[webhooks/epoch] post accepted without digest verification: no shared secret configured');
+            error_log('[webhooks/epoch] post rejected: no shared secret configured');
+            Mailer::adminAlert('webhook-epoch-unconfigured', 'Epoch postback rejected (no shared secret)',
+                'An Epoch postback was received but no shared secret is configured, so it could not be verified and was rejected.', 3600);
+            http_response_code(400);
+            echo 'unverified postback';
+            return;
         }
 
         $subscription = $this->pendingForProvider('epoch', [
@@ -258,8 +312,13 @@ class WebhookController extends Controller
                 echo 'bad hash';
                 return;
             }
-        } elseif ($hash !== '' && ($apiUser === '' || $apiPass === '')) {
-            error_log('[webhooks/segpay] signed post received although no hash secret is configured');
+        } elseif ($apiUser === '' || $apiPass === '') {
+            error_log('[webhooks/segpay] post rejected: no hash secret configured');
+            Mailer::adminAlert('webhook-segpay-unconfigured', 'SegPay postback rejected (no hash secret)',
+                'A SegPay postback was received but no hash secret is configured, so it could not be verified and was rejected.', 3600);
+            http_response_code(400);
+            echo 'unverified postback';
+            return;
         }
 
         $isApproved = in_array($approved, ['1', 'true', 'yes'], true);

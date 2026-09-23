@@ -47,7 +47,9 @@ CREATE TABLE IF NOT EXISTS users (
     totp_enabled  TINYINT(1) NOT NULL DEFAULT 0,
     totp_verified_at DATETIME NULL DEFAULT NULL,
     recovery_email_sent_at DATETIME NULL,
-    INDEX idx_users_email_verification_token (email_verification_token)
+    INDEX idx_users_email_verification_token (email_verification_token),
+    INDEX idx_users_role_status (role, status),
+    INDEX idx_users_created_at (created_at)
 );
 
 CREATE TABLE IF NOT EXISTS support_messages (
@@ -103,6 +105,7 @@ CREATE TABLE IF NOT EXISTS galleries (
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at   DATETIME NULL,
     INDEX idx_galleries_listing (deleted_at, published_at, created_at),
+    INDEX idx_galleries_views (views),
     FULLTEXT KEY ft_search (title, description)
 );
 
@@ -126,7 +129,9 @@ CREATE TABLE IF NOT EXISTS photos (
     views        INT UNSIGNED NOT NULL DEFAULT 0,
     unique_views INT UNSIGNED NOT NULL DEFAULT 0,
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_photos_media_created (is_video, created_at)
+    INDEX idx_photos_media_created (is_video, created_at),
+    INDEX idx_photos_filename (filename),
+    INDEX idx_photos_views (views)
 );
 
 CREATE TABLE IF NOT EXISTS gallery_photo (
@@ -207,6 +212,7 @@ CREATE TABLE IF NOT EXISTS gallery_viewers (
     gallery_id INT UNSIGNED NOT NULL,
     viewed_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, gallery_id),
+    INDEX idx_gallery_viewers_user_viewed (user_id, viewed_at),
     FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE,
     FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE
 );
@@ -297,6 +303,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_subscriptions_user (user_id),
     INDEX idx_subscriptions_status (status),
+    INDEX idx_subscriptions_status_expires (status, expires_at),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE,
     FOREIGN KEY (payment_processor_id) REFERENCES payment_processors(id) ON DELETE SET NULL
@@ -649,6 +656,20 @@ CREATE TABLE IF NOT EXISTS operator_tokens (
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_operator_tokens_revoked (revoked),
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Persistent "remember me" logins: random selector:validator pair in a
+-- long-lived secure cookie; only the SHA-256 validator hash is stored.
+CREATE TABLE IF NOT EXISTS remember_tokens (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT UNSIGNED NOT NULL,
+    selector    CHAR(32) NOT NULL UNIQUE,
+    validator_hash CHAR(64) NOT NULL,
+    expires_at  DATETIME NOT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at DATETIME NULL,
+    INDEX idx_remember_tokens_user (user_id),
+    CONSTRAINT fk_remember_tokens_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

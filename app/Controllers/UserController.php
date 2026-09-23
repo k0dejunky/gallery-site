@@ -645,8 +645,9 @@ class UserController extends Controller
         }
 
         if ($password !== '') {
-            if (strlen($password) < 8) {
-                $this->flash('error', 'Password must be at least 8 characters.');
+            $policyError = Auth::passwordError($password, $email);
+            if ($policyError !== null) {
+                $this->flash('error', $policyError);
                 $this->redirect('/admin/users/' . $id . '/edit');
             }
             User::updatePassword($id, password_hash($password, PASSWORD_DEFAULT));

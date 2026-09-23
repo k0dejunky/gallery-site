@@ -44,7 +44,7 @@ class AuthController extends Controller
         $password = (string) $this->request->post('password', '');
         $remember = $this->request->post('remember_me', null) !== null;
 
-        $result = Auth::attempt($email, $password, $this->request->ip());
+        $result = Auth::attempt($email, $password, $this->request->ip(), $remember);
 
         if ($result === '2fa') {
             $_SESSION['2fa_remember'] = $remember ? 1 : 0;
@@ -335,8 +335,9 @@ class AuthController extends Controller
             $this->redirect('/login');
         }
 
-        if (strlen($password) < 8) {
-            $this->flash('error', 'Password must be at least 8 characters.');
+        $policyError = Auth::passwordError($password);
+        if ($policyError !== null) {
+            $this->flash('error', $policyError);
             $this->redirect('/reset-password?token=' . urlencode($token));
         }
 
