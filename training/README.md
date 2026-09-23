@@ -83,6 +83,25 @@ single-file names for backward compatibility).
   `chat-finetuned:<hash>`, atomically (versioned create + smoke test).
 - On success advances the watermark; on failure keeps pairs for the next poll.
 
+## Sharing the PC with other work
+
+The training PC is used for other things, so training yields to interactive use:
+
+- **Idle gating** — a training round only *starts* when the machine has had no
+  keyboard/mouse input for `REQUIRED_IDLE_SECONDS` (default 300). If you sit
+  down while training is already running it finishes (mid-run checkpointing is
+  not practical), but the next round waits for idle again. Set `0` to disable.
+- **CPU budget** — `apply_cpu_budget()` limits torch to `CPU_THREADS` threads
+  (default 0 = half the physical cores) so the rest of the machine stays
+  responsive during a run. Set an explicit count to override.
+- **Pause file** — while `C:\work\.chat_trainer_paused` exists, polling
+  continues but no training starts. Create the file to pause, delete it to
+  resume. A handy one-liner: `type nul > C:\work\.chat_trainer_paused` /
+  `del C:\work\.chat_trainer_paused`.
+
+These are controlled via env vars in `run_chat_trainer.bat`
+(`REQUIRED_IDLE_SECONDS`, `CPU_THREADS`, `PAUSE_FILE`).
+
 ## Windows-specific notes
 
 - The Phenom II has no AVX2 and no SMT; the trainer uses all 6 physical cores

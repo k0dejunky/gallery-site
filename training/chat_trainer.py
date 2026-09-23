@@ -37,6 +37,24 @@ MAX_LEN = int(os.environ.get("MAX_LEN", "512"))
 STEPS = int(os.environ.get("STEPS", "60"))
 LR = float(os.environ.get("LR", "2e-4"))
 
+# ---- sharing the PC with other work ---------------------------------------
+# The training PC is also used for other things, so training must not hog the
+# machine. Three knobs:
+#   REQUIRED_IDLE_SECONDS  seconds the PC must have been idle (no keyboard /
+#                          mouse input) before a training round may START.
+#                          Default 300 (5 min). Set 0 to disable the check.
+#   CPU_THREADS            how many cores torch may use. Default is half the
+#                          physical cores so other apps keep running smoothly.
+#   PAUSE_FILE             when this file exists, polling continues but no
+#                          training starts (drop a file to pause, delete it
+#                          to resume). Default C:\work\.chat_trainer_paused
+# If the machine becomes active while training is already running, the round
+# continues to completion (checkpointing mid-run is not practical) but the
+# next round waits for idle again.
+REQUIRED_IDLE_SECONDS = int(os.environ.get("REQUIRED_IDLE_SECONDS", "300"))
+CPU_THREADS = int(os.environ.get("CPU_THREADS", "0"))  # 0 = auto (half of physical)
+PAUSE_FILE = os.environ.get("PAUSE_FILE", r"C:\work\.chat_trainer_paused")
+
 # Populated by train_adapter(); sent to the server so the adapter directory is
 # self-contained (Ollama 0.33.x ADAPTER needs adapter_config.json + config.json).
 ADAPTER_CONFIG_JSON = ""
@@ -60,6 +78,51 @@ BASE_CONFIG = {
 }
 
 # ------------------------------------------------------------------ helpers
+def idle_seconds() -> int:
+    """Seconds since the last keyboard/mouse input (Windows). On non-Windows
+    or when the check fails, treat the machine as idle (0) so training can
+    proceed (e.g. in CI or under a service account)."""
+    if os.name != "nt":
+        return 0
+    try:
+        import ctypes
+        class LASTINPUTINFO(ctypes.Structure):
+            _fields_ = [("cbSize", ctypes.c_uint), ("dwTime", ctypes.c_uint)]
+        info = LASTINPUTINFO()
+        info.cbSize = ctypes.sizeof(LASTINPUTINFO)
+        if not ctypes.windll.user32.GetLastInputInfo(ctypes.byref(info)):
+            return 0
+        millis = ctypes.windll.kernel32.GetTickCount() - info.dwTime
+        return int(millis // 1000)
+    except Exception:
+        return 0
+
+def is_paused() -> bool:
+    """True when the pause file exists (manual stop)."""
+    return PAUSE_FILE != "" and os.path.exists(PAUSE_FILE)
+
+def can_start_training() -> str:
+    """Return '' when a training round may start now, else a reason string."""
+    if is_paused():
+        return "paused (pause file present)"
+    if REQUIRED_IDLE_SECONDS > 0:
+        idle = idle_seconds()
+        if idle < REQUIRED_IDLE_SECONDS:
+            return "PC busy (idle %ds, need %ds)" % (idle, REQUIRED_IDLE_SECONDS)
+    return ""
+
+def apply_cpu_budget():
+    """Limit torch to CPU_THREADS cores (0 = half the physical cores), so
+    training never starves other apps on the shared PC."""
+    try:
+        import torch
+        physical = getattr(torch, "get_num_physical_cores", lambda: None)() or os.cpu_count() or 1
+        threads = CPU_THREADS if CPU_THREADS > 0 else max(1, int(physical) // 2)
+        torch.set_num_threads(threads)
+        print("[chat-trainer] torch threads = %d (physical %d)" % (threads, physical), flush=True)
+    except Exception as e:
+        print("[chat-trainer] could not set torch threads: %s" % e, flush=True)
+
 def state() -> dict:
     try:
         with open(STATE_FILE) as fh:
@@ -130,6 +193,8 @@ def train_adapter(records, out_path):
     from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from datasets import Dataset
+
+    apply_cpu_budget()
 
     print(f"[chat-trainer] loading model from {MODEL_DIR}", flush=True)
     tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
@@ -242,6 +307,7 @@ def main():
         sys.exit(1)
 
     print(f"[chat-trainer] starting (server={SERVER_BASE}, poll={POLL_SECONDS}s, min_pairs={MIN_NEW_PAIRS})", flush=True)
+    print(f"[chat-trainer] sharing PC: require_idle={REQUIRED_IDLE_SECONDS}s, pause_file={PAUSE_FILE or '(none)'}", flush=True)
 
     while True:
         try:
@@ -251,6 +317,14 @@ def main():
             print(f"[chat-trainer] fetched {len(pairs)} new pair(s) since id {since}", flush=True)
 
             if len(pairs) >= MIN_NEW_PAIRS:
+                # Respect the shared PC: don't start a multi-hour CPU run while
+                # the operator is actively using the machine or has paused it.
+                blocked = can_start_training()
+                if blocked:
+                    print(f"[chat-trainer] deferring training ({blocked}); pairs kept", flush=True)
+                    time.sleep(POLL_SECONDS)
+                    continue
+
                 batch = pairs[:MAX_PAIRS_PER_RUN]
                 records = build_training_records(batch)
                 print(f"[chat-trainer] training on {len(records)} records", flush=True)
