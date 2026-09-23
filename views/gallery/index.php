@@ -22,15 +22,15 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
 
 <div class="hero">
     <form method="get" action="<?= url('/galleries') ?>">
-        <input type="text" name="q" value="<?= e($q) ?>" placeholder="Search galleries by title, description or category…">
+        <input type="text" name="q" value="<?= e($q) ?>" placeholder="Search galleries by title, description or category…" aria-label="Search galleries">
         <button type="submit" class="btn">Search</button>
     </form>
 </div>
 
 <div class="chips" style="justify-content:center">
-    <a class="chip <?= $type === '' ? 'active' : '' ?>" href="<?= e($allUrl) ?>">All Galleries</a>
-    <a class="chip <?= $type === 'images' ? 'active' : '' ?>" href="<?= e($imgUrl) ?>">&#128444; Image Galleries</a>
-    <a class="chip <?= $type === 'videos' ? 'active' : '' ?>" href="<?= e($vidUrl) ?>">&#9654; Video Galleries</a>
+    <a class="chip <?= $type === '' ? 'active' : '' ?>" href="<?= e($allUrl) ?>"<?= $type === '' ? ' aria-current="page"' : '' ?>>All Galleries</a>
+    <a class="chip <?= $type === 'images' ? 'active' : '' ?>" href="<?= e($imgUrl) ?>"<?= $type === 'images' ? ' aria-current="page"' : '' ?>>&#128444; Image Galleries</a>
+    <a class="chip <?= $type === 'videos' ? 'active' : '' ?>" href="<?= e($vidUrl) ?>"<?= $type === 'videos' ? ' aria-current="page"' : '' ?>>&#9654; Video Galleries</a>
 </div>
 
 <div class="sort-bar" style="justify-content:center">
@@ -47,7 +47,7 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
         if ($val !== '') $p['sort'] = $val;
         $href = $p ? $sortBase . '?' . http_build_query($p) : $sortBase;
     ?>
-        <a class="chip <?= ($sort ?? '') === $val ? 'active' : '' ?>" href="<?= e($href) ?>"><?= $label ?></a>
+        <a class="chip <?= ($sort ?? '') === $val ? 'active' : '' ?>" href="<?= e($href) ?>"<?= ($sort ?? '') === $val ? ' aria-current="page"' : '' ?>><?= $label ?></a>
     <?php endforeach; ?>
 </div>
 

@@ -170,3 +170,12 @@ table td:nth-child(1) { overflow-wrap: anywhere; word-break: break-word; }
 .g-masonry.g-size-lg .grid{column-count:2}
 @media(max-width:768px){.g-masonry .grid{column-count:2}.g-masonry.g-size-sm .grid{column-count:2}.g-masonry.g-size-lg .grid{column-count:1}}
 @media(max-width:480px){.g-masonry .grid{column-count:1}}
+
+/* Skip-to-content link (WCAG 2.4.1): visually hidden until focused */
+.skip-link{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden}
+.skip-link:focus{left:1rem;top:1rem;width:auto;height:auto;z-index:10001;background:#fff;color:var(--purple-900);padding:.6rem 1rem;border-radius:var(--border-radius-sm);box-shadow:var(--shadow);text-decoration:none}
+
+/* Flash messages: ensure errors/success are announced (role on the element) */
+.flash{position:relative}
+.flash[role=alert]{border-left:4px solid var(--btn-danger-bg, #c62828)}
+.flash[role=status]{border-left:4px solid var(--btn-bg, #7e22ce)}

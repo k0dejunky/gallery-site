@@ -1,5 +1,6 @@
 <?php
 $title = 'Login';
+$noindex = true;
 // Inline SVG fallback so a missing thumbnail never shows a broken image on
 // the guest landing page; also doubles as a "no picture" placeholder.
 $pictureBlank = 'data:image/svg+xml;utf8,' . rawurlencode(
@@ -107,31 +108,3 @@ foreach ($recentVideos as $photo) {
     </div>
 </section>
 <?php endif; ?>
-
-<script>
-    // Keep each recent strip to a single row: measure how many cards fit,
-    // hide any card that would be clipped (never show a cut-off thumbnail).
-    // Strips with fewer than 4 thumbnails are centered with equal spacing
-    // between the cards and the page edges (space-evenly); larger strips
-    // are justified across the full row.
-    function fitRecentStrip() {
-        document.querySelectorAll('.recent-strip').forEach(function (strip) {
-            const cards = Array.from(strip.querySelectorAll('.recent-card'));
-            if (!cards.length) return;
-
-            const cardWidth = cards[0].offsetWidth || 220;
-            const gap = parseFloat(getComputedStyle(strip).gap) || 0;
-            const available = strip.clientWidth;
-            const count = Math.max(0, Math.floor((available + gap) / (cardWidth + gap)));
-
-            strip.style.justifyContent = cards.length < 4 ? 'space-evenly' : 'space-between';
-
-            cards.forEach(function (card, i) {
-                card.style.display = i < count ? '' : 'none';
-            });
-        });
-    }
-    fitRecentStrip();
-    window.addEventListener('resize', fitRecentStrip);
-    window.addEventListener('load', fitRecentStrip);
-</script>

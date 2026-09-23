@@ -1,0 +1,17 @@
+User-agent: *
+Disallow: /admin
+Disallow: /account
+Disallow: /favorites
+Disallow: /saved-searches
+Disallow: /chat
+Disallow: /support
+Disallow: /settings
+Disallow: /membership/my
+Disallow: /membership/checkout
+Disallow: /*?se=
+Disallow: /files/
+Disallow: /video-editor
+Disallow: /verify-email
+Disallow: /reset-password
+
+Sitemap: https://amethyst2213.com/gallery/sitemap.xml

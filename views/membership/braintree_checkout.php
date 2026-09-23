@@ -14,6 +14,8 @@ $planId    = (int) $plan['id'];
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Secure checkout for your <?= e($plan['name']) ?> membership.">
 <title>Checkout — <?= $planName ?></title>
 <style>
 :root {

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="robots" content="noindex, nofollow">
     <title><?= $status ?> Error</title>
     <style>
         body { font-family: sans-serif; max-width: 600px; margin: 4rem auto; padding: 0 1rem; background: #f9a8d4; color: #3b0764; }

@@ -1,4 +1,4 @@
-<?php $title = 'Two-factor verification'; ?>
+<?php $title = 'Two-factor verification'; $noindex = true; ?>
 
 <div class="auth-panel">
     <h1>Two-factor verification</h1>

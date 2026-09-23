@@ -38,6 +38,25 @@ $isAuthPage = $isLoginPage
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') : e(config('app.site_name')) ?></title>
+    <?php if (isset($metaDescription) && $metaDescription !== ''): ?>
+        <meta name="description" content="<?= e($metaDescription) ?>">
+    <?php else: ?>
+        <meta name="description" content="<?= e(config('app.site_name')) ?> — curated galleries of original photos and videos.">
+    <?php endif; ?>
+    <?php if (isset($noindex) && $noindex): ?>
+        <meta name="robots" content="noindex, nofollow">
+    <?php endif; ?>
+    <?php if (isset($canonicalUrl) && $canonicalUrl !== ''): ?>
+        <link rel="canonical" href="<?= e($canonicalUrl) ?>">
+    <?php endif; ?>
+    <?php if (isset($ogImage) && $ogImage !== ''): ?>
+        <meta property="og:image" content="<?= e($ogImage) ?>">
+    <?php endif; ?>
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="<?= e(isset($title) ? $title . ' — ' . config('app.site_name') : config('app.site_name')) ?>">
+    <meta property="og:description" content="<?= e($metaDescription ?? (config('app.site_name') . ' — curated galleries of original photos and videos.')) ?>">
+    <meta property="og:url" content="<?= e($canonicalUrl ?? absolute_url('')) ?>">
+    <meta name="twitter:card" content="summary_large_image">
     <style>
 <?= \App\Models\Theme::cssUser($userThemePreset) ?>
 <?= \App\Models\Theme::cssLayoutUser($userThemePreset) ?>
@@ -115,7 +134,7 @@ $isAuthPage = $isLoginPage
         .fav-section h2 { color: var(--purple-800); border-bottom: 2px solid var(--pink-300); padding-bottom: var(--spacing-xs); }
         .fav-section h2 a { font-size: var(--font-size-sm); font-weight: normal; color: var(--purple-600); text-decoration: none; float: right; }
         .section-title { color: var(--purple-800); border-bottom: 2px solid var(--pink-300); padding-bottom: var(--spacing-xs); }
-        .muted { color: var(--purple-800); opacity: 0.75; }
+        .muted { color: #581c87; }
         .home-layout { display: flex; gap: var(--spacing-lg); align-items: flex-start; }
          .home-nav-wrap { flex: 0 0 230px; display: flex; flex-direction: column; gap: var(--spacing-md); position: sticky; top: 0; }
         .home-nav-actions, .home-nav { display: flex; flex-direction: column; gap: var(--spacing-xs); padding: var(--spacing-md); background: var(--sidebar-bg); border: var(--input-border-width) solid var(--sidebar-border); border-radius: var(--border-radius-lg); }
@@ -174,9 +193,10 @@ $isAuthPage = $isLoginPage
         .collapsible { overflow: hidden; transition: max-height .3s; }
         img { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
      </style>
-    <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=5">
+    <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=6">
 </head>
 <body data-base="<?= e(config('app.base_path')) ?>">
+<a class="skip-link" href="#main-content">Skip to content</a>
 <?php if (!empty($_SESSION['impersonator_id'])): ?>
     <div style="background:#7f1d1d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;justify-content:center;border-radius:var(--border-radius);margin-bottom:1rem;">
         <b>Impersonating — viewing the site as a member.</b>
@@ -213,7 +233,7 @@ $isAuthPage = $isLoginPage
 
     <?php foreach ($flash as $flashType => $flashMessages): ?>
         <?php foreach ($flashMessages as $flashMessage): ?>
-            <div class="flash <?= e($flashType) ?>"><?= e($flashMessage) ?></div>
+            <div class="flash <?= e($flashType) ?>" role="<?= $flashType === 'error' ? 'alert' : 'status' ?>"><?= e($flashMessage) ?></div>
         <?php endforeach; ?>
     <?php endforeach; ?>
 
@@ -279,12 +299,12 @@ $isAuthPage = $isLoginPage
             <?php endif; ?>
         </nav>
         </div>
-        <main class="home-main">
+        <main id="main-content" class="home-main">
             <?php require $content; ?>
         </main>
     </div>
     <?php else: ?>
-    <?php require $content; ?>
+    <main id="main-content"><?php require $content; ?></main>
     <?php endif; ?>
     <?php if ($sidebarNav && $user !== null): ?>
     <nav class="media-bottom-nav" aria-label="Mobile site menu">

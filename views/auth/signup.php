@@ -1,5 +1,6 @@
 <?php
 $title = 'Sign Up';
+$noindex = true;
 $pictureBlank = 'data:image/svg+xml;utf8,' . rawurlencode(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" fill="#ffd9e8"/><rect x="130" y="102" width="140" height="96" rx="12" fill="none" stroke="#f472b6" stroke-width="8"/><circle cx="185" cy="145" r="14" fill="#ec4899"/><path d="M130 196l42-42 32 30 44-52 52 64" fill="none" stroke="#9333ea" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 );
@@ -157,26 +158,3 @@ foreach ($recentVideos as $photo) {
     </div>
 </section>
 <?php endif; ?>
-
-<script>
-    function fitRecentStrip() {
-        document.querySelectorAll('.recent-strip').forEach(function (strip) {
-            const cards = Array.from(strip.querySelectorAll('.recent-card'));
-            if (!cards.length) return;
-
-            const cardWidth = cards[0].offsetWidth || 220;
-            const gap = parseFloat(getComputedStyle(strip).gap) || 0;
-            const available = strip.clientWidth;
-            const count = Math.max(0, Math.floor((available + gap) / (cardWidth + gap)));
-
-            strip.style.justifyContent = cards.length < 4 ? 'space-evenly' : 'space-between';
-
-            cards.forEach(function (card, i) {
-                card.style.display = i < count ? '' : 'none';
-            });
-        });
-    }
-    fitRecentStrip();
-    window.addEventListener('resize', fitRecentStrip);
-    window.addEventListener('load', fitRecentStrip);
-</script>

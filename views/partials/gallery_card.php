@@ -67,7 +67,7 @@ $cardId = 'card-' . (int) $gallery['id'];
             <?php endforeach; ?>
         </div>
     </div>
-    <button class="card-expand-btn" type="button" data-target="<?= e($cardId) ?>-details">Show more</button>
+    <button class="card-expand-btn" type="button" data-target="<?= e($cardId) ?>-details" aria-expanded="false" aria-controls="<?= e($cardId) ?>-details">Show more</button>
     <?php endif; ?>
     <?php if (!empty($currentUser) && !empty($hasActive)): ?>
         <button type="button" class="btn btn-sm btn-outline favorite-toggle<?= $isFavorite ? ' is-favorite' : '' ?>"

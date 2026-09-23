@@ -272,6 +272,7 @@
         var hidden=details.hidden;
         details.hidden=!hidden;
         btn.textContent=hidden?'Show less':'Show more';
+        btn.setAttribute('aria-expanded',hidden?'true':'false');
       });
     });
   });
@@ -360,11 +361,47 @@
   });
 })();
 
-/* Flash auto-dismiss */
+/* Recent-pictures/videos strip on the login/signup pages: keep it to a
+   single row, hiding any card that would be clipped. */
 (function(){
+  function fitRecentStrip(){
+    document.querySelectorAll('.recent-strip').forEach(function(strip){
+      var cards=Array.prototype.slice.call(strip.querySelectorAll('.recent-card'));
+      if(!cards.length)return;
+      var cardWidth=cards[0].offsetWidth||220;
+      var gap=parseFloat(getComputedStyle(strip).gap)||0;
+      var available=strip.clientWidth;
+      var count=Math.max(0,Math.floor((available+gap)/(cardWidth+gap)));
+      strip.style.justifyContent=cards.length<4?'space-evenly':'space-between';
+      cards.forEach(function(card,i){card.style.display=i<count?'':'none';});
+    });
+  }
+  document.addEventListener('DOMContentLoaded',function(){
+    if(!document.querySelector('.recent-strip'))return;
+    fitRecentStrip();
+    window.addEventListener('resize',fitRecentStrip);
+    window.addEventListener('load',fitRecentStrip);
+  });
+})();
+
+/* Flash auto-dismiss (pauses on hover/focus so AT users and slow readers
+   can read the message before it fades) */
+(function(){
+  function scheduleDismiss(el){
+    var timer=setTimeout(function(){
+      el.style.transition='opacity .4s';
+      el.style.opacity='0';
+      setTimeout(function(){el.remove()},400);
+    },5000);
+    el._flashTimer=timer;
+  }
   document.addEventListener('DOMContentLoaded',function(){
     document.querySelectorAll('.flash').forEach(function(el){
-      setTimeout(function(){el.style.transition='opacity .4s';el.style.opacity='0';setTimeout(function(){el.remove()},400)},5000);
+      scheduleDismiss(el);
+      el.addEventListener('mouseenter',function(){clearTimeout(el._flashTimer);el.style.transition='';el.style.opacity='';});
+      el.addEventListener('mouseleave',function(){scheduleDismiss(el);});
+      el.addEventListener('focusin',function(){clearTimeout(el._flashTimer);el.style.transition='';el.style.opacity='';});
+      el.addEventListener('focusout',function(){scheduleDismiss(el);});
     });
   });
 })();

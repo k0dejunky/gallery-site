@@ -14,7 +14,7 @@ require __DIR__ . '/../partials/breadcrumbs.php';
 <div class="hero" style="padding:1.25rem 1.5rem; text-align:left; margin-top:1rem;">
     <form method="get" action="<?= url('/galleries/category/' . e($category['slug'])) ?>">
         <input type="hidden" name="type" value="<?= e($type) ?>">
-        <input type="text" name="q" value="<?= e($q) ?>" placeholder="Search within this category…">
+        <input type="text" name="q" value="<?= e($q) ?>" placeholder="Search within this category…" aria-label="Search within this category">
         <button type="submit" class="btn">Search</button>
     </form>
 </div>
@@ -33,16 +33,16 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
 ?>
 
 <div class="chips" style="justify-content:center">
-    <a class="chip <?= $type === '' ? 'active' : '' ?>" href="<?= e($allUrl) ?>">All Galleries</a>
-    <a class="chip <?= $type === 'images' ? 'active' : '' ?>" href="<?= e($imgUrl) ?>">&#128444; Image Galleries</a>
-    <a class="chip <?= $type === 'videos' ? 'active' : '' ?>" href="<?= e($vidUrl) ?>">&#9654; Video Galleries</a>
+    <a class="chip <?= $type === '' ? 'active' : '' ?>" href="<?= e($allUrl) ?>"<?= $type === '' ? ' aria-current="page"' : '' ?>>All Galleries</a>
+    <a class="chip <?= $type === 'images' ? 'active' : '' ?>" href="<?= e($imgUrl) ?>"<?= $type === 'images' ? ' aria-current="page"' : '' ?>>&#128444; Image Galleries</a>
+    <a class="chip <?= $type === 'videos' ? 'active' : '' ?>" href="<?= e($vidUrl) ?>"<?= $type === 'videos' ? ' aria-current="page"' : '' ?>>&#9654; Video Galleries</a>
 </div>
 
 <div class="sort-bar" style="justify-content:center">
     <span class="label">Sort:</span>
     <?php foreach (['' => 'Newest', 'views' => 'Most Viewed', 'title' => 'A-Z'] as $value => $label): ?>
         <?php $sortQuery = $query; if ($value === '') unset($sortQuery['sort']); else $sortQuery['sort'] = $value; ?>
-        <a class="chip <?= ($sort ?? '') === $value ? 'active' : '' ?>" href="<?= e($base . ($sortQuery ? '?' . http_build_query($sortQuery) : '')) ?>"><?= e($label) ?></a>
+        <a class="chip <?= ($sort ?? '') === $value ? 'active' : '' ?>" href="<?= e($base . ($sortQuery ? '?' . http_build_query($sortQuery) : '')) ?>"<?= ($sort ?? '') === $value ? ' aria-current="page"' : '' ?>><?= e($label) ?></a>
     <?php endforeach; ?>
 </div>
 

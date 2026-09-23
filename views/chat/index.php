@@ -53,7 +53,7 @@
         <?php if (!empty($replyEnabled)): ?>
         <form class="chat-composer" id="chat-form">
             <?= csrf_field() ?>
-            <textarea id="chat-input" rows="2" maxlength="2000" placeholder="Type a message…"></textarea>
+            <textarea id="chat-input" rows="2" maxlength="2000" placeholder="Type a message…" aria-label="Message"></textarea>
             <button type="submit" class="btn" id="chat-send">Send</button>
         </form>
         <?php else: ?>
