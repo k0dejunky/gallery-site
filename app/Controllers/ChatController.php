@@ -268,16 +268,22 @@ class ChatController extends Controller
         }
 
         // Long-poll loop: hold the connection, emit when a new message lands.
+        // A cheap MAX(id) probe runs each tick and the full message fetch only
+        // when a newer row actually exists, halving the per-tick query cost
+        // and keeping idle chat tabs off the busiest path.
         $start = time();
         while (time() - $start < 30) {
-            $new = $this->decorateMessages(ChatMessage::messages($cid, $since));
-            if ($new !== []) {
-                $latestId = ChatMessage::latestId($cid);
-                echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'mode' => (string) ($conv['ai_mode'] ?? 'retrieval')]) . "\n\n";
-                flush();
-                $since = $latestId;
-                ChatMessage::markRead($cid, $latestId);
-                continue;
+            $headId = ChatMessage::latestId($cid);
+            if ($headId > $since) {
+                $new = $this->decorateMessages(ChatMessage::messages($cid, $since));
+                if ($new !== []) {
+                    $latestId = $headId;
+                    echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'mode' => (string) ($conv['ai_mode'] ?? 'retrieval')]) . "\n\n";
+                    flush();
+                    $since = $latestId;
+                    ChatMessage::markRead($cid, $latestId);
+                    continue;
+                }
             }
 
             // Heartbeat so proxies don't kill the connection.

@@ -142,6 +142,8 @@ function media_token_valid(string $path, string $given): bool
  */
 function file_url(string $filename, string $size = '', string $format = ''): string
 {
+    static $mtimeCache = [];
+
     $query = in_array($size, ['thumb', 'web', 'blur'], true) ? '?size=' . $size : '';
 
     // Version the regenerated variants by file mtime so the browser never
@@ -159,7 +161,14 @@ function file_url(string $filename, string $size = '', string $format = ''): str
             }
         }
 
-        $mtime = @filemtime(config('app.uploads.dir') . '/' . $variant);
+        // Memoize the stat per request: a 48-card grid calls file_url 3-4x
+        // per cover, each a filemtime() syscall. A single look-up per
+        // variant per request avoids ~200 stat() calls on the busiest pages.
+        if (!array_key_exists($variant, $mtimeCache)) {
+            $mtimeCache[$variant] = @filemtime(config('app.uploads.dir') . '/' . $variant);
+        }
+
+        $mtime = $mtimeCache[$variant];
 
         if ($mtime !== false) {
             $query .= '&v=' . $mtime;

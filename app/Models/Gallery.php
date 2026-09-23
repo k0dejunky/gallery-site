@@ -347,13 +347,15 @@ class Gallery
             $accessCondition = ' AND ' . $condition;
         }
 
+        // Scalar subqueries instead of a LEFT JOIN ... GROUP BY so a gallery
+        // in several categories is never row-multiplied and the whole query
+        // scales with the number of matching galleries, not total media.
         $rows = Database::run(
-            'SELECT g.*, gc.category_id, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
+            'SELECT g.*, gc.category_id,
+                    (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count, ' . self::videoCountSql() . '
              FROM galleries g
              INNER JOIN gallery_category gc ON gc.gallery_id = g.id
-             LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
              WHERE gc.category_id IN (' . $placeholders . ') AND ' . self::publishedVisibleSql('g') . $accessCondition . $typeCondition . $levelCondition . '
-             GROUP BY g.id, gc.category_id
              ORDER BY g.created_at DESC',
             array_merge($ids, $accessParams)
         )->fetchAll();
@@ -385,12 +387,11 @@ class Gallery
         }
 
         return Database::run(
-            'SELECT g.*, NULL AS category_id, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
+            'SELECT g.*, NULL AS category_id,
+                    (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count, ' . self::videoCountSql() . '
              FROM galleries g
-             LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
              WHERE ' . self::publishedVisibleSql('g') . $accessCondition . '
                AND NOT EXISTS (SELECT 1 FROM gallery_category gc WHERE gc.gallery_id = g.id)' . $typeCondition . $levelCondition . '
-             GROUP BY g.id
              ORDER BY g.created_at DESC',
             $accessParams
         )->fetchAll();

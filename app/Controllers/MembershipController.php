@@ -38,13 +38,17 @@ class MembershipController extends Controller
         $user   = $siteEditorPreview ? ['id' => 0, 'email' => '', 'billing_first_name' => ''] : Auth::user();
         $userId = (int) $user['id'];
 
+        $recentlyViewed = $siteEditorPreview ? [] : Gallery::recentlyViewed($userId, 4);
+        $cardCovers    = Gallery::firstPhotos(array_map('intval', array_column($recentlyViewed, 'id')));
+
         $this->view('membership/dashboard', [
             'user'           => $user,
             'emailUnverified' => false,
             'activeSub'      => $siteEditorPreview ? null : Subscription::activeFor($userId),
             'pendingSub'     => $siteEditorPreview ? null : Subscription::pendingFor($userId),
             'latestSub'      => $siteEditorPreview ? null : (Subscription::forUser($userId)[0] ?? null),
-            'recentlyViewed' => $siteEditorPreview ? [] : Gallery::recentlyViewed($userId, 4),
+            'recentlyViewed' => $recentlyViewed,
+            'cardCovers'     => $cardCovers,
             'recentImages'   => $siteEditorPreview ? [] : Photo::recentImages(4),
             'recentVideos'   => $siteEditorPreview ? [] : Photo::recentVideos(4),
             'sidebarNav'     => true,

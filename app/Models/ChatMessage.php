@@ -36,29 +36,33 @@ class ChatMessage
      */
     public static function canChat(int $userId): bool
     {
-        $user = Database::run(
-            'SELECT id, role FROM users WHERE id = ? LIMIT 1',
-            [$userId]
-        )->fetch();
+        // Cheap 60s cache; eligibility only changes when a subscription is
+        // granted/expires, and bump('chat') fires on every chat write.
+        return (bool) \App\Core\Cache::rememberGen('chat', 'canchat:u' . $userId, 60, static function () use ($userId): string {
+            $user = Database::run(
+                'SELECT id, role FROM users WHERE id = ? LIMIT 1',
+                [$userId]
+            )->fetch();
 
-        if ($user !== null && in_array((string) $user['role'], \App\Core\Auth::ADMIN_ROLES, true)) {
-            return true;
-        }
+            if ($user !== null && in_array((string) $user['role'], \App\Core\Auth::ADMIN_ROLES, true)) {
+                return '1';
+            }
 
-        $row = Database::run(
-            'SELECT p.can_chat
-             FROM subscriptions s
-             JOIN plans p ON p.id = s.plan_id
-             WHERE s.user_id = ?
-               AND s.status IN (?, ?)
-               AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
-               AND p.can_chat = 1
-             ORDER BY s.id DESC
-             LIMIT 1',
-            [$userId, 'active', 'cancelled']
-        )->fetch();
+            $row = Database::run(
+                'SELECT p.can_chat
+                 FROM subscriptions s
+                 JOIN plans p ON p.id = s.plan_id
+                 WHERE s.user_id = ?
+                   AND s.status IN (?, ?)
+                   AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
+                   AND p.can_chat = 1
+                 ORDER BY s.id DESC
+                 LIMIT 1',
+                [$userId, 'active', 'cancelled']
+            )->fetch();
 
-        return (bool) ($row['can_chat'] ?? false);
+            return ($row['can_chat'] ?? false) ? '1' : '0';
+        });
     }
 
     /**
@@ -135,6 +139,8 @@ class ChatMessage
                 $attachment['path'] ?? null,
             ]
         );
+
+        \App\Core\Cache::bump('chat');
 
         return (int) Database::connection()->lastInsertId();
     }
@@ -292,27 +298,31 @@ class ChatMessage
 
     public static function unreadCountForUser(int $userId): int
     {
-        $conv = self::forUser($userId);
-        if ($conv === null) {
-            return 0;
-        }
+        // Cheap 60s cache: the unread badge is re-shown after any send/read,
+        // and recomputed on each write below via bump('chat').
+        return (int) \App\Core\Cache::rememberGen('chat', 'unread:u' . $userId, 60, static function () use ($userId): string {
+            $conv = self::forUser($userId);
+            if ($conv === null) {
+                return '0';
+            }
 
-        $lastRead = (int) ($conv['last_read_message_id'] ?? 0);
+            $lastRead = (int) ($conv['last_read_message_id'] ?? 0);
 
-        // Fall back to the legacy behaviour when nothing has been read yet:
-        // count replies after the member's last message.
-        if ($lastRead <= 0) {
-            $lastUser = (int) Database::run(
-                "SELECT MAX(id) FROM chat_messages WHERE conversation_id = ? AND sender_role = 'user'",
-                [(int) $conv['id']]
+            // Fall back to the legacy behaviour when nothing has been read yet:
+            // count replies after the member's last message.
+            if ($lastRead <= 0) {
+                $lastUser = (int) Database::run(
+                    "SELECT MAX(id) FROM chat_messages WHERE conversation_id = ? AND sender_role = 'user'",
+                    [(int) $conv['id']]
+                )->fetchColumn();
+                $lastRead = $lastUser;
+            }
+
+            return (string) (int) Database::run(
+                'SELECT COUNT(*) FROM chat_messages WHERE conversation_id = ? AND id > ? AND sender_role IN (?, ?)',
+                [(int) $conv['id'], $lastRead, self::ROLE_MODEL, self::ROLE_OPERATOR]
             )->fetchColumn();
-            $lastRead = $lastUser;
-        }
-
-        return (int) Database::run(
-            'SELECT COUNT(*) FROM chat_messages WHERE conversation_id = ? AND id > ? AND sender_role IN (?, ?)',
-            [(int) $conv['id'], $lastRead, self::ROLE_MODEL, self::ROLE_OPERATOR]
-        )->fetchColumn();
+        });
     }
 
     /**
@@ -331,6 +341,8 @@ class ChatMessage
               WHERE id = ?',
             [$messageId, $conversationId]
         );
+
+        \App\Core\Cache::bump('chat');
     }
 
     public static function setMode(int $conversationId, string $mode): bool

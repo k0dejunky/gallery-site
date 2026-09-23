@@ -111,7 +111,7 @@ $billingLabels = [
         <?php else: ?>
             <div class="dashboard-grid">
                 <?php foreach ($recentlyViewed as $gallery): ?>
-                    <?php $cover = \App\Models\Gallery::firstPhoto((int) $gallery['id']); ?>
+                    <?php $cover = $cardCovers[(int) $gallery['id']] ?? null; ?>
                     <article class="card dashboard-card">
                         <a href="<?= url('/galleries/' . (int) $gallery['id']) ?>">
                             <?php if ($cover !== null): ?>

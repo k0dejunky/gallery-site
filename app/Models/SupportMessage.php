@@ -96,19 +96,23 @@ class SupportMessage
     public static function unreadCountForUser(int $userId): int
     {
         self::userId($userId);
-        return (int) Database::run(
-            "SELECT COUNT(*)
-             FROM support_messages sm
-             WHERE sm.user_id = ?
-               AND COALESCE(sm.user_read_at, '1000-01-01 00:00:00') <
-                   COALESCE((SELECT MAX(sr.created_at) FROM support_replies sr
-                             WHERE sr.ticket_id = sm.id AND sr.author_role = 'admin'), '1000-01-01 00:00:00')
-               AND COALESCE((SELECT MAX(sr.created_at) FROM support_replies sr
-                             WHERE sr.ticket_id = sm.id AND sr.author_role = 'admin'), '1000-01-01 00:00:00') >
-                   COALESCE((SELECT MAX(sr.created_at) FROM support_replies sr
-                             WHERE sr.ticket_id = sm.id AND sr.author_role = 'user'), sm.created_at)",
-            [$userId]
-        )->fetchColumn();
+
+        // Cheap 60s cache: the badge is recomputed on each write via bump('support').
+        return (int) \App\Core\Cache::rememberGen('support', 'unread:u' . $userId, 60, static function () use ($userId): string {
+            return (string) (int) Database::run(
+                "SELECT COUNT(*)
+                 FROM support_messages sm
+                 WHERE sm.user_id = ?
+                   AND COALESCE(sm.user_read_at, '1000-01-01 00:00:00') <
+                       COALESCE((SELECT MAX(sr.created_at) FROM support_replies sr
+                                 WHERE sr.ticket_id = sm.id AND sr.author_role = 'admin'), '1000-01-01 00:00:00')
+                   AND COALESCE((SELECT MAX(sr.created_at) FROM support_replies sr
+                                 WHERE sr.ticket_id = sm.id AND sr.author_role = 'admin'), '1000-01-01 00:00:00') >
+                       COALESCE((SELECT MAX(sr.created_at) FROM support_replies sr
+                                 WHERE sr.ticket_id = sm.id AND sr.author_role = 'user'), sm.created_at)",
+                [$userId]
+            )->fetchColumn();
+        });
     }
 
     /** Mark a member's ticket read without changing the admin ticket status. */
@@ -120,6 +124,7 @@ class SupportMessage
             'UPDATE support_messages SET user_read_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
             [$ticketId, $userId]
         );
+        \App\Core\Cache::bump('support');
     }
 
     public static function replies(int $ticketId): array
@@ -141,6 +146,7 @@ class SupportMessage
         }
         Database::run('INSERT INTO support_replies (ticket_id, user_id, author_role, message) VALUES (?, ?, ?, ?)',
             [$ticketId, $userId, $role, $message]);
+        \App\Core\Cache::bump('support');
         return (int) Database::connection()->lastInsertId();
     }
 
