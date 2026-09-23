@@ -474,8 +474,10 @@ class AdminController extends Controller
         }
 
         // AI storage: the self-hosted Ollama model library (base + fine-tuned
-        // GGUF models) plus the site's uploaded LoRA adapters.
-        $ai = $this->dirSize(self::ollamaModelsDir()) + $this->dirSize($root . '/storage/training');
+        // GGUF models) plus the site's uploaded LoRA adapters. Falls back to
+        // the Ollama /api/tags sizes when the model dir is not readable by the
+        // web process, so the pie never silently shows 0.
+        $ai = $this->aiStorageBytes() + $this->dirSize($root . '/storage/training');
 
         $used = $total - $free;
         $os   = max(0, $used - $images - $videos - $backups - $db - $ai);
@@ -506,7 +508,7 @@ class AdminController extends Controller
         return $home . '/models';
     }
 
-    /** Total bytes of a directory tree, or 0 when it does not exist. */
+    /** Total bytes of a directory tree, or 0 when it does not exist/unreadable. */
     private static function dirSize(string $dir): float
     {
         if (!is_dir($dir)) {
@@ -514,15 +516,47 @@ class AdminController extends Controller
         }
 
         $size = 0.0;
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
-        );
-        foreach ($iterator as $file) {
-            if ($file->isFile()) {
-                $size += (float) $file->getSize();
+        try {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
+            );
+            foreach ($iterator as $file) {
+                if ($file->isFile()) {
+                    $size += (float) $file->getSize();
+                }
             }
+        } catch (\Throwable $error) {
+            return 0.0;
         }
 
         return $size;
+    }
+
+    /**
+     * Ollama model library size in bytes. Prefers summing the model dir; when
+     * that is not readable (permissions), falls back to the sum of model sizes
+     * reported by the Ollama /api/tags endpoint.
+     */
+    private function aiStorageBytes(): float
+    {
+        $dir = self::ollamaModelsDir();
+        $size = $this->dirSize($dir);
+        if ($size > 0) {
+            return $size;
+        }
+
+        $url = rtrim((string) env_value('OLLAMA_URL', 'http://127.0.0.1:11434'), '/') . '/api/tags';
+        [$status, , $body] = \App\Models\Http::request($url, ['method' => 'GET', 'timeout' => 5]);
+        if ($status < 200 || $status >= 300) {
+            return 0.0;
+        }
+
+        $data = json_decode((string) $body, true);
+        $total = 0.0;
+        foreach (($data['models'] ?? []) as $model) {
+            $total += (float) ($model['size'] ?? 0);
+        }
+
+        return $total;
     }
 }
