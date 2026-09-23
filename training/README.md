@@ -64,14 +64,37 @@ single-file names for backward compatibility).
      strings, no `ignore_merges`/`fuse_unk`, ByteLevel post-processor only.
    - `model-00001-of-00002.safetensors` + `model-00002-of-00002.safetensors`.
 4. Copy `training/chat_trainer.py` to `C:\ai\chat_trainer.py`.
-5. Copy `run_chat_trainer.bat` (sets `CHAT_BRIDGE_TOKEN`, paths, poll/training
-   params, restarts on exit) to `C:\ai\run_chat_trainer.bat`.
-6. Register the scheduled task so it starts at logon:
-   ```
-   schtasks /Create /TN "ChatTrainer" /TR "C:\ai\run_chat_trainer.bat" /SC ONLOGON /RL HIGHEST /F
-   ```
-7. Seed `C:\work\.chat_trainer_state.json` with `{"since_id": <max pair id>, "trained_pairs": 0}`
+5. Copy `training/trainer_control.py` to `C:\ai\trainer_control.py`.
+6. Copy `training/run_chat_trainer.bat` to `C:\ai\run_chat_trainer.bat`
+   (starts the control server, which supervises the trainer).
+7. Run `training/install_control.bat` once on the PC (or via RDP) — it
+   registers the `ChatTrainer` at-logon scheduled task and starts the server.
+8. Seed `C:\work\.chat_trainer_state.json` with `{"since_id": <max pair id>, "trained_pairs": 0}`
    so it does not re-train pairs the server has already processed.
+
+## Control UI (trainer_control.py)
+
+The training PC runs a small stdlib web server on **http://<pc-ip>:8790**
+(LAN reachable). It supervises `chat_trainer.py` as a child process and serves
+two views:
+
+- **Trainer panel** — live status (running/stopped/paused, last poll, since_id,
+  trained pairs, idle, phase) + **Pause / Resume / Stop / Restart AI / Train
+  now** buttons that actually work:
+  - Pause/Resume create/delete the pause file (training held, polling continues).
+  - Stop kills the trainer subprocess; the supervisor does **not** auto-respawn
+    while stopped.
+  - Restart AI kills + respawns the trainer with the current config.
+  - Train now sets a one-shot force-train marker (skips the idle check).
+- **Admin view** — edit every trainer setting (server URL, bridge token, model
+  dir, poll/min pairs, LoRA r/alpha/dropout, steps, LR, idle seconds, CPU
+  threads, file paths) and Save (restarts the trainer to apply), plus a
+  **Run at logon** toggle that registers/removes the scheduled task.
+
+Settings live in `C:\work\chat_trainer_config.json` (created on first start).
+The trainer reads `config file > env var > built-in default`, so the UI's Save
+actually changes behaviour. A `CONTROL_TOKEN` env var on `trainer_control.py`
+adds an `X-Control-Token` requirement (default: open on the LAN).
 
 ## Behavior
 

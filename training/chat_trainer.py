@@ -6,9 +6,10 @@ Fetches cleaned chat training pairs from the gallery server, trains a LoRA
 adapter on Llama-3.2-3B using HuggingFace transformers + PEFT (CPU-only),
 then uploads the adapter back to the server.
 
-The server rebuilds its Ollama fine-tuned model from the uploaded adapter
-(Modelfile ADAPTER directive), so the adapter is saved as adapter_model.
-safetensors and uploaded as chat-lora.safetensors.
+Managed by trainer_control.py (the web control server + supervisor). All
+settings are read from C:\\work\\chat_trainer_config.json (env vars and then
+built-in defaults are used as fallbacks when a key is missing), so the control
+UI's "Save" changes behaviour without editing the launcher .bat.
 
 Run continuously: poll every POLL_SECONDS, train when >= MIN_NEW_PAIRS new
 clean pairs have accumulated, upload the finished adapter.
@@ -23,37 +24,110 @@ import urllib.request
 import urllib.error
 
 # ------------------------------------------------------------------ config
-SERVER_BASE = os.environ.get("CHAT_SERVER", "https://amethyst2213.com/gallery")
-BRIDGE_TOKEN = os.environ.get("CHAT_BRIDGE_TOKEN", "REPLACE_WITH_GALLERY_CHAT_KEY")
-MODEL_DIR = os.environ.get("MODEL_DIR", r"D:\llama-3.2-3b-hf-ab")
-OUTPUT_ADAPTER = os.environ.get("OUTPUT_ADAPTER", r"C:\work\chat-lora.safetensors")
-POLL_SECONDS = int(os.environ.get("POLL_SECONDS", "600"))
-MIN_NEW_PAIRS = int(os.environ.get("MIN_NEW_PAIRS", "20"))
-STATE_FILE = os.environ.get("STATE_FILE", r"C:\work\.chat_trainer_state.json")
-MAX_PAIRS_PER_RUN = int(os.environ.get("MAX_PAIRS_PER_RUN", "2000"))
-LORA_R = int(os.environ.get("LORA_R", "8"))
-LORA_ALPHA = int(os.environ.get("LORA_ALPHA", "16"))
-MAX_LEN = int(os.environ.get("MAX_LEN", "512"))
-STEPS = int(os.environ.get("STEPS", "60"))
-LR = float(os.environ.get("LR", "2e-4"))
+DEFAULT_CONFIG = {
+    "server_base": "https://amethyst2213.com/gallery",
+    "bridge_token": "REPLACE_WITH_GALLERY_CHAT_KEY",
+    "model_dir": r"D:\llama-3.2-3b-hf-ab",
+    "output_adapter": r"C:\work\chat-lora.safetensors",
+    "poll_seconds": 600,
+    "min_new_pairs": 20,
+    "state_file": r"C:\work\.chat_trainer_state.json",
+    "max_pairs_per_run": 2000,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.05,
+    "max_len": 512,
+    "steps": 60,
+    "lr": 2e-4,
+    "required_idle_seconds": 300,
+    "cpu_threads": 0,
+    "pause_file": r"C:\work\.chat_trainer_paused",
+    "force_train_file": r"C:\work\.chat_trainer_train_now",
+    "log_file": r"C:\work\chat_trainer.log",
+    "status_file": r"C:\work\.chat_trainer_status.json",
+    "base_model": "llama3.2:3b",
+}
 
-# ---- sharing the PC with other work ---------------------------------------
-# The training PC is also used for other things, so training must not hog the
-# machine. Three knobs:
-#   REQUIRED_IDLE_SECONDS  seconds the PC must have been idle (no keyboard /
-#                          mouse input) before a training round may START.
-#                          Default 300 (5 min). Set 0 to disable the check.
-#   CPU_THREADS            how many cores torch may use. Default is half the
-#                          physical cores so other apps keep running smoothly.
-#   PAUSE_FILE             when this file exists, polling continues but no
-#                          training starts (drop a file to pause, delete it
-#                          to resume). Default C:\work\.chat_trainer_paused
-# If the machine becomes active while training is already running, the round
-# continues to completion (checkpointing mid-run is not practical) but the
-# next round waits for idle again.
-REQUIRED_IDLE_SECONDS = int(os.environ.get("REQUIRED_IDLE_SECONDS", "300"))
-CPU_THREADS = int(os.environ.get("CPU_THREADS", "0"))  # 0 = auto (half of physical)
-PAUSE_FILE = os.environ.get("PAUSE_FILE", r"C:\work\.chat_trainer_paused")
+ENV_MAP = {
+    "server_base": "CHAT_SERVER",
+    "bridge_token": "CHAT_BRIDGE_TOKEN",
+    "model_dir": "MODEL_DIR",
+    "output_adapter": "OUTPUT_ADAPTER",
+    "poll_seconds": "POLL_SECONDS",
+    "min_new_pairs": "MIN_NEW_PAIRS",
+    "state_file": "STATE_FILE",
+    "max_pairs_per_run": "MAX_PAIRS_PER_RUN",
+    "lora_r": "LORA_R",
+    "lora_alpha": "LORA_ALPHA",
+    "max_len": "MAX_LEN",
+    "steps": "STEPS",
+    "lr": "LR",
+    "required_idle_seconds": "REQUIRED_IDLE_SECONDS",
+    "cpu_threads": "CPU_THREADS",
+    "pause_file": "PAUSE_FILE",
+}
+
+CONFIG_FILE = os.environ.get("CHAT_TRAINER_CONFIG", r"C:\work\chat_trainer_config.json")
+
+
+def load_config() -> dict:
+    """Config precedence: config file > env var > built-in default."""
+    cfg = dict(DEFAULT_CONFIG)
+    data = {}
+    try:
+        if os.path.isfile(CONFIG_FILE):
+            with open(CONFIG_FILE, encoding="utf-8") as fh:
+                data = json.load(fh)
+            if not isinstance(data, dict):
+                data = {}
+    except Exception:
+        data = {}
+    cfg.update(data)
+
+    for key, env in ENV_MAP.items():
+        if env in os.environ and os.environ[env] != "":
+            cfg[key] = os.environ[env]
+
+    # Coerce numeric/bool types from strings (file or env).
+    for key in ("poll_seconds", "min_new_pairs", "max_pairs_per_run", "lora_r",
+                "lora_alpha", "lora_dropout", "max_len", "steps",
+                "required_idle_seconds", "cpu_threads"):
+        cfg[key] = _to_num(cfg.get(key))
+    cfg["lr"] = _to_num(cfg.get("lr"), float)
+    cfg["bridge_token"] = str(cfg.get("bridge_token", "")).strip()
+    return cfg
+
+
+def _to_num(value, cast=int):
+    try:
+        return cast(value)
+    except (TypeError, ValueError):
+        return cast(DEFAULT_CONFIG.get("poll_seconds", 600)) if cast is int else 2e-4
+
+
+CFG = load_config()
+
+SERVER_BASE = str(CFG["server_base"]).rstrip("/")
+BRIDGE_TOKEN = CFG["bridge_token"]
+MODEL_DIR = CFG["model_dir"]
+OUTPUT_ADAPTER = CFG["output_adapter"]
+POLL_SECONDS = CFG["poll_seconds"]
+MIN_NEW_PAIRS = CFG["min_new_pairs"]
+STATE_FILE = CFG["state_file"]
+MAX_PAIRS_PER_RUN = CFG["max_pairs_per_run"]
+LORA_R = CFG["lora_r"]
+LORA_ALPHA = CFG["lora_alpha"]
+LORA_DROPOUT = CFG["lora_dropout"]
+MAX_LEN = CFG["max_len"]
+STEPS = CFG["steps"]
+LR = CFG["lr"]
+REQUIRED_IDLE_SECONDS = CFG["required_idle_seconds"]
+CPU_THREADS = CFG["cpu_threads"]
+PAUSE_FILE = CFG["pause_file"]
+FORCE_TRAIN_FILE = CFG["force_train_file"]
+LOG_FILE = CFG["log_file"]
+STATUS_FILE = CFG["status_file"]
+BASE_MODEL = str(CFG["base_model"])
 
 # Populated by train_adapter(); sent to the server so the adapter directory is
 # self-contained (Ollama 0.33.x ADAPTER needs adapter_config.json + config.json).
@@ -77,6 +151,42 @@ BASE_CONFIG = {
     "tie_word_embeddings": True,
 }
 
+# ------------------------------------------------------------------ logging
+def _log(msg: str):
+    line = "[%s] %s" % (time.strftime("%Y-%m-%d %H:%M:%S"), msg)
+    print(line, flush=True)
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+    except Exception:
+        pass
+
+
+def write_status(extra: dict = None):
+    """Publish live state for the control UI (C:\\work\\.chat_trainer_status.json)."""
+    status = {
+        "pid": os.getpid(),
+        "running": True,
+        "paused": is_paused(),
+        "idle_seconds": idle_seconds(),
+        "last_poll_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "config_file": CONFIG_FILE,
+    }
+    try:
+        st = state()
+        status["since_id"] = int(st.get("since_id", 0))
+        status["trained_pairs"] = int(st.get("trained_pairs", 0))
+    except Exception:
+        pass
+    if isinstance(extra, dict):
+        status.update(extra)
+    try:
+        with open(STATUS_FILE, "w") as fh:
+            json.dump(status, fh)
+    except Exception:
+        pass
+
+
 # ------------------------------------------------------------------ helpers
 def idle_seconds() -> int:
     """Seconds since the last keyboard/mouse input (Windows). On non-Windows
@@ -97,19 +207,40 @@ def idle_seconds() -> int:
     except Exception:
         return 0
 
+
 def is_paused() -> bool:
     """True when the pause file exists (manual stop)."""
     return PAUSE_FILE != "" and os.path.exists(PAUSE_FILE)
+
+
+def force_train_requested() -> bool:
+    """True when the control UI asked for an immediate training round."""
+    return FORCE_TRAIN_FILE != "" and os.path.exists(FORCE_TRAIN_FILE)
+
+
+def consume_force_train() -> bool:
+    """Consume the force-train marker and return whether it was set."""
+    if FORCE_TRAIN_FILE and os.path.exists(FORCE_TRAIN_FILE):
+        try:
+            os.remove(FORCE_TRAIN_FILE)
+        except Exception:
+            pass
+        return True
+    return False
+
 
 def can_start_training() -> str:
     """Return '' when a training round may start now, else a reason string."""
     if is_paused():
         return "paused (pause file present)"
+    if force_train_requested():
+        return ""  # operator override: train now regardless of idle
     if REQUIRED_IDLE_SECONDS > 0:
         idle = idle_seconds()
         if idle < REQUIRED_IDLE_SECONDS:
             return "PC busy (idle %ds, need %ds)" % (idle, REQUIRED_IDLE_SECONDS)
     return ""
+
 
 def apply_cpu_budget():
     """Limit torch to CPU_THREADS cores (0 = half the physical cores), so
@@ -119,9 +250,10 @@ def apply_cpu_budget():
         physical = getattr(torch, "get_num_physical_cores", lambda: None)() or os.cpu_count() or 1
         threads = CPU_THREADS if CPU_THREADS > 0 else max(1, int(physical) // 2)
         torch.set_num_threads(threads)
-        print("[chat-trainer] torch threads = %d (physical %d)" % (threads, physical), flush=True)
+        _log("torch threads = %d (physical %d)" % (threads, physical))
     except Exception as e:
-        print("[chat-trainer] could not set torch threads: %s" % e, flush=True)
+        _log("could not set torch threads: %s" % e)
+
 
 def state() -> dict:
     try:
@@ -130,9 +262,11 @@ def state() -> dict:
     except Exception:
         return {"since_id": 0, "trained_pairs": 0}
 
+
 def save_state(st):
     with open(STATE_FILE, "w") as fh:
         json.dump(st, fh)
+
 
 def fetch_training_data(since_id: int):
     url = f"{SERVER_BASE}/webhooks/chat/training-data?since_id={since_id}"
@@ -149,23 +283,25 @@ def fetch_training_data(since_id: int):
                 continue
     return pairs
 
+
 JUNK_WORDS = {
     "test", "testing", "tests", "dbg", "dbg-test", "sup", "hi", "hello", "hey",
     "h", "asdf", "khgkghkjghkjhg", "hdjdjfjfj", "pic", "tits", "pussy",
 }
+
 
 def _is_junk(text: str) -> bool:
     """Heuristic junk filter: empty, tiny, or pure test/placeholder text."""
     t = text.strip().lower()
     if not t:
         return True
-    # single emoji / symbol-only replies
     if len(t) <= 2 and not t.isalnum():
         return True
     words = t.split()
     if len(words) <= 1 and (t in JUNK_WORDS or t.isdigit()):
         return True
     return False
+
 
 def build_training_records(pairs):
     """Convert pairs to list of {text: <chat-format>} records, dropping junk."""
@@ -187,16 +323,17 @@ def build_training_records(pairs):
         records.append({"text": text})
     return records
 
+
 def train_adapter(records, out_path):
     """Train a LoRA with transformers + PEFT on CPU. Returns True on success."""
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer
-    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+    from peft import LoraConfig, get_peft_model
     from datasets import Dataset
 
     apply_cpu_budget()
 
-    print(f"[chat-trainer] loading model from {MODEL_DIR}", flush=True)
+    _log("loading model from %s" % MODEL_DIR)
     tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -204,11 +341,11 @@ def train_adapter(records, out_path):
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_DIR, torch_dtype=torch.float32, low_cpu_mem_usage=True
     )
-    print("[chat-trainer] model loaded, params=", model.num_parameters(), flush=True)
+    _log("model loaded, params=%s" % model.num_parameters())
 
     peft_config = LoraConfig(
         r=LORA_R, lora_alpha=LORA_ALPHA, target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
-        lora_dropout=0.05, bias="none", task_type="CAUSAL_LM",
+        lora_dropout=LORA_DROPOUT, bias="none", task_type="CAUSAL_LM",
     )
     model = get_peft_model(model, peft_config)
     model.print_trainable_parameters()
@@ -244,11 +381,10 @@ def train_adapter(records, out_path):
     import shutil
     src = r"C:\work\peft-out\final\adapter_model.safetensors"
     if not os.path.isfile(src):
-        print("[chat-trainer] adapter_model.safetensors not found", flush=True)
+        _log("adapter_model.safetensors not found")
         return False
     shutil.copyfile(src, out_path)
 
-    # Read the PEFT metadata for the server webhook (adapter_config.json).
     global ADAPTER_CONFIG_JSON, BASE_CONFIG_JSON
     try:
         with open(r"C:\work\peft-out\final\adapter_config.json", encoding="utf-8") as fh:
@@ -256,8 +392,9 @@ def train_adapter(records, out_path):
     except Exception:
         ADAPTER_CONFIG_JSON = ""
     BASE_CONFIG_JSON = json.dumps(BASE_CONFIG)
-    print(f"[chat-trainer] adapter saved to {out_path}", flush=True)
+    _log("adapter saved to %s" % out_path)
     return True
+
 
 def upload_adapter(path: str, base_model: str, pair_count: int) -> bool:
     boundary = "----chatform-" + hashlib.md5(str(time.time()).encode()).hexdigest()
@@ -294,59 +431,68 @@ def upload_adapter(path: str, base_model: str, pair_count: int) -> bool:
     try:
         with urllib.request.urlopen(req, timeout=180) as resp:
             result = json.loads(resp.read().decode("utf-8"))
-            print(f"[chat-trainer] upload result: {result}", flush=True)
+            _log("upload result: %s" % result)
             return bool(result.get("ok"))
     except urllib.error.HTTPError as e:
-        print(f"[chat-trainer] upload HTTP {e.code}: {e.read().decode('utf-8', 'ignore')}", flush=True)
+        _log("upload HTTP %s: %s" % (e.code, e.read().decode("utf-8", "ignore")))
         return False
+
 
 # ------------------------------------------------------------------ main loop
 def main():
     if BRIDGE_TOKEN.startswith("REPLACE_WITH"):
-        print("[chat-trainer] CHAT_BRIDGE_TOKEN not set - edit or export it.", flush=True)
+        _log("CHAT_BRIDGE_TOKEN not set - edit the control UI or config file.")
         sys.exit(1)
 
-    print(f"[chat-trainer] starting (server={SERVER_BASE}, poll={POLL_SECONDS}s, min_pairs={MIN_NEW_PAIRS})", flush=True)
-    print(f"[chat-trainer] sharing PC: require_idle={REQUIRED_IDLE_SECONDS}s, pause_file={PAUSE_FILE or '(none)'}", flush=True)
+    _log("starting (server=%s, poll=%ds, min_pairs=%d)" % (SERVER_BASE, POLL_SECONDS, MIN_NEW_PAIRS))
+    _log("sharing PC: require_idle=%ds, pause_file=%s" % (REQUIRED_IDLE_SECONDS, PAUSE_FILE or "(none)"))
 
     while True:
         try:
             st = state()
             since = int(st.get("since_id", 0))
             pairs = fetch_training_data(since)
-            print(f"[chat-trainer] fetched {len(pairs)} new pair(s) since id {since}", flush=True)
+            _log("fetched %d new pair(s) since id %d" % (len(pairs), since))
+            write_status({"last_poll": len(pairs)})
 
             if len(pairs) >= MIN_NEW_PAIRS:
-                # Respect the shared PC: don't start a multi-hour CPU run while
-                # the operator is actively using the machine or has paused it.
                 blocked = can_start_training()
                 if blocked:
-                    print(f"[chat-trainer] deferring training ({blocked}); pairs kept", flush=True)
+                    _log("deferring training (%s); pairs kept" % blocked)
+                    write_status({"defer_reason": blocked})
                     time.sleep(POLL_SECONDS)
                     continue
 
+                forced = consume_force_train()
                 batch = pairs[:MAX_PAIRS_PER_RUN]
                 records = build_training_records(batch)
-                print(f"[chat-trainer] training on {len(records)} records", flush=True)
+                _log("training on %d records%s" % (len(records), " (operator force-train)" if forced else ""))
+                write_status({"phase": "training", "records": len(records)})
 
                 if train_adapter(records, OUTPUT_ADAPTER):
-                    if upload_adapter(OUTPUT_ADAPTER, "llama3.2:3b", len(batch)):
+                    if upload_adapter(OUTPUT_ADAPTER, BASE_MODEL, len(batch)):
                         st["since_id"] = int(batch[-1]["id"]) if batch else since
                         st["trained_pairs"] = int(st.get("trained_pairs", 0)) + len(batch)
                         save_state(st)
-                        print(f"[chat-trainer] trained + uploaded {len(batch)} pairs", flush=True)
+                        _log("trained + uploaded %d pairs" % len(batch))
+                        write_status({"phase": "idle", "last_train": len(batch)})
                     else:
-                        print("[chat-trainer] training ok but upload failed; retrying next poll", flush=True)
+                        _log("training ok but upload failed; retrying next poll")
+                        write_status({"phase": "idle", "upload_failed": True})
                 else:
-                    print("[chat-trainer] training failed; keeping pairs for retry", flush=True)
+                    _log("training failed; keeping pairs for retry")
+                    write_status({"phase": "idle", "train_failed": True})
             else:
-                print(f"[chat-trainer] only {len(pairs)} pair(s) - need {MIN_NEW_PAIRS}; waiting", flush=True)
+                _log("only %d pair(s) - need %d; waiting" % (len(pairs), MIN_NEW_PAIRS))
+                write_status({"phase": "idle"})
         except Exception as e:
             import traceback
-            print(f"[chat-trainer] error: {e}", flush=True)
+            _log("error: %s" % e)
             traceback.print_exc()
+            write_status({"phase": "error", "error": str(e)})
 
         time.sleep(POLL_SECONDS)
+
 
 if __name__ == "__main__":
     main()
