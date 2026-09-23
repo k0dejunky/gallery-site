@@ -125,6 +125,26 @@ The training PC is used for other things, so training yields to interactive use:
 These are controlled via env vars in `run_chat_trainer.bat`
 (`REQUIRED_IDLE_SECONDS`, `CPU_THREADS`, `PAUSE_FILE`).
 
+## Desktop GUI (ChatTrainerUI.exe)
+
+A native Windows GUI that mirrors the web UI, built with Tkinter and packaged
+with PyInstaller. It talks to the control server over localhost (`:8790`) so it
+works even if the box's firewall blocks the LAN.
+
+- **Trainer tab** — live status + working **Pause / Resume / Stop / Restart AI /
+  Train now** buttons, and a scrolling log tail.
+- **Admin tab** — edit every trainer setting and Save (restarts the trainer to
+  apply), plus the run-at-logon toggle.
+
+Installed on the training PC as `C:\ai\dist\ChatTrainerUI.exe` with a
+**"Chat Trainer"** desktop shortcut (purple chat icon). Rebuild after changing
+`trainer_gui.py`:
+
+```bat
+copy trainer_gui.py trainer_gui.spec trainer.ico C:\ai\
+C:\ai\build_ui.bat          :: or: C:\Python38\python.exe -m PyInstaller --clean trainer_gui.spec
+```
+
 ## Windows-specific notes
 
 - The Phenom II has no AVX2 and no SMT; the trainer uses all 6 physical cores
