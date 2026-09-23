@@ -433,7 +433,7 @@ class AdminController extends Controller
         $free  = @disk_free_space($root);
 
         if ($total === false || $free === false) {
-            return ['total' => 0, 'free' => 0, 'images' => 0, 'videos' => 0, 'db' => 0, 'os' => 0];
+            return ['total' => 0, 'free' => 0, 'images' => 0, 'videos' => 0, 'db' => 0, 'ai' => 0, 'os' => 0];
         }
 
         $uploads = (string) config('app.uploads.dir');
@@ -473,8 +473,12 @@ class AdminController extends Controller
             )->fetchColumn();
         }
 
+        // AI storage: the self-hosted Ollama model library (base + fine-tuned
+        // GGUF models) plus the site's uploaded LoRA adapters.
+        $ai = $this->dirSize(self::ollamaModelsDir()) + $this->dirSize($root . '/storage/training');
+
         $used = $total - $free;
-        $os   = max(0, $used - $images - $videos - $backups - $db);
+        $os   = max(0, $used - $images - $videos - $backups - $db - $ai);
 
         return [
             'total'   => (float) $total,
@@ -483,7 +487,42 @@ class AdminController extends Controller
             'videos'  => (float) $videos,
             'backups' => $backups,
             'db'      => (float) $db,
+            'ai'      => (float) $ai,
             'os'      => (float) $os,
         ];
+    }
+
+    /**
+     * The Ollama model library directory (defaults to the standard home used
+     * by the install script; override with OLLAMA_HOME in .env).
+     */
+    private static function ollamaModelsDir(): string
+    {
+        $home = (string) env_value('OLLAMA_HOME', '');
+        if ($home === '') {
+            $home = is_dir('/usr/share/ollama/.ollama') ? '/usr/share/ollama/.ollama' : '/root/.ollama';
+        }
+
+        return $home . '/models';
+    }
+
+    /** Total bytes of a directory tree, or 0 when it does not exist. */
+    private static function dirSize(string $dir): float
+    {
+        if (!is_dir($dir)) {
+            return 0.0;
+        }
+
+        $size = 0.0;
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($iterator as $file) {
+            if ($file->isFile()) {
+                $size += (float) $file->getSize();
+            }
+        }
+
+        return $size;
     }
 }
