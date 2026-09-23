@@ -1021,7 +1021,13 @@ class GalleryController extends Controller
                 continue;
             }
 
-            $dest = $config['dir'] . '/' . $filename;
+            // Staged files carry a "pending_" tracking prefix. Strip it so the
+            // committed photo (and its thumb_/web_ variants) is stored with a
+            // clean filename; keep the prefix's uniqueness by reusing the rest
+            // of the generated name.
+            $finalName = preg_replace('/^pending_/', '', $filename);
+
+            $dest = $config['dir'] . '/' . $finalName;
 
             if (!rename($source, $dest)) {
                 continue;
@@ -1030,11 +1036,11 @@ class GalleryController extends Controller
             foreach (['thumb_', 'web_'] as $prefix) {
                 $variant = $dir . '/' . $prefix . $filename;
                 if (is_file($variant)) {
-                    rename($variant, $config['dir'] . '/' . $prefix . $filename);
+                    rename($variant, $config['dir'] . '/' . $prefix . $finalName);
                 }
             }
 
-            $photoId = Photo::create($filename, $hash);
+            $photoId = Photo::create($finalName, $hash);
             Gallery::attachPhoto($galleryId, $photoId);
             $added++;
         }
