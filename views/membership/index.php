@@ -92,7 +92,7 @@
     <?php if (empty($plans)): ?>
         <p class="muted" style="text-align:center; order:7;">No plans are available right now. Please check back soon.</p>
     <?php else: ?>
-        <?php $silverPlanId = 0; foreach ($plans as $candidatePlan) { if (strtolower((string) ($candidatePlan['slug'] ?? $candidatePlan['name'])) === 'silver') { $silverPlanId = (int) $candidatePlan['id']; break; } } $goldPlanId = 0; foreach ($plans as $candidatePlan) { if (strtolower((string) ($candidatePlan['slug'] ?? $candidatePlan['name'])) === 'gold') { $goldPlanId = (int) $candidatePlan['id']; break; } } $platinumPlanId = 0; foreach ($plans as $candidatePlan) { if (strtolower((string) ($candidatePlan['slug'] ?? $candidatePlan['name'])) === 'platinum') { $platinumPlanId = (int) $candidatePlan['id']; break; } } ?>
+        <?php $silverPlanId = 0; foreach ($plans as $candidatePlan) { if (strtolower((string) ($candidatePlan['slug'] ?? $candidatePlan['name'])) === 'silver') { $silverPlanId = (int) $candidatePlan['id']; break; } } $goldPlanId = 0; foreach ($plans as $candidatePlan) { if (strtolower((string) ($candidatePlan['slug'] ?? $candidatePlan['name'])) === 'gold') { $goldPlanId = (int) $candidatePlan['id']; break; } } $platinumPlanId = 0; foreach ($plans as $candidatePlan) { if (strtolower((string) ($candidatePlan['slug'] ?? $candidatePlan['name'])) === 'platinum') { $platinumPlanId = (int) $candidatePlan['id']; break; } } $chatPlanId = 0; foreach ($plans as $candidatePlan) { if (strtolower((string) ($candidatePlan['slug'] ?? $candidatePlan['name'])) === 'chat-add-on') { $chatPlanId = (int) $candidatePlan['id']; break; } } ?>
         <?php
         // PayPal JS SDK: when the PayPal processor is in test mode we use the
         // sandbox client id and a single sandbox subscription plan, so real
@@ -110,6 +110,7 @@
         $paypalSilverPlan    = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-2EE95782UN3086035NKHSZ4A';
         $paypalGoldPlan      = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-61A81431CY9628522NKINSBY';
         $paypalPlatinumPlan  = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-61D79162UG274461KNKIY55I';
+        $paypalChatPlan      = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-8W950200CP3643916NK2AXBI';
         $paypalContainerBase = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : '';
         // Plan display names sent to PayPal as the subscription's custom_id,
         // so the buyer and the PayPal webhook can identify which plan a
@@ -117,11 +118,13 @@
         $paypalSilverName   = '';
         $paypalGoldName     = '';
         $paypalPlatinumName = '';
+        $paypalChatName     = '';
         foreach ($plans as $candidatePlan) {
             $__slug = strtolower((string) ($candidatePlan['slug'] ?? $candidatePlan['name']));
-            if ($__slug === 'silver')    { $paypalSilverName   = (string) ($candidatePlan['name'] ?? ''); }
-            if ($__slug === 'gold')      { $paypalGoldName     = (string) ($candidatePlan['name'] ?? ''); }
-            if ($__slug === 'platinum')  { $paypalPlatinumName = (string) ($candidatePlan['name'] ?? ''); }
+            if ($__slug === 'silver')      { $paypalSilverName   = (string) ($candidatePlan['name'] ?? ''); }
+            if ($__slug === 'gold')        { $paypalGoldName     = (string) ($candidatePlan['name'] ?? ''); }
+            if ($__slug === 'platinum')    { $paypalPlatinumName = (string) ($candidatePlan['name'] ?? ''); }
+            if ($__slug === 'chat-add-on') { $paypalChatName     = (string) ($candidatePlan['name'] ?? ''); }
         }
         ?>
         <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); order:7;">
@@ -165,6 +168,11 @@
                         <div style="order:2;">
                             <div id="paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-platinum' : 'P-61D79162UG274461KNKIY55I') ?>"></div>
                             <input type="hidden" name="_token" value="<?= e(\App\Core\Csrf::token()) ?>" data-paypal-csrf-platinum>
+                        </div>
+                    <?php elseif (strtolower((string) ($plan['slug'] ?? $plan['name'])) === 'chat-add-on'): ?>
+                        <div style="order:2;">
+                            <div id="paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-chat' : 'P-8W950200CP3643916NK2AXBI') ?>"></div>
+                            <input type="hidden" name="_token" value="<?= e(\App\Core\Csrf::token()) ?>" data-paypal-csrf-chat>
                         </div>
                     <?php else: ?>
                         <form method="post" action="<?= url('/membership/subscribe') ?>" style="order:2;" id="subForm_<?= (int) $plan['id'] ?>">
@@ -279,6 +287,34 @@
                     .catch(function () { alert('We could not record your subscription. Please contact support.'); });
             }
         }).render('#paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-platinum' : 'P-61D79162UG274461KNKIY55I') ?>');
+    }());
+    </script>
+
+    <script>
+    (function () {
+        var chatBtn = document.getElementById('paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-chat' : 'P-8W950200CP3643916NK2AXBI') ?>');
+        if (!chatBtn || !window.paypal) return;
+        paypal.Buttons({
+            style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe' },
+            createSubscription: function (data, actions) {
+                return actions.subscription.create({ plan_id: '<?= e($paypalChatPlan) ?>', custom_id: '<?= e($paypalChatName) ?>' });
+            },
+            onApprove: function (data) {
+                var token = document.querySelector('[data-paypal-csrf-chat]');
+                var body = new URLSearchParams({
+                    _token: token ? token.value : '',
+                    plan_id: '<?= $chatPlanId ?>',
+                    paypal_subscription_id: data.subscriptionID || ''
+                });
+                fetch('<?= url('/membership/paypal-approve') ?>', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: body })
+                    .then(function (response) { return response.json(); })
+                    .then(function (result) {
+                        if (result.ok) window.location.href = '<?= url('/membership/my') ?>';
+                        else alert(result.error || 'We could not record your subscription. Please contact support.');
+                    })
+                    .catch(function () { alert('We could not record your subscription. Please contact support.'); });
+            }
+        }).render('#paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-chat' : 'P-8W950200CP3643916NK2AXBI') ?>');
     }());
     </script>
 

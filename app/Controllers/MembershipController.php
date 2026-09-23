@@ -345,7 +345,7 @@ class MembershipController extends Controller
         $paypalId = trim((string) $this->request->post('paypal_subscription_id', ''));
 
         $planSlug = strtolower((string) ($plan['slug'] ?? $plan['name']));
-        if ($plan === null || !in_array($planSlug, ['silver', 'gold'], true)
+        if ($plan === null || !in_array($planSlug, ['silver', 'gold', 'platinum', 'chat-add-on'], true)
             || !preg_match('/\A[A-Za-z0-9_-]{6,100}\z/', $paypalId)) {
             http_response_code(400);
             echo json_encode(['ok' => false, 'error' => 'Invalid PayPal subscription.']);
