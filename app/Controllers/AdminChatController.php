@@ -536,6 +536,32 @@ class AdminChatController extends Controller
         $this->redirect('/admin/chat');
     }
 
+    /**
+     * JSON for the admin chat page: how many cleaned pairs are waiting to be
+     * trained (beyond the trainer's reported watermark), plus totals. Polled
+     * by the page so the number updates live as pairs are added/trained.
+     */
+    public function trainingCountJson(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        $sinceId = \App\Core\ChatSettings::trainerSinceId();
+        $waiting = (int) Database::run(
+            'SELECT COUNT(*) FROM chat_training_pairs WHERE cleaned = 1 AND id > ?',
+            [$sinceId]
+        )->fetchColumn();
+        $cleaned = (int) Database::run('SELECT COUNT(*) FROM chat_training_pairs WHERE cleaned = 1')->fetchColumn();
+        $uncleaned = (int) Database::run('SELECT COUNT(*) FROM chat_training_pairs WHERE cleaned = 0')->fetchColumn();
+
+        echo json_encode([
+            'ok' => true,
+            'waiting' => $waiting,
+            'cleaned' => $cleaned,
+            'uncleaned' => $uncleaned,
+            'since_id' => $sinceId,
+        ]);
+    }
+
     /** Write the cleaned training export (JSONL) ready for the training PC. */
     public function exportTraining(): void
     {

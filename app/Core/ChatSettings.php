@@ -32,6 +32,7 @@ class ChatSettings
             'model'            => ChatModel::BASE,
             'finetuned_model'  => ChatModel::FINETUNED,
             'finetuned'        => [],
+            'trainer_since_id' => 0,
         ];
 
         if (!is_array($data)) {
@@ -60,5 +61,22 @@ class ChatSettings
     public static function dailyMessage(): string
     {
         return (string) (self::all()['daily_message'] ?? '');
+    }
+
+    /**
+     * The trainer's last-reported watermark: the highest chat_training_pairs id
+     * the training PC has consumed (trained). Pairs with a higher id are
+     * "waiting to be trained".
+     */
+    public static function trainerSinceId(): int
+    {
+        return (int) (self::all()['trainer_since_id'] ?? 0);
+    }
+
+    public static function setTrainerSinceId(int $sinceId): void
+    {
+        $state = self::all();
+        $state['trainer_since_id'] = max(0, $sinceId);
+        self::save($state);
     }
 }

@@ -6,6 +6,7 @@
         <span class="muted" style="font-size:.85rem;">
             AI master switch: <strong><?= !empty($state['ai_enabled']) ? 'ON' : 'OFF' ?></strong> &middot;
             Training: <strong><?= (int) ($trainingCount ?? 0) ?></strong> pairs (<?= (int) ($cleanedCount ?? 0) ?> cleaned) &middot;
+            <span id="waiting-badge">Waiting to be trained: <strong>…</strong></span> &middot;
             <?php if (!empty($ai['hasBase'])): ?>AI base online<?php else: ?>AI base <span style="color:var(--danger,#c62828);">offline</span><?php endif; ?>
             <?php if (!empty($ai['hasFine'])): ?> &middot; fine-tuned loaded (<?= e((string) $finetunedModel) ?>)<?php elseif (!empty($adapterInstalled)): ?> &middot; adapter installed — model <span style="color:var(--danger,#c62828);">not built yet</span><?php else: ?> &middot; no adapter installed (retrieval mode only)<?php endif; ?>
         </span>
@@ -70,7 +71,27 @@
                                     <?= csrf_field() ?>
                                     <button type="submit" class="btn btn-sm btn-danger">Revoke</button>
                                 </form>
-                            <?php endif; ?>
+<?php endif; ?>
+
+<script>
+(function () {
+    var badge = document.getElementById('waiting-badge');
+    if (!badge) return;
+    function refresh() {
+        fetch('<?= url('/admin/chat/training-count') ?>', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d || !d.ok) return;
+                var n = d.waiting;
+                badge.innerHTML = 'Waiting to be trained: <strong style="color:' +
+                    (n > 0 ? 'var(--warn,#ffb454)' : 'var(--ok,#3ddc84)') + '">' + n + '</strong>';
+            })
+            .catch(function () {});
+    }
+    refresh();
+    setInterval(refresh, 5000);
+})();
+</script>
                         </td>
                     </tr>
                 <?php endforeach; ?>

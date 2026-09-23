@@ -612,6 +612,46 @@ class ChatBridgeController extends Controller
         }
     }
 
+    /**
+     * The training PC reports its watermark (highest consumed pair id) every
+     * poll. The server stores it so the admin page can show how many pairs
+     * are waiting to be trained. Pairs beyond this id and cleaned=1 are
+     * "waiting".
+     */
+    public function trainingProgress(): void
+    {
+        $data = json_decode($this->rawBody(), true);
+        if (!is_array($data)) {
+            $data = [];
+        }
+        $sinceId = max(0, (int) ($data['since_id'] ?? $this->request->post('since_id', 0)));
+        \App\Core\ChatSettings::setTrainerSinceId($sinceId);
+
+        $this->json(['ok' => true, 'since_id' => $sinceId]);
+    }
+
+    /**
+     * Count cleaned training pairs still waiting to be trained (id greater
+     * than the reported trainer watermark). Used by the admin page and the
+     * desktop trainer UI to show live "waiting to be trained" numbers.
+     */
+    public function trainingCount(): void
+    {
+        $sinceId = max(0, (int) $this->request->query('since_id', \App\Core\ChatSettings::trainerSinceId()));
+        $waiting = (int) \App\Core\Database::run(
+            'SELECT COUNT(*) FROM chat_training_pairs WHERE cleaned = 1 AND id > ?',
+            [$sinceId]
+        )->fetchColumn();
+        $total = (int) \App\Core\Database::run('SELECT COUNT(*) FROM chat_training_pairs WHERE cleaned = 1')->fetchColumn();
+
+        $this->json([
+            'ok' => true,
+            'since_id' => $sinceId,
+            'waiting' => $waiting,
+            'cleaned' => $total,
+        ]);
+    }
+
     /** Accept an uploaded trained adapter + metadata; verify checksum. */
     public function trainingUpload(): void
     {

@@ -81,6 +81,8 @@ return [
     ['GET', '/webhooks/chat/context', 'ChatBridgeController@context'],
     ['GET', '/webhooks/chat/training-data', 'ChatBridgeController@trainingData'],
     ['POST', '/webhooks/chat/training-upload', 'ChatBridgeController@trainingUpload'],
+    ['POST', '/webhooks/chat/training-progress', 'ChatBridgeController@trainingProgress'],
+    ['GET', '/webhooks/chat/training-count', 'ChatBridgeController@trainingCount'],
 
     // Admin
     // GET /admin is the admin entry point: it renders the login form for
@@ -221,6 +223,7 @@ return [
     ['POST', '/admin/chat/daily-broadcast/{id}/send', 'AdminChatController@runDailyBroadcast', 'chat'],
     ['POST', '/admin/chat/daily-broadcast/{id}/cancel', 'AdminChatController@cancelDailyBroadcast', 'chat'],
     ['POST', '/admin/chat/export-training', 'AdminChatController@exportTraining', 'chat'],
+    ['GET', '/admin/chat/training-count', 'AdminChatController@trainingCountJson', 'chat'],
     ['POST', '/admin/chat/import-training', 'AdminChatController@importTraining', 'chat'],
     ['POST', '/admin/chat/tokens', 'AdminChatController@createToken', 'chat'],
     ['POST', '/admin/chat/tokens/{id}/revoke', 'AdminChatController@revokeToken', 'chat'],

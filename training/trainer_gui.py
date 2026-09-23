@@ -132,8 +132,9 @@ class TrainerGUI:
         mf.pack(fill="x", pady=(0, 10))
         self.metrics = {}
         names = [("last_poll", "Last poll"), ("since_id", "Since id"),
-                 ("trained_pairs", "Trained pairs"), ("idle", "Idle"),
-                 ("phase", "Phase"), ("autostart", "Run at logon")]
+                 ("trained_pairs", "Trained pairs"), ("waiting", "Waiting to train"),
+                 ("idle", "Idle"), ("phase", "Phase"),
+                 ("autostart", "Run at logon")]
         for i, (key, label) in enumerate(names):
             # Plain tk.Frame: ttk.Frame rejects borderwidth/relief/bg.
             cell = tk.Frame(mf, bg=CARD, borderwidth=1, relief="solid", padx=8, pady=6)
@@ -364,6 +365,15 @@ class TrainerGUI:
         self.metrics["idle"].config(text=t.get("idle_seconds", "—"))
         self.metrics["phase"].config(text=t.get("phase") or "—")
         self.metrics["autostart"].config(text="on" if s.get("autostart") else "off")
+
+        # pairs waiting to be trained (from the site, via the control server)
+        p = s.get("pending") or {}
+        waiting = p.get("waiting")
+        if waiting is None:
+            self.metrics["waiting"].config(text="—")
+        else:
+            color = OK if int(waiting) <= 0 else WARN
+            self.metrics["waiting"].config(text=str(waiting), foreground=color)
 
         # training-run progress from the trainer's live status
         progress = t.get("progress") or {}

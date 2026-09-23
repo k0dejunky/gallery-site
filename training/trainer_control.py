@@ -28,6 +28,8 @@ import os
 import subprocess
 import sys
 import time
+import urllib.request
+import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # ------------------------------------------------------------------ config
@@ -154,6 +156,44 @@ def read_config_file() -> dict:
 def write_config_file(cfg: dict):
     with open(CONFIG_FILE, "w", encoding="utf-8") as fh:
         json.dump(cfg, fh, indent=2, ensure_ascii=False)
+
+
+_pending_cache = {"at": 0, "value": None}
+
+
+def pending_count() -> dict:
+    """How many cleaned pairs are waiting to be trained, from the site's
+    training-count webhook (bearer). Cached ~10s so the GUI doesn't hammer
+    the server. Returns {waiting, cleaned, since_id} or {} on failure."""
+    now = time.time()
+    if _pending_cache["value"] is not None and now - _pending_cache["at"] < 10:
+        return _pending_cache["value"]
+    cfg = read_config_file()
+    base = str(cfg.get("server_base", "")).rstrip("/")
+    token = str(cfg.get("bridge_token", "")).strip()
+    if not base or not token:
+        return {}
+    try:
+        url = base + "/webhooks/chat/training-count?since_id=%d" % int(cfg.get("trainer_since_id") or 0)
+        # prefer the trainer's actual consumed watermark from its state file
+        state_path = str(cfg.get("state_file", r"C:\work\.chat_trainer_state.json"))
+        try:
+            if os.path.isfile(state_path):
+                with open(state_path) as fh:
+                    st = json.load(fh)
+                url = base + "/webhooks/chat/training-count?since_id=%d" % int(st.get("since_id", 0))
+        except Exception:
+            pass
+        req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        out = {"waiting": int(data.get("waiting", 0)),
+               "cleaned": int(data.get("cleaned", 0)),
+               "since_id": int(data.get("since_id", 0))}
+        _pending_cache.update({"at": now, "value": out})
+        return out
+    except Exception:
+        return {}
 
 
 def public_config() -> dict:
@@ -343,6 +383,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             status["trainer"] = None
         status["autostart"] = autostart_status().get("autostart", False)
+        status["pending"] = pending_count()
         return {"ok": True, "status": status}
 
     def log_tail(self):
