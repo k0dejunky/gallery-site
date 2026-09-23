@@ -187,6 +187,44 @@ def write_status(extra: dict = None):
         pass
 
 
+class ProgressCallback:
+    """Report live LoRA training progress (step/total/loss) into the status
+    file so the desktop UI can show a real progress bar."""
+
+    def __init__(self):
+        self.total = 0
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        self.total = int(getattr(state, "max_steps", 0) or 0)
+        write_status({"phase": "training", "progress": {"step": 0, "total": self.total, "pct": 0.0, "loss": None}})
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        step = int(getattr(state, "global_step", 0) or 0)
+        loss = None
+        if isinstance(logs, dict):
+            loss = logs.get("loss") or logs.get("train_loss")
+            if loss is not None:
+                try:
+                    loss = float(loss)
+                except (TypeError, ValueError):
+                    loss = None
+        total = self.total or int(getattr(state, "max_steps", 0) or 0)
+        pct = (step / total) if total else 0.0
+        write_status({
+            "phase": "training",
+            "progress": {"step": step, "total": total, "pct": pct, "loss": loss},
+        })
+
+    def on_step_end(self, args, state, control, **kwargs):
+        step = int(getattr(state, "global_step", 0) or 0)
+        total = self.total or int(getattr(state, "max_steps", 0) or 0)
+        pct = (step / total) if total else 0.0
+        write_status({
+            "phase": "training",
+            "progress": {"step": step, "total": total, "pct": pct, "loss": None},
+        })
+
+
 # ------------------------------------------------------------------ helpers
 def idle_seconds() -> int:
     """Seconds since the last keyboard/mouse input (Windows). On non-Windows
@@ -372,8 +410,9 @@ def train_adapter(records, out_path):
         use_cpu=True,
         dataloader_pin_memory=False,
     )
-    trainer = Trainer(model=model, args=args, train_dataset=ds)
+    trainer = Trainer(model=model, args=args, train_dataset=ds, callbacks=[ProgressCallback()])
     trainer.train()
+    write_status({"phase": "idle", "progress": None})
 
     model.save_pretrained(r"C:\work\peft-out\final")
     tokenizer.save_pretrained(r"C:\work\peft-out\final")

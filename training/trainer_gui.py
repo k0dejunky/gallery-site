@@ -135,17 +135,14 @@ class TrainerGUI:
                  ("trained_pairs", "Trained pairs"), ("idle", "Idle"),
                  ("phase", "Phase"), ("autostart", "Run at logon")]
         for i, (key, label) in enumerate(names):
-            cell = ttk.Frame(mf, padding=8)
+            # Plain tk.Frame: ttk.Frame rejects borderwidth/relief/bg.
+            cell = tk.Frame(mf, bg=CARD, borderwidth=1, relief="solid", padx=8, pady=6)
             cell.grid(row=0, column=i, padx=4, sticky="nsew")
-            cell.configure(style="TFrame", borderwidth=1, relief="solid")
-            # use a plain tk frame for border colour on the card
             cell_lbl = tk.Label(cell, text=label, bg=CARD, fg=MUT, font=("Segoe UI", 8))
             cell_lbl.pack(anchor="w")
             cell_val = tk.Label(cell, text="—", bg=CARD, fg=FG, font=("Segoe UI", 13, "bold"))
             cell_val.pack(anchor="w")
             self.metrics[key] = cell_val
-            cell.config(bg=CARD)
-            cell_lbl.config(bg=CARD)
         for c in range(len(names)):
             mf.grid_columnconfigure(c, weight=1)
 
@@ -167,9 +164,23 @@ class TrainerGUI:
         self.btn_trainnow = ttk.Button(bf, text="Train now", command=lambda: self.action("train-now"))
         self.btn_trainnow.pack(side="left")
 
+        # training-run progress
+        pcard = tk.Frame(f, bg=CARD, borderwidth=1, relief="solid", padx=10, pady=8)
+        pcard.pack(fill="x", pady=(0, 10))
+        prow = tk.Frame(pcard, bg=CARD)
+        prow.pack(fill="x")
+        self.prog_lbl = tk.Label(prow, text="Training progress", bg=CARD, fg=MUT, font=("Segoe UI", 8))
+        self.prog_lbl.pack(side="left")
+        self.prog_pct = tk.Label(prow, text="—", bg=CARD, fg=FG, font=("Segoe UI", 10, "bold"))
+        self.prog_pct.pack(side="right")
+        self.progress = ttk.Progressbar(pcard, maximum=100, value=0)
+        self.progress.pack(fill="x", pady=(6, 0))
+        self.prog_detail = tk.Label(pcard, text="", bg=CARD, fg=MUT, font=("Segoe UI", 9))
+        self.prog_detail.pack(anchor="w", pady=(4, 0))
+
         # unreachable banner + start server
         self.banner = ttk.Frame(f)
-        self.banner_lbl = ttk.Label(self.banner, text="Control server not reachable.", foreground=ERR, background=CARD)
+        self.banner_lbl = tk.Label(self.banner, text="Control server not reachable.", fg=ERR, bg=CARD)
         self.banner_lbl.pack(side="left", padx=(0, 8))
         self.btn_startserver = ttk.Button(self.banner, text="Start server", command=self.start_server)
         self.btn_startserver.pack(side="left")
@@ -354,6 +365,27 @@ class TrainerGUI:
         self.metrics["phase"].config(text=t.get("phase") or "—")
         self.metrics["autostart"].config(text="on" if s.get("autostart") else "off")
 
+        # training-run progress from the trainer's live status
+        progress = t.get("progress") or {}
+        step = progress.get("step")
+        total = progress.get("total")
+        loss = progress.get("loss")
+        pct = progress.get("pct")
+        if progress and step is not None and total:
+            pct = max(0, min(100, int(round(pct * 100))) if pct is not None else int(step * 100 / total))
+            self.progress["value"] = pct
+            self.prog_pct.config(text="%d%%" % pct)
+            detail = "Step %d / %d" % (step, total)
+            if loss is not None:
+                detail += "   ·   loss %.4f" % loss
+            self.prog_detail.config(text=detail)
+            self.prog_lbl.config(text="Training in progress")
+        else:
+            self.progress["value"] = 0
+            self.prog_pct.config(text="—")
+            self.prog_detail.config(text="No training run active (idle).")
+            self.prog_lbl.config(text="Training progress")
+
         notes = []
         if paused:
             notes.append("PAUSED - training held until Resume")
@@ -406,8 +438,29 @@ class TrainerGUI:
 
 
 def main():
-    root = tk.Tk()
-    TrainerGUI(root)
+    try:
+        root = tk.Tk()
+    except Exception as e:
+        # Very early failure (no display / Tk init) - show what we can.
+        print("FATAL: could not start Tk: %s" % e)
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, str(e), "Chat Trainer Control", 0x10)
+        except Exception:
+            pass
+        sys.exit(1)
+    try:
+        TrainerGUI(root)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, "Failed to start the UI:\n%s" % e,
+                                             "Chat Trainer Control", 0x10)
+        except Exception:
+            pass
+        sys.exit(1)
     root.mainloop()
 
 
