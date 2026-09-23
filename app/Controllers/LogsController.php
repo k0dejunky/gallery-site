@@ -381,7 +381,15 @@ class LogsController extends Controller
         switch ($type) {
             case 'gallery':
                 if (isset($before['title'], $before['description'], $before['type'])) {
-                    Gallery::update($entityId, (string) $before['title'], (string) $before['description'], (string) $before['type']);
+                    Gallery::update(
+                        $entityId,
+                        (string) $before['title'],
+                        (string) $before['description'],
+                        (string) $before['type'],
+                        (int) ($before['min_level'] ?? 0),
+                        isset($before['published_at']) ? (string) $before['published_at'] : null,
+                        isset($before['is_secret']) ? !empty($before['is_secret']) : null
+                    );
                     if (isset($before['categories'])) {
                         Gallery::setCategories($entityId, (array) $before['categories']);
                     }

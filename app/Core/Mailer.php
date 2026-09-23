@@ -29,8 +29,8 @@ class Mailer
      */
     public static function send(string $to, string $subject, string $body): bool
     {
-        $to      = trim($to);
-        $subject = trim($subject);
+        $to      = self::sanitizeHeader(trim($to));
+        $subject = self::sanitizeHeader(trim($subject));
 
         if ($to === '' || $subject === '') {
             return false;
@@ -52,8 +52,8 @@ class Mailer
      */
     public static function sendHtml(string $to, string $subject, string $html, ?string $text = null): bool
     {
-        $to      = trim($to);
-        $subject = trim($subject);
+        $to      = self::sanitizeHeader(trim($to));
+        $subject = self::sanitizeHeader(trim($subject));
         $html    = trim($html);
 
         if ($to === '' || $subject === '' || $html === '') {
@@ -123,7 +123,18 @@ class Mailer
      */
     private static function from(): string
     {
-        return (string) env_value('MAIL_FROM', 'gallery@localhost');
+        return self::sanitizeHeader((string) env_value('MAIL_FROM', 'gallery@localhost'));
+    }
+
+    /**
+     * Strip CR/LF (and stray non-printables) from a header value so no
+     * caller can inject additional headers or SMTP commands through
+     * recipient/subject/from fields.
+     */
+    private static function sanitizeHeader(string $value): string
+    {
+        $value = str_replace(["\r", "\n"], '', $value);
+        return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $value) ?? $value;
     }
 
     /**

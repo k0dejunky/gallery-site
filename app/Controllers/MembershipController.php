@@ -269,6 +269,11 @@ class MembershipController extends Controller
             return;
         }
 
+        if ($isBraintree && $nonce === '') {
+            $this->flash('error', 'Payment details are incomplete. Please try again.');
+            $this->redirect('/membership/checkout?plan_id=' . (int) $planId);
+        }
+
         // Placeholder transaction reference: in a real gateway integration this
         // would be the charge/payment-intent id returned by the processor.
         $transactionRef = $paymentProcessorId !== null

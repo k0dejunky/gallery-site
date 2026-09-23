@@ -134,10 +134,12 @@ class Router
     {
         if (Auth::check() && Auth::isAdmin()) {
             Flash::set('error', 'You do not have permission to do that.');
+            http_response_code(403);
             header('Location: ' . url('/admin'));
             exit;
         }
 
+        http_response_code(403);
         header('Location: ' . url('/admin'));
         exit;
     }

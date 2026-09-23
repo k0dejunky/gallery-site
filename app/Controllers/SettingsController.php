@@ -28,12 +28,15 @@ class SettingsController extends Controller
     }
 
     /**
-     * Settings require an authenticated user (unless previewing in site editor).
+     * Settings require an authenticated user. The site-editor preview (GET only)
+     * may be viewed unauthenticated; every state-changing (POST) action still
+     * requires a logged-in user.
      */
     public function __construct(Request $request)
     {
         parent::__construct($request);
-        if (!$this->siteEditorPreview()) {
+        $isPreviewGet = $this->siteEditorPreview() && $request->method() === 'GET';
+        if (!$isPreviewGet) {
             Auth::requireLogin();
         }
     }

@@ -134,6 +134,10 @@ class StorageController extends Controller
 
             if ($blurred !== null) {
                 $path = $blurred;
+            } elseif (is_file($thumbPath)) {
+                // GD could not blur this image (unsupported format, memory
+                // limits, ...): serve the unblurred thumbnail instead of 404ing.
+                $path = $thumbPath;
             }
         }
 

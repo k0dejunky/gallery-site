@@ -1023,7 +1023,7 @@ class GalleryController extends Controller
             return;
         }
 
-        foreach (glob($dir . '/*') ?: [] as $file) {
+        foreach (array_merge(glob($dir . '/*') ?: [], glob($dir . '/.*') ?: []) as $file) {
             if (is_file($file)) {
                 @unlink($file);
             }
@@ -1505,7 +1505,7 @@ if ($publishAtRaw !== '') {
         }
 
         foreach ([$paginator, $secondPaginator] as $p) {
-            if ($p !== null) {
+            if ($p !== null && !empty($p['items'])) {
                 foreach ($p['items'] as $g) {
                     $ids[] = (int) $g['id'];
                 }

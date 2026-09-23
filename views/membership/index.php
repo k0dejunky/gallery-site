@@ -284,7 +284,9 @@
 
 
 <script>
-        sel.closest('form').addEventListener('submit', function(e){
+(function () {
+    document.querySelectorAll('.pp-select').forEach(function (sel) {
+        sel.closest('form').addEventListener('submit', function (e) {
             var opt = sel.options[sel.selectedIndex];
             if (opt && opt.getAttribute('data-provider') === 'braintree') {
                 e.preventDefault();
@@ -295,4 +297,3 @@
     });
 })();
 </script>
-// MARKER-B

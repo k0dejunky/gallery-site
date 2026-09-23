@@ -43,7 +43,7 @@ class Auth
 
             if ($remember) {
                 $timeout = max(300, (int) config('app.auth.admin_remember_seconds', 604800));
-            } elseif (self::userRole($userId) !== null && in_array(self::userRole($userId), self::ADMIN_ROLES, true)) {
+            } elseif (in_array(self::userRole($userId), self::ADMIN_ROLES, true)) {
                 $timeout = max(300, (int) config('app.auth.admin_idle_seconds', 1800));
             } else {
                 $timeout = max(300, (int) config('app.auth.session_idle_seconds', 43200));

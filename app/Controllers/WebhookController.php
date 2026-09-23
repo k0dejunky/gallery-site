@@ -151,7 +151,14 @@ class WebhookController extends Controller
             }
         }
 
-        if ($secret !== '' && $digest !== '') {
+        if ($secret !== '') {
+            if ($digest === '') {
+                error_log('[webhooks/epoch] unsigned post rejected although a shared secret is configured');
+                http_response_code(400);
+                echo 'bad digest';
+                return;
+            }
+
             $pi     = (string) $this->payload('pi', '');
             $co     = (string) $this->payload('co', '');
             $amount = (string) $this->payload('amount', '');
@@ -166,7 +173,7 @@ class WebhookController extends Controller
                 echo 'bad digest';
                 return;
             }
-        } elseif ($secret === '') {
+        } else {
             error_log('[webhooks/epoch] post accepted without digest verification: no shared secret configured');
         }
 
@@ -226,7 +233,14 @@ class WebhookController extends Controller
             }
         }
 
-        if ($hash !== '' && $apiUser !== '' && $apiPass !== '') {
+        if ($apiUser !== '' && $apiPass !== '') {
+            if ($hash === '') {
+                error_log('[webhooks/segpay] unsigned post rejected although a hash secret is configured');
+                http_response_code(400);
+                echo 'bad hash';
+                return;
+            }
+
             $bases = [
                 $apiUser . $apiPass . $txn . $price . $stage,
                 $txn . $purchase . $userId . $price . $stage,
@@ -244,8 +258,8 @@ class WebhookController extends Controller
                 echo 'bad hash';
                 return;
             }
-        } elseif ($hash === '' && $apiPass !== '') {
-            error_log('[webhooks/segpay] unsigned post received although a hash secret is configured');
+        } elseif ($hash !== '' && ($apiUser === '' || $apiPass === '')) {
+            error_log('[webhooks/segpay] signed post received although no hash secret is configured');
         }
 
         $isApproved = in_array($approved, ['1', 'true', 'yes'], true);

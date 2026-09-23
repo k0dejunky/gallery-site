@@ -129,8 +129,18 @@ class UserController extends Controller
 
         $role = (string) $this->request->post('role', '');
 
-        if ($action === 'role' && !in_array($role, Auth::ADMIN_ROLES, true) && $role !== 'user') {
+        if ($action === 'role' && $role !== 'user' && !in_array($role, Auth::ADMIN_ROLES, true)) {
             $this->flash('error', 'Unknown role.');
+            $this->redirect('/admin/users');
+        }
+
+        if ($action === 'role' && $role === 'admin' && !Auth::isAdmin()) {
+            $this->flash('error', 'You do not have permission to assign the admin role.');
+            $this->redirect('/admin/users');
+        }
+
+        if ($action === 'role' && $role === 'super_admin' && !Auth::can('manage_roles')) {
+            $this->flash('error', 'You do not have permission to assign the super admin role.');
             $this->redirect('/admin/users');
         }
 
@@ -414,7 +424,8 @@ class UserController extends Controller
             ['status' => $target['status'] ?? null], ['status' => $status]);
 
         $this->flash('success', 'Account ' . ($status === 'suspended' ? 'suspended.' : 'reactivated.'));
-        $this->redirect($this->request->post('return_to') ?: '/admin/users');
+        $returnTo = (string) $this->request->post('return_to', '');
+        $this->redirect($returnTo !== '' && preg_match('#^/admin#', $returnTo) ? $returnTo : '/admin/users');
     }
 
     /**
@@ -652,7 +663,7 @@ class UserController extends Controller
         }
 
         $dob   = $this->request->input('date_of_birth') ?: null;
-        $av    = (bool) $this->request->input('age_verified');
+        $av    = $this->request->input('age_verified') === '1';
         $bFn   = $this->request->input('billing_first_name');
         $bLn   = $this->request->input('billing_last_name');
         $bA1   = $this->request->input('billing_address_line1');

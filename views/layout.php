@@ -176,7 +176,7 @@ $isAuthPage = $isLoginPage
      </style>
     <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=5">
 </head>
-<body>
+<body data-base="<?= e(config('app.base_path')) ?>">
 <?php if (!empty($_SESSION['impersonator_id'])): ?>
     <div style="background:#7f1d1d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;justify-content:center;border-radius:var(--border-radius);margin-bottom:1rem;">
         <b>Impersonating — viewing the site as a member.</b>

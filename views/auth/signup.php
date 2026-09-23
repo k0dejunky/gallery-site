@@ -68,7 +68,7 @@ foreach ($recentVideos as $photo) {
                 </p>
     <p>
         <label for="date_of_birth">Date of Birth</label><br>
-                    <input type="date" name="date_of_birth" id="date_of_birth" placeholder="MM/DD/YYYY" required onclick="this.showPicker()" onfocus="this.showPicker()">
+                    <input type="date" name="date_of_birth" id="date_of_birth" placeholder="MM/DD/YYYY" required onclick="if(window.HTMLInputElement&&HTMLInputElement.prototype.showPicker)this.showPicker()" onfocus="if(window.HTMLInputElement&&HTMLInputElement.prototype.showPicker)this.showPicker()">
     </p>
             </div>
 

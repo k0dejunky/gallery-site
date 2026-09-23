@@ -45,7 +45,7 @@ class Cache
             return $value === false ? null : (string) $value;
         }
 
-        return self::$local[$key] ?? null;
+        return self::localGet($key);
     }
 
     /**
@@ -60,7 +60,7 @@ class Cache
             return;
         }
 
-        self::$local[$key] = $value;
+        self::$local[$key] = ['value' => $value, 'expires' => time() + $ttl];
     }
 
 /**
@@ -76,6 +76,26 @@ public static function forget(string $key): void
     }
 
     unset(self::$local[$key]);
+}
+
+/**
+ * Read from the in-memory fallback, honouring the TTL each value was
+ * stored with.
+ */
+private static function localGet(string $key): ?string
+{
+    $entry = self::$local[$key] ?? null;
+
+    if ($entry === null) {
+        return null;
+    }
+
+    if (($entry['expires'] ?? 0) < time()) {
+        unset(self::$local[$key]);
+        return null;
+    }
+
+    return (string) $entry['value'];
 }
 
 /**
@@ -106,7 +126,7 @@ public static function bump(string $bucket): void
         return;
     }
 
-    self::$local['gen:' . $bucket] = (string) $next;
+    self::$local['gen:' . $bucket] = ['value' => (string) $next, 'expires' => time() + 86400 * 30];
 }
 
 /**

@@ -207,7 +207,7 @@
       var offset=loadedCount();
       if(offset>=total)return;
       loading=true;
-      if(state)state.textContent='Loading&hellip;';
+      if(state)state.textContent='Loading…';
       btn.disabled=true;
       fetch(location.pathname+'/photos?offset='+offset,{headers:{'X-Requested-With':'XMLHttpRequest'}})
         .then(function(r){return r.text()})
@@ -290,7 +290,8 @@
         btn.disabled=true;
         var fd=new FormData();
         fd.append('_token',csrf);
-        fetch('/gallery/favorites/galleries/'+galleryId+'/toggle',{
+        var base=(document.body&&document.body.getAttribute('data-base'))||'';
+        fetch(base+'/favorites/galleries/'+galleryId+'/toggle',{
           method:'POST',
           headers:{'X-Requested-With':'XMLHttpRequest'},
           body:fd

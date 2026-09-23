@@ -38,6 +38,17 @@ $breadcrumbItems = [
         var img = document.getElementById('fullsize-img');
         var toggle = document.getElementById('fullsize-toggle');
         if (!img || !toggle) return;
+        var webpSupported = null;
+        function supportsWebP() {
+            if (webpSupported !== null) return webpSupported;
+            try {
+                var c = document.createElement('canvas');
+                webpSupported = c.toDataURL('image/webp').indexOf('data:image/webp') === 0;
+            } catch (e) {
+                webpSupported = false;
+            }
+            return webpSupported;
+        }
         var full = false;
         toggle.addEventListener('click', function () {
             full = !full;
@@ -46,7 +57,7 @@ $breadcrumbItems = [
                 img.src = img.dataset.full;
             } else {
                 img.src = img.dataset.web;
-                if (img.dataset.webWebp && window.createImageBitmap) {
+                if (img.dataset.webWebp && supportsWebP()) {
                     // Serve WebP when supported; otherwise the jpeg web copy.
                     img.src = img.dataset.webWebp;
                 }

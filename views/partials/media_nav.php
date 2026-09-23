@@ -10,6 +10,7 @@ $nextUrl = null;
 if ($next !== null) {
     $nextUrl = url('/' . (is_video($next['filename']) ? 'videos' : 'images') . '/' . (int) $next['id']);
 }
+$gallery   = $gallery ?? null;
 $backUrl   = $gallery !== null ? url('/galleries/' . (int) $gallery['id']) : url('/galleries');
 $returnTo  = isset($returnTo) && is_string($returnTo) ? $returnTo : $backUrl;
 $returnQuery = http_build_query(['return_to' => $returnTo]);

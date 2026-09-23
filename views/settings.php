@@ -134,7 +134,7 @@
 </section>
 <?php endif; ?>
 
-<section class="card settings-card">
+<section class="card settings-card" id="gDisplayBar">
     <h2 class="section-title">Gallery display</h2>
     <div class="settings-fields" style="grid-template-columns:repeat(3,minmax(0,1fr))">
         <label>View mode

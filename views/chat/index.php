@@ -103,6 +103,7 @@
             thread.appendChild(div);
             thread.scrollTop = thread.scrollHeight;
         }
+        return div;
     }
 
     /** Prepend a batch of older messages, keeping the scroll position stable. */
@@ -148,15 +149,17 @@
         messages.forEach(function (m) {
             // Skip the stream echo of a message we already rendered optimistically.
             if (m.sender_role === 'user') {
-                var idx = pendingSends.indexOf(m.message);
+                var idx = pendingSends.indexOf(String(m.message || '').trim());
                 if (idx >= 0) {
                     pendingSends.splice(idx, 1);
                     latestId = Math.max(latestId, m.id);
                     return;
                 }
             }
-            if ((m.id || 0) > latestId) { append(m); }
-            if ((m.id || 0) > latestId) { latestId = m.id; }
+            if ((m.id || 0) > latestId) {
+                append(m);
+                latestId = m.id;
+            }
         });
     }
 
@@ -169,7 +172,7 @@
         body.append('message', text);
         input.value = '';
         // Optimistic: show your message immediately, don't wait for the POST.
-        append({ id: 0, sender_role: 'user', message: text, attachment_name: null, attachment_url: null, attachment_thumb_url: null });
+        var optimistic = append({ id: 0, sender_role: 'user', message: text, attachment_name: null, attachment_url: null, attachment_thumb_url: null });
         pendingSends.push(text);
 hideBadge();
 
@@ -178,11 +181,20 @@ hideBadge();
         thread.scrollTop = thread.scrollHeight;
     }, 50);
         fetch('<?= url('/chat') ?>', { method: 'POST', body: body })
-            .then(function (r) { return r.json(); })
-            .then(function (res) {
-                if (!res.ok) { alert(res.error || 'Could not send.'); input.value = text; return; }
+            .then(function (r) {
+                if (!r.ok) { throw new Error('send-failed'); }
+                return r.json();
             })
-            .catch(function () { alert('Network error.'); });
+            .then(function (res) {
+                if (!res.ok) { throw new Error(res.error || 'Could not send.'); }
+            })
+            .catch(function (err) {
+                alert(err && err.message && err.message !== 'send-failed' ? err.message : 'Could not send.');
+                if (optimistic && optimistic.parentNode) { optimistic.parentNode.removeChild(optimistic); }
+                var pi = pendingSends.indexOf(text);
+                if (pi >= 0) { pendingSends.splice(pi, 1); }
+                input.value = text;
+            });
     });
 
     // Clear the sidebar unread badge once the member is reading the chat.
