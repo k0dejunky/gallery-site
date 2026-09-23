@@ -48,10 +48,18 @@ class ChatModel
 
     /**
      * The absolute path to the current LoRA adapter, or null when none is
-     * installed yet.
+     * installed yet. Ollama's ADAPTER directive needs a directory containing
+     * model.safetensors + adapter_config.json (a HuggingFace-style PEFT
+     * adapter), so the adapter is stored as a directory when present; the
+     * legacy single-file names are kept for backward compatibility.
      */
     public static function adapterPath(): ?string
     {
+        $dir = self::trainingDir() . '/chat-lora';
+        if (is_dir($dir) && is_file($dir . '/model.safetensors')) {
+            return $dir;
+        }
+
         foreach (['chat-lora.gguf', 'chat-lora.safetensors'] as $name) {
             $p = self::trainingDir() . '/' . $name;
             if (is_file($p)) {

@@ -627,8 +627,39 @@ class ChatBridgeController extends Controller
         if (!is_dir($dir)) {
             @mkdir($dir, 0775, true);
         }
-        $dest = $dir . '/chat-lora.safetensors';
+
+        // Ollama's ADAPTER directive (0.33.x and earlier) requires a directory
+        // with model.safetensors + adapter_config.json. Store the uploaded
+        // adapter that way so `ollama create` can consume it.
+        $adapterDir = $dir . '/chat-lora';
+        if (!is_dir($adapterDir)) {
+            @mkdir($adapterDir, 0775, true);
+        }
+        $dest = $adapterDir . '/model.safetensors';
         copy($adapter, $dest);
+
+        // Persist the PEFT metadata so the adapter directory is self-contained.
+        $adapterConfig = (string) $this->request->post('adapter_config', '');
+        if ($adapterConfig !== '' && json_decode($adapterConfig, true) !== null) {
+            @file_put_contents($adapterDir . '/adapter_config.json', $adapterConfig, LOCK_EX);
+        } elseif (is_file($adapterDir . '/adapter_config.json') === false) {
+            @file_put_contents(
+                $adapterDir . '/adapter_config.json',
+                (string) json_encode(['peft_type' => 'LORA', 'task_type' => 'CAUSAL_LM', 'r' => 8, 'lora_alpha' => 16, 'target_modules' => ['q_proj', 'k_proj', 'v_proj', 'o_proj'], 'bias' => 'none']),
+                LOCK_EX
+            );
+        }
+
+        // Base model config.json helps Ollama validate tensor shapes.
+        $baseConfig = (string) $this->request->post('base_config', '');
+        if ($baseConfig !== '' && json_decode($baseConfig, true) !== null) {
+            @file_put_contents($adapterDir . '/config.json', $baseConfig, LOCK_EX);
+        }
+
+        // Remove the legacy single-file adapter so adapterPath() prefers the
+        // directory (and stale formats never shadow the current one).
+        @unlink($dir . '/chat-lora.safetensors');
+        @unlink($dir . '/chat-lora.gguf');
 
         $meta = [
             'adapter_checksum' => $checksum,

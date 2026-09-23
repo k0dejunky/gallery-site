@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS galleries (
     type         VARCHAR(10) NOT NULL DEFAULT 'images',
     min_level    INT UNSIGNED NOT NULL DEFAULT 0,
     is_secret    TINYINT(1) NOT NULL DEFAULT 0,
+    published_at DATETIME NULL DEFAULT NULL,
     views        INT UNSIGNED NOT NULL DEFAULT 0,
     unique_views INT UNSIGNED NOT NULL DEFAULT 0,
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -168,6 +169,7 @@ CREATE TABLE IF NOT EXISTS gallery_category (
     gallery_id  INT UNSIGNED NOT NULL,
     category_id INT UNSIGNED NOT NULL,
     PRIMARY KEY (gallery_id, category_id),
+    INDEX category_id (category_id),
     INDEX idx_gallery_category_category (category_id),
     FOREIGN KEY (gallery_id)  REFERENCES galleries(id)  ON DELETE CASCADE,
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
