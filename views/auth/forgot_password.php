@@ -1,4 +1,4 @@
-<?php $title = 'Forgot Password'; $noindex = true; ?>
+<?php ?>
 
 <div class="auth-panel">
     <h1>Forgot Password</h1>

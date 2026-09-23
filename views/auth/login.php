@@ -1,6 +1,4 @@
 <?php
-$title = 'Login';
-$noindex = true;
 // Inline SVG fallback so a missing thumbnail never shows a broken image on
 // the guest landing page; also doubles as a "no picture" placeholder.
 $pictureBlank = 'data:image/svg+xml;utf8,' . rawurlencode(

@@ -30,6 +30,8 @@ class AuthController extends Controller
             // Only the most recent uploads are shown on the login page.
             'recentImages' => Photo::recentImages(10),
             'recentVideos' => Photo::recentVideos(10),
+            'title'        => 'Login',
+            'noindex'      => true,
         ]);
     }
 
@@ -71,7 +73,7 @@ class AuthController extends Controller
             $this->redirect('/login');
         }
 
-        $this->view('auth/2fa', []);
+        $this->view('auth/2fa', ['title' => 'Two-factor verification', 'noindex' => true]);
     }
 
     /**
@@ -109,6 +111,8 @@ class AuthController extends Controller
         $this->view('auth/signup', [
             'recentImages' => Photo::recentImages(10),
             'recentVideos' => Photo::recentVideos(10),
+            'title'        => 'Sign Up',
+            'noindex'      => true,
         ]);
     }
 
@@ -272,7 +276,7 @@ class AuthController extends Controller
 
     public function forgotForm(): void
     {
-        $this->view('auth/forgot_password');
+        $this->view('auth/forgot_password', ['title' => 'Forgot Password', 'noindex' => true]);
     }
 
     public function forgot(): void
@@ -320,7 +324,7 @@ class AuthController extends Controller
             $this->redirect('/login');
         }
 
-        $this->view('auth/reset_password', ['token' => $token]);
+        $this->view('auth/reset_password', ['token' => $token, 'title' => 'Reset Password', 'noindex' => true]);
     }
 
     public function reset(): void
