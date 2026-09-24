@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.23",
-  "versionCode": 34,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.23.apk",
-  "changelog": "Enter/return now sends your message (Shift+Enter for a newline), matching the web chat.",
+  "latestVersion": "2.24",
+  "versionCode": 35,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.24.apk",
+  "changelog": "Fix in-app update install (FileProvider root for the downloaded APK) and show clear errors if an update fails.",
   "publishedAt": "2026-09-23"
 }
