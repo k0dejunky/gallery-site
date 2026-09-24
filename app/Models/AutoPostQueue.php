@@ -840,18 +840,21 @@ class AutoPostQueue
     }
 
     /**
-     * When the queue is idle, repost the most recent successfully posted rows
-     * to keep X / Reddit active: the last $count posted posts per platform are
-     * re-queued one per hour, spread across the next $count hours.
+     * When the queue is idle, schedule fresh posts from random galleries on
+     * the site to keep X / Reddit active: up to $count galleries are picked at
+     * random (only galleries with media that have never been queued/posted for
+     * any autopost platform) and each gallery is scheduled exactly once, one
+     * post per hour across the next $count hours. Galleries are never
+     * duplicated — 24 distinct galleries produce 24 distinct posts.
      *
-     * Returns the number of reposts scheduled. This runs from the worker when
+     * Returns the number of posts scheduled. This runs from the worker when
      * there is nothing queued to publish, so an empty queue never goes quiet.
      *
-     * @param int      $count    how many recent posts to recycle (<= 24)
+     * @param int      $count    how many posts to schedule (<= 24)
      * @param int      $hours    the window (hours) to spread them over
      * @param string|null $platform limit to one platform when given
      */
-    public static function repostRecentWhenIdle(int $count = 24, int $hours = 24, ?string $platform = null): int
+    public static function scheduleRandomGalleriesWhenIdle(int $count = 24, int $hours = 24, ?string $platform = null): int
     {
         $count = max(1, min(48, $count));
         $hours = max(1, min(168, $hours));
@@ -860,52 +863,71 @@ class AutoPostQueue
             ? [$platform]
             : ['twitter', 'reddit'];
 
-        $requeued = 0;
+        // Only schedule on platforms that have nothing queued.
+        $idlePlatforms = array_values(array_filter(
+            $platforms,
+            static fn (string $pf): bool => !self::hasQueued($pf)
+        ));
 
-        foreach ($platforms as $pf) {
-            if (self::hasQueued($pf)) {
-                continue; // never stack reposts on top of real scheduled work
-            }
+        if ($idlePlatforms === []) {
+            return 0;
+        }
 
-            $recent = Database::run(
-                'SELECT id, text, platform, photo_id, gallery_id, media_ids
-                 FROM auto_poster_queue
-                 WHERE status = ? AND platform = ?
-                   AND (media_ids IS NOT NULL AND media_ids <> ? OR photo_id IS NOT NULL)
-                 ORDER BY COALESCE(posted_at, created_at) DESC, id DESC
-                 LIMIT ' . $count,
-                ['posted', $pf, '[]']
-            )->fetchAll();
+        // Pick $count distinct random galleries that have media and have never
+        // been queued/posted for any autopost platform, so the same gallery is
+        // never scheduled twice (neither within one run nor across platforms).
+        $galleryIds = Database::run(
+            'SELECT g.id
+             FROM galleries g
+             JOIN gallery_photo gp ON gp.gallery_id = g.id
+             JOIN photos p ON p.id = gp.photo_id
+             WHERE g.deleted_at IS NULL
+               AND NOT EXISTS (
+                   SELECT 1 FROM auto_poster_queue q
+                   WHERE q.gallery_id = g.id
+                     AND q.status IN (?, ?, ?, ?, ?)
+               )
+             GROUP BY g.id
+             ORDER BY RAND()
+             LIMIT ' . $count,
+            ['queued', 'posted', 'failed', 'skipped', 'dismissed']
+        )->fetchAll();
 
-            // Spread reposts one per hour across the window, starting an hour
-            // from now, oldest-first within the batch so recent posts don't
-            // crowd the front.
-            $recent = array_reverse($recent);
+        if ($galleryIds === []) {
+            return 0;
+        }
 
-            foreach ($recent as $i => $row) {
-                $minuteOffset = min($hours, $count) === 1 ? 60 : (int) floor(($i + 1) * ($hours * 60) / max(1, count($recent)));
-                $when = (new DateTime('@' . time()))
-                    ->setTimezone(self::schedulerTimezone())
-                    ->modify('+' . $minuteOffset . ' minutes')
-                    ->format('Y-m-d\TH:i');
+        $scheduled = 0;
+        $platformCount = count($idlePlatforms);
 
-                $newId = self::requeueFrom((int) $row['id'], $when);
-                if ($newId > 0) {
-                    $requeued++;
-                }
+        foreach ($galleryIds as $i => $row) {
+            // Round-robin the posts across the idle platforms so a gallery is
+            // only ever used once.
+            $pf = $idlePlatforms[$i % $platformCount];
+
+            // One post per hour across the window, starting an hour from now.
+            $hourOffset = min($hours, $count) === 1 ? 1 : (int) floor(($i + 1) * $hours / max(1, count($galleryIds)));
+            $when = (new DateTime('@' . time()))
+                ->setTimezone(self::schedulerTimezone())
+                ->modify('+' . max(1, $hourOffset) . ' hours')
+                ->format('Y-m-d\TH:i');
+
+            $newId = self::enqueue((int) $row['id'], null, $when, $pf);
+            if ($newId > 0) {
+                $scheduled++;
             }
         }
 
-        if ($requeued > 0) {
+        if ($scheduled > 0) {
             AutoPosterConfig::log(
                 $platform ?? 'x',
                 '',
                 'info',
-                "Idle queue: reposted {$requeued} recent post(s) over {$hours} hour(s)"
+                "Idle queue: scheduled {$scheduled} random gallery post(s) over {$hours} hour(s)"
             );
         }
 
-        return $requeued;
+        return $scheduled;
     }
 
     /**

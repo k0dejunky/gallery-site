@@ -53,12 +53,13 @@ do {
             ));
         }
 
-        // Nothing scheduled right now: recycle the most recent posted items so
-        // X / Reddit stay active (one repost per hour over the next 24 hours).
+        // Nothing scheduled right now: schedule fresh posts from random
+        // galleries so X / Reddit stay active (one per hour over the next
+        // 24 hours).
         if ($due === []) {
-            $requeued = AutoPostQueue::repostRecentWhenIdle(24, 24);
+            $requeued = AutoPostQueue::scheduleRandomGalleriesWhenIdle(24, 24);
             if ($requeued > 0) {
-                error_log('[autopost] idle queue: requeued ' . $requeued . ' recent post(s) over 24h');
+                error_log('[autopost] idle queue: scheduled ' . $requeued . ' random gallery post(s) over 24h');
             }
         }
     } catch (Throwable $error) {
