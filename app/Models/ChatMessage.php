@@ -406,10 +406,10 @@ class ChatMessage
 
     public static function insertTrainingPair(string $userMessage, string $operatorReply): void
     {
-        Database::run(
-            'INSERT INTO chat_training_pairs (user_message, operator_reply) VALUES (?, ?)',
-            [$userMessage, $operatorReply]
-        );
+        // Operator replies are trainer-ready immediately (cleaned = 1): the
+        // model learns from real replies without a separate export step.
+        // Junk and duplicate pairs are silently skipped.
+        \App\Models\ChatTraining::savePair($userMessage, $operatorReply);
     }
 
     public static function trainingPairCount(): int

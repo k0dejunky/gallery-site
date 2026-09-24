@@ -110,4 +110,35 @@ class ChatTraining
 
         return ['inserted' => $inserted, 'skipped' => $skipped];
     }
+
+    /**
+     * Normalize + insert a single operator reply pair as trainer-ready
+     * (cleaned = 1). Used when the operator replies live so the model learns
+     * from real replies immediately — no separate export step needed.
+     * Returns true when the pair was stored, false when it was junk or a
+     * duplicate (and so intentionally skipped).
+     */
+    public static function savePair(string $userMessage, string $operatorReply): bool
+    {
+        $pair = self::normalizePair($userMessage, $operatorReply);
+        if ($pair === null) {
+            return false;
+        }
+
+        $existing = Database::run(
+            'SELECT 1 FROM chat_training_pairs WHERE user_message = ? AND operator_reply = ? LIMIT 1',
+            [$pair['user_message'], $pair['operator_reply']]
+        )->fetchColumn();
+
+        if ($existing !== false) {
+            return false;
+        }
+
+        Database::run(
+            'INSERT INTO chat_training_pairs (user_message, operator_reply, cleaned) VALUES (?, ?, 1)',
+            [$pair['user_message'], $pair['operator_reply']]
+        );
+
+        return true;
+    }
 }
