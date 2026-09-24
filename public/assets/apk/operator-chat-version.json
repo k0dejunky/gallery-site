@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.24",
-  "versionCode": 35,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.24.apk",
-  "changelog": "Fix in-app update install (FileProvider root for the downloaded APK) and show clear errors if an update fails.",
+  "latestVersion": "2.25",
+  "versionCode": 36,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.25.apk",
+  "changelog": "Instagram/Snapchat-style redesign: dark theme, story-ring avatars, gradient message bubbles, and a new DM composer.",
   "publishedAt": "2026-09-23"
 }
