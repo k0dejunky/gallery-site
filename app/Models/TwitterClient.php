@@ -465,7 +465,7 @@ class TwitterClient
             }
 
             // Write the chunk to a temp file so multipart can send it as a file.
-            $tmp = tempnam(sys_get_temp_dir(), 'xmedia');
+            $tmp = tempnam(gallery_temp_dir(), 'xmedia');
             file_put_contents($tmp, $chunk);
 
             $appendFields = [

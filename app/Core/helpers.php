@@ -10,6 +10,34 @@ function e(?string $value): string
 }
 
 /**
+ * A writable directory for scratch files (blurred copies, media chunks,
+ * frame grabs). Prefers the system temp dir, but falls back to a dedicated
+ * directory under storage/ when /tmp is missing or not writable by the web
+ * user — a misconfigured /tmp otherwise silently breaks media uploads with
+ * errors like "Path cannot be empty".
+ */
+function gallery_temp_dir(): string
+{
+    static $dir = null;
+
+    if ($dir !== null) {
+        return $dir;
+    }
+
+    $sys = sys_get_temp_dir();
+    if ($sys !== '' && is_dir($sys) && is_writable($sys)) {
+        return $dir = rtrim($sys, '/');
+    }
+
+    $fallback = dirname(__DIR__, 2) . '/storage/tmp';
+    if (!is_dir($fallback)) {
+        @mkdir($fallback, 0775, true);
+    }
+
+    return $dir = rtrim($fallback, '/');
+}
+
+/**
  * Build an application URL prefixed with the configured base path so links
  * work regardless of where the site is installed (e.g. under /gallery).
  */
@@ -573,7 +601,7 @@ function _load_image(string $src)
     if (max($info[0], $info[1]) > $maxWorking
         && in_array($type, [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)) {
         $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
-        $prescaled = tempnam(sys_get_temp_dir(), 'imgload');
+        $prescaled = tempnam(gallery_temp_dir(), 'imgload');
 
         if ($prescaled !== false) {
             // ffmpeg needs a recognisable extension (or an explicit -f) to
@@ -781,7 +809,7 @@ function create_blurred_copy(string $src, int $blurPercent = 25): ?string
         IMAGETYPE_WEBP => 'webp',
     ];
 
-    $dest = sys_get_temp_dir() . '/blur_' . bin2hex(random_bytes(6)) . '.'
+    $dest = gallery_temp_dir() . '/blur_' . bin2hex(random_bytes(6)) . '.'
         . ($extensions[$type] ?? 'jpg');
 
     $saved = save_image($image, $dest, $type, 82);

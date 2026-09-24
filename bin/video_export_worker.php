@@ -187,7 +187,7 @@ if (!empty($blurRegions)) {
         $points = $br['points'] ?? null;
         if (is_array($points) && count($points) >= 2) {
             $r = max(0.005, min(0.5, (float) ($br['r'] ?? 0.05)));
-            $maskFile = sys_get_temp_dir() . '/ve-brush-' . $jobId . '-' . $idx . '.png';
+            $maskFile = gallery_temp_dir() . '/ve-brush-' . $jobId . '-' . $idx . '.png';
             build_brush_mask($maskFile, $srcW, $srcH, $points, $r);
             $tempMasks[] = $maskFile;
             $maskInputs[] = '-loop 1 -framerate ' . $srcFps . ' -i ' . escapeshellarg($maskFile);

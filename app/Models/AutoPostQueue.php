@@ -1577,7 +1577,7 @@ class AutoPostQueue
         $frames = [];
 
         foreach ($times as $t) {
-            $tmp = tempnam(sys_get_temp_dir(), 'xframe') . '.jpg';
+            $tmp = tempnam(gallery_temp_dir(), 'xframe') . '.jpg';
 
             $cmd = escapeshellarg($ffmpeg) . ' -y -hide_banner -loglevel error -ss ' . escapeshellarg((string) $t)
                 . ' -i ' . escapeshellarg($path)

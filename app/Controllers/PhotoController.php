@@ -548,7 +548,7 @@ class PhotoController extends Controller
             return false;
         }
 
-        $temp = tempnam(sys_get_temp_dir(), 'veframe');
+        $temp = tempnam(gallery_temp_dir(), 'veframe');
 
         if ($temp === false || file_put_contents($temp, $binary) === false) {
             if ($temp !== false) {
