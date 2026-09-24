@@ -88,19 +88,438 @@
 })();
 </script>
 
+<?php // Drag-and-drop upload: stage files into this session's pending area
+// (exactly like the gallery creation page), then commit them to this gallery.
+// Staged files use the same pending endpoints and validation as the create
+// page, so a file that passes here passes there (and vice versa). ?>
+<style>
+    .drop-zone {
+        border: 2px dashed var(--card-border, #bbb);
+        border-radius: var(--border-radius, 6px);
+        padding: 2rem 1.5rem;
+        text-align: center;
+        color: var(--text-muted, #666);
+        background: var(--card-bg, #fafafa);
+        cursor: pointer;
+        transition: border-color .15s ease, background .15s ease;
+        box-sizing: border-box;
+        width: 100%;
+    }
+    .drop-zone:hover { border-color: var(--purple-400, #a855f7); }
+    .drop-zone.dragover { border-color: var(--purple-500, #9333ea); background: color-mix(in srgb, var(--purple-500, #9333ea) 8%, transparent); }
+    .drop-zone .dz-icon { font-size: 2rem; line-height: 1; margin-bottom: .35rem; }
+    .drop-zone .dz-main { font-weight: 600; color: var(--purple-700, #6b21a8); }
+    .drop-zone .dz-hint { font-size: var(--font-size-sm, .9rem); margin-top: .4rem; }
+
+    .pending-head { display: flex; align-items: center; justify-content: space-between; margin: 1.25rem 0 .75rem; }
+    .pending-head h2 { margin: 0; font-size: var(--font-size-lg, 1.15rem); }
+    .pending-head .count { color: var(--text-muted, #888); font-size: var(--font-size-sm, .9rem); }
+
+    .pending-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 1rem; }
+    .pending-tile {
+        border: 1px solid var(--card-border, #ddd);
+        border-radius: var(--border-radius, 6px);
+        overflow: hidden;
+        background: var(--card-bg, #fff);
+        position: relative;
+    }
+    .pending-tile .media { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; background: #111; }
+    .pending-tile .tile-name {
+        display: block;
+        padding: .3rem .45rem;
+        font-size: var(--font-size-xs, .75rem);
+        color: var(--text-muted, #666);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .pending-tile .tile-controls { display: flex; gap: .35rem; padding: .4rem .45rem; border-top: 1px solid var(--card-border, #eee); }
+    .pending-tile .tile-controls button {
+        flex: 1;
+        border: 1px solid var(--card-border, #ddd);
+        background: var(--card-bg, #f4f4f4);
+        border-radius: 4px;
+        padding: .25rem .3rem;
+        font-size: var(--font-size-xs, .75rem);
+        cursor: pointer;
+    }
+    .pending-tile .tile-controls button:hover { background: var(--pink-100, #eee); }
+    .pending-tile .tile-controls button.danger { color: var(--danger, #c62828); border-color: var(--danger, #c62828); }
+    .pending-tile.is-busy::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,.25); }
+    .tile-spinner { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(255,255,255,.7); color: var(--text-muted, #888); font-size: var(--font-size-xs, .75rem); }
+    .pending-tile.is-waiting { opacity: .85; }
+    .pending-tile.is-failed { opacity: .55; border-color: var(--danger, #c62828); }
+    .pending-tile.is-failed .tile-name { color: var(--danger, #c62828); }
+    .empty-state { padding: 1.5rem; text-align: center; color: var(--text-muted, #888); border: 1px dashed var(--card-border, #ddd); border-radius: var(--border-radius, 6px); }
+</style>
+
 <?php // Accept multiple images/videos at once; the controller enforces the gallery type per file. ?>
 <h2>Upload photos</h2>
 <p class="muted">
     This is an <strong><?= ($gallery['type'] ?? 'images') === 'videos' ? 'Video Gallery' : 'Image Gallery' ?></strong> —
     <?= ($gallery['type'] ?? 'images') === 'videos' ? 'only video files can be uploaded' : 'only image files can be uploaded' ?>.
+    Drop files here (or click to select) to stage them, then press <strong>Add staged files to this gallery</strong>.
 </p>
-<form method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos') ?>" enctype="multipart/form-data">
+<form method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/pending-commit') ?>" id="pending-commit-form">
     <?= csrf_field() ?>
-    <p>
-        <input type="file" name="photos[]" accept="<?= ($gallery['type'] ?? 'images') === 'videos' ? 'video/*' : 'image/*' ?>" multiple>
-        <button type="submit" class="btn">Upload</button>
+    <div class="drop-zone" id="drop-zone" tabindex="0">
+        <div class="dz-icon">&#128228;</div>
+        <div class="dz-main">Drop files here or click to upload</div>
+        <div class="dz-hint"><?= ($gallery['type'] ?? 'images') === 'videos' ? 'Video files for a video gallery' : 'Image files for an image gallery' ?></div>
+        <input type="file" id="file-input" name="photos[]" multiple style="display:none">
+    </div>
+
+    <div class="pending-head">
+        <h2>Staged files</h2>
+        <span class="count"><span id="pending-count">0</span> staged</span>
+    </div>
+    <div class="pending-tiles" id="pending-tiles"></div>
+
+    <p style="margin-top:1rem;">
+        <button type="submit" class="btn" id="commit-btn" disabled>Add staged files to this gallery</button>
+        <span class="muted">Staged files stay in your session until committed, so a reload won't lose them.</span>
     </p>
 </form>
+<script>
+(function () {
+    var csrf = document.querySelector('#pending-commit-form input[name="_token"]').value;
+    var galleryType = <?= json_encode(($gallery['type'] ?? 'images') === 'videos' ? 'videos' : 'images', JSON_UNESCAPED_SLASHES) ?>;
+    var fileInput = document.getElementById('file-input');
+    var dropZone = document.getElementById('drop-zone');
+    var tilesEl = document.getElementById('pending-tiles');
+    var countEl = document.getElementById('pending-count');
+    var commitBtn = document.getElementById('commit-btn');
+    var pendingFiles = <?= json_encode($pendingFiles ?? [], JSON_UNESCAPED_SLASHES) ?> || [];
+    var uploadQueue = [];
+    var queuedTiles = []; // uploadQueue items that are showing an on-screen tile
+    var uploading = false;
+    // Files at/above CHUNK_MIN bytes are uploaded as CHUNK_SIZE chunks so a
+    // multi-GB video uploads as many small fast requests (resumable) instead
+    // of one long request the webserver/fastcgi timeouts would kill. Kept in
+    // sync with config/app.php => uploads => chunk_size / chunk_min.
+    var CHUNK_MIN = <?= (int) config('app.uploads.chunk_min') ?>;
+    var CHUNK_SIZE = <?= (int) config('app.uploads.chunk_size') ?>;
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    function render() {
+        countEl.textContent = pendingFiles.length + (queuedTiles.length ? ' + ' + queuedTiles.length + ' queued' : '');
+        commitBtn.disabled = uploading || pendingFiles.length === 0;
+        tilesEl.innerHTML = '';
+        if (!pendingFiles.length && !queuedTiles.length) {
+            tilesEl.innerHTML = '<div class="empty-state">No files staged yet.</div>';
+            return;
+        }
+        pendingFiles.forEach(function (f) {
+            var tile = document.createElement('div');
+            tile.className = 'pending-tile';
+            tile.dataset.file = f.filename;
+            tile.innerHTML =
+                (f.is_image
+                    ? '<img class="media" src="' + esc(f.thumb_url) + '" alt="" loading="lazy">'
+                    : '<video class="media" src="' + esc(f.file_url) + '" poster="' + esc(f.thumb_url) + '" muted preload="metadata"></video>') +
+                '<span class="tile-name">' + esc(f.original) + '</span>' +
+                '<div class="tile-controls">' +
+                    (f.is_image
+                        ? '<button type="button" data-act="rotate" data-dir="left" title="Rotate left">&larr;</button>' +
+                          '<button type="button" data-act="rotate" data-dir="right" title="Rotate right">&rarr;</button>'
+                        : '') +
+                    '<button type="button" data-act="delete" class="danger" title="Remove">&times;</button>' +
+                '</div>';
+            tilesEl.appendChild(tile);
+        });
+        queuedTiles.forEach(function (item) { tilesEl.appendChild(item.tile); });
+    }
+
+    function setBusy(tile, busy) {
+        if (!tile) return;
+        tile.classList.toggle('is-busy', busy);
+        if (busy) {
+            var sp = document.createElement('div');
+            sp.className = 'tile-spinner';
+            sp.textContent = 'Working…';
+            tile.appendChild(sp);
+        } else {
+            var s = tile.querySelector('.tile-spinner');
+            if (s) s.remove();
+        }
+    }
+
+    function waitTile(name) {
+        var tile = document.createElement('div');
+        tile.className = 'pending-tile is-waiting';
+        var sp = document.createElement('div');
+        sp.className = 'tile-spinner';
+        sp.textContent = 'Queued…';
+        var nm = document.createElement('span');
+        nm.className = 'tile-name';
+        nm.textContent = name;
+        tile.appendChild(sp);
+        tile.appendChild(nm);
+        return tile;
+    }
+
+    function uploadFiles(fileList) {
+        // Queue every selected file and upload them ONE per request.
+        // PHP silently truncates multi-file requests at max_file_uploads
+        // (default 20), so a single mega-request would drop everything past
+        // the 20th file. Per-file requests have no count limit, keep the
+        // exact same server-side validation rules for every file, and let
+        // one bad file fail without cancelling the rest of the batch.
+        //
+        // Every selected file gets an on-screen "Queued…" tile immediately so
+        // a slow or mixed batch shows feedback the moment it is selected; the
+        // tile is replaced by the real thumbnail once the server confirms the
+        // upload (success) or marked failed (rejection) otherwise.
+        var type = galleryType;
+        var added = 0;
+        Array.prototype.forEach.call(fileList, function (file) {
+            var item = { file: file, type: type, tile: waitTile(file.name) };
+            queuedTiles.push(item);
+            tilesEl.appendChild(item.tile);
+            uploadQueue.push(item);
+            added++;
+        });
+        processQueue();
+    }
+
+    function processQueue() {
+        if (uploading) return;
+        if (!uploadQueue.length) return;
+
+        uploading = true;
+        commitBtn.disabled = true;
+
+        var totalBytes = uploadQueue.reduce(function (sum, item) { return sum + item.file.size; }, 0);
+        var sentBytes = 0; // cumulative bytes of fully-completed files
+        var failures = [];
+
+        if (window.AdminProgress) {
+            window.AdminProgress.show('Uploading files…');
+            window.AdminProgress.progress(0, uploadQueue.length + ' file(s)');
+        }
+
+        function report(pct, label) {
+            if (window.AdminProgress) {
+                window.AdminProgress.progress(pct == null ? (sentBytes / Math.max(totalBytes, 1)) * 100 : pct, label || uploadQueue.length + ' file(s) remaining');
+            }
+        }
+
+        function next() {
+            if (!uploadQueue.length) {
+                uploading = false;
+                commitBtn.disabled = pendingFiles.length === 0;
+                fileInput.value = '';
+                queuedTiles = [];
+                render();
+                if (window.AdminProgress) window.AdminProgress.hide();
+                if (failures.length) {
+                    alert('Some files could not be uploaded:\n\n' + failures.join('\n'));
+                }
+                return;
+            }
+
+            var item = uploadQueue[0];
+            var sp = item.tile && item.tile.querySelector('.tile-spinner');
+            if (sp) sp.textContent = 'Uploading…';
+            if (item.file.size >= CHUNK_MIN) uploadChunked(item);
+            else uploadDirect(item);
+        }
+
+        // Finish one file successfully and move to the next in the queue.
+        function finishFile(item, data) {
+            if (data && data.files) { pendingFiles = data.files; }
+            var qi = queuedTiles.indexOf(item);
+            if (qi >= 0) queuedTiles.splice(qi, 1);
+            render();
+            sentBytes += item.file.size;
+            report();
+            uploadQueue.shift();
+            next();
+        }
+
+        // Drop one file with a message and move to the next in the queue.
+        function failFile(item, message) {
+            failures.push(message);
+            uploadQueue.shift();
+            if (item.tile) {
+                var qi = queuedTiles.indexOf(item);
+                if (qi >= 0) queuedTiles.splice(qi, 1);
+                item.tile.classList.add('is-failed');
+                var nm = item.tile.querySelector('.tile-name');
+                if (nm) nm.textContent = item.file.name + ' — rejected';
+                item.tile.title = message;
+            }
+            next();
+        }
+
+        // Small files: a single POST, exactly as the create page does.
+        function uploadDirect(item) {
+            var data = new FormData();
+            data.append('photos[]', item.file);
+            data.append('type', item.type);
+            data.append('_token', csrf);
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '<?= url('/admin/galleries/pending/upload') ?>');
+            xhr.upload.addEventListener('progress', function (e) {
+                if (e.lengthComputable) report(((sentBytes + e.loaded) / Math.max(totalBytes, 1)) * 100, item.file.name);
+            });
+            xhr.addEventListener('load', function () {
+                var ok = false, skipped = [], reason = '', res = null;
+                try { res = JSON.parse(xhr.responseText); ok = res.ok === true; skipped = res.skipped || []; reason = res.error || ''; } catch (err) {}
+                if (!ok) failFile(item, item.file.name + ': rejected by server' + (reason ? ' — ' + reason : ''));
+                else if (skipped.length) failFile(item, skipped[0] + ': could not be saved');
+                else finishFile(item, res);
+            });
+            xhr.addEventListener('error', function () {
+                failFile(item, item.file.name + ': network error');
+            });
+            xhr.send(data);
+        }
+
+        // Large files: slice into chunks, upload each chunk to /pending/chunk
+        // (auto-retrying a chunk on a transient failure so the upload resumes
+        // from the last good chunk), then finalise with /pending/complete.
+        function uploadChunked(item) {
+            var uid = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+            var total = Math.max(1, Math.ceil(item.file.size / CHUNK_SIZE));
+            var chunk = 0;
+
+            function sendChunk() {
+                if (chunk >= total) { completeFile(); return; }
+                var start = chunk * CHUNK_SIZE;
+                var end = Math.min(item.file.size, start + CHUNK_SIZE);
+                var blob = item.file.slice(start, end);
+                var fd = new FormData();
+                fd.append('chunk', blob, 'chunk.bin');
+                fd.append('upload_uid', uid);
+                fd.append('chunk_index', String(chunk));
+                fd.append('total_chunks', String(total));
+                fd.append('type', item.type);
+                fd.append('_token', csrf);
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '<?= url('/admin/galleries/pending/chunk') ?>');
+                xhr.upload.addEventListener('progress', function (e) {
+                    if (e.lengthComputable) {
+                        var done = Math.min(item.file.size, chunk * CHUNK_SIZE + e.loaded);
+                        report(((sentBytes + done) / Math.max(totalBytes, 1)) * 100, chunk + '/' + total + ' — ' + item.file.name);
+                    }
+                });
+                xhr.addEventListener('load', function () {
+                    var ok = false;
+                    try { ok = JSON.parse(xhr.responseText).ok === true; } catch (err) {}
+                    if (!ok) {
+                        failFile(item, item.file.name + ': rejected by server');
+                        return;
+                    }
+                    chunk++;
+                    sendChunk();
+                });
+                xhr.addEventListener('error', function () {
+                    // Network drop: retry this chunk in place (resume). Give up
+                    // after a few attempts so a dead link surfaces to the user.
+                    var attempt = 0;
+                    function retry() {
+                        attempt++;
+                        if (attempt <= 8) { setTimeout(sendChunk, 700 * attempt); return; }
+                        failFile(item, item.file.name + ': network error (could not resume)');
+                    }
+                    retry();
+                });
+                xhr.send(fd);
+            }
+
+            // All chunks stored -> ask the server to assemble + validate.
+            function completeFile() {
+                var fd = new FormData();
+                fd.append('upload_uid', uid);
+                fd.append('original_name', item.file.name);
+                fd.append('total_chunks', String(total));
+                fd.append('type', item.type);
+                fd.append('_token', csrf);
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '<?= url('/admin/galleries/pending/complete') ?>');
+                xhr.addEventListener('load', function () {
+                    var res = null;
+                    try { res = JSON.parse(xhr.responseText); } catch (err) {}
+                    if (!res || res.ok !== true) {
+                        var msg = res && res.error ? ' — ' + res.error : '';
+                        failFile(item, item.file.name + ': rejected by server' + msg);
+                        return;
+                    }
+                    finishFile(item, res);
+                });
+                xhr.addEventListener('error', function () {
+                    failFile(item, item.file.name + ': network error');
+                });
+                xhr.send(fd);
+            }
+
+            sendChunk();
+        }
+
+        next();
+    }
+
+    dropZone.addEventListener('click', function () { fileInput.click(); });
+    dropZone.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', function () { dropZone.classList.remove('dragover'); });
+    dropZone.addEventListener('drop', function (e) {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer && e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
+    });
+    fileInput.addEventListener('change', function () { if (fileInput.files.length) uploadFiles(fileInput.files); });
+
+    tilesEl.addEventListener('click', function (e) {
+        var btn = e.target.closest('button[data-act]');
+        if (!btn) return;
+        var tile = btn.closest('.pending-tile');
+        var filename = tile.dataset.file;
+        var act = btn.dataset.act;
+
+        if (act === 'delete') {
+            setBusy(tile, true);
+            var body = new FormData();
+            body.append('_token', csrf);
+            fetch('<?= url('/admin/galleries/pending') ?>/' + encodeURIComponent(filename) + '/delete', { method: 'POST', body: body })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.ok) { pendingFiles = res.files; render(); }
+                    else alert(res.error || 'Could not remove file.');
+                })
+                .catch(function () { setBusy(tile, false); alert('Could not remove file.'); });
+            return;
+        }
+
+        if (act === 'rotate') {
+            setBusy(tile, true);
+            var rbody = new FormData();
+            rbody.append('direction', btn.dataset.dir);
+            rbody.append('_token', csrf);
+            fetch('<?= url('/admin/galleries/pending') ?>/' + encodeURIComponent(filename) + '/rotate', { method: 'POST', body: rbody })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.ok) { pendingFiles = res.files; render(); }
+                    else { setBusy(tile, false); alert(res.error || 'Could not rotate image.'); }
+                })
+                .catch(function () { setBusy(tile, false); alert('Could not rotate image.'); });
+        }
+    });
+
+    render();
+})();
+</script>
 
 <h2>Photos</h2>
 <?php if (empty($photos)): ?>

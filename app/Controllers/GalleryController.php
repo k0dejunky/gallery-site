@@ -487,6 +487,43 @@ class GalleryController extends Controller
     }
 
     /**
+     * Admin: move the current session's staged uploads into an existing
+     * gallery. The manage page stages drag-and-dropped files exactly like the
+     * create page (same pending endpoints), then commits them here.
+     */
+    public function commitPending(int $galleryId): void
+    {
+        Auth::requirePermission('galleries');
+
+        $gallery = Gallery::find($galleryId);
+
+        if ($gallery === null) {
+            $this->notFound();
+            return;
+        }
+
+        if (!empty($gallery['is_secret']) && !Auth::isSuperAdmin()) {
+            $this->notFound();
+            return;
+        }
+
+        $count = $this->finalizePending($galleryId, (string) ($gallery['type'] ?? 'images'));
+
+        AuditLog::record(
+            (int) Auth::user()['id'],
+            'update',
+            'gallery',
+            $galleryId,
+            'Added ' . $count . ' staged file(s) to gallery "' . $gallery['title'] . '"',
+            null,
+            ['photos' => $count, 'title' => $gallery['title']]
+        );
+
+        $this->flash('success', $count . ' file(s) added to the gallery.');
+        $this->redirect('/admin/galleries/' . $galleryId);
+    }
+
+    /**
      * Admin: accept an AJAX multi-file upload into this session's pending
      * area so an admin can stage files before naming and saving the gallery.
      * Generates thumbnails/variants immediately and returns the updated list
@@ -965,7 +1002,7 @@ class GalleryController extends Controller
     /**
      * The staged files as URL/thumbnail-ready rows for the tiled preview.
      */
-    private function pendingListMeta(): array
+    public function pendingListMeta(): array
     {
         $config = config('app.uploads');
         $list   = $_SESSION['pending_gallery_files'] ?? [];

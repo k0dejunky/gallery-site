@@ -184,6 +184,9 @@ class AdminController extends Controller
             'queuedGalleries' => Gallery::queuedForPublishing(Auth::isSuperAdmin()),
             'allowedUsers' => !empty($gallery['is_secret']) ? Gallery::allowedUsers($id) : [],
             'accessUsers' => Auth::isSuperAdmin() ? \App\Models\User::allForGalleryAccess() : [],
+            // Staged drag-and-drop uploads (same pending area the create page
+            // uses), so the manage page resumes tiles on a revisit.
+            'pendingFiles' => (new \App\Controllers\GalleryController($this->request))->pendingListMeta(),
         ]);
     }
 

@@ -121,6 +121,7 @@ return [
     ['POST', '/admin/galleries/{id}/publish-now', 'GalleryController@publishNow', 'galleries'],
     ['POST', '/admin/galleries/{id}/recommend', 'GalleryController@recommendPost', 'galleries'],
     ['POST', '/admin/galleries/{galleryId}/photos', 'PhotoController@upload', 'galleries'],
+    ['POST', '/admin/galleries/{galleryId}/pending-commit', 'GalleryController@commitPending', 'galleries'],
     ['POST', '/admin/galleries/{galleryId}/photos/{photoId}/caption', 'PhotoController@updateCaption', 'galleries'],
     ['POST', '/admin/galleries/{galleryId}/photos/{photoId}/delete', 'PhotoController@destroy', 'galleries'],
     ['POST', '/admin/galleries/{galleryId}/photos/{photoId}/move', 'PhotoController@move', 'galleries'],
