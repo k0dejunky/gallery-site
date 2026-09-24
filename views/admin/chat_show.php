@@ -105,6 +105,15 @@
         }
     });
 
+    // Enter sends the operator reply; Shift+Enter inserts a newline. The
+    // isComposing guard keeps CJK/IME Enter-to-confirm from firing a send.
+    replyText.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+            e.preventDefault();
+            replyForm.requestSubmit();
+        }
+    });
+
     // Lazy-load older messages when the user scrolls to the top of the thread.
     var thread = document.getElementById('chat-thread');
     var convId = <?= (int) ($conversation['id'] ?? 0) ?>;

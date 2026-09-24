@@ -197,6 +197,15 @@ hideBadge();
             });
     });
 
+    // Enter sends the message; Shift+Enter inserts a newline. The isComposing
+    // guard keeps CJK/IME Enter-to-confirm from firing a send.
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+            e.preventDefault();
+            form.requestSubmit();
+        }
+    });
+
     // Clear the sidebar unread badge once the member is reading the chat.
     function hideBadge() {
         document.querySelectorAll('.nav-item[href$="/chat"] .nav-unread, .nav-unread').forEach(function (b) {
