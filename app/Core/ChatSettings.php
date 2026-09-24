@@ -3,7 +3,9 @@
 namespace App\Core;
 
 /**
- * Chat site-wide settings persisted in storage/chat.json.
+ * Chat site-wide settings, persisted in the chat_settings key/value table
+ * (migrated from storage/chat.json). Keys are stored as JSON so scalars and
+ * arrays round-trip cleanly.
  *
  *   ai_enabled        bool    master switch for the AI (off = operator-only)
  *   default_ai_mode   string  mode for new conversations (retrieval/finetuned/operator)
@@ -12,19 +14,18 @@ namespace App\Core;
  *   model             string  base model name
  *   finetuned_model   string  fine-tuned model name
  *   finetuned         array   adapter metadata from the last training upload
+ *   trainer_since_id  int     highest chat_training_pairs id the trainer consumed
+ *
+ * On the first read of an existing install whose table is empty, the legacy
+ * storage/chat.json is imported once so no settings are lost in the migration.
  */
 class ChatSettings
 {
-    private static function file(): string
-    {
-        return dirname(__DIR__, 2) . '/storage/chat.json';
-    }
+    private const TABLE = 'chat_settings';
 
-    public static function all(): array
+    private static function defaults(): array
     {
-        $data = is_file(self::file()) ? json_decode((string) @file_get_contents(self::file()), true) : null;
-
-        $defaults = [
+        return [
             'ai_enabled'       => true,
             'default_ai_mode'  => 'retrieval',
             'daily_message'    => '',
@@ -34,18 +35,61 @@ class ChatSettings
             'finetuned'        => [],
             'trainer_since_id' => 0,
         ];
+    }
 
-        if (!is_array($data)) {
-            return $defaults;
+    private static function legacyFile(): string
+    {
+        return dirname(__DIR__, 2) . '/storage/chat.json';
+    }
+
+    public static function all(): array
+    {
+        $rows = Database::run(
+            'SELECT setting_key, setting_value FROM ' . self::TABLE
+        )->fetchAll();
+
+        if ($rows === []) {
+            // Empty table: an existing install may still hold its state in the
+            // legacy file. Import it once, then re-read.
+            $legacy = self::readLegacy();
+            if ($legacy !== null) {
+                self::save($legacy);
+                $rows = Database::run(
+                    'SELECT setting_key, setting_value FROM ' . self::TABLE
+                )->fetchAll();
+            }
         }
 
-        return array_merge($defaults, array_intersect_key($data, $defaults));
+        $data = [];
+        foreach ($rows as $row) {
+            $decoded = json_decode((string) ($row['setting_value'] ?? ''), true);
+            $data[(string) $row['setting_key']] = $decoded === null && trim((string) ($row['setting_value'] ?? '')) !== 'null'
+                ? (string) ($row['setting_value'] ?? '')
+                : $decoded;
+        }
+
+        return array_merge(self::defaults(), array_intersect_key($data, self::defaults()));
     }
 
     public static function save(array $state): void
     {
-        $file = self::file();
-        @file_put_contents($file, (string) json_encode($state, JSON_PRETTY_PRINT), LOCK_EX);
+        $known = self::defaults();
+        foreach ($state as $key => $value) {
+            if (!array_key_exists($key, $known)) {
+                continue;
+            }
+            self::put((string) $key, $value);
+        }
+    }
+
+    /** Upsert a single key (JSON-encoded), leaving the rest untouched. */
+    public static function put(string $key, $value): void
+    {
+        Database::run(
+            'INSERT INTO ' . self::TABLE . ' (setting_key, setting_value) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)',
+            [$key, json_encode($value, JSON_UNESCAPED_SLASHES)]
+        );
     }
 
     /** Whether the AI is currently enabled (master switch). */
@@ -75,8 +119,22 @@ class ChatSettings
 
     public static function setTrainerSinceId(int $sinceId): void
     {
-        $state = self::all();
-        $state['trainer_since_id'] = max(0, $sinceId);
-        self::save($state);
+        self::put('trainer_since_id', max(0, $sinceId));
+    }
+
+    /**
+     * Read the legacy storage/chat.json into a settings array, or null when
+     * the file is absent/unparseable.
+     */
+    private static function readLegacy(): ?array
+    {
+        $path = self::legacyFile();
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $decoded = json_decode((string) @file_get_contents($path), true);
+
+        return is_array($decoded) ? $decoded : null;
     }
 }

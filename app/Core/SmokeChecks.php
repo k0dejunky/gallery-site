@@ -532,20 +532,21 @@ class SmokeChecks
         $add('smoke.ap.tags', 'Smoke · Auto Poster', 'Recommendations tag up to 20 categories', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'MAX_TAGS = 20') !== false ? $ok('MAX_TAGS = 20') : $bad('auto-post recommendations must tag up to 20 categories');
         });
-        $add('smoke.ap.template_settings', 'Smoke · Auto Poster', 'Post templates are editable per platform (X + Reddit)', static function () use ($apq, $ok, $bad): array {
+        $apt = $read("$root/app/Core/AutoPostText.php");
+        $add('smoke.ap.template_settings', 'Smoke · Auto Poster', 'Post templates are editable per platform (X + Reddit)', static function () use ($apq, $apt, $ok, $bad): array {
             return strpos($apq, 'public static function templateSettings(') !== false
-                && strpos($apq, "templateSettings(string \$platform") !== false
-                && strpos($apq, "'max_tags'") !== false && strpos($apq, "'max_length'") !== false
-                && strpos($apq, "'banned_words'") !== false
-                && strpos($apq, 'DEFAULT_PATTERN') !== false && strpos($apq, "'{title}'") !== false
-                    && strpos($apq, "'{hashtags}'") !== false
+                && strpos($apt, "templateSettings(string \$platform") !== false
+                && strpos($apt, "'max_tags'") !== false && strpos($apt, "'max_length'") !== false
+                && strpos($apt, "'banned_words'") !== false
+                && strpos($apt, 'DEFAULT_PATTERN') !== false && strpos($apt, "'{title}'") !== false
+                    && strpos($apt, "'{hashtags}'") !== false
                 ? $ok('per-platform editable template settings present')
                 : $bad('AutoPostQueue must expose per-platform editable template settings (pattern tokens, hashtag/char limits, banned words)');
         });
         $add('smoke.ap.template_config', 'Smoke · Auto Poster', 'AutoPosterConfig persists + preserves both templates', static function () use ($root, $read, $ok, $bad): array {
             $cfg = $read("$root/app/Models/AutoPosterConfig.php");
             return strpos($cfg, 'public static function saveTemplate(') !== false
-                && strpos($cfg, "'template_x' =>") !== false && strpos($cfg, "'template_reddit' =>") !== false
+                && preg_match("/'template_x'\s*=>/", $cfg) === 1 && preg_match("/'template_reddit'\s*=>/", $cfg) === 1
                 ? $ok('saveTemplate + both templates preserved on save()')
                 : $bad('AutoPosterConfig must save an X and a Reddit template and carry them over on credential saves');
         });
@@ -654,7 +655,7 @@ class SmokeChecks
         });
         $apc = $read("$root/app/Models/AutoPosterConfig.php");
         $add('smoke.ap.config_tz', 'Smoke · Auto Poster', 'Config persists validated timezone', static function () use ($apc, $ok, $bad): array {
-            return strpos($apc, 'validatedTimezone') !== false && strpos($apc, "'timezone' =>") !== false
+            return strpos($apc, 'validatedTimezone') !== false && preg_match("/'timezone'\s*=>/", $apc) === 1
                 ? $ok('validated timezone')
                 : $bad('auto-poster config must persist a validated timezone');
         });

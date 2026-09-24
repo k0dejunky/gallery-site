@@ -153,9 +153,11 @@ function media_token_valid(string $path, string $given): bool
     $secret = env_value('GALLERY_MEDIA_KEY');
 
     if ($secret === '') {
-        // No secret configured: the gate is inert so the site keeps working,
-        // but originals/web sizes still require the membership level check.
-        return true;
+        // No secret configured: fail closed. Originals and web-sized variants
+        // must never be served through a URL that can be replayed without a
+        // signed token, so a missing key denies rather than silently passing.
+        // config/validate.php refuses to boot production without this key.
+        return false;
     }
 
     return hash_equals(media_token($path), $given);

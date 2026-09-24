@@ -305,7 +305,7 @@ class AdminChatController extends Controller
         if ($file !== null && !empty($file['tmp_name']) && is_file($file['tmp_name'])) {
             $attachment = ChatMessage::storeAttachment($file);
             if ($attachment === null) {
-                $this->flash('error', 'Attachment could not be stored.');
+                $this->flash('error', 'Attachment could not be stored (unsupported file type).');
                 $this->redirect('/admin/chat/' . $id);
                 return;
             }

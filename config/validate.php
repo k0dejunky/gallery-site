@@ -38,6 +38,13 @@ return static function (): bool {
         if (in_array($debug, ['1', 'true', 'yes', 'on'], true)) {
             $errors[] = 'APP_DEBUG must be disabled in production';
         }
+
+        // Originals/web variants are signed with this HMAC key; without it the
+        // media gate fails closed (helpers.media_token_valid) and no protected
+        // file can be served, so a production host must configure it.
+        if (env_value('GALLERY_MEDIA_KEY') === '') {
+            $errors[] = 'GALLERY_MEDIA_KEY must be set in production';
+        }
     }
 
     // PHP warnings/notices must never be printed inline, regardless of

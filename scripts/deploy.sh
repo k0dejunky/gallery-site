@@ -20,11 +20,14 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
 [[ $# -ge 1 ]] || { echo "usage: $0 <file> [<file>...]" >&2; exit 1; }
 remote() {
+    # Pipe the script to a temp file, then run it under sudo. The password goes
+    # to sudo through its own pipe, so a host with NOPASSWD sudo never executes
+    # the password line as a stray script command.
+    local tmp=".gallery-deploy-$$-$(date +%s).sh"
     if [[ -n "$PASS" ]]; then
-        { printf '%s\n' "$PASS"; printf '%s\n' "$1"; } |
-            ssh "$HOST" "sudo -S -p '' bash -s"
+        printf '%s\n' "$1" | ssh "$HOST" "cat > /tmp/$tmp && { echo '$PASS' | sudo -S -p '' bash /tmp/$tmp; rm -f /tmp/$tmp; }"
     else
-        printf '%s\n' "$1" | ssh "$HOST" "sudo bash -s"
+        printf '%s\n' "$1" | ssh "$HOST" "cat > /tmp/$tmp && bash /tmp/$tmp; rm -f /tmp/$tmp"
     fi
 }
 

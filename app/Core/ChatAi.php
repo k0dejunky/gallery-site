@@ -87,15 +87,9 @@ class ChatAi
      */
     public static function currentFineTunedModel(): string
     {
-        $stateFile = dirname(__DIR__, 2) . '/storage/chat.json';
-        if (is_file($stateFile)) {
-            $data = json_decode((string) @file_get_contents($stateFile), true);
-            if (is_array($data) && !empty($data['finetuned']['created'])) {
-                return (string) $data['finetuned']['created'];
-            }
-        }
+        $finetuned = ChatSettings::all()['finetuned'] ?? [];
 
-        return self::FINETUNED_MODEL;
+        return !empty($finetuned['created']) ? (string) $finetuned['created'] : self::FINETUNED_MODEL;
     }
 
     private static function generate(string $model, string $prompt): array

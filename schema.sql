@@ -442,6 +442,14 @@ CREATE TABLE IF NOT EXISTS auto_poster_log (
     INDEX idx_auto_poster_created (created_at)
 );
 
+-- Auto Poster credentials (Reddit/X OAuth tokens) + per-platform post
+-- templates, stored as JSON per key. Replaces storage/autoposter.json.
+CREATE TABLE IF NOT EXISTS autoposter_settings (
+    setting_key   VARCHAR(64)  NOT NULL PRIMARY KEY,
+    setting_value MEDIUMTEXT   NULL,
+    updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 -- Queue for auto-posting: holds recommended X/Reddit posts generated from
 -- recent uploads, ready for the admin to review, queue, or dismiss. media_ids
 -- carries the 1-4 attached files; scheduled_at sets when the autopost worker
@@ -497,9 +505,10 @@ INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, le
     ('Lifetime', 'lifetime', 249.99, 'lifetime', 'Full access forever.', 7, 1, 1)
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
-INSERT INTO users (email, password_hash, role)
-VALUES ('admin@example.com', '$2y$10$uNmLZcHOdbU1ClIdYBshduRC5MV6kNjkvhr20NZaWDRbyLFI4kX0m', 'admin')
-ON DUPLICATE KEY UPDATE email = email;
+-- No default admin user is seeded. install.sh creates the initial admin with a
+-- freshly generated bcrypt password so a known credential never ships with the
+-- schema. On an existing install, an admin account can be restored by setting a
+-- user's role to 'admin' (admin Users page) or via SQL.
 
 -- Daily content view counts for the admin dashboard's view-trends charts.
 CREATE TABLE IF NOT EXISTS content_views (
@@ -607,6 +616,15 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     KEY idx_chat_msg_conv_date (conversation_id, created_at),
     CONSTRAINT fk_chat_msg_conv FOREIGN KEY (conversation_id)
         REFERENCES chat_conversations(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Chat site-wide settings (AI switch, default mode, daily message, fine-tuned
+-- model metadata, trainer watermark) as JSON per key. Replaces
+-- storage/chat.json.
+CREATE TABLE IF NOT EXISTS chat_settings (
+    setting_key   VARCHAR(64)  NOT NULL PRIMARY KEY,
+    setting_value MEDIUMTEXT   NULL,
+    updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS chat_training_pairs (

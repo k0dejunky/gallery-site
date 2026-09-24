@@ -256,6 +256,8 @@ Alias /gallery "$INSTALL_DIR/public"
     XSendFile On
     XSendFilePath $INSTALL_DIR/storage/uploads
     XSendFilePath $INSTALL_DIR/storage
+    # Published operator APK is streamed via X-Sendfile (chat apk endpoint).
+    XSendFilePath $INSTALL_DIR/public/assets/apk
 </Directory>
 
 # Long-lived cache headers for static assets.
@@ -295,21 +297,22 @@ SQL
 log "Importing database schema..."
 mysql -u root "$DB_NAME" < "$INSTALL_DIR/schema.sql"
 
-# If a custom admin email/password was requested, apply it now so the seeded
-# default (known) password is never left in place. A bcrypt hash is generated
-# with PHP to match the app's password_hash() usage.
-if [[ -n "$ADMIN_PASS" || "$ADMIN_EMAIL" != "admin@example.com" ]]; then
-    ADMIN_PASS="${ADMIN_PASS:-$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)}"
-    HASH="$(php -r 'echo password_hash($argv[1], PASSWORD_BCRYPT);' "$ADMIN_PASS")"
-    mysql -u root "$DB_NAME" <<SQL
-UPDATE users
-   SET email = '$ADMIN_EMAIL',
-       password_hash = '$HASH'
- WHERE role = 'admin'
- LIMIT 1;
+# ---------------------------------------------------------------------------
+# Create the initial admin account with a fresh password. The schema no longer
+# seeds a default admin (no known credential ships), so this always generates
+# a password, hashes it with PHP's password_hash(), and upserts the account.
+# In interactive mode a generated password is printed at the end; pass
+# --admin-pass to set it explicitly.
+# ---------------------------------------------------------------------------
+log "Creating admin account ($ADMIN_EMAIL)..."
+ADMIN_PASS="${ADMIN_PASS:-$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)}"
+HASH="$(php -r 'echo password_hash($argv[1], PASSWORD_BCRYPT);' "$ADMIN_PASS")"
+mysql -u root "$DB_NAME" <<SQL
+INSERT INTO users (email, password_hash, role)
+VALUES ('$ADMIN_EMAIL', '$HASH', 'admin')
+ON DUPLICATE KEY UPDATE email = '$ADMIN_EMAIL', password_hash = '$HASH';
 SQL
-    ok "Seeded admin updated to $ADMIN_EMAIL with a fresh password."
-fi
+ok "Admin account ready: $ADMIN_EMAIL"
 
 # ---------------------------------------------------------------------------
 # Tune MySQL for the gallery workload
@@ -485,7 +488,7 @@ cat <<EOF
  Database       : $DB_NAME  (user: $DB_USER)
  DB password    : $DB_PASS
  Admin login    : $ADMIN_EMAIL
- Admin password : ${ADMIN_PASS:-<unchanged; schema default - CHANGE AFTER LOGIN>}
+ Admin password : $ADMIN_PASS
 --------------------------------------------------------------------------
  Video exports   : runs via PHP exec() -> /usr/bin/ffmpeg
  Image variants  : web + thumbnail generated in one ffmpeg pass (GD fallback)

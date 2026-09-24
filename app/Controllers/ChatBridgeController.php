@@ -20,22 +20,35 @@ use App\Models\ChatMessage;
  */
 class ChatBridgeController extends Controller
 {
-    private function authorized(): bool
+    private function presentedToken(): string
     {
-        $expected = \env_value('GALLERY_CHAT_KEY', '');
-
         $given = trim((string) $this->request->header('Authorization', ''));
         if (stripos($given, 'bearer ') === 0) {
             $given = trim(substr($given, 7));
         }
-        if ($given === '') {
-            return false;
+
+        return $given;
+    }
+
+    /** The valid per-device operator token row, or null when not authenticated. */
+    private function deviceToken(): ?array
+    {
+        $raw = $this->presentedToken();
+
+        return $raw === '' ? null : \App\Models\OperatorToken::authenticate($raw);
+    }
+
+    private function authorized(): bool
+    {
+        if ($this->deviceToken() !== null) {
+            return true;
         }
 
-        // Accept a valid per-device operator token (primary), or the legacy
-        // shared key during migration.
-        if (\App\Models\OperatorToken::authenticate($given) !== null) {
-            return true;
+        $expected = \env_value('GALLERY_CHAT_KEY', '');
+        $given = $this->presentedToken();
+
+        if ($given === '') {
+            return false;
         }
 
         return $expected !== '' && hash_equals($expected, $given);
@@ -421,7 +434,7 @@ class ChatBridgeController extends Controller
             $attachment = $this->storeChatAttachment($file);
             if ($attachment === null) {
                 if ($idempotencyKey !== '' && $db->inTransaction()) $db->rollBack();
-                $this->json(['ok' => false, 'error' => 'Attachment could not be stored.']);
+                $this->json(['ok' => false, 'error' => 'Attachment could not be stored (unsupported file type).']);
                 return;
             }
         }
@@ -655,6 +668,14 @@ class ChatBridgeController extends Controller
     /** Accept an uploaded trained adapter + metadata; verify checksum. */
     public function trainingUpload(): void
     {
+        // Adapter uploads rebuild the Ollama fine-tuned model, so they require
+        // a per-device operator token (the legacy shared key is not enough).
+        if ($this->deviceToken() === null) {
+            http_response_code(403);
+            $this->json(['ok' => false, 'error' => 'A per-device operator token is required for adapter uploads.']);
+            return;
+        }
+
         $files = $this->request->file('adapter');
         $adapter = $files['tmp_name'] ?? '';
         $name    = (string) ($files['name'] ?? 'chat-lora.safetensors');
@@ -664,12 +685,102 @@ class ChatBridgeController extends Controller
             return;
         }
 
+        $size = (int) ($files['size'] ?? filesize($adapter));
+        if ($size <= 0 || $size > 2 * 1024 * 1024 * 1024) {
+            http_response_code(400);
+            $this->json(['ok' => false, 'error' => 'Adapter file must be between 1 byte and 2 GiB.']);
+            return;
+        }
+
+        // Validate it really is a safetensors file: [u64 LE header length][JSON header].
+        if (!$this->looksLikeSafetensors($adapter, $size)) {
+            http_response_code(400);
+            $this->json(['ok' => false, 'error' => 'Adapter must be a valid .safetensors file.']);
+            return;
+        }
+
         $checksum = hash_file('sha256', $adapter);
         $dir = dirname(__DIR__, 2) . '/storage/training';
         if (!is_dir($dir)) {
             @mkdir($dir, 0775, true);
         }
 
+        // Single-flight: only one upload may rebuild the model at a time.
+        $lockPath = $dir . '/.upload.lock';
+        $lock = @fopen($lockPath, 'c');
+        if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
+            if (is_resource($lock)) fclose($lock);
+            http_response_code(409);
+            $this->json(['ok' => false, 'error' => 'Another adapter upload is already in progress.']);
+            return;
+        }
+
+        try {
+            $result = $this->storeAdapterAndRebuild($adapter, $name, $dir, $checksum);
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+
+        $this->json(['ok' => true, 'checksum' => $checksum, 'stored' => basename($result['dest'] ?? ''), 'model' => $result['meta'] ?? []]);
+    }
+
+    /**
+     * Lightweight safetensors check: the file must begin with a little-endian
+     * u64 header length whose JSON header decodes to an object with at least
+     * one tensor entry. This blocks junk/HTML/executable payloads without
+     * loading the model.
+     */
+    private function looksLikeSafetensors(string $path, int $size): bool
+    {
+        if ($size < 8) {
+            return false;
+        }
+
+        $fh = @fopen($path, 'rb');
+        if ($fh === false) {
+            return false;
+        }
+
+        try {
+            $lenBytes = fread($fh, 8);
+            if (strlen($lenBytes) !== 8) {
+                return false;
+            }
+
+            // Little-endian u64 header length (unpack('P') is platform
+            // endianness-agnostic on 64-bit PHP).
+            $headerLen = unpack('P', $lenBytes)[1];
+            if ($headerLen <= 0 || $headerLen > $size - 8 || $headerLen > 16 * 1024 * 1024) {
+                return false;
+            }
+
+            $headerJson = fread($fh, (int) $headerLen);
+            if (strlen($headerJson) !== (int) $headerLen) {
+                return false;
+            }
+
+            $header = json_decode($headerJson, true);
+            if (!is_array($header)) {
+                return false;
+            }
+
+            // At least one tensor entry is required (e.g. "base_model.model.layers.0.self_attn.q_proj.weight").
+            foreach ($header as $key => $entry) {
+                if ($key !== '__metadata__' && is_array($entry)) {
+                    return true;
+                }
+            }
+
+            return false;
+        } finally {
+            fclose($fh);
+        }
+    }
+
+    /** Store the adapter directory + metadata, then rebuild the Ollama model. */
+    private function storeAdapterAndRebuild(string $adapter, string $name, string $dir, string $checksum): array
+    {
         // Ollama's ADAPTER directive (0.33.x and earlier) requires a directory
         // with model.safetensors + adapter_config.json. Store the uploaded
         // adapter that way so `ollama create` can consume it.
@@ -710,27 +821,20 @@ class ChatBridgeController extends Controller
             'trained_at'       => date('Y-m-d H:i:s'),
         ];
 
-        $stateFile = dirname(__DIR__, 2) . '/storage/chat.json';
-        $state = [];
-        if (is_file($stateFile)) {
-            $decoded = json_decode((string) @file_get_contents($stateFile), true);
-            $state = is_array($decoded) ? $decoded : [];
-        }
-        $state['finetuned'] = $meta;
-        @file_put_contents($stateFile, (string) json_encode($state, JSON_PRETTY_PRINT), LOCK_EX);
+        // Persist the adapter metadata in the chat_settings table.
+        \App\Core\ChatSettings::put('finetuned', $meta);
 
         // Rebuild the Ollama fine-tuned model from the new adapter. If it
         // fails, the model is left unchanged (versioned create + smoke test).
         $rebuild = \App\Core\ChatModel::rebuild();
         if (!empty($rebuild['ok'])) {
-            $state['finetuned']['created'] = $rebuild['created'];
-            @file_put_contents($stateFile, (string) json_encode($state, JSON_PRETTY_PRINT), LOCK_EX);
             $meta['created'] = $rebuild['created'];
+            \App\Core\ChatSettings::put('finetuned', $meta);
         } else {
             $meta['rebuild_error'] = $rebuild['error'] ?? 'unknown';
         }
 
-        $this->json(['ok' => true, 'checksum' => $checksum, 'stored' => basename($dest), 'model' => $meta]);
+        return ['dest' => $dest, 'meta' => $meta];
     }
 
     /**
@@ -948,7 +1052,88 @@ class ChatBridgeController extends Controller
         return $messages;
     }
 
-    /** Sniff a stored attachment's real MIME type from its content. */
+    /**
+     * APK version manifest for the operator app. Bearer-authenticated and the
+     * SHA-256 of the referenced APK is computed live so the app can verify the
+     * download before installing (no unauthenticated update path).
+     */
+    public function apkInfo(): void
+    {
+        $manifest = $this->apkManifest();
+
+        if ($manifest === null) {
+            $this->json(['ok' => false, 'error' => 'No published APK version.']);
+            return;
+        }
+
+        $apkPath = $this->apkPath((string) ($manifest['latestVersion'] ?? ''));
+
+        $this->json([
+            'ok'            => true,
+            'latestVersion' => (string) ($manifest['latestVersion'] ?? ''),
+            'versionCode'   => (int) ($manifest['versionCode'] ?? 0),
+            'apkUrl'        => (string) ($manifest['apkUrl'] ?? ''),
+            'changelog'     => (string) ($manifest['changelog'] ?? ''),
+            'publishedAt'   => (string) ($manifest['publishedAt'] ?? ''),
+            'sha256'        => $apkPath !== null && is_file($apkPath) ? hash_file('sha256', $apkPath) : '',
+        ]);
+    }
+
+    /**
+     * Stream a published operator APK (Bearer-authenticated). The app verifies
+     * the file's SHA-256 against apk-info before installing.
+     */
+    public function apk(): void
+    {
+        $version = (string) $this->request->query('version', '');
+        $path = $this->apkPath($version);
+
+        if ($path === null || !is_file($path)) {
+            http_response_code(404);
+            $this->json(['ok' => false, 'error' => 'APK not found.']);
+            return;
+        }
+
+        header('Content-Type: application/vnd.android.package-archive');
+        header('Content-Length: ' . (string) filesize($path));
+        header('Content-Disposition: attachment; filename="' . addcslashes(basename($path), '"') . '"');
+        header('X-Sendfile: ' . $path);
+        exit;
+    }
+
+    /** Parse the APK version manifest, or null when missing/invalid. */
+    private function apkManifest(): ?array
+    {
+        $path = dirname(__DIR__, 2) . '/public/assets/apk/operator-chat-version.json';
+
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $decoded = json_decode((string) @file_get_contents($path), true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    /** Absolute path of the published APK for a version, or null. */
+    private function apkPath(string $version): ?string
+    {
+        if ($version === '') {
+            return null;
+        }
+
+        $safe = preg_replace('/[^0-9.]/', '', $version);
+
+        if ($safe === '') {
+            return null;
+        }
+
+        return dirname(__DIR__, 2) . '/public/assets/apk/OperatorChat-v' . $safe . '.apk';
+    }
+
+    /**
+     * Sniff a stored attachment's real MIME type from its content.
+     */
     private function sniffAttachmentType(string $path): string
     {
         $full = dirname(__DIR__, 2) . '/' . ltrim($path, '/');

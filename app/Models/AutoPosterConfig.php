@@ -6,44 +6,47 @@ use App\Core\Database;
 use DateTimeZone;
 
 /**
- * Persists Auto Poster configuration (Reddit + X/Twitter API credentials) and
- * the posting history. Credentials are stored in a JSON file under storage/
- * (gitignored) rather than the database, so they never travel with the repo.
- * The posting log is kept in the database so it survives config file rewrites.
+ * Persists Auto Poster configuration (Reddit + X/Twitter API credentials and
+ * per-platform post templates) in the autoposter_settings key/value table
+ * (migrated from storage/autoposter.json, so credentials never live in the
+ * repo — storage/autoposter.json remains gitignored). The posting log stays in
+ * the database as before.
+ *
+ * On the first read of an existing install whose table is empty, the legacy
+ * storage/autoposter.json is imported once so tokens/templates are preserved.
  */
 class AutoPosterConfig
 {
-    /** Relative path (from the app root) to the JSON credentials file. */
-    private const FILE = '/storage/autoposter.json';
-
-    /**
-     * The credentials file's absolute path.
-     */
-    private static function file(): string
-    {
-        return dirname(__DIR__, 2) . self::FILE;
-    }
+    private const TABLE = 'autoposter_settings';
 
     /**
      * Load the saved credentials. Returns an array with 'reddit' and 'twitter'
      * sub-arrays (each may be empty), the validated 'timezone' and the separate
      * 'template_x' / 'template_reddit' settings used to generate post text per
      * platform (each may be empty, in which case the encoder falls back to its
-     * built-in defaults). A legacy single 'template' key is honoured as the
-     * starting point for both platforms until each is saved separately.
+     * built-in defaults).
      */
     public static function all(): array
     {
-        $path = self::file();
+        $rows = Database::run(
+            'SELECT setting_key, setting_value FROM ' . self::TABLE
+        )->fetchAll();
 
-        if (!is_file($path)) {
-            return ['reddit' => [], 'twitter' => [], 'timezone' => self::effectiveTimezone(null), 'template_x' => [], 'template_reddit' => []];
+        if ($rows === []) {
+            // Empty table: import the legacy credentials file once, then re-read.
+            $legacy = self::readLegacy();
+            if ($legacy !== null) {
+                self::saveAll($legacy);
+                $rows = Database::run(
+                    'SELECT setting_key, setting_value FROM ' . self::TABLE
+                )->fetchAll();
+            }
         }
 
-        $data = json_decode((string) file_get_contents($path), true);
-
-        if (!is_array($data)) {
-            return ['reddit' => [], 'twitter' => [], 'timezone' => self::effectiveTimezone(null), 'template_x' => [], 'template_reddit' => []];
+        $data = [];
+        foreach ($rows as $row) {
+            $decoded = json_decode((string) ($row['setting_value'] ?? ''), true);
+            $data[(string) $row['setting_key']] = $decoded;
         }
 
         $legacy = is_array($data['template'] ?? null) ? $data['template'] : [];
@@ -61,8 +64,7 @@ class AutoPosterConfig
      * The timezone the scheduler displays and schedules in. The auto-poster
      * has no timezone of its own: it always follows the site-wide timezone
      * set on the Settings page, so every picker and the queue show the same
-     * zone the rest of the site uses. A legacy stored value (autoposter.json
-     * "timezone") is ignored for display.
+     * zone the rest of the site uses.
      */
     public static function timezone(): string
     {
@@ -70,29 +72,21 @@ class AutoPosterConfig
     }
 
     /**
-     * Persist the credentials file. Creates storage/ if needed. When a template
-     * argument is null the corresponding currently saved template is carried
-     * over, so a credentials-only save never wipes either platform's post
-     * template.
+     * Persist the credentials. When a template argument is null the
+     * corresponding currently saved template is carried over, so a
+     * credentials-only save never wipes either platform's post template.
      */
     public static function save(array $reddit, array $twitter, string $timezone = 'UTC', ?array $templateX = null, ?array $templateReddit = null): void
     {
-        $path = self::file();
-        $dir  = dirname($path);
-
-        if (!is_dir($dir)) {
-            mkdir($dir, 0775, true);
-        }
-
         $current = self::all();
 
-        file_put_contents($path, json_encode([
+        self::saveAll([
             'reddit'          => $reddit,
             'twitter'         => $twitter,
             'timezone'        => self::validatedTimezone($timezone),
             'template_x'      => $templateX ?? ($current['template_x'] ?? []),
             'template_reddit' => $templateReddit ?? ($current['template_reddit'] ?? []),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        ]);
     }
 
     /**
@@ -103,50 +97,8 @@ class AutoPosterConfig
     public static function saveTemplate(array $template, string $platform = 'x'): void
     {
         $config = self::all();
-
-        if (strtolower($platform) === 'reddit') {
-            self::save(
-                $config['reddit'],
-                $config['twitter'],
-                (string) $config['timezone'],
-                $config['template_x'] ?? [],
-                $template
-            );
-
-            return;
-        }
-
-        self::save(
-            $config['reddit'],
-            $config['twitter'],
-            (string) $config['timezone'],
-            $template,
-            $config['template_reddit'] ?? []
-        );
-    }
-
-    /**
-     * Validate a PHP IANA timezone identifier, defaulting to UTC. Callers use
-     * this so a stale/typoed stored value can never break future scheduling.
-     */
-    private static function validatedTimezone(string $timezone): string
-    {
-        if ($timezone !== '' && in_array($timezone, DateTimeZone::listIdentifiers(), true)) {
-            return $timezone;
-        }
-
-        return 'UTC';
-    }
-
-    /**
-     * The scheduler timezone to use: always the site-wide timezone. Kept as
-     * a narrow shim so callers read one consistent source (SiteConfig) and a
-     * legacy "timezone" stored in autoposter.json can never reintroduce an
-     * unrelated zone.
-     */
-    private static function effectiveTimezone(?string $stored): string
-    {
-        return SiteConfig::timezone();
+        $key = strtolower($platform) === 'reddit' ? 'template_reddit' : 'template_x';
+        self::put($key, $template);
     }
 
     /**
@@ -162,7 +114,7 @@ class AutoPosterConfig
             $config['reddit']['access_token'] = $accessToken;
         }
 
-        self::save($config['reddit'], $config['twitter'], (string) $config['timezone']);
+        self::put('reddit', $config['reddit']);
     }
 
     /**
@@ -179,7 +131,7 @@ class AutoPosterConfig
             $config['twitter']['access_token'] = $accessToken;
         }
 
-        self::save($config['reddit'], $config['twitter'], (string) $config['timezone']);
+        self::put('twitter', $config['twitter']);
     }
 
     /**
@@ -232,5 +184,63 @@ class AutoPosterConfig
         }
 
         Database::run('DELETE FROM auto_poster_log');
+    }
+
+    /** Upsert a single JSON-encoded key, leaving the rest untouched. */
+    private static function put(string $key, $value): void
+    {
+        Database::run(
+            'INSERT INTO ' . self::TABLE . ' (setting_key, setting_value) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)',
+            [$key, json_encode($value, JSON_UNESCAPED_SLASHES)]
+        );
+    }
+
+    /** Upsert every key of a full settings array at once. */
+    private static function saveAll(array $state): void
+    {
+        foreach ($state as $key => $value) {
+            self::put((string) $key, $value);
+        }
+    }
+
+    /**
+     * Validate a PHP IANA timezone identifier, defaulting to UTC. Callers use
+     * this so a stale/typoed stored value can never break future scheduling.
+     */
+    private static function validatedTimezone(string $timezone): string
+    {
+        if ($timezone !== '' && in_array($timezone, DateTimeZone::listIdentifiers(), true)) {
+            return $timezone;
+        }
+
+        return 'UTC';
+    }
+
+    /**
+     * The scheduler timezone to use: always the site-wide timezone. Kept as
+     * a narrow shim so callers read one consistent source (SiteConfig) and a
+     * legacy "timezone" stored value can never reintroduce an unrelated zone.
+     */
+    private static function effectiveTimezone(?string $stored): string
+    {
+        return SiteConfig::timezone();
+    }
+
+    /**
+     * Read the legacy storage/autoposter.json into a settings array, or null
+     * when the file is absent/unparseable.
+     */
+    private static function readLegacy(): ?array
+    {
+        $path = dirname(__DIR__, 2) . '/storage/autoposter.json';
+
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $decoded = json_decode((string) @file_get_contents($path), true);
+
+        return is_array($decoded) ? $decoded : null;
     }
 }

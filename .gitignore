@@ -42,3 +42,5 @@
 *.swp
 storage/chat.json
 /chat-operator-app/
+# Training corpus (sensitive data, never commit)
+/training/kink-corpus/

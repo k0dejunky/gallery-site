@@ -398,6 +398,12 @@ CREATE TABLE IF NOT EXISTS auto_poster_log (
 CREATE INDEX IF NOT EXISTS idx_auto_poster_platform ON auto_poster_log (platform);
 CREATE INDEX IF NOT EXISTS idx_auto_poster_created ON auto_poster_log (created_at);
 
+CREATE TABLE IF NOT EXISTS autoposter_settings (
+    setting_key   VARCHAR(64)  NOT NULL PRIMARY KEY,
+    setting_value TEXT,
+    updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS auto_poster_queue (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     platform     VARCHAR(20) NOT NULL DEFAULT 'twitter',
@@ -520,6 +526,12 @@ CREATE TABLE IF NOT EXISTS chat_conversations (
 CREATE INDEX IF NOT EXISTS idx_chat_conv_user ON chat_conversations (user_id);
 CREATE INDEX IF NOT EXISTS idx_chat_conv_status ON chat_conversations (status);
 
+CREATE TABLE IF NOT EXISTS chat_settings (
+    setting_key   VARCHAR(64) NOT NULL PRIMARY KEY,
+    setting_value TEXT,
+    updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS chat_messages (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     conversation_id INTEGER NOT NULL,
@@ -588,5 +600,5 @@ INSERT OR IGNORE INTO plans (name, slug, price, billing_cycle, description, sort
     ('Yearly', 'yearly', 99.99, 'yearly', 'Full access for one year.', 6, 1, 1),
     ('Lifetime', 'lifetime', 249.99, 'lifetime', 'Full access forever.', 7, 1, 1);
 
-INSERT OR IGNORE INTO users (email, password_hash, role)
-VALUES ('admin@example.com', '$2y$10$uNmLZcHOdbU1ClIdYBshduRC5MV6kNjkvhr20NZaWDRbyLFI4kX0m', 'admin');
+-- No default admin user is seeded (see schema.sql note): install.sh creates
+-- the initial admin with a fresh bcrypt password.

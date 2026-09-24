@@ -1,70 +1,76 @@
 # Android thin client — Chat Bridge contract
 
-The Android app is a **thin client**: no AI logic, no API keys on the device.
-It talks to the site's chat webhooks using a Bearer token (`GALLERY_CHAT_KEY`).
+The Android app (OperatorChat) is a **thin client**: no AI logic, no API keys
+on the device beyond the operator's Bearer token. It talks to the site's chat
+webhooks. The preferred credential is a **per-device operator token**
+(`operator_tokens`, SHA-256-hashed server-side, revocable from the admin Chat
+page); the legacy shared `GALLERY_CHAT_KEY` is still accepted for migration.
 
 Base URL: `https://amethyst2213.com/gallery`
 
 ## Auth
-All requests send: `Authorization: Bearer <GALLERY_CHAT_KEY>`
+
+All requests send `Authorization: Bearer <token>`. The app stores URL + token
+encrypted (AndroidKeyStore AES/GCM). The inbox, threads, replies, streams,
+attachments and app-update endpoints all require this token.
 
 ## Endpoints
 
-### 1. Get conversation config (AI/Live mode + pending count)
-`GET /webhooks/chat/config?conversation=<ID>`
+### Conversations / inbox
+- `GET /webhooks/chat/inbox?query=&cursor=&limit=` — cursor-paginated conversation
+  list with `has_more`/`next_cursor`.
+- `GET /webhooks/chat/users?q=` — member search ("message any user").
+- `POST /webhooks/chat/start` — start a conversation with a member (`user_id`).
 
-```json
-{
-  "ok": true,
-  "conversation": 12,
-  "ai_mode": "retrieval",          // "retrieval" | "finetuned" | "operator"
-  "status": "open",                // "open" | "closed"
-  "pending": 3,                    // member messages awaiting reply
-  "user_id": 42
-}
-```
+### Messages
+- `GET /webhooks/chat/thread?conversation=<ID>` — most recent 50 messages.
+- `GET /webhooks/chat/history?conversation=<ID>&before=<id>&limit=` — older
+  messages, oldest-first; returns `has_more`.
+- `POST /webhooks/chat/reply` — operator reply (`conversation_id`, `message`,
+  `sender_role=operator`), optional multipart `attachment`; sends an
+  `Idempotency-Key` header so offline retries never duplicate.
 
-`ai_mode` meaning for the thin client:
-- `retrieval` / `finetuned` — AI mode: the server replies automatically; the app only displays messages.
-- `operator` — operator-only mode: **no AI**. The app must surface a notification and let the human operator reply via `POST /webhooks/chat/reply`.
+### Live updates
+- `GET /webhooks/chat/stream?conversation=<ID>&since=<id>` — SSE long-poll; the
+  app loops it for a conversation's live messages.
+- `GET /webhooks/chat/events?since=<id>` — SSE long-poll across all
+  conversations (drives the notification service).
 
-### 2. Fetch member messages awaiting a reply
-`GET /webhooks/chat/pending?conversation=<ID>`
+### Mode / read state
+- `POST /webhooks/chat/mode` — set `ai_mode` (retrieval|finetuned|operator).
+- `POST /webhooks/chat/reply-toggle` — enable/disable member replies.
+- `POST /webhooks/chat/read` — mark read by the operator.
 
-```json
-{
-  "ok": true,
-  "conversation": 12,
-  "messages": [
-    { "id": 7, "conversation_id": 12, "sender_role": "user", "message": "hi there", "created_at": "2026-09-16 22:00:00" }
-  ]
-}
-```
+### Attachments
+- `GET /webhooks/chat/attachment?message=<id>[&thumb=1]` — download an
+  attachment (or its JPEG thumbnail).
 
-### 3. Post a reply (operator live-mode, or model)
-`POST /webhooks/chat/reply`  — JSON body:
+### App updates
+- `GET /webhooks/chat/apk-info` — `{ latestVersion, versionCode, apkUrl,
+  changelog, sha256 }` (sha256 computed live from the published APK).
+- `GET /webhooks/chat/apk?version=<X.Y>` — streams the signed APK; the app
+  verifies the SHA-256 and the signing certificate before installing.
 
-```json
-{ "conversation_id": 12, "message": "hey gorgeous", "sender_role": "operator" }
-```
-
-`sender_role`: `"operator"` (human live reply — harvested into training data)
-or `"model"` (server/AI produced). Response:
-
-```json
-{ "ok": true, "id": 8 }
-```
-
-### 4. Conversation context (for the app UI / debugging)
-`GET /webhooks/chat/context?conversation=<ID>` → `{ ok, conversation, ai_mode, history[], few_shot[], ai_base }`
-
-## Training PC endpoints
-- `GET /webhooks/chat/training-data?since_id=<N>` → newline-delimited JSON of `{id, user_message, operator_reply, created_at}`.
-- `POST /webhooks/chat/training-upload` → multipart `adapter` file + `base_model` + `pair_count`; server verifies SHA-256 checksum.
+### Training PC
+- `GET /webhooks/chat/training-data?since_id=<N>` — cleaned pairs (JSONL).
+- `POST /webhooks/chat/training-upload` — adapter + configs (device token only).
+- `POST /webhooks/chat/training-progress` — trainer watermark.
+- `GET /webhooks/chat/training-count` — waiting/cleaned pair counts.
+- `GET /webhooks/chat/context?conversation=<ID>` — conversation + few-shot
+  context for debugging.
 
 ## Thin-client behavior (required on the device)
-1. Poll `config?conversation=<ID>` every ~5–10 s.
-2. If `ai_mode` is `retrieval`/`finetuned` (AI mode): **do nothing** — the server replies automatically; the app only shows the member's message + the AI response.
-3. If the admin has put the conversation in live mode (operator): the app shows a notification; the operator types a reply and sends it via `POST /reply` with `sender_role=operator`.
 
-No model, no token beyond `GALLERY_CHAT_KEY`, no chat logic on the device.
+1. Keep a foreground service on an SSE `events` stream; fall back to adaptive
+   inbox polling only while the stream is unhealthy.
+2. In AI modes (`retrieval`/`finetuned`) the server replies automatically; the
+   app only displays messages.
+3. In `operator` mode the app surfaces a notification and the operator replies
+   via `POST /reply` (`sender_role=operator`), which is harvested into training
+   data.
+4. Offline replies (text and attachments) are queued and drained by a
+   WorkManager worker with the idempotency key.
+5. In-app updates verify the downloaded APK's SHA-256 and release-signing
+   certificate before invoking the installer.
+
+No model, no chat logic on the device.

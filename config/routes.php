@@ -83,6 +83,8 @@ return [
     ['POST', '/webhooks/chat/training-upload', 'ChatBridgeController@trainingUpload'],
     ['POST', '/webhooks/chat/training-progress', 'ChatBridgeController@trainingProgress'],
     ['GET', '/webhooks/chat/training-count', 'ChatBridgeController@trainingCount'],
+    ['GET', '/webhooks/chat/apk-info', 'ChatBridgeController@apkInfo'],
+    ['GET', '/webhooks/chat/apk', 'ChatBridgeController@apk'],
 
     // Admin
     // GET /admin is the admin entry point: it renders the login form for

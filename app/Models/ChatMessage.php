@@ -149,36 +149,31 @@ class ChatMessage
      * Store an uploaded chat attachment under storage/uploads/chat/ and
      * return metadata to persist on the message row, or null on failure.
      * The real MIME type is sniffed from the file content (finfo) because
-     * phone uploads often arrive as application/octet-stream.
+     * phone uploads often arrive as application/octet-stream. Only a
+     * allowlisted set of image/video/audio/document types is accepted.
      *
      * @param array{tmp_name:string, name:string, type:string, size:int} $file
      * @return array{name:string, type:string, path:string}|null
      */
     public static function storeAttachment(array $file): ?array
     {
-        $dir = dirname(__DIR__, 2) . '/storage/uploads/chat';
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0775, true);
+        $tmp = (string) ($file['tmp_name'] ?? '');
+        if (!is_file($tmp)) {
+            return null;
         }
 
-        $name = trim((string) ($file['name'] ?? ''));
-        if ($name === '' || $name !== basename($name)) {
-            $name = 'attachment-' . bin2hex(random_bytes(6));
-        }
-
-        $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', $name) ?: 'attachment';
-        $dest = $dir . '/' . bin2hex(random_bytes(6)) . '_' . $safeName;
-
-        if (!@move_uploaded_file((string) $file['tmp_name'], $dest)) {
-            if (!@copy((string) $file['tmp_name'], $dest)) {
-                return null;
-            }
-        }
+        $allowedExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'webm', 'mp3', 'ogg', 'oga', 'wav', 'pdf', 'txt'];
+        $allowedMime = [
+            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+            'video/mp4', 'video/webm',
+            'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/x-wav', 'audio/x-pn-wav',
+            'application/pdf', 'text/plain',
+        ];
 
         $realType = '';
         if (function_exists('finfo_open')) {
             $fi = finfo_open(FILEINFO_MIME_TYPE);
-            $t = $fi !== false ? finfo_file($fi, $dest) : false;
+            $t = $fi !== false ? finfo_file($fi, $tmp) : false;
             if (is_resource($fi)) {
                 finfo_close($fi);
             }
@@ -187,7 +182,36 @@ class ChatMessage
             }
         }
         if ($realType === '') {
-            $realType = mime_content_type($dest) ?: '';
+            $realType = mime_content_type($tmp) ?: '';
+        }
+
+        // Reject by content before it ever reaches storage: sniffed MIME must
+        // be in the allowlist, and the extension must match one too.
+        if (!in_array(strtolower($realType), $allowedMime, true)) {
+            return null;
+        }
+
+        $name = trim((string) ($file['name'] ?? ''));
+        if ($name === '' || $name !== basename($name)) {
+            $name = 'attachment-' . bin2hex(random_bytes(6));
+        }
+
+        $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', $name) ?: 'attachment';
+        $ext = strtolower(pathinfo($safeName, PATHINFO_EXTENSION));
+        if (!in_array($ext, $allowedExt, true)) {
+            return null;
+        }
+
+        $dir = dirname(__DIR__, 2) . '/storage/uploads/chat';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        $dest = $dir . '/' . bin2hex(random_bytes(6)) . '_' . $safeName;
+
+        if (!@move_uploaded_file($tmp, $dest)) {
+            if (!@copy($tmp, $dest)) {
+                return null;
+            }
         }
 
         $sent = (string) ($file['type'] ?? '');

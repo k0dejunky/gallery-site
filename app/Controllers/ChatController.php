@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\ChatAi;
+use App\Core\RateLimiter;
 use App\Models\ChatMessage;
 
 /**
@@ -66,6 +67,14 @@ class ChatController extends Controller
 
         if (!ChatMessage::canChat($userId)) {
             $this->json(['ok' => false, 'error' => 'You are not eligible to chat.']);
+            return;
+        }
+
+        // Per-user send throttle: 12 messages per 60 seconds. Enforced before
+        // the synchronous Ollama generation so spam cannot drive model load.
+        if (!RateLimiter::allow(['chat_send:' . $userId], 12, 60)) {
+            http_response_code(429);
+            $this->json(['ok' => false, 'error' => 'You are sending messages too quickly. Please wait a moment.']);
             return;
         }
 
