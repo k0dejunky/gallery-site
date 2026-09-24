@@ -198,6 +198,10 @@ class ProgressCallback:
         self.total = int(getattr(state, "max_steps", 0) or 0)
         write_status({"phase": "training", "progress": {"step": 0, "total": self.total, "pct": 0.0, "loss": None}})
 
+    def on_init_end(self, args, state, control, **kwargs):
+        self.total = int(getattr(state, "max_steps", 0) or 0)
+        write_status({"phase": "training", "progress": {"step": 0, "total": self.total, "pct": 0.0, "loss": None}})
+
     def on_log(self, args, state, control, logs=None, **kwargs):
         step = int(getattr(state, "global_step", 0) or 0)
         loss = None
@@ -223,6 +227,39 @@ class ProgressCallback:
             "phase": "training",
             "progress": {"step": step, "total": total, "pct": pct, "loss": None},
         })
+
+    def on_epoch_begin(self, args, state, control, **kwargs):
+        pass
+
+    def on_epoch_end(self, args, state, control, **kwargs):
+        pass
+
+    def on_train_end(self, args, state, control, **kwargs):
+        write_status({"phase": "idle", "progress": None})
+
+    def on_step_begin(self, args, state, control, **kwargs):
+        pass
+
+    def on_substep_end(self, args, state, control, **kwargs):
+        pass
+
+    def on_save(self, args, state, control, **kwargs):
+        pass
+
+    def on_optimizer_step(self, args, state, control, optimizer=None, **kwargs):
+        pass
+
+    def on_optimizer_end(self, args, state, control, **kwargs):
+        pass
+
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        pass
+
+    def on_predict(self, args, state, control, metrics=None, **kwargs):
+        pass
+
+    def on_preprocess_data(self, args, state, control, **kwargs):
+        pass
 
 
 # ------------------------------------------------------------------ helpers

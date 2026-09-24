@@ -167,11 +167,24 @@ class ChatAi
             $names[] = (string) ($m['name'] ?? '');
         }
 
+        // The fine-tuned model is created under a versioned name
+        // (chat-finetuned:<hash>) by ChatModel::rebuild(), so match the base
+        // name, :latest, any versioned variant, and the currently recorded one.
+        $hasFine = in_array(self::FINETUNED_MODEL, $names, true)
+            || in_array(self::FINETUNED_MODEL . ':latest', $names, true)
+            || in_array(self::currentFineTunedModel(), $names, true);
+        foreach ($names as $name) {
+            if (str_starts_with($name, self::FINETUNED_MODEL . ':')) {
+                $hasFine = true;
+                break;
+            }
+        }
+
         return [
             'ok'      => $status >= 200 && $status < 300,
             'models'  => $names,
             'hasBase' => in_array(self::BASE_MODEL, $names, true) || in_array(self::BASE_MODEL . ':latest', $names, true),
-            'hasFine' => in_array(self::FINETUNED_MODEL, $names, true) || in_array(self::FINETUNED_MODEL . ':latest', $names, true),
+            'hasFine' => $hasFine,
         ];
     }
 }
