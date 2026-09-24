@@ -8,6 +8,22 @@ use App\Core\Database;
 use App\Models\Photo;
 use App\Models\VideoProject;
 
+// Hard timeouts (via coreutils 'timeout') so a corrupt input file can never
+// hang the single export worker forever: probes get 30s, the encode gets 1h.
+// Falls back to a plain exec when the timeout binary is unavailable.
+$timeoutBin = trim((string) (shell_exec('command -v timeout') ?: ''));
+
+function run_with_timeout(string $command, int $timeoutSec, array &$lines, int &$status): void
+{
+    global $timeoutBin;
+    $lines = [];
+    if ($timeoutBin !== '') {
+        exec('timeout ' . max(1, $timeoutSec) . 's ' . $command . ' 2>&1', $lines, $status);
+    } else {
+        exec($command . ' 2>&1', $lines, $status);
+    }
+}
+
 $jobId = (int) ($argv[1] ?? 0);
 $job = Database::run(
     'SELECT j.*, p.source_photo_id, p.project_json FROM video_export_jobs j JOIN video_projects p ON p.id = j.project_id WHERE j.id = ? LIMIT 1',
@@ -101,7 +117,8 @@ $srcH = 1080;
 $srcFps = 30;
 $srcDuration = null;
 $probeOut = [];
-exec('ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 ' . escapeshellarg($source) . ' 2>&1', $probeOut);
+$probeStatus = 0;
+run_with_timeout('ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 ' . escapeshellarg($source), 30, $probeOut, $probeStatus);
 if (isset($probeOut[0]) && strpos($probeOut[0], ',') !== false) {
     $dims = array_map('intval', explode(',', $probeOut[0]));
     if (($dims[0] ?? 0) > 0 && ($dims[1] ?? 0) > 0) {
@@ -110,13 +127,13 @@ if (isset($probeOut[0]) && strpos($probeOut[0], ',') !== false) {
     }
 }
 $probeOut = [];
-exec('ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate -of csv=p=0 ' . escapeshellarg($source) . ' 2>&1', $probeOut);
+run_with_timeout('ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate -of csv=p=0 ' . escapeshellarg($source), 30, $probeOut, $probeStatus);
 if (isset($probeOut[0]) && strpos($probeOut[0], '/') !== false) {
     [$fpsNum, $fpsDen] = array_map('trim', explode('/', $probeOut[0]));
     if ((int) $fpsDen > 0) $srcFps = round((float) $fpsNum / (float) $fpsDen, 3);
 }
 $probeOut = [];
-exec('ffprobe -v error -show_entries format=duration -of csv=p=0 ' . escapeshellarg($source) . ' 2>&1', $probeOut);
+run_with_timeout('ffprobe -v error -show_entries format=duration -of csv=p=0 ' . escapeshellarg($source), 30, $probeOut, $probeStatus);
 if (isset($probeOut[0]) && is_numeric($probeOut[0])) $srcDuration = (float) $probeOut[0];
 
 $filters = [];
@@ -303,8 +320,12 @@ $command .= ' ' . escapeshellarg($output);
 
 $lines = [];
 $status = 0;
-exec($command . ' 2>&1', $lines, $status);
+run_with_timeout($command, 3600, $lines, $status);
 foreach ($tempMasks as $tempMask) if (is_file($tempMask)) @unlink($tempMask);
+if ($status === 124 || $status === 137) {
+    VideoProject::updateExport($jobId, 'failed', 100, null, 'FFmpeg export timed out after 1 hour.');
+    exit(1);
+}
 if ($status !== 0 || !is_file($output)) {
     VideoProject::updateExport($jobId, 'failed', 100, null, substr(implode("\n", $lines), 0, 2000) ?: 'FFmpeg export failed.');
     exit(1);

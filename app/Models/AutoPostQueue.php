@@ -585,23 +585,41 @@ class AutoPostQueue
     }
 
     /**
-     * Queue rows that are due for auto-publishing: queued posts whose
-     * scheduled_at has passed. Rows without a schedule (legacy/unscheduled)
-     * are also considered due. Ordered oldest schedule first so the worker
-     * publishes in the order the admin scheduled them.
+     * Claim + return queue rows that are due for auto-publishing: queued posts
+     * whose scheduled_at has passed (rows without a schedule are also due),
+     * ordered oldest first.
+     *
+     * Rows are claimed atomically (claimed_at/claimed_by) so two worker runs
+     * — even on different hosts — can never publish the same row, instead of
+     * relying on the single-server flock alone. A crashed worker's claimed
+     * rows are reclaimed after 15 minutes (stale expiry), so a post-then-crash
+     * is no longer reposted on the very next tick.
      */
     public static function due(int $limit = 20): array
     {
         $limit = max(1, min(100, $limit));
-        $where = "q.status = 'queued'
-                  AND (q.scheduled_at IS NULL OR q.scheduled_at <= CURRENT_TIMESTAMP)";
+        $claim = 'worker-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        // Local time: matches MySQL/SQLite CURRENT_TIMESTAMP semantics (a UTC
+        // cutoff would make every fresh claim look stale when the server clock
+        // is not UTC).
+        $staleCutoff = date('Y-m-d H:i:s', time() - 900);
+
+        Database::run(
+            "UPDATE auto_poster_queue
+             SET claimed_at = CURRENT_TIMESTAMP, claimed_by = ?
+             WHERE status = 'queued'
+               AND (scheduled_at IS NULL OR scheduled_at <= CURRENT_TIMESTAMP)
+               AND (claimed_at IS NULL OR claimed_at < ?)
+             ORDER BY COALESCE(scheduled_at, created_at) ASC, id ASC
+             LIMIT $limit",
+            [$claim, $staleCutoff]
+        );
 
         return Database::run(
-            "SELECT q.*
-             FROM auto_poster_queue q
-             WHERE $where
-             ORDER BY COALESCE(q.scheduled_at, q.created_at) ASC, q.id ASC
-             LIMIT $limit"
+            'SELECT q.* FROM auto_poster_queue q
+             WHERE q.claimed_by = ?
+             ORDER BY COALESCE(q.scheduled_at, q.created_at) ASC, q.id ASC',
+            [$claim]
         )->fetchAll();
     }
 
@@ -948,7 +966,9 @@ class AutoPostQueue
     public static function markSkipped(int $id, string $note = ''): bool
     {
         $row = Database::run(
-            'UPDATE auto_poster_queue SET status = ?, error = ?, posted_at = NULL WHERE id = ?',
+            'UPDATE auto_poster_queue SET status = ?, error = ?, posted_at = NULL,
+                    claimed_at = NULL, claimed_by = NULL
+             WHERE id = ?',
             ['skipped', $note, $id]
         );
 
@@ -1086,7 +1106,8 @@ class AutoPostQueue
     {
         $row = Database::run(
             'UPDATE auto_poster_queue
-             SET status = ?, post_url = ?, error = NULL, posted_at = CURRENT_TIMESTAMP
+             SET status = ?, post_url = ?, error = NULL, posted_at = CURRENT_TIMESTAMP,
+                 claimed_at = NULL, claimed_by = NULL
              WHERE id = ?',
             ['posted', $url, $id]
         );
@@ -1101,7 +1122,8 @@ class AutoPostQueue
     {
         $row = Database::run(
             'UPDATE auto_poster_queue
-             SET status = ?, error = ?, posted_at = NULL
+             SET status = ?, error = ?, posted_at = NULL,
+                 claimed_at = NULL, claimed_by = NULL
              WHERE id = ?',
             ['failed', $error, $id]
         );

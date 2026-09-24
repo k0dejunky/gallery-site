@@ -36,6 +36,9 @@ if (!flock($lock, LOCK_EX | LOCK_NB)) {
 }
 
 do {
+    // Liveness heartbeat for /health (surfaced as workers.autopost_heartbeat).
+    @touch(dirname(__DIR__) . '/storage/logs/autopost.heartbeat');
+
     try {
         $due = AutoPostQueue::due(20);
 

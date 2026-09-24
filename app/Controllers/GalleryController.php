@@ -378,25 +378,16 @@ class GalleryController extends Controller
     }
 
     /**
-     * Admin: show the create-gallery form. When arriving via the abandoned
-     * uploads resume flow (?resume=1) the current session's staging area is
-     * kept so the admin can finish a gallery that was abandoned mid-upload.
+     * Admin: show the create-gallery form. Staged uploads already in this
+     * session's pending area are shown (and can be removed tile-by-tile), so a
+     * plain GET never destroys files an admin is mid-way through staging —
+     * including files staged on the manage page for another gallery. The
+     * abandoned-uploads page covers leftover staging from sessions that ended
+     * without saving.
      */
     public function create(): void
     {
         Auth::requirePermission('galleries');
-
-        $resume = $this->request->query('resume') === '1';
-
-        // A fresh visit to the create form should not carry over previously
-        // staged files that were never saved. Resuming keeps them instead.
-        if (!$resume) {
-            $dir = config('app.uploads.dir') . '/pending/' . session_id();
-            if (is_dir($dir)) {
-                $this->clearPendingDir($dir);
-            }
-            unset($_SESSION['pending_gallery_files']);
-        }
 
         $this->viewAdmin('create', [
             'categories'   => Category::all(),
@@ -649,6 +640,29 @@ class GalleryController extends Controller
             return;
         }
 
+        $config = config('app.uploads');
+
+        // Per-chunk ceiling: a resumable upload is sliced into configured-size
+        // parts; a single request exceeding the chunk size (anything up to the
+        // PHP upload ceiling) is rejected instead of staged, so a scripted
+        // session cannot stream arbitrarily large chunks in one request.
+        $chunkSize = (int) ($config['chunk_size'] ?? 0);
+        $chunkBytes = is_file($tmp) ? (int) filesize($tmp) : 0;
+        if ($chunkSize > 0 && $chunkBytes > $chunkSize) {
+            $this->jsonReply(['ok' => false, 'error' => 'Chunk exceeds the configured chunk size.']);
+            return;
+        }
+
+        // Per-session staging ceiling: bound how much a single admin session
+        // may hold in the pending area (staged files + in-progress chunks) so
+        // an abandoned or scripted upload cannot fill the disk before the
+        // final assemble-time validation ever runs.
+        $stagedLimit = (int) ($config['max_size'] ?? 0) * 3;
+        if ($stagedLimit > 0 && $this->pendingStagedBytes() + $chunkBytes > $stagedLimit) {
+            $this->jsonReply(['ok' => false, 'error' => 'Session upload staging limit reached.']);
+            return;
+        }
+
         $parts = $this->chunksDir($uid);
         if (!is_dir($parts) && !@mkdir($parts, 0775, true)) {
             $this->jsonReply(['ok' => false, 'error' => 'Could not allocate upload space.']);
@@ -782,6 +796,39 @@ class GalleryController extends Controller
     private function chunksDir(string $uid): string
     {
         return config('app.uploads.dir') . '/pending/' . session_id() . '/.chunks/' . $uid;
+    }
+
+    /**
+     * Total bytes currently held in this session's pending area: staged files
+     * plus in-progress chunk parts. Used to bound how much a single session
+     * can stage (disk-fill guard).
+     */
+    private function pendingStagedBytes(): int
+    {
+        $root = config('app.uploads.dir') . '/pending/' . session_id();
+
+        if (!is_dir($root)) {
+            return 0;
+        }
+
+        $total = 0;
+
+        foreach (glob($root . '/*') ?: [] as $path) {
+            if (is_file($path)) {
+                $total += (int) filesize($path);
+            }
+        }
+
+        $chunksRoot = $root . '/.chunks';
+        if (is_dir($chunksRoot)) {
+            foreach (glob($chunksRoot . '/*/*') ?: [] as $part) {
+                if (is_file($part)) {
+                    $total += (int) filesize($part);
+                }
+            }
+        }
+
+        return $total;
     }
 
     /**

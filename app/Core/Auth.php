@@ -152,6 +152,16 @@ class Auth
     }
 
     /**
+     * Drop a pending two-factor login (used on lockout/abandon).
+     */
+    public static function clearTwoFactorPending(): void
+    {
+        self::start();
+
+        unset($_SESSION['2fa_pending_user_id'], $_SESSION['2fa_pending_at'], $_SESSION['2fa_remember'], $_SESSION['2fa_attempts']);
+    }
+
+    /**
      * The user id awaiting a two-factor code, or null.
      */
     public static function twoFactorPendingUserId(): ?int

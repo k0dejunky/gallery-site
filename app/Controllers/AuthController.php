@@ -85,13 +85,33 @@ class AuthController extends Controller
             $this->redirect('/login');
         }
 
+        // Throttle brute-force guesses of the 6-digit TOTP code: cap per IP
+        // via the shared rate limiter and per pending session via a counter.
+        // A lockout forces a fresh sign-in (which requires the password again).
+        if (!\App\Core\RateLimiter::allow(['2fa:' . $this->request->ip()], 10, 300)) {
+            Auth::clearTwoFactorPending();
+            $this->flash('error', 'Too many verification attempts. Please sign in again later.');
+            $this->redirect('/login');
+            return;
+        }
+
+        $attempts = (int) ($_SESSION['2fa_attempts'] ?? 0);
+        if ($attempts >= 5) {
+            Auth::clearTwoFactorPending();
+            $this->flash('error', 'Too many verification attempts. Please sign in again.');
+            $this->redirect('/login');
+            return;
+        }
+
         $code = (string) $this->request->post('code', '');
 
         if (Auth::completeTwoFactor($code)) {
+            unset($_SESSION['2fa_attempts']);
             $this->flash('success', 'Welcome back!');
             $this->redirect(Auth::homePath());
         }
 
+        $_SESSION['2fa_attempts'] = $attempts + 1;
         $this->flash('error', 'The verification code is invalid or has expired.');
         $this->redirect('/login/2fa');
     }

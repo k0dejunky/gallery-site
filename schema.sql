@@ -467,10 +467,13 @@ CREATE TABLE IF NOT EXISTS auto_poster_queue (
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     scheduled_at DATETIME NULL,
     posted_at   DATETIME NULL,
+    claimed_at  DATETIME NULL,
+    claimed_by  VARCHAR(64) NULL,
     INDEX idx_apq_status (status),
     INDEX idx_apq_photo (photo_id),
     INDEX idx_apq_created (created_at),
     INDEX idx_apq_scheduled (status, scheduled_at),
+    INDEX idx_apq_claim (status, claimed_at),
     FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

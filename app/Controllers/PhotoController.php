@@ -59,8 +59,8 @@ class PhotoController extends Controller
         }
 
         $before = count(Gallery::photos($galleryId));
-        $this->storeFiles($galleryId, $files);
-        $after = count(Gallery::photos($galleryId));
+        $added  = $this->storeFiles($galleryId, $files);
+        $after  = count(Gallery::photos($galleryId));
 
         if ($after > $before) {
             AuditLog::record(
@@ -74,7 +74,7 @@ class PhotoController extends Controller
             );
         }
 
-        $this->flash('success', 'Photos uploaded.');
+        $this->flash($added > 0 ? 'success' : 'error', $added > 0 ? $added . ' photo(s) uploaded.' : 'No photos were uploaded.');
         $this->redirect('/admin/galleries/' . $galleryId);
     }
 
@@ -721,12 +721,13 @@ class PhotoController extends Controller
      * video) is enforced here so video galleries stay video-only and image
      * galleries stay image-only.
      */
-    private function storeFiles(int $galleryId, array $files): void
+    private function storeFiles(int $galleryId, array $files): int
     {
         $config      = config('app.uploads');
         $gallery     = Gallery::find($galleryId);
         $galleryType = ($gallery['type'] ?? 'images') === 'videos' ? 'videos' : 'images';
         $count       = count($files['name']);
+        $added       = 0;
 
         for ($i = 0; $i < $count; $i++) {
             if ($files['error'][$i] === UPLOAD_ERR_NO_FILE) {
@@ -749,6 +750,7 @@ class PhotoController extends Controller
 
             if ($existing !== null) {
                 Gallery::attachPhoto($galleryId, (int) $existing['id']);
+                $added++;
                 continue;
             }
 
@@ -763,8 +765,12 @@ class PhotoController extends Controller
                 continue;
             }
 
+            // Generate variants BEFORE the photo is committed: a file that
+            // cannot produce a thumbnail (corrupt/unsupported content) is
+            // rolled back and reported instead of leaving a broken grid tile.
+            $variantsOk = true;
             if ($isImage) {
-                create_image_variants(
+                $variantsOk = create_image_variants(
                     $dest,
                     $config['dir'] . '/web_' . $filename,
                     $config['dir'] . '/thumb_' . $filename,
@@ -773,7 +779,7 @@ class PhotoController extends Controller
                     $config['thumb_height']
                 );
             } elseif (is_video($filename)) {
-                create_video_thumbnail(
+                $variantsOk = create_video_thumbnail(
                     $dest,
                     $config['dir'] . '/thumb_' . $filename,
                     $config['thumb_width'],
@@ -781,9 +787,20 @@ class PhotoController extends Controller
                 );
             }
 
+            if (!$variantsOk) {
+                @unlink($dest);
+                @unlink($config['dir'] . '/web_' . $filename);
+                @unlink($config['dir'] . '/thumb_' . $filename);
+                $this->flash('error', $files['name'][$i] . ': could not generate a preview (file may be corrupt or unsupported).');
+                continue;
+            }
+
             $photoId = Photo::create($filename, $hash);
             Gallery::attachPhoto($galleryId, $photoId);
+            $added++;
         }
+
+        return $added;
     }
 
     /**

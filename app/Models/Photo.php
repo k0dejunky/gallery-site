@@ -35,25 +35,21 @@ class Photo
 
         \App\Models\Stats::recordContentView('photo', $photoId);
 
-        $already = (int) Database::run(
-            'SELECT COUNT(*) FROM photo_viewers WHERE user_id = ? AND photo_id = ?',
-            [$userId, $photoId]
-        )->fetchColumn();
-
-        if ($already === 0) {
+        // Race-safe view counting: insert the viewer row; a duplicate-key
+        // exception means the user has already seen this photo (repeat view,
+        // views +1) or a concurrent request won the race — never a 500.
+        try {
             Database::run(
                 'INSERT INTO photo_viewers (user_id, photo_id) VALUES (?, ?)',
                 [$userId, $photoId]
             );
-            Database::run(
-                'UPDATE photos SET views = views + 1, unique_views = unique_views + 1 WHERE id = ?',
-                [$photoId]
-            );
+        } catch (\PDOException $e) {
+            Database::run('UPDATE photos SET views = views + 1 WHERE id = ?', [$photoId]);
             return;
         }
 
         Database::run(
-            'UPDATE photos SET views = views + 1 WHERE id = ?',
+            'UPDATE photos SET views = views + 1, unique_views = unique_views + 1 WHERE id = ?',
             [$photoId]
         );
     }

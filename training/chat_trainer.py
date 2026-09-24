@@ -27,6 +27,10 @@ import urllib.error
 DEFAULT_CONFIG = {
     "server_base": "https://amethyst2213.com/gallery",
     "bridge_token": "REPLACE_WITH_GALLERY_CHAT_KEY",
+    # Per-device operator token used ONLY for training-upload (the server
+    # requires it for adapter uploads; the shared key is not enough). Leave
+    # empty to fall back to bridge_token when the server still allows it.
+    "upload_token": "",
     "model_dir": r"D:\llama-3.2-3b-hf-ab",
     "output_adapter": r"C:\work\chat-lora.safetensors",
     "poll_seconds": 600,
@@ -51,6 +55,7 @@ DEFAULT_CONFIG = {
 ENV_MAP = {
     "server_base": "CHAT_SERVER",
     "bridge_token": "CHAT_BRIDGE_TOKEN",
+    "upload_token": "CHAT_UPLOAD_TOKEN",
     "model_dir": "MODEL_DIR",
     "output_adapter": "OUTPUT_ADAPTER",
     "poll_seconds": "POLL_SECONDS",
@@ -95,6 +100,7 @@ def load_config() -> dict:
         cfg[key] = _to_num(cfg.get(key))
     cfg["lr"] = _to_num(cfg.get("lr"), float)
     cfg["bridge_token"] = str(cfg.get("bridge_token", "")).strip()
+    cfg["upload_token"] = str(cfg.get("upload_token", "")).strip()
     return cfg
 
 
@@ -109,6 +115,7 @@ CFG = load_config()
 
 SERVER_BASE = str(CFG["server_base"]).rstrip("/")
 BRIDGE_TOKEN = CFG["bridge_token"]
+UPLOAD_TOKEN = CFG["upload_token"]
 MODEL_DIR = CFG["model_dir"]
 OUTPUT_ADAPTER = CFG["output_adapter"]
 POLL_SECONDS = CFG["poll_seconds"]
@@ -519,9 +526,12 @@ def upload_adapter(path: str, base_model: str, pair_count: int) -> bool:
     body += f"\r\n--{boundary}--\r\n".encode("utf-8")
 
     url = f"{SERVER_BASE}/webhooks/chat/training-upload"
+    # Adapter uploads rebuild the fine-tuned model, so the server requires a
+    # per-device operator token here (the shared bridge key is not accepted).
+    upload_auth = UPLOAD_TOKEN or BRIDGE_TOKEN
     req = urllib.request.Request(
         url, data=body, method="POST",
-        headers={"Authorization": f"Bearer {BRIDGE_TOKEN}",
+        headers={"Authorization": f"Bearer {upload_auth}",
                  "Content-Type": f"multipart/form-data; boundary={boundary}"},
     )
     try:

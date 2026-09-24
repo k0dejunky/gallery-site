@@ -40,10 +40,17 @@ if (!is_dir($backupDir)) {
     @mkdir($backupDir, 0775, true);
 }
 
-// Check for running backup
+// Check for running backup. A .running marker older than 6 hours is a stale
+// lock left by a hard-killed backup (the bash trap cannot run on kill -9);
+// reclaim it instead of blocking all future backups forever.
 if (is_file($backupDir . '/.running')) {
-    fwrite(STDERR, "Another backup is already running (.running exists).\n");
-    exit(1);
+    $mtime = @filemtime($backupDir . '/.running');
+    if ($mtime !== false && time() - (int) $mtime > 6 * 3600) {
+        @unlink($backupDir . '/.running');
+    } else {
+        fwrite(STDERR, "Another backup is already running (.running exists).\n");
+        exit(1);
+    }
 }
 
 // DB credentials
@@ -88,7 +95,7 @@ TARGET={$target}
 SQLT={$sqlt}
 # .env deliberately excluded: it holds DB/mail/cron secrets. Back it up
 # separately in the secrets vault so a leaked archive cannot expose them.
-tar czf "\$TARGET" --warning=no-file-changed --ignore-failed-read -C {$root} storage/uploads storage/*.json
+tar czf "\$TARGET" --warning=no-file-changed --ignore-failed-read -C {$root} storage/uploads storage/*.json storage/cron
 test \$? -le 1
 gzip -c "\$DUMP" > "\$SQLT"
 rm -f "\$DUMP"

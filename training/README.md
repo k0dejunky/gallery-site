@@ -14,7 +14,7 @@ training PC (192.168.1.250, user k0debox)
   C:\work\.chat_trainer_state.json -> watermark (since_id / trained_pairs)
         |
         | GET /webhooks/chat/training-data?since_id=N   (Bearer CHAT_BRIDGE_TOKEN)
-        | POST /webhooks/chat/training-upload           (multipart adapter + configs)
+        | POST /webhooks/chat/training-upload           (multipart adapter + configs; Bearer CHAT_UPLOAD_TOKEN)
         v
 gallery server (amethyst2213.com /var/www/gallery)
   storage/training/chat-lora/     -> model.safetensors + adapter_config.json + config.json
@@ -51,6 +51,16 @@ if Ollama is upgraded past 0.33.x.
 `storage/training/chat-lora/{model.safetensors, adapter_config.json, config.json}`.
 The `training-upload` webhook stores it that way (it also accepts the legacy
 single-file names for backward compatibility).
+
+## Authentication
+
+- Read endpoints (`training-data`, `training-count`, `training-progress`) use
+  the shared **`CHAT_BRIDGE_TOKEN`** (`GALLERY_CHAT_KEY`).
+- `training-upload` rebuilds the fine-tuned model, so it requires a
+  **per-device operator token** (the shared key is rejected). Create one on the
+  admin **Chat** page (Operator tokens), then set **`CHAT_UPLOAD_TOKEN`** (or
+  `upload_token` in the trainer config file). The trainer falls back to the
+  bridge token only if the server still permits it.
 
 ## Installing on a fresh training PC
 

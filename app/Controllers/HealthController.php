@@ -43,6 +43,60 @@ class HealthController extends Controller
         $cronLog = dirname(__DIR__, 2) . '/storage/logs/cron.log';
         $lastHousekeeping = is_file($cronLog) ? @filemtime($cronLog) : 0;
 
+        // Worker/queue liveness (surfaced as data; not part of core readiness).
+        // Every block is guarded so a missing table or pre-migration schema can
+        // never take the endpoint down.
+        $autopostHeartbeat = dirname(__DIR__, 2) . '/storage/logs/autopost.heartbeat';
+        $lastAutopost = is_file($autopostHeartbeat) ? @filemtime($autopostHeartbeat) : 0;
+
+        $autopostFailed24h = 0;
+        $autopostBacklog = 0;
+        $stuckPhotoEdits = 0;
+        $stuckVideoExports = 0;
+
+        try {
+            $autopostFailed24h = (int) Database::run(
+                "SELECT COUNT(*) FROM auto_poster_queue WHERE status = 'failed' AND created_at >= ?",
+                [date('Y-m-d H:i:s', time() - 86400)]
+            )->fetchColumn();
+        } catch (\Throwable $error) {
+            $autopostFailed24h = 0;
+        }
+
+        try {
+            // Due-but-unclaimed rows (queued, past schedule, not currently
+            // being worked by a live claim) = backlog.
+            $autopostBacklog = (int) Database::run(
+                "SELECT COUNT(*) FROM auto_poster_queue
+                 WHERE status = 'queued'
+                   AND (scheduled_at IS NULL OR scheduled_at <= CURRENT_TIMESTAMP)
+                   AND (claimed_at IS NULL OR claimed_at < ?)",
+                [date('Y-m-d H:i:s', time() - 900)]
+            )->fetchColumn();
+        } catch (\Throwable $error) {
+            $autopostBacklog = 0;
+        }
+
+        try {
+            $stuckPhotoEdits = (int) Database::run(
+                "SELECT COUNT(*) FROM photo_edit_jobs
+                 WHERE status IN ('queued', 'running') AND started_at < ?",
+                [date('Y-m-d H:i:s', time() - 1800)]
+            )->fetchColumn();
+        } catch (\Throwable $error) {
+            $stuckPhotoEdits = 0;
+        }
+
+        try {
+            $stuckVideoExports = (int) Database::run(
+                "SELECT COUNT(*) FROM video_export_jobs
+                 WHERE status = 'running' AND started_at < ?",
+                [date('Y-m-d H:i:s', time() - 6 * 3600)]
+            )->fetchColumn();
+        } catch (\Throwable $error) {
+            $stuckVideoExports = 0;
+        }
+
         http_response_code($ok ? 200 : 503);
         header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store');
@@ -57,6 +111,13 @@ class HealthController extends Controller
                 'last_ok_age_sec' => $lastOk > 0 ? time() - $lastOk : null,
             ],
             'housekeeping_age_sec' => $lastHousekeeping > 0 ? time() - $lastHousekeeping : null,
+            'workers' => [
+                'autopost_heartbeat_age_sec' => $lastAutopost > 0 ? time() - $lastAutopost : null,
+                'autopost_failed_24h' => $autopostFailed24h,
+                'autopost_backlog' => $autopostBacklog,
+                'stuck_photo_edits' => $stuckPhotoEdits,
+                'stuck_video_exports' => $stuckVideoExports,
+            ],
             'time' => gmdate('c'),
         ], JSON_UNESCAPED_SLASHES);
     }

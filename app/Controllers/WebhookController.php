@@ -572,42 +572,54 @@ class WebhookController extends Controller
             }
         }
 
-        if ($gateway !== null) {
-            $authAlgo = (string) $this->request->header('Paypal-Auth-Algo');
-            $certUrl  = (string) $this->request->header('Paypal-Cert-Url');
-            $transId  = (string) $this->request->header('Paypal-Transmission-Id');
-            $transTime = (string) $this->request->header('Paypal-Transmission-Time');
-            $sig      = (string) $this->request->header('Paypal-Transmission-Sig');
+        // Fail closed: a PayPal webhook is only trusted after its signature is
+        // verified against the configured webhook id and the PayPal
+        // transmission headers. Any missing piece (credentials not configured,
+        // no webhook id, missing/partial headers, bad or unverifiable
+        // signature) rejects the event instead of processing it, so a crafted
+        // request can never activate/cancel a subscription.
+        if ($gateway === null || $webhookId === '') {
+            error_log('[webhooks/paypal] rejected: no PayPal credentials/webhook id configured');
+            http_response_code(503);
+            echo 'webhook not configured';
+            return;
+        }
 
-            if ($webhookId !== '' && $authAlgo !== '' && $certUrl !== ''
-                && $transId !== '' && $transTime !== '' && $sig !== '') {
-                try {
-                    $ok = $gateway->verifyWebhookSignature(
-                        $webhookId,
-                        $authAlgo,
-                        $certUrl,
-                        $transId,
-                        $transTime,
-                        $sig,
-                        $rawBody
-                    );
+        $authAlgo = (string) $this->request->header('Paypal-Auth-Algo');
+        $certUrl  = (string) $this->request->header('Paypal-Cert-Url');
+        $transId  = (string) $this->request->header('Paypal-Transmission-Id');
+        $transTime = (string) $this->request->header('Paypal-Transmission-Time');
+        $sig      = (string) $this->request->header('Paypal-Transmission-Sig');
 
-                    if (!$ok) {
-                        http_response_code(400);
-                        echo 'bad signature';
-                        return;
-                    }
-                } catch (\Throwable $e) {
-                    error_log('[webhooks/paypal] signature verification failed: ' . $e->getMessage());
-                    http_response_code(500);
-                    echo 'verification error';
-                    return;
-                }
-            } else {
-                error_log('[webhooks/paypal] signature verification skipped: webhook_id or transmission headers missing');
+        if ($authAlgo === '' || $certUrl === '' || $transId === ''
+            || $transTime === '' || $sig === '') {
+            error_log('[webhooks/paypal] rejected: missing PayPal transmission headers');
+            http_response_code(400);
+            echo 'missing transmission headers';
+            return;
+        }
+
+        try {
+            $ok = $gateway->verifyWebhookSignature(
+                $webhookId,
+                $authAlgo,
+                $certUrl,
+                $transId,
+                $transTime,
+                $sig,
+                $rawBody
+            );
+
+            if (!$ok) {
+                http_response_code(400);
+                echo 'bad signature';
+                return;
             }
-        } else {
-            error_log('[webhooks/paypal] accepted without signature verification: no PayPal credentials configured');
+        } catch (\Throwable $e) {
+            error_log('[webhooks/paypal] signature verification failed: ' . $e->getMessage());
+            http_response_code(500);
+            echo 'verification error';
+            return;
         }
 
         $resourceId = (string) ($event['resource']['id'] ?? '');

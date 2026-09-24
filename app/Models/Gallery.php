@@ -559,29 +559,32 @@ class Gallery
 
         \App\Models\Stats::recordContentView('gallery', $galleryId);
 
-        $already = (int) Database::run(
-            'SELECT COUNT(*) FROM gallery_viewers WHERE user_id = ? AND gallery_id = ?',
+        // Race-safe view counting: try the repeat-view update first; a row
+        // match means the user has seen it before (views +1 only). Otherwise
+        // insert; a duplicate-key exception means a concurrent request won the
+        // race and this is a repeat view (views +1), never a 500.
+        $updated = (int) Database::run(
+            'UPDATE gallery_viewers SET viewed_at = CURRENT_TIMESTAMP WHERE user_id = ? AND gallery_id = ?',
             [$userId, $galleryId]
-        )->fetchColumn();
+        )->rowCount();
 
-        if ($already === 0) {
+        if ($updated > 0) {
+            Database::run('UPDATE galleries SET views = views + 1 WHERE id = ?', [$galleryId]);
+            return;
+        }
+
+        try {
             Database::run(
                 'INSERT INTO gallery_viewers (user_id, gallery_id, viewed_at) VALUES (?, ?, CURRENT_TIMESTAMP)',
                 [$userId, $galleryId]
             );
-            Database::run(
-                'UPDATE galleries SET views = views + 1, unique_views = unique_views + 1 WHERE id = ?',
-                [$galleryId]
-            );
+        } catch (\PDOException $e) {
+            Database::run('UPDATE galleries SET views = views + 1 WHERE id = ?', [$galleryId]);
             return;
         }
 
         Database::run(
-            'UPDATE gallery_viewers SET viewed_at = CURRENT_TIMESTAMP WHERE user_id = ? AND gallery_id = ?',
-            [$userId, $galleryId]
-        );
-        Database::run(
-            'UPDATE galleries SET views = views + 1 WHERE id = ?',
+            'UPDATE galleries SET views = views + 1, unique_views = unique_views + 1 WHERE id = ?',
             [$galleryId]
         );
     }

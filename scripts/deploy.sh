@@ -121,3 +121,7 @@ ROLLBACK_NEEDED=0
 remote "rm -rf '$STAGE'"
 echo ">> deployed: ${FILES[*]}"
 echo ">> rollback copies on server: $SNAP"
+
+# Prune snapshot/stage dirs older than 7 days so /tmp never fills with
+# historical rollback copies.
+remote "find /tmp/gallery-pre-deploy-* /tmp/gallery-deploy-* -maxdepth 0 -mtime +7 -exec rm -rf {} + 2>/dev/null || true"

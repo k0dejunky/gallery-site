@@ -360,12 +360,19 @@ fi
 # Create .env
 # ---------------------------------------------------------------------------
 log "Writing .env..."
+CRON_KEY="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)"
+CHAT_KEY="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)"
+MEDIA_KEY="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)"
 cat > "$INSTALL_DIR/.env" <<EOF
 GALLERY_DB_HOST=127.0.0.1
 GALLERY_DB_PORT=3306
 GALLERY_DB_NAME=$DB_NAME
 GALLERY_DB_USER=$DB_USER
 GALLERY_DB_PASSWORD=$DB_PASS
+APP_URL=${APP_URL:-http://$(hostname -I 2>/dev/null | awk '{print $1}')/gallery}
+GALLERY_CRON_KEY=$CRON_KEY
+GALLERY_CHAT_KEY=$CHAT_KEY
+GALLERY_MEDIA_KEY=$MEDIA_KEY
 EOF
 
 # ---------------------------------------------------------------------------
@@ -447,13 +454,21 @@ if [[ -d /etc/sudoers.d ]]; then
             > /etc/sudoers.d/gallery-mail-admin
         chmod 440 /etc/sudoers.d/gallery-mail-admin
     fi
+    if [[ -f "$INSTALL_DIR/bin/apply_server_optimizations.php" ]]; then
+        printf 'www-data ALL=(root) NOPASSWD: /usr/bin/php %s/bin/apply_server_optimizations.php\n' "$INSTALL_DIR" \
+            > /etc/sudoers.d/gallery-apply-server-optimizations
+        chmod 440 /etc/sudoers.d/gallery-apply-server-optimizations
+    fi
     ok "Sudoers rules installed."
 else
     warn "sudoers.d missing; skipping sudoers rules."
 fi
 
 log "Applying initial cron schedule..."
-if [[ -f "$INSTALL_DIR/bin/apply_cron.php" && -n "${GALLERY_CRON_KEY:-}" ]]; then
+# apply_cron.php reads GALLERY_CRON_KEY from the freshly written .env, so a
+# root run now both installs /etc/cron.d/ rules and creates the schedules file
+# the health checks expect (fixes the "cron_files: none" test failure).
+if [[ -f "$INSTALL_DIR/bin/apply_cron.php" && -f "$INSTALL_DIR/.env" ]]; then
     php "$INSTALL_DIR/bin/apply_cron.php" >/dev/null 2>&1 \
         && ok "Initial cron schedule applied." \
         || warn "apply_cron.php could not run as root; apply cron manually."

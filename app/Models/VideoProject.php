@@ -115,8 +115,13 @@ class VideoProject
 
     public static function recoverStaleExports(): void
     {
+        // Local time: matches CURRENT_TIMESTAMP semantics used when the job
+        // was marked running (a UTC cutoff would misjudge staleness).
+        $cutoff = date('Y-m-d H:i:s', time() - 6 * 3600);
+
         Database::run(
-            "UPDATE video_export_jobs SET status = 'queued', progress = 0, finished_at = NULL WHERE status = 'running' AND started_at < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 6 HOUR) AND attempts < 3"
+            "UPDATE video_export_jobs SET status = 'queued', progress = 0, finished_at = NULL WHERE status = 'running' AND started_at < ? AND attempts < 3",
+            [$cutoff]
         );
     }
 }

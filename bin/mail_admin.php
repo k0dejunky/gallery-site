@@ -59,7 +59,7 @@ $password = (string) ($argv[3] ?? '');
 
 abort(in_array($command, ['list', 'create', 'delete', 'password', 'status'], true),
     "unknown command: {$command}");
-abort($email === '' || preg_match('/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i', $email),
+abort($email !== '' && preg_match('/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i', $email),
     'invalid email address');
 if (in_array($command, ['create', 'password'], true)) {
     abort(strlen($password) >= 8, 'password must be at least 8 characters');
