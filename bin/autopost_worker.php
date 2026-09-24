@@ -52,6 +52,15 @@ do {
                         : 'skipped: ' . ($result['error'] ?? 'platform not authorized'))
             ));
         }
+
+        // Nothing scheduled right now: recycle the most recent posted items so
+        // X / Reddit stay active (one repost per hour over the next 24 hours).
+        if ($due === []) {
+            $requeued = AutoPostQueue::repostRecentWhenIdle(24, 24);
+            if ($requeued > 0) {
+                error_log('[autopost] idle queue: requeued ' . $requeued . ' recent post(s) over 24h');
+            }
+        }
     } catch (Throwable $error) {
         error_log('[autopost] run failed: ' . $error->getMessage());
     }

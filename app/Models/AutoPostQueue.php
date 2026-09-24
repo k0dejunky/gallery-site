@@ -820,6 +820,95 @@ class AutoPostQueue
     }
 
     /**
+     * Whether any rows are currently waiting in the queue (any status the
+     * worker would act on). Used to detect an idle queue so the worker can
+     * fall back to reposting recent posts.
+     */
+    public static function hasQueued(?string $platform = null): bool
+    {
+        $where = "q.status = 'queued'";
+        $bind  = [];
+        if ($platform !== null && $platform !== '') {
+            $where .= ' AND q.platform = ?';
+            $bind[] = $platform;
+        }
+
+        return (int) Database::run(
+            'SELECT COUNT(*) FROM auto_poster_queue q WHERE ' . $where,
+            $bind
+        )->fetchColumn() > 0;
+    }
+
+    /**
+     * When the queue is idle, repost the most recent successfully posted rows
+     * to keep X / Reddit active: the last $count posted posts per platform are
+     * re-queued one per hour, spread across the next $count hours.
+     *
+     * Returns the number of reposts scheduled. This runs from the worker when
+     * there is nothing queued to publish, so an empty queue never goes quiet.
+     *
+     * @param int      $count    how many recent posts to recycle (<= 24)
+     * @param int      $hours    the window (hours) to spread them over
+     * @param string|null $platform limit to one platform when given
+     */
+    public static function repostRecentWhenIdle(int $count = 24, int $hours = 24, ?string $platform = null): int
+    {
+        $count = max(1, min(48, $count));
+        $hours = max(1, min(168, $hours));
+
+        $platforms = $platform !== null && $platform !== ''
+            ? [$platform]
+            : ['twitter', 'reddit'];
+
+        $requeued = 0;
+
+        foreach ($platforms as $pf) {
+            if (self::hasQueued($pf)) {
+                continue; // never stack reposts on top of real scheduled work
+            }
+
+            $recent = Database::run(
+                'SELECT id, text, platform, photo_id, gallery_id, media_ids
+                 FROM auto_poster_queue
+                 WHERE status = ? AND platform = ?
+                   AND (media_ids IS NOT NULL AND media_ids <> ? OR photo_id IS NOT NULL)
+                 ORDER BY COALESCE(posted_at, created_at) DESC, id DESC
+                 LIMIT ' . $count,
+                ['posted', $pf, '[]']
+            )->fetchAll();
+
+            // Spread reposts one per hour across the window, starting an hour
+            // from now, oldest-first within the batch so recent posts don't
+            // crowd the front.
+            $recent = array_reverse($recent);
+
+            foreach ($recent as $i => $row) {
+                $minuteOffset = min($hours, $count) === 1 ? 60 : (int) floor(($i + 1) * ($hours * 60) / max(1, count($recent)));
+                $when = (new DateTime('@' . time()))
+                    ->setTimezone(self::schedulerTimezone())
+                    ->modify('+' . $minuteOffset . ' minutes')
+                    ->format('Y-m-d\TH:i');
+
+                $newId = self::requeueFrom((int) $row['id'], $when);
+                if ($newId > 0) {
+                    $requeued++;
+                }
+            }
+        }
+
+        if ($requeued > 0) {
+            AutoPosterConfig::log(
+                $platform ?? 'x',
+                '',
+                'info',
+                "Idle queue: reposted {$requeued} recent post(s) over {$hours} hour(s)"
+            );
+        }
+
+        return $requeued;
+    }
+
+    /**
      * The photo rows (filename, is_video, caption) that a queue row attaches:
      * decoded from media_ids, falling back to a single photo_id for legacy rows.
      * Order is the order the media was attached.
