@@ -841,16 +841,16 @@ class AutoPostQueue
 
     /**
      * When the queue is idle, schedule fresh posts from random galleries on
-     * the site to keep X / Reddit active: up to $count galleries are picked at
-     * random (only galleries with media that have never been queued/posted for
-     * any autopost platform) and each gallery is scheduled exactly once, one
-     * post per hour across the next $count hours. Galleries are never
-     * duplicated — 24 distinct galleries produce 24 distinct posts.
+     * the site to keep X / Reddit active: exactly $count distinct galleries
+     * are picked at random (only galleries with media that have never been
+     * queued/posted for any autopost platform). The same gallery list is used
+     * for every idle platform — each gallery is scheduled once per platform
+     * (so on X AND Reddit), one post per hour across the next $count hours.
      *
      * Returns the number of posts scheduled. This runs from the worker when
      * there is nothing queued to publish, so an empty queue never goes quiet.
      *
-     * @param int      $count    how many posts to schedule (<= 24)
+     * @param int      $count    how many distinct galleries to schedule (<= 24)
      * @param int      $hours    the window (hours) to spread them over
      * @param string|null $platform limit to one platform when given
      */
@@ -875,7 +875,7 @@ class AutoPostQueue
 
         // Pick $count distinct random galleries that have media and have never
         // been queued/posted for any autopost platform, so the same gallery is
-        // never scheduled twice (neither within one run nor across platforms).
+        // never reused (not within one run, not across platforms).
         $galleryIds = Database::run(
             'SELECT g.id
              FROM galleries g
@@ -898,23 +898,22 @@ class AutoPostQueue
         }
 
         $scheduled = 0;
-        $platformCount = count($idlePlatforms);
 
         foreach ($galleryIds as $i => $row) {
-            // Round-robin the posts across the idle platforms so a gallery is
-            // only ever used once.
-            $pf = $idlePlatforms[$i % $platformCount];
-
             // One post per hour across the window, starting an hour from now.
+            // Every idle platform posts this gallery in the same slot, so the
+            // gallery list is identical for X and Reddit.
             $hourOffset = min($hours, $count) === 1 ? 1 : (int) floor(($i + 1) * $hours / max(1, count($galleryIds)));
             $when = (new DateTime('@' . time()))
                 ->setTimezone(self::schedulerTimezone())
                 ->modify('+' . max(1, $hourOffset) . ' hours')
                 ->format('Y-m-d\TH:i');
 
-            $newId = self::enqueue((int) $row['id'], null, $when, $pf);
-            if ($newId > 0) {
-                $scheduled++;
+            foreach ($idlePlatforms as $pf) {
+                $newId = self::enqueue((int) $row['id'], null, $when, $pf);
+                if ($newId > 0) {
+                    $scheduled++;
+                }
             }
         }
 
@@ -923,7 +922,7 @@ class AutoPostQueue
                 $platform ?? 'x',
                 '',
                 'info',
-                "Idle queue: scheduled {$scheduled} random gallery post(s) over {$hours} hour(s)"
+                "Idle queue: scheduled {$scheduled} post(s) from " . count($galleryIds) . " distinct gallery(ies) over {$hours} hour(s)"
             );
         }
 
