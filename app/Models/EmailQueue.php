@@ -117,6 +117,50 @@ class EmailQueue
     }
 
     /**
+     * A random gallery's image uploads, newest first, up to $count rows. Used
+     * as the fallback sample when there are no uploads newer than the last-sent
+     * watermark, so the daily digest still delivers on schedule instead of
+     * going silent whenever nothing new was uploaded.
+     *
+     * @return array<int, array{id:int, filename:string, created_at:string, gallery_id:int}>
+     */
+    public static function sampleRandomGallery(int $count = 6): array
+    {
+        $count = max(1, min(EmailerConfig::MAX_SAMPLE, $count));
+
+        $gallery = Database::run(
+            'SELECT g.id
+             FROM galleries g
+             JOIN gallery_photo gp ON gp.gallery_id = g.id
+             JOIN photos p ON p.id = gp.photo_id
+             WHERE g.deleted_at IS NULL AND p.is_video = 0
+             GROUP BY g.id
+             ORDER BY RAND()
+             LIMIT 1',
+            []
+        )->fetch();
+
+        if (!$gallery) {
+            return [];
+        }
+
+        return Database::run(
+            "SELECT p.id, p.filename, p.created_at,
+                    (SELECT MIN(gp2.gallery_id)
+                     FROM gallery_photo gp2
+                     JOIN galleries g2 ON g2.id = gp2.gallery_id
+                     WHERE gp2.photo_id = p.id AND g2.deleted_at IS NULL) AS gallery_id
+             FROM gallery_photo gp
+             JOIN photos p ON p.id = gp.photo_id
+             WHERE gp.gallery_id = ? AND p.is_video = 0
+             GROUP BY p.id
+             ORDER BY p.created_at DESC, p.id DESC
+             LIMIT " . (int) $count,
+            [(int) $gallery['id']]
+        )->fetchAll();
+    }
+
+    /**
      * Resolve the subject line for an audience from the config, substituting
      * the site name and the headline photo count. Falls back generically when
      * the admin left the field blank.
@@ -159,8 +203,20 @@ class EmailQueue
         $newestId = (int) $samples[0]['id'];
         $lastId   = (int) ($config['last_sent_photo_id'] ?? 0);
 
+        $fallback = false;
+
         if (!$force && $lastId > 0 && $newestId <= $lastId) {
-            return ['ok' => false, 'reason' => 'no_new_uploads'];
+            // No uploads newer than the last digest: fall back to a random
+            // gallery's photos so the scheduled digest still delivers instead
+            // of going quiet. The watermark is NOT advanced on a fallback, so
+            // the next tick still knows there was nothing genuinely new.
+            $fallbackSamples = self::sampleRandomGallery((int) ($config['sample_count'] ?? 6));
+            if ($fallbackSamples !== []) {
+                $samples  = $fallbackSamples;
+                $fallback = true;
+            } else {
+                return ['ok' => false, 'reason' => 'no_sample'];
+            }
         }
 
         $count = count($samples);
@@ -190,7 +246,14 @@ class EmailQueue
 
         self::insertRows($rows);
 
-        EmailerConfig::markSent(date('Y-m-d H:i:s'), $newestId);
+        // Only advance the watermark when real new uploads were sampled. A
+        // fallback (random-gallery) digest keeps last_sent_photo_id untouched
+        // so the next tick can still detect genuinely new media.
+        if ($fallback) {
+            EmailerConfig::markSent(date('Y-m-d H:i:s'), $lastId);
+        } else {
+            EmailerConfig::markSent(date('Y-m-d H:i:s'), $newestId);
+        }
 
         $perAudience = ['subscriber' => 0, 'non_subscriber' => 0];
         foreach ($rows as $row) {
