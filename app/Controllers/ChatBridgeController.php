@@ -789,14 +789,22 @@ class ChatBridgeController extends Controller
             $through = ChatMessage::latestId($cid);
         }
 
+        // Only ever move the operator read marker forward. GREATEST with a
+        // bound parameter reports a 0 rowCount even when the value changes
+        // (MySQL compares the bound value as a string), which makes the marker
+        // unreliable. Read the current value and set the larger one explicitly.
+        $current = (int) \App\Core\Database::run(
+            'SELECT operator_read_through_id FROM chat_conversations WHERE id = ?',
+            [$cid]
+        )->fetchColumn();
+        $target = max($current, $through);
+
         \App\Core\Database::run(
-            'UPDATE chat_conversations
-                SET operator_read_through_id = GREATEST(COALESCE(operator_read_through_id, 0), ?)
-              WHERE id = ?',
-            [$through, $cid]
+            'UPDATE chat_conversations SET operator_read_through_id = ? WHERE id = ?',
+            [$target, $cid]
         );
 
-        $this->json(['ok' => true, 'conversation' => $cid, 'operator_read_through_id' => $through]);
+        $this->json(['ok' => true, 'conversation' => $cid, 'operator_read_through_id' => $target]);
     }
 
     /**
