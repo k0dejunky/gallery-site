@@ -15,6 +15,8 @@ namespace App\Core;
  *   finetuned_model   string  fine-tuned model name
  *   finetuned         array   adapter metadata from the last training upload
  *   trainer_since_id  int     highest chat_training_pairs id the trainer consumed
+ *   ai_content_search bool    AI may search site galleries to answer content questions
+ *   ai_content_search_max int max galleries the AI can reference per reply
  *
  * On the first read of an existing install whose table is empty, the legacy
  * storage/chat.json is imported once so no settings are lost in the migration.
@@ -26,14 +28,16 @@ class ChatSettings
     private static function defaults(): array
     {
         return [
-            'ai_enabled'       => true,
-            'default_ai_mode'  => 'retrieval',
-            'daily_message'    => '',
-            'daily_message_at' => null,
-            'model'            => ChatModel::BASE,
-            'finetuned_model'  => ChatModel::FINETUNED,
-            'finetuned'        => [],
-            'trainer_since_id' => 0,
+            'ai_enabled'           => true,
+            'default_ai_mode'      => 'retrieval',
+            'daily_message'        => '',
+            'daily_message_at'     => null,
+            'model'                => ChatModel::BASE,
+            'finetuned_model'      => ChatModel::FINETUNED,
+            'finetuned'            => [],
+            'trainer_since_id'     => 0,
+            'ai_content_search'    => true,
+            'ai_content_search_max' => 6,
         ];
     }
 

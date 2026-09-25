@@ -119,8 +119,10 @@ class ChatMessage
      * Add a message to a conversation. Returns the new message id.
      *
      * @param array{name:string, type:string, path:string}|null $attachment
+     * @param array<int,array{title:string,url:string}>|null $contentRefs clickable
+     *        gallery references the AI reply used (stored so links survive reloads)
      */
-    public static function addMessage(int $conversationId, string $role, string $message, ?array $attachment = null): int
+    public static function addMessage(int $conversationId, string $role, string $message, ?array $attachment = null, ?array $contentRefs = null): int
     {
         $message = mb_substr(trim($message), 0, self::MAX_MESSAGE_LENGTH);
         if ($message === '' && $attachment === null) {
@@ -128,8 +130,8 @@ class ChatMessage
         }
 
         Database::run(
-            'INSERT INTO chat_messages (conversation_id, sender_role, message, attachment_name, attachment_type, attachment_path)
-             VALUES (?, ?, ?, ?, ?, ?)',
+            'INSERT INTO chat_messages (conversation_id, sender_role, message, attachment_name, attachment_type, attachment_path, content_refs)
+             VALUES (?, ?, ?, ?, ?, ?, ?)',
             [
                 $conversationId,
                 $role,
@@ -137,6 +139,7 @@ class ChatMessage
                 $attachment['name'] ?? null,
                 $attachment['type'] ?? null,
                 $attachment['path'] ?? null,
+                $contentRefs === null || $contentRefs === [] ? null : json_encode(array_values($contentRefs), JSON_UNESCAPED_SLASHES),
             ]
         );
 

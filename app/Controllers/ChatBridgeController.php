@@ -1046,6 +1046,9 @@ class ChatBridgeController extends Controller
             $m['attachment_thumb_url'] = !empty($m['attachment_path']) && str_starts_with($type, 'image/')
                 ? url('/webhooks/chat/attachment?message=' . (int) $m['id'] . '&thumb=1')
                 : null;
+            $m['content_refs'] = !empty($m['content_refs'])
+                ? json_decode((string) $m['content_refs'], true)
+                : [];
         }
         unset($m);
 

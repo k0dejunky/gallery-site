@@ -615,6 +615,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     attachment_name VARCHAR(255) NULL,
     attachment_type VARCHAR(60) NULL,
     attachment_path VARCHAR(255) NULL,
+    content_refs    TEXT NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_chat_msg_conv_date (conversation_id, created_at),
     CONSTRAINT fk_chat_msg_conv FOREIGN KEY (conversation_id)

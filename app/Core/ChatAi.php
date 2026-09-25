@@ -37,9 +37,10 @@ class ChatAi
      * @param string $mode      ChatMessage::MODE_RETRIEVAL or MODE_FINETUNED
      * @param array<int,array{id:int,sender_role:string,message:string}> $history
      * @param array<int,array{user_message:string,operator_reply:string}> $fewShot
+     * @param array<int,array{title:string,description:string,categories:list<string>,min_level:int,url:string}> $contentContext
      * @return array{ok:bool, reply?:string, error?:string}
      */
-    public static function reply(string $mode, string $message, array $history = [], array $fewShot = []): array
+    public static function reply(string $mode, string $message, array $history = [], array $fewShot = [], array $contentContext = []): array
     {
         $model = $mode === \App\Models\ChatMessage::MODE_FINETUNED
             ? self::currentFineTunedModel()
@@ -67,6 +68,23 @@ class ChatAi
                     . "  operator: " . ($pair['operator_reply'] ?? '') . "\n";
             }
             $prompt .= "\n";
+        }
+
+        if ($contentContext !== []) {
+            $prompt .= "Site content this member can view (exact gallery titles — do not invent others):\n";
+            foreach ($contentContext as $i => $g) {
+                $cats = is_array($g['categories'] ?? null) ? implode(', ', $g['categories']) : '';
+                $line = "- \"" . ($g['title'] ?? '') . "\"";
+                if ($cats !== '') {
+                    $line .= " [" . $cats . "]";
+                }
+                if (!empty($g['description'])) {
+                    $line .= " — " . mb_substr((string) $g['description'], 0, 160);
+                }
+                $prompt .= $line . "\n";
+            }
+            $prompt .= "If the member asked about content like this, name the matching gallery by its exact title from the list and invite them to it. "
+                . "If none of these match what they asked for, or they are not asking about content, answer naturally without mentioning galleries.\n\n";
         }
 
         $prompt .= "Conversation so far:\n";

@@ -540,6 +540,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     attachment_name VARCHAR(255),
     attachment_type VARCHAR(60),
     attachment_path VARCHAR(255),
+    content_refs    TEXT,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE
 );

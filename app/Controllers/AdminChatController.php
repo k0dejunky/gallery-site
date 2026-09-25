@@ -349,6 +349,11 @@ class AdminChatController extends Controller
         $state['model']           = ChatAi::BASE_MODEL;
         $state['finetuned_model'] = ChatAi::FINETUNED_MODEL;
 
+        // AI content search: let the bot search site galleries (titles,
+        // descriptions, categories) to answer content questions.
+        $state['ai_content_search'] = $this->request->post('ai_content_search') === '1';
+        $state['ai_content_search_max'] = max(1, min(12, (int) $this->request->post('ai_content_search_max', '6')));
+
         \App\Core\ChatSettings::save($state);
 
         $this->flash('success', 'Chat settings saved.');

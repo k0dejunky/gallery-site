@@ -7,6 +7,9 @@
     .chat-msg.user { align-self: flex-end; background: var(--purple-600, #9333ea); color: #fff; border-bottom-right-radius: 3px; }
     .chat-msg.model, .chat-msg.operator { align-self: flex-start; background: var(--pink-100, #fdf2f8); color: var(--purple-900, #4a044e); border: 1px solid var(--pink-300, #f9a8d4); border-bottom-left-radius: 3px; }
     .chat-msg .who { display: block; font-size: .68rem; opacity: .7; margin-bottom: .05rem; text-transform: uppercase; letter-spacing: .04em; }
+    .chat-msg a.chat-ref { color: inherit; text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
+    .chat-msg.user a.chat-ref { color: #fff; }
+    .chat-msg.model a.chat-ref { color: var(--purple-700, #6b21a8); }
     .chat-attachment { display: inline-block; margin-top: .45rem; color: inherit; text-decoration: none; font-size: .85rem; }
     .chat-image { display: block; max-width: 100%; max-height: 420px; width: auto; height: auto; margin-top: .5rem; border-radius: 10px; border: 1px solid rgba(0,0,0,.08); background: #fff; object-fit: contain; user-select: none; -webkit-user-drag: none; pointer-events: none; }
     .chat-composer { display: flex; gap: .5rem; margin-top: .75rem; }
@@ -33,7 +36,7 @@
                 <p class="muted">Say hello to start chatting.</p>
             <?php else: ?>
                 <?php foreach ($messages as $m): ?>
-                    <div class="chat-msg <?= e((string) $m['sender_role']) ?>">
+                    <div class="chat-msg <?= e((string) $m['sender_role']) ?>"<?= !empty($m['content_refs']) ? ' data-refs="' . e(json_encode($m['content_refs'], JSON_UNESCAPED_SLASHES)) . '"' : '' ?>>
                         <?php if ($m['sender_role'] === 'user'): ?>
                             <span class="who">You</span>
                         <?php endif; ?>
@@ -84,6 +87,24 @@
         });
     }
 
+    // Turn exact gallery titles mentioned in a message into clickable links
+    // (longest title first, so a title that is a substring of another still
+    // resolves correctly). Refs come from the server; nothing is invented here.
+    function linkRefs(el, refs) {
+        if (!el || !refs || !refs.length) return;
+        var html = el.innerHTML;
+        var linked = refs.slice().sort(function (a, b) {
+            return String(b.title || '').length - String(a.title || '').length;
+        });
+        linked.forEach(function (r) {
+            if (!r.title || !r.url) return;
+            var t = esc(r.title);
+            var re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+            html = html.replace(re, '<a class="chat-ref" href="' + esc(r.url) + '" target="_blank" rel="noopener">$&</a>');
+        });
+        el.innerHTML = html;
+    }
+
     function append(msg, atTop) {
         var div = document.createElement('div');
         var isUser = msg.sender_role === 'user';
@@ -97,6 +118,7 @@
             }
         }
         div.innerHTML = html;
+        linkRefs(div, msg.content_refs || []);
         if (atTop) {
             thread.insertBefore(div, thread.firstChild);
         } else {
@@ -212,7 +234,15 @@ hideBadge();
             if (b && b.closest('a') && /\/chat$/.test(b.closest('a').getAttribute('href') || '')) { b.remove(); }
         });
     }
-    hideBadge();
+hideBadge();
+
+    // Link gallery titles already rendered server-side (the AI reply refs
+    // are carried in data-refs so they survive a page reload).
+    Array.prototype.forEach.call(thread.querySelectorAll('.chat-msg'), function (bubble) {
+        var refs = [];
+        try { refs = JSON.parse(bubble.getAttribute('data-refs') || '[]'); } catch (err) { refs = []; }
+        linkRefs(bubble, refs);
+    });
 
     // Real-time push via Server-Sent Events (no manual refresh / polling).
     var es = new EventSource('<?= url('/chat/stream') ?>?since=' + latestId);

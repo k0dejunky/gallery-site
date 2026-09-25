@@ -109,6 +109,13 @@
         <option value="finetuned" <?= ($state['default_ai_mode'] ?? '') === 'finetuned' ? 'selected' : '' ?>>Fine-tuned (AI, LoRA adapter)</option>
         <option value="operator" <?= ($state['default_ai_mode'] ?? '') === 'operator' ? 'selected' : '' ?>>Operator only (no AI)</option>
     </select>
+    <label style="font-size:.85rem;display:inline-flex;align-items:center;gap:.3rem;">
+        <input type="checkbox" name="ai_content_search" value="1"<?= !empty($state['ai_content_search']) ? ' checked' : '' ?>>
+        AI searches site galleries to answer content questions
+    </label>
+    <label class="muted" style="font-size:.85rem;">max
+        <input type="number" name="ai_content_search_max" min="1" max="12" value="<?= (int) ($state['ai_content_search_max'] ?? 6) ?>" style="width:4rem;">
+    </label>
     <button type="submit" class="btn btn-sm">Save default</button>
 </form>
 

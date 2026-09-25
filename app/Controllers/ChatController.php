@@ -115,17 +115,47 @@ class ChatController extends Controller
         $aiEnabled = \App\Core\ChatSettings::aiEnabled();
 
         if ($aiEnabled && ChatMessage::isAiMode($convMode)) {
+            // When the member asks for specific content, search the galleries
+            // they can actually view and feed the matches into the prompt so
+            // the AI can name real galleries (linked in the chat UI).
+            $settings = \App\Core\ChatSettings::all();
+            $content  = [];
+            if (!empty($settings['ai_content_search'])) {
+                $content = \App\Core\ChatContentSearch::find(
+                    $message,
+                    $userId,
+                    Auth::effectiveLevel(),
+                    max(1, min(12, (int) ($settings['ai_content_search_max'] ?? 6)))
+                );
+            }
+
             $aiReply = ChatAi::reply(
                 $convMode,
                 $message,
                 ChatMessage::messages($cid, 0, false),
-                ChatMessage::similarContext($message)
+                ChatMessage::similarContext($message),
+                $content
             );
 
             if ($aiReply['ok']) {
-                ChatMessage::addMessage($cid, ChatMessage::ROLE_MODEL, (string) $aiReply['reply']);
-                $result['ai_reply'] = $aiReply['reply'];
+                $replyText = (string) $aiReply['reply'];
+                // Only the galleries the model actually named become clickable
+                // refs (longest title match against the reply text).
+                $refs = array_values(array_filter(
+                    $content,
+                    static fn (array $g): bool => mb_strpos($replyText, (string) ($g['title'] ?? '')) !== false
+                ));
+                $refs = array_map(
+                    static fn (array $g): array => ['title' => (string) $g['title'], 'url' => (string) $g['url']],
+                    $refs
+                );
+
+                ChatMessage::addMessage($cid, ChatMessage::ROLE_MODEL, $replyText, null, $refs);
+                $result['ai_reply'] = $replyText;
                 $result['ai_reply_id'] = ChatMessage::latestId($cid);
+                if ($refs !== []) {
+                    $result['ai_content_refs'] = $refs;
+                }
             } else {
                 $result['ai_pending'] = true; // model down; operator can respond via the Android app
             }
@@ -445,6 +475,9 @@ class ChatController extends Controller
             $m['attachment_thumb_url'] = !empty($m['attachment_path']) && str_starts_with($type, 'image/')
                 ? url('/chat/attachment?message=' . (int) $m['id'] . '&thumb=1')
                 : null;
+            $m['content_refs'] = !empty($m['content_refs'])
+                ? json_decode((string) $m['content_refs'], true)
+                : [];
         }
         unset($m);
 
