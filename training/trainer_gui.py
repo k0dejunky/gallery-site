@@ -11,6 +11,7 @@ Two tabs:
 
 import json
 import os
+import queue
 import subprocess
 import sys
 import threading
@@ -20,13 +21,46 @@ import urllib.error
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-CONTROL_HOST = os.environ.get("CONTROL_HOST", "127.0.0.1")
-CONTROL_PORT = os.environ.get("CONTROL_PORT", "8790")
-CONTROL_TOKEN = os.environ.get("CONTROL_TOKEN", "")
+# GUI connection settings are persisted here so the app remembers the control
+# server host/port/token across launches (env vars act as first-run defaults).
+GUI_SETTINGS_FILE = os.environ.get("GUI_SETTINGS_FILE", r"C:\work\chat_trainer_gui.json")
+
+
+def load_gui_settings():
+    try:
+        with open(GUI_SETTINGS_FILE, encoding="utf-8") as fh:
+            data = json.load(fh)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def save_gui_settings(host, port, token):
+    try:
+        with open(GUI_SETTINGS_FILE, "w", encoding="utf-8") as fh:
+            json.dump({"control_host": host, "control_port": port, "control_token": token}, fh)
+    except Exception:
+        pass
+
+
+_gs = load_gui_settings()
+CONTROL_HOST = str(_gs.get("control_host") or os.environ.get("CONTROL_HOST", "127.0.0.1"))
+CONTROL_PORT = str(_gs.get("control_port") or os.environ.get("CONTROL_PORT", "8790"))
+CONTROL_TOKEN = str(_gs.get("control_token") or os.environ.get("CONTROL_TOKEN", ""))
 BASE = "http://%s:%s" % (CONTROL_HOST, CONTROL_PORT)
 
 PYTHON = os.environ.get("TRAINER_PYTHON", r"C:\Python38\python.exe")
 CONTROL_SCRIPT = os.environ.get("CONTROL_SCRIPT", r"C:\ai\trainer_control.py")
+
+
+def apply_connection(host, port, token):
+    """Update + persist the control-server connection (used by fetch())."""
+    global CONTROL_HOST, CONTROL_PORT, CONTROL_TOKEN, BASE
+    CONTROL_HOST = str(host or "127.0.0.1").strip()
+    CONTROL_PORT = str(port or "8790").strip()
+    CONTROL_TOKEN = str(token or "").strip()
+    BASE = "http://%s:%s" % (CONTROL_HOST, CONTROL_PORT)
+    save_gui_settings(CONTROL_HOST, CONTROL_PORT, CONTROL_TOKEN)
 
 # ---- dark theme palette -----------------------------------------------------
 BG      = "#14121a"
@@ -103,9 +137,12 @@ class TrainerGUI:
         self.running_flag = True
         self._log_prev = None
         self._polling = False
+        self._q = queue.Queue()
 
         self.build()
         self.refresh_all()
+        root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self._drain()
         self.poll()
 
     # ---- layout -------------------------------------------------------------
@@ -201,6 +238,26 @@ class TrainerGUI:
 
     def build_admin(self):
         f = self.tab_admin
+
+        # Control-server connection: host/port/token, persisted so the app
+        # remembers the sign-on across launches.
+        conn = ttk.LabelFrame(f, text="Control server connection", padding=6)
+        conn.pack(fill="x", pady=(0, 8))
+        crow = ttk.Frame(conn)
+        crow.pack(fill="x")
+        ttk.Label(crow, text="Host").pack(side="left", padx=(0, 4))
+        self.e_host = ttk.Entry(crow, width=16)
+        self.e_host.pack(side="left", padx=(0, 10))
+        self.e_host.insert(0, CONTROL_HOST)
+        ttk.Label(crow, text="Port").pack(side="left", padx=(0, 4))
+        self.e_port = ttk.Entry(crow, width=7)
+        self.e_port.pack(side="left", padx=(0, 10))
+        self.e_port.insert(0, CONTROL_PORT)
+        ttk.Label(crow, text="Token (optional)").pack(side="left", padx=(0, 4))
+        self.e_token = ttk.Entry(crow, width=26, show="*")
+        self.e_token.pack(side="left", padx=(0, 10))
+        self.e_token.insert(0, CONTROL_TOKEN)
+        ttk.Button(crow, text="Save connection", style="Primary.TButton", command=self.save_connection).pack(side="left")
 
         warn = ttk.Label(f, text="Saved to C:\\work\\chat_trainer_config.json. Saving restarts the trainer to apply.",
                          style="Mut.TLabel")
@@ -320,33 +377,55 @@ class TrainerGUI:
         time.sleep(1)
         self.refresh_all()
 
+    def save_connection(self):
+        apply_connection(self.e_host.get(), self.e_port.get(), self.e_token.get())
+        messagebox.showinfo("Trainer", "Connection saved - remembered next launch.")
+        self.refresh_all()
+
     # ---- polling ------------------------------------------------------------
     def poll(self):
         if not self.running_flag:
             return
-        if self._polling:
-            self.root.after(3000, self.poll)
-            return
-        self._polling = True
-
-        def worker():
-            status = None
-            log = None
-            try:
-                status = fetch("/api/status").get("status", {})
-            except Exception:
-                status = None
-            try:
-                log = fetch("/api/log").get("log", "")
-            except Exception:
-                log = None
-            self._polling = False
-            # Schedule the Tk updates back on the main thread so a slow or
-            # hung request never freezes the UI.
-            self.root.after(0, lambda: self.apply_poll(status, log))
-
-        threading.Thread(target=worker, daemon=True).start()
+        if not self._polling:
+            self._polling = True
+            threading.Thread(target=self._poll_worker, daemon=True).start()
         self.root.after(3000, self.poll)
+
+    def _poll_worker(self):
+        # Network fetches run off the Tk thread; results are handed back via a
+        # thread-safe queue so Tk is only ever touched on the main thread.
+        status = None
+        log = None
+        try:
+            status = fetch("/api/status").get("status", {})
+        except Exception:
+            status = None
+        try:
+            log = fetch("/api/log").get("log", "")
+        except Exception:
+            log = None
+        self._polling = False
+        try:
+            self._q.put(("poll", status, log))
+        except Exception:
+            pass
+
+    def _drain(self):
+        # Main-thread loop: apply whatever the poll workers handed back.
+        if not self.running_flag:
+            return
+        try:
+            while True:
+                kind, a, b = self._q.get_nowait()
+                if kind == "poll":
+                    self.apply_poll(a, b)
+        except queue.Empty:
+            pass
+        self.root.after(100, self._drain)
+
+    def on_close(self):
+        self.running_flag = False
+        self.root.destroy()
 
     def apply_poll(self, status, log):
         if status is None:
