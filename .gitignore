@@ -45,3 +45,6 @@ storage/chat.json
 # Training corpus (sensitive data, never commit)
 /training/kink-corpus/
 /storage/mail-outbox/
+# Python bytecode
+__pycache__/
+*.pyc

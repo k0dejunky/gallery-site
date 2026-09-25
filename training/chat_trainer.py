@@ -550,6 +550,17 @@ def upload_adapter(path: str, base_model: str, pair_count: int) -> bool:
 
 # ------------------------------------------------------------------ main loop
 def main():
+    # The control server launches us with stdout=PIPE but never drains it, so
+    # once transformers/tqdm fill the pipe buffer (64K) we block forever on a
+    # write. Redirect our own stdout/stderr to the log file so the pipe stays
+    # empty and training can never deadlock on it.
+    try:
+        fh = open(LOG_FILE, "a", encoding="utf-8", buffering=1)
+        os.dup2(fh.fileno(), sys.stdout.fileno())
+        os.dup2(fh.fileno(), sys.stderr.fileno())
+    except Exception:
+        pass
+
     if BRIDGE_TOKEN.startswith("REPLACE_WITH"):
         _log("CHAT_BRIDGE_TOKEN not set - edit the control UI or config file.")
         sys.exit(1)
