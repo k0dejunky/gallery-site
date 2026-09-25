@@ -93,22 +93,26 @@ def load_config() -> dict:
         if env in os.environ and os.environ[env] != "":
             cfg[key] = os.environ[env]
 
-    # Coerce numeric/bool types from strings (file or env).
+    # Coerce numeric types from strings (file or env). Integer keys stay ints;
+    # lr / lora_dropout are floats (int-casting a float would silently zero it).
     for key in ("poll_seconds", "min_new_pairs", "max_pairs_per_run", "lora_r",
-                "lora_alpha", "lora_dropout", "max_len", "steps",
+                "lora_alpha", "max_len", "steps",
                 "required_idle_seconds", "cpu_threads"):
-        cfg[key] = _to_num(cfg.get(key))
-    cfg["lr"] = _to_num(cfg.get("lr"), float)
+        cfg[key] = _to_num(cfg.get(key), default=DEFAULT_CONFIG.get(key))
+    for key in ("lr", "lora_dropout"):
+        cfg[key] = _to_num(cfg.get(key), float, default=DEFAULT_CONFIG.get(key))
     cfg["bridge_token"] = str(cfg.get("bridge_token", "")).strip()
     cfg["upload_token"] = str(cfg.get("upload_token", "")).strip()
     return cfg
 
 
-def _to_num(value, cast=int):
+def _to_num(value, cast=int, default=None):
+    if default is None:
+        default = DEFAULT_CONFIG.get("poll_seconds", 600) if cast is int else 2e-4
     try:
         return cast(value)
     except (TypeError, ValueError):
-        return cast(DEFAULT_CONFIG.get("poll_seconds", 600)) if cast is int else 2e-4
+        return default
 
 
 CFG = load_config()

@@ -210,8 +210,9 @@ def apply_save(body: dict) -> dict:
     cfg = read_config_file()
     errors = {}
     int_keys = ("poll_seconds", "min_new_pairs", "max_pairs_per_run", "lora_r",
-                "lora_alpha", "lora_dropout", "max_len", "steps",
+                "lora_alpha", "max_len", "steps",
                 "required_idle_seconds", "cpu_threads")
+    float_keys = ("lr", "lora_dropout")
     str_keys = ("server_base", "bridge_token", "model_dir", "output_adapter",
                 "state_file", "pause_file", "force_train_file", "log_file",
                 "status_file", "base_model")
@@ -225,11 +226,12 @@ def apply_save(body: dict) -> dict:
                 cfg[k] = int(body[k])
             except (TypeError, ValueError):
                 errors[k] = "must be an integer"
-    if "lr" in body:
-        try:
-            cfg["lr"] = float(body["lr"])
-        except (TypeError, ValueError):
-            errors["lr"] = "must be a number"
+    for k in float_keys:
+        if k in body:
+            try:
+                cfg[k] = float(body[k])
+            except (TypeError, ValueError):
+                errors[k] = "must be a number"
 
     # Keep the stored token if the masked placeholder was submitted unchanged.
     if cfg.get("bridge_token") == MASK:
