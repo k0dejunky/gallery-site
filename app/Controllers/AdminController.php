@@ -100,6 +100,7 @@ class AdminController extends Controller
             'autopostFailed' => \App\Models\AutoPostQueue::failed(6),
             'autopostCounts' => \App\Models\AutoPostQueue::statusCounts(),
             'chatStats'  => $chatStats,
+            'liveStatus' => \App\Models\LiveSession::status(),
         ]);
     }
 

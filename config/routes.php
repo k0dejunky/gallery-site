@@ -24,6 +24,13 @@ return [
     ['GET', '/webhooks/{provider}', 'WebhookController@handle'],
     ['POST', '/webhooks/{provider}', 'WebhookController@handle'],
 
+    // Live streaming (MediaMTX auth webhook is server-to-server, CSRF-exempt)
+    ['POST', '/webhooks/live/auth', 'LiveController@auth'],
+    ['POST', '/live/start', 'LiveController@start'],
+    ['POST', '/live/stop', 'LiveController@stop'],
+    ['GET', '/live', 'LiveController@page'],
+    ['GET', '/live/status', 'LiveController@status'],
+
     // Auth
     ['GET', '/login', 'AuthController@loginForm'],
     ['POST', '/login', 'AuthController@login'],

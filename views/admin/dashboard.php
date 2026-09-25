@@ -145,6 +145,10 @@
         <b style="color:<?= !empty($chatStats['baseOnline']) ? 'var(--success,#16a34a)' : 'var(--danger,#c62828)' ?>;"><?= !empty($chatStats['baseOnline']) ? 'Online' : 'Offline' ?></b>
         <small>Base AI status</small>
     </div>
+    <div class="stat-card" style="border-left:4px solid <?= !empty($liveStatus['live']) ? '#dc2626' : 'var(--card-border,#ccc)' ?>;">
+        <b style="color:<?= !empty($liveStatus['live']) ? '#dc2626' : 'var(--text-muted,#888)' ?>;"><?= !empty($liveStatus['live']) ? 'LIVE' : 'Offline' ?></b>
+        <small>Live stream</small>
+    </div>
 </div>
 
 <?php // System health: disk space pie + security summary. ?>

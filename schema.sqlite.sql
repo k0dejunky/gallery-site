@@ -532,6 +532,19 @@ CREATE TABLE IF NOT EXISTS chat_settings (
     updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS live_sessions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    stream_key  VARCHAR(64) NOT NULL,
+    created_by  INTEGER NOT NULL,
+    status      VARCHAR(10) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','live','ended')),
+    started_at  DATETIME,
+    ended_at    DATETIME,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_live_status ON live_sessions (status);
+CREATE INDEX IF NOT EXISTS idx_live_key ON live_sessions (stream_key);
+
 CREATE TABLE IF NOT EXISTS chat_messages (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     conversation_id INTEGER NOT NULL,
