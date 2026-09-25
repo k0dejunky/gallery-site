@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\Database;
 use App\Models\LiveSession;
 use App\Models\OperatorToken;
 
@@ -121,13 +122,23 @@ class LiveController extends Controller
         $this->json(['ok' => true]);
     }
 
-    /** Member player page. */
+    /** Member player page (login + subscription) with the live group chat. */
     public function page(): void
     {
         Auth::requireLogin();
         Auth::requireSubscription();
 
         $status = LiveSession::status();
+
+        $chatMessages = [];
+        $chatLatest   = 0;
+        if ($status['live'] && $status['session_id'] !== null) {
+            $chatLatest = (int) Database::run(
+                'SELECT COALESCE(MAX(id), 0) FROM live_chat_messages WHERE session_id = ?',
+                [$status['session_id']]
+            )->fetchColumn();
+            $chatMessages = $this->chatRows((int) $status['session_id'], max(0, $chatLatest - 200));
+        }
 
         $this->view('live', [
             'title'      => 'Live',
@@ -138,6 +149,8 @@ class LiveController extends Controller
             'token'      => $status['live'] && $status['stream_key'] !== null
                 ? LiveSession::playbackToken((string) $status['stream_key'], (int) Auth::user()['id'])
                 : '',
+            'chatMessages' => $chatMessages,
+            'chatLatest'   => $chatLatest,
             'noindex'    => true,
         ]);
     }
@@ -152,6 +165,131 @@ class LiveController extends Controller
             'since'   => $status['since'],
             'viewers' => $status['viewers'],
         ]);
+    }
+
+    /** Member sends a message to the live group chat. */
+    public function chatSend(): void
+    {
+        Auth::requireLogin();
+        Auth::requireSubscription();
+        $user   = Auth::user();
+        $userId = (int) $user['id'];
+
+        $status = LiveSession::status();
+        if (!$status['live'] || $status['session_id'] === null) {
+            $this->json(['ok' => false, 'error' => 'No live stream is active right now.']);
+            return;
+        }
+
+        $message = trim((string) $this->request->post('message', ''));
+        if ($message === '' || mb_strlen($message) > 500) {
+            $this->json(['ok' => false, 'error' => 'Message must be 1–500 characters.']);
+            return;
+        }
+
+        Database::run(
+            'INSERT INTO live_chat_messages (session_id, user_id, sender_role, message, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
+            [
+                (int) $status['session_id'],
+                $userId,
+                in_array((string) ($user['role'] ?? ''), \App\Core\Auth::ADMIN_ROLES, true) ? 'operator' : 'user',
+                $message,
+            ]
+        );
+
+        \App\Core\Cache::bump('chat');
+
+        $this->json(['ok' => true, 'id' => (int) Database::connection()->lastInsertId()]);
+    }
+
+    /** SSE long-poll of the live group chat. */
+    public function chatStream(): void
+    {
+        Auth::requireLogin();
+
+        $since  = max(0, (int) $this->request->query('since', 0));
+        $status = LiveSession::status();
+
+        header('Content-Type: text/event-stream');
+        header('Cache-Control: no-cache');
+        header('X-Accel-Buffering: no');
+        session_write_close();
+        @ini_set('output_buffering', 'off');
+        @ini_set('zlib.output_compression', 'off');
+        while (ob_get_level() > 0) {
+            @ob_end_flush();
+        }
+
+        if (!$status['live'] || $status['session_id'] === null) {
+            echo "data: {\"ok\":true,\"messages\":[],\"latestId\":0}\n\n";
+            echo "retry: 3000\n\n";
+            flush();
+            exit;
+        }
+
+        $sid      = (int) $status['session_id'];
+        $latestId = (int) Database::run(
+            'SELECT COALESCE(MAX(id), 0) FROM live_chat_messages WHERE session_id = ?',
+            [$sid]
+        )->fetchColumn();
+
+        $rows = $this->chatRows($sid, $since);
+        if ($rows !== []) {
+            $this->sse($rows, $latestId);
+            flush();
+            $since = $latestId;
+        }
+
+        $start = time();
+        // Short window: Apache/mod_proxy_fcgi buffers SSE and flushes on
+        // completion, so a ~5s loop delivers chat messages in quick bursts
+        // instead of the 30s the member chat uses.
+        while (time() - $start < 5) {
+            $headId = (int) Database::run(
+                'SELECT COALESCE(MAX(id), 0) FROM live_chat_messages WHERE session_id = ?',
+                [$sid]
+            )->fetchColumn();
+            if ($headId > $since) {
+                $rows = $this->chatRows($sid, $since);
+                if ($rows !== []) {
+                    $this->sse($rows, $headId);
+                    flush();
+                    $since = $headId;
+                    continue;
+                }
+            }
+
+            // Heartbeat so proxies don't kill the connection.
+            echo ": ping\n\n";
+            flush();
+            sleep(1);
+        }
+    }
+
+    /** Chat rows for a session newer than $since, with the sender's name. */
+    private function chatRows(int $sessionId, int $since): array
+    {
+        $rows = Database::run(
+            'SELECT m.id, m.user_id, m.sender_role, m.message, m.created_at, u.email
+             FROM live_chat_messages m
+             JOIN users u ON u.id = m.user_id
+             WHERE m.session_id = ? AND m.id > ?
+             ORDER BY m.id ASC LIMIT 200',
+            [$sessionId, $since]
+        )->fetchAll();
+
+        foreach ($rows as &$r) {
+            $name = (string) ($r['email'] ?? 'member');
+            $r['name'] = $r['sender_role'] === 'operator' ? 'Operator' : (strpos($name, '@') !== false ? substr($name, 0, strpos($name, '@')) : $name);
+        }
+        unset($r);
+
+        return $rows;
+    }
+
+    private function sse(array $rows, int $latestId): void
+    {
+        echo 'data: ' . json_encode(['ok' => true, 'messages' => $rows, 'latestId' => $latestId], JSON_UNESCAPED_SLASHES) . "\n\n";
     }
 
     /** Resolve the current operator from a Bearer operator token. */

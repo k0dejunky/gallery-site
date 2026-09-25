@@ -545,6 +545,18 @@ CREATE TABLE IF NOT EXISTS live_sessions (
 CREATE INDEX IF NOT EXISTS idx_live_status ON live_sessions (status);
 CREATE INDEX IF NOT EXISTS idx_live_key ON live_sessions (stream_key);
 
+CREATE TABLE IF NOT EXISTS live_chat_messages (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  INTEGER NOT NULL,
+    user_id     INTEGER NOT NULL,
+    sender_role VARCHAR(10) NOT NULL DEFAULT 'user',
+    message     VARCHAR(1000) NOT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES live_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_live_chat_session ON live_chat_messages (session_id, id);
+
 CREATE TABLE IF NOT EXISTS chat_messages (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     conversation_id INTEGER NOT NULL,

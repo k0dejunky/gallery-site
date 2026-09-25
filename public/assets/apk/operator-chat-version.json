@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.28",
-  "versionCode": 39,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.28.apk",
-  "changelog": "Live video broadcast: the operator can now stream live from the app's camera (RTMP to the site's MediaMTX server) — members watch on /live. Accessible from the main menu (Go live).",
+  "latestVersion": "2.29",
+  "versionCode": 40,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.29.apk",
+  "changelog": "Live streaming fixes: stream now starts reliably (preview waits for the surface) and works in any orientation — portrait or landscape. Go live from the main menu.",
   "publishedAt": "2026-09-25"
 }

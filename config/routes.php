@@ -30,6 +30,8 @@ return [
     ['POST', '/live/stop', 'LiveController@stop'],
     ['GET', '/live', 'LiveController@page'],
     ['GET', '/live/status', 'LiveController@status'],
+    ['POST', '/live/chat/send', 'LiveController@chatSend'],
+    ['GET', '/live/chat/stream', 'LiveController@chatStream'],
 
     // Auth
     ['GET', '/login', 'AuthController@loginForm'],
