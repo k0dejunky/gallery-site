@@ -62,6 +62,80 @@ single-file names for backward compatibility).
   `upload_token` in the trainer config file). The trainer falls back to the
   bridge token only if the server still permits it.
 
+## Teach the fine-tuned model to reference galleries
+
+The site has an AI content search: when a member asks for specific content
+("do you have any blowjob content?"), the server searches the galleries they
+can view and injects the matches into the prompt as a "Site content this member
+can view:" block, then asks the model to name a matching gallery.
+
+- **Retrieval mode** follows that instruction (the base abliterated model).
+- **Finetuned mode** is LoRA-trained on plain operator replies, so it replies in
+  operator voice and ignores the injected gallery list.
+
+To teach finetuned mode to reference galleries, the training data needs examples
+in the **same shape the model sees at inference**: a user turn that contains the
+content block + the member's query, and an assistant reply that names the exact
+gallery.
+
+### How the trainer formats records
+
+`build_training_records()` wraps each pair in the Llama-3 chat template and
+prepends the static system persona (the same string `ChatAi` sends at
+inference) inside the user turn, so trained records match inference:
+
+```
+<|start_header_id|>user<|end_header_id|>
+You are the chat assistant for an adult content gallery site. Be warm, flirty,
+and human. Stay in character and respond naturally. Never break character.
+Keep replies under 2000 characters.
+{user_message}<|eot_id|>
+<|start_header_id|>assistant<|end_header_id|>
+{operator_reply}<|eot_id|>
+```
+
+For a content-referral example, `user_message` is the injected content block +
+the member's query, and `operator_reply` names one of the listed galleries.
+
+### The seed corpus
+
+`training/content-referral-pairs.jsonl` contains 14 curated pairs built from
+real site galleries (titles and categories are real). Import it so the next
+training round teaches the model to name galleries:
+
+- **Admin UI:** admin **Chat** → **Import training pairs** → paste the file's
+  JSONL lines, or upload the file.
+- **CLI:** `php bin/chat_training_import.php --file=training/content-referral-pairs.jsonl`
+
+Pairs are cleaned, junk-filtered and stored as `cleaned = 1`; re-importing is
+idempotent.
+
+### Authoring new content-referral pairs
+
+Follow the same shape (keep each record well under the trainer's 512-token
+`MAX_LEN`, so avoid long descriptions):
+
+- `user_message` = `Site content this member can view (exact gallery titles, do not invent others): - "Exact Title" [category, category]` + the rule line + `member: <the content question>`.
+- `operator_reply` = a short, flirty reply in the operator's voice that names
+  the matching gallery by its **exact title** from the list and invites the
+  member to open it.
+
+Rules:
+
+- Only ever reference galleries whose **exact titles** appear in the list.
+- Match the reply's topic to the query (blow job query → blow job gallery).
+- Vary the phrasing so the model generalizes (don't memorize one template).
+- Use galleries the member's level allows (level-gate like the live search).
+- Don't add pairs where the member is just chatting — those are for normal
+  operator-style training, not content referral.
+
+### Retraining
+
+The trainer only runs when **≥ 20 new pairs** have accumulated and the PC has
+been idle. Import the seeds (or add more) and wait for the next run; the new
+adapter upload rebuilds `chat-finetuned` atomically. Remember Ollama must stay
+≤ 0.33.x (the `ADAPTER` Modelfile directive was removed in 0.34.1).
+
 ## Installing on a fresh training PC
 
 1. Install Python 3.8.10 (All Users, Prepend Path, Include pip) to `C:\Python38`.

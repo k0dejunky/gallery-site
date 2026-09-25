@@ -409,6 +409,16 @@ def _is_junk(text: str) -> bool:
     return False
 
 
+# The static system persona ChatAi sends at inference. Prepended inside the
+# user turn of every training record so trained examples match inference format
+# (the model sees the same instruction during training and at chat time).
+SYSTEM_PERSONA = (
+    "You are the chat assistant for an adult content gallery site. Be warm, "
+    "flirty, and human. Stay in character and respond naturally. Never break "
+    "character. Keep replies under 2000 characters."
+)
+
+
 def build_training_records(pairs):
     """Convert pairs to list of {text: <chat-format>} records, dropping junk."""
     records = []
@@ -421,6 +431,8 @@ def build_training_records(pairs):
             continue
         text = (
             "<|start_header_id|>user<|end_header_id|>\n\n"
+            + SYSTEM_PERSONA
+            + "\n\n"
             + user
             + "<|eot_id|>\n<|start_header_id|>assistant<|end_header_id|>\n\n"
             + reply
