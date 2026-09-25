@@ -318,7 +318,9 @@ class LiveController extends Controller
         echo 'data: ' . json_encode(['ok' => true, 'messages' => $rows, 'latestId' => $latestId], JSON_UNESCAPED_SLASHES) . "\n\n";
     }
 
-    /** Resolve the current operator from a Bearer operator token. */
+    /** Resolve the current operator from a Bearer token: a per-device operator
+     *  token, or (for migration) the legacy shared GALLERY_CHAT_KEY, in which
+     *  case the session is attributed to the first admin account. */
     private function operator(): ?array
     {
         $given = trim((string) $this->request->header('Authorization', ''));
@@ -329,7 +331,24 @@ class LiveController extends Controller
             return null;
         }
 
-        return OperatorToken::authenticate($given);
+        $token = OperatorToken::authenticate($given);
+        if ($token !== null) {
+            return ['created_by' => (int) $token['created_by']];
+        }
+
+        // Legacy shared key (GALLERY_CHAT_KEY): the app may still be signed in
+        // with it. Attribute the session to the first admin account.
+        $expected = (string) env_value('GALLERY_CHAT_KEY', '');
+        if ($expected !== '' && hash_equals($expected, $given)) {
+            $admin = Database::run(
+                'SELECT id FROM users WHERE role IN (' . implode(',', array_fill(0, count(\App\Core\Auth::ADMIN_ROLES), '?')) . ') ORDER BY id ASC LIMIT 1',
+                \App\Core\Auth::ADMIN_ROLES
+            )->fetch();
+
+            return $admin !== false ? ['created_by' => (int) $admin['id']] : null;
+        }
+
+        return null;
     }
 
     /** Read the raw request body (JSON). */
