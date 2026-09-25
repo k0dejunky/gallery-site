@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.29",
-  "versionCode": 40,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.29.apk",
-  "changelog": "Live streaming fixes: stream now starts reliably (preview waits for the surface) and works in any orientation — portrait or landscape. Go live from the main menu.",
+  "latestVersion": "2.30",
+  "versionCode": 41,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.30.apk",
+  "changelog": "Live recordings: when a stream ends the server saves it as a new top-tier (Platinum) video gallery and auto-posts it to X + Reddit. This version sends the stream key on stop so the recording is imported correctly.",
   "publishedAt": "2026-09-25"
 }

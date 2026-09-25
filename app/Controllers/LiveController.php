@@ -46,8 +46,25 @@ class LiveController extends Controller
         }
 
         if ($action === 'read') {
+            // The server's own recorder (loopback) authenticates as the
+            // internal 'rec' reader (RTSP) or via ?rec=1&recpass= (HLS) so it
+            // can capture the stream; member reads use a signed playback token.
+            if ($this->validRecorder($data)) {
+                http_response_code(200);
+                echo 'ok';
+                return;
+            }
+
             $streamKey = strtok($path, '/') ?: '';
             parse_str($query, $q);
+            if (($q['rec'] ?? '') === '1'
+                && !empty($q['recpass'])
+                && hash_equals(hash('sha256', (string) env_value('GALLERY_MEDIA_KEY', '')), (string) $q['recpass'])) {
+                http_response_code(200);
+                echo 'ok';
+                return;
+            }
+
             $token = (string) ($q['t'] ?? '');
             if ($streamKey !== '' && $token !== '' && LiveSession::validPlaybackToken($streamKey, $token)) {
                 http_response_code(200);
@@ -104,7 +121,7 @@ class LiveController extends Controller
         ]);
     }
 
-    /** Operator app: end the broadcast. */
+    /** Operator app: end the broadcast (saving the recording into a gallery). */
     public function stop(): void
     {
         $operator = $this->operator();
@@ -112,6 +129,15 @@ class LiveController extends Controller
             http_response_code(403);
             $this->json(['ok' => false, 'error' => 'A valid operator token is required.']);
             return;
+        }
+
+        // Import the recording first (the .ts file is finalized once it exists).
+        $streamKey = trim((string) $this->request->post('stream_key', ''));
+        if ($streamKey !== '') {
+            $galleryId = \App\Models\LiveRecording::finalize($streamKey);
+            if ($galleryId !== null) {
+                error_log('[live] recording saved to gallery #' . $galleryId);
+            }
         }
 
         $active = LiveSession::active();
@@ -317,5 +343,23 @@ class LiveController extends Controller
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode($data, JSON_UNESCAPED_SLASHES);
         exit;
+    }
+
+    /**
+     * Whether the auth webhook call is from the server's own ffmpeg recorder
+     * (user 'rec' + password = sha256 of GALLERY_MEDIA_KEY). Only allowed for
+     * reads; the recorder runs on this box and captures the live stream.
+     */
+    private function validRecorder(array $data): bool
+    {
+        if ((string) ($data['user'] ?? '') !== 'rec') {
+            return false;
+        }
+        $secret = (string) env_value('GALLERY_MEDIA_KEY', '');
+        if ($secret === '') {
+            return false;
+        }
+
+        return hash_equals(hash('sha256', $secret), (string) ($data['password'] ?? ''));
     }
 }
