@@ -63,7 +63,8 @@ class AdminController extends Controller
         }
 
         // Chat statistics: AI master switch, the training queue (pairs waiting
-        // vs consumed by the training PC) and whether the base model is online.
+        // vs actually trained by the training PC) and whether the base model
+        // is online.
         $trainerSince = \App\Core\ChatSettings::trainerSinceId();
         $chatStats = [
             'aiEnabled'    => \App\Core\ChatSettings::aiEnabled(),
@@ -71,10 +72,7 @@ class AdminController extends Controller
                 'SELECT COUNT(*) FROM chat_training_pairs WHERE cleaned = 1 AND id > ?',
                 [$trainerSince]
             )->fetchColumn(),
-            'pairsTrained' => (int) Database::run(
-                'SELECT COUNT(*) FROM chat_training_pairs WHERE cleaned = 1 AND id <= ?',
-                [$trainerSince]
-            )->fetchColumn(),
+            'pairsTrained' => \App\Core\ChatSettings::trainerTrainedPairs(),
             'baseOnline'   => (bool) (\App\Core\ChatAi::ping()['hasBase'] ?? false),
         ];
 

@@ -38,6 +38,7 @@ class ChatSettings
             'trainer_since_id'     => 0,
             'ai_content_search'    => true,
             'ai_content_search_max' => 6,
+            'trainer_trained_pairs' => 0,
         ];
     }
 
@@ -124,6 +125,21 @@ class ChatSettings
     public static function setTrainerSinceId(int $sinceId): void
     {
         self::put('trainer_since_id', max(0, $sinceId));
+    }
+
+    /**
+     * The number of pairs the trainer has actually trained and uploaded
+     * (reported alongside the watermark). Kept separate from the watermark so
+     * "pairs trained" reflects real training, not merely consumed rows.
+     */
+    public static function trainerTrainedPairs(): int
+    {
+        return (int) (self::all()['trainer_trained_pairs'] ?? 0);
+    }
+
+    public static function setTrainerTrainedPairs(int $count): void
+    {
+        self::put('trainer_trained_pairs', max(0, $count));
     }
 
     /**

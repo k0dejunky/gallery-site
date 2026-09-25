@@ -638,9 +638,11 @@ class ChatBridgeController extends Controller
             $data = [];
         }
         $sinceId = max(0, (int) ($data['since_id'] ?? $this->request->post('since_id', 0)));
+        $trained = max(0, (int) ($data['trained_pairs'] ?? $this->request->post('trained_pairs', 0)));
         \App\Core\ChatSettings::setTrainerSinceId($sinceId);
+        \App\Core\ChatSettings::setTrainerTrainedPairs($trained);
 
-        $this->json(['ok' => true, 'since_id' => $sinceId]);
+        $this->json(['ok' => true, 'since_id' => $sinceId, 'trained_pairs' => $trained]);
     }
 
     /**

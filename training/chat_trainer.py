@@ -370,14 +370,15 @@ def fetch_training_data(since_id: int):
     return pairs
 
 
-def report_watermark(since_id: int):
-    """Tell the server the highest pair id we have consumed (trained). The
-    server shows "pairs waiting to be trained" = cleaned pairs above this id,
-    live on the website and the desktop UI. Best-effort; failures are logged
-    but never break the poll loop."""
+def report_watermark(since_id: int, trained_pairs: int = 0):
+    """Tell the server the highest pair id we have consumed plus how many pairs
+    we have actually trained and uploaded. The server shows "pairs waiting to
+    be trained" = cleaned pairs above the id, and "pairs trained" = the real
+    trained counter, live on the website and the desktop UI. Best-effort;
+    failures are logged but never break the poll loop."""
     try:
         url = f"{SERVER_BASE}/webhooks/chat/training-progress"
-        body = json.dumps({"since_id": int(since_id)}).encode("utf-8")
+        body = json.dumps({"since_id": int(since_id), "trained_pairs": int(trained_pairs)}).encode("utf-8")
         req = urllib.request.Request(
             url, data=body, method="POST",
             headers={"Authorization": f"Bearer {BRIDGE_TOKEN}",
@@ -385,7 +386,7 @@ def report_watermark(since_id: int):
         )
         with urllib.request.urlopen(req, timeout=30) as resp:
             result = json.loads(resp.read().decode("utf-8"))
-            _log("reported watermark since_id=%d -> %s" % (int(since_id), result.get("ok")))
+            _log("reported watermark since_id=%d trained=%d -> %s" % (int(since_id), int(trained_pairs), result.get("ok")))
     except Exception as e:
         _log("watermark report failed (ignored): %s" % e)
 
@@ -587,7 +588,7 @@ def main():
             pairs = fetch_training_data(since)
             _log("fetched %d new pair(s) since id %d" % (len(pairs), since))
             write_status({"last_poll": len(pairs)})
-            report_watermark(since)
+            report_watermark(since, int(st.get("trained_pairs", 0)))
 
             if len(pairs) >= MIN_NEW_PAIRS:
                 blocked = can_start_training()
