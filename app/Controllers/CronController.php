@@ -27,6 +27,18 @@ class CronController extends Controller
         }
 
         $summary = Housekeeping::run(10);
+
+        // Import any live-stream recordings left by a crashed/disconnected
+        // operator (no /live/stop reached the server).
+        try {
+            $imported = \App\Models\LiveRecording::importOrphans();
+            if ($imported > 0) {
+                $summary['live_recordings_imported'] = $imported;
+            }
+        } catch (\Throwable $error) {
+            $summary['live_recordings_error'] = $error->getMessage();
+        }
+
         echo json_encode(['ok' => true] + $summary);
     }
 }
