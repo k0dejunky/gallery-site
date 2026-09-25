@@ -62,6 +62,22 @@ class AdminController extends Controller
             $viewPeriod = 'month';
         }
 
+        // Chat statistics: AI master switch, the training queue (pairs waiting
+        // vs consumed by the training PC) and whether the base model is online.
+        $trainerSince = \App\Core\ChatSettings::trainerSinceId();
+        $chatStats = [
+            'aiEnabled'    => \App\Core\ChatSettings::aiEnabled(),
+            'pairsWaiting' => (int) Database::run(
+                'SELECT COUNT(*) FROM chat_training_pairs WHERE cleaned = 1 AND id > ?',
+                [$trainerSince]
+            )->fetchColumn(),
+            'pairsTrained' => (int) Database::run(
+                'SELECT COUNT(*) FROM chat_training_pairs WHERE cleaned = 1 AND id <= ?',
+                [$trainerSince]
+            )->fetchColumn(),
+            'baseOnline'   => (bool) (\App\Core\ChatAi::ping()['hasBase'] ?? false),
+        ];
+
         $this->viewAdmin('dashboard', [
             'summary'   => Stats::summary(),
             'growth'    => Stats::growth(),
@@ -85,6 +101,7 @@ class AdminController extends Controller
             'supportStats' => \App\Models\Stats::supportStats(),
             'autopostFailed' => \App\Models\AutoPostQueue::failed(6),
             'autopostCounts' => \App\Models\AutoPostQueue::statusCounts(),
+            'chatStats'  => $chatStats,
         ]);
     }
 

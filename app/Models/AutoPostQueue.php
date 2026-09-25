@@ -651,13 +651,15 @@ class AutoPostQueue
      * queue is never left empty just because every gallery has been used
      * before. Dismissed and currently-queued galleries are never reused.
      *
-     * The first scheduled post is due immediately (so posting resumes right
-     * away); the rest are spread across the window on the hourly cadence, so a
-     * populated queue is maintained without blasting the platforms.
+     * One post is scheduled per hour across the window (the first is due
+     * immediately, each following slot is exactly +1h). When fewer galleries
+     * are available than the window needs, the pool is cycled so every hourly
+     * slot is filled and the queue is maintained without blasting the
+     * platforms.
      *
      * Returns the number of posts scheduled.
      *
-     * @param int      $count    how many galleries to schedule (<= 48)
+     * @param int      $count    how many hourly slots to schedule (<= 48)
      * @param int      $hours    the window (hours) to spread them over
      * @param string|null $platform limit to one platform when given
      */
@@ -670,10 +672,11 @@ class AutoPostQueue
             ? [$platform]
             : ['twitter', 'reddit'];
 
-        // Only refill platforms that have nothing queued.
+        // Only refill platforms that have nothing queued AND are actually able to
+        // post (an unauthorized platform's rows would just be marked skipped).
         $idlePlatforms = array_values(array_filter(
             $platforms,
-            static fn (string $pf): bool => !self::hasQueued($pf)
+            static fn (string $pf): bool => !self::hasQueued($pf) && self::platformAuthorized($pf)
         ));
 
         if ($idlePlatforms === []) {
@@ -707,20 +710,25 @@ class AutoPostQueue
             return 0;
         }
 
+        // One post per hour across the window — the first is due immediately
+        // and each following slot is exactly +1h, so the queue always has a
+        // post ready every hour. When fewer galleries are available than the
+        // window needs, the pool is cycled to fill every hourly slot (a small
+        // gallery set still keeps X/Reddit active all day).
         $scheduled = 0;
+        $pool      = array_values($galleryIds);
+        $poolCount = max(1, count($pool));
+        $slots     = min($count, $hours);
 
-        foreach ($galleryIds as $i => $row) {
-            // First refill post goes out immediately; the rest follow on the
-            // hourly cadence across the window so the queue is maintained
-            // without blasting the platforms.
-            $offsetHours = $i === 0 ? 0 : (int) floor($i * $hours / max(1, count($galleryIds)));
+        for ($i = 0; $i < $slots; $i++) {
+            $gallery = $pool[$i % $poolCount];
             $when = (new DateTime('@' . time()))
                 ->setTimezone(self::schedulerTimezone())
-                ->modify('+' . $offsetHours . ' hours')
+                ->modify('+' . $i . ' hours')
                 ->format('Y-m-d\TH:i');
 
             foreach ($idlePlatforms as $pf) {
-                $newId = self::enqueue((int) $row['id'], null, $when, $pf);
+                $newId = self::enqueue((int) $gallery['id'], null, $when, $pf);
                 if ($newId > 0) {
                     $scheduled++;
                 }
@@ -732,7 +740,7 @@ class AutoPostQueue
                 $platform ?? 'x',
                 '',
                 'info',
-                "Idle queue refilled: scheduled {$scheduled} post(s) from " . count($galleryIds) . " gallery(ies) (first due now)"
+                "Idle queue refilled: scheduled {$scheduled} post(s) across {$slots} hourly slot(s) from " . $poolCount . " gallery(ies) (first due now)"
             );
         }
 

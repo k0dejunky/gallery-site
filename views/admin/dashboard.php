@@ -127,6 +127,26 @@
     </div>
 </div>
 
+<?php // Chat statistics: AI master switch, training queue, base model. ?>
+<div class="stat-cards" style="margin-top:var(--spacing-lg);">
+    <div class="stat-card" style="border-left:4px solid <?= !empty($chatStats['aiEnabled']) ? 'var(--success,#16a34a)' : 'var(--danger,#c62828)' ?>;">
+        <b><?= !empty($chatStats['aiEnabled']) ? 'ON' : 'OFF' ?></b>
+        <small>AI master switch</small>
+    </div>
+    <div class="stat-card">
+        <b><?= number_format((int) ($chatStats['pairsWaiting'] ?? 0)) ?></b>
+        <small>Training pairs waiting</small>
+    </div>
+    <div class="stat-card">
+        <b><?= number_format((int) ($chatStats['pairsTrained'] ?? 0)) ?></b>
+        <small>Pairs trained</small>
+    </div>
+    <div class="stat-card">
+        <b style="color:<?= !empty($chatStats['baseOnline']) ? 'var(--success,#16a34a)' : 'var(--danger,#c62828)' ?>;"><?= !empty($chatStats['baseOnline']) ? 'Online' : 'Offline' ?></b>
+        <small>Base AI status</small>
+    </div>
+</div>
+
 <?php // System health: disk space pie + security summary. ?>
 <?php if (!empty($disk)): ?>
     <?php
