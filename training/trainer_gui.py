@@ -101,6 +101,8 @@ class TrainerGUI:
         self.cfg = {}
         self.entries = {}
         self.running_flag = True
+        self._log_prev = None
+        self._polling = False
 
         self.build()
         self.refresh_all()
@@ -322,10 +324,41 @@ class TrainerGUI:
     def poll(self):
         if not self.running_flag:
             return
-        try:
-            self.refresh_status()
-        finally:
+        if self._polling:
             self.root.after(3000, self.poll)
+            return
+        self._polling = True
+
+        def worker():
+            status = None
+            log = None
+            try:
+                status = fetch("/api/status").get("status", {})
+            except Exception:
+                status = None
+            try:
+                log = fetch("/api/log").get("log", "")
+            except Exception:
+                log = None
+            self._polling = False
+            # Schedule the Tk updates back on the main thread so a slow or
+            # hung request never freezes the UI.
+            self.root.after(0, lambda: self.apply_poll(status, log))
+
+        threading.Thread(target=worker, daemon=True).start()
+        self.root.after(3000, self.poll)
+
+    def apply_poll(self, status, log):
+        if status is None:
+            self.status = {}
+            self.show_banner()
+        else:
+            self.status = status
+            self.hide_banner()
+        self.render_status()
+        if log is not None and log != self._log_prev:
+            self._log_prev = log
+            self.render_log(log)
 
     def refresh_all(self):
         self.refresh_status()
@@ -440,10 +473,18 @@ class TrainerGUI:
             log = d.get("log", "")
         except Exception:
             return
+        self._log_prev = log
+        self.render_log(log)
+
+    def render_log(self, log):
+        # Keep the view pinned to the bottom when the user is already there;
+        # otherwise preserve their scroll position.
+        at_end = self.logtxt.yview()[1] >= 0.99
         self.logtxt.config(state="normal")
         self.logtxt.delete("1.0", "end")
         self.logtxt.insert("end", log)
-        self.logtxt.see("end")
+        if at_end:
+            self.logtxt.see("end")
         self.logtxt.config(state="disabled")
 
 
