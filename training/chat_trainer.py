@@ -43,7 +43,7 @@ DEFAULT_CONFIG = {
     "max_len": 512,
     "steps": 60,
     "lr": 2e-4,
-    "required_idle_seconds": 300,
+    "required_idle_seconds": 0,
     "cpu_threads": 0,
     "pause_file": r"C:\work\.chat_trainer_paused",
     "force_train_file": r"C:\work\.chat_trainer_train_now",

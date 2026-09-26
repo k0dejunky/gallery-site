@@ -195,9 +195,9 @@ adds an `X-Control-Token` requirement (default: open on the LAN).
 The training PC is used for other things, so training yields to interactive use:
 
 - **Idle gating** — a training round only *starts* when the machine has had no
-  keyboard/mouse input for `REQUIRED_IDLE_SECONDS` (default 300). If you sit
-  down while training is already running it finishes (mid-run checkpointing is
-  not practical), but the next round waits for idle again. Set `0` to disable.
+  keyboard/mouse input for `REQUIRED_IDLE_SECONDS` (default 0 = disabled, so the
+  next cycle starts as soon as a poll finds new pairs). Set it to e.g. 300 to
+  skip training while the PC is being used.
 - **CPU budget** — `apply_cpu_budget()` limits torch to `CPU_THREADS` threads
   (default 0 = half the physical cores) so the rest of the machine stays
   responsive during a run. Set an explicit count to override.
