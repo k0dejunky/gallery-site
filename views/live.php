@@ -45,8 +45,8 @@
             <div class="live-chat-messages" id="live-chat-messages"></div>
             <form class="live-chat-form" id="live-chat-form">
                 <?= csrf_field() ?>
-                <input type="text" id="live-chat-input" maxlength="500" placeholder="Say something…" disabled autocomplete="off">
-                <button type="submit" class="btn btn-sm" disabled>Send</button>
+                <input type="text" id="live-chat-input" maxlength="500" placeholder="Say something…" autocomplete="off">
+                <button type="submit" class="btn btn-sm">Send</button>
             </form>
         </div>
     </div>
@@ -63,7 +63,6 @@
     var chatMessages = document.getElementById('live-chat-messages');
     var chatForm = document.getElementById('live-chat-form');
     var chatInput = document.getElementById('live-chat-input');
-    var sendBtn = chatForm ? chatForm.querySelector('button[type=submit]') : null;
     var csrf = chatForm ? chatForm.querySelector('input[name="_token"]').value : '';
 
     var hls = null;
@@ -153,8 +152,6 @@
         stateLive = live;
         if (badge) { badge.textContent = live ? '● LIVE' : 'Offline'; badge.className = 'live-badge ' + (live ? 'on' : 'off'); }
         if (offline) offline.style.display = live ? 'none' : 'grid';
-        if (chatInput) chatInput.disabled = !live;
-        if (sendBtn) sendBtn.disabled = !live;
     }
 
     function applyState(s) {
