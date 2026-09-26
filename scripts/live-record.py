@@ -65,8 +65,15 @@ def main():
                 media = media_playlist()
                 segs = segments(media)
             except Exception:
-                # Playlist gone (stream ended) -> finalize.
-                break
+                # The HLS muxer may not be ready the moment runOnReady fires
+                # (the playlist only appears after the first keyframe), so a
+                # fetch error here is usually transient - keep retrying until
+                # a quiet window elapses rather than giving up immediately and
+                # losing the recording.
+                if time.time() - last_new > 30:
+                    break
+                time.sleep(1)
+                continue
 
             wrote = False
             for seg in segs:

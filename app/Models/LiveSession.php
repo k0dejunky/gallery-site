@@ -108,6 +108,33 @@ class LiveSession
     }
 
     /**
+     * Whether a raw stream key is currently being published in MediaMTX (the
+     * path is 'ready'). Used by the orphan importer so it never finalizes a
+     * recording while the stream is still live.
+     */
+    public static function isPublishing(string $rawKey): bool
+    {
+        try {
+            [$status, , $body] = Http::request('http://127.0.0.1:9997/v2/paths/list', [
+                'method'  => 'GET',
+                'timeout' => 3,
+            ]);
+            if ($status < 200 || $status >= 300) {
+                return false;
+            }
+            $data = json_decode($body, true);
+            foreach (($data['items'] ?? []) as $item) {
+                if (!empty($item['ready']) && (string) ($item['name'] ?? '') === $rawKey) {
+                    return true;
+                }
+            }
+        } catch (\Throwable $error) {
+            // MediaMTX unreachable: assume not publishing.
+        }
+        return false;
+    }
+
+    /**
      * Live state as seen by the site: checks MediaMTX's HTTP API for any
      * currently-published stream, matched back to our session row.
      *
