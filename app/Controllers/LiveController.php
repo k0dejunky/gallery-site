@@ -95,10 +95,15 @@ class LiveController extends Controller
 
         $active = LiveSession::active();
         if ($active !== null) {
-            // A stale 'pending' session (created but never actually published,
-            // e.g. the app dropped the connection before streaming) blocks new
-            // starts; clear it. A genuinely live stream must be stopped first.
-            if ((string) $active['status'] === 'pending') {
+            // A previous session may be stale: 'pending' (created but never
+            // published, e.g. the app dropped the connection before streaming)
+            // or 'live' in the DB while MediaMTX no longer has the publisher
+            // (operator crashed / network died without /live/stop). Only a
+            // broadcast that is actually being published right now blocks a
+            // new start; anything else is cleared so the operator can retry.
+            $status         = LiveSession::status();
+            $genuinelyLive  = $status['live'] && $status['session_id'] === (int) $active['id'];
+            if ((string) $active['status'] === 'pending' || !$genuinelyLive) {
                 LiveSession::markEnded((int) $active['id']);
             } else {
                 $this->json(['ok' => false, 'error' => 'A live stream is already active. Stop it first.']);
