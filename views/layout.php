@@ -275,6 +275,9 @@ $isAuthPage = $isLoginPage
             <?php if ($user !== null): ?>
                 <a class="nav-item<?= strpos($currentPath, url('/chat')) === 0 ? ' active' : '' ?>" href="<?= url('/chat') ?>" data-se-move-key="pub-chat">Chat<?php if (\App\Models\ChatMessage::canChat((int) $user['id']) && !empty($chatUnreadCount)): ?> <span class="nav-unread" aria-label="<?= (int) $chatUnreadCount ?> unread replies"><?= (int) $chatUnreadCount ?></span><?php endif; ?></a>
             <?php endif; ?>
+            <?php if ($user !== null && \App\Core\Auth::hasActiveSubscription()): ?>
+                <a class="nav-item<?= strpos($currentPath, url('/live')) === 0 ? ' active' : '' ?>" href="<?= url('/live') ?>" data-se-move-key="pub-live">Live</a>
+            <?php endif; ?>
             <?php if ($user !== null && \App\Core\Auth::isAdmin()): ?>
                 <a class="nav-item" href="<?= url('/admin') ?>" data-se-move-key="pub-admin">Admin</a>
             <?php endif; ?>
@@ -313,6 +316,9 @@ $isAuthPage = $isLoginPage
         <a href="<?= url('/favorites') ?>">Favorites</a>
         <a href="<?= url('/membership') ?>">Membership</a>
          <a href="<?= url('/support') ?>">Support<?php if (!empty($supportUnreadCount)): ?> <span class="nav-unread"><?= (int) $supportUnreadCount ?></span><?php endif; ?></a>
+        <?php if ($user !== null && \App\Core\Auth::hasActiveSubscription()): ?>
+        <a href="<?= url('/live') ?>">Live</a>
+        <?php endif; ?>
         <a href="<?= url('/settings') ?>">Settings</a>
     </nav>
     <?php endif; ?>
