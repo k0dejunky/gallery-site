@@ -121,17 +121,25 @@ class ChatMessage
      * @param array{name:string, type:string, path:string}|null $attachment
      * @param array<int,array{title:string,url:string}>|null $contentRefs clickable
      *        gallery references the AI reply used (stored so links survive reloads)
+     * @param string|null $expiresAt when the attachment stops being viewable (UTC)
+     * @param int|null $maxViews how many member views the attachment allows
      */
-    public static function addMessage(int $conversationId, string $role, string $message, ?array $attachment = null, ?array $contentRefs = null): int
+    public static function addMessage(int $conversationId, string $role, string $message, ?array $attachment = null, ?array $contentRefs = null, ?string $expiresAt = null, ?int $maxViews = null): int
     {
         $message = mb_substr(trim($message), 0, self::MAX_MESSAGE_LENGTH);
         if ($message === '' && $attachment === null) {
             return 0;
         }
 
+        // Expiry only makes sense for messages that actually carry media.
+        if ($attachment === null) {
+            $expiresAt = null;
+            $maxViews  = null;
+        }
+
         Database::run(
-            'INSERT INTO chat_messages (conversation_id, sender_role, message, attachment_name, attachment_type, attachment_path, content_refs)
-             VALUES (?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO chat_messages (conversation_id, sender_role, message, attachment_name, attachment_type, attachment_path, expires_at, max_views, view_count, content_refs)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)',
             [
                 $conversationId,
                 $role,
@@ -139,6 +147,8 @@ class ChatMessage
                 $attachment['name'] ?? null,
                 $attachment['type'] ?? null,
                 $attachment['path'] ?? null,
+                $expiresAt,
+                $maxViews !== null && $maxViews > 0 ? $maxViews : null,
                 $contentRefs === null || $contentRefs === [] ? null : json_encode(array_values($contentRefs), JSON_UNESCAPED_SLASHES),
             ]
         );
@@ -146,6 +156,68 @@ class ChatMessage
         \App\Core\Cache::bump('chat');
 
         return (int) Database::connection()->lastInsertId();
+    }
+
+    /** Whether a message's attachment is expired (time passed or view limit hit). */
+    public static function isMediaExpired(array $msg): bool
+    {
+        if (empty($msg['attachment_path'])) {
+            return false;
+        }
+        $expires = (string) ($msg['expires_at'] ?? '');
+        if ($expires !== '' && $expires !== '0000-00-00 00:00:00' && strtotime($expires . ' UTC') <= time()) {
+            return true;
+        }
+        $maxViews = (int) ($msg['max_views'] ?? 0);
+        if ($maxViews > 0 && (int) ($msg['view_count'] ?? 0) >= $maxViews) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Delete the stored files + attachment metadata of messages whose media has
+     * expired, so expired media frees storage and becomes permanently gone.
+     * Returns the number of messages purged.
+     */
+    public static function purgeExpiredMedia(): int
+    {
+        $rows = Database::run(
+            'SELECT id, attachment_path FROM chat_messages
+             WHERE attachment_path IS NOT NULL AND attachment_path <> \'\'
+               AND (expires_at IS NOT NULL AND expires_at <= UTC_TIMESTAMP()
+                    OR (max_views IS NOT NULL AND max_views > 0 AND view_count >= max_views))'
+        )->fetchAll();
+
+        $purged = 0;
+        foreach ($rows as $row) {
+            $id   = (int) $row['id'];
+            $path = (string) $row['attachment_path'];
+
+            $full = dirname(__DIR__, 2) . '/' . ltrim($path, '/');
+            @unlink($full);
+            // Cached thumbnail lives next to the file under chat/thumbs/.
+            $dir  = dirname($full);
+            $base = pathinfo($full, PATHINFO_FILENAME);
+            foreach (glob($dir . '/thumbs/' . $base . '*') ?: [] as $thumb) {
+                @unlink($thumb);
+            }
+
+            Database::run(
+                'UPDATE chat_messages
+                 SET attachment_name = NULL, attachment_type = NULL, attachment_path = NULL,
+                     expires_at = NULL, max_views = NULL, view_count = 0
+                 WHERE id = ?',
+                [$id]
+            );
+            $purged++;
+        }
+
+        if ($purged > 0) {
+            \App\Core\Cache::bump('chat');
+        }
+
+        return $purged;
     }
 
     /**

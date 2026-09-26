@@ -34,8 +34,10 @@
                 <div style="display:inline-block;text-align:left;max-width:100%;padding:2px 7px;border-radius:12px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;
                      <?= $m['sender_role'] === 'user' ? 'background:var(--purple-600,#9333ea);color:#fff;border-bottom-right-radius:3px;' : 'background:var(--pink-100,#fdf2f8);color:var(--purple-900,#4a044e);border:1px solid var(--pink-300,#f9a8d4);border-bottom-left-radius:3px;' ?>">
                     <?= e((string) $m['message']) ?>
-                    <?php if (!empty($m['attachment_name']) && !empty($m['attachment_url'])): ?>
-                        <?php if (!empty($m['attachment_thumb_url'])): ?>
+                    <?php if (!empty($m['attachment_name'])): ?>
+                        <?php if (empty($m['attachment_url'])): ?>
+                            <span style="display:block;margin-top:.5rem;font-size:.85rem;opacity:.7;">🔒 Media expired</span>
+                        <?php elseif (!empty($m['attachment_thumb_url'])): ?>
                             <a href="<?= e($m['attachment_url']) ?>" target="_blank" rel="noopener" style="display:block;margin-top:.5rem;border-radius:8px;overflow:hidden;border:1px solid rgba(0,0,0,.08);background:#fff;">
                                 <img src="<?= e($m['attachment_thumb_url']) ?>" alt="<?= e($m['attachment_name']) ?>" style="display:block;max-width:220px;max-height:220px;width:auto;height:auto;">
                             </a>
@@ -70,6 +72,30 @@
         <span id="attach-name" class="muted" style="font-size:.85rem;"></span>
     </div>
 
+    <div id="expiry-row" style="display:none;margin-top:.5rem;gap:.75rem;align-items:center;flex-wrap:wrap;">
+        <label class="muted" style="font-size:.85rem;">Expire media after
+            <select name="expires_in" id="expires-in" style="margin-left:.3rem;">
+                <option value="0">Never</option>
+                <option value="5">5 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="60">1 hour</option>
+                <option value="360">6 hours</option>
+                <option value="1440">24 hours</option>
+            </select>
+        </label>
+        <label class="muted" style="font-size:.85rem;">or after
+            <select name="max_views" id="max-views" style="margin-left:.3rem;">
+                <option value="0">Unlimited views</option>
+                <option value="1">1 view</option>
+                <option value="3">3 views</option>
+                <option value="5">5 views</option>
+                <option value="10">10 views</option>
+            </select>
+        </label>
+        <span class="muted" style="font-size:.8rem;">(applies to the attached picture/video only)</span>
+    </div>
+
     <button type="submit" class="btn" style="margin-top:.5rem;">Send operator reply</button>
 </form>
 
@@ -81,6 +107,7 @@
     var attachInput = document.getElementById('attachment-input');
     var attachName = document.getElementById('attach-name');
     var replyForm = document.getElementById('reply-form');
+    var expiryRow = document.getElementById('expiry-row');
 
     emojiToggle.addEventListener('click', function () {
         emojiBar.style.display = emojiBar.style.display === 'none' ? 'flex' : 'none';
@@ -95,6 +122,7 @@
         attachName.textContent = attachInput.files && attachInput.files[0]
             ? attachInput.files[0].name
             : '';
+        expiryRow.style.display = attachInput.files && attachInput.files.length > 0 ? 'flex' : 'none';
     });
     replyForm.addEventListener('submit', function (ev) {
         var hasText = replyText.value.trim() !== '';
@@ -131,7 +159,10 @@
             '<div style="display:inline-block;text-align:left;max-width:100%;padding:2px 7px;border-radius:12px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;' +
             (m.sender_role === 'user' ? 'background:var(--purple-600,#9333ea);color:#fff;border-bottom-right-radius:3px;' : 'background:var(--pink-100,#fdf2f8);color:var(--purple-900,#4a044e);border:1px solid var(--pink-300,#f9a8d4);border-bottom-left-radius:3px;') +
             '">' + esc(m.message) +
-            (m.attachment_name ? '<div style="margin-top:.3rem;">📎 ' + esc(m.attachment_name) + '</div>' : '') +
+            (m.attachment_name ? (m.media_expired
+                ? '<div style="margin-top:.3rem;">🔒 Media expired</div>'
+                : '<div style="margin-top:.3rem;">📎 ' + esc(m.attachment_name) + '</div>')
+                : '') +
             '</div>';
         thread.insertBefore(wrap, thread.firstChild);
     }

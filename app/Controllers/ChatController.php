@@ -362,12 +362,30 @@ class ChatController extends Controller
             exit;
         }
 
+        // Expiring media: refuse to serve once the time or view limit is hit.
+        if (\App\Models\ChatMessage::isMediaExpired($msg)) {
+            http_response_code(410);
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => false, 'error' => 'Media has expired.']);
+            exit;
+        }
+
         $path = dirname(__DIR__, 2) . '/' . $msg['attachment_path'];
         if (!is_file($path)) {
             http_response_code(404);
             header('Content-Type: application/json');
             echo json_encode(['ok' => false, 'error' => 'Attachment file missing.']);
             exit;
+        }
+
+        // A member view of the full media consumes one of the view limit
+        // (thumbnails are free - they are just list previews).
+        $maxViews = (int) ($msg['max_views'] ?? 0);
+        if ($maxViews > 0 && !$thumb) {
+            \App\Core\Database::run(
+                'UPDATE chat_messages SET view_count = view_count + 1 WHERE id = ? AND view_count < max_views',
+                [(int) $msg['id']]
+            );
         }
 
         $name = (string) ($msg['attachment_name'] ?? basename($path));
@@ -475,6 +493,14 @@ class ChatController extends Controller
             $m['attachment_thumb_url'] = !empty($m['attachment_path']) && str_starts_with($type, 'image/')
                 ? url('/chat/attachment?message=' . (int) $m['id'] . '&thumb=1')
                 : null;
+            $m['expires_at'] = !empty($m['expires_at']) ? (string) $m['expires_at'] : null;
+            $m['max_views']  = (int) ($m['max_views'] ?? 0);
+            $m['view_count'] = (int) ($m['view_count'] ?? 0);
+            $m['media_expired'] = \App\Models\ChatMessage::isMediaExpired($m);
+            if ($m['media_expired']) {
+                $m['attachment_url'] = null;
+                $m['attachment_thumb_url'] = null;
+            }
             $m['content_refs'] = !empty($m['content_refs'])
                 ? json_decode((string) $m['content_refs'], true)
                 : [];

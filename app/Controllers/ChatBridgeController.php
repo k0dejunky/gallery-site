@@ -384,6 +384,9 @@ class ChatBridgeController extends Controller
         $cid  = (int) ($data['conversation_id'] ?? $this->request->post('conversation_id', 0));
         $msg  = trim((string) ($data['message'] ?? $this->request->post('message', '')));
         $role = (string) ($data['sender_role'] ?? $this->request->post('sender_role', 'operator'));
+        // Optional expiry for an attached picture/video.
+        $expiresIn = max(0, (int) ($data['expires_in_minutes'] ?? $this->request->post('expires_in_minutes', 0)));
+        $maxViews  = max(0, (int) ($data['max_views'] ?? $this->request->post('max_views', 0)));
         $idempotencyKey = trim((string) ($data['idempotency_key']
             ?? $this->request->post('idempotency_key', '')
             ?: $this->request->header('Idempotency-Key', '')));
@@ -439,7 +442,11 @@ class ChatBridgeController extends Controller
             }
         }
 
-        $id = ChatMessage::addMessage($cid, $role, $msg, $attachment);
+        $expiresAt = null;
+        if ($attachment !== null && $expiresIn > 0) {
+            $expiresAt = gmdate('Y-m-d H:i:s', time() + $expiresIn * 60);
+        }
+        $id = ChatMessage::addMessage($cid, $role, $msg, $attachment, null, $expiresAt, $maxViews > 0 ? $maxViews : null);
         if ($id <= 0) {
             if ($idempotencyKey !== '' && $db->inTransaction()) $db->rollBack();
             $this->json(['ok' => false, 'error' => 'Message is empty (or too long) with no attachment.']);
@@ -952,6 +959,14 @@ class ChatBridgeController extends Controller
             return;
         }
 
+        // Expiring media: refuse to serve once the time or view limit is hit.
+        // The operator's own device (this endpoint) does not consume views.
+        if (\App\Models\ChatMessage::isMediaExpired($msg)) {
+            http_response_code(410);
+            $this->json(['ok' => false, 'error' => 'Media has expired.']);
+            return;
+        }
+
         $path = dirname(__DIR__, 2) . '/' . $msg['attachment_path'];
         if (!is_file($path)) {
             $this->json(['ok' => false, 'error' => 'Attachment file missing.']);
@@ -1068,6 +1083,14 @@ class ChatBridgeController extends Controller
             $m['attachment_thumb_url'] = !empty($m['attachment_path']) && str_starts_with($type, 'image/')
                 ? url('/webhooks/chat/attachment?message=' . (int) $m['id'] . '&thumb=1')
                 : null;
+            $m['expires_at'] = !empty($m['expires_at']) ? (string) $m['expires_at'] : null;
+            $m['max_views']  = (int) ($m['max_views'] ?? 0);
+            $m['view_count'] = (int) ($m['view_count'] ?? 0);
+            $m['media_expired'] = \App\Models\ChatMessage::isMediaExpired($m);
+            if ($m['media_expired']) {
+                $m['attachment_url'] = null;
+                $m['attachment_thumb_url'] = null;
+            }
             $m['content_refs'] = !empty($m['content_refs'])
                 ? json_decode((string) $m['content_refs'], true)
                 : [];

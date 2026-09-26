@@ -121,6 +121,10 @@ class Housekeeping
             }
         }
 
+        // Expiring chat media whose time or view limit has been hit: remove
+        // the stored files so they free storage and are permanently gone.
+        $out['chat_media_purged'] = \App\Models\ChatMessage::purgeExpiredMedia();
+
         @file_put_contents(
             $root . '/storage/logs/cron.log',
             implode(' | ', array_map(fn ($k, $v) => "$k=$v", array_keys($out), $out)) . "\n",

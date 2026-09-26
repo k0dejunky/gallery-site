@@ -41,8 +41,10 @@
                             <span class="who">You</span>
                         <?php endif; ?>
                         <?= e((string) $m['message']) ?>
-                        <?php if (!empty($m['attachment_name']) && !empty($m['attachment_url'])): ?>
-                            <?php if (!empty($m['attachment_thumb_url']) && str_starts_with((string) $m['attachment_type'], 'image/')): ?>
+                        <?php if (!empty($m['attachment_name'])): ?>
+                            <?php if (empty($m['attachment_url'])): ?>
+                                <span class="chat-attachment chat-expired">🔒 Media expired</span>
+                            <?php elseif (!empty($m['attachment_thumb_url']) && str_starts_with((string) $m['attachment_type'], 'image/')): ?>
                                 <img class="chat-image" loading="lazy" src="<?= e($m['attachment_url']) ?>" alt="<?= e($m['attachment_name']) ?>" draggable="false" oncontextmenu="return false">
                             <?php else: ?>
                                 <span class="chat-attachment">📎 <?= e($m['attachment_name']) ?></span>
@@ -110,8 +112,10 @@
         var isUser = msg.sender_role === 'user';
         div.className = 'chat-msg ' + esc(msg.sender_role);
         var html = (isUser ? '<span class="who">You</span>' : '') + esc(msg.message);
-        if (msg.attachment_name && msg.attachment_url) {
-            if (msg.attachment_thumb_url) {
+        if (msg.attachment_name) {
+            if (msg.media_expired || !msg.attachment_url) {
+                html += ' <span class="chat-attachment chat-expired">🔒 Media expired</span>';
+            } else if (msg.attachment_thumb_url) {
                 html += ' <img class="chat-image" loading="lazy" src="' + esc(msg.attachment_url) + '" alt="' + esc(msg.attachment_name) + '" draggable="false" oncontextmenu="return false">';
             } else {
                 html += ' <span class="chat-attachment">📎 ' + esc(msg.attachment_name) + '</span>';

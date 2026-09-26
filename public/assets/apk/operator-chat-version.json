@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.34",
-  "versionCode": 45,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.34.apk",
-  "changelog": "Live: camera preview now renders on a TextureView (the SurfaceView preview showed black on some devices), so you see your own broadcast feed before and during streaming.",
+  "latestVersion": "2.35",
+  "versionCode": 46,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.35.apk",
+  "changelog": "Chat: when you attach a picture/video you can now make it disappear - pick a time limit (5m to 24h) and/or a view limit (1-10 views). Expired media shows as 'Media expired' instead of loading.",
   "publishedAt": "2026-09-26"
 }

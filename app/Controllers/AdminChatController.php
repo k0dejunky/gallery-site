@@ -158,6 +158,14 @@ class AdminChatController extends Controller
             $m['attachment_thumb_url'] = !empty($m['attachment_path']) && str_starts_with($type, 'image/')
                 ? url('/admin/chat/attachment?message=' . (int) $m['id'] . '&thumb=1')
                 : null;
+            $m['expires_at'] = !empty($m['expires_at']) ? (string) $m['expires_at'] : null;
+            $m['max_views']  = (int) ($m['max_views'] ?? 0);
+            $m['view_count'] = (int) ($m['view_count'] ?? 0);
+            $m['media_expired'] = \App\Models\ChatMessage::isMediaExpired($m);
+            if ($m['media_expired']) {
+                $m['attachment_url'] = null;
+                $m['attachment_thumb_url'] = null;
+            }
         }
         unset($m);
 
@@ -200,6 +208,14 @@ class AdminChatController extends Controller
             $m['attachment_thumb_url'] = !empty($m['attachment_path']) && !empty($m['attachment_type']) && str_starts_with((string) $m['attachment_type'], 'image/')
                 ? url('/admin/chat/attachment?message=' . (int) $m['id'] . '&thumb=1')
                 : null;
+            $m['expires_at'] = !empty($m['expires_at']) ? (string) $m['expires_at'] : null;
+            $m['max_views']  = (int) ($m['max_views'] ?? 0);
+            $m['view_count'] = (int) ($m['view_count'] ?? 0);
+            $m['media_expired'] = \App\Models\ChatMessage::isMediaExpired($m);
+            if ($m['media_expired']) {
+                $m['attachment_url'] = null;
+                $m['attachment_thumb_url'] = null;
+            }
         }
         unset($m);
 
@@ -322,7 +338,15 @@ class AdminChatController extends Controller
             return;
         }
 
-        $newId = ChatMessage::addMessage($id, ChatMessage::ROLE_OPERATOR, $message, $attachment);
+        // Optional expiry for the media: a duration (minutes) and/or a view limit.
+        $expiresIn = max(0, (int) $this->request->post('expires_in', 0));
+        $maxViews  = max(0, (int) $this->request->post('max_views', 0));
+        $expiresAt = null;
+        if ($attachment !== null && $expiresIn > 0) {
+            $expiresAt = gmdate('Y-m-d H:i:s', time() + $expiresIn * 60);
+        }
+
+        $newId = ChatMessage::addMessage($id, ChatMessage::ROLE_OPERATOR, $message, $attachment, null, $expiresAt, $maxViews > 0 ? $maxViews : null);
 
         $userMsg = Database::run(
             "SELECT message FROM chat_messages WHERE conversation_id = ? AND sender_role = 'user' ORDER BY id DESC LIMIT 1",
@@ -800,6 +824,15 @@ class AdminChatController extends Controller
             http_response_code(404);
             header('Content-Type: application/json');
             echo json_encode(['ok' => false, 'error' => 'Attachment not found.']);
+            exit;
+        }
+
+        // Expiring media: refuse to serve once the time or view limit is hit.
+        // The admin panel's own fetches do not consume member views.
+        if (\App\Models\ChatMessage::isMediaExpired($msg)) {
+            http_response_code(410);
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => false, 'error' => 'Media has expired.']);
             exit;
         }
 
