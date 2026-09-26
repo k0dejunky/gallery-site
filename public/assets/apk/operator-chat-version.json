@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.33",
-  "versionCode": 44,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.33.apk",
-  "changelog": "Live: fixed the camera preview not showing after granting permission, and the broadcast screen now shows the viewers' live chat so you can read and reply while streaming.",
+  "latestVersion": "2.34",
+  "versionCode": 45,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.34.apk",
+  "changelog": "Live: camera preview now renders on a TextureView (the SurfaceView preview showed black on some devices), so you see your own broadcast feed before and during streaming.",
   "publishedAt": "2026-09-26"
 }
