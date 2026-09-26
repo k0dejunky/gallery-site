@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.30",
-  "versionCode": 41,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.30.apk",
-  "changelog": "Live recordings: when a stream ends the server saves it as a new top-tier (Platinum) video gallery and auto-posts it to X + Reddit. This version sends the stream key on stop so the recording is imported correctly.",
-  "publishedAt": "2026-09-25"
+  "latestVersion": "2.31",
+  "versionCode": 42,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.31.apk",
+  "changelog": "Live: camera preview now shows as soon as the Go-live screen opens (before broadcasting), and a Flip button switches between the front and back camera while you frame or broadcast. The server now force-closes any lingering RTMP connection from the previous session, so starting a new stream right after ending one no longer fails with the connection/token error.",
+  "publishedAt": "2026-09-26"
 }

@@ -73,6 +73,41 @@ class LiveSession
     }
 
     /**
+     * Force-close every currently-published MediaMTX path. Used when the
+     * operator starts a fresh broadcast: the phone's previous RTMP connection
+     * can linger in the background after a session ends (app backgrounded /
+     * killed), leaving MediaMTX's path 'ready' and blocking a new start. The
+     * site only ever has the operator's own stream, so closing all paths is
+     * safe here.
+     */
+    public static function closeAllPaths(): void
+    {
+        try {
+            [$status, , $body] = Http::request('http://127.0.0.1:9997/v2/paths/list', [
+                'method'  => 'GET',
+                'timeout' => 3,
+            ]);
+            if ($status < 200 || $status >= 300) {
+                return;
+            }
+            $data = json_decode($body, true);
+            foreach (($data['items'] ?? []) as $item) {
+                $name = (string) ($item['name'] ?? '');
+                if ($name === '') {
+                    continue;
+                }
+                Http::request('http://127.0.0.1:9997/v2/paths/close/' . rawurlencode($name), [
+                    'method'  => 'POST',
+                    'timeout' => 3,
+                ]);
+            }
+        } catch (\Throwable $error) {
+            // MediaMTX unreachable: the next /live/start still creates a fresh
+            // session; the stale row is cleared below regardless.
+        }
+    }
+
+    /**
      * Live state as seen by the site: checks MediaMTX's HTTP API for any
      * currently-published stream, matched back to our session row.
      *

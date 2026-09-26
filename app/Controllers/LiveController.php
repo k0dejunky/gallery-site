@@ -95,20 +95,24 @@ class LiveController extends Controller
 
         $active = LiveSession::active();
         if ($active !== null) {
-            // A previous session may be stale: 'pending' (created but never
-            // published, e.g. the app dropped the connection before streaming)
-            // or 'live' in the DB while MediaMTX no longer has the publisher
-            // (operator crashed / network died without /live/stop). Only a
-            // broadcast that is actually being published right now blocks a
-            // new start; anything else is cleared so the operator can retry.
-            $status         = LiveSession::status();
-            $genuinelyLive  = $status['live'] && $status['session_id'] === (int) $active['id'];
-            if ((string) $active['status'] === 'pending' || !$genuinelyLive) {
-                LiveSession::markEnded((int) $active['id']);
-            } else {
-                $this->json(['ok' => false, 'error' => 'A live stream is already active. Stop it first.']);
-                return;
+            // The previous session may be stale: 'pending' (created but never
+            // published), or the operator's own earlier broadcast whose RTMP
+            // connection is still lingering in MediaMTX (app backgrounded /
+            // killed without /live/stop). Either way, when it is the same
+            // operator we close the old path and start fresh. Only a
+            // genuinely-live stream from a *different* account is blocked.
+            $sameOperator = (int) $active['created_by'] === (int) $operator['created_by'];
+            if (!$sameOperator) {
+                $status        = LiveSession::status();
+                $genuinelyLive = $status['live'] && $status['session_id'] === (int) $active['id'];
+                if ($genuinelyLive) {
+                    $this->json(['ok' => false, 'error' => 'A live stream is already active. Stop it first.']);
+                    return;
+                }
             }
+
+            LiveSession::closeAllPaths();
+            LiveSession::markEnded((int) $active['id']);
         }
 
         $rawKey  = bin2hex(random_bytes(24));
@@ -149,6 +153,11 @@ class LiveController extends Controller
         if ($active !== null) {
             LiveSession::markEnded((int) $active['id']);
         }
+
+        // Force-disconnect the publisher so MediaMTX drops the path (a phone
+        // whose RTMP connection survives the app's stop can otherwise keep the
+        // stream 'live' and block the next broadcast).
+        LiveSession::closeAllPaths();
 
         $this->json(['ok' => true]);
     }
