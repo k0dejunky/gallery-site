@@ -823,6 +823,26 @@ class ChatBridgeController extends Controller
             'trained_at'       => date('Y-m-d H:i:s'),
         ];
 
+        // A successful upload proves a training round happened, so bring the
+        // "pairs trained" / watermark counters in sync right here instead of
+        // waiting for the trainer's next watermark poll (which can stall after
+        // a long run). Newer trainers send absolute since_id/trained_pairs;
+        // the legacy field is an incremental pair_count.
+        $uploadSince = max(0, (int) $this->request->post('since_id', 0));
+        $uploadTrained = max(0, (int) $this->request->post('trained_pairs', 0));
+        if ($uploadSince > 0 || $uploadTrained > 0) {
+            if ($uploadSince > \App\Core\ChatSettings::trainerSinceId()) {
+                \App\Core\ChatSettings::setTrainerSinceId($uploadSince);
+            }
+            if ($uploadTrained > \App\Core\ChatSettings::trainerTrainedPairs()) {
+                \App\Core\ChatSettings::setTrainerTrainedPairs($uploadTrained);
+            }
+        } elseif ((int) $meta['pair_count'] > 0) {
+            \App\Core\ChatSettings::setTrainerTrainedPairs(
+                \App\Core\ChatSettings::trainerTrainedPairs() + (int) $meta['pair_count']
+            );
+        }
+
         // Persist the adapter metadata in the chat_settings table.
         \App\Core\ChatSettings::put('finetuned', $meta);
 

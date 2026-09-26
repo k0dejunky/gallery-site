@@ -516,7 +516,7 @@ def train_adapter(records, out_path):
     return True
 
 
-def upload_adapter(path: str, base_model: str, pair_count: int) -> bool:
+def upload_adapter(path: str, base_model: str, pair_count: int, since_id: int = 0, trained_pairs: int = 0) -> bool:
     boundary = "----chatform-" + hashlib.md5(str(time.time()).encode()).hexdigest()
     with open(path, "rb") as fh:
         data = fh.read()
@@ -531,6 +531,14 @@ def upload_adapter(path: str, base_model: str, pair_count: int) -> bool:
 
     add_field("base_model", base_model)
     add_field("pair_count", str(pair_count))
+    # Absolute counters (idempotent on the server): the highest consumed pair
+    # id and the cumulative trained count. Sent with the upload so the website
+    # reflects a finished training round even if the next watermark poll is
+    # delayed or never arrives.
+    if since_id:
+        add_field("since_id", str(since_id))
+    if trained_pairs:
+        add_field("trained_pairs", str(trained_pairs))
     if ADAPTER_CONFIG_JSON:
         add_field("adapter_config", ADAPTER_CONFIG_JSON)
     if BASE_CONFIG_JSON:
@@ -605,9 +613,11 @@ def main():
                 write_status({"phase": "training", "records": len(records)})
 
                 if train_adapter(records, OUTPUT_ADAPTER):
-                    if upload_adapter(OUTPUT_ADAPTER, BASE_MODEL, len(batch)):
-                        st["since_id"] = int(batch[-1]["id"]) if batch else since
-                        st["trained_pairs"] = int(st.get("trained_pairs", 0)) + len(batch)
+                    new_since = int(batch[-1]["id"]) if batch else since
+                    new_trained = int(st.get("trained_pairs", 0)) + len(batch)
+                    if upload_adapter(OUTPUT_ADAPTER, BASE_MODEL, len(batch), new_since, new_trained):
+                        st["since_id"] = new_since
+                        st["trained_pairs"] = new_trained
                         save_state(st)
                         _log("trained + uploaded %d pairs" % len(batch))
                         write_status({"phase": "idle", "last_train": len(batch)})
