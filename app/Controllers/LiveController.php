@@ -154,6 +154,22 @@ class LiveController extends Controller
         Auth::requireLogin();
         Auth::requireSubscription();
 
+        $this->view('live', $this->liveState() + ['title' => 'Live', 'noindex' => true]);
+    }
+
+    /** JSON live state (player URL + token + chat) polled by the /live page so
+     *  the player/chat appear the moment a broadcast starts. */
+    public function state(): void
+    {
+        Auth::requireLogin();
+        Auth::requireSubscription();
+
+        $this->json(['ok' => true] + $this->liveState());
+    }
+
+    /** Live state for the member page: player URL/token + recent chat rows. */
+    private function liveState(): array
+    {
         $status = LiveSession::status();
 
         $chatMessages = [];
@@ -166,19 +182,17 @@ class LiveController extends Controller
             $chatMessages = $this->chatRows((int) $status['session_id'], max(0, $chatLatest - 200));
         }
 
-        $this->view('live', [
-            'title'      => 'Live',
-            'live'       => $status['live'],
-            'since'      => $status['since'],
-            'viewers'    => $status['viewers'],
-            'streamKey'  => $status['stream_key'],
-            'token'      => $status['live'] && $status['stream_key'] !== null
+        return [
+            'live'         => $status['live'],
+            'since'        => $status['since'],
+            'viewers'      => $status['viewers'],
+            'streamKey'    => $status['stream_key'],
+            'token'        => $status['live'] && $status['stream_key'] !== null
                 ? LiveSession::playbackToken((string) $status['stream_key'], (int) Auth::user()['id'])
                 : '',
-            'chatMessages' => $chatMessages,
             'chatLatest'   => $chatLatest,
-            'noindex'    => true,
-        ]);
+            'chatMessages' => $chatMessages,
+        ];
     }
 
     /** Live/offline status JSON (drives badges on the dashboard + chat). */

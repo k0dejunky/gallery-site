@@ -11,7 +11,7 @@
     @media (max-width: 860px) { .live-grid { grid-template-columns: 1fr; } }
     .live-player-wrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: var(--card-radius, 8px); overflow: hidden; }
     .live-player-wrap video { width: 100%; height: 100%; object-fit: contain; background: #000; }
-    .live-offline { display: grid; place-items: center; height: 100%; color: var(--text-muted, #888); text-align: center; padding: 2rem; }
+    .live-offline { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-muted, #888); text-align: center; padding: 2rem; }
     .live-chat { display: flex; flex-direction: column; height: 100%; max-height: 60vh; border: 1px solid var(--card-border, #ddd); border-radius: var(--card-radius, 8px); background: var(--card-bg, #fff); overflow: hidden; }
     .live-chat h2 { margin: 0; padding: .6rem .8rem; font-size: .95rem; border-bottom: 1px solid var(--card-border, #eee); }
     .live-chat-messages { flex: 1; overflow-y: auto; padding: .6rem .8rem; display: flex; flex-direction: column; gap: .35rem; }
@@ -27,61 +27,55 @@
 <div class="live-page">
     <div class="live-top">
         <h1>Live</h1>
-        <?php if (!empty($live)): ?>
-            <span class="live-badge on" id="live-badge">● LIVE</span>
-        <?php else: ?>
-            <span class="live-badge off" id="live-badge">Offline</span>
-        <?php endif; ?>
-        <span class="muted" id="live-since"><?= !empty($since) ? 'since ' . e(tzdate('H:i', (string) $since)) : '' ?></span>
+        <span class="live-badge off" id="live-badge">Offline</span>
+        <span class="muted" id="live-since"></span>
         <span class="muted" id="live-viewers"></span>
     </div>
 
     <div class="live-grid">
         <div class="live-player-wrap">
-            <?php if (!empty($live) && !empty($streamKey) && !empty($token)): ?>
-                <video id="live-video" controls autoplay muted playsinline></video>
-            <?php else: ?>
-                <div class="live-offline">
-                    <p>The model is not live right now. Check back soon — a live show could start any moment.</p>
-                </div>
-            <?php endif; ?>
+            <video id="live-video" controls autoplay muted playsinline></video>
+            <div class="live-offline" id="live-offline">
+                <p>The model is not live right now. Check back soon — a live show could start any moment.</p>
+            </div>
         </div>
 
         <div class="live-chat">
             <h2>Live chat <span class="muted" style="font-weight:400;">(everyone watching)</span></h2>
-            <div class="live-chat-messages" id="live-chat-messages">
-                <?php if (!empty($chatMessages)): ?>
-                    <?php foreach ($chatMessages as $cm): ?>
-                        <div class="live-chat-msg <?= e((string) $cm['sender_role']) ?>">
-                            <span class="who"><?= e((string) $cm['name']) ?></span>
-                            <span class="when"><?= e(tzdate('H:i', (string) $cm['created_at'])) ?></span><br>
-                            <?= e((string) $cm['message']) ?>
-                        </div>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <div class="live-chat-empty" id="live-chat-empty"><?= !empty($live) ? 'Say hello to everyone watching…' : 'Chat opens when the model goes live.' ?></div>
-                <?php endif; ?>
-            </div>
+            <div class="live-chat-messages" id="live-chat-messages"></div>
             <form class="live-chat-form" id="live-chat-form">
                 <?= csrf_field() ?>
-                <input type="text" id="live-chat-input" maxlength="500" placeholder="Say something…" <?= empty($live) ? 'disabled' : '' ?> autocomplete="off">
-                <button type="submit" class="btn btn-sm" <?= empty($live) ? 'disabled' : '' ?>>Send</button>
+                <input type="text" id="live-chat-input" maxlength="500" placeholder="Say something…" disabled autocomplete="off">
+                <button type="submit" class="btn btn-sm" disabled>Send</button>
             </form>
         </div>
     </div>
 </div>
 
-<?php if (!empty($live) && !empty($streamKey) && !empty($token)): ?>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
-<?php endif; ?>
+<script src="<?= url('/assets/js/hls.min.js') ?>"></script>
 <script>
 (function () {
+    var video = document.getElementById('live-video');
+    var offline = document.getElementById('live-offline');
+    var badge = document.getElementById('live-badge');
+    var sinceEl = document.getElementById('live-since');
+    var viewersEl = document.getElementById('live-viewers');
     var chatMessages = document.getElementById('live-chat-messages');
-    var chatEmpty = document.getElementById('live-chat-empty');
     var chatForm = document.getElementById('live-chat-form');
     var chatInput = document.getElementById('live-chat-input');
-    var latestId = <?= (int) ($chatLatest ?? 0) ?>;
+    var sendBtn = chatForm ? chatForm.querySelector('button[type=submit]') : null;
     var csrf = chatForm ? chatForm.querySelector('input[name="_token"]').value : '';
+
+    var hls = null;
+    var es = null;
+    var latestId = 0;
+    var currentKey = '';
+    var stateLive = false;
+
+    var hlsBase = <?= json_encode(url('/live/hls'), JSON_UNESCAPED_SLASHES) ?>;
+    var stateUrl = <?= json_encode(url('/live/state'), JSON_UNESCAPED_SLASHES) ?>;
+    var sseUrl = <?= json_encode(url('/live/chat/stream'), JSON_UNESCAPED_SLASHES) ?>;
+    var sendUrl = <?= json_encode(url('/live/chat/send'), JSON_UNESCAPED_SLASHES) ?>;
 
     function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -89,19 +83,105 @@
         });
     }
 
-    function addMsg(m, prepend) {
+    function hm(s) {
+        var t = new Date(String(s == null ? '' : s).replace(' ', 'T') + 'Z');
+        if (isNaN(t)) return '';
+        return t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function addMsg(m) {
+        if (m.id && m.id <= latestId) return;
+        if (m.id) latestId = m.id;
         var div = document.createElement('div');
         div.className = 'live-chat-msg ' + esc(m.sender_role);
         div.innerHTML = '<span class="who">' + esc(m.name) + '</span>' +
-            '<span class="when">' + esc(m.created_at || '') + '</span><br>' + esc(m.message);
-        if (prepend) { chatMessages.appendChild(div); } else { chatMessages.appendChild(div); }
+            '<span class="when">' + esc(hm(m.created_at)) + '</span><br>' + esc(m.message);
+        chatMessages.appendChild(div);
         chatMessages.scrollTop = chatMessages.scrollHeight;
-        if (chatEmpty) chatEmpty.style.display = 'none';
     }
 
-    <?php foreach ($chatMessages as $cm): ?>
-        addMsg({ sender_role: <?= json_encode((string) $cm['sender_role']) ?>, name: <?= json_encode((string) $cm['name']) ?>, created_at: <?= json_encode(tzdate('H:i', (string) $cm['created_at'])) ?>, message: <?= json_encode((string) $cm['message']) ?> }, true);
-    <?php endforeach; ?>
+    function resetChat(initial) {
+        chatMessages.innerHTML = '';
+        latestId = 0;
+        (initial || []).forEach(addMsg);
+    }
+
+    function teardownPlayer() {
+        if (hls) { try { hls.destroy(); } catch (e) {} hls = null; }
+        if (es) { try { es.close(); } catch (e) {} es = null; }
+        currentKey = '';
+        video.removeAttribute('src');
+        try { video.load(); } catch (e) {}
+    }
+
+    function buildPlayer(key, token) {
+        teardownPlayer();
+        currentKey = key;
+        function signed(u) { return u + (u.indexOf('?') >= 0 ? '&' : '?') + 't=' + encodeURIComponent(token); }
+
+        if (window.Hls && window.Hls.isSupported()) {
+            var h = new window.Hls({
+                lowLatencyMode: true,
+                xhrSetup: function (xhr, url) { xhr.open('GET', signed(url), true); }
+            });
+            h.loadSource(hlsBase + '/' + encodeURIComponent(key) + '/index.m3u8');
+            h.attachMedia(video);
+            h.on(window.Hls.Events.ERROR, function (evt, data) {
+                if (data && data.fatal) {
+                    if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) h.startLoad();
+                    else if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) h.recoverMediaError();
+                }
+            });
+            hls = h;
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = signed(hlsBase + '/' + encodeURIComponent(key) + '/index.m3u8');
+        }
+    }
+
+    function connectSse(since) {
+        if (es) { try { es.close(); } catch (e) {} }
+        es = new EventSource(sseUrl + '?since=' + since);
+        es.onmessage = function (e) {
+            try {
+                var d = JSON.parse(e.data);
+                if (d && d.messages) d.messages.forEach(addMsg);
+            } catch (err) {}
+        };
+    }
+
+    function setLiveUI(live) {
+        stateLive = live;
+        if (badge) { badge.textContent = live ? '● LIVE' : 'Offline'; badge.className = 'live-badge ' + (live ? 'on' : 'off'); }
+        if (offline) offline.style.display = live ? 'none' : 'grid';
+        if (chatInput) chatInput.disabled = !live;
+        if (sendBtn) sendBtn.disabled = !live;
+    }
+
+    function applyState(s) {
+        if (!s || s.ok === false) return;
+        var wasLive = stateLive;
+        var keyChanged = currentKey !== s.streamKey;
+
+        setLiveUI(s.live);
+        if (sinceEl && s.since) sinceEl.textContent = 'since ' + hm(s.since);
+        if (viewersEl && s.viewers) viewersEl.textContent = s.viewers + ' watching';
+
+        if (!s.live) {
+            teardownPlayer();
+            resetChat([]);
+            return;
+        }
+
+        // Live: (re)build the player + chat when the broadcast starts or the
+        // stream key changes; otherwise just catch up anything SSE missed.
+        if (!wasLive || keyChanged) {
+            resetChat(s.chatMessages || []);
+            buildPlayer(s.streamKey || '', s.token || '');
+            connectSse(latestId);
+        } else {
+            (s.chatMessages || []).forEach(function (m) { if (m.id > latestId) addMsg(m); });
+        }
+    }
 
     if (chatForm) {
         chatForm.addEventListener('submit', function (e) {
@@ -112,7 +192,7 @@
             body.append('_token', csrf);
             body.append('message', text);
             chatInput.value = '';
-            fetch('<?= url('/live/chat/send') ?>', { method: 'POST', body: body })
+            fetch(sendUrl, { method: 'POST', body: body })
                 .then(function (r) { return r.json(); })
                 .then(function (res) {
                     if (!res.ok) { chatInput.value = text; alert(res.error || 'Could not send.'); }
@@ -121,53 +201,23 @@
         });
     }
 
-    // Live chat SSE.
-    var es = new EventSource('<?= url('/live/chat/stream') ?>?since=' + latestId);
-    es.onmessage = function (e) {
-        try {
-            var data = JSON.parse(e.data);
-            if (data && data.messages) {
-                data.messages.forEach(function (m) { addMsg(m); });
-                latestId = data.latestId || latestId;
-            }
-        } catch (err) { /* ignore */ }
-    };
+    applyState({
+        live: <?= json_encode((bool) $live) ?>,
+        since: <?= json_encode((string) ($since ?? '')) ?>,
+        viewers: <?= json_encode((int) ($viewers ?? 0)) ?>,
+        streamKey: <?= json_encode((string) ($streamKey ?? ''), JSON_UNESCAPED_SLASHES) ?>,
+        token: <?= json_encode((string) ($token ?? ''), JSON_UNESCAPED_SLASHES) ?>,
+        chatLatest: <?= json_encode((int) ($chatLatest ?? 0)) ?>,
+        chatMessages: <?= json_encode($chatMessages ?? [], JSON_UNESCAPED_SLASHES) ?>
+    });
 
-    // Video player + live status polling.
-    var video = document.getElementById('live-video');
-    var streamKey = <?= json_encode((string) ($streamKey ?? ''), JSON_UNESCAPED_SLASHES) ?>;
-    var token = <?= json_encode((string) ($token ?? ''), JSON_UNESCAPED_SLASHES) ?>;
-
-    if (video && streamKey && token) {
-        var base = '<?= url('/live/hls') ?>/' + encodeURIComponent(streamKey) + '/index.m3u8';
-        function signed(url) { return url + (url.indexOf('?') >= 0 ? '&' : '?') + 't=' + encodeURIComponent(token); }
-        if (window.Hls && window.Hls.isSupported()) {
-            var hls = new window.Hls({ lowLatencyMode: true, xhrSetup: function (xhr, url) { xhr.open('GET', signed(url), true); } });
-            hls.loadSource(base);
-            hls.attachMedia(video);
-            hls.on(window.Hls.Events.ERROR, function (evt, data) {
-                if (data && data.fatal) {
-                    if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-                    else if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
-                }
-            });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = signed(base);
-        }
-    }
-
-    setInterval(function () {
-        fetch('<?= url('/live/status') ?>', { headers: { 'Accept': 'application/json' } })
+    function poll() {
+        fetch(stateUrl, { headers: { 'Accept': 'application/json' } })
             .then(function (r) { return r.json(); })
-            .then(function (d) {
-                if (!d.ok) return;
-                var badge = document.getElementById('live-badge');
-                if (d.live) { badge.textContent = '● LIVE'; badge.className = 'live-badge on'; }
-                else { badge.textContent = 'Offline'; badge.className = 'live-badge off'; }
-                var v = document.getElementById('live-viewers');
-                if (v && d.viewers) v.textContent = d.viewers + ' watching';
-            })
+            .then(applyState)
             .catch(function () {});
-    }, 15000);
+    }
+    setInterval(poll, 5000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
 })();
 </script>
