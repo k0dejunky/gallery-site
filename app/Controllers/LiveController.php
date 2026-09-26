@@ -224,9 +224,12 @@ class LiveController extends Controller
     /** Member sends a message to the live group chat. */
     public function chatSend(): void
     {
-        Auth::requireLogin();
-        Auth::requireSubscription();
-        $user   = Auth::user();
+        $user = $this->liveChatUser();
+        if ($user === null) {
+            http_response_code(403);
+            $this->json(['ok' => false, 'error' => 'Not authorised to send live chat.']);
+            return;
+        }
         $userId = (int) $user['id'];
 
         $status = LiveSession::status();
@@ -256,10 +259,36 @@ class LiveController extends Controller
         $this->json(['ok' => true, 'id' => (int) Database::connection()->lastInsertId()]);
     }
 
+    /** The current chat participant: a logged-in member, or the operator app
+     *  (Bearer shared key / operator token), attributed to the admin account. */
+    private function liveChatUser(): ?array
+    {
+        $member = Auth::user();
+        if ($member !== null) {
+            return $member;
+        }
+
+        $operator = $this->operator();
+        if ($operator !== null) {
+            $admin = Database::run(
+                'SELECT id, role FROM users WHERE id = ? LIMIT 1',
+                [(int) $operator['created_by']]
+            )->fetch();
+            if ($admin !== false) {
+                return $admin;
+            }
+        }
+
+        return null;
+    }
+
     /** SSE long-poll of the live group chat. */
     public function chatStream(): void
     {
-        Auth::requireLogin();
+        if ($this->liveChatUser() === null) {
+            http_response_code(403);
+            return;
+        }
 
         $since  = max(0, (int) $this->request->query('since', 0));
         $status = LiveSession::status();

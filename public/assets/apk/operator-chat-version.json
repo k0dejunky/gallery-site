@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.31",
-  "versionCode": 42,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.31.apk",
-  "changelog": "Live: camera preview now shows as soon as the Go-live screen opens (before broadcasting), and a Flip button switches between the front and back camera while you frame or broadcast. The server now force-closes any lingering RTMP connection from the previous session, so starting a new stream right after ending one no longer fails with the connection/token error.",
+  "latestVersion": "2.33",
+  "versionCode": 44,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.33.apk",
+  "changelog": "Live: fixed the camera preview not showing after granting permission, and the broadcast screen now shows the viewers' live chat so you can read and reply while streaming.",
   "publishedAt": "2026-09-26"
 }
