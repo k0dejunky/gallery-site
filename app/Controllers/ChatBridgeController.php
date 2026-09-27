@@ -477,7 +477,7 @@ class ChatBridgeController extends Controller
         // Replying implies the operator has read the thread: clear unread.
         \App\Core\Database::run(
             'UPDATE chat_conversations
-                SET operator_read_through_id = GREATEST(COALESCE(operator_read_through_id, 0), ?)
+                SET operator_read_through_id = GREATEST(COALESCE(operator_read_through_id, 0), CAST(? AS UNSIGNED))
               WHERE id = ?',
             [ChatMessage::latestId($cid), $cid]
         );

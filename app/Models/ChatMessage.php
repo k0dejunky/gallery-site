@@ -436,7 +436,7 @@ class ChatMessage
 
         Database::run(
             'UPDATE chat_conversations
-                SET last_read_message_id = GREATEST(COALESCE(last_read_message_id, 0), ?)
+                SET last_read_message_id = GREATEST(COALESCE(last_read_message_id, 0), CAST(? AS UNSIGNED))
               WHERE id = ?',
             [$messageId, $conversationId]
         );
