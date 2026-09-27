@@ -95,7 +95,35 @@ class ChatAi
 
         $prompt .= "member: " . $message . "\nassistant:";
 
-        return self::generate($model, $prompt);
+        $result = self::generate($model, $prompt);
+
+        // A bad fine-tuned adapter can produce degenerate output (very short,
+        // or just punctuation) instead of a reply. Fall back to the base model
+        // so the chat still answers instead of appearing unresponsive.
+        if ($model !== self::BASE_MODEL && !self::looksLikeReply($result['reply'] ?? '')) {
+            $result = self::generate(self::BASE_MODEL, $prompt);
+        }
+
+        return $result;
+    }
+
+    /** Whether a model reply is long/meaningful enough to use (vs degenerate
+     *  fine-tuned output like a stray quote or punctuation). */
+    public static function looksLikeReply(string $text): bool
+    {
+        $t = trim($text);
+        if ($t === '') {
+            return false;
+        }
+        if (mb_strlen($t) < 12) {
+            return false;
+        }
+        // Only quotes / punctuation / em-dashes is not a real reply.
+        if (preg_match('/^[\s"\'\.,!?\-—:;…*~]+$/u', $t)) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

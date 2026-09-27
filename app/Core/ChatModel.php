@@ -135,6 +135,9 @@ class ChatModel
         $data = json_decode($body, true);
         $text = trim((string) ($data['response'] ?? ''));
 
-        return $status >= 200 && $status < 300 && $text !== '';
+        // Reject degenerate output (bad adapters can produce stray quotes /
+        // punctuation instead of an actual reply), so a broken fine-tune never
+        // replaces a working model.
+        return $status >= 200 && $status < 300 && \App\Core\ChatAi::looksLikeReply($text);
     }
 }

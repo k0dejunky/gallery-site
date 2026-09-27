@@ -44,6 +44,30 @@ class ChatTraining
         if (count($words) <= 1 && (in_array($t, self::JUNK_WORDS, true) || ctype_digit($t))) {
             return true;
         }
+        if (self::looksLikeNovel($text)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Reject web-novel / roleplay text that sometimes gets pasted into the
+     * chat (or an import file) - character-name dialogue, "Narrator:" lines,
+     * and book-chapter conversion markers. Training the LoRA on this garbage
+     * made the fine-tuned model reply with nonsense.
+     */
+    private static function looksLikeNovel(string $text): bool
+    {
+        foreach (['narrator:', 'book chapter', 'roleplay', 'convert book', 'said, waving her hand', 'said, waving a hand', 'said, waving his hand'] as $m) {
+            if (stripos($text, $m) !== false) {
+                return true;
+            }
+        }
+        // Repeated "Name: dialogue" lines - the web-novel script format.
+        if (preg_match_all('/(?:^|\n)\s*[A-Z][a-zA-Z]+: ["“]/', $text, $m) >= 2) {
+            return true;
+        }
+
         return false;
     }
 
