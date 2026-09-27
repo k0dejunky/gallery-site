@@ -34,14 +34,14 @@
         max-width: 70vw;
         max-height: none;
         border: 0;
-        background: rgba(0, 0, 0, .35);
-        backdrop-filter: blur(3px);
+        background: transparent;
         color: #fff;
     }
-    .live-grid:fullscreen .live-chat h2 { color: #fff; border-bottom-color: rgba(255,255,255,.25); }
-    .live-grid:fullscreen .live-chat-msg .who { color: #ffd0e8; }
-    .live-grid:fullscreen .live-chat-msg .when { color: rgba(255,255,255,.65); }
-    .live-grid:fullscreen .live-chat-form { border-top-color: rgba(255,255,255,.25); }
+    .live-grid:fullscreen .live-chat h2 { color: #fff; border-bottom-color: rgba(255,255,255,.35); }
+    .live-grid:fullscreen .live-chat-msg .who { color: #ffd0e8; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+    .live-grid:fullscreen .live-chat-msg { text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+    .live-grid:fullscreen .live-chat-msg .when { color: rgba(255,255,255,.8); }
+    .live-grid:fullscreen .live-chat-form { border-top-color: rgba(255,255,255,.35); }
     @media (max-width: 860px) {
         .live-grid:fullscreen .live-chat {
             left: 0;
@@ -51,7 +51,6 @@
             width: 100%;
             max-width: none;
             height: 38vh;
-            backdrop-filter: blur(4px);
         }
     }
     .live-chat { display: flex; flex-direction: column; height: 100%; max-height: 60vh; border: 1px solid var(--card-border, #ddd); border-radius: var(--card-radius, 8px); background: var(--card-bg, #fff); overflow: hidden; }
