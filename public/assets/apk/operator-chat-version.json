@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.43",
-  "versionCode": 54,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.43.apk",
-  "changelog": "Live: the broadcast screen now keeps the device awake - the screen won't time out while you're live, and a wake lock keeps the CPU/network alive even if the screen is turned off, so the stream no longer drops.",
+  "latestVersion": "2.44",
+  "versionCode": 55,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.44.apk",
+  "changelog": "Live: the broadcast is now also recorded to an MP4 on the phone (in the app's Movies folder, shown in the status line) while it streams to the site. Each orientation segment saves its own file.",
   "publishedAt": "2026-09-27"
 }
