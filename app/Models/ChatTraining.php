@@ -58,7 +58,10 @@ class ChatTraining
      */
     private static function looksLikeNovel(string $text): bool
     {
-        foreach (['narrator:', 'book chapter', 'roleplay', 'convert book', 'said, waving her hand', 'said, waving a hand', 'said, waving his hand'] as $m) {
+        // Web-novel markers (not the innocent uses of the words on their own):
+        // 'narrator:' lines, book-chapter conversion prompts, and novel prose
+        // cues. A member asking "are you into roleplay?" is legitimate.
+        foreach (['narrator:', 'book chapter', 'convert book', 'convert book chapters', 'said, waving her hand', 'said, waving a hand', 'said, waving his hand'] as $m) {
             if (stripos($text, $m) !== false) {
                 return true;
             }
