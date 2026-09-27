@@ -11,7 +11,7 @@ $breadcrumbItems = [
 <?php $reportUrl = url('/support') . '?' . http_build_query(['return_to' => $_SERVER['REQUEST_URI'] ?? url('/galleries')]); ?>
 
 <figure style="margin: 1rem 0; text-align: center;">
-    <p class="media-progress" role="status">Item <?= (int) ($currentIndex + 1) ?> of <?= count($mediaItems ?? [$photo]) ?></p>
+    <p class="media-progress" role="status">Item <?= (int) ($currentIndex + 1) ?> of <?= (int) ($mediaCount ?? 1) ?></p>
     <picture>
         <source type="image/webp" srcset="<?= e(file_url($photo['filename'], 'web', 'webp')) ?>">
         <img id="fullsize-img"

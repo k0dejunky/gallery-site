@@ -53,18 +53,9 @@ class ImageController extends Controller
             Photo::recordView($id, (int) $user['id']);
         }
 
-        [$prev, $next] = $galleryId !== null
-            ? Photo::galleryNeighbors($galleryId, $id)
-            : [null, null];
-
-        $mediaItems = $galleryId !== null ? Gallery::photos($galleryId) : [$photo];
-        $currentIndex = 0;
-        foreach ($mediaItems as $index => $item) {
-            if ((int) $item['id'] === $id) {
-                $currentIndex = $index;
-                break;
-            }
-        }
+        [$currentIndex, $mediaCount, $prev, $next] = $galleryId !== null
+            ? Gallery::neighborsAndIndex($galleryId, $id)
+            : [0, 1, null, null];
 
         $returnTo = $this->safeReturnTo($this->request->query('return_to', ''))
             ?? ($galleryId !== null ? url('/galleries/' . $galleryId) : url('/galleries'));
@@ -76,7 +67,7 @@ class ImageController extends Controller
             'gallery' => $gallery,
             'prev'    => $prev,
             'next'    => $next,
-            'mediaItems' => $mediaItems,
+            'mediaCount' => $mediaCount,
             'currentIndex' => $currentIndex,
             'returnTo' => $returnTo,
         ]);

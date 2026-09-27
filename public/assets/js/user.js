@@ -4,6 +4,7 @@
   var touchStartX=0, touchStartY=0, touchStartDistance=0, touchScale=1;
   var touchMoved=false, pinchActive=false, suppressClickUntil=0, returnFocus=null;
   var historyKey='galleryLightbox';
+  var lbFullBtn=null, fullSize=false;
 
   function create(){
     if(lb)return;
@@ -12,7 +13,7 @@
     lb.setAttribute('role','dialog');
     lb.setAttribute('aria-modal','true');
     lb.setAttribute('aria-label','Image viewer');
-    lb.innerHTML='<span class="lb-counter" aria-live="polite"></span><button class="lb-close" aria-label="Close image viewer">&times;</button><button class="lb-nav lb-prev" aria-label="Previous image">&#8249;</button><button class="lb-nav lb-next" aria-label="Next image">&#8250;</button><img src="" alt=""><div class="lb-caption"></div>';
+    lb.innerHTML='<span class="lb-counter" aria-live="polite"></span><button class="lb-close" aria-label="Close image viewer">&times;</button><button class="lb-nav lb-prev" aria-label="Previous image">&#8249;</button><button class="lb-nav lb-next" aria-label="Next image">&#8250;</button><button class="lb-full" aria-label="View full-size original">Full size</button><img src="" alt=""><div class="lb-caption"></div>';
     document.body.appendChild(lb);
     lbImg=lb.querySelector('img');
     lbCaption=lb.querySelector('.lb-caption');
@@ -26,6 +27,8 @@
       if(Date.now()<suppressClickUntil)return;
       if(!pinchActive)lbImg.classList.toggle('zoomed');
     });
+    lbFullBtn=lb.querySelector('.lb-full');
+    lbFullBtn.onclick=function(e){e.stopPropagation();fullSize=!fullSize;show();};
     lbImg.addEventListener('touchstart',touchStart,{passive:false});
     lbImg.addEventListener('touchmove',touchMove,{passive:false});
     lbImg.addEventListener('touchend',touchEnd,{passive:false});
@@ -43,7 +46,11 @@
   function buildList(){
     var out=[];
     document.querySelectorAll('#gallery [data-lightbox]').forEach(function(el){
-      out.push({src:el.getAttribute('data-lightbox'),caption:el.getAttribute('data-lightbox-caption')||el.alt||''});
+      out.push({
+        src:el.getAttribute('data-lightbox'),
+        full:el.getAttribute('data-lightbox-full')||null,
+        caption:el.getAttribute('data-lightbox-caption')||el.alt||''
+      });
     });
     return out;
   }
@@ -51,6 +58,7 @@
   function open(list,startIdx,opener){
     create();
     returnFocus=opener||document.activeElement;
+    fullSize=false;
     if(list&&list.length){images=list;currentIdx=startIdx<0?0:startIdx;}
     else{
       images=buildList();
@@ -86,6 +94,7 @@
     lbImg.classList.remove('zoomed');
     lbImg.style.transform='';
     touchScale=1;
+    fullSize=false;
     show();
   }
 
@@ -118,13 +127,22 @@
 
   function show(){
     var m=images[currentIdx];
-    lbImg.src=m.src;
+    // Clear the previous image immediately so a slow next image never leaves
+    // the old one on screen ("clicking a new one loads the old image").
+    if(lbImg.src!=='')lbImg.removeAttribute('src');
+    lbImg.classList.remove('lb-loaded');
+    lbImg.src=(fullSize&&m.full)?m.full:m.src;
     lbImg.decoding='async';
     lbImg.fetchPriority='high';
     lbImg.alt=m.caption||'';
     lbImg.classList.remove('zoomed');
+    lbImg.onload=function(){lbImg.classList.add('lb-loaded');};
     lbCaption.textContent=m.caption||'';
     lbCounter.textContent='Item '+(currentIdx+1)+' of '+images.length;
+    if(lbFullBtn){
+      lbFullBtn.style.display=m.full?'':'none';
+      lbFullBtn.textContent=fullSize?'Show web size':'Full size';
+    }
     [-1,1].forEach(function(offset){
       var adjacent=images[(currentIdx+offset+images.length)%images.length];
       if(adjacent&&adjacent.src){var preload=new Image();preload.decoding='async';preload.src=adjacent.src;}

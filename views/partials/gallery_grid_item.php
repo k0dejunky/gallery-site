@@ -19,7 +19,8 @@
                 <source type="image/webp" srcset="<?= e(file_url($photo['filename'], 'thumb', 'webp')) ?>">
                 <source type="image/jpeg" srcset="<?= e(file_url($photo['filename'], 'thumb')) ?>">
                 <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>"
-                     data-lightbox="<?= e(file_url($photo['filename'])) ?>"
+                     data-lightbox="<?= e(file_url($photo['filename'], 'web')) ?>"
+                     data-lightbox-full="<?= e(file_url($photo['filename'])) ?>"
                      data-lightbox-caption="<?= e($photo['caption']) ?>"
                      alt="<?= e($photo['caption']) ?>"
                      loading="lazy" decoding="async" sizes="(max-width: 640px) 100vw, (max-width: 1000px) 50vw, 220px">

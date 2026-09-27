@@ -282,36 +282,6 @@ class Photo
     }
 
     /**
-     * The photos that come immediately before and after a given photo in its
-     * gallery, in gallery display order. Used to build the Previous/Next
-     * buttons on the image and video pages. Returns [prev, next] where each
-     * is a photo row or null at either end of the gallery.
-     *
-     * @return array{0: ?array, 1: ?array}
-     */
-    public static function galleryNeighbors(int $galleryId, int $photoId): array
-    {
-        $photos = Gallery::photos($galleryId);
-        $index  = null;
-
-        foreach ($photos as $i => $photo) {
-            if ((int) $photo['id'] === $photoId) {
-                $index = $i;
-                break;
-            }
-        }
-
-        if ($index === null) {
-            return [null, null];
-        }
-
-        return [
-            $index > 0 ? $photos[$index - 1] : null,
-            $index < count($photos) - 1 ? $photos[$index + 1] : null,
-        ];
-    }
-
-    /**
      * Remove a photo if no gallery references it anymore: deletes the file,
      * its thumbnail and the database row. Used after gallery deletions so
      * orphaned uploads do not accumulate.

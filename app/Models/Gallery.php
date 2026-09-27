@@ -710,6 +710,48 @@ class Gallery
     }
 
     /**
+     * Cheap neighbour + position query for the in-page image/video viewers:
+     * returns [currentIndex, total, prev, next] without loading every photo in
+     * the gallery (large galleries made each image page very slow). Ties on
+     * equal positions are broken by photo id, matching Gallery::photos order.
+     */
+    public static function neighborsAndIndex(int $galleryId, int $photoId): array
+    {
+        $total = self::photoCount($galleryId);
+        $pos   = (int) Database::run(
+            'SELECT position FROM gallery_photo WHERE gallery_id = ? AND photo_id = ? LIMIT 1',
+            [$galleryId, $photoId]
+        )->fetchColumn();
+
+        $index = (int) Database::run(
+            'SELECT COUNT(*) FROM gallery_photo
+             WHERE gallery_id = ? AND (position < ? OR (position = ? AND photo_id < ?))',
+            [$galleryId, $pos, $pos, $photoId]
+        )->fetchColumn();
+
+        $prev = Database::run(
+            'SELECT p.* FROM photos p JOIN gallery_photo gp ON gp.photo_id = p.id
+             WHERE gp.gallery_id = ? AND (gp.position < ? OR (gp.position = ? AND gp.photo_id < ?))
+             ORDER BY gp.position DESC, gp.photo_id DESC LIMIT 1',
+            [$galleryId, $pos, $pos, $photoId]
+        )->fetch();
+
+        $next = Database::run(
+            'SELECT p.* FROM photos p JOIN gallery_photo gp ON gp.photo_id = p.id
+             WHERE gp.gallery_id = ? AND (gp.position > ? OR (gp.position = ? AND gp.photo_id > ?))
+             ORDER BY gp.position ASC, gp.photo_id ASC LIMIT 1',
+            [$galleryId, $pos, $pos, $photoId]
+        )->fetch();
+
+        return [
+            $index,
+            $total,
+            $prev !== false ? $prev : null,
+            $next !== false ? $next : null,
+        ];
+    }
+
+    /**
      * Photos inside a gallery in display order.
      */
     public static function photos(int $galleryId): array
