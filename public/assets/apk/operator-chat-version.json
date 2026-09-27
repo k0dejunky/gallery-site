@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.40",
-  "versionCode": 51,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.40.apk",
-  "changelog": "Live: back to the correct portrait/landscape aspect ratio (no more square), fixed audio not broadcasting, and new Mute mic + Pause buttons - pausing shows viewers a 'the model will be back in a moment' message without ending the stream.",
+  "latestVersion": "2.41",
+  "versionCode": 52,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.41.apk",
+  "changelog": "Live: rotating the phone no longer shows 'offline' - the UI now correctly stays in the Live state (End stream/Mute/Pause stay active) while the stream reconnects during a rotation.",
   "publishedAt": "2026-09-27"
 }
