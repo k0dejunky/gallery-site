@@ -111,9 +111,48 @@
         currentKey = '';
         video.removeAttribute('src');
         try { video.load(); } catch (e) {}
-        // Restore the default 16:9 box until the next stream is known.
-        var wrap = video.closest('.live-player-wrap');
-        if (wrap) wrap.style.aspectRatio = '16 / 9';
+        resetPlayerSize();
+    }
+
+    var playerWrap = null;
+    function playerBox() {
+        playerWrap = playerWrap || video.closest('.live-player-wrap');
+        return playerWrap;
+    }
+
+    /** Reset the box to the default full-width 16:9 while not streaming. */
+    function resetPlayerSize() {
+        var wrap = playerBox();
+        if (!wrap) return;
+        wrap.style.width = '';
+        wrap.style.height = '';
+        wrap.style.marginLeft = '';
+        wrap.style.marginRight = '';
+    }
+
+    /**
+     * Size the player box so the video is fully visible in the viewport in
+     * either orientation: the box takes the video's exact aspect ratio, at
+     * most the column width and at most the viewport height (minus the page
+     * chrome), centred in the column. No letterbox bars inside the box.
+     */
+    function fitPlayer() {
+        var wrap = playerBox();
+        if (!wrap || !video.videoWidth || !video.videoHeight) return;
+        var ar = video.videoWidth / video.videoHeight;
+        var column = (wrap.parentElement && wrap.parentElement.clientWidth)
+            ? wrap.parentElement.clientWidth
+            : window.innerWidth;
+        var maxH = Math.max(220, window.innerHeight - 150);
+        var w = column, h = w / ar;
+        if (h > maxH) {
+            h = maxH;
+            w = Math.round(h * ar);
+        }
+        wrap.style.width = Math.round(w) + 'px';
+        wrap.style.height = Math.round(h) + 'px';
+        wrap.style.marginLeft = 'auto';
+        wrap.style.marginRight = 'auto';
     }
 
     function buildPlayer(key, token) {
@@ -121,15 +160,16 @@
         currentKey = key;
         function signed(u) { return u + (u.indexOf('?') >= 0 ? '&' : '?') + 't=' + encodeURIComponent(token); }
 
-        // Shape the player box to match the stream (portrait or landscape) so
-        // the video fills it without letterbox bars.
         video.addEventListener('loadedmetadata', function onMeta() {
-            var wrap = video.closest('.live-player-wrap');
-            if (wrap && video.videoWidth > 0 && video.videoHeight > 0) {
-                wrap.style.aspectRatio = video.videoWidth + ' / ' + video.videoHeight;
-            }
+            fitPlayer();
             video.removeEventListener('loadedmetadata', onMeta);
         });
+        if (!window.__liveResizeBound) {
+            window.__liveResizeBound = true;
+            window.addEventListener('resize', function () {
+                if (video.videoWidth > 0 && currentKey) fitPlayer();
+            });
+        }
 
         if (window.Hls && window.Hls.isSupported()) {
             var h = new window.Hls({
