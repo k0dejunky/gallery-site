@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.41",
-  "versionCode": 52,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.41.apk",
-  "changelog": "Live: rotating the phone no longer shows 'offline' - the UI now correctly stays in the Live state (End stream/Mute/Pause stay active) while the stream reconnects during a rotation.",
+  "latestVersion": "2.42",
+  "versionCode": 53,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.42.apk",
+  "changelog": "Live: audio fix - the mic is now captured at the most widely supported setting (AAC stereo 44.1kHz/128k). If your mic still can't initialize, the app now tells you instead of silently streaming video-only, and mute/pause state is reset after each broadcast.",
   "publishedAt": "2026-09-27"
 }
