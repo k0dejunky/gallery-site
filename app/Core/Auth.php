@@ -613,6 +613,14 @@ class Auth
         }
     }
 
+    /** Require a logged-in member and return their user row (redirects to login). */
+    public static function requireUser(): array
+    {
+        self::requireLogin();
+
+        return self::user() ?? [];
+    }
+
     /**
      * Guard for admin pages: requires an authenticated admin, otherwise
      * redirect to the admin login page (with a flash message when a plain

@@ -248,8 +248,7 @@ class AuthController extends Controller
      */
     public function resendVerification(): void
     {
-        Auth::requireLogin();
-        $user = Auth::user();
+        $user = Auth::requireUser();
 
         $limit = (int) config('app.auth.verification_rate_limit', 5);
         $window = (int) config('app.auth.recovery_rate_window_seconds', 3600);

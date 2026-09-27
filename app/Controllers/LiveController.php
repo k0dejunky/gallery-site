@@ -449,11 +449,6 @@ class LiveController extends Controller
     }
 
     /** Read the raw request body (JSON). */
-    private function rawBody(): string
-    {
-        return (string) file_get_contents('php://input');
-    }
-
 
     /**
      * Whether the auth webhook call is from the server's own ffmpeg recorder

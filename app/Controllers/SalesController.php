@@ -10,14 +10,8 @@ use App\Models\Plan;
 use App\Models\Sale;
 use App\Models\SaleCode;
 
-class SalesController extends Controller
+class SalesController extends MembershipAdminController
 {
-    public function __construct(Request $request)
-    {
-        parent::__construct($request);
-        Auth::requirePermission('membership');
-    }
-
     public function index(): void
     {
         $this->redirect('/admin/plans');

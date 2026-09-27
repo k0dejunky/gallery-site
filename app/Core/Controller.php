@@ -33,6 +33,12 @@ class Controller
         exit;
     }
 
+    /** The raw request body (JSON payloads from webhooks/apps). */
+    protected function rawBody(): string
+    {
+        return (string) file_get_contents('php://input');
+    }
+
     /**
      * Render a user-facing view inside the main layout. View data is
      * extracted so templates and the layout both see the variables. For

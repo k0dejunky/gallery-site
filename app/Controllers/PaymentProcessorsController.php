@@ -8,14 +8,8 @@ use App\Core\Request;
 use App\Models\AuditLog;
 use App\Models\PaymentProcessor;
 
-class PaymentProcessorsController extends Controller
+class PaymentProcessorsController extends MembershipAdminController
 {
-    public function __construct(Request $request)
-    {
-        parent::__construct($request);
-        Auth::requirePermission('membership');
-    }
-
     /**
      * List every configured payment processor with its masked credentials.
      */

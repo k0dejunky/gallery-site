@@ -15,14 +15,8 @@ use App\Models\EmailQueue;
  * Everything here is gated to admins with the membership permission (router
  * 4th element plus an explicit guard in the constructor).
  */
-class EmailerController extends Controller
+class EmailerController extends MembershipAdminController
 {
-    public function __construct(Request $request)
-    {
-        parent::__construct($request);
-        Auth::requirePermission('membership');
-    }
-
     /**
      * Show the emailer settings, current schedule/send state, recipient
      * counts, the sample the next digest will use, and the recent queue log.

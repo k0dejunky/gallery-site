@@ -71,6 +71,9 @@ need the behaviour, call these — never copy the logic into a controller/view.
 | Responsibility | Where |
 |---|---|
 | Send a JSON response from any controller | `App\Core\Controller::json($data, $status = 200)` (protected; all controllers inherit it — do NOT add `private function json()` to a controller) |
+| Raw request body (JSON webhooks/apps) | `App\Core\Controller::rawBody()` (protected, inherited — do NOT re-declare) |
+| Require login and return the member row | `App\Core\Auth::requireUser()` (replaces `requireLogin(); $user = Auth::user();`) |
+| Membership-admin guard | extend `App\Controllers\MembershipAdminController` (do NOT duplicate the `requirePermission('membership')` constructor) |
 | Serve a chat attachment file (expiry, view count, MIME sniff, thumbnail, readfile) | `App\Models\ChatMessage::serveAttachment(array $msg, bool $thumb = false, bool $countView = false)` |
 | Sniff a stored file's real MIME type (phone uploads arrive as octet-stream) | `App\Models\ChatMessage::sniffAttachmentType(string $path): string` |
 | Add `attachment_url`/`attachment_thumb_url`/expiry metadata to chat message rows | `App\Models\ChatMessage::decorateMessages(array $messages, string $urlBase): array` (`$urlBase` = `/chat/attachment`, `/webhooks/chat/attachment` or `/admin/chat/attachment`) |

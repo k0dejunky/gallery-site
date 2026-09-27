@@ -963,11 +963,6 @@ class ChatBridgeController extends Controller
         \App\Models\ChatMessage::serveAttachment($msg, $thumb, false);
     }
 
-    private function rawBody(): string
-    {
-        return (string) file_get_contents('php://input');
-    }
-
     /**
      * APK version manifest for the operator app. Bearer-authenticated and the
      * SHA-256 of the referenced APK is computed live so the app can verify the

@@ -15,14 +15,8 @@ use App\Models\SaleCode;
  * subscribe to; payments are manual/placeholder, so a plan is just an
  * offering the admin prices, describes and switches on or off.
  */
-class PlanController extends Controller
+class PlanController extends MembershipAdminController
 {
-    public function __construct(Request $request)
-    {
-        parent::__construct($request);
-        Auth::requirePermission('membership');
-    }
-
     /**
      * The plan list, with how many subscriptions each plan currently has.
      */

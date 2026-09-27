@@ -526,7 +526,7 @@ class GalleryController extends Controller
 
         $files = $this->request->file('photos');
         if ($files === null) {
-            $this->jsonReply(['ok' => false, 'error' => 'No files selected.']);
+            $this->json(['ok' => false, 'error' => 'No files selected.']);
             return;
         }
 
@@ -554,7 +554,7 @@ class GalleryController extends Controller
 
             $error = $this->validatePending($files, $i, $config, $type, $mime);
             if ($error !== null) {
-                $this->jsonReply(['ok' => false, 'error' => $files['name'][$i] . ': ' . $error]);
+                $this->json(['ok' => false, 'error' => $files['name'][$i] . ': ' . $error]);
                 return;
             }
 
@@ -567,7 +567,7 @@ class GalleryController extends Controller
             $filename  = uniqid('pending_', true) . '.' . $extension;
 
             if (!move_uploaded_file($files['tmp_name'][$i], $dir . '/' . $filename)) {
-                $this->jsonReply(['ok' => false, 'error' => $files['name'][$i] . ': could not be saved.']);
+                $this->json(['ok' => false, 'error' => $files['name'][$i] . ': could not be saved.']);
                 return;
             }
 
@@ -600,7 +600,7 @@ class GalleryController extends Controller
 
         $_SESSION['pending_gallery_files'] = $list;
 
-        $this->jsonReply([
+        $this->json([
             'ok' => true,
             'added' => $added,
             'files' => $this->pendingListMeta(),
@@ -625,7 +625,7 @@ class GalleryController extends Controller
         $chunk = $this->request->file('chunk');
 
         if ($uid === '' || $total > 200000 || $index >= $total) {
-            $this->jsonReply(['ok' => false, 'error' => 'Invalid chunk parameters.']);
+            $this->json(['ok' => false, 'error' => 'Invalid chunk parameters.']);
             return;
         }
 
@@ -636,7 +636,7 @@ class GalleryController extends Controller
         $err   = is_array($chunk['error'] ?? null) ? ($chunk['error'][0] ?? UPLOAD_ERR_NO_FILE) : ($chunk['error'] ?? UPLOAD_ERR_NO_FILE);
 
         if ($chunk === null || $tmp === null || $tmp === '' || $err !== UPLOAD_ERR_OK) {
-            $this->jsonReply(['ok' => false, 'error' => 'Missing chunk data.']);
+            $this->json(['ok' => false, 'error' => 'Missing chunk data.']);
             return;
         }
 
@@ -649,7 +649,7 @@ class GalleryController extends Controller
         $chunkSize = (int) ($config['chunk_size'] ?? 0);
         $chunkBytes = is_file($tmp) ? (int) filesize($tmp) : 0;
         if ($chunkSize > 0 && $chunkBytes > $chunkSize) {
-            $this->jsonReply(['ok' => false, 'error' => 'Chunk exceeds the configured chunk size.']);
+            $this->json(['ok' => false, 'error' => 'Chunk exceeds the configured chunk size.']);
             return;
         }
 
@@ -659,24 +659,24 @@ class GalleryController extends Controller
         // final assemble-time validation ever runs.
         $stagedLimit = (int) ($config['max_size'] ?? 0) * 3;
         if ($stagedLimit > 0 && $this->pendingStagedBytes() + $chunkBytes > $stagedLimit) {
-            $this->jsonReply(['ok' => false, 'error' => 'Session upload staging limit reached.']);
+            $this->json(['ok' => false, 'error' => 'Session upload staging limit reached.']);
             return;
         }
 
         $parts = $this->chunksDir($uid);
         if (!is_dir($parts) && !@mkdir($parts, 0775, true)) {
-            $this->jsonReply(['ok' => false, 'error' => 'Could not allocate upload space.']);
+            $this->json(['ok' => false, 'error' => 'Could not allocate upload space.']);
             return;
         }
 
         $partFile = $parts . '/part-' . str_pad((string) $index, 6, '0', STR_PAD_LEFT);
 
         if (!move_uploaded_file($tmp, $partFile)) {
-            $this->jsonReply(['ok' => false, 'error' => 'Could not save chunk.']);
+            $this->json(['ok' => false, 'error' => 'Could not save chunk.']);
             return;
         }
 
-        $this->jsonReply(['ok' => true, 'index' => $index]);
+        $this->json(['ok' => true, 'index' => $index]);
     }
 
     /**
@@ -697,13 +697,13 @@ class GalleryController extends Controller
         $dir          = $this->pendingDir();
 
         if ($uid === '' || $totalChunks < 1 || $totalChunks > 200000) {
-            $this->jsonReply(['ok' => false, 'error' => 'Invalid upload parameters.']);
+            $this->json(['ok' => false, 'error' => 'Invalid upload parameters.']);
             return;
         }
 
         $assembled = $this->reassembleChunks($uid, $totalChunks);
         if ($assembled === null) {
-            $this->jsonReply(['ok' => false, 'error' => 'Upload is incomplete. Some chunks are missing; please retry.']);
+            $this->json(['ok' => false, 'error' => 'Upload is incomplete. Some chunks are missing; please retry.']);
             return;
         }
 
@@ -721,7 +721,7 @@ class GalleryController extends Controller
         if ($error !== null) {
             @unlink($assembled);
             $this->removeChunks($uid);
-            $this->jsonReply(['ok' => false, 'error' => $originalName . ': ' . $error]);
+            $this->json(['ok' => false, 'error' => $originalName . ': ' . $error]);
             return;
         }
 
@@ -732,7 +732,7 @@ class GalleryController extends Controller
 
         if (!@rename($assembled, $dir . '/' . $filename)) {
             $this->removeChunks($uid);
-            $this->jsonReply(['ok' => false, 'error' => $originalName . ': could not be saved.']);
+            $this->json(['ok' => false, 'error' => $originalName . ': could not be saved.']);
             return;
         }
 
@@ -765,7 +765,7 @@ class GalleryController extends Controller
         ];
         $_SESSION['pending_gallery_files'] = $list;
 
-        $this->jsonReply([
+        $this->json([
             'ok' => true,
             'added' => 1,
             'files' => $this->pendingListMeta(),
@@ -786,7 +786,7 @@ class GalleryController extends Controller
             $this->removeChunks($uid);
         }
 
-        $this->jsonReply(['ok' => true]);
+        $this->json(['ok' => true]);
     }
 
     /**
@@ -913,11 +913,11 @@ class GalleryController extends Controller
         $entry    = $this->pendingEntry($filename);
 
         if ($entry === null) {
-            $this->jsonReply(['ok' => false, 'error' => 'File not found in pending uploads.']);
+            $this->json(['ok' => false, 'error' => 'File not found in pending uploads.']);
             return;
         }
         if (!$entry['is_image']) {
-            $this->jsonReply(['ok' => false, 'error' => 'Only images can be rotated.']);
+            $this->json(['ok' => false, 'error' => 'Only images can be rotated.']);
             return;
         }
 
@@ -930,7 +930,7 @@ class GalleryController extends Controller
         $path   = $dir . '/' . $filename;
 
         if (!is_file($path) || !ImageEditor::rotate($path, $direction)) {
-            $this->jsonReply(['ok' => false, 'error' => 'Could not rotate image.']);
+            $this->json(['ok' => false, 'error' => 'Could not rotate image.']);
             return;
         }
 
@@ -943,7 +943,7 @@ class GalleryController extends Controller
             $config['thumb_height']
         );
 
-        $this->jsonReply(['ok' => true, 'files' => $this->pendingListMeta()]);
+        $this->json(['ok' => true, 'files' => $this->pendingListMeta()]);
     }
 
     /**
@@ -972,7 +972,7 @@ class GalleryController extends Controller
 
         $_SESSION['pending_gallery_files'] = $newList;
 
-        $this->jsonReply(['ok' => true, 'files' => $this->pendingListMeta()]);
+        $this->json(['ok' => true, 'files' => $this->pendingListMeta()]);
     }
 
     /**
@@ -1267,13 +1267,6 @@ class GalleryController extends Controller
     /**
      * Emit a JSON reply and stop.
      */
-    private function jsonReply(array $data): void
-    {
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode($data);
-        exit;
-    }
-
     /**
      * Detect a file's MIME type with finfo when available.
      */

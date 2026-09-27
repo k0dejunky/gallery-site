@@ -17,8 +17,7 @@ class ChatController extends Controller
 {
     public function index(): void
     {
-        Auth::requireLogin();
-        $user = Auth::user();
+        $user = Auth::requireUser();
         $userId = (int) $user['id'];
 
         $eligible = ChatMessage::canChat($userId);
@@ -61,8 +60,7 @@ class ChatController extends Controller
      */
     public function send(): void
     {
-        Auth::requireLogin();
-        $user = Auth::user();
+        $user = Auth::requireUser();
         $userId = (int) $user['id'];
 
         if (!ChatMessage::canChat($userId)) {
@@ -172,8 +170,7 @@ class ChatController extends Controller
      */
     public function poll(): void
     {
-        Auth::requireLogin();
-        $user = Auth::user();
+        $user = Auth::requireUser();
         $userId = (int) $user['id'];
 
         if (!ChatMessage::canChat($userId)) {
@@ -208,8 +205,7 @@ class ChatController extends Controller
      */
     public function history(): void
     {
-        Auth::requireLogin();
-        $user = Auth::user();
+        $user = Auth::requireUser();
         $userId = (int) $user['id'];
 
         if (!ChatMessage::canChat($userId)) {
@@ -251,8 +247,7 @@ class ChatController extends Controller
      */
     public function stream(): void
     {
-        Auth::requireLogin();
-        $user = Auth::user();
+        $user = Auth::requireUser();
         $userId = (int) $user['id'];
 
         if (!ChatMessage::canChat($userId)) {
@@ -334,8 +329,7 @@ class ChatController extends Controller
      */
     public function attachment(): void
     {
-        Auth::requireLogin();
-        $user = Auth::user();
+        $user = Auth::requireUser();
         $userId = (int) $user['id'];
 
         $mid = max(0, (int) $this->request->query('message', 0));

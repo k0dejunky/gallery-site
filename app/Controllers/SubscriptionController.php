@@ -17,14 +17,8 @@ use App\Models\User;
  * and expiry dates), or cancels/deletes records. Admins can also grant a
  * subscription to a user directly.
  */
-class SubscriptionController extends Controller
+class SubscriptionController extends MembershipAdminController
 {
-    public function __construct(Request $request)
-    {
-        parent::__construct($request);
-        Auth::requirePermission('membership');
-    }
-
     /**
      * Every subscription, newest first, plus a reconciliation panel of
      * pending biller signups (PENDING-* refs) so stuck checkouts surface.

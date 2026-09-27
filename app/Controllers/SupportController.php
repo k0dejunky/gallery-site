@@ -81,8 +81,7 @@ class SupportController extends Controller
 
     public function show(int $id): void
     {
-        Auth::requireLogin();
-        $user = Auth::user();
+        $user = Auth::requireUser();
         $ticket = SupportMessage::findForUser($id, (int) $user['id']);
         if ($ticket === null) {
             $this->notFound();
@@ -94,8 +93,7 @@ class SupportController extends Controller
 
     public function reply(int $id): void
     {
-        Auth::requireLogin();
-        $user = Auth::user();
+        $user = Auth::requireUser();
         $ticket = SupportMessage::findForUser($id, (int) $user['id']);
         if ($ticket === null) {
             $this->notFound();

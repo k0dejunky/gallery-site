@@ -796,7 +796,8 @@ class SmokeChecks
                 : $bad('routes.php must register public /unsubscribe and the admin emailer save/send-now/test/retry routes');
         });
         $add('smoke.email.permission', 'Smoke · Emailer', 'Emailer admin gated by membership permission', static function () use ($ecCtrl, $ok, $bad): array {
-            return strpos($ecCtrl, "Auth::requirePermission('membership')") !== false
+            return strpos($ecCtrl, 'extends MembershipAdminController') !== false
+                || strpos($ecCtrl, "Auth::requirePermission('membership')") !== false
                 ? $ok('membership gate')
                 : $bad('EmailerController must require the membership permission');
         });
