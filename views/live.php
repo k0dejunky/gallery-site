@@ -16,9 +16,44 @@
     .live-controls { position: absolute; top: .5rem; left: .5rem; display: flex; gap: .4rem; z-index: 3; }
     .live-controls button { background: rgba(0,0,0,.55); color: #fff; border: 0; border-radius: 6px; padding: .3rem .55rem; cursor: pointer; font-size: 1.05rem; line-height: 1; }
     .live-controls button:hover { background: rgba(0,0,0,.8); }
-    .live-grid:fullscreen { background: #000; padding: 1rem; width: 100%; height: 100%; box-sizing: border-box; }
-    .live-grid:fullscreen .live-player-wrap { max-height: calc(100vh - 2rem); margin: auto; }
-    .live-grid:fullscreen .live-chat { height: calc(100vh - 2rem); max-height: none; }
+    .live-grid:fullscreen { background: #000; position: relative; }
+    .live-grid:fullscreen .live-player-wrap {
+        width: 100% !important;
+        height: 100% !important;
+        aspect-ratio: auto;
+        max-height: none;
+        margin: 0;
+        border-radius: 0;
+    }
+    .live-grid:fullscreen .live-chat {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 300px;
+        max-width: 70vw;
+        max-height: none;
+        border: 0;
+        background: rgba(0, 0, 0, .35);
+        backdrop-filter: blur(3px);
+        color: #fff;
+    }
+    .live-grid:fullscreen .live-chat h2 { color: #fff; border-bottom-color: rgba(255,255,255,.25); }
+    .live-grid:fullscreen .live-chat-msg .who { color: #ffd0e8; }
+    .live-grid:fullscreen .live-chat-msg .when { color: rgba(255,255,255,.65); }
+    .live-grid:fullscreen .live-chat-form { border-top-color: rgba(255,255,255,.25); }
+    @media (max-width: 860px) {
+        .live-grid:fullscreen .live-chat {
+            left: 0;
+            right: 0;
+            top: auto;
+            bottom: 0;
+            width: 100%;
+            max-width: none;
+            height: 38vh;
+            backdrop-filter: blur(4px);
+        }
+    }
     .live-chat { display: flex; flex-direction: column; height: 100%; max-height: 60vh; border: 1px solid var(--card-border, #ddd); border-radius: var(--card-radius, 8px); background: var(--card-bg, #fff); overflow: hidden; }
     .live-chat h2 { margin: 0; padding: .6rem .8rem; font-size: .95rem; border-bottom: 1px solid var(--card-border, #eee); }
     .live-chat-messages { flex: 1; overflow-y: auto; padding: .6rem .8rem; display: flex; flex-direction: column; gap: .35rem; }
