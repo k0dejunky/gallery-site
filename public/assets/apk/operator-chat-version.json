@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.35",
-  "versionCode": 46,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.35.apk",
-  "changelog": "Chat: when you attach a picture/video you can now make it disappear - pick a time limit (5m to 24h) and/or a view limit (1-10 views). Expired media shows as 'Media expired' instead of loading.",
+  "latestVersion": "2.36",
+  "versionCode": 47,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.36.apk",
+  "changelog": "Chat: fixed a bug where an image you were sending/queued could briefly show 'Media expired'. Images now render as fast thumbnails (tap to open full size) on the web chat too.",
   "publishedAt": "2026-09-26"
 }
