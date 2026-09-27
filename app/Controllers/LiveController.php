@@ -454,12 +454,6 @@ class LiveController extends Controller
         return (string) file_get_contents('php://input');
     }
 
-    private function json(array $data): void
-    {
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode($data, JSON_UNESCAPED_SLASHES);
-        exit;
-    }
 
     /**
      * Whether the auth webhook call is from the server's own ffmpeg recorder

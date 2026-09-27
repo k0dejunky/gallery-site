@@ -220,6 +220,194 @@ class ChatMessage
         return $purged;
     }
 
+    // ------------------------------------------------------------------ media
+    // The three chat attachment endpoints (member, operator bridge, admin) all
+    // serve the same file the same way; these shared helpers keep them from
+    // duplicating the sniffing / thumbnail / serving / decoration logic.
+
+    /**
+     * Serve a chat attachment: resolve the file, enforce expiry, (optionally)
+     * count a member view, sniff the real MIME type and stream the file - or a
+     * cached 320px JPEG thumbnail when $thumb is set. The caller has already
+     * authenticated the request and (where applicable) verified ownership.
+     */
+    public static function serveAttachment(array $msg, bool $thumb = false, bool $countView = false): void
+    {
+        if (empty($msg['attachment_path'])) {
+            http_response_code(404);
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => false, 'error' => 'Attachment not found.']);
+            exit;
+        }
+
+        // Expiring media: refuse to serve once the time or view limit is hit.
+        if (self::isMediaExpired($msg)) {
+            http_response_code(410);
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => false, 'error' => 'Media has expired.']);
+            exit;
+        }
+
+        $path = dirname(__DIR__, 2) . '/' . $msg['attachment_path'];
+        if (!is_file($path)) {
+            http_response_code(404);
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => false, 'error' => 'Attachment file missing.']);
+            exit;
+        }
+
+        // A member view of the full media consumes one of the view limit
+        // (thumbnails are free - they are just list previews).
+        if ($countView && (int) ($msg['max_views'] ?? 0) > 0 && !$thumb) {
+            Database::run(
+                'UPDATE chat_messages SET view_count = view_count + 1 WHERE id = ? AND view_count < max_views',
+                [(int) $msg['id']]
+            );
+        }
+
+        $name = (string) ($msg['attachment_name'] ?? basename($path));
+        $mime = (string) ($msg['attachment_type'] ?? (mime_content_type($path) ?: 'application/octet-stream'));
+
+        // Phone uploads may be stored as octet-stream even for images: sniff
+        // the real type from the file content so thumbnails still work.
+        if (!str_starts_with($mime, 'image/')) {
+            $real = self::sniffAttachmentType((string) $msg['attachment_path']);
+            if (str_starts_with($real, 'image/')) {
+                $mime = $real;
+            }
+        }
+
+        // Image attachments can be requested as a small thumbnail.
+        if ($thumb && str_starts_with($mime, 'image/')) {
+            $out = self::makeThumbnail($path);
+            if ($out !== null) {
+                header('Content-Type: image/jpeg');
+                header('Content-Length: ' . (string) filesize($out));
+                readfile($out);
+                exit;
+            }
+        }
+
+        header('Content-Type: ' . $mime);
+        header('Content-Disposition: inline; filename="' . addcslashes($name, '"') . '"');
+        header('Content-Length: ' . (string) filesize($path));
+        readfile($path);
+        exit;
+    }
+
+    /** Sniff a stored attachment's real MIME type from its content. */
+    public static function sniffAttachmentType(string $path): string
+    {
+        $full = dirname(__DIR__, 2) . '/' . ltrim($path, '/');
+        if (!is_file($full)) {
+            return '';
+        }
+        if (function_exists('finfo_open')) {
+            $fi = finfo_open(FILEINFO_MIME_TYPE);
+            $t = $fi !== false ? finfo_file($fi, $full) : false;
+            if (is_resource($fi)) {
+                finfo_close($fi);
+            }
+            if (is_string($t) && $t !== '') {
+                return $t;
+            }
+        }
+        return mime_content_type($full) ?: '';
+    }
+
+    /**
+     * Generate (and cache) a JPEG thumbnail no wider than 320px for an image
+     * file. Returns the cached thumb path, or null on any failure.
+     */
+    private static function makeThumbnail(string $path): ?string
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            return null;
+        }
+
+        $key = 'thumb_' . hash('sha1', (string) filesize($path) . '_' . filemtime($path)) . '.jpg';
+        $thumbsDir = dirname(__DIR__, 2) . '/storage/uploads/chat/thumbs';
+        if (!is_dir($thumbsDir)) {
+            @mkdir($thumbsDir, 0775, true);
+        }
+        $out = $thumbsDir . '/' . $key;
+        if (is_file($out) && filemtime($out) >= filemtime($path)) {
+            return $out;
+        }
+
+        $img = @imagecreatefromstring((string) file_get_contents($path));
+        if ($img === false) {
+            return null;
+        }
+
+        $w = imagesx($img);
+        $h = imagesy($img);
+        if ($w <= 0 || $h <= 0) {
+            imagedestroy($img);
+            return null;
+        }
+
+        $maxW = 320;
+        if ($w > $maxW) {
+            $scale = $maxW / $w;
+            $nw = $maxW;
+            $nh = max(1, (int) round($h * $scale));
+        } else {
+            $nw = $w;
+            $nh = $h;
+        }
+
+        $thumb = imagecreatetruecolor($nw, $nh);
+        imagecopyresampled($thumb, $img, 0, 0, 0, 0, $nw, $nh, $w, $h);
+        imagedestroy($img);
+
+        imagejpeg($thumb, $out, 82);
+        imagedestroy($thumb);
+
+        return $out;
+    }
+
+    /**
+     * Add attachment URL(s) + expiring-media metadata to message rows so the
+     * various chat UIs (member web, admin web, operator app) can render them.
+     * $urlBase is the controller's attachment route (e.g. '/chat/attachment').
+     */
+    public static function decorateMessages(array $messages, string $urlBase): array
+    {
+        foreach ($messages as &$m) {
+            $type = (string) ($m['attachment_type'] ?? '');
+            // Self-heal: phone uploads sometimes arrive as octet-stream even
+            // for images; sniff the real type so thumbnails render.
+            if (!str_starts_with($type, 'image/') && !empty($m['attachment_path'])) {
+                $real = self::sniffAttachmentType((string) $m['attachment_path']);
+                if (str_starts_with($real, 'image/')) {
+                    $type = $real;
+                    $m['attachment_type'] = $real;
+                }
+            }
+            $m['attachment_url'] = !empty($m['attachment_path'])
+                ? url($urlBase . '?message=' . (int) $m['id'])
+                : null;
+            $m['attachment_thumb_url'] = !empty($m['attachment_path']) && str_starts_with($type, 'image/')
+                ? url($urlBase . '?message=' . (int) $m['id'] . '&thumb=1')
+                : null;
+            $m['expires_at'] = !empty($m['expires_at']) ? (string) $m['expires_at'] : null;
+            $m['max_views']  = (int) ($m['max_views'] ?? 0);
+            $m['view_count'] = (int) ($m['view_count'] ?? 0);
+            $m['media_expired'] = self::isMediaExpired($m);
+            if ($m['media_expired']) {
+                $m['attachment_url'] = null;
+                $m['attachment_thumb_url'] = null;
+            }
+            $m['content_refs'] = !empty($m['content_refs'])
+                ? json_decode((string) $m['content_refs'], true)
+                : [];
+        }
+        unset($m);
+
+        return $messages;
+    }
+
     /**
      * Store an uploaded chat attachment under storage/uploads/chat/ and
      * return metadata to persist on the message row, or null on failure.

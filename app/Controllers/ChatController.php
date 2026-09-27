@@ -31,7 +31,7 @@ class ChatController extends Controller
             $conv = ['id' => 0, 'ai_mode' => 'retrieval', 'status' => 'open'];
         }
 
-        $messages = $conv['id'] > 0 ? $this->decorateMessages(ChatMessage::messagesLatest((int) $conv['id'], 50)) : [];
+        $messages = $conv['id'] > 0 ? \App\Models\ChatMessage::decorateMessages(ChatMessage::messagesLatest((int) $conv['id'], 50), '/chat/attachment') : [];
         $hasMore = $conv['id'] > 0 && !empty($messages)
             ? ChatMessage::hasOlder((int) $conv['id'], (int) $messages[0]['id'])
             : false;
@@ -190,7 +190,7 @@ class ChatController extends Controller
             return;
         }
 
-        $messages = $this->decorateMessages(ChatMessage::messages($cid, $since));
+        $messages = \App\Models\ChatMessage::decorateMessages(ChatMessage::messages($cid, $since), '/chat/attachment');
 
         $this->json([
             'ok'       => true,
@@ -228,7 +228,7 @@ class ChatController extends Controller
             return;
         }
 
-        $messages = $this->decorateMessages(ChatMessage::messagesBefore($cid, $before, $limit));
+        $messages = \App\Models\ChatMessage::decorateMessages(ChatMessage::messagesBefore($cid, $before, $limit), '/chat/attachment');
         $older = !empty($messages)
             ? ChatMessage::hasOlder($cid, (int) $messages[0]['id'])
             : false;
@@ -238,13 +238,6 @@ class ChatController extends Controller
             'messages' => $messages,
             'has_more' => $older,
         ]);
-    }
-
-    private function json(array $data): void
-    {
-        header('Content-Type: application/json');
-        echo json_encode($data);
-        exit;
     }
 
     /**
@@ -298,7 +291,7 @@ class ChatController extends Controller
         $latestId = ChatMessage::latestId($cid);
 
         // Initial snapshot of anything already newer than the client.
-        $new = $this->decorateMessages(ChatMessage::messages($cid, $since));
+        $new = \App\Models\ChatMessage::decorateMessages(ChatMessage::messages($cid, $since), '/chat/attachment');
         if ($new !== []) {
             echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'mode' => (string) ($conv['ai_mode'] ?? 'retrieval')]) . "\n\n";
             flush();
@@ -314,7 +307,7 @@ class ChatController extends Controller
         while (time() - $start < 30) {
             $headId = ChatMessage::latestId($cid);
             if ($headId > $since) {
-                $new = $this->decorateMessages(ChatMessage::messages($cid, $since));
+                $new = \App\Models\ChatMessage::decorateMessages(ChatMessage::messages($cid, $since), '/chat/attachment');
                 if ($new !== []) {
                     $latestId = $headId;
                     echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'mode' => (string) ($conv['ai_mode'] ?? 'retrieval')]) . "\n\n";
@@ -348,6 +341,7 @@ class ChatController extends Controller
         $mid = max(0, (int) $this->request->query('message', 0));
         $thumb = (int) $this->request->query('thumb', 0) === 1;
 
+        // Members may only fetch their own conversation's attachments.
         $msg = $mid > 0 ? \App\Core\Database::run(
             'SELECT cm.* FROM chat_messages cm
              JOIN chat_conversations c ON c.id = cm.conversation_id
@@ -355,178 +349,10 @@ class ChatController extends Controller
             [$mid, $userId]
         )->fetch() : null;
 
-        if (!$msg || empty($msg['attachment_path'])) {
-            http_response_code(404);
-            header('Content-Type: application/json');
-            echo json_encode(['ok' => false, 'error' => 'Attachment not found.']);
-            exit;
+        if (!$msg) {
+            $this->json(['ok' => false, 'error' => 'Attachment not found.'], 404);
         }
 
-        // Expiring media: refuse to serve once the time or view limit is hit.
-        if (\App\Models\ChatMessage::isMediaExpired($msg)) {
-            http_response_code(410);
-            header('Content-Type: application/json');
-            echo json_encode(['ok' => false, 'error' => 'Media has expired.']);
-            exit;
-        }
-
-        $path = dirname(__DIR__, 2) . '/' . $msg['attachment_path'];
-        if (!is_file($path)) {
-            http_response_code(404);
-            header('Content-Type: application/json');
-            echo json_encode(['ok' => false, 'error' => 'Attachment file missing.']);
-            exit;
-        }
-
-        // A member view of the full media consumes one of the view limit
-        // (thumbnails are free - they are just list previews).
-        $maxViews = (int) ($msg['max_views'] ?? 0);
-        if ($maxViews > 0 && !$thumb) {
-            \App\Core\Database::run(
-                'UPDATE chat_messages SET view_count = view_count + 1 WHERE id = ? AND view_count < max_views',
-                [(int) $msg['id']]
-            );
-        }
-
-        $name = (string) ($msg['attachment_name'] ?? basename($path));
-        $mime = (string) ($msg['attachment_type'] ?? (mime_content_type($path) ?: 'application/octet-stream'));
-
-        // Phone uploads may be stored as octet-stream even for images: sniff
-        // the real type from the file content so thumbnails still work.
-        if (!str_starts_with($mime, 'image/')) {
-            $real = $this->sniffAttachmentType((string) $msg['attachment_path']);
-            if (str_starts_with($real, 'image/')) {
-                $mime = $real;
-            }
-        }
-
-        // Image attachments can be requested as a small thumbnail.
-        if ($thumb && str_starts_with($mime, 'image/')) {
-            $out = $this->makeThumbnail($path);
-            if ($out !== null) {
-                header('Content-Type: image/jpeg');
-                header('Content-Length: ' . (string) filesize($out));
-                readfile($out);
-                exit;
-            }
-        }
-
-        header('Content-Type: ' . $mime);
-        header('Content-Disposition: inline; filename="' . addcslashes($name, '"') . '"');
-        header('Content-Length: ' . (string) filesize($path));
-        readfile($path);
-        exit;
-    }
-
-    /**
-     * Generate (and cache) a JPEG thumbnail no wider than 320px for an image
-     * file. Returns the cached thumb path, or null on any failure.
-     */
-    private function makeThumbnail(string $path): ?string
-    {
-        if (!function_exists('imagecreatetruecolor')) {
-            return null;
-        }
-
-        $key = 'thumb_' . hash('sha1', (string) filesize($path) . '_' . filemtime($path)) . '.jpg';
-        $thumbsDir = dirname(__DIR__, 2) . '/storage/uploads/chat/thumbs';
-        if (!is_dir($thumbsDir)) {
-            @mkdir($thumbsDir, 0775, true);
-        }
-        $out = $thumbsDir . '/' . $key;
-        if (is_file($out) && filemtime($out) >= filemtime($path)) {
-            return $out;
-        }
-
-        $img = @imagecreatefromstring((string) file_get_contents($path));
-        if ($img === false) {
-            return null;
-        }
-
-        $w = imagesx($img);
-        $h = imagesy($img);
-        if ($w <= 0 || $h <= 0) {
-            imagedestroy($img);
-            return null;
-        }
-
-        $maxW = 320;
-        if ($w > $maxW) {
-            $scale = $maxW / $w;
-            $nw = $maxW;
-            $nh = max(1, (int) round($h * $scale));
-        } else {
-            $nw = $w;
-            $nh = $h;
-        }
-
-        $thumb = imagecreatetruecolor($nw, $nh);
-        imagecopyresampled($thumb, $img, 0, 0, 0, 0, $nw, $nh, $w, $h);
-        imagedestroy($img);
-
-        imagejpeg($thumb, $out, 82);
-        imagedestroy($thumb);
-
-        return $out;
-    }
-
-    /**
-     * Add an attachment_url to each message row that has an attachment, so the
-     * web chat can render a download link.
-     */
-    private function decorateMessages(array $messages): array
-    {
-        foreach ($messages as &$m) {
-            $type = (string) ($m['attachment_type'] ?? '');
-            // Self-heal: phone uploads sometimes arrive as octet-stream even
-            // for images; sniff the real type so thumbnails render.
-            if (!str_starts_with($type, 'image/') && !empty($m['attachment_path'])) {
-                $real = $this->sniffAttachmentType((string) $m['attachment_path']);
-                if (str_starts_with($real, 'image/')) {
-                    $type = $real;
-                    $m['attachment_type'] = $real;
-                }
-            }
-            $m['attachment_url'] = !empty($m['attachment_path'])
-                ? url('/chat/attachment?message=' . (int) $m['id'])
-                : null;
-            $m['attachment_thumb_url'] = !empty($m['attachment_path']) && str_starts_with($type, 'image/')
-                ? url('/chat/attachment?message=' . (int) $m['id'] . '&thumb=1')
-                : null;
-            $m['expires_at'] = !empty($m['expires_at']) ? (string) $m['expires_at'] : null;
-            $m['max_views']  = (int) ($m['max_views'] ?? 0);
-            $m['view_count'] = (int) ($m['view_count'] ?? 0);
-            $m['media_expired'] = \App\Models\ChatMessage::isMediaExpired($m);
-            if ($m['media_expired']) {
-                $m['attachment_url'] = null;
-                $m['attachment_thumb_url'] = null;
-            }
-            $m['content_refs'] = !empty($m['content_refs'])
-                ? json_decode((string) $m['content_refs'], true)
-                : [];
-        }
-        unset($m);
-
-        return $messages;
-    }
-
-    /** Sniff a stored attachment's real MIME type from its content. */
-    private function sniffAttachmentType(string $path): string
-    {
-        $full = dirname(__DIR__, 2) . '/' . ltrim($path, '/');
-        if (!is_file($full)) {
-            return '';
-        }
-        if (function_exists('finfo_open')) {
-            $fi = finfo_open(FILEINFO_MIME_TYPE);
-            $t = $fi !== false ? finfo_file($fi, $full) : false;
-            if (is_resource($fi)) {
-                finfo_close($fi);
-            }
-            if (is_string($t) && $t !== '') {
-                return $t;
-            }
-        }
-        return mime_content_type($full) ?: '';
+        \App\Models\ChatMessage::serveAttachment($msg, $thumb, true);
     }
 }

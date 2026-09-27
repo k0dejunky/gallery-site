@@ -19,6 +19,21 @@ class Controller
     }
 
     /**
+     * Emit a JSON response and stop. Every controller uses this for its API
+     * endpoints; an optional HTTP status can be passed explicitly (otherwise a
+     * previously-set status, e.g. http_response_code(403), is preserved).
+     */
+    protected function json(array $data, int $status = 200): void
+    {
+        if ($status !== 200) {
+            http_response_code($status);
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($data, JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    /**
      * Render a user-facing view inside the main layout. View data is
      * extracted so templates and the layout both see the variables. For
      * logged-in users the layout also receives the favourite-category

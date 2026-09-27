@@ -635,13 +635,6 @@ class PhotoController extends Controller
     /**
      * Reply with a JSON payload and exit.
      */
-    private function json(array $data, int $status = 200): void
-    {
-        http_response_code($status);
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode($data);
-        exit;
-    }
 
     /**
      * Map a light/medium/heavy preset to Gaussian blur iterations.
