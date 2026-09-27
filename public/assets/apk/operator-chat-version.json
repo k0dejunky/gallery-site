@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.44",
-  "versionCode": 55,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.44.apk",
-  "changelog": "Live: the broadcast is now also recorded to an MP4 on the phone (in the app's Movies folder, shown in the status line) while it streams to the site. Each orientation segment saves its own file.",
+  "latestVersion": "2.45",
+  "versionCode": 56,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.45.apk",
+  "changelog": "Internal: no behaviour change - shared base/token helper added to the live screen code.",
   "publishedAt": "2026-09-27"
 }
