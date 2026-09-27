@@ -141,12 +141,19 @@
         var wrap = playerBox();
         if (!wrap || !video.videoWidth || !video.videoHeight) return;
         var ar = video.videoWidth / video.videoHeight;
-        var column = (wrap.parentElement && wrap.parentElement.clientWidth)
-            ? wrap.parentElement.clientWidth
-            : window.innerWidth;
+        // Measure the player's OWN grid column (its natural width), not the
+        // whole grid - sizing it to the full grid would cover the chat panel.
+        var prevW = wrap.style.width;
+        var prevH = wrap.style.height;
+        wrap.style.width = '';
+        wrap.style.height = '';
+        var column = wrap.offsetWidth || window.innerWidth;
+        wrap.style.width = prevW;
+        wrap.style.height = prevH;
+
         var w, h;
         if (ar >= 1) {
-            // Landscape: fill the whole column width.
+            // Landscape: fill the player's whole column width.
             w = column;
             h = Math.round(w / ar);
         } else {
@@ -181,13 +188,14 @@
             var h = new window.Hls({
                 // MediaMTX serves MPEG-TS HLS here (needed for recordings);
                 // lowLatencyMode is for fMP4 LL-HLS and causes stalls on TS, so
-                // keep a comfortable live buffer instead.
+                // keep a small live buffer and always chase the live edge.
                 lowLatencyMode: false,
-                liveSyncDurationCount: 3,
-                liveMaxLatencyDurationCount: 6,
-                maxBufferLength: 30,
-                maxMaxBufferLength: 60,
-                backBufferLength: 15,
+                liveSyncDurationCount: 2,
+                liveMaxLatencyDurationCount: 4,
+                maxLiveSyncPlaybackRate: 1.5,
+                maxBufferLength: 20,
+                maxMaxBufferLength: 40,
+                backBufferLength: 10,
                 xhrSetup: function (xhr, url) { xhr.open('GET', signed(url), true); }
             });
             h.loadSource(hlsBase + '/' + encodeURIComponent(key) + '/index.m3u8');
