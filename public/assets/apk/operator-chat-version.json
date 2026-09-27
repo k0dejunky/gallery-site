@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.38",
-  "versionCode": 49,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.38.apk",
-  "changelog": "Live: fixed the preview being shifted to the right after rotating back from landscape - the stream now re-attaches to a fresh preview surface on rotation, so the portrait view is centered again.",
+  "latestVersion": "2.39",
+  "versionCode": 50,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.39.apk",
+  "changelog": "Live: rotating the phone no longer stops the broadcast. The stream now uses a fixed square encoder (640x640) with auto-rotation, so the picture stays upright and keeps streaming seamlessly as you turn the phone - no disconnect, no restart.",
   "publishedAt": "2026-09-27"
 }

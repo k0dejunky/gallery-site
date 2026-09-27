@@ -151,15 +151,15 @@
         wrap.style.width = prevW;
         wrap.style.height = prevH;
 
-        var w, h;
-        if (ar >= 1) {
-            // Landscape: fill the player's whole column width.
-            w = column;
-            h = Math.round(w / ar);
-        } else {
-            // Portrait: as wide as possible within the viewport height.
-            var maxH = Math.max(220, window.innerHeight - 150);
-            h = Math.min(column / ar, maxH);
+        // Fit the video within the column width and the viewport height,
+        // preserving its aspect: a wide (landscape) stream that fits
+        // vertically takes the full column width; square/portrait streams are
+        // capped to the viewport height so they stay fully visible.
+        var maxH = Math.max(220, window.innerHeight - 150);
+        var w = column;
+        var h = w / ar;
+        if (h > maxH) {
+            h = maxH;
             w = Math.round(h * ar);
         }
         wrap.style.width = Math.round(w) + 'px';
