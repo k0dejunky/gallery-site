@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.37",
-  "versionCode": 48,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.37.apk",
-  "changelog": "Live: the broadcast now encodes in the phone's actual orientation - hold it portrait and the stream is portrait, landscape gives landscape. The website player shapes itself to match, and recordings keep the orientation. Rotating mid-stream switches the encoder too.",
-  "publishedAt": "2026-09-26"
+  "latestVersion": "2.38",
+  "versionCode": 49,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.38.apk",
+  "changelog": "Live: fixed the preview being shifted to the right after rotating back from landscape - the stream now re-attaches to a fresh preview surface on rotation, so the portrait view is centered again.",
+  "publishedAt": "2026-09-27"
 }
