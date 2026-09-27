@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.42",
-  "versionCode": 53,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.42.apk",
-  "changelog": "Live: audio fix - the mic is now captured at the most widely supported setting (AAC stereo 44.1kHz/128k). If your mic still can't initialize, the app now tells you instead of silently streaming video-only, and mute/pause state is reset after each broadcast.",
+  "latestVersion": "2.43",
+  "versionCode": 54,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.43.apk",
+  "changelog": "Live: the broadcast screen now keeps the device awake - the screen won't time out while you're live, and a wake lock keeps the CPU/network alive even if the screen is turned off, so the stream no longer drops.",
   "publishedAt": "2026-09-27"
 }
