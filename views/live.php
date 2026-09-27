@@ -132,9 +132,10 @@
 
     /**
      * Size the player box so the video is fully visible in the viewport in
-     * either orientation: the box takes the video's exact aspect ratio, at
-     * most the column width and at most the viewport height (minus the page
-     * chrome), centred in the column. No letterbox bars inside the box.
+     * either orientation. Landscape takes the full column width (height follows
+     * the 16:9 aspect); portrait is capped to the viewport height so it fits on
+     * the screen. The box always matches the video's exact aspect ratio, so
+     * there are no letterbox bars inside it.
      */
     function fitPlayer() {
         var wrap = playerBox();
@@ -143,10 +144,15 @@
         var column = (wrap.parentElement && wrap.parentElement.clientWidth)
             ? wrap.parentElement.clientWidth
             : window.innerWidth;
-        var maxH = Math.max(220, window.innerHeight - 150);
-        var w = column, h = w / ar;
-        if (h > maxH) {
-            h = maxH;
+        var w, h;
+        if (ar >= 1) {
+            // Landscape: fill the whole column width.
+            w = column;
+            h = Math.round(w / ar);
+        } else {
+            // Portrait: as wide as possible within the viewport height.
+            var maxH = Math.max(220, window.innerHeight - 150);
+            h = Math.min(column / ar, maxH);
             w = Math.round(h * ar);
         }
         wrap.style.width = Math.round(w) + 'px';
@@ -173,7 +179,15 @@
 
         if (window.Hls && window.Hls.isSupported()) {
             var h = new window.Hls({
-                lowLatencyMode: true,
+                // MediaMTX serves MPEG-TS HLS here (needed for recordings);
+                // lowLatencyMode is for fMP4 LL-HLS and causes stalls on TS, so
+                // keep a comfortable live buffer instead.
+                lowLatencyMode: false,
+                liveSyncDurationCount: 3,
+                liveMaxLatencyDurationCount: 6,
+                maxBufferLength: 30,
+                maxMaxBufferLength: 60,
+                backBufferLength: 15,
                 xhrSetup: function (xhr, url) { xhr.open('GET', signed(url), true); }
             });
             h.loadSource(hlsBase + '/' + encodeURIComponent(key) + '/index.m3u8');
