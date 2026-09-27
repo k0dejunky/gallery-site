@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.36",
-  "versionCode": 47,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.36.apk",
-  "changelog": "Chat: fixed a bug where an image you were sending/queued could briefly show 'Media expired'. Images now render as fast thumbnails (tap to open full size) on the web chat too.",
+  "latestVersion": "2.37",
+  "versionCode": 48,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.37.apk",
+  "changelog": "Live: the broadcast now encodes in the phone's actual orientation - hold it portrait and the stream is portrait, landscape gives landscape. The website player shapes itself to match, and recordings keep the orientation. Rotating mid-stream switches the encoder too.",
   "publishedAt": "2026-09-26"
 }

@@ -111,12 +111,25 @@
         currentKey = '';
         video.removeAttribute('src');
         try { video.load(); } catch (e) {}
+        // Restore the default 16:9 box until the next stream is known.
+        var wrap = video.closest('.live-player-wrap');
+        if (wrap) wrap.style.aspectRatio = '16 / 9';
     }
 
     function buildPlayer(key, token) {
         teardownPlayer();
         currentKey = key;
         function signed(u) { return u + (u.indexOf('?') >= 0 ? '&' : '?') + 't=' + encodeURIComponent(token); }
+
+        // Shape the player box to match the stream (portrait or landscape) so
+        // the video fills it without letterbox bars.
+        video.addEventListener('loadedmetadata', function onMeta() {
+            var wrap = video.closest('.live-player-wrap');
+            if (wrap && video.videoWidth > 0 && video.videoHeight > 0) {
+                wrap.style.aspectRatio = video.videoWidth + ' / ' + video.videoHeight;
+            }
+            video.removeEventListener('loadedmetadata', onMeta);
+        });
 
         if (window.Hls && window.Hls.isSupported()) {
             var h = new window.Hls({
