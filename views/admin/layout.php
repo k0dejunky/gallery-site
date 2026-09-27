@@ -25,6 +25,15 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-H9LH86H11C"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+
+        gtag('config', 'G-H9LH86H11C');
+    </script>
     <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') . ' Admin' : e(config('app.site_name')) . ' Admin' ?></title>
     <link rel="stylesheet" href="<?= e(url('/assets/admin-shared.css')) ?>">
     <link rel="stylesheet" href="<?= e(url('/assets/css/user.css')) ?>?v=4">
