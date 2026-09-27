@@ -13,6 +13,12 @@
     .live-player-wrap video { width: 100%; height: 100%; object-fit: contain; background: #000; }
     .live-offline { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-muted, #888); text-align: center; padding: 2rem; }
     .live-paused { position: absolute; inset: 0; display: none; place-items: center; background: rgba(0,0,0,.55); color: #fff; text-align: center; padding: 2rem; font-size: 1.05rem; backdrop-filter: blur(2px); z-index: 2; }
+    .live-controls { position: absolute; top: .5rem; left: .5rem; display: flex; gap: .4rem; z-index: 3; }
+    .live-controls button { background: rgba(0,0,0,.55); color: #fff; border: 0; border-radius: 6px; padding: .3rem .55rem; cursor: pointer; font-size: 1.05rem; line-height: 1; }
+    .live-controls button:hover { background: rgba(0,0,0,.8); }
+    .live-grid:fullscreen { background: #000; padding: 1rem; width: 100%; height: 100%; box-sizing: border-box; }
+    .live-grid:fullscreen .live-player-wrap { max-height: calc(100vh - 2rem); margin: auto; }
+    .live-grid:fullscreen .live-chat { height: calc(100vh - 2rem); max-height: none; }
     .live-chat { display: flex; flex-direction: column; height: 100%; max-height: 60vh; border: 1px solid var(--card-border, #ddd); border-radius: var(--card-radius, 8px); background: var(--card-bg, #fff); overflow: hidden; }
     .live-chat h2 { margin: 0; padding: .6rem .8rem; font-size: .95rem; border-bottom: 1px solid var(--card-border, #eee); }
     .live-chat-messages { flex: 1; overflow-y: auto; padding: .6rem .8rem; display: flex; flex-direction: column; gap: .35rem; }
@@ -42,6 +48,10 @@
             <div class="live-paused" id="live-paused">
                 <p>😴 The model will be back in a moment.</p>
             </div>
+            <div class="live-controls" id="live-controls" hidden>
+                <button type="button" id="live-mute" title="Mute / unmute audio" aria-label="Mute or unmute">🔇</button>
+                <button type="button" id="live-fs" title="Full screen" aria-label="Toggle full screen">⛶</button>
+            </div>
         </div>
 
         <div class="live-chat">
@@ -68,6 +78,50 @@
     var chatForm = document.getElementById('live-chat-form');
     var chatInput = document.getElementById('live-chat-input');
     var csrf = chatForm ? chatForm.querySelector('input[name="_token"]').value : '';
+
+    var controlsEl = document.getElementById('live-controls');
+    var muteBtn = document.getElementById('live-mute');
+    var fsBtn = document.getElementById('live-fs');
+
+    // Mute / unmute the live audio.
+    if (muteBtn && video) {
+        muteBtn.addEventListener('click', function () {
+            video.muted = !video.muted;
+            muteBtn.textContent = video.muted ? '🔇' : '🔊';
+        });
+        video.addEventListener('volumechange', function () {
+            if (muteBtn) muteBtn.textContent = video.muted ? '🔇' : '🔊';
+        });
+    }
+
+    // Full screen the video + chat together.
+    if (fsBtn && video) {
+        function isFs() {
+            return !!(document.fullscreenElement || document.webkitFullscreenElement);
+        }
+        function toggleFs() {
+            var target = document.querySelector('.live-grid');
+            if (isFs()) {
+                var fn = document.exitFullscreen || document.webkitExitFullscreen;
+                if (fn) fn.call(document);
+            } else if (target) {
+                var req = target.requestFullscreen || target.webkitRequestFullscreen;
+                if (req) {
+                    req.call(target);
+                } else if (video.webkitEnterFullscreen) {
+                    video.webkitEnterFullscreen();
+                }
+            }
+            if (fsBtn) fsBtn.textContent = isFs() ? '✕' : '⛶';
+        }
+        fsBtn.addEventListener('click', toggleFs);
+        document.addEventListener('fullscreenchange', function () {
+            if (fsBtn) fsBtn.textContent = isFs() ? '✕' : '⛶';
+        });
+        document.addEventListener('webkitfullscreenchange', function () {
+            if (fsBtn) fsBtn.textContent = isFs() ? '✕' : '⛶';
+        });
+    }
 
     var hls = null;
     var es = null;
@@ -237,6 +291,8 @@
         }
         if (offline) offline.style.display = live ? 'none' : 'grid';
         if (pausedEl) pausedEl.style.display = (live && paused) ? 'grid' : 'none';
+        if (controlsEl) controlsEl.hidden = !live;
+        if (muteBtn && live) muteBtn.textContent = video.muted ? '🔇' : '🔊';
     }
 
     function applyState(s) {
