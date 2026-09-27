@@ -200,6 +200,7 @@ class LiveController extends Controller
             'live'         => $status['live'],
             'since'        => $status['since'],
             'viewers'      => $status['viewers'],
+            'paused'       => (bool) ($status['paused'] ?? false),
             'streamKey'    => $status['stream_key'],
             'token'        => $status['live'] && $status['stream_key'] !== null
                 ? LiveSession::playbackToken((string) $status['stream_key'], (int) Auth::user()['id'])
@@ -218,7 +219,46 @@ class LiveController extends Controller
             'live'    => $status['live'],
             'since'   => $status['since'],
             'viewers' => $status['viewers'],
+            'paused'  => (bool) ($status['paused'] ?? false),
         ]);
+    }
+
+    /** Operator pauses the broadcast without ending it (viewers see a message). */
+    public function pause(): void
+    {
+        $operator = $this->operator();
+        if ($operator === null) {
+            http_response_code(403);
+            $this->json(['ok' => false, 'error' => 'A valid operator token is required.']);
+            return;
+        }
+        $active = LiveSession::active();
+        if ($active !== null) {
+            Database::run(
+                'UPDATE live_sessions SET paused_at = COALESCE(paused_at, CURRENT_TIMESTAMP) WHERE id = ?',
+                [(int) $active['id']]
+            );
+        }
+        $this->json(['ok' => true]);
+    }
+
+    /** Operator resumes a paused broadcast. */
+    public function resume(): void
+    {
+        $operator = $this->operator();
+        if ($operator === null) {
+            http_response_code(403);
+            $this->json(['ok' => false, 'error' => 'A valid operator token is required.']);
+            return;
+        }
+        $active = LiveSession::active();
+        if ($active !== null) {
+            Database::run(
+                'UPDATE live_sessions SET paused_at = NULL WHERE id = ?',
+                [(int) $active['id']]
+            );
+        }
+        $this->json(['ok' => true]);
     }
 
     /** Member sends a message to the live group chat. */

@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.39",
-  "versionCode": 50,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.39.apk",
-  "changelog": "Live: rotating the phone no longer stops the broadcast. The stream now uses a fixed square encoder (640x640) with auto-rotation, so the picture stays upright and keeps streaming seamlessly as you turn the phone - no disconnect, no restart.",
+  "latestVersion": "2.40",
+  "versionCode": 51,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.40.apk",
+  "changelog": "Live: back to the correct portrait/landscape aspect ratio (no more square), fixed audio not broadcasting, and new Mute mic + Pause buttons - pausing shows viewers a 'the model will be back in a moment' message without ending the stream.",
   "publishedAt": "2026-09-27"
 }

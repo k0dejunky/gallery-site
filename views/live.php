@@ -12,6 +12,7 @@
     .live-player-wrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: var(--card-radius, 8px); overflow: hidden; }
     .live-player-wrap video { width: 100%; height: 100%; object-fit: contain; background: #000; }
     .live-offline { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-muted, #888); text-align: center; padding: 2rem; }
+    .live-paused { position: absolute; inset: 0; display: none; place-items: center; background: rgba(0,0,0,.55); color: #fff; text-align: center; padding: 2rem; font-size: 1.05rem; backdrop-filter: blur(2px); z-index: 2; }
     .live-chat { display: flex; flex-direction: column; height: 100%; max-height: 60vh; border: 1px solid var(--card-border, #ddd); border-radius: var(--card-radius, 8px); background: var(--card-bg, #fff); overflow: hidden; }
     .live-chat h2 { margin: 0; padding: .6rem .8rem; font-size: .95rem; border-bottom: 1px solid var(--card-border, #eee); }
     .live-chat-messages { flex: 1; overflow-y: auto; padding: .6rem .8rem; display: flex; flex-direction: column; gap: .35rem; }
@@ -37,6 +38,9 @@
             <video id="live-video" controls autoplay muted playsinline></video>
             <div class="live-offline" id="live-offline">
                 <p>The model is not live right now. Check back soon — a live show could start any moment.</p>
+            </div>
+            <div class="live-paused" id="live-paused">
+                <p>😴 The model will be back in a moment.</p>
             </div>
         </div>
 
@@ -223,18 +227,25 @@
         };
     }
 
-    function setLiveUI(live) {
+    var pausedEl = document.getElementById('live-paused');
+
+    function setLiveUI(live, paused) {
         stateLive = live;
-        if (badge) { badge.textContent = live ? '● LIVE' : 'Offline'; badge.className = 'live-badge ' + (live ? 'on' : 'off'); }
+        if (badge) {
+            badge.textContent = paused ? '⏸ PAUSED' : (live ? '● LIVE' : 'Offline');
+            badge.className = 'live-badge ' + (live ? 'on' : 'off');
+        }
         if (offline) offline.style.display = live ? 'none' : 'grid';
+        if (pausedEl) pausedEl.style.display = (live && paused) ? 'grid' : 'none';
     }
 
     function applyState(s) {
         if (!s || s.ok === false) return;
         var wasLive = stateLive;
         var keyChanged = currentKey !== s.streamKey;
+        var paused = !!s.paused;
 
-        setLiveUI(s.live);
+        setLiveUI(s.live, paused);
         if (sinceEl && s.since) sinceEl.textContent = 'since ' + hm(s.since);
         if (viewersEl && s.viewers) viewersEl.textContent = s.viewers + ' watching';
 

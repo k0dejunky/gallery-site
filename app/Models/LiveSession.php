@@ -164,6 +164,7 @@ class LiveSession
                             'viewers'    => (int) ($item['readers'] ?? 0),
                             'stream_key' => $key,
                             'session_id' => $row !== false ? (int) $row['id'] : null,
+                            'paused'     => $row !== false && !empty($row['paused_at']),
                         ];
                     }
                 }
@@ -172,7 +173,7 @@ class LiveSession
             // MediaMTX down: treat as offline.
         }
 
-        return ['live' => false, 'since' => null, 'viewers' => 0, 'stream_key' => null, 'session_id' => null];
+        return ['live' => false, 'since' => null, 'viewers' => 0, 'stream_key' => null, 'session_id' => null, 'paused' => false];
     }
 
     /**

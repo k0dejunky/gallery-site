@@ -31,7 +31,7 @@ class Router
         // shared-secret digests instead. The live-stream start/stop endpoints
         // are also Bearer-authenticated operator-API calls (no CSRF token).
         $csrfExempt = strpos($request->uri(), '/webhooks/') === 0
-            || in_array($request->uri(), ['/live/start', '/live/stop', '/live/chat/send'], true);
+            || in_array($request->uri(), ['/live/start', '/live/stop', '/live/chat/send', '/live/pause', '/live/resume'], true);
 
         if ($request->isPost()
             && !$csrfExempt

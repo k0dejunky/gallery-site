@@ -28,6 +28,8 @@ return [
     ['POST', '/webhooks/live/auth', 'LiveController@auth'],
     ['POST', '/live/start', 'LiveController@start'],
     ['POST', '/live/stop', 'LiveController@stop'],
+    ['POST', '/live/pause', 'LiveController@pause'],
+    ['POST', '/live/resume', 'LiveController@resume'],
     ['GET', '/live', 'LiveController@page'],
     ['GET', '/live/status', 'LiveController@status'],
     ['GET', '/live/state', 'LiveController@state'],
