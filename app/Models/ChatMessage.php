@@ -44,7 +44,7 @@ class ChatMessage
                 [$userId]
             )->fetch();
 
-            if ($user !== null && in_array((string) $user['role'], \App\Core\Auth::ADMIN_ROLES, true)) {
+            if ($user !== null && \App\Core\Auth::isAdminRole($user)) {
                 return '1';
             }
 

@@ -406,6 +406,12 @@ class Auth
         return $user !== null && in_array($user['role'], self::ADMIN_ROLES, true);
     }
 
+    /** Whether an arbitrary user ROW (not the session user) has an admin role. */
+    public static function isAdminRole(array $user): bool
+    {
+        return in_array((string) ($user['role'] ?? ''), self::ADMIN_ROLES, true);
+    }
+
     public static function isSuperAdmin(): bool
     {
         $user = self::user();

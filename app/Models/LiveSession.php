@@ -219,7 +219,7 @@ class LiveSession
         if ($user === false) {
             return false;
         }
-        if (in_array((string) $user['role'], \App\Core\Auth::ADMIN_ROLES, true)) {
+        if (\App\Core\Auth::isAdminRole($user)) {
             return true;
         }
 

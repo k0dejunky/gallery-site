@@ -289,7 +289,7 @@ class LiveController extends Controller
             [
                 (int) $status['session_id'],
                 $userId,
-                in_array((string) ($user['role'] ?? ''), \App\Core\Auth::ADMIN_ROLES, true) ? 'operator' : 'user',
+                \App\Core\Auth::isAdminRole($user) ? 'operator' : 'user',
                 $message,
             ]
         );
