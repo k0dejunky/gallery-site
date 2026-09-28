@@ -60,12 +60,17 @@ $isAuthPage = $isLoginPage
     <?php endif; ?>
     <?php if (isset($ogImage) && $ogImage !== ''): ?>
         <meta property="og:image" content="<?= e($ogImage) ?>">
+        <meta property="og:image:alt" content="<?= e(isset($title) ? $title . ' — ' . config('app.site_name') : config('app.site_name')) ?>">
+        <meta name="twitter:image" content="<?= e($ogImage) ?>">
     <?php endif; ?>
     <meta property="og:type" content="website">
+    <meta property="og:locale" content="en_US">
     <meta property="og:title" content="<?= e(isset($title) ? $title . ' — ' . config('app.site_name') : config('app.site_name')) ?>">
     <meta property="og:description" content="<?= e($metaDescription ?? (config('app.site_name') . ' — curated galleries of original photos and videos.')) ?>">
     <meta property="og:url" content="<?= e($canonicalUrl ?? absolute_url('')) ?>">
     <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="<?= e(isset($title) ? $title . ' — ' . config('app.site_name') : config('app.site_name')) ?>">
+    <meta name="twitter:description" content="<?= e($metaDescription ?? (config('app.site_name') . ' — curated galleries of original photos and videos.')) ?>">
     <style>
 <?= \App\Models\Theme::cssUser($userThemePreset) ?>
 <?= \App\Models\Theme::cssLayoutUser($userThemePreset) ?>

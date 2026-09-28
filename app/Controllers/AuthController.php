@@ -32,6 +32,11 @@ class AuthController extends Controller
             'recentVideos' => Photo::recentVideos(10),
             'title'        => 'Login',
             'noindex'      => true,
+            'canonicalUrl' => absolute_url('/login'),
+            'metaDescription' => 'Log in to ' . config('app.site_name') . ' — original member galleries of photos and videos.',
+            'ogImage'      => ($recent = Photo::recentImages(1)) !== [] && !empty($recent[0]['filename'])
+                ? absolute_url(file_url((string) $recent[0]['filename'], 'web'))
+                : '',
         ]);
     }
 
@@ -133,6 +138,11 @@ class AuthController extends Controller
             'recentVideos' => Photo::recentVideos(10),
             'title'        => 'Sign Up',
             'noindex'      => true,
+            'canonicalUrl' => absolute_url('/signup'),
+            'metaDescription' => 'Join ' . config('app.site_name') . ' for original member galleries of photos and videos.',
+            'ogImage'      => ($recent = Photo::recentImages(1)) !== [] && !empty($recent[0]['filename'])
+                ? absolute_url(file_url((string) $recent[0]['filename'], 'web'))
+                : '',
         ]);
     }
 

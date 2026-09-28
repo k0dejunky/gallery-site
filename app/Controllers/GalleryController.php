@@ -22,6 +22,26 @@ class GalleryController extends Controller
      * search/type-filtered paginator. Empty favourite sections are dropped
      * so only categories with results appear in the sidebar navigation.
      */
+    /**
+     * Clean /images and /videos listing URLs: redirect to the filtered
+     * gallery listing (?type=), preserving any search/category/sort filters.
+     */
+    public function indexType(): void
+    {
+        $type = str_contains((string) $this->request->uri(), '/videos') ? 'videos' : 'images';
+
+        $query = $_GET;
+        $query['type'] = $type;
+
+        $this->redirect('/galleries' . ($query ? '?' . http_build_query($query) : ''));
+    }
+
+    /**
+     * Searching/browsing galleries is allowed without a membership, but
+     * opening an individual gallery still requires one (show()).
+     * The site editor loads a public, non-personalized preview in an
+     * iframe. Normal gallery browsing still requires authentication.
+     */
     public function index(): void
     {
         // Searching/browsing galleries is allowed without a membership, but

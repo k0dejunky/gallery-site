@@ -12,6 +12,8 @@ return [
     ['GET', '/about', 'StaticPageController@about'],
     ['GET', '/sitemap.xml', 'StaticPageController@sitemap'],
     ['GET', '/galleries', 'GalleryController@index'],
+    ['GET', '/images', 'GalleryController@indexType'],
+    ['GET', '/videos', 'GalleryController@indexType'],
     ['GET', '/galleries/category/{slug}', 'GalleryController@category'],
     ['GET', '/galleries/{id}/photos', 'GalleryController@photosPage'],
     ['GET', '/galleries/{id}', 'GalleryController@show'],

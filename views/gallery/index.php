@@ -16,8 +16,8 @@ if (($sort ?? '') !== '') {
     $query['sort'] = $sort;
 }
 $allUrl = $query ? $base . '?' . http_build_query($query) : $base;
-$imgUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'images']));
-$vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos']));
+$imgUrl = url('/images') . ($query ? '?' . http_build_query($query) : '');
+$vidUrl = url('/videos') . ($query ? '?' . http_build_query($query) : '');
 ?>
 
 <div class="hero">
