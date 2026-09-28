@@ -27,7 +27,8 @@
       if(Date.now()<suppressClickUntil)return;
       if(!pinchActive){
         lbImg.classList.toggle('zoomed');
-        if(!lbImg.classList.contains('zoomed')){ lb.scrollTop=0; lb.scrollLeft=0; }
+        // Reset the pan position so a fresh zoom starts at the top-left.
+        lb.scrollTop=0; lb.scrollLeft=0;
       }
     });
     lbFullBtn=lb.querySelector('.lb-full');
