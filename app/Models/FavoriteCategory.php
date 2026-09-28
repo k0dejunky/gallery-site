@@ -17,16 +17,21 @@ class FavoriteCategory
     {
         // Cached per user; invalidated via bump('favorites') on add/remove so
         // the sidebar always reflects the latest favourites.
-        return \App\Core\Cache::rememberGen('favorites', 'nav:u' . $userId, 300, static function () use ($userId): array {
-            return Database::run(
-                'SELECT c.id, c.name, c.slug
-                 FROM user_favorite_categories uf
-                 INNER JOIN categories c ON c.id = uf.category_id
-                 WHERE uf.user_id = ?
-                 ORDER BY uf.created_at ASC',
-                [$userId]
-            )->fetchAll();
+        $json = \App\Core\Cache::rememberGen('favorites', 'nav:u' . $userId, 300, static function () use ($userId): string {
+            return json_encode(
+                Database::run(
+                    'SELECT c.id, c.name, c.slug
+                     FROM user_favorite_categories uf
+                     INNER JOIN categories c ON c.id = uf.category_id
+                     WHERE uf.user_id = ?
+                     ORDER BY uf.created_at ASC',
+                    [$userId]
+                )->fetchAll(),
+                JSON_UNESCAPED_SLASHES
+            ) ?: '[]';
         });
+
+        return json_decode((string) $json, true) ?: [];
     }
 
     /**
