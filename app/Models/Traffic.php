@@ -610,10 +610,7 @@ class Traffic
      */
     public static function slugify(string $name): string
     {
-        $slug = strtolower((string) preg_replace('/[^a-zA-Z0-9]+/', '-', $name));
-        $slug = trim($slug, '-');
-
-        return mb_substr($slug, 0, 64);
+        return \slugify($name, 64);
     }
 
     /** Validate a ?c= code: lowercase letters, digits, underscore, dash. */

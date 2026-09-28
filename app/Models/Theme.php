@@ -433,11 +433,7 @@ class Theme
      */
     public static function slugify(string $name): string
     {
-        $slug = strtolower(trim($name));
-        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
-        $slug = trim($slug, '-');
-
-        return $slug ?: 'theme-' . bin2hex(random_bytes(4));
+        return \slugify($name, null, 'theme-' . bin2hex(random_bytes(4)));
     }
 
     /**

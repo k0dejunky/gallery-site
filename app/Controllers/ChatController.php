@@ -260,21 +260,12 @@ class ChatController extends Controller
         $conv  = ChatMessage::forUser($userId);
         $cid   = $conv !== null ? (int) $conv['id'] : 0;
 
-        header('Content-Type: text/event-stream');
-        header('Cache-Control: no-cache');
-        header('X-Accel-Buffering: no');
+        start_sse();
 
         // Release the session lock: this SSE connection lives for up to 30s
         // and would otherwise block the member's send() request (PHP session
         // files are single-writer), delaying messages by the whole window.
         session_write_close();
-
-        // Ensure PHP streams rather than buffering the whole response.
-        @ini_set('output_buffering', 'off');
-        @ini_set('zlib.output_compression', 'off');
-        while (ob_get_level() > 0) {
-            @ob_end_flush();
-        }
 
         if ($cid <= 0) {
             echo "data: {\"ok\":true,\"messages\":[],\"latestId\":0}\n\n";

@@ -58,10 +58,7 @@ class ChatBridgeController extends Controller
     {
         parent::__construct($request);
         if (!$this->authorized()) {
-            http_response_code(401);
-            header('Content-Type: application/json');
-            echo json_encode(['ok' => false, 'error' => 'Unauthorized']);
-            exit;
+            $this->json(['ok' => false, 'error' => 'Unauthorized'], 401);
         }
     }
 
@@ -142,8 +139,7 @@ class ChatBridgeController extends Controller
                     SUBSTRING_INDEX(u.email, '@', 1) AS username,
                     (SELECT 1 FROM subscriptions s JOIN plans p ON p.id = s.plan_id
                       WHERE s.user_id = c.user_id AND p.can_chat = 1
-                        AND s.status IN ('active', 'cancelled')
-                        AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
+                        AND ' . \App\Models\Subscription::activeWhere('s') . '
                       LIMIT 1) AS can_chat,
                     (SELECT m.message FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_message,
                     (SELECT m.sender_role FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_sender,
@@ -257,16 +253,7 @@ class ChatBridgeController extends Controller
             exit;
         }
 
-        header('Content-Type: text/event-stream');
-        header('Cache-Control: no-cache');
-        header('X-Accel-Buffering: no');
-
-        // Ensure PHP streams rather than buffering the whole response.
-        @ini_set('output_buffering', 'off');
-        @ini_set('zlib.output_compression', 'off');
-        while (ob_get_level() > 0) {
-            @ob_end_flush();
-        }
+        start_sse();
 
         $latestId = ChatMessage::latestId($cid);
         $new = \App\Models\ChatMessage::decorateMessages(ChatMessage::messages($cid, $since), '/webhooks/chat/attachment');
@@ -307,16 +294,7 @@ class ChatBridgeController extends Controller
     {
         $since = max(0, (int) $this->request->query('since', 0));
 
-        header('Content-Type: text/event-stream');
-        header('Cache-Control: no-cache');
-        header('X-Accel-Buffering: no');
-
-        // Ensure PHP streams rather than buffering the whole response.
-        @ini_set('output_buffering', 'off');
-        @ini_set('zlib.output_compression', 'off');
-        while (ob_get_level() > 0) {
-            @ob_end_flush();
-        }
+        start_sse();
 
         $new = $this->memberEvents($since);
         if ($new !== []) {
@@ -507,8 +485,7 @@ class ChatBridgeController extends Controller
             "SELECT u.id, u.email, SUBSTRING_INDEX(u.email, '@', 1) AS username,
                     (SELECT 1 FROM subscriptions s JOIN plans p ON p.id = s.plan_id
                       WHERE s.user_id = u.id AND p.can_chat = 1
-                        AND s.status IN ('active', 'cancelled')
-                        AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
+                        AND ' . \App\Models\Subscription::activeWhere('s') . '
                       LIMIT 1) AS can_chat,
                     (SELECT c.id FROM chat_conversations c WHERE c.user_id = u.id ORDER BY c.id DESC LIMIT 1) AS conversation_id,
                     (SELECT c.member_reply_enabled FROM chat_conversations c WHERE c.user_id = u.id ORDER BY c.id DESC LIMIT 1) AS member_reply_enabled

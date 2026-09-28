@@ -528,8 +528,10 @@ class SmokeChecks
                 : $bad('helpers must provide a blurred temp copy that never overwrites the source');
         });
         $add('smoke.ap.timezone', 'Smoke · Auto Poster', 'Schedule times converted to/from configured timezone', static function () use ($apq, $ok, $bad): array {
-            return strpos($apq, 'displaySchedule') !== false && strpos($apq, 'schedulerTimezone') !== false && strpos($apq, "setTimezone(new DateTimeZone('UTC'))") !== false
-                ? $ok('timezone conversion present')
+            return strpos($apq, 'displaySchedule') !== false && strpos($apq, 'schedulerTimezone') !== false
+                && strpos($apq, 'normalize_local_datetime($value, self::schedulerTimezone())') !== false
+                && strpos($apq, 'is_future_local_datetime($value, self::schedulerTimezone())') !== false
+                ? $ok('timezone conversion present (via shared helper)')
                 : $bad('auto-post queue must convert schedule times to/from the configured timezone');
         });
         $add('smoke.ap.cta', 'Smoke · Auto Poster', 'Recommendations carry the call-to-action text', static function () use ($apq, $ok, $bad): array {
@@ -954,6 +956,68 @@ class SmokeChecks
                 && strpos($cacheCore, 'unset(self::$local[$key])') !== false
                 ? $ok('Redis-less fallback evicts expired/soonest entries over the cap')
                 : $bad('Cache must cap its Redis-less in-memory fallback so a Redis outage cannot grow memory without limit');
+        });
+
+        // -------------------------------------------------- Consolidation
+        $helpersSrc = $read("$root/app/Core/helpers.php");
+        $photoC     = $read("$root/app/Controllers/PhotoController.php");
+        $galleryC   = $read("$root/app/Controllers/GalleryController.php");
+        $storageC   = $read("$root/app/Controllers/StorageController.php");
+        $liveRecC   = $read("$root/app/Models/LiveRecording.php");
+        $add('smoke.consol.media_helpers', 'Smoke · Consolidation', 'Media MIME/probe helpers live once in helpers.php', static function () use ($helpersSrc, $photoC, $galleryC, $storageC, $liveRecC, $ok, $bad): array {
+            return strpos($helpersSrc, 'function sniff_mime(') !== false
+                && strpos($helpersSrc, 'function mime_for_extension(') !== false
+                && strpos($helpersSrc, 'function video_has_stream(') !== false
+                && strpos($photoC, 'private function mimeOf(') === false
+                && strpos($galleryC, 'private function pendingMimeOf(') === false
+                && strpos($galleryC, 'private function pendingMimeFor(') === false
+                && strpos($storageC, 'private function mimeFor(') === false
+                && strpos($liveRecC, 'private static function hasVideoStream(') === false
+                ? $ok('sniff_mime/mime_for_extension/video_has_stream shared; private copies gone')
+                : $bad('media MIME/probe helpers must live once in helpers.php and the per-controller copies must be removed');
+        });
+
+        $galleryModel = $read("$root/app/Models/Gallery.php");
+        $apqModel     = $read("$root/app/Models/AutoPostQueue.php");
+        $add('smoke.consol.datetime', 'Smoke · Consolidation', 'datetime-local->UTC normalizer is shared', static function () use ($helpersSrc, $galleryModel, $apqModel, $ok, $bad): array {
+            return strpos($helpersSrc, 'function normalize_local_datetime(') !== false
+                && strpos($helpersSrc, 'function is_future_local_datetime(') !== false
+                && strpos($galleryModel, 'return normalize_local_datetime($value, site_timezone());') !== false
+                && strpos($galleryModel, 'return is_future_local_datetime($value, site_timezone());') !== false
+                && strpos($apqModel, 'normalize_local_datetime($value, self::schedulerTimezone())') !== false
+                && strpos($apqModel, 'is_future_local_datetime($value, self::schedulerTimezone())') !== false
+                ? $ok('gallery/auto-poster/chat all delegate to the shared normalizer')
+                : $bad('publish/schedule datetime parsing must delegate to normalize_local_datetime()/is_future_local_datetime() in helpers.php');
+        });
+
+        $add('smoke.consol.sse', 'Smoke · Consolidation', 'SSE long-poll preamble is shared', static function () use ($helpersSrc, $root, $read, $ok, $bad): array {
+            $chat    = $read("$root/app/Controllers/ChatController.php");
+            $bridge  = $read("$root/app/Controllers/ChatBridgeController.php");
+            $live    = $read("$root/app/Controllers/LiveController.php");
+            return strpos($helpersSrc, 'function start_sse(') !== false
+                && strpos($chat, 'start_sse();') !== false
+                && strpos($bridge, 'start_sse();') !== false
+                && strpos($live, 'start_sse();') !== false
+                // The ob-drain + zlib block must not be re-copied in controllers.
+                && substr_count($chat, 'ob_end_flush') === 0
+                && substr_count($bridge, 'ob_end_flush') === 0
+                && substr_count($live, 'ob_end_flush') === 0
+                && substr_count($bridge, 'X-Accel-Buffering') === 0
+                && substr_count($live, 'X-Accel-Buffering') === 0
+                ? $ok('all SSE endpoints use start_sse(); preamble not re-copied')
+                : $bad('SSE streams must share the start_sse() preamble in helpers.php instead of repeating headers/ob-drain');
+        });
+
+        $subscriptionC = $read("$root/app/Models/Subscription.php");
+        $broadcastC    = $read("$root/app/Models/ChatBroadcast.php");
+        $chatMsgC      = $read("$root/app/Models/ChatMessage.php");
+        $add('smoke.consol.subscription', 'Smoke · Consolidation', 'Subscription eligibility predicate is shared', static function () use ($subscriptionC, $broadcastC, $chatMsgC, $ok, $bad): array {
+            return strpos($subscriptionC, 'public static function activeWhere(') !== false
+                && strpos($subscriptionC, 'public static function chatEligibleUserIds(') !== false
+                && strpos($broadcastC, 'return Subscription::chatEligibleUserIds();') !== false
+                && strpos($chatMsgC, 'Subscription::activeWhere(\'s\')') !== false
+                ? $ok('chat eligibility + active-subscription predicate centralized')
+                : $bad('chat/broadcast eligibility must go through Subscription::activeWhere()/chatEligibleUserIds()');
         });
 
         // -------------------------------------------------------- System

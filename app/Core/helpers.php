@@ -251,6 +251,67 @@ function is_video(string $filename): bool
 }
 
 /**
+ * Detect a file's MIME type with finfo when available, or '' when it cannot
+ * be determined. Shared by every upload/validation path so a sniffed type is
+ * never implemented twice with different fallbacks.
+ */
+function sniff_mime(string $path): string
+{
+    if (class_exists('finfo')) {
+        $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($path);
+
+        return $mime !== false ? $mime : '';
+    }
+
+    return '';
+}
+
+/**
+ * Map a filename extension to its content type so files are streamed with
+ * the correct header. Single source of truth for the upload/validation and
+ * file-serving paths (previously three hand-maintained copies).
+ */
+function mime_for_extension(string $filename): string
+{
+    $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+
+    $map = [
+        'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png',
+        'gif' => 'image/gif', 'webp' => 'image/webp',
+        'mp4' => 'video/mp4', 'm4v' => 'video/mp4', 'webm' => 'video/webm',
+        'ogg' => 'video/ogg', 'mov' => 'video/quicktime', 'avi' => 'video/x-msvideo',
+        'mkv' => 'video/x-matroska',
+    ];
+
+    return $map[$extension] ?? 'application/octet-stream';
+}
+
+/**
+ * Whether a file actually contains a decodable video stream, probed with
+ * ffprobe (used to reject corrupt/polyglot uploads and to sanity-check
+ * live recordings). Empty string when there is no probe or no video stream.
+ */
+function video_has_stream(string $path): bool
+{
+    if ($path === '' || !is_file($path)) {
+        return false;
+    }
+
+    $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
+    $probe   = [];
+    $rc      = 0;
+
+    @exec(
+        escapeshellarg($ffprobe) . ' -v error -select_streams v:0 -show_entries stream=codec_type -of csv=p=0 '
+        . escapeshellarg($path) . ' 2>/dev/null',
+        $probe,
+        $rc
+    );
+
+    return $rc === 0 && trim(implode('', $probe)) === 'video';
+}
+
+/**
  * Render a hidden CSRF token input. Every POST form must include this so the
  * framework can verify the request came from the same browser session.
  */
@@ -261,14 +322,21 @@ function csrf_field(): string
 
 /**
  * Turn arbitrary text into a URL-friendly slug (lowercase, dashes instead of
- * spaces/symbols). Used to build clean category URLs.
+ * spaces/symbols). Used to build clean category URLs. Optional $max caps the
+ * length (e.g. short traffic-link codes) and $fallback is returned when the
+ * slug would otherwise be empty (e.g. a safe theme filename).
  */
-function slugify(string $text): string
+function slugify(string $text, ?int $max = null, ?string $fallback = null): string
 {
     $text = strtolower(trim($text));
     $text = preg_replace('/[^a-z0-9]+/', '-', $text);
+    $slug = trim((string) $text, '-');
 
-    return trim((string) $text, '-');
+    if ($max !== null && mb_strlen($slug) > $max) {
+        $slug = mb_substr($slug, 0, $max);
+    }
+
+    return $slug !== '' ? $slug : (string) $fallback;
 }
 
 /**
@@ -348,6 +416,64 @@ function tzdate(string $format, $when = null): string
         return $dt->setTimezone(new \DateTimeZone(site_timezone()))->format($format);
     } catch (\Exception $e) {
         return '';
+    }
+}
+
+/**
+ * Normalize a datetime-local picker value (site timezone) to a UTC MySQL
+ * DATETIME string, or null when blank/unparseable. Single source of truth
+ * for every schedule/publish picker (gallery publish, auto-poster, chat
+ * broadcasts) so the same instant is stored regardless of the admin surface.
+ */
+function normalize_local_datetime(?string $value, string $timezone = ''): ?string
+{
+    $v = trim((string) $value);
+    if ($v === '') {
+        return null;
+    }
+
+    $tz = $timezone !== '' ? $timezone : site_timezone();
+
+    $v = str_replace('T', ' ', $v);
+    if (!preg_match('/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2})(:\d{2})?$/', $v, $m)) {
+        return null;
+    }
+
+    $parsed = $m[1] . (isset($m[2]) ? $m[2] : ':00');
+    $dt = \DateTime::createFromFormat('Y-m-d H:i:s', $parsed, new \DateTimeZone($tz));
+    if ($dt === false) {
+        return null;
+    }
+
+    return $dt->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+}
+
+/**
+ * Whether a datetime-local value (interpreted in $timezone) is a valid,
+ * strictly-future UTC moment. Shared "scheduled in the future" guard.
+ */
+function is_future_local_datetime(?string $value, string $timezone = ''): bool
+{
+    $utc = normalize_local_datetime($value, $timezone);
+
+    return $utc !== null && $utc > gmdate('Y-m-d H:i:s');
+}
+
+/**
+ * The shared SSE long-poll preamble: event-stream headers, no buffering, and
+ * the output-buffer drain so PHP streams instead of holding the whole
+ * response in memory. Callers still decide whether to session_write_close().
+ */
+function start_sse(): void
+{
+    header('Content-Type: text/event-stream');
+    header('Cache-Control: no-cache');
+    header('X-Accel-Buffering: no');
+
+    @ini_set('output_buffering', 'off');
+    @ini_set('zlib.output_compression', 'off');
+    while (ob_get_level() > 0) {
+        @ob_end_flush();
     }
 }
 

@@ -550,7 +550,7 @@ class GalleryController extends Controller
                 continue;
             }
 
-            $mime = $this->pendingMimeOf($files['tmp_name'][$i]);
+            $mime = sniff_mime($files['tmp_name'][$i]);
 
             $error = $this->validatePending($files, $i, $config, $type, $mime);
             if ($error !== null) {
@@ -707,7 +707,7 @@ class GalleryController extends Controller
             return;
         }
 
-        $mime = $this->pendingMimeOf($assembled);
+        $mime = sniff_mime($assembled);
 
         $files = [
             'name'     => [$originalName],
@@ -1005,8 +1005,8 @@ class GalleryController extends Controller
         }
 
         $mime = in_array($size, ['thumb', 'web'], true)
-            ? $this->pendingMimeOf($path)
-            : $this->pendingMimeFor($name);
+            ? sniff_mime($path)
+            : mime_for_extension($name);
 
         header('Content-Type: ' . $mime);
         header('Content-Length: ' . filesize($path));
@@ -1221,17 +1221,7 @@ class GalleryController extends Controller
         // Videos are probed with ffprobe so a corrupt or polyglot file with a
         // video MIME is rejected at upload time instead of failing later at
         // thumbnail/export time.
-        $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
-        $probe = [];
-        $rc = 0;
-        @exec(
-            escapeshellarg($ffprobe) . ' -v error -select_streams v:0 -show_entries stream=codec_type -of csv=p=0 '
-            . escapeshellarg($files['tmp_name'][$index]) . ' 2>/dev/null',
-            $probe,
-            $rc
-        );
-
-        if ($rc !== 0 || trim(implode('', $probe)) !== 'video') {
+        if (!video_has_stream($files['tmp_name'][$index])) {
             return 'File is not a valid video.';
         }
 
@@ -1262,41 +1252,6 @@ class GalleryController extends Controller
         ];
 
         return $map[$mime] ?? 'bin';
-    }
-
-    /**
-     * Emit a JSON reply and stop.
-     */
-    /**
-     * Detect a file's MIME type with finfo when available.
-     */
-    private function pendingMimeOf(string $path): string
-    {
-        if (class_exists('finfo')) {
-            $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($path);
-
-            return $mime !== false ? $mime : '';
-        }
-
-        return '';
-    }
-
-    /**
-     * Map a filename extension to a content type for serving staged files.
-     */
-    private function pendingMimeFor(string $filename): string
-    {
-        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-
-        $map = [
-            'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png',
-            'gif' => 'image/gif', 'webp' => 'image/webp',
-            'mp4' => 'video/mp4', 'm4v' => 'video/mp4', 'webm' => 'video/webm',
-            'ogg' => 'video/ogg', 'mov' => 'video/quicktime', 'avi' => 'video/x-msvideo',
-            'mkv' => 'video/x-matroska',
-        ];
-
-        return $map[$extension] ?? 'application/octet-stream';
     }
 
     /**

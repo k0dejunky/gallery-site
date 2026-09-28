@@ -146,7 +146,7 @@ class StorageController extends Controller
             return;
         }
 
-        $mime = in_array($size, ['thumb', 'web', 'blur'], true) ? $this->imageMimeOf($path) : $this->mimeFor($name);
+        $mime = in_array($size, ['thumb', 'web', 'blur'], true) ? $this->imageMimeOf($path) : mime_for_extension($name);
         $len  = (int) filesize($path);
 
         header('Content-Type: ' . $mime);
@@ -208,12 +208,10 @@ class StorageController extends Controller
      */
     private function imageMimeOf(string $path): string
     {
-        if (class_exists('finfo')) {
-            $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($path);
+        $mime = sniff_mime($path);
 
-            if ($mime !== false && strpos($mime, 'image/') === 0) {
-                return $mime;
-            }
+        if ($mime !== '' && strpos($mime, 'image/') === 0) {
+            return $mime;
         }
 
         $info = @getimagesize($path);
@@ -223,47 +221,5 @@ class StorageController extends Controller
         }
 
         return 'image/jpeg';
-    }
-
-    /**
-     * Map a filename extension to its content type so files are streamed with
-     * the correct header.
-     */
-    private function mimeFor(string $filename): string
-    {
-        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-
-        if (in_array($extension, ['jpg', 'jpeg'], true)) {
-            return 'image/jpeg';
-        }
-        if ($extension === 'png') {
-            return 'image/png';
-        }
-        if ($extension === 'gif') {
-            return 'image/gif';
-        }
-        if ($extension === 'webp') {
-            return 'image/webp';
-        }
-        if ($extension === 'mp4' || $extension === 'm4v') {
-            return 'video/mp4';
-        }
-        if ($extension === 'webm') {
-            return 'video/webm';
-        }
-        if ($extension === 'ogg') {
-            return 'video/ogg';
-        }
-        if ($extension === 'mov') {
-            return 'video/quicktime';
-        }
-        if ($extension === 'avi') {
-            return 'video/x-msvideo';
-        }
-        if ($extension === 'mkv') {
-            return 'video/x-matroska';
-        }
-
-        return 'application/octet-stream';
     }
 }

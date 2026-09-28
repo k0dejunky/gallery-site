@@ -125,37 +125,27 @@ class MembershipController extends Controller
      */
     public function braintreeToken(): void
     {
-        header('Content-Type: application/json');
-
         if (!Auth::check()) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Login required']);
-            return;
+            $this->json(['error' => 'Login required'], 401);
         }
 
         $planId = (int) $this->request->post('plan_id', (int) ($_GET['plan_id'] ?? 0));
         $plan   = Plan::find($planId);
 
         if ($plan === null || (int) $plan['active'] !== 1) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Plan not available']);
-            return;
+            $this->json(['error' => 'Plan not available'], 400);
         }
 
         $processor = $this->braintreeProcessor();
 
         if ($processor === null) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Braintree is not configured']);
-            return;
+            $this->json(['error' => 'Braintree is not configured'], 500);
         }
 
         $gateway = BraintreeGateway::fromConfig($processor);
 
         if ($gateway === null) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Braintree credentials are incomplete']);
-            return;
+            $this->json(['error' => 'Braintree credentials are incomplete'], 500);
         }
 
         // If the user already has a Braintree customer id stored in
@@ -165,15 +155,14 @@ class MembershipController extends Controller
 
         try {
             $token = $gateway->clientToken($customerId);
-            echo json_encode([
+            $this->json([
                 'client_token' => $token,
                 'environment'  => $gateway->environment(),
                 'public_key'   => $gateway->publicKey(),
             ]);
         } catch (\Throwable $e) {
             error_log('[membership/braintree-token] ' . $e->getMessage());
-            http_response_code(500);
-            echo json_encode(['error' => 'Could not generate payment token']);
+            $this->json(['error' => 'Could not generate payment token'], 500);
         }
     }
 

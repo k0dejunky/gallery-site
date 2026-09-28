@@ -55,9 +55,7 @@ class Gallery
      */
     public static function validPublishSchedule(?string $value): bool
     {
-        $utc = self::normalizePublishAt($value);
-
-        return $utc !== null && $utc > gmdate('Y-m-d H:i:s');
+        return is_future_local_datetime($value, site_timezone());
     }
 
     /**
@@ -66,23 +64,7 @@ class Gallery
      */
     public static function normalizePublishAt(?string $value): ?string
     {
-        $v = trim((string) $value);
-        if ($v === '') {
-            return null;
-        }
-
-        $v = str_replace('T', ' ', $v);
-        if (preg_match('/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2})(:\d{2})?$/', $v, $m)) {
-            $parsed = $m[1] . (isset($m[2]) ? $m[2] : ':00');
-            $dt = DateTime::createFromFormat('Y-m-d H:i:s', $parsed, new DateTimeZone(site_timezone()));
-            if ($dt === false) {
-                return null;
-            }
-
-            return $dt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
-        }
-
-        return null;
+        return normalize_local_datetime($value, site_timezone());
     }
 
     /**

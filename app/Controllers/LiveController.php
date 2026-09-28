@@ -356,15 +356,8 @@ class LiveController extends Controller
         $since  = max(0, (int) $this->request->query('since', 0));
         $status = LiveSession::status();
 
-        header('Content-Type: text/event-stream');
-        header('Cache-Control: no-cache');
-        header('X-Accel-Buffering: no');
+        start_sse();
         session_write_close();
-        @ini_set('output_buffering', 'off');
-        @ini_set('zlib.output_compression', 'off');
-        while (ob_get_level() > 0) {
-            @ob_end_flush();
-        }
 
         if (!$status['live'] || $status['session_id'] === null) {
             echo "data: {\"ok\":true,\"messages\":[],\"latestId\":0}\n\n";

@@ -834,25 +834,10 @@ class PhotoController extends Controller
             return null;
         }
 
-        if (strpos($this->mimeOf($files['tmp_name'][$index]), 'video/') !== 0) {
+        if (strpos(sniff_mime($files['tmp_name'][$index]), 'video/') !== 0) {
             return 'File is not a valid video.';
         }
 
         return null;
-    }
-
-    /**
-     * Detect a file's MIME type with finfo when available, falling back to an
-     * empty string so video validation simply fails.
-     */
-    private function mimeOf(string $path): string
-    {
-        if (class_exists('finfo')) {
-            $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($path);
-
-            return $mime !== false ? $mime : '';
-        }
-
-        return '';
     }
 }

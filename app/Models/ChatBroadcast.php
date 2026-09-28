@@ -69,16 +69,7 @@ class ChatBroadcast
      */
     public static function eligibleUserIds(): array
     {
-        $rows = Database::run(
-            "SELECT DISTINCT s.user_id
-             FROM subscriptions s
-             JOIN plans p ON p.id = s.plan_id
-             WHERE p.can_chat = 1
-               AND s.status IN ('active', 'cancelled')
-               AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)"
-        )->fetchAll();
-
-        return array_map('intval', array_column($rows, 'user_id'));
+        return Subscription::chatEligibleUserIds();
     }
 
     /**

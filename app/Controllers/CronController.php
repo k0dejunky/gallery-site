@@ -18,12 +18,8 @@ class CronController extends Controller
         $expected = \env_value('GALLERY_CRON_KEY');
         $given    = (string) ($this->request->query('key', ''));
 
-        header('Content-Type: application/json');
-
         if ($expected === '' || !hash_equals($expected, $given)) {
-            http_response_code(403);
-            echo json_encode(['ok' => false, 'error' => 'Forbidden']);
-            return;
+            $this->json(['ok' => false, 'error' => 'Forbidden'], 403);
         }
 
         $summary = Housekeeping::run(10);
@@ -39,6 +35,6 @@ class CronController extends Controller
             $summary['live_recordings_error'] = $error->getMessage();
         }
 
-        echo json_encode(['ok' => true] + $summary);
+        $this->json(['ok' => true] + $summary);
     }
 }

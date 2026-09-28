@@ -53,12 +53,11 @@ class ChatMessage
                  FROM subscriptions s
                  JOIN plans p ON p.id = s.plan_id
                  WHERE s.user_id = ?
-                   AND s.status IN (?, ?)
-                   AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
+                   AND ' . \App\Models\Subscription::activeWhere('s') . '
                    AND p.can_chat = 1
                  ORDER BY s.id DESC
                  LIMIT 1',
-                [$userId, 'active', 'cancelled']
+                [$userId]
             )->fetch();
 
             return ($row['can_chat'] ?? false) ? '1' : '0';

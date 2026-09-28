@@ -252,20 +252,7 @@ class AdminController extends Controller
             return;
         }
 
-        $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-        $mime      = match ($extension) {
-            'jpg', 'jpeg' => 'image/jpeg',
-            'png' => 'image/png',
-            'gif' => 'image/gif',
-            'webp' => 'image/webp',
-            'mp4', 'm4v' => 'video/mp4',
-            'webm' => 'video/webm',
-            'ogg' => 'video/ogg',
-            'mov' => 'video/quicktime',
-            'avi' => 'video/x-msvideo',
-            'mkv' => 'video/x-matroska',
-            default => 'application/octet-stream',
-        };
+        $mime      = mime_for_extension($name);
 
         header('Content-Type: ' . $mime);
         header('Content-Length: ' . filesize($path));

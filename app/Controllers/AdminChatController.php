@@ -10,8 +10,6 @@ use App\Models\AuditLog;
 use App\Models\ChatBroadcast;
 use App\Models\ChatMessage;
 use App\Models\OperatorToken;
-use DateTime;
-use DateTimeZone;
 
 /**
  * Admin chat management: list conversations, toggle each conversation between
@@ -588,7 +586,6 @@ class AdminChatController extends Controller
      */
     public function trainingCountJson(): void
     {
-        header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store');
         $sinceId = \App\Core\ChatSettings::trainerSinceId();
         $waiting = (int) Database::run(
@@ -598,7 +595,7 @@ class AdminChatController extends Controller
         $cleaned = (int) Database::run('SELECT COUNT(*) FROM chat_training_pairs WHERE cleaned = 1')->fetchColumn();
         $uncleaned = (int) Database::run('SELECT COUNT(*) FROM chat_training_pairs WHERE cleaned = 0')->fetchColumn();
 
-        echo json_encode([
+        $this->json([
             'ok' => true,
             'waiting' => $waiting,
             'cleaned' => $cleaned,
@@ -804,23 +801,7 @@ class AdminChatController extends Controller
     /** Normalize a datetime-local schedule (site timezone) to UTC, or null. */
     private static function normalizeSchedule(?string $value): ?string
     {
-        $v = trim((string) $value);
-        if ($v === '') {
-            return null;
-        }
-
-        $v = str_replace('T', ' ', $v);
-        if (!preg_match('/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2})(:\d{2})?$/', $v, $m)) {
-            return null;
-        }
-
-        $parsed = $m[1] . (isset($m[2]) ? $m[2] : ':00');
-        $dt = DateTime::createFromFormat('Y-m-d H:i:s', $parsed, new DateTimeZone(site_timezone()));
-        if ($dt === false) {
-            return null;
-        }
-
-        return $dt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+        return normalize_local_datetime($value, site_timezone());
     }
 
     /**

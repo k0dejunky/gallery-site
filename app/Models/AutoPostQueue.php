@@ -408,13 +408,7 @@ class AutoPostQueue
      */
     public static function validFutureSchedule(?string $value): bool
     {
-        $utc = self::normalizeSchedule($value);
-
-        if ($utc === null) {
-            return false;
-        }
-
-        return $utc > gmdate('Y-m-d H:i:s');
+        return is_future_local_datetime($value, self::schedulerTimezone());
     }
 
     /**
@@ -1468,23 +1462,7 @@ class AutoPostQueue
      */
     private static function normalizeSchedule(?string $value): ?string
     {
-        $v = trim((string) $value);
-        if ($v === '') {
-            return null;
-        }
-
-        $v = str_replace('T', ' ', $v);
-        if (preg_match('/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2})(:\d{2})?$/', $v, $m)) {
-            $parsed = $m[1] . (isset($m[2]) ? $m[2] : ':00');
-            $dt = DateTime::createFromFormat('Y-m-d H:i:s', $parsed, self::schedulerTimezone());
-            if ($dt === false) {
-                return null;
-            }
-
-            return $dt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
-        }
-
-        return null;
+        return normalize_local_datetime($value, self::schedulerTimezone());
     }
 
     /**

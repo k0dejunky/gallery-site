@@ -47,16 +47,12 @@ class TestSuiteController extends Controller
      */
     public function run(): void
     {
-        header('Content-Type: application/json');
-
         if (!$this->isSafeToSpawn()) {
-            echo json_encode(['ok' => false, 'error' => 'PHP exec worker unavailable']);
-            return;
+            $this->json(['ok' => false, 'error' => 'PHP exec worker unavailable']);
         }
 
         if ($this->activeRunId() !== null) {
-            echo json_encode(['ok' => false, 'error' => 'A test run is already in progress.']);
-            return;
+            $this->json(['ok' => false, 'error' => 'A test run is already in progress.']);
         }
 
         $all       = TestSuite::tests();
@@ -103,22 +99,19 @@ class TestSuiteController extends Controller
 
         $this->spawnWorker($runId);
 
-        echo json_encode(['ok' => true, 'run' => $runId, 'count' => count($ids)]);
+        $this->json(['ok' => true, 'run' => $runId, 'count' => count($ids)]);
     }
 
     /** Real-time polling endpoint: current state of a run as JSON. */
     public function status(): void
     {
-        header('Content-Type: application/json');
         $runId = (string) $this->request->query('run');
         if ($runId === '' || !preg_match('/^[A-Za-z0-9-]+$/', $runId)) {
-            echo json_encode(['ok' => false, 'error' => 'bad run']);
-            return;
+            $this->json(['ok' => false, 'error' => 'bad run']);
         }
         $state = TestSuite::readRun($runId);
         if ($state === null) {
-            echo json_encode(['ok' => false, 'error' => 'no such run']);
-            return;
+            $this->json(['ok' => false, 'error' => 'no such run']);
         }
         // Normalise the tests map (id => result) to a plain list so the
         // client can iterate it directly without knowing the internal shape.

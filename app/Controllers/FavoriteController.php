@@ -107,9 +107,7 @@ class FavoriteController extends Controller
             || str_contains((string) $this->request->header('Accept'), 'application/json');
 
         if ($isAjax) {
-            header('Content-Type: application/json');
-            echo json_encode(['ok' => true, 'favorited' => $favorited]);
-            return;
+            $this->json(['ok' => true, 'favorited' => $favorited]);
         }
 
         $this->flash('success', ($favorited ? 'Added "' : 'Removed "') . $gallery['title'] . '" ' . ($favorited ? 'to' : 'from') . ' your favorite galleries.');

@@ -72,13 +72,10 @@ class SearchController extends Controller
     {
         Auth::requirePermission('dashboard');
 
-        header('Content-Type: application/json; charset=utf-8');
-
         $q = trim((string) $this->request->query('q', ''));
 
         if ($q === '') {
-            echo json_encode(['q' => $q, 'groups' => []]);
-            exit;
+            $this->json(['q' => $q, 'groups' => []]);
         }
 
         $like = '%' . str_replace(['%', '_'], ['\%', '\_'], $q) . '%';
@@ -170,7 +167,6 @@ class SearchController extends Controller
             )];
         }
 
-        echo json_encode(['q' => $q, 'groups' => $groups], JSON_UNESCAPED_SLASHES);
-        exit;
+        $this->json(['q' => $q, 'groups' => $groups]);
     }
 }

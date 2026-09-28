@@ -12,6 +12,36 @@ use App\Core\Database;
 class Subscription
 {
     /**
+     * SQL fragment for a usable subscription on the given alias: active or
+     * cancelled and, when an expiry is stored, still in the future. Single
+     * source of truth for every eligibility query (membership access, chat
+     * eligibility, email recipients) so a drift here cannot grant or revoke
+     * access inconsistently across features.
+     */
+    public static function activeWhere(string $alias = 's'): string
+    {
+        return "$alias.status IN ('active', 'cancelled') AND ($alias.expires_at IS NULL OR $alias.expires_at > CURRENT_TIMESTAMP)";
+    }
+
+    /**
+     * User ids holding a chat-eligible subscription (a plan flagged
+     * can_chat). Shared by the chat feature, broadcasts and the operator
+     * bridge so "who can chat" is decided in exactly one place.
+     *
+     * @return array<int, int>
+     */
+    public static function chatEligibleUserIds(): array
+    {
+        $rows = Database::run(
+            'SELECT DISTINCT s.user_id
+             FROM subscriptions s
+             JOIN plans p ON p.id = s.plan_id
+             WHERE p.can_chat = 1 AND ' . self::activeWhere('s')
+        )->fetchAll();
+
+        return array_map('intval', array_column($rows, 'user_id'));
+    }
+    /**
      * Whether the given user currently has a usable subscription: an active
      * one whose expiry (if any) is still in the future.
      */

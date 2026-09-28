@@ -64,7 +64,7 @@ class LiveRecording
             . ' -map 0:v:0 -map 0:a:0 -c copy -movflags +faststart ' . escapeshellarg($mp4) . ' 2>&1';
         exec($cmd, $out, $rc);
         $ok = $rc === 0 && is_file($mp4) && (int) filesize($mp4) >= 100 * 1024
-            && self::hasVideoStream($mp4);
+            && video_has_stream($mp4);
 
         if (!$ok) {
             // Re-encode to repair the stream (also keeps only the first
@@ -78,7 +78,7 @@ class LiveRecording
                 . ' -c:a aac -b:a 128k -movflags +faststart ' . escapeshellarg($mp4) . ' 2>&1';
             exec($cmd, $out, $rc);
             $ok = $rc === 0 && is_file($mp4) && (int) filesize($mp4) >= 100 * 1024
-                && self::hasVideoStream($mp4);
+                && video_has_stream($mp4);
         }
 
         if (!$ok) {
@@ -110,16 +110,6 @@ class LiveRecording
         \App\Core\Cache::bump('gallery');
 
         return $galleryId;
-    }
-
-    /** Whether an mp4 actually contains a video stream (a -c copy remux can come
-     *  out audio-only when the recording began mid-GOP). */
-    private static function hasVideoStream(string $mp4): bool
-    {
-        $probe = 'ffprobe -v error -select_streams v:0 -show_entries stream=codec_type -of csv=p=0 '
-            . escapeshellarg($mp4) . ' 2>&1';
-        exec($probe, $pout, $prc);
-        return $prc === 0 && trim(implode("\n", $pout)) === 'video';
     }
 
     /**

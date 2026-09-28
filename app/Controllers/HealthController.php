@@ -97,10 +97,8 @@ class HealthController extends Controller
             $stuckVideoExports = 0;
         }
 
-        http_response_code($ok ? 200 : 503);
-        header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store');
-        echo json_encode([
+        $this->json([
             'ok' => $ok,
             'app' => (string) config('app.site_name', 'gallery'),
             'db' => $db,
@@ -119,6 +117,6 @@ class HealthController extends Controller
                 'stuck_video_exports' => $stuckVideoExports,
             ],
             'time' => gmdate('c'),
-        ], JSON_UNESCAPED_SLASHES);
+        ], $ok ? 200 : 503);
     }
 }
