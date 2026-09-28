@@ -951,6 +951,6 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
         })();
     </script>
     <?php require __DIR__ . '/../partials/tour_targets.php'; ?>
-    <script src="<?= e(url('/assets/js/tour.js')) ?>?v=6" defer></script>
+    <script src="<?= e(url('/assets/js/tour.js')) ?>?v=7" defer></script>
 </body>
 </html>

@@ -22,7 +22,7 @@
     { url: function(){ return T().playlist; }, sel: '.player-playlist', title: 'Playlist', body: 'Videos you save to a collection play here as a playlist with thumbnails and durations — the playing one is highlighted and the next starts automatically.' },
     { url: '/collections', sel: '.grid, .empty-state', title: 'Collections', body: 'Build collections of whole galleries and individual videos, then play a collection as a playlist in the video player.' },
     { url: '/favorites', sel: '.favorites-section', title: 'Favorites', body: 'Mark your favorite categories and galleries so your home page is built around them.' },
-    { url: '/chat', sel: '#chat-input, .chat-page', title: 'Chat', body: 'Chat with the operator. Retrieval and fine-tuned AI modes answer from real conversations; operator mode waits for a human.' },
+    { url: '/chat', sel: '#chat-input, .chat-page', title: 'Chat', body: 'Chat with the operator — send a message and get a reply.' },
     { url: '/membership', sel: 'main', title: 'Membership', body: 'Review your membership tier, upgrade, or manage a trial.' },
     { url: '/settings', sel: '.settings-form', title: 'Settings', body: 'Manage your profile, notifications, timezone and theme — and replay this tour any time.' }
   ];
