@@ -83,6 +83,8 @@ $crond['gallery-backup'] =
     "{$backupM} {$backupH} * * * {$php}/bin/gallery_backup.php >> " . SITE_ROOT . "/storage/logs/backup.log 2>&1\n";
 $crond['gallery-restore-drill'] =
     "{$drillM} {$drillH} * * {$drillD} root /usr/local/bin/restore-drill >> " . SITE_ROOT . "/storage/logs/drill.log 2>&1\n";
+$crond['gallery-ai-watchdog'] =
+    "* * * * * root /usr/bin/php " . SITE_ROOT . "/bin/keep_ai_alive.php >> " . SITE_ROOT . "/storage/logs/ai-watchdog.log 2>&1\n";
 
 // --- Write the files atomically ------------------------------------------------
 foreach ($crond as $name => $content) {
@@ -98,5 +100,5 @@ foreach ($crond as $name => $content) {
 $ok($svcRc === 0, 'systemctl restart of worker services failed');
 
 // Cron daemon picks up /etc/cron.d changes automatically; nothing else to do.
-echo "apply_cron: wrote 7 /etc/cron.d entries and restarted worker services\n";
+echo "apply_cron: wrote 8 /etc/cron.d entries and restarted worker services\n";
 exit(0);

@@ -1061,6 +1061,16 @@ class SmokeChecks
                 ? $ok('root helper wired')
                 : $bad('apply_cron.php must require root, write /etc/cron.d and restart worker services');
         });
+        $add('smoke.sys.ai_watchdog', 'Smoke · System', 'AI watchdog exists and is cron-installed as root', static function () use ($applyCron, $root, $read, $ok, $bad): array {
+            $wd = $read("$root/bin/keep_ai_alive.php");
+            return strpos($applyCron, 'gallery-ai-watchdog') !== false
+                && strpos($applyCron, '* * * * * root /usr/bin/php') !== false
+                && strpos($wd, "api/tags") !== false
+                && strpos($wd, "systemctl restart ollama.service") !== false
+                && strpos($wd, 'keep_alive') !== false
+                ? $ok('keep_ai_alive.php probes/warms/restarts Ollama and is cron-installed every minute')
+                : $bad('bin/keep_ai_alive.php must check the Ollama API, warm the model and restart ollama.service, and apply_cron must install it every minute as root');
+        });
 
         // ------------------------------------------------------ Test suite
         $add('smoke.suite.routes', 'Smoke · Test Suite', 'Test suite routes registered', static function () use ($routesSrc, $ok, $bad): array {
