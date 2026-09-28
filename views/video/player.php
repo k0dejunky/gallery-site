@@ -2,12 +2,12 @@
 // In-page video player rendered inside the site template, with Previous/Next
 // navigation through the gallery and a button back to it.
 $title = $photo['caption'] !== '' ? $photo['caption'] : ($gallery !== null ? $gallery['title'] : 'Video');
-$src   = file_url($photo['filename']);
+$src   = file_url($photo['filename'], 'web');
 $reportUrl = url('/support') . '?' . http_build_query(['return_to' => $_SERVER['REQUEST_URI'] ?? url('/galleries')]);
 ?>
 <?php require __DIR__ . '/../partials/media_nav.php'; ?>
 
-<figure style="margin: 1rem 0; text-align: center;">
+<figure id="video-player-wrap" style="margin: 1rem 0; text-align: center;">
     <p class="media-progress" role="status">Item <?= (int) ($currentIndex + 1) ?> of <?= (int) ($mediaCount ?? 1) ?></p>
     <div class="gallery-player" data-player>
         <video id="gallery-video-<?= (int) $photo['id'] ?>" data-video-id="<?= (int) $photo['id'] ?>" src="<?= e($src) ?>" controls preload="metadata" playsinline aria-label="<?= e($title) ?>"></video>

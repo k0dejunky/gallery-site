@@ -93,6 +93,12 @@ class StorageController extends Controller
             $name = 'web_' . $name;
         }
 
+        // A missing web rendition (e.g. a video uploaded before renditions were
+        // generated) falls back to the original file instead of 404ing.
+        if ($size === 'web' && !is_file(config('app.uploads.dir') . '/' . $name)) {
+            $name = preg_replace('/^web_/', '', $name);
+        }
+
         // Prefer the WebP copy of a variant when requested and present.
         if ($format === 'webp' && in_array($size, ['thumb', 'web'], true)) {
             $webpName = preg_replace('/\.[^.]+$/', '.webp', $name);
@@ -146,7 +152,9 @@ class StorageController extends Controller
             return;
         }
 
-        $mime = in_array($size, ['thumb', 'web', 'blur'], true) ? $this->imageMimeOf($path) : mime_for_extension($name);
+        $mime = in_array($size, ['thumb', 'blur'], true)
+            ? $this->imageMimeOf($path)
+            : (sniff_mime($path) ?: mime_for_extension($name));
         $len  = (int) filesize($path);
 
         header('Content-Type: ' . $mime);

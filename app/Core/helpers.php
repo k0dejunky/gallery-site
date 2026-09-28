@@ -330,6 +330,54 @@ function video_needs_faststart(string $path): bool
 }
 
 /**
+ * Generate a web-optimized video rendition (≤1280x720, H.264 CRF 28,
+ * ~2-4 Mbps, moov-first) next to the original, so the player streams a
+ * fraction of the bandwidth instead of a 1080p ~17 Mbps original. Returns
+ * false when the source is missing or the transcode fails.
+ */
+function create_video_web_rendition(string $src, string $dest): bool
+{
+    if (!is_file($src)) {
+        return false;
+    }
+
+    // Fit within 1280x720 preserving aspect: scale by width when wider than
+    // 1280, by height when taller than 720, else leave dimensions alone.
+    $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
+    $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
+    $vf = '';
+
+    @exec(
+        escapeshellarg($ffprobe) . ' -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 '
+        . escapeshellarg($src) . ' 2>/dev/null',
+        $probe,
+        $rc
+    );
+
+    if ($rc === 0 && isset($probe[0])) {
+        $parts = array_map('intval', explode(',', (string) $probe[0]));
+        if (count($parts) >= 2) {
+            $w = (int) $parts[0];
+            $h = (int) $parts[1];
+            if ($w > 1280) {
+                $vf = 'scale=1280:-2';
+            } elseif ($h > 720) {
+                $vf = 'scale=-2:720';
+            }
+        }
+    }
+
+    $cmd = escapeshellarg($ffmpeg) . ' -nostdin -y -i ' . escapeshellarg($src)
+        . ($vf !== '' ? ' -vf ' . escapeshellarg($vf) : '')
+        . ' -c:v libx264 -preset veryfast -crf 28 -maxrate 4M -bufsize 8M'
+        . ' -c:a aac -b:a 96k -movflags +faststart -f mp4 ' . escapeshellarg($dest) . ' 2>&1';
+
+    @exec($cmd, $out, $rc);
+
+    return $rc === 0 && is_file($dest);
+}
+
+/**
  * Remux a video with `-movflags +faststart` (stream copy — no re-encode, no
  * quality loss) so the moov atom sits at the front and browsers can start
  * playback and seek immediately. No-op when the file is already faststart.

@@ -506,6 +506,7 @@
       '<button type="button" class="player-btn player-speed" data-act="speed" title="Playback speed">1&#215;</button>' +
       (isLive ? '<button type="button" class="player-btn" data-act="quality" title="Quality">&#9881;</button>' : '') +
       '<button type="button" class="player-btn" data-act="vol" aria-label="Mute or unmute">&#128266;</button>' +
+      '<label class="player-keep" title="Keep the picture-in-picture window open after the video ends (allows replay)"><input type="checkbox" data-act="keep" checked>Keep open</label>' +
       '<button type="button" class="player-btn" data-act="pip" title="Picture in picture">&#9210;</button>' +
       '<button type="button" class="player-btn" data-act="fs" title="Full screen">&#9974;</button>';
     el.appendChild(bar);
@@ -551,6 +552,24 @@
     bar.querySelector('[data-act="pip"]').addEventListener('click', function(){
       if(document.pictureInPictureElement === video){ document.exitPictureInPicture().catch(function(){}); }
       else if(typeof video.requestPictureInPicture === 'function'){ video.requestPictureInPicture().catch(function(){}); }
+    });
+    // "Keep open" (default ON): after the video ends, the picture-in-picture
+    // window stays open so it can be replayed; when off it closes on end.
+    var keepOpen = true;
+    try { keepOpen = localStorage.getItem('galleryPipKeepOpen') !== '0'; } catch (e) {}
+    video.__pipKeepOpen = keepOpen;
+    var keepCb = bar.querySelector('[data-act="keep"]');
+    if (keepCb) {
+      keepCb.checked = keepOpen;
+      keepCb.addEventListener('change', function(){
+        keepOpen = keepCb.checked;
+        video.__pipKeepOpen = keepOpen;
+        try { localStorage.setItem('galleryPipKeepOpen', keepOpen ? '1' : '0'); } catch (e) {}
+      });
+    }
+    video.addEventListener('ended', function(){
+      video.__pipJustEnded = true;
+      setTimeout(function(){ video.__pipJustEnded = false; }, 2000);
     });
     bar.querySelector('[data-act="fs"]').addEventListener('click', function(){
       var target = fsTarget ? document.querySelector(fsTarget) : el;
@@ -601,4 +620,68 @@
   function initAll(){ document.querySelectorAll('[data-player]').forEach(function(el){ init(el); }); }
   if(document.readyState !== 'loading'){ initAll(); } else { document.addEventListener('DOMContentLoaded', initAll); }
   window.addEventListener('load', initAll);
+})();
+
+/* Picture-in-picture "keep open": when a video ends inside PiP and the user
+   opted to keep it open, the browser auto-closes the PiP window on ended —
+   reopen it so it stays up for replay. A manual close (not right after ended)
+   is never reopened. */
+document.addEventListener('leavepictureinpicture', function(){
+  var v = document.pictureInPictureElement;
+  if(v && v.__pipKeepOpen && v.__pipJustEnded){
+    setTimeout(function(){
+      if(!document.pictureInPictureElement && typeof v.requestPictureInPicture === 'function'){
+        v.requestPictureInPicture().catch(function(){});
+      }
+    }, 150);
+  }
+});
+
+/* In-gallery video navigation: Previous/Next swap the player via AJAX instead
+   of a full page load, so a picture-in-picture window keeps playing as you
+   move through the gallery. The <video> element is preserved and only its
+   source is swapped. */
+(function(){
+  function bind(){
+    var wrap = document.getElementById('video-player-wrap');
+    if(!wrap || !wrap.querySelector('video') || wrap.__navBound) return;
+    wrap.__navBound = true;
+
+    document.querySelectorAll('.media-nav a[data-swap]').forEach(function(a){
+      a.addEventListener('click', function(e){
+        e.preventDefault();
+        var href = a.getAttribute('href');
+        fetch(href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(function(r){ return r.text(); })
+          .then(function(html){
+            var doc = new DOMParser().parseFromString(html, 'text/html');
+            var nv = doc.querySelector('#video-player-wrap video');
+            if(!nv || !nv.getAttribute('src')) return;
+            var video = wrap.querySelector('video');
+            var wasPlaying = video && !video.paused;
+            video.src = nv.getAttribute('src');
+            video.load();
+            if(wasPlaying){ video.play().catch(function(){}); }
+            // Update caption, progress and nav from the fetched fragment.
+            var swap = function(sel){
+              var nd = doc.querySelector(sel);
+              var old = wrap.querySelector(sel);
+              if(nd && old){ old.outerHTML = nd.outerHTML; }
+            };
+            swap('.media-progress');
+            swap('figcaption');
+            var nvNav = doc.querySelector('.media-nav');
+            var oldNav = document.querySelector('.media-nav');
+            if(nvNav && oldNav){ oldNav.outerHTML = nvNav.outerHTML; }
+            var rep = doc.querySelector('#video-player-wrap + p a, figure + p a');
+            var oldRep = document.querySelector('#video-player-wrap + p a, figure + p a');
+            if(rep && oldRep){ oldRep.href = rep.getAttribute('href'); }
+            history.pushState({}, '', href);
+          })
+          .catch(function(){});
+      });
+    });
+  }
+  if(document.readyState !== 'loading'){ bind(); } else { document.addEventListener('DOMContentLoaded', bind); }
+  window.addEventListener('load', bind);
 })();

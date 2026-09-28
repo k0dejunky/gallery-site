@@ -20,7 +20,7 @@ $backLabel = $gallery !== null
 ?>
 <div class="media-nav">
     <?php if ($prevUrl !== null): ?>
-        <a class="btn" href="<?= e($prevUrl . '?' . $returnQuery) ?>">&larr; Previous</a>
+        <a class="btn" data-swap href="<?= e($prevUrl . '?' . $returnQuery) ?>">&larr; Previous</a>
     <?php else: ?>
         <span class="btn btn-disabled" aria-disabled="true">&larr; Previous</span>
     <?php endif; ?>
@@ -28,7 +28,7 @@ $backLabel = $gallery !== null
     <a class="btn btn-outline" href="<?= e($returnTo) ?>"><?= $backLabel ?></a>
 
     <?php if ($nextUrl !== null): ?>
-        <a class="btn" href="<?= e($nextUrl . '?' . $returnQuery) ?>">Next &rarr;</a>
+        <a class="btn" data-swap href="<?= e($nextUrl . '?' . $returnQuery) ?>">Next &rarr;</a>
     <?php else: ?>
         <span class="btn btn-disabled" aria-disabled="true">Next &rarr;</span>
     <?php endif; ?>

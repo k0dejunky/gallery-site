@@ -740,10 +740,12 @@ class GalleryController extends Controller
                 return;
             }
 
-            // Move moov to the front so browsers can start/seek without
-            // downloading the whole file.
+            // Move moov to the front + build a web-optimized rendition so the
+            // browser can start/seek quickly without high bandwidth.
             if (!$meta['is_image']) {
+                set_time_limit(0);
                 faststart_video_if_needed($dest);
+                create_video_web_rendition($dest, $dir . '/web_' . $filename);
             }
 
             $list[] = [
@@ -896,7 +898,9 @@ class GalleryController extends Controller
         }
 
         if (!$meta['is_image']) {
+            set_time_limit(0);
             faststart_video_if_needed($dir . '/' . $filename);
+            create_video_web_rendition($dir . '/' . $filename, $dir . '/web_' . $filename);
         }
 
         $this->removeChunks($uid);

@@ -162,9 +162,13 @@ class MediaUploader
         if (self::generateVariants($destPath, $isImage, $config)) {
             // Videos are remuxed (stream copy, no re-encode) so the moov atom
             // sits at the front — browsers otherwise wait for the whole file
-            // before they can start playback or seek.
+            // before they can start playback or seek — and a web-optimized
+            // rendition (≤720p, ~2-4 Mbps) is created so playback streams a
+            // fraction of the original's bandwidth.
             if (!$isImage) {
+                set_time_limit(0);
                 faststart_video_if_needed($destPath);
+                create_video_web_rendition($destPath, dirname($destPath) . '/web_' . basename($destPath));
             }
 
             return true;
