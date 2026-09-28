@@ -27,9 +27,52 @@
     return steps.filter(function(s){ return !s.sel || document.querySelector(s.sel); });
   }
 
+  var cleanupFns = [];
   function cleanup(){
     var el = document.getElementById('tour-card'); if(el) el.remove();
     var sp = document.getElementById('tour-spot'); if(sp) sp.remove();
+    var ov = document.getElementById('tour-overlay'); if(ov) ov.remove();
+    cleanupFns.forEach(function(fn){ try{ fn(); }catch(e){} });
+    cleanupFns = [];
+  }
+
+  function onViewport(fn){
+    window.addEventListener('scroll', fn, {passive:true});
+    window.addEventListener('resize', fn);
+    cleanupFns.push(function(){
+      window.removeEventListener('scroll', fn);
+      window.removeEventListener('resize', fn);
+    });
+  }
+
+  // Spotlight: a full-page dim with a cut-out over the target feature.
+  function placeSpotlight(ov, sp, target){
+    var PAD = 10;
+    var r = target.getBoundingClientRect();
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var x = Math.max(0, r.left - PAD);
+    var y = Math.max(0, r.top - PAD);
+    var w = r.width + PAD * 2;
+    var h = r.height + PAD * 2;
+    if(w > vw) w = vw;
+    if(h > vh) h = vh;
+    x = Math.min(x, vw - w);
+    y = Math.min(y, vh - h);
+    if(w <= 0 || h <= 0 || (w >= vw && h >= vh)){
+      ov.style.display = 'none';
+      sp.style.display = 'none';
+      return;
+    }
+    ov.style.display = '';
+    sp.style.display = '';
+    var x2 = Math.min(vw, x + w), y2 = Math.min(vh, y + h);
+    ov.style.clipPath =
+      'polygon(0 0, ' + vw + 'px 0, ' + vw + 'px ' + y + 'px, ' + x2 + 'px ' + y + 'px, ' +
+      x2 + 'px ' + y2 + 'px, ' + x + 'px ' + y2 + 'px, ' + x + 'px ' + y + 'px, 0 ' + y + 'px)';
+    sp.style.top = y + 'px';
+    sp.style.left = x + 'px';
+    sp.style.width = w + 'px';
+    sp.style.height = h + 'px';
   }
 
   function show(){
@@ -40,22 +83,18 @@
 
     if(target){
       try{ target.scrollIntoView({block:'center', behavior:'smooth'}); }catch(e){}
-      // Highlight ring around the target.
+      // Full-page dim with a cut-out around the feature, plus a glowing ring.
+      var ov = document.createElement('div');
+      ov.id = 'tour-overlay';
+      ov.className = 'tour-overlay';
+      document.body.appendChild(ov);
       var sp = document.createElement('div');
       sp.id = 'tour-spot';
       sp.className = 'tour-spot';
       document.body.appendChild(sp);
-      var place = function(){
-        var r = target.getBoundingClientRect();
-        sp.style.top = (r.top - 6) + 'px';
-        sp.style.left = (r.left - 6) + 'px';
-        sp.style.width = (r.width + 12) + 'px';
-        sp.style.height = (r.height + 12) + 'px';
-      };
+      var place = function(){ placeSpotlight(ov, sp, target); };
       place();
-      window.addEventListener('scroll', place, {passive:true});
-      window.addEventListener('resize', place);
-      sp._place = place;
+      onViewport(place);
     }
 
     var card = document.createElement('div');
@@ -90,9 +129,7 @@
       }
     };
     placeCard();
-    window.addEventListener('scroll', placeCard, {passive:true});
-    window.addEventListener('resize', placeCard);
-    card._place = placeCard;
+    onViewport(placeCard);
 
     card.addEventListener('click', function(e){
       var b = e.target.closest('[data-t]');
@@ -106,8 +143,6 @@
 
   function finish(){
     cleanup();
-    // remove the transient listeners we added
-    window.removeEventListener('scroll', cleanup); // no-op guard
   }
 
   function markSeen(){ try{ localStorage.setItem(SEEN, '1'); }catch(e){} }
