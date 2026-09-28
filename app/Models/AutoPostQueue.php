@@ -681,23 +681,19 @@ class AutoPostQueue
         // previously posted/skipped/failed ones (never dismissed, never already
         // queued) so an empty queue is always refilled.
         $galleryIds = Database::run(
-            "SELECT g.id,
-                    CASE WHEN NOT EXISTS (
-                        SELECT 1 FROM auto_poster_queue q
-                        WHERE q.gallery_id = g.id AND q.status IN (?, ?, ?, ?, ?)
-                    ) THEN 0 ELSE 1 END AS used
+            "SELECT g.id
              FROM galleries g
              JOIN gallery_photo gp ON gp.gallery_id = g.id
              JOIN photos p ON p.id = gp.photo_id
              WHERE g.deleted_at IS NULL
+               AND g.is_secret = 0
                AND NOT EXISTS (
                    SELECT 1 FROM auto_poster_queue q
-                   WHERE q.gallery_id = g.id AND q.status IN (?, ?)
+                   WHERE q.gallery_id = g.id AND q.status = 'queued'
                )
              GROUP BY g.id
-             ORDER BY used ASC, RAND()
-             LIMIT " . $count,
-            ['queued', 'posted', 'failed', 'skipped', 'dismissed', 'dismissed', 'queued']
+             ORDER BY RAND()
+             LIMIT " . $count
         )->fetchAll();
 
         if ($galleryIds === []) {
@@ -798,9 +794,10 @@ class AutoPostQueue
                  JOIN gallery_photo gp ON gp.gallery_id = g.id
                  JOIN photos p ON p.id = gp.photo_id
                  WHERE g.deleted_at IS NULL
+                   AND g.is_secret = 0
                    AND NOT EXISTS (
                        SELECT 1 FROM auto_poster_queue q
-                       WHERE q.gallery_id = g.id AND q.status IN ('dismissed', 'queued')
+                       WHERE q.gallery_id = g.id AND q.status = 'queued'
                    )
                  GROUP BY g.id
                  ORDER BY RAND()
