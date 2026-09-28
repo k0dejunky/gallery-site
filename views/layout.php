@@ -209,7 +209,7 @@ $isAuthPage = $isLoginPage
      </style>
     <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=6">
 </head>
-<body data-base="<?= e(config('app.base_path')) ?>">
+<body data-base="<?= e(config('app.base_path')) ?>" data-user="<?= $user !== null ? '1' : '0' ?>">
 <a class="skip-link" href="#main-content">Skip to content</a>
 <?php if (!empty($_SESSION['impersonator_id'])): ?>
     <div style="background:#7f1d1d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;justify-content:center;border-radius:var(--border-radius);margin-bottom:1rem;">
@@ -508,6 +508,6 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
 <?php endif; ?>
     <script>try{var p=JSON.parse(localStorage.getItem('galleryDisplayPrefs')||'{}');var v=p.view||'grid';var s=p.size||'md';document.documentElement.classList.add('g-view-'+v);document.documentElement.classList.add('g-size-'+s);if(p.masonry)document.documentElement.classList.add('g-masonry');}catch(e){document.documentElement.classList.add('g-view-grid');document.documentElement.classList.add('g-size-md');}</script>
     <script src="<?= url('/assets/js/user.js') ?>?v=5" defer></script>
-    <script src="<?= url('/assets/js/tour.js') ?>?v=1" defer></script>
+    <script src="<?= url('/assets/js/tour.js') ?>?v=2" defer></script>
 </body>
 </html>

@@ -41,14 +41,14 @@
     <p class="muted">Updates are sent by default. Turn off the ones you do not want.</p>
     <form method="post" action="<?= e(url('/settings/notifications')) ?>" class="settings-form">
         <?= csrf_field() ?>
-        <div class="settings-fields">
-            <label style="display:inline-flex;align-items:center;gap:.4rem;">
+        <div class="chips">
+            <label class="chip favorite-option<?= !empty($user['notify_new_gallery']) ? ' selected' : '' ?>">
                 <input type="checkbox" name="notify_new_gallery" value="1"<?= !empty($user['notify_new_gallery']) ? ' checked' : '' ?>> New galleries
             </label>
-            <label style="display:inline-flex;align-items:center;gap:.4rem;">
+            <label class="chip favorite-option<?= !empty($user['notify_live']) ? ' selected' : '' ?>">
                 <input type="checkbox" name="notify_live" value="1"<?= !empty($user['notify_live']) ? ' checked' : '' ?>> Live shows
             </label>
-            <label style="display:inline-flex;align-items:center;gap:.4rem;">
+            <label class="chip favorite-option<?= !empty($user['notify_chat_reply']) ? ' selected' : '' ?>">
                 <input type="checkbox" name="notify_chat_reply" value="1"<?= !empty($user['notify_chat_reply']) ? ' checked' : '' ?>> Chat replies
             </label>
         </div>

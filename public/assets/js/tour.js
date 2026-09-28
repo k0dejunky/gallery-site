@@ -3,7 +3,7 @@
    be re-launched from the Settings page (localStorage flag). Steps that don't
    apply to the current page are skipped automatically. */
 (function(){
-  var SEEN = 'galleryTourSeen';
+  var SEEN = 'galleryTourSeen_v2';
 
   var steps = [
     { title: 'Welcome', body: 'Take a quick tour of what the site has to offer. You can dismiss this anytime and replay it later from Settings.' },
@@ -114,8 +114,8 @@
   function clearSeen(){ try{ localStorage.removeItem(SEEN); }catch(e){} }
 
   function start(){
-    if(location.pathname.indexOf('/admin') !== -1) return;
     if(location.search.indexOf('se=') !== -1) return;
+    if(!document.body || document.body.dataset.user !== '1') return;
     list = visible();
     if(list.length === 0) return;
     idx = 0;

@@ -36,7 +36,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
     </script>
     <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') . ' Admin' : e(config('app.site_name')) . ' Admin' ?></title>
     <link rel="stylesheet" href="<?= e(url('/assets/admin-shared.css')) ?>">
-    <link rel="stylesheet" href="<?= e(url('/assets/css/user.css')) ?>?v=4">
+    <link rel="stylesheet" href="<?= e(url('/assets/css/user.css')) ?>?v=7">
     <style>
 <?= \App\Models\Theme::css(\App\Models\Theme::SCOPE_ADMIN) ?>
 <?= \App\Models\Theme::cssLayout(\App\Models\Theme::SCOPE_ADMIN) ?>
@@ -353,7 +353,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
         details.sys-card > summary .collapsible-meta { margin-left: auto; font-size: var(--font-size-sm); }
     </style>
 </head>
-<body class="admin-theme">
+<body class="admin-theme" data-user="1">
 <?php $isSiteEditor = strpos($_SERVER['REQUEST_URI'] ?? '', '/admin/site-editor') !== false; ?>
 <?php if (!empty($_SESSION['impersonator_id'])): ?>
     <div style="background:#7f1d1d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;justify-content:center;border-radius:var(--border-radius);margin-bottom:var(--spacing-md);">
@@ -950,5 +950,6 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
             window.addEventListener('pagehide', releaseLock);
         })();
     </script>
+    <script src="<?= e(url('/assets/js/tour.js')) ?>?v=2" defer></script>
 </body>
 </html>
