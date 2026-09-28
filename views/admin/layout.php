@@ -36,7 +36,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
     </script>
     <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') . ' Admin' : e(config('app.site_name')) . ' Admin' ?></title>
     <link rel="stylesheet" href="<?= e(url('/assets/admin-shared.css')) ?>">
-    <link rel="stylesheet" href="<?= e(url('/assets/css/user.css')) ?>?v=8">
+    <link rel="stylesheet" href="<?= e(url('/assets/css/user.css')) ?>?v=9">
     <style>
 <?= \App\Models\Theme::css(\App\Models\Theme::SCOPE_ADMIN) ?>
 <?= \App\Models\Theme::cssLayout(\App\Models\Theme::SCOPE_ADMIN) ?>
@@ -951,6 +951,6 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
         })();
     </script>
     <?php require __DIR__ . '/../partials/tour_targets.php'; ?>
-    <script src="<?= e(url('/assets/js/tour.js')) ?>?v=4" defer></script>
+    <script src="<?= e(url('/assets/js/tour.js')) ?>?v=5" defer></script>
 </body>
 </html>

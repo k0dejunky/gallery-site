@@ -78,9 +78,10 @@
     });
   }
 
-  // Spotlight: a full-page dim with a cut-out over the target feature.
+  // Spotlight: a light full-page dim with a generous cut-out over the target
+  // section so the page stays visible and only the feature is emphasised.
   function placeSpotlight(ov, sp, target){
-    var PAD = 10;
+    var PAD = 14;
     var r = target.getBoundingClientRect();
     var vw = window.innerWidth, vh = window.innerHeight;
     var x = Math.max(0, r.left - PAD);
