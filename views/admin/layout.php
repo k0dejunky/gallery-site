@@ -353,7 +353,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
         details.sys-card > summary .collapsible-meta { margin-left: auto; font-size: var(--font-size-sm); }
     </style>
 </head>
-<body class="admin-theme" data-user="1">
+<body class="admin-theme" data-base="<?= e(config('app.base_path')) ?>" data-user="1">
 <?php $isSiteEditor = strpos($_SERVER['REQUEST_URI'] ?? '', '/admin/site-editor') !== false; ?>
 <?php if (!empty($_SESSION['impersonator_id'])): ?>
     <div style="background:#7f1d1d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;justify-content:center;border-radius:var(--border-radius);margin-bottom:var(--spacing-md);">
@@ -950,6 +950,7 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
             window.addEventListener('pagehide', releaseLock);
         })();
     </script>
-    <script src="<?= e(url('/assets/js/tour.js')) ?>?v=3" defer></script>
+    <?php require __DIR__ . '/../partials/tour_targets.php'; ?>
+    <script src="<?= e(url('/assets/js/tour.js')) ?>?v=4" defer></script>
 </body>
 </html>

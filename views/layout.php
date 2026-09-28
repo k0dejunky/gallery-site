@@ -507,7 +507,8 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
     </script>
 <?php endif; ?>
     <script>try{var p=JSON.parse(localStorage.getItem('galleryDisplayPrefs')||'{}');var v=p.view||'grid';var s=p.size||'md';document.documentElement.classList.add('g-view-'+v);document.documentElement.classList.add('g-size-'+s);if(p.masonry)document.documentElement.classList.add('g-masonry');}catch(e){document.documentElement.classList.add('g-view-grid');document.documentElement.classList.add('g-size-md');}</script>
+    <?php require __DIR__ . '/partials/tour_targets.php'; ?>
     <script src="<?= url('/assets/js/user.js') ?>?v=5" defer></script>
-    <script src="<?= url('/assets/js/tour.js') ?>?v=3" defer></script>
+    <script src="<?= url('/assets/js/tour.js') ?>?v=4" defer></script>
 </body>
 </html>
