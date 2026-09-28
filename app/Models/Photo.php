@@ -86,6 +86,14 @@ class Photo
     {
         if ($userId <= 0) return false;
 
+        // Super admins manage (and review) secret galleries; they bypass the
+        // per-gallery allow-list so their thumbnails and originals render on
+        // the admin manage pages (manageGallery already limits who may open a
+        // secret gallery to super admins).
+        if (\App\Core\Auth::isSuperAdmin()) {
+            return true;
+        }
+
         return (bool) Database::run(
             'SELECT 1 FROM gallery_photo gp
              INNER JOIN galleries g ON g.id = gp.gallery_id

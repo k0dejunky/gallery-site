@@ -91,9 +91,15 @@ class Gallery
         $access = ' AND galleries.is_secret = 0';
         $params = [$id];
         if ($userId !== null) {
-            [$condition, $conditionParams] = self::userVisibleSql($userId, 'galleries');
-            $access = ' AND ' . $condition;
-            $params = array_merge($params, $conditionParams);
+            // Super admins bypass the secret-gallery allow-list so they can
+            // open (and review) any gallery from the user-facing pages.
+            if (\App\Core\Auth::isSuperAdmin()) {
+                $access = '';
+            } else {
+                [$condition, $conditionParams] = self::userVisibleSql($userId, 'galleries');
+                $access = ' AND ' . $condition;
+                $params = array_merge($params, $conditionParams);
+            }
         }
         $gallery = Database::run(
             'SELECT * FROM galleries WHERE id = ? AND ' . self::publishedVisibleSql('galleries') . $access,
