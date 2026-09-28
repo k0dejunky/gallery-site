@@ -88,6 +88,44 @@ class SubscriptionController extends MembershipAdminController
     }
 
     /**
+     * Grant a one-time free trial (SiteConfig::trialDays() days) to a
+     * non-member who has never had a trial.
+     */
+    public function grantTrial(): void
+    {
+        $email = trim($this->request->input('user_email'));
+        $user  = $email !== '' ? User::findByEmail($email) : null;
+
+        if ($user === null) {
+            $this->flash('error', 'No user found with that email.');
+            $this->redirect('/admin/subscriptions');
+        }
+
+        $userId = (int) $user['id'];
+        $days   = \App\Models\SiteConfig::trialDays();
+        $id     = Subscription::grantTrial($userId, $days);
+
+        if ($id === null) {
+            $this->flash('error', 'That user already had a trial or holds an active membership.');
+        } else {
+            AuditLog::record((int) Auth::user()['id'], 'create', 'subscription', $id, 'Granted ' . $days . '-day free trial to ' . $user['email'], null, ['user_id' => $userId, 'days' => $days]);
+            $this->flash('success', 'Granted a ' . $days . '-day free trial to "' . $user['email'] . '".');
+        }
+        $this->redirect('/admin/subscriptions');
+    }
+
+    /**
+     * Configure the free-trial length in days (admin).
+     */
+    public function trialSettings(): void
+    {
+        $days = max(1, min(90, (int) $this->request->post('trial_days', '3')));
+        \App\Models\SiteConfig::setTrialDays($days);
+        $this->flash('success', 'Free trial length set to ' . $days . ' day' . ($days === 1 ? '' : 's') . '.');
+        $this->redirect('/admin/subscriptions');
+    }
+
+    /**
      * Approve a pending membership request: set it active with start/expiry
      * dates computed from the plan's billing cycle.
      */

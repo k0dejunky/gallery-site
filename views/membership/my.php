@@ -29,9 +29,10 @@
          <div class="card">
             <h2>Current membership</h2>
             <?php $isRecurring = strpos((string) ($activeSub['transaction_ref'] ?? ''), 'BT-') === 0; ?>
+            <?php $isTrial = strpos((string) ($activeSub['transaction_ref'] ?? ''), 'TRIAL-') === 0; ?>
             <?php $hasExpiry = !empty($activeSub['expires_at']); ?>
             <p>
-                <strong><?= e($activeSub['plan_name']) ?></strong> &mdash;
+                <strong><?= e($activeSub['plan_name']) ?></strong><?= $isTrial ? ' <span class="chip">free trial</span>' : '' ?> &mdash;
                 <?php if (!empty($activeSub['expires_at'])): ?>
                     <?php if ($isRecurring): ?>
                         renews automatically; access is available through <strong><?= e(tzdate('F j, Y', $activeSub['expires_at'])) ?></strong>.

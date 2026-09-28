@@ -231,6 +231,54 @@ class Subscription
     }
 
     /**
+     * Grant a one-time free trial at the Silver level for the given number of
+     * days. Rejected when the user has already had a trial (TRIAL- ref) or
+     * already holds an active membership. Returns the new subscription id or
+     * null.
+     */
+    public static function grantTrial(int $userId, int $days): ?int
+    {
+        if ($userId <= 0) {
+            return null;
+        }
+
+        $hadTrial = (int) Database::run(
+            "SELECT COUNT(*) FROM subscriptions WHERE user_id = ? AND transaction_ref LIKE 'TRIAL-%'",
+            [$userId]
+        )->fetchColumn();
+        if ($hadTrial > 0) {
+            return null;
+        }
+
+        if (self::activeFor($userId) !== null) {
+            return null;
+        }
+
+        $plan = Database::run(
+            'SELECT id FROM plans WHERE level = ? AND active = 1 ORDER BY price ASC LIMIT 1',
+            [Plan::SILVER_LEVEL]
+        )->fetch();
+        if ($plan === false) {
+            return null;
+        }
+
+        $expiresAt = gmdate('Y-m-d H:i:s', time() + max(1, min(90, $days)) * 86400);
+
+        Database::run(
+            "INSERT INTO subscriptions (user_id, plan_id, status, price_paid, access_level, transaction_ref, expires_at, created_at, updated_at)
+             VALUES (?, ?, 'active', 0, ?, 'TRIAL-" . bin2hex(random_bytes(6)) . "', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [$userId, (int) $plan['id'], Plan::SILVER_LEVEL, $expiresAt]
+        );
+        $id = (int) Database::connection()->lastInsertId();
+        Database::run(
+            'UPDATE subscriptions SET membership_number = LPAD(CAST(id AS CHAR), 5, \'0\') WHERE id = ?',
+            [$id]
+        );
+
+        return $id;
+    }
+
+    /**
      * Approve a pending subscription: mark it active and compute its expiry
      * from the plan's billing cycle (lifetime plans never expire).
      */

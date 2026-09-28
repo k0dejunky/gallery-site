@@ -316,6 +316,8 @@ return [
     // Subscriptions (admin only)
     ['GET', '/admin/subscriptions', 'SubscriptionController@index', 'membership'],
     ['POST', '/admin/subscriptions', 'SubscriptionController@store', 'membership'],
+    ['POST', '/admin/subscriptions/trial', 'SubscriptionController@grantTrial', 'membership'],
+    ['POST', '/admin/subscriptions/trial/settings', 'SubscriptionController@trialSettings', 'membership'],
     ['POST', '/admin/subscriptions/{id}/approve', 'SubscriptionController@approve', 'membership'],
     ['POST', '/admin/subscriptions/{id}/cancel', 'SubscriptionController@cancel', 'membership'],
     ['POST', '/admin/subscriptions/{id}/delete', 'SubscriptionController@destroy', 'membership'],

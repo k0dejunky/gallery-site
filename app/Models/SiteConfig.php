@@ -15,35 +15,55 @@ class SiteConfig
     /** Relative path (from the app root) to the JSON config file. */
     private const FILE = '/storage/site_config.json';
 
-    /**
-     * The config file's absolute path.
-     */
+    /** The config file's absolute path. */
     private static function file(): string
     {
         return dirname(__DIR__, 2) . self::FILE;
     }
 
+    /** Defaults for every configurable key. */
+    private static function defaults(): array
+    {
+        return [
+            'timezone'   => 'UTC',
+            'trial_days' => 3,
+        ];
+    }
+
     /**
-     * Load the saved configuration. Falls back to UTC when the file is
-     * missing, unreadable, or holds an invalid timezone.
-     *
-     * @return array{timezone: string}
+     * Load the saved configuration merged over the defaults. Unknown values
+     * fall back to defaults so a malformed file never breaks the site.
      */
     public static function all(): array
     {
         $path = self::file();
+        $data = [];
 
-        if (!is_file($path)) {
-            return ['timezone' => 'UTC'];
+        if (is_file($path)) {
+            $decoded = json_decode((string) file_get_contents($path), true);
+            if (is_array($decoded)) {
+                $data = $decoded;
+            }
         }
 
-        $data = json_decode((string) file_get_contents($path), true);
+        $merged = array_merge(self::defaults(), $data);
+        $merged['timezone'] = self::validatedTimezone((string) ($merged['timezone'] ?? 'UTC'));
 
-        if (!is_array($data)) {
-            return ['timezone' => 'UTC'];
+        return $merged;
+    }
+
+    /** Persist config keys, preserving anything not being written. */
+    public static function save(array $config): void
+    {
+        $path = self::file();
+        $dir  = dirname($path);
+
+        if (!is_dir($dir)) {
+            mkdir($dir, 0775, true);
         }
 
-        return ['timezone' => self::validatedTimezone((string) ($data['timezone'] ?? 'UTC'))];
+        $merged = array_merge(self::all(), array_intersect_key($config, self::defaults()));
+        file_put_contents($path, json_encode($merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -55,20 +75,27 @@ class SiteConfig
     }
 
     /**
-     * Persist the display timezone. Creates storage/ when needed.
+     * Persist the display timezone (preserves the other config keys).
      */
     public static function setTimezone(string $timezone): void
     {
-        $path = self::file();
-        $dir  = dirname($path);
+        self::save(['timezone' => self::validatedTimezone($timezone)]);
+    }
 
-        if (!is_dir($dir)) {
-            mkdir($dir, 0775, true);
-        }
+    /**
+     * Free-trial length in days (default 3, clamped 1-90).
+     */
+    public static function trialDays(): int
+    {
+        return max(1, min(90, (int) (self::all()['trial_days'] ?? 3)));
+    }
 
-        file_put_contents($path, json_encode([
-            'timezone' => self::validatedTimezone($timezone),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    /**
+     * Set the free-trial length in days (clamped 1-90).
+     */
+    public static function setTrialDays(int $days): void
+    {
+        self::save(['trial_days' => max(1, min(90, $days))]);
     }
 
     /**

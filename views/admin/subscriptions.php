@@ -49,6 +49,22 @@
         <button type="submit" class="btn">Grant</button>
     </p>
 </form>
+
+<h2 style="margin-top:1rem;">Free Trial</h2>
+<form method="post" action="<?= url('/admin/subscriptions/trial') ?>" style="margin-bottom:.5rem;">
+    <?= csrf_field() ?>
+    <p>
+        <input type="email" name="user_email" placeholder="User email" required>
+        <button type="submit" class="btn btn-outline">Grant <?= (int) \App\Models\SiteConfig::trialDays() ?>-day trial</button>
+        <span class="muted" style="font-size:.85rem;">One trial per user; rejected if they are already a member.</span>
+    </p>
+</form>
+<form method="post" action="<?= url('/admin/subscriptions/trial/settings') ?>" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+    <?= csrf_field() ?>
+    <label class="muted" style="font-size:.9rem;">Trial length (days)</label>
+    <input type="number" name="trial_days" min="1" max="90" value="<?= (int) \App\Models\SiteConfig::trialDays() ?>" style="width:5rem;">
+    <button type="submit" class="btn btn-sm btn-outline">Save</button>
+</form>
 <?php endif; ?>
 
 <h2>All Subscriptions</h2>
