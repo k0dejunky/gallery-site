@@ -57,6 +57,13 @@ return [
     ['GET', '/favorites', 'FavoriteController@index'],
     ['POST', '/favorites/categories/{categoryId}/toggle', 'FavoriteController@toggle'],
     ['POST', '/favorites/galleries/{galleryId}/toggle', 'FavoriteController@toggleGallery'],
+    ['GET', '/collections', 'CollectionController@index'],
+    ['POST', '/collections', 'CollectionController@create'],
+    ['GET', '/collections/{id}', 'CollectionController@show'],
+    ['POST', '/collections/{id}/rename', 'CollectionController@rename'],
+    ['POST', '/collections/{id}/delete', 'CollectionController@delete'],
+    ['POST', '/collections/{id}/galleries', 'CollectionController@addGallery'],
+    ['POST', '/collections/{id}/galleries/{galleryId}/delete', 'CollectionController@removeGallery'],
 
     // Saved searches (active members)
     ['GET', '/saved-searches', 'SavedSearchController@index'],

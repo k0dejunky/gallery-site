@@ -504,7 +504,7 @@ class Gallery
      * Correlated subquery counting videos per gallery, joined into list
      * queries as the video_count column.
      */
-    private static function videoCountSql(): string
+    public static function videoCountSql(): string
     {
         return '(SELECT COUNT(*) FROM photos p2
             INNER JOIN gallery_photo gp2 ON gp2.photo_id = p2.id

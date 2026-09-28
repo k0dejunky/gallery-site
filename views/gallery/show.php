@@ -11,6 +11,25 @@ $breadcrumbItems = [
 <p><?= e($gallery['description']) ?></p>
 <p class="muted"><?= number_format((int) ($gallery['views'] ?? 0)) ?> views &middot; <?= number_format((int) ($gallery['unique_views'] ?? 0)) ?> unique viewers &middot; <?= number_format((int) $total) ?> items</p>
 
+<?php if (!empty($collections)): ?>
+    <form method="post" action="<?= url('/collections/' . (int) $collections[0]['id'] . '/galleries') ?>" class="settings-form" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem;">
+        <?= csrf_field() ?>
+        <input type="hidden" name="gallery_id" value="<?= (int) $gallery['id'] ?>">
+        <label class="muted" style="font-size:.9rem;">Save to collection</label>
+        <select name="collection_id" onchange="this.form.action='<?= url('/collections') ?>/'+this.value+'/galleries'">
+            <?php foreach ($collections as $c): ?>
+                <option value="<?= (int) $c['id'] ?>"><?= e((string) $c['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+        <button type="submit" class="btn btn-sm btn-outline">Add to collection</button>
+        <a href="<?= url('/collections') ?>" class="muted" style="font-size:.85rem;">Manage collections</a>
+    </form>
+<?php else: ?>
+    <p class="muted" style="font-size:.9rem;margin-bottom:.75rem;">
+        <a href="<?= url('/collections') ?>">Create a collection</a> to save this gallery.
+    </p>
+<?php endif; ?>
+
 <?php if (!empty($categories)): ?>
     <div class="chips">
         <?php foreach ($categories as $cat): ?>

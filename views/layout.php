@@ -284,6 +284,7 @@ $isAuthPage = $isLoginPage
             <a class="nav-item<?= $currentPath === url('/account') ? ' active' : '' ?>" href="<?= url('/account') ?>" data-se-move-key="pub-account">Dashboard</a>
             <a class="nav-item<?= strpos($currentPath, url('/galleries')) === 0 ? ' active' : '' ?>" href="<?= url('/galleries') ?>" data-se-move-key="pub-galleries">Galleries</a>
             <a class="nav-item<?= strpos($currentPath, url('/favorites')) === 0 ? ' active' : '' ?>" href="<?= url('/favorites') ?>" data-se-move-key="pub-favorites">Favorites</a>
+            <a class="nav-item<?= strpos($currentPath, url('/collections')) === 0 ? ' active' : '' ?>" href="<?= url('/collections') ?>" data-se-move-key="pub-collections">Collections</a>
             <a class="nav-item<?= strpos($currentPath, url('/membership')) === 0 ? ' active' : '' ?>" href="<?= url('/membership') ?>" data-se-move-key="pub-membership">Membership</a>
             <a class="nav-item<?= strpos($currentPath, url('/support')) === 0 ? ' active' : '' ?>" href="<?= url('/support') ?>" data-se-move-key="pub-support">Support<?php if (!empty($supportUnreadCount)): ?> <span class="nav-unread" aria-label="<?= (int) $supportUnreadCount ?> unread replies"><?= (int) $supportUnreadCount ?></span><?php endif; ?></a>
             <?php if ($user !== null): ?>
@@ -328,6 +329,7 @@ $isAuthPage = $isLoginPage
         <a href="<?= url('/account') ?>">Dashboard</a>
         <a href="<?= url('/galleries') ?>">Galleries</a>
         <a href="<?= url('/favorites') ?>">Favorites</a>
+        <a href="<?= url('/collections') ?>">Collections</a>
         <a href="<?= url('/membership') ?>">Membership</a>
          <a href="<?= url('/support') ?>">Support<?php if (!empty($supportUnreadCount)): ?> <span class="nav-unread"><?= (int) $supportUnreadCount ?></span><?php endif; ?></a>
         <?php if ($user !== null && \App\Core\Auth::hasActiveSubscription()): ?>

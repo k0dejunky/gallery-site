@@ -351,6 +351,7 @@ class GalleryController extends Controller
             'currentUser' => Auth::user(),
             'photoCount' => $total,
             'returnTo'   => url('/galleries/' . $id),
+            'collections' => \App\Models\Collection::forUser((int) $user['id']),
         ]);
     }
 
