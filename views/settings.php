@@ -5,6 +5,12 @@
 <h1>Settings</h1>
 <p class="settings-back"><a class="btn btn-outline" href="<?= e(url('/account')) ?>">&larr; Back to dashboard</a></p>
 
+<section class="card settings-card" style="border-left:4px solid var(--purple-500);">
+    <h2 class="section-title">Site tour</h2>
+    <p class="muted">Replay the interactive tour that walks you through the site's features.</p>
+    <button type="button" class="btn btn-sm" onclick="if(window.GalleryTour){GalleryTour.clearSeen();GalleryTour.start();}">Start tour</button>
+</section>
+
 <?php // Super admins see the operator chat bridge connection details. ?>
 <?php if (!empty($chatBridge) && !empty($chatBridge['visible'])): ?>
 <section class="card settings-card" style="border-left:4px solid var(--purple-500);">

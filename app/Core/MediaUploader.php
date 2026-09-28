@@ -203,6 +203,11 @@ class MediaUploader
         $photoId = \App\Models\Photo::create($filename, $hash);
         \App\Models\Gallery::attachPhoto($galleryId, $photoId);
 
+        // Cache the video duration (playlist rows show it without probing).
+        if (is_video($filename)) {
+            \App\Models\Photo::setDuration($photoId, video_duration_seconds($config['dir'] . '/' . $filename));
+        }
+
         return $photoId;
     }
 }

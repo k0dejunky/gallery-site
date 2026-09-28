@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS photos (
     hash         CHAR(40) NOT NULL UNIQUE,
     caption      VARCHAR(255) NOT NULL DEFAULT '',
     link         VARCHAR(500) NOT NULL DEFAULT '',
+    duration_seconds INT UNSIGNED NULL DEFAULT NULL,
     views        INT UNSIGNED NOT NULL DEFAULT 0,
     unique_views INT UNSIGNED NOT NULL DEFAULT 0,
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -228,12 +229,15 @@ CREATE TABLE IF NOT EXISTS collections (
 CREATE TABLE IF NOT EXISTS collection_items (
     id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     collection_id INT UNSIGNED NOT NULL,
-    gallery_id    INT UNSIGNED NOT NULL,
+    gallery_id    INT UNSIGNED NULL DEFAULT NULL,
+    photo_id      INT UNSIGNED NULL DEFAULT NULL,
     position      INT UNSIGNED NOT NULL DEFAULT 0,
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_collection_item (collection_id, gallery_id),
+    UNIQUE KEY uq_collection_photo (collection_id, photo_id),
     FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
-    FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE
+    FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE,
+    FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS gallery_viewers (

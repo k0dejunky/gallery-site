@@ -282,6 +282,17 @@ class Photo
     }
 
     /**
+     * Cache a video's duration in seconds (shown in playlist rows).
+     */
+    public static function setDuration(int $id, int $seconds): void
+    {
+        Database::run(
+            'UPDATE photos SET duration_seconds = ? WHERE id = ?',
+            [max(0, $seconds), $id]
+        );
+    }
+
+    /**
      * Remove a photo if no gallery references it anymore: deletes the file,
      * its thumbnail and the database row. Used after gallery deletions so
      * orphaned uploads do not accumulate.

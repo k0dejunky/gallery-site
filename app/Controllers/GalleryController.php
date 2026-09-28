@@ -37,6 +37,71 @@ class GalleryController extends Controller
     }
 
     /**
+     * AJAX fragment for the player's in-page gallery browser: a compact grid
+     * of visible gallery cards. No layout — raw HTML for fetch() to insert.
+     */
+    public function browseGalleries(): void
+    {
+        Auth::requireLogin();
+
+        $galleries = \App\Core\Database::run(
+            'SELECT g.*, (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count
+             FROM galleries g
+             WHERE ' . \App\Models\Gallery::publishedVisibleSql('g') . " AND g.is_secret = 0
+             ORDER BY g.created_at DESC
+             LIMIT 60"
+        )->fetchAll();
+
+        $covers = \App\Models\Gallery::firstPhotos(array_map('intval', array_column($galleries, 'id')));
+
+        header('Content-Type: text/html; charset=utf-8');
+        foreach ($galleries as $g) {
+            $cover = $covers[(int) $g['id']] ?? null;
+            require __DIR__ . '/../../views/partials/browse_gallery_card.php';
+        }
+        exit;
+    }
+
+    /**
+     * AJAX fragment for the player's in-page browser: a gallery's video tiles.
+     */
+    public function browseGallery(int $id): void
+    {
+        Auth::requireLogin();
+
+        $gallery = Gallery::findPublic($id, (int) Auth::user()['id']);
+        if ($gallery === null) {
+            $this->notFound();
+            return;
+        }
+        if (empty($gallery['is_secret'])) {
+            Auth::requireGalleryLevel(
+                (int) ($gallery['min_level'] ?? 0),
+                'A membership is required to view that gallery.'
+            );
+        }
+
+        $photos = \App\Core\Database::run(
+            'SELECT p.* FROM photos p
+             JOIN gallery_photo gp ON gp.photo_id = p.id
+             WHERE gp.gallery_id = ? AND p.is_video = 1
+             ORDER BY gp.position ASC, p.id ASC
+             LIMIT 60',
+            [$id]
+        )->fetchAll();
+
+        header('Content-Type: text/html; charset=utf-8');
+        if ($photos === []) {
+            echo '<p class="muted" style="padding:1rem;">No videos in this gallery.</p>';
+            exit;
+        }
+        foreach ($photos as $photo) {
+            require __DIR__ . '/../../views/partials/browse_video_tile.php';
+        }
+        exit;
+    }
+
+    /**
      * Searching/browsing galleries is allowed without a membership, but
      * opening an individual gallery still requires one (show()).
      * The site editor loads a public, non-personalized preview in an

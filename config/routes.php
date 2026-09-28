@@ -17,6 +17,8 @@ return [
     ['GET', '/galleries/category/{slug}', 'GalleryController@category'],
     ['GET', '/galleries/{id}/photos', 'GalleryController@photosPage'],
     ['GET', '/galleries/{id}', 'GalleryController@show'],
+    ['GET', '/browse/galleries', 'GalleryController@browseGalleries'],
+    ['GET', '/browse/galleries/{id}', 'GalleryController@browseGallery'],
     ['GET', '/unsubscribe', 'UnsubscribeController@index'],
     ['GET', '/images/{id}', 'ImageController@show'],
     ['GET', '/videos/{id}', 'VideoController@show'],
@@ -64,6 +66,8 @@ return [
     ['POST', '/collections/{id}/delete', 'CollectionController@delete'],
     ['POST', '/collections/{id}/galleries', 'CollectionController@addGallery'],
     ['POST', '/collections/{id}/galleries/{galleryId}/delete', 'CollectionController@removeGallery'],
+    ['POST', '/collections/{id}/photos', 'CollectionController@addPhoto'],
+    ['POST', '/collections/{id}/photos/{photoId}/delete', 'CollectionController@removePhoto'],
     ['GET', '/go/{code}', 'ReferralController@go'],
     ['GET', '/account/referrals', 'ReferralController@page'],
 

@@ -410,6 +410,33 @@ function faststart_video_if_needed(string $path): bool
 }
 
 /**
+ * Probe a video's duration in seconds with ffprobe (0 when it cannot be read).
+ */
+function video_duration_seconds(string $path): int
+{
+    if (!is_file($path)) {
+        return 0;
+    }
+
+    $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
+    $probe   = [];
+    $rc      = 0;
+
+    @exec(
+        escapeshellarg($ffprobe) . ' -v error -show_entries format=duration -of csv=p=0 '
+        . escapeshellarg($path) . ' 2>/dev/null',
+        $probe,
+        $rc
+    );
+
+    if ($rc === 0 && isset($probe[0])) {
+        return max(0, (int) round((float) $probe[0]));
+    }
+
+    return 0;
+}
+
+/**
  * Whether a file actually contains a decodable video stream, probed with
  * ffprobe (used to reject corrupt/polyglot uploads and to sanity-check
  * live recordings). Empty string when there is no probe or no video stream.

@@ -640,14 +640,34 @@ document.addEventListener('leavepictureinpicture', function(){
 /* In-gallery video navigation: Previous/Next swap the player via AJAX instead
    of a full page load, so a picture-in-picture window keeps playing as you
    move through the gallery. The <video> element is preserved and only its
-   source is swapped. */
+   source is swapped. Also swaps the collection playlist panel + highlights. */
 (function(){
+  function updatePlaylist(doc, href, video){
+    // Replace the playlist aside (if the new page has one) and highlight the
+    // active row; keep a reference to the next item for auto-advance.
+    var npl = doc.querySelector('.player-playlist');
+    var opl = document.querySelector('.player-playlist');
+    if(npl && opl){ opl.outerHTML = npl.outerHTML; }
+    var vidId = null;
+    var nv = doc.querySelector('#video-player-wrap video');
+    if(nv) vidId = nv.getAttribute('data-video-id');
+    var active = null, next = null;
+    document.querySelectorAll('.player-playlist .pl-item').forEach(function(li, i, arr){
+      li.classList.remove('active');
+      if(li.getAttribute('data-video-id') === vidId){ li.classList.add('active'); active = li; }
+      if(active && !next && i > Array.prototype.indexOf.call(arr, active)){ next = li; }
+    });
+    var list = document.querySelector('.player-playlist ul');
+    if(active && list && active.scrollIntoView){ try{ active.scrollIntoView({block:'nearest'}); }catch(e){} }
+    if(video){ video.__plNext = next ? (next.querySelector('a') ? next.querySelector('a').getAttribute('href') : null) : null; }
+  }
+
   function bind(){
     var wrap = document.getElementById('video-player-wrap');
     if(!wrap || !wrap.querySelector('video') || wrap.__navBound) return;
     wrap.__navBound = true;
 
-    document.querySelectorAll('.media-nav a[data-swap]').forEach(function(a){
+    document.querySelectorAll('.media-nav a[data-swap], .player-playlist a[data-swap]').forEach(function(a){
       a.addEventListener('click', function(e){
         e.preventDefault();
         var href = a.getAttribute('href');
@@ -676,12 +696,181 @@ document.addEventListener('leavepictureinpicture', function(){
             var rep = doc.querySelector('#video-player-wrap + p a, figure + p a');
             var oldRep = document.querySelector('#video-player-wrap + p a, figure + p a');
             if(rep && oldRep){ oldRep.href = rep.getAttribute('href'); }
+            updatePlaylist(doc, href, video);
             history.pushState({}, '', href);
           })
           .catch(function(){});
       });
     });
+
+    // Auto-advance: when the current video ends, play the next playlist item.
+    var video = wrap.querySelector('video');
+    video.addEventListener('ended', function(){
+      if(!document.hasFocus()) return;
+      var active = document.querySelector('.player-playlist .pl-item.active');
+      var next = active && active.nextElementSibling;
+      if(next){
+        var link = next.querySelector('a[data-swap]');
+        if(link){ link.click(); }
+      }
+    });
   }
   if(document.readyState !== 'loading'){ bind(); } else { document.addEventListener('DOMContentLoaded', bind); }
   window.addEventListener('load', bind);
+})();
+
+/* Playlist queue + in-page gallery browser for the video player.
+   Browsing happens inside the page (fetch + DOM swap), so a picture-in-picture
+   window keeps playing. Picking a video adds it to a sessionStorage queue
+   (front/end prompt when items are queued) and/or plays it in place. */
+(function(){
+  var QKEY = 'galleryPlaylistQueue';
+  var queue = [];
+  function loadQ(){ try{ queue = JSON.parse(sessionStorage.getItem(QKEY)||'[]')||[]; }catch(e){ queue=[]; } }
+  function saveQ(){ try{ sessionStorage.setItem(QKEY, JSON.stringify(queue)); }catch(e){} }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+  function init(){
+    var btn = document.getElementById('browse-galleries-btn');
+    var panel = document.getElementById('player-browse');
+    if(!btn || !panel) return;
+
+    btn.addEventListener('click', function(){
+      panel.hidden = !panel.hidden;
+      if(!panel.hidden && !panel.dataset.loaded){
+        panel.dataset.loaded = '1';
+        var body = panel.querySelector('.pb-body');
+        fetch(btn.getAttribute('data-href') || '/browse/galleries')
+          .then(function(r){ return r.text(); })
+          .then(function(html){ body.innerHTML = html; })
+          .catch(function(){ body.innerHTML = '<p class="muted">Could not load galleries.</p>'; });
+      }
+    });
+
+    panel.addEventListener('click', function(e){
+      var gal = e.target.closest('[data-browse-gallery]');
+      if(gal){
+        e.preventDefault();
+        var body = panel.querySelector('.pb-body');
+        body.innerHTML = '<p class="muted">Loading&hellip;</p>';
+        fetch('/browse/galleries/' + gal.getAttribute('data-browse-gallery'))
+          .then(function(r){ return r.text(); })
+          .then(function(html){ body.innerHTML = html; })
+          .catch(function(){ body.innerHTML = '<p class="muted">Could not load that gallery.</p>'; });
+        return;
+      }
+      var vid = e.target.closest('[data-browse-video]');
+      if(vid){
+        e.preventDefault();
+        var item = {
+          id: vid.getAttribute('data-browse-video'),
+          title: vid.getAttribute('data-video-title') || 'Video',
+          thumb: vid.getAttribute('data-video-thumb') || '',
+          web: vid.getAttribute('data-video-web') || '',
+          url: vid.getAttribute('data-video-url') || ('/videos/' + vid.getAttribute('data-browse-video'))
+        };
+        chooseAction(item);
+      }
+    });
+  }
+
+  function chooseAction(item){
+    var video = document.querySelector('#video-player-wrap video');
+    if(!video) return;
+    var already = queue.some(function(q){ return q.id === item.id; });
+    var doIt = function(how){
+      if(!already){
+        if(how === 'front'){ queue.unshift(item); }
+        else if(how === 'end'){ queue.push(item); }
+      }
+      saveQ();
+      renderQueue();
+      if(how === 'front' || how === 'play'){
+        playItem(item);
+      }
+    };
+    if(queue.length > 0){
+      showPrompt(item, doIt);
+    } else {
+      doIt('play'); // no queue -> play immediately
+    }
+  }
+
+  function showPrompt(item, doIt){
+    var old = document.getElementById('queue-prompt');
+    if(old) old.remove();
+    var d = document.createElement('div');
+    d.id = 'queue-prompt';
+    d.className = 'queue-prompt';
+    d.innerHTML = '<div class="queue-prompt-card" role="dialog" aria-modal="true">' +
+      '<p>Add &ldquo;' + esc(item.title) + '&rdquo; to the playlist?</p>' +
+      '<div class="queue-prompt-actions">' +
+      '<button type="button" data-q="play">Play now</button>' +
+      '<button type="button" data-q="front">Add to front</button>' +
+      '<button type="button" data-q="end">Add to end</button>' +
+      '<button type="button" class="qp-cancel" data-q="cancel">Cancel</button>' +
+      '</div></div>';
+    document.body.appendChild(d);
+    d.querySelectorAll('button').forEach(function(b){
+      b.addEventListener('click', function(){
+        var how = b.getAttribute('data-q');
+        d.remove();
+        if(how === 'cancel') return;
+        if(how === 'front') doIt('front');
+        else if(how === 'end') doIt('end');
+        else doIt('play');
+      });
+    });
+  }
+
+  // Swap the SAME <video> element to the picked video (PiP persists).
+  function playItem(item){
+    var video = document.querySelector('#video-player-wrap video');
+    if(!video || !item.web) return;
+    var wasPaused = video.paused;
+    video.src = item.web;
+    video.load();
+    if(!wasPaused){ video.play().catch(function(){}); }
+    // highlight the matching playlist row if one exists
+    var li = document.querySelector('.player-playlist .pl-item[data-video-id="' + item.id + '"]');
+    if(li){
+      document.querySelectorAll('.player-playlist .pl-item').forEach(function(x){ x.classList.remove('active'); });
+      li.classList.add('active');
+    }
+  }
+
+  function renderQueue(){
+    var ul = document.querySelector('.player-playlist ul');
+    if(!ul) return;
+    // remove previously rendered queued rows (marked data-queued)
+    ul.querySelectorAll('.pl-item[data-queued]').forEach(function(x){ x.remove(); });
+    var sep = ul.querySelector('.pl-queued-sep');
+    if(sep) sep.remove();
+    if(!queue.length) return;
+    var wrap = document.createElement('li');
+    wrap.className = 'pl-item pl-queued-sep';
+    wrap.innerHTML = '<div class="pl-title" style="font-weight:600;">Up next</div>';
+    ul.appendChild(wrap);
+    queue.forEach(function(item){
+      var li = document.createElement('li');
+      li.className = 'pl-item';
+      li.setAttribute('data-queued', '1');
+      li.setAttribute('data-video-id', item.id);
+      li.innerHTML = '<a href="' + esc(item.url) + '">' +
+        (item.thumb ? '<img src="' + esc(item.thumb) + '" alt="" loading="lazy">' : '') +
+        '<span class="pl-title">' + esc(item.title) + '</span>' +
+        '</a>';
+      ul.appendChild(li);
+      li.querySelector('a').addEventListener('click', function(e){
+        e.preventDefault();
+        var video = document.querySelector('#video-player-wrap video');
+        if(video && item.web){ video.src = item.web; video.load(); video.play().catch(function(){}); }
+      });
+    });
+    // auto-advance flows into queued rows via the playlist ended handler
+  }
+
+  loadQ();
+  if(document.readyState !== 'loading'){ init(); } else { document.addEventListener('DOMContentLoaded', init); }
+  window.addEventListener('load', function(){ init(); renderQueue(); });
 })();

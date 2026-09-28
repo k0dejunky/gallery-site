@@ -22,11 +22,18 @@
             <div class="card card-compact">
                 <a class="card-link" href="<?= url('/collections/' . (int) $c['id']) ?>">
                     <div class="card-cover">
-                        <div class="card-placeholder" style="display:grid;place-items:center;height:100%;color:var(--purple-600);font-size:2.2rem;">&#128215;</div>
+                        <?php if (!empty($c['cover'])): ?>
+                            <img src="<?= e((string) $c['cover']) ?>" alt="" loading="lazy">
+                        <?php else: ?>
+                            <div class="card-placeholder" style="display:grid;place-items:center;height:100%;color:var(--purple-600);font-size:2.2rem;">&#128215;</div>
+                        <?php endif; ?>
                     </div>
                     <div class="card-body">
                         <h3 style="margin:.4rem 0 .15rem;"><?= e((string) $c['name']) ?></h3>
-                        <p class="muted" style="margin:0;font-size:.85rem;"><?= (int) $c['gallery_count'] ?> galler<?= (int) $c['gallery_count'] === 1 ? 'y' : 'ies' ?></p>
+                        <p class="muted" style="margin:0;font-size:.85rem;">
+                            <?= (int) $c['gallery_count'] ?> galler<?= (int) $c['gallery_count'] === 1 ? 'y' : 'ies' ?>
+                            <?= (int) $c['video_count'] > 0 ? ' &middot; ' . (int) $c['video_count'] . ' video' . ((int) $c['video_count'] === 1 ? '' : 's') : '' ?>
+                        </p>
                     </div>
                 </a>
                 <form method="post" action="<?= url('/collections/' . (int) $c['id'] . '/delete') ?>" onsubmit="return confirm('Delete this collection?');" style="padding:.6rem;">

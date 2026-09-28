@@ -43,10 +43,13 @@ class CollectionController extends Controller
 
         $collection = Collection::find($id);
         $galleries  = Collection::galleries($id, $userId);
+        $videos     = Collection::videos($id, $userId);
 
         $this->view('collections/show', [
             'collection' => $collection,
             'galleries'  => $galleries,
+            'videos'     => $videos,
+            'firstVideoId' => $videos !== [] ? (int) $videos[0]['id'] : 0,
             'favoriteGalleryIds' => Gallery::favoriteIds($userId, array_map('intval', array_column($galleries, 'id'))),
         ]);
     }
@@ -116,6 +119,30 @@ class CollectionController extends Controller
         Auth::requireLogin();
 
         Collection::removeGallery($id, (int) $_SESSION['user_id'], $galleryId);
+        $this->flash('success', 'Removed from collection.');
+        $this->redirect('/collections/' . $id);
+    }
+
+    /** Add an individual video to a collection (from the video player). */
+    public function addPhoto(int $id): void
+    {
+        Auth::requireLogin();
+        $photoId = (int) $this->request->post('photo_id', 0);
+
+        if (Collection::addPhoto($id, (int) $_SESSION['user_id'], $photoId)) {
+            $this->flash('success', 'Added video to collection.');
+        } else {
+            $this->flash('error', 'That video is already in the collection, or it was not found.');
+        }
+        $this->redirect('/videos/' . $photoId);
+    }
+
+    /** Remove an individual video from a collection. */
+    public function removePhoto(int $id, int $photoId): void
+    {
+        Auth::requireLogin();
+
+        Collection::removePhoto($id, (int) $_SESSION['user_id'], $photoId);
         $this->flash('success', 'Removed from collection.');
         $this->redirect('/collections/' . $id);
     }

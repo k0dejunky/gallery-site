@@ -14,13 +14,14 @@ $gallery   = $gallery ?? null;
 $backUrl   = $gallery !== null ? url('/galleries/' . (int) $gallery['id']) : url('/galleries');
 $returnTo  = isset($returnTo) && is_string($returnTo) ? $returnTo : $backUrl;
 $returnQuery = http_build_query(['return_to' => $returnTo]);
+$playlistQuery = isset($playlistQuery) ? (string) $playlistQuery : '';
 $backLabel = $gallery !== null
     ? '&larr; Back to &ldquo;' . e($gallery['title']) . '&rdquo;'
     : '&larr; Back to galleries';
 ?>
 <div class="media-nav">
     <?php if ($prevUrl !== null): ?>
-        <a class="btn" data-swap href="<?= e($prevUrl . '?' . $returnQuery) ?>">&larr; Previous</a>
+        <a class="btn" data-swap href="<?= e($prevUrl . '?' . $returnQuery . $playlistQuery) ?>">&larr; Previous</a>
     <?php else: ?>
         <span class="btn btn-disabled" aria-disabled="true">&larr; Previous</span>
     <?php endif; ?>
@@ -28,7 +29,7 @@ $backLabel = $gallery !== null
     <a class="btn btn-outline" href="<?= e($returnTo) ?>"><?= $backLabel ?></a>
 
     <?php if ($nextUrl !== null): ?>
-        <a class="btn" data-swap href="<?= e($nextUrl . '?' . $returnQuery) ?>">Next &rarr;</a>
+        <a class="btn" data-swap href="<?= e($nextUrl . '?' . $returnQuery . $playlistQuery) ?>">Next &rarr;</a>
     <?php else: ?>
         <span class="btn btn-disabled" aria-disabled="true">Next &rarr;</span>
     <?php endif; ?>

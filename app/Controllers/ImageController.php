@@ -57,6 +57,37 @@ class ImageController extends Controller
             ? Gallery::neighborsAndIndex($galleryId, $id)
             : [0, 1, null, null];
 
+        // Optional collection-as-playlist: ?playlist={collectionId} plays the
+        // collection's individual videos, and prev/next move within it.
+        $playlist      = [];
+        $playlistName  = null;
+        $playlistQuery = '';
+        $playlistId    = 0;
+        $collections   = [];
+        $userId = $user !== null ? (int) $user['id'] : 0;
+
+        if ($userId > 0) {
+            $collections = \App\Models\Collection::forUser($userId);
+
+            $playlistId = (int) $this->request->query('playlist', 0);
+            if ($playlistId > 0 && \App\Models\Collection::owns($playlistId, $userId)) {
+                $collection   = \App\Models\Collection::find($playlistId);
+                $playlistName = $collection !== false ? (string) $collection['name'] : 'Collection';
+                $playlist     = \App\Models\Collection::videos($playlistId, $userId);
+
+                if ($playlist !== []) {
+                    $playlistQuery = '&playlist=' . $playlistId;
+                    $keys = array_column($playlist, 'id');
+                    $pos  = array_search($id, array_map('intval', $keys), true);
+                    $pos  = $pos === false ? 0 : $pos;
+                    $prev = $pos > 0 ? $playlist[$pos - 1] : null;
+                    $next = $pos < count($playlist) - 1 ? $playlist[$pos + 1] : null;
+                    $currentIndex = $pos;
+                    $mediaCount   = count($playlist);
+                }
+            }
+        }
+
         $returnTo = $this->safeReturnTo($this->request->query('return_to', ''))
             ?? ($galleryId !== null ? url('/galleries/' . $galleryId) : url('/galleries'));
 
@@ -70,6 +101,11 @@ class ImageController extends Controller
             'mediaCount' => $mediaCount,
             'currentIndex' => $currentIndex,
             'returnTo' => $returnTo,
+            'collections'   => $collections,
+            'playlist'      => $playlist,
+            'playlistName'  => $playlistName,
+            'playlistQuery' => $playlistQuery,
+            'playlistId'    => $playlistId,
         ]);
     }
 
