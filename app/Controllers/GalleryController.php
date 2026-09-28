@@ -717,50 +717,34 @@ class GalleryController extends Controller
                 continue;
             }
 
-            $mime = sniff_mime($files['tmp_name'][$i]);
-
-            $error = $this->validatePending($files, $i, $config, $type, $mime);
-            if ($error !== null) {
-                $this->json(['ok' => false, 'error' => $files['name'][$i] . ': ' . $error]);
+            $meta = \App\Core\MediaUploader::inspect($files, $i, $config, $type);
+            if ($meta === null) {
+                $this->json(['ok' => false, 'error' => $files['name'][$i] . ': ' . \App\Core\MediaUploader::error()]);
                 return;
             }
 
-            // Determine the file's real extension from its detected MIME type,
-            // so a disguised or oddly-named file is stored with the correct
+            // The file's real extension comes from its detected MIME type, so
+            // a disguised or oddly-named file is stored with the correct
             // extension (e.g. an image/jpeg named .png becomes .jpg).
-            $hash      = sha1_file($files['tmp_name'][$i]);
-            $isImage   = strpos($mime, 'image/') === 0;
-            $extension = $this->extensionForMime($mime);
-            $filename  = uniqid('pending_', true) . '.' . $extension;
+            $filename = uniqid('pending_', true) . '.' . $meta['extension'];
+            $dest     = $dir . '/' . $filename;
 
-            if (!move_uploaded_file($files['tmp_name'][$i], $dir . '/' . $filename)) {
+            if (!move_uploaded_file($files['tmp_name'][$i], $dest)) {
                 $this->json(['ok' => false, 'error' => $files['name'][$i] . ': could not be saved.']);
                 return;
             }
 
-            if ($isImage) {
-                create_image_variants(
-                    $dir . '/' . $filename,
-                    $dir . '/web_' . $filename,
-                    $dir . '/thumb_' . $filename,
-                    $config['web_max_width'],
-                    $config['thumb_width'],
-                    $config['thumb_height']
-                );
-            } else {
-                create_video_thumbnail(
-                    $dir . '/' . $filename,
-                    $dir . '/thumb_' . $filename,
-                    $config['thumb_width'],
-                    $config['thumb_height']
-                );
+            if (!\App\Core\MediaUploader::generateVariants($dest, $meta['is_image'], $config)) {
+                @unlink($dest);
+                $this->json(['ok' => false, 'error' => $files['name'][$i] . ': could not generate a preview (file may be corrupt or unsupported).']);
+                return;
             }
 
             $list[] = [
                 'filename' => $filename,
                 'original' => $files['name'][$i],
-                'hash'     => $hash,
-                'is_image' => $isImage,
+                'hash'     => $meta['hash'],
+                'is_image' => $meta['is_image'],
             ];
             $added++;
         }
@@ -874,8 +858,6 @@ class GalleryController extends Controller
             return;
         }
 
-        $mime = sniff_mime($assembled);
-
         $files = [
             'name'     => [$originalName],
             'tmp_name' => [$assembled],
@@ -883,19 +865,16 @@ class GalleryController extends Controller
             'error'    => [UPLOAD_ERR_OK],
         ];
 
-        $error = $this->validatePending($files, 0, $config, $type, $mime);
+        $meta = \App\Core\MediaUploader::inspect($files, 0, $config, $type);
 
-        if ($error !== null) {
+        if ($meta === null) {
             @unlink($assembled);
             $this->removeChunks($uid);
-            $this->json(['ok' => false, 'error' => $originalName . ': ' . $error]);
+            $this->json(['ok' => false, 'error' => $originalName . ': ' . \App\Core\MediaUploader::error()]);
             return;
         }
 
-        $hash      = sha1_file($assembled);
-        $isImage   = strpos($mime, 'image/') === 0;
-        $extension = $this->extensionForMime($mime);
-        $filename  = uniqid('pending_', true) . '.' . $extension;
+        $filename = uniqid('pending_', true) . '.' . $meta['extension'];
 
         if (!@rename($assembled, $dir . '/' . $filename)) {
             $this->removeChunks($uid);
@@ -903,22 +882,11 @@ class GalleryController extends Controller
             return;
         }
 
-        if ($isImage) {
-            create_image_variants(
-                $dir . '/' . $filename,
-                $dir . '/web_' . $filename,
-                $dir . '/thumb_' . $filename,
-                $config['web_max_width'],
-                $config['thumb_width'],
-                $config['thumb_height']
-            );
-        } else {
-            create_video_thumbnail(
-                $dir . '/' . $filename,
-                $dir . '/thumb_' . $filename,
-                $config['thumb_width'],
-                $config['thumb_height']
-            );
+        if (!\App\Core\MediaUploader::generateVariants($dir . '/' . $filename, $meta['is_image'], $config)) {
+            @unlink($dir . '/' . $filename);
+            $this->removeChunks($uid);
+            $this->json(['ok' => false, 'error' => $originalName . ': could not generate a preview (file may be corrupt or unsupported).']);
+            return;
         }
 
         $this->removeChunks($uid);
@@ -927,8 +895,8 @@ class GalleryController extends Controller
         $list[] = [
             'filename' => $filename,
             'original' => $originalName,
-            'hash'     => $hash,
-            'is_image' => $isImage,
+            'hash'     => $meta['hash'],
+            'is_image' => $meta['is_image'],
         ];
         $_SESSION['pending_gallery_files'] = $list;
 
@@ -1257,18 +1225,9 @@ class GalleryController extends Controller
         foreach ($list as $item) {
             $filename  = $item['filename'];
             $source    = $dir . '/' . $filename;
-            $isImage   = (bool) $item['is_image'];
             $hash      = $item['hash'];
 
             if (!is_file($source)) {
-                continue;
-            }
-
-            $existing = Photo::findByHash($hash);
-
-            if ($existing !== null) {
-                Gallery::attachPhoto($galleryId, (int) $existing['id']);
-                $added++;
                 continue;
             }
 
@@ -1291,8 +1250,7 @@ class GalleryController extends Controller
                 }
             }
 
-            $photoId = Photo::create($finalName, $hash);
-            Gallery::attachPhoto($galleryId, $photoId);
+            \App\Core\MediaUploader::commit($galleryId, $finalName, $hash);
             $added++;
         }
 
@@ -1339,88 +1297,6 @@ class GalleryController extends Controller
      * Validate a single staged upload: size, allowed extension, gallery-type
      * match and that it really is an image or a video.
      */
-    private function validatePending(array $files, int $index, array $config, string $galleryType, string $mime): ?string
-    {
-        if ($files['size'][$index] > $config['max_size']) {
-            return 'File is too large.';
-        }
-
-        if ($mime === '') {
-            return 'Could not detect file type.';
-        }
-
-        $isImage = strpos($mime, 'image/') === 0;
-        $isVideo = strpos($mime, 'video/') === 0;
-
-        // Validate against the detected MIME type, not the filename extension,
-        // so an image mislabelled as a video (or vice versa) is rejected for
-        // the wrong gallery type.
-        if (!$isImage && !$isVideo) {
-            return 'File type not allowed. Supported: ' . implode(', ', $config['image_ext']) . ' (images) or ' . implode(', ', $config['video_ext']) . ' (videos).';
-        }
-
-        // The MIME-derived extension must also be one the app is configured
-        // to accept, so exotic image/video containers are still rejected.
-        $extension = $this->extensionForMime($mime);
-
-        if ($isImage && !in_array($extension, $config['image_ext'], true)) {
-            return 'Image type not allowed. Supported image types: ' . implode(', ', $config['image_ext']) . '.';
-        }
-        if ($isVideo && !in_array($extension, $config['video_ext'], true)) {
-            return 'Video type not allowed. Supported video types: ' . implode(', ', $config['video_ext']) . '.';
-        }
-
-        if ($galleryType === 'videos' && $isImage) {
-            return 'Video galleries can only contain video files.';
-        }
-        if ($galleryType === 'images' && $isVideo) {
-            return 'Image galleries can only contain image files.';
-        }
-
-        if ($isImage) {
-            if (!image_can_decode($files['tmp_name'][$index])) {
-                return 'File is not a valid image.';
-            }
-
-            return null;
-        }
-
-        // Videos are probed with ffprobe so a corrupt or polyglot file with a
-        // video MIME is rejected at upload time instead of failing later at
-        // thumbnail/export time.
-        if (!video_has_stream($files['tmp_name'][$index])) {
-            return 'File is not a valid video.';
-        }
-
-        return null;
-    }
-
-    /**
-     * Map a detected MIME type to a canonical filename extension. Falls back
-     * to the original file extension for an unknown video container, and to
-     * 'bin' when nothing else applies.
-     */
-    private function extensionForMime(string $mime): string
-    {
-        $map = [
-            'image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif',
-            'image/webp' => 'webp', 'image/bmp' => 'bmp', 'image/x-ms-bmp' => 'bmp',
-            'image/heic' => 'heic', 'image/heif' => 'heic',
-            'image/avif' => 'avif', 'image/tiff' => 'tiff', 'image/x-tiff' => 'tiff',
-            'image/vnd.microsoft.icon' => 'ico', 'image/x-icon' => 'ico',
-            'video/mp4' => 'mp4', 'video/webm' => 'webm', 'video/ogg' => 'ogg',
-            'video/quicktime' => 'mov', 'video/x-quicktime' => 'mov',
-            'video/x-msvideo' => 'avi', 'video/avi' => 'avi',
-            'video/x-matroska' => 'mkv', 'video/x-m4v' => 'm4v',
-            'video/3gpp' => '3gp', 'video/3gpp2' => '3g2',
-            'video/mpeg' => 'mpg', 'video/x-mpeg' => 'mpg',
-            'video/x-ms-wmv' => 'wmv', 'video/x-ms-asf' => 'wmv', 'video/x-ms-wm' => 'wmv',
-            'video/x-flv' => 'flv', 'video/mp2t' => 'ts', 'video/mp2p' => 'ts',
-        ];
-
-        return $map[$mime] ?? 'bin';
-    }
-
     /**
      * Admin: show the edit-gallery form, including the files it currently
      * contains so admins can see the gallery contents while editing.

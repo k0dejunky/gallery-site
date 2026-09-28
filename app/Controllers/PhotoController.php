@@ -789,113 +789,24 @@ class PhotoController extends Controller
                 continue;
             }
 
-            $error = $this->validate($files, $i, $config, $galleryType);
-
-            if ($error !== null) {
-                $this->flash('error', $files['name'][$i] . ': ' . $error);
+            $meta = \App\Core\MediaUploader::inspect($files, $i, $config, $galleryType);
+            if ($meta === null) {
+                $this->flash('error', $files['name'][$i] . ': ' . \App\Core\MediaUploader::error());
                 continue;
             }
 
-            $hash     = sha1_file($files['tmp_name'][$i]);
-            $existing = Photo::findByHash($hash);
+            $filename = uniqid('photo_', true) . '.' . $meta['extension'];
+            $dest     = $config['dir'] . '/' . $filename;
 
-            if ($existing !== null) {
-                Gallery::attachPhoto($galleryId, (int) $existing['id']);
-                $added++;
+            if (!\App\Core\MediaUploader::saveFinal($files['tmp_name'][$i], $dest, $meta['is_image'], $config)) {
+                $this->flash('error', $files['name'][$i] . ': ' . \App\Core\MediaUploader::error());
                 continue;
             }
 
-            $extension = strtolower(pathinfo($files['name'][$i], PATHINFO_EXTENSION));
-            $filename  = uniqid('photo_', true) . '.' . $extension;
-            $isImage   = in_array($extension, $config['image_ext'], true);
-
-            $dest = $config['dir'] . '/' . $filename;
-
-            if (!move_uploaded_file($files['tmp_name'][$i], $dest)) {
-                $this->flash('error', $files['name'][$i] . ': could not be saved.');
-                continue;
-            }
-
-            // Generate variants BEFORE the photo is committed: a file that
-            // cannot produce a thumbnail (corrupt/unsupported content) is
-            // rolled back and reported instead of leaving a broken grid tile.
-            $variantsOk = true;
-            if ($isImage) {
-                $variantsOk = create_image_variants(
-                    $dest,
-                    $config['dir'] . '/web_' . $filename,
-                    $config['dir'] . '/thumb_' . $filename,
-                    $config['web_max_width'],
-                    $config['thumb_width'],
-                    $config['thumb_height']
-                );
-            } elseif (is_video($filename)) {
-                $variantsOk = create_video_thumbnail(
-                    $dest,
-                    $config['dir'] . '/thumb_' . $filename,
-                    $config['thumb_width'],
-                    $config['thumb_height']
-                );
-            }
-
-            if (!$variantsOk) {
-                @unlink($dest);
-                @unlink($config['dir'] . '/web_' . $filename);
-                @unlink($config['dir'] . '/thumb_' . $filename);
-                $this->flash('error', $files['name'][$i] . ': could not generate a preview (file may be corrupt or unsupported).');
-                continue;
-            }
-
-            $photoId = Photo::create($filename, $hash);
-            Gallery::attachPhoto($galleryId, $photoId);
+            \App\Core\MediaUploader::commit($galleryId, $filename, $meta['hash']);
             $added++;
         }
 
         return $added;
-    }
-
-    /**
-     * Validate a single uploaded file: size limit, allowed extension, gallery
-     * type match and that the content really is an image or a video (not a
-     * disguised payload). Returns an error message or null when the file is
-     * acceptable.
-     */
-    private function validate(array $files, int $index, array $config, string $galleryType = 'images'): ?string
-    {
-        if ($files['size'][$index] > $config['max_size']) {
-            return 'File is too large.';
-        }
-
-        $extension = strtolower(pathinfo($files['name'][$index], PATHINFO_EXTENSION));
-
-        $allowed = array_merge($config['image_ext'], $config['video_ext']);
-
-        if (!in_array($extension, $allowed, true)) {
-            return 'File type not allowed.';
-        }
-
-        $isImage = in_array($extension, $config['image_ext'], true);
-
-        if ($galleryType === 'videos' && $isImage) {
-            return 'Video galleries can only contain video files.';
-        }
-
-        if ($galleryType === 'images' && !$isImage) {
-            return 'Image galleries can only contain image files.';
-        }
-
-        if ($isImage) {
-            if (!image_can_decode($files['tmp_name'][$index])) {
-                return 'File is not a valid image.';
-            }
-
-            return null;
-        }
-
-        if (strpos(sniff_mime($files['tmp_name'][$index]), 'video/') !== 0) {
-            return 'File is not a valid video.';
-        }
-
-        return null;
     }
 }
