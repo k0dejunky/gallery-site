@@ -711,11 +711,13 @@ class AutoPostQueue
         // gallery set still keeps X/Reddit active all day).
         $scheduled = 0;
         $pool      = array_values($galleryIds);
-        $poolCount = max(1, count($pool));
+        $poolCount = count($pool);
         $slots     = min($count, $hours);
+        // Never cycle the pool: each gallery is used at most once per refill.
+        $toSchedule = min($slots, $poolCount);
 
-        for ($i = 0; $i < $slots; $i++) {
-            $gallery = $pool[$i % $poolCount];
+        for ($i = 0; $i < $toSchedule; $i++) {
+            $gallery = $pool[$i];
             $when = (new DateTime('@' . time()))
                 ->setTimezone(self::schedulerTimezone())
                 ->modify('+' . $i . ' hours')
@@ -734,7 +736,7 @@ class AutoPostQueue
                 $platform ?? 'x',
                 '',
                 'info',
-                "Idle queue refilled: scheduled {$scheduled} post(s) across {$slots} hourly slot(s) from " . $poolCount . " gallery(ies) (first due now)"
+                "Idle queue refilled: scheduled {$scheduled} post(s) from " . $toSchedule . " distinct gallery(ies) (target {$slots}, first due now)"
             );
         }
 
@@ -810,10 +812,19 @@ class AutoPostQueue
             }
 
             $pool      = array_values($galleryIds);
-            $poolCount = max(1, count($pool));
+            $poolCount = count($pool);
+            if ($poolCount === 0) {
+                continue;
+            }
 
-            for ($i = 0; $i < $missing; $i++) {
-                $gallery = $pool[$i % $poolCount];
+            // Use each gallery at most once per generation — never cycle the pool
+            // to fill the window. When fewer distinct galleries are available than
+            // the target, we schedule exactly that many (a gallery is never queued
+            // twice in one random refill).
+            $toSchedule = min($missing, $poolCount);
+
+            for ($i = 0; $i < $toSchedule; $i++) {
+                $gallery = $pool[$i];
                 $when    = (clone $next)->modify('+' . $i . ' hours')->format('Y-m-d\TH:i');
                 if (self::enqueue((int) $gallery['id'], null, $when, $pf) > 0) {
                     $scheduled++;
@@ -822,10 +833,10 @@ class AutoPostQueue
 
             AutoPosterConfig::log(
                 $pf === 'twitter' ? 'x' : $pf,
-                '',
-                'info',
-                "Pipeline refilled: queued was {$queued}, scheduled {$missing} more to reach {$slots} hourly post(s)"
-            );
+            '',
+            'info',
+            "Pipeline refilled: queued was {$queued}, scheduled {$toSchedule} distinct gallery post(s) (target {$slots})"
+        );
         }
 
         return $scheduled;
