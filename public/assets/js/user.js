@@ -25,7 +25,10 @@
     lbImg.addEventListener('click',function(e){
       e.stopPropagation();
       if(Date.now()<suppressClickUntil)return;
-      if(!pinchActive)lbImg.classList.toggle('zoomed');
+      if(!pinchActive){
+        lbImg.classList.toggle('zoomed');
+        if(!lbImg.classList.contains('zoomed')){ lb.scrollTop=0; lb.scrollLeft=0; }
+      }
     });
     lbFullBtn=lb.querySelector('.lb-full');
     lbFullBtn.onclick=function(e){e.stopPropagation();fullSize=!fullSize;show();};
@@ -81,6 +84,7 @@
     lbImg.classList.remove('zoomed');
     lbImg.style.transform='';
     touchScale=1;
+    lb.scrollTop=0; lb.scrollLeft=0;
     document.body.style.overflow='';
     if(returnFocus&&typeof returnFocus.focus==='function')returnFocus.focus();
     returnFocus=null;
@@ -112,13 +116,18 @@
       touchScale=Math.max(1,Math.min(4,touchScale*ratio));
       touchStartDistance=distance(e.touches[0],e.touches[1]);
       lbImg.style.transform='scale('+touchScale+')';
+      // Beyond 1x the image must overflow so the lightbox can scroll (pan)
+      // to the rest of it; the class drops the max-width/max-height caps.
+      if(touchScale>1){lbImg.classList.add('zoomed');}else{lbImg.classList.remove('zoomed');}
       return;
     }
-    if(!pinchActive&&Math.abs(e.touches[0].clientX-touchStartX)>10){e.preventDefault();touchMoved=true;}
+    // When zoomed, don't block the browser's native pan/scroll; swiping to
+    // navigate images only applies at 1x.
+    if(!pinchActive&&!lbImg.classList.contains('zoomed')&&Math.abs(e.touches[0].clientX-touchStartX)>10){e.preventDefault();touchMoved=true;}
   }
   function touchEnd(e){
     if(touchMoved)suppressClickUntil=Date.now()+500;
-    if(!pinchActive&&touchMoved&&e.changedTouches.length){
+    if(!pinchActive&&touchMoved&&e.changedTouches.length&&!lbImg.classList.contains('zoomed')){
       var dx=e.changedTouches[0].clientX-touchStartX,dy=e.changedTouches[0].clientY-touchStartY;
       if(Math.abs(dx)>=50&&Math.abs(dx)>Math.abs(dy)){navigate(dx<0?1:-1);}
     }
@@ -136,6 +145,7 @@
     lbImg.fetchPriority='high';
     lbImg.alt=m.caption||'';
     lbImg.classList.remove('zoomed');
+    if(lb){ lb.scrollTop=0; lb.scrollLeft=0; }
     lbImg.onload=function(){lbImg.classList.add('lb-loaded');};
     lbCaption.textContent=m.caption||'';
     lbCounter.textContent='Item '+(currentIdx+1)+' of '+images.length;
