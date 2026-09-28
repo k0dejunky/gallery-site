@@ -58,9 +58,9 @@ class PhotoController extends Controller
             $this->redirect('/admin/galleries/' . $galleryId);
         }
 
-        $before = count(Gallery::photos($galleryId));
+        $before = Gallery::photoCount($galleryId);
         $added  = $this->storeFiles($galleryId, $files);
-        $after  = count(Gallery::photos($galleryId));
+        $after  = Gallery::photoCount($galleryId);
 
         if ($after > $before) {
             AuditLog::record(

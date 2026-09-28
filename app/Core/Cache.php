@@ -140,21 +140,49 @@ public static function genKey(string $bucket, string $key): string
 
 /**
  * Cache a value under a generation-scoped key. Returns the cached string,
- * or computes + stores the callback result when missing.
+ * or computes + stores the callback result when missing. Array callbacks are
+ * supported transparently: an array result is JSON-encoded and stored under a
+ * distinct key (suffix ":a") so it can never collide with a string cache, and
+ * a hit is decoded back to an array. This makes "forget to stringify" bugs
+ * impossible instead of fatalling on the (string) cast.
+ *
+ * @return string|array
  */
-public static function rememberGen(string $bucket, string $key, int $ttl, callable $callback): string
+public static function rememberGen(string $bucket, string $key, int $ttl, callable $callback)
 {
     $cacheKey = self::genKey($bucket, $key);
+
+    // Arrays are stored under their own key (suffix ":a") so a string cache
+    // can never misinterpret an old value, and legacy plain-key strings are
+    // never mistaken for arrays. Check the array key first so a caller that
+    // switched from string to array after a legacy write still gets an array.
+    $arrayKey = $cacheKey . ':a';
+    $arrayHit = self::get($arrayKey);
+
+    if ($arrayHit !== null) {
+        $decoded = json_decode($arrayHit, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
     $hit = self::get($cacheKey);
 
     if ($hit !== null) {
         return $hit;
     }
 
-    $value = (string) $callback();
-    self::set($cacheKey, $value, $ttl);
+    $value = $callback();
 
-    return $value;
+    if (is_array($value)) {
+        self::set($arrayKey, json_encode($value, JSON_UNESCAPED_SLASHES) ?: '[]', $ttl);
+
+        return $value;
+    }
+
+    $string = (string) $value;
+    self::set($cacheKey, $string, $ttl);
+
+    return $string;
 }
 
     /**

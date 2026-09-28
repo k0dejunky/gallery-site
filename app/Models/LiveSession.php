@@ -158,6 +158,10 @@ class LiveSession
                             [self::hashOf($key), 'live']
                         )->fetch();
 
+                        if ($row !== false) {
+                            self::maybeNotifyLive($row);
+                        }
+
                         return [
                             'live'       => true,
                             'since'      => $row !== false ? (string) $row['started_at'] : null,
@@ -174,6 +178,36 @@ class LiveSession
         }
 
         return ['live' => false, 'since' => null, 'viewers' => 0, 'stream_key' => null, 'session_id' => null, 'paused' => false];
+    }
+
+    /**
+     * Email members who enabled notify_live that the stream is genuinely up,
+     * exactly once per session (guarded by live_sessions.live_notified_at).
+     * Called from status() because that is the first place a session is known
+     * to be truly live (RTMP path ready); the atomic claim means a flood of
+     * status() polls still enqueues only one mail.
+     */
+    private static function maybeNotifyLive(array $row): void
+    {
+        if (!empty($row['live_notified_at'])) {
+            return;
+        }
+
+        $claimed = Database::run(
+            'UPDATE ' . self::TABLE . ' SET live_notified_at = CURRENT_TIMESTAMP
+             WHERE id = ? AND live_notified_at IS NULL',
+            [(int) $row['id']]
+        );
+
+        if ((int) $claimed->rowCount() !== 1) {
+            return; // a concurrent status() poll won the race
+        }
+
+        $subject = 'She is live now';
+        $html    = render_email('live_now', []);
+        $text    = render_email('live_now.text', []);
+
+        \App\Models\EmailQueue::enqueueNotification('notify_live', $subject, $html, $text);
     }
 
     /**

@@ -131,6 +131,41 @@ class Gallery
             [$id]
         );
         \App\Core\Cache::bump('gallery');
+        self::notifyNewGalleryIfUnsent($id);
+    }
+
+    /**
+     * Email members who enabled notify_new_gallery that a gallery has gone
+     * live, exactly once per gallery (guarded by galleries.notified_at).
+     * Safe to call from publishNow and the housekeeping sweep; a gallery
+     * already notified is skipped.
+     */
+    public static function notifyNewGalleryIfUnsent(int $galleryId): void
+    {
+        $claimed = Database::run(
+            'UPDATE galleries SET notified_at = CURRENT_TIMESTAMP
+             WHERE id = ? AND notified_at IS NULL',
+            [$galleryId]
+        );
+
+        if ((int) $claimed->rowCount() !== 1) {
+            return; // already notified (or a concurrent run won the race)
+        }
+
+        $gallery = Database::run(
+            'SELECT id, title, description FROM galleries WHERE id = ?',
+            [$galleryId]
+        )->fetch();
+
+        if ($gallery === false) {
+            return;
+        }
+
+        $subject = 'New gallery: ' . mb_substr((string) $gallery['title'], 0, 120);
+        $html    = render_email('new_gallery', ['gallery' => $gallery]);
+        $text    = render_email('new_gallery.text', ['gallery' => $gallery]);
+
+        \App\Models\EmailQueue::enqueueNotification('notify_new_gallery', $subject, $html, $text);
     }
 
     /**
@@ -768,7 +803,10 @@ class Gallery
 
     /**
      * Bulk-load the first photo for multiple galleries in one query.
-     * Returns [gallery_id => photo_row] map.
+     * Returns [gallery_id => photo_row] map. Each gallery's cover is its
+     * lowest-position photo (ties broken by lowest photo id, matching the
+     * per-gallery display order), fetched with a MIN(position) subquery so a
+     * listing of N galleries scans only N cover rows instead of every photo.
      */
     public static function firstPhotos(array $galleryIds): array
     {
@@ -784,18 +822,20 @@ class Gallery
              FROM photos p
              INNER JOIN gallery_photo gp ON gp.photo_id = p.id
              WHERE gp.gallery_id IN ($placeholders)
-             ORDER BY gp.position ASC, p.id ASC",
+               AND gp.position = (
+                   SELECT MIN(g2.position) FROM gallery_photo g2
+                   WHERE g2.gallery_id = gp.gallery_id
+               )
+             ORDER BY gp.gallery_id ASC, p.id ASC",
             $galleryIds
         )->fetchAll();
 
         $result = [];
-        $seen   = [];
 
         foreach ($rows as $row) {
             $gid = (int) $row['gallery_id'];
-            if (!isset($seen[$gid])) {
-                $seen[$gid]    = true;
-                $result[$gid]  = $row;
+            if (!isset($result[$gid])) {
+                $result[$gid] = $row;
             }
         }
 

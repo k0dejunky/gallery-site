@@ -103,6 +103,7 @@
 <?php // AI settings (site default mode) ?>
 <form method="post" action="<?= url('/admin/chat/settings') ?>" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;">
     <?= csrf_field() ?>
+    <input type="hidden" name="save_section" value="ai">
     <label class="muted" style="font-size:.85rem;">Default mode for <strong>new</strong> conversations (existing ones keep their own mode):</label>
     <select name="default_ai_mode">
         <option value="retrieval" <?= ($state['default_ai_mode'] ?? 'retrieval') === 'retrieval' ? 'selected' : '' ?>>Retrieval (AI, few-shot over operator replies)</option>
@@ -118,6 +119,46 @@
     </label>
     <button type="submit" class="btn btn-sm">Save default</button>
 </form>
+
+<?php // Live chat moderation: site-wide word filter + member mutes ?>
+<section class="card" style="margin:1rem 0;padding:1rem;">
+    <h2 class="section-title">Live chat moderation</h2>
+    <p class="muted" style="font-size:.85rem;margin-bottom:.75rem;">Site-wide word filter for the live group chat (members only; the operator is never filtered). One word per line, or comma-separated. Messages containing a filtered word are rejected.</p>
+    <form method="post" action="<?= url('/admin/chat/settings') ?>" style="display:flex;flex-direction:column;gap:.5rem;max-width:640px;margin-bottom:1.25rem;">
+        <?= csrf_field() ?>
+        <input type="hidden" name="save_section" value="wordfilter">
+        <textarea name="live_chat_filters" rows="4" placeholder="e.g. scam&#10;onlyfans&#10;spam"><?= e(implode("\n", \App\Core\ChatSettings::liveChatFilters())) ?></textarea>
+        <div><button type="submit" class="btn btn-sm">Save word filter</button></div>
+    </form>
+    <div style="display:flex;flex-wrap:wrap;gap:2rem;">
+        <form method="post" action="<?= url('/admin/chat/mute') ?>" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+            <?= csrf_field() ?>
+            <label class="muted" style="font-size:.85rem;">Mute member from live chat</label>
+            <input type="email" name="email" required placeholder="member@example.com" style="max-width:16rem;">
+            <input type="number" name="hours" min="1" max="168" value="24" style="width:5rem;" title="Hours">
+            <button type="submit" class="btn btn-sm btn-outline">Mute</button>
+        </form>
+        <form method="post" action="<?= url('/admin/chat/unmute') ?>" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+            <?= csrf_field() ?>
+            <label class="muted" style="font-size:.85rem;">Lift a mute</label>
+            <input type="email" name="email" placeholder="member@example.com" style="max-width:16rem;">
+            <button type="submit" class="btn btn-sm btn-outline">Unmute</button>
+        </form>
+    </div>
+    <?php if (!empty($liveChatMutes)): ?>
+        <table style="width:100%;max-width:640px;margin-top:.75rem;font-size:.85rem;">
+            <thead><tr><th style="text-align:left;">Email</th><th style="text-align:left;">Muted until (site time)</th></tr></thead>
+            <tbody>
+                <?php foreach ($liveChatMutes as $m): ?>
+                    <tr>
+                        <td><?= e((string) $m['email']) ?></td>
+                        <td><?= e($m['chat_muted_until'] ? tzdate('Y-m-d H:i', $m['chat_muted_until']) : '') ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
+</section>
 
 <?php // Daily broadcast to users without the chat feature ?>
 <form method="post" action="<?= url('/admin/chat/daily-message') ?>" style="display:flex;flex-direction:column;gap:.35rem;margin-bottom:1rem;max-width:640px;">

@@ -17,6 +17,7 @@ namespace App\Core;
  *   trainer_since_id  int     highest chat_training_pairs id the trainer consumed
  *   ai_content_search bool    AI may search site galleries to answer content questions
  *   ai_content_search_max int max galleries the AI can reference per reply
+ *   live_chat_filters  array   site-wide word filter applied to live-chat member messages
  *
  * On the first read of an existing install whose table is empty, the legacy
  * storage/chat.json is imported once so no settings are lost in the migration.
@@ -38,6 +39,7 @@ class ChatSettings
             'trainer_since_id'     => 0,
             'ai_content_search'    => true,
             'ai_content_search_max' => 6,
+            'live_chat_filters'    => [],
             'trainer_trained_pairs' => 0,
         ];
     }
@@ -140,6 +142,20 @@ class ChatSettings
     public static function setTrainerTrainedPairs(int $count): void
     {
         self::put('trainer_trained_pairs', max(0, $count));
+    }
+
+    /**
+     * The site-wide live-chat word filter: lowercase words applied to member
+     * live-chat messages. An empty list means no filtering.
+     */
+    public static function liveChatFilters(): array
+    {
+        $filters = self::all()['live_chat_filters'] ?? [];
+
+        return array_values(array_filter(
+            is_array($filters) ? $filters : [],
+            static fn ($word): bool => is_string($word) && trim($word) !== ''
+        ));
     }
 
     /**

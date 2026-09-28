@@ -21,7 +21,10 @@ CREATE TABLE IF NOT EXISTS users (
     age_verified_at DATETIME NULL DEFAULT NULL,
     email_verified_at DATETIME NULL DEFAULT NULL,
     email_verification_token CHAR(64) NULL DEFAULT NULL,
+    chat_muted_until DATETIME NULL DEFAULT NULL,
     marketing_opt_out TINYINT(1) NOT NULL DEFAULT 0,
+    notify_new_gallery TINYINT(1) NOT NULL DEFAULT 1,
+    notify_live TINYINT(1) NOT NULL DEFAULT 1,
     signup_source_link_id INT UNSIGNED NULL DEFAULT NULL,
     utm_source   VARCHAR(120) NULL,
     utm_medium   VARCHAR(120) NULL,
@@ -100,6 +103,7 @@ CREATE TABLE IF NOT EXISTS galleries (
     min_level    INT UNSIGNED NOT NULL DEFAULT 0,
     is_secret    TINYINT(1) NOT NULL DEFAULT 0,
     published_at DATETIME NULL DEFAULT NULL,
+    notified_at  DATETIME NULL DEFAULT NULL,
     views        INT UNSIGNED NOT NULL DEFAULT 0,
     unique_views INT UNSIGNED NOT NULL DEFAULT 0,
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -139,6 +143,7 @@ CREATE TABLE IF NOT EXISTS gallery_photo (
     photo_id   INT UNSIGNED NOT NULL,
     position   INT UNSIGNED NOT NULL DEFAULT 0,
     PRIMARY KEY (gallery_id, photo_id),
+    INDEX idx_gallery_photo_pos (gallery_id, position),
     FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE,
     FOREIGN KEY (photo_id)   REFERENCES photos(id)   ON DELETE CASCADE
 );
@@ -483,7 +488,7 @@ CREATE TABLE IF NOT EXISTS auto_poster_queue (
 -- each row 'sent' or 'failed'.
 CREATE TABLE IF NOT EXISTS email_queue (
     id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    audience   ENUM('subscriber','non_subscriber') NOT NULL,
+    audience   ENUM('subscriber','non_subscriber','notification') NOT NULL,
     user_id    INT UNSIGNED NULL,
     email      VARCHAR(255) NOT NULL,
     subject    VARCHAR(255) NOT NULL,
@@ -637,6 +642,7 @@ CREATE TABLE IF NOT EXISTS live_sessions (
     created_by  INT UNSIGNED NOT NULL,
     status      ENUM('pending','live','ended') NOT NULL DEFAULT 'pending',
     started_at  DATETIME NULL,
+    live_notified_at DATETIME NULL,
     ended_at    DATETIME NULL,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_live_status (status),

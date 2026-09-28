@@ -431,6 +431,14 @@ class SmokeChecks
                 ? $ok('cache helpers + hot paths wired')
                 : $bad('Cache must expose rememberGen()/bump() and Category/Photo/Gallery hot reads must use it');
         });
+        $add('smoke.serveropt.cache_array_safe', 'Smoke · Server optimizations', 'rememberGen transparently round-trips array callbacks', static function () use ($cacheCore, $ok, $bad): array {
+            return strpos($cacheCore, 'is_array($value)') !== false
+                && strpos($cacheCore, '$arrayKey') !== false
+                && strpos($cacheCore, "':a'") !== false
+                && strpos($cacheCore, 'json_encode($value') !== false
+                ? $ok('array callbacks stored under a distinct key + decoded on hit')
+                : $bad('Cache::rememberGen must accept array callbacks (JSON under a distinct ":a" key) so an array return never fatals on the (string) cast');
+        });
 
         // ----------------------------------------------------- Operator tokens
         $tokenModel = $read("$root/app/Models/OperatorToken.php");

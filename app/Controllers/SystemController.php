@@ -60,6 +60,11 @@ class SystemController extends Controller
             'photoEditQueue' => $this->photoEditQueue(),
             'slowQueries' => \App\Core\Database::recentSlowQueries(),
             'apiHealth'  => $this->apiHealth(),
+            'analytics'  => [
+                'finance' => \App\Models\Stats::finance(6),
+                'traffic' => \App\Models\Stats::trafficMonthly(6),
+                'plans'   => \App\Models\Stats::planDistribution(),
+            ],
         ]);
     }
 

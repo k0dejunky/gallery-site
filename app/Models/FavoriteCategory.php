@@ -16,22 +16,20 @@ class FavoriteCategory
     public static function forUser(int $userId): array
     {
         // Cached per user; invalidated via bump('favorites') on add/remove so
-        // the sidebar always reflects the latest favourites.
-        $json = \App\Core\Cache::rememberGen('favorites', 'nav:u' . $userId, 300, static function () use ($userId): string {
-            return json_encode(
-                Database::run(
-                    'SELECT c.id, c.name, c.slug
-                     FROM user_favorite_categories uf
-                     INNER JOIN categories c ON c.id = uf.category_id
-                     WHERE uf.user_id = ?
-                     ORDER BY uf.created_at ASC',
-                    [$userId]
-                )->fetchAll(),
-                JSON_UNESCAPED_SLASHES
-            ) ?: '[]';
+        // the sidebar always reflects the latest favourites. rememberGen
+        // transparently round-trips the array (see Cache::rememberGen). The
+        // "navv2:" key is versioned so no legacy string cached under the old
+        // key can ever be misread as this array.
+        return \App\Core\Cache::rememberGen('favorites', 'navv2:u' . $userId, 300, static function () use ($userId): array {
+            return Database::run(
+                'SELECT c.id, c.name, c.slug
+                 FROM user_favorite_categories uf
+                 INNER JOIN categories c ON c.id = uf.category_id
+                 WHERE uf.user_id = ?
+                 ORDER BY uf.created_at ASC',
+                [$userId]
+            )->fetchAll();
         });
-
-        return json_decode((string) $json, true) ?: [];
     }
 
     /**

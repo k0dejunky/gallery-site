@@ -1321,7 +1321,10 @@ class GalleryController extends Controller
 
         $this->viewAdmin('edit', [
             'gallery'      => $gallery,
-            'photos'       => Gallery::photos($id),
+            // Capped so a huge gallery never makes the edit form render one
+            // tile per file; the manage page still lists everything.
+            'photos'       => Gallery::photosSlice($id, 200, 0),
+            'photoCount'   => Gallery::photoCount($id),
             'categories'   => Category::all(),
             'assigned'     => array_map(
                 static fn (array $category) => (int) $category['id'],

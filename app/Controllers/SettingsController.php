@@ -196,6 +196,27 @@ class SettingsController extends Controller
         $this->redirect($this->settingsPath());
     }
 
+    /**
+     * Notification preferences (default ON, opt-out): a member can switch off
+     * the "new gallery" and "live now" emails independently.
+     */
+    public function updateNotifications(): void
+    {
+        $user = Auth::user();
+
+        \App\Core\Database::run(
+            'UPDATE users SET notify_new_gallery = ?, notify_live = ? WHERE id = ?',
+            [
+                $this->request->post('notify_new_gallery') === '1' ? 1 : 0,
+                $this->request->post('notify_live') === '1' ? 1 : 0,
+                (int) $user['id'],
+            ]
+        );
+
+        $this->flash('success', 'Notification preferences updated.');
+        $this->redirect($this->settingsPath());
+    }
+
     public function logoutEverywhere(): void
     {
         $user = Auth::user();

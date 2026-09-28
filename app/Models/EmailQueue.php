@@ -268,6 +268,60 @@ class EmailQueue
     }
 
     /**
+     * Members who have enabled a notification type (notify_new_gallery /
+     * notify_live): active, non-admin accounts that have not used the global
+     * marketing opt-out. Both paid and free members receive transactional
+     * notifications (a new gallery / live start is relevant to everyone).
+     *
+     * @return array<int, array{id: int, email: string}>
+     */
+    public static function notificationRecipients(string $flagColumn): array
+    {
+        if (!in_array($flagColumn, ['notify_new_gallery', 'notify_live'], true)) {
+            return [];
+        }
+
+        $excluded = implode(', ', array_map(static fn (string $r): string => "'" . $r . "'", self::EXCLUDED_ROLES));
+
+        $rows = Database::run(
+            "SELECT u.id, u.email
+             FROM users u
+             WHERE u.status = 'active'
+               AND u.role NOT IN ($excluded)
+               AND COALESCE(u.marketing_opt_out, 0) = 0
+               AND COALESCE(u.{$flagColumn}, 1) = 1"
+        )->fetchAll();
+
+        return array_map(
+            static fn (array $row): array => ['id' => (int) $row['id'], 'email' => (string) $row['email']],
+            $rows
+        );
+    }
+
+    /**
+     * Queue a transactional notification (audience = 'notification') to every
+     * member who enabled the given type. The body carries the per-recipient
+     * {{unsubscribe-url}} placeholder like the digest, so opting out of
+     * marketing mail also stops these. Returns the number of recipients.
+     */
+    public static function enqueueNotification(string $flagColumn, string $subject, string $html, string $text): int
+    {
+        $recipients = self::notificationRecipients($flagColumn);
+        if ($recipients === []) {
+            return 0;
+        }
+
+        $rows = [];
+        foreach ($recipients as $user) {
+            $rows[] = ['notification', $user['id'], $user['email'], $subject, $html, $text];
+        }
+
+        self::insertRows($rows);
+
+        return count($rows);
+    }
+
+    /**
      * Batch-insert queued rows 200 at a time so even a large mailing stays
      * inside a single prepared statement.
      *

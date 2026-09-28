@@ -241,6 +241,74 @@ class Stats
     }
 
     /**
+     * Monthly traffic series for the admin System page: gallery content views,
+     * distinct members who viewed at least one gallery, and newly published
+     * galleries, over the trailing $months calendar months. Returns aligned
+     * label/value arrays so Charts::bars() can draw them directly.
+     */
+    public static function trafficMonthly(int $months = 6): array
+    {
+        $months = max(1, min(24, $months));
+        $since  = date('Y-m-01 00:00:00', strtotime('-' . ($months - 1) . ' months'));
+
+        $viewRows = Database::run(
+            "SELECT DATE_FORMAT(view_date, '%Y-%m') AS ym, SUM(count) AS cnt
+             FROM content_views
+             WHERE entity_type = 'gallery' AND view_date >= ?
+             GROUP BY ym ORDER BY ym",
+            [$since]
+        )->fetchAll();
+
+        $uniqueRows = Database::run(
+            "SELECT DATE_FORMAT(viewed_at, '%Y-%m') AS ym, COUNT(DISTINCT user_id) AS uniques
+             FROM gallery_viewers
+             WHERE viewed_at >= ?
+             GROUP BY ym ORDER BY ym",
+            [$since]
+        )->fetchAll();
+
+        $galleryRows = Database::run(
+            "SELECT DATE_FORMAT(created_at, '%Y-%m') AS ym, COUNT(*) AS cnt
+             FROM galleries
+             WHERE deleted_at IS NULL AND created_at >= ?
+             GROUP BY ym ORDER BY ym",
+            [$since]
+        )->fetchAll();
+
+        $axis = $views = $uniques = $new = [];
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $key = date('Y-m', strtotime("-$i months"));
+            $axis[$key]    = date('M', strtotime("-$i months"));
+            $views[$key]   = 0;
+            $uniques[$key] = 0;
+            $new[$key]     = 0;
+        }
+
+        foreach ($viewRows as $r) {
+            if (isset($views[$r['ym']])) {
+                $views[$r['ym']] = (int) $r['cnt'];
+            }
+        }
+        foreach ($uniqueRows as $r) {
+            if (isset($uniques[$r['ym']])) {
+                $uniques[$r['ym']] = (int) $r['uniques'];
+            }
+        }
+        foreach ($galleryRows as $r) {
+            if (isset($new[$r['ym']])) {
+                $new[$r['ym']] = (int) $r['cnt'];
+            }
+        }
+
+        return [
+            'labels'        => array_values($axis),
+            'views'         => array_values($views),
+            'uniques'       => array_values($uniques),
+            'new_galleries' => array_values($new),
+        ];
+    }
+
+    /**
      * Mixed recent-activity feed for the dashboard: signups, completed
      * payments, failed logins and admin actions merged into one timeline.
      */

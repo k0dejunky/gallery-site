@@ -121,10 +121,13 @@
 </details>
 
 <?php // Show every file already in this gallery so admins see the current contents. Videos show a short clip + poster; images show their thumbnail. ?>
-<h2>Files in this gallery (<?= count($photos) ?>)</h2>
+<h2>Files in this gallery (<?= (int) ($photoCount ?? count($photos)) ?>)</h2>
 <?php if (empty($photos)): ?>
     <p class="muted">No files yet — <a href="<?= url('/admin/galleries/' . (int) $gallery['id']) ?>">upload files on the manage page</a>.</p>
 <?php else: ?>
+    <?php if (($photoCount ?? count($photos)) > count($photos)): ?>
+        <p class="muted">Showing the first <?= count($photos) ?> files — use the manage page to see or edit the rest.</p>
+    <?php endif; ?>
     <div class="media-grid">
         <?php foreach ($photos as $photo): ?>
             <div class="media-item">

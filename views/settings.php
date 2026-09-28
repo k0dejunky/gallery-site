@@ -30,6 +30,23 @@
     </form>
 </section>
 
+<section class="card settings-card">
+    <h2 class="section-title">Email notifications</h2>
+    <p class="muted">Updates are sent by default. Turn off the ones you do not want.</p>
+    <form method="post" action="<?= e(url('/settings/notifications')) ?>" class="settings-form">
+        <?= csrf_field() ?>
+        <div class="settings-fields">
+            <label style="display:inline-flex;align-items:center;gap:.4rem;">
+                <input type="checkbox" name="notify_new_gallery" value="1"<?= !empty($user['notify_new_gallery']) ? ' checked' : '' ?>> New galleries
+            </label>
+            <label style="display:inline-flex;align-items:center;gap:.4rem;">
+                <input type="checkbox" name="notify_live" value="1"<?= !empty($user['notify_live']) ? ' checked' : '' ?>> Live shows
+            </label>
+        </div>
+        <button type="submit" class="btn">Save notification preferences</button>
+    </form>
+</section>
+
 <?php if (\App\Core\Auth::isAdmin()): ?>
 <section class="card settings-card">
     <h2 class="section-title">Site timezone</h2>

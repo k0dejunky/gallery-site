@@ -27,6 +27,54 @@
 <p class="muted">Disk free: <b><?= $diskFree !== false ? number_format((float) $diskFree / 1048576) . ' MB' : 'unknown' ?></b></p>
 
 <div class="sys-grid">
+    <!-- Traffic & revenue -->
+    <div class="sys-card" style="grid-column:span 2;">
+        <h2>Traffic &amp; revenue</h2>
+        <?php $fin = $analytics['finance']; $tr = $analytics['traffic']; ?>
+        <table style="margin-bottom:.75rem;">
+            <tr>
+                <th>Revenue MTD</th><td><?= '$' . number_format((float) $fin['mtd_revenue'], 2) ?></td>
+                <th>Revenue 12 months</th><td><?= '$' . number_format((float) $fin['total_12mo'], 2) ?></td>
+                <th>Active members</th><td><?= number_format((int) $analytics['plans']['total_members']) ?></td>
+            </tr>
+            <tr>
+                <th>Gallery views (30d)</th><td><?= number_format((int) $tr['views'][count($tr['views']) - 1]) ?></td>
+                <th>Unique viewers (30d)</th><td><?= number_format((int) $tr['uniques'][count($tr['uniques']) - 1]) ?></td>
+                <th>New galleries (30d)</th><td><?= number_format((int) $tr['new_galleries'][count($tr['new_galleries']) - 1]) ?></td>
+            </tr>
+        </table>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;">
+            <div>
+                <p class="muted" style="font-size:.8rem;margin:.25rem 0;">Revenue per month</p>
+                <?= \App\Core\Charts::bars($fin['labels'], $fin['revenue'], 480, 130, '#16a34a', '$%.0f') ?>
+            </div>
+            <div>
+                <p class="muted" style="font-size:.8rem;margin:.25rem 0;">New paid subscriptions per month</p>
+                <?= \App\Core\Charts::bars($fin['labels'], $fin['new_paid'], 480, 130, '#2563eb', '%d') ?>
+            </div>
+            <div>
+                <p class="muted" style="font-size:.8rem;margin:.25rem 0;">Gallery views per month</p>
+                <?= \App\Core\Charts::bars($tr['labels'], $tr['views'], 480, 130, '#6d2ea8', '%s') ?>
+            </div>
+            <div>
+                <p class="muted" style="font-size:.8rem;margin:.25rem 0;">Unique viewers per month</p>
+                <?= \App\Core\Charts::bars($tr['labels'], $tr['uniques'], 480, 130, '#d946ef', '%s') ?>
+            </div>
+            <div>
+                <p class="muted" style="font-size:.8rem;margin:.25rem 0;">New galleries per month</p>
+                <?= \App\Core\Charts::bars($tr['labels'], $tr['new_galleries'], 480, 130, '#0ea5e9', '%d') ?>
+            </div>
+            <div>
+                <p class="muted" style="font-size:.8rem;margin:.25rem 0;">Members by tier</p>
+                <?= \App\Core\Charts::pie(array_values(array_map(
+                    static fn (string $tier, array $t): array => ['label' => $tier . ' (' . $t['members'] . ')', 'value' => $t['members'], 'color' => ['#6d2ea8', '#2563eb', '#16a34a'][min((int) $t['level'] - 1, 2)]],
+                    array_keys($analytics['plans']['by_tier']),
+                    array_values($analytics['plans']['by_tier'])
+                )), 220, 160) ?>
+            </div>
+        </div>
+    </div>
+
     <!-- Operational diagnostics -->
     <div class="sys-card">
         <h2>Operational diagnostics</h2>

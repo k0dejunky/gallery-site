@@ -125,6 +125,14 @@ class Housekeeping
         // the stored files so they free storage and are permanently gone.
         $out['chat_media_purged'] = \App\Models\ChatMessage::purgeExpiredMedia();
 
+        // New PHP fatals since the last sweep: alert the admin so an outage
+        // (like a runtime type error) is caught immediately, not by users.
+        $out['fatal_alerted'] = self::alertOnPhpFatals($root);
+
+        // Member notifications: email members once per newly-live gallery
+        // (covers galleries published on schedule, not just "publish now").
+        $out['new_gallery_notified'] = self::notifyNewGalleries();
+
         @file_put_contents(
             $root . '/storage/logs/cron.log',
             implode(' | ', array_map(fn ($k, $v) => "$k=$v", array_keys($out), $out)) . "\n",
@@ -132,6 +140,93 @@ class Housekeeping
         );
 
         return $out;
+    }
+
+    /**
+     * Queue "new gallery" notifications (once each, via notified_at) for
+     * galleries that are visible and were created in the last 14 days. The
+     * 14-day window stops a legacy site from notifying its entire back
+     * catalogue on first deploy; the LIMIT bounds a burst.
+     */
+    private static function notifyNewGalleries(): int
+    {
+        $rows = Database::run(
+            'SELECT id FROM galleries
+             WHERE deleted_at IS NULL
+               AND notified_at IS NULL
+               AND (published_at IS NULL OR published_at <= CURRENT_TIMESTAMP)
+               AND created_at >= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 14 DAY)
+             ORDER BY id ASC
+             LIMIT 50'
+        )->fetchAll();
+
+        $count = 0;
+        foreach ($rows as $row) {
+            \App\Models\Gallery::notifyNewGalleryIfUnsent((int) $row['id']);
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Watch for brand-new PHP fatal/parse errors in storage/logs/php-error.log
+     * since the last sweep and email the admin when one appears. Tracks the
+     * byte offset it has already consumed in a small state file, so a fatal
+     * is reported exactly once; if the log is rotated/truncated the offset is
+     * reset and the tail is scanned again.
+     */
+    private static function alertOnPhpFatals(string $root): int
+    {
+        $logPath = $root . '/storage/logs/php-error.log';
+        $state   = $root . '/storage/logs/.php_fatal_alert_offset';
+
+        $size = is_file($logPath) ? (int) @filesize($logPath) : 0;
+        if ($size <= 0) {
+            @file_put_contents($state, '0');
+
+            return 0;
+        }
+
+        $offset = is_file($state) ? (int) @file_get_contents($state) : 0;
+        if ($offset > $size) {
+            $offset = 0; // log was rotated or truncated
+        }
+
+        // Keep the tail bounded so a huge backlog never floods the read.
+        $start = max($offset, $size - 262144);
+
+        $chunk = $start < $size ? (string) @file_get_contents($logPath, false, null, $start, $size - $start) : '';
+
+        @file_put_contents($state, (string) $size);
+
+        if ($chunk === '') {
+            return 0;
+        }
+
+        $lines = preg_split('/\r?\n/', $chunk) ?: [];
+        $fresh = [];
+
+        foreach ($lines as $line) {
+            if (preg_match('/PHP (Fatal|Parse) error:|Uncaught [A-Za-z\\\\]+:/', $line)) {
+                $fresh[] = trim($line);
+            }
+        }
+
+        if (!$fresh) {
+            return 0;
+        }
+
+        $sample = implode("\n", array_slice($fresh, 0, 10));
+
+        Mailer::adminAlert(
+            'php-fatal',
+            'PHP fatal error on the gallery site',
+            "New PHP fatal/parse errors detected:\n\n" . $sample . "\n\nCheck storage/logs/php-error.log for the full trace.",
+            3600
+        );
+
+        return count($fresh);
     }
 
     /**

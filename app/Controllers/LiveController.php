@@ -284,12 +284,35 @@ class LiveController extends Controller
             return;
         }
 
+        $senderRole = \App\Core\Auth::isAdminRole($user) ? 'operator' : 'user';
+
+        // Moderation applies to members only: mutes and the site-wide word
+        // filter never block the operator's own replies.
+        if ($senderRole === 'user') {
+            $mutedUntil = (string) ($user['chat_muted_until'] ?? '');
+            if ($mutedUntil !== '' && $mutedUntil > gmdate('Y-m-d H:i:s')) {
+                $this->json([
+                    'ok'    => false,
+                    'error' => 'You are muted from live chat until ' . tzdate('Y-m-d H:i', $mutedUntil) . ' (site time).',
+                ]);
+                return;
+            }
+
+            $lower = mb_strtolower($message);
+            foreach (\App\Core\ChatSettings::liveChatFilters() as $word) {
+                if (mb_strpos($lower, $word) !== false) {
+                    $this->json(['ok' => false, 'error' => 'Your message was blocked by the live-chat word filter.']);
+                    return;
+                }
+            }
+        }
+
         Database::run(
             'INSERT INTO live_chat_messages (session_id, user_id, sender_role, message, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
             [
                 (int) $status['session_id'],
                 $userId,
-                \App\Core\Auth::isAdminRole($user) ? 'operator' : 'user',
+                $senderRole,
                 $message,
             ]
         );
@@ -311,7 +334,7 @@ class LiveController extends Controller
         $operator = $this->operator();
         if ($operator !== null) {
             $admin = Database::run(
-                'SELECT id, role FROM users WHERE id = ? LIMIT 1',
+                'SELECT id, role, chat_muted_until FROM users WHERE id = ? LIMIT 1',
                 [(int) $operator['created_by']]
             )->fetch();
             if ($admin !== false) {

@@ -85,6 +85,11 @@ class AdminChatController extends Controller
             'broadcasts'   => ChatBroadcast::log(50),
             'tokens'       => OperatorToken::all(),
             'latestApk'    => $this->latestApkVersion(),
+            'liveChatMutes' => Database::run(
+                'SELECT id, email, chat_muted_until FROM users
+                 WHERE chat_muted_until IS NOT NULL
+                 ORDER BY chat_muted_until DESC'
+            )->fetchAll(),
         ]);
     }
 
@@ -305,24 +310,93 @@ class AdminChatController extends Controller
     /** Site-wide AI mode default used for new conversations. */
     public function saveSettings(): void
     {
-        $defaultMode = (string) $this->request->post('default_ai_mode', 'retrieval');
-        if (!in_array($defaultMode, [ChatMessage::MODE_RETRIEVAL, ChatMessage::MODE_FINETUNED, ChatMessage::MODE_OPERATOR], true)) {
-            $defaultMode = ChatMessage::MODE_RETRIEVAL;
+        $state   = \App\Core\ChatSettings::all();
+        $section = (string) $this->request->post('save_section', 'ai');
+
+        if ($section === 'wordfilter') {
+            // Site-wide live-chat word filter: comma/whitespace separated
+            // words, normalized to lowercase and deduped. Applied to member
+            // live-chat messages.
+            $rawFilter = (string) $this->request->post('live_chat_filters', '');
+            $state['live_chat_filters'] = array_values(array_unique(array_filter(
+                array_map(
+                    static fn (string $word): string => mb_strtolower(trim($word)),
+                    preg_split('/[\s,]+/', $rawFilter) ?: []
+                ),
+                static fn (string $word): bool => $word !== ''
+            )));
+        } else {
+            // AI defaults form (the default when no marker is posted).
+            $defaultMode = (string) $this->request->post('default_ai_mode', 'retrieval');
+            if (!in_array($defaultMode, [ChatMessage::MODE_RETRIEVAL, ChatMessage::MODE_FINETUNED, ChatMessage::MODE_OPERATOR], true)) {
+                $defaultMode = ChatMessage::MODE_RETRIEVAL;
+            }
+            $state['default_ai_mode'] = $defaultMode;
+            $state['model']           = ChatAi::BASE_MODEL;
+            $state['finetuned_model'] = ChatAi::FINETUNED_MODEL;
+            $state['ai_content_search'] = $this->request->post('ai_content_search') === '1';
+            $state['ai_content_search_max'] = max(1, min(12, (int) $this->request->post('ai_content_search_max', '6')));
         }
-
-        $state = \App\Core\ChatSettings::all();
-        $state['default_ai_mode'] = $defaultMode;
-        $state['model']           = ChatAi::BASE_MODEL;
-        $state['finetuned_model'] = ChatAi::FINETUNED_MODEL;
-
-        // AI content search: let the bot search site galleries (titles,
-        // descriptions, categories) to answer content questions.
-        $state['ai_content_search'] = $this->request->post('ai_content_search') === '1';
-        $state['ai_content_search_max'] = max(1, min(12, (int) $this->request->post('ai_content_search_max', '6')));
 
         \App\Core\ChatSettings::save($state);
 
         $this->flash('success', 'Chat settings saved.');
+        $this->redirect('/admin/chat');
+    }
+
+    /**
+     * Mute a member from the live group chat for a number of hours (1-168).
+     * Looks the user up by email so admins do not need their numeric id.
+     */
+    public function muteUser(): void
+    {
+        $email = mb_strtolower(trim((string) $this->request->post('email', '')));
+        $hours = max(1, min(168, (int) $this->request->post('hours', '1')));
+
+        if ($email === '') {
+            $this->flash('error', 'Enter the member\'s email to mute.');
+            $this->redirect('/admin/chat');
+            return;
+        }
+
+        $user = Database::run(
+            "SELECT id, role, chat_muted_until FROM users WHERE email = ? AND role = 'user' LIMIT 1",
+            [$email]
+        )->fetch();
+
+        if ($user === false) {
+            $this->flash('error', 'No member account with that email.');
+            $this->redirect('/admin/chat');
+            return;
+        }
+
+        $until = gmdate('Y-m-d H:i:s', time() + $hours * 3600);
+        Database::run(
+            'UPDATE users SET chat_muted_until = ? WHERE id = ?',
+            [$until, (int) $user['id']]
+        );
+
+        $this->flash('success', 'Muted ' . $email . ' from live chat for ' . $hours . ' hour' . ($hours === 1 ? '' : 's') . '.');
+        $this->redirect('/admin/chat');
+    }
+
+    /**
+     * Lift a member's live-chat mute immediately.
+     */
+    public function unmuteUser(): void
+    {
+        $email = mb_strtolower(trim((string) $this->request->post('email', '')));
+
+        $updated = Database::run(
+            'UPDATE users SET chat_muted_until = NULL WHERE email = ? AND chat_muted_until IS NOT NULL',
+            [$email]
+        );
+
+        if ((int) $updated->rowCount() > 0) {
+            $this->flash('success', 'Mute lifted for ' . $email . '.');
+        } else {
+            $this->flash('error', 'No active mute found for that email.');
+        }
         $this->redirect('/admin/chat');
     }
 
