@@ -115,6 +115,52 @@ class User
     }
 
     /**
+     * The member's personal referral code (created on first use). Used by
+     * /go/{code} to attribute signups to the referrer.
+     */
+    public static function referralCode(int $userId): string
+    {
+        $existing = (string) Database::run(
+            'SELECT referral_code FROM users WHERE id = ? LIMIT 1',
+            [$userId]
+        )->fetchColumn();
+
+        if ($existing !== '') {
+            return $existing;
+        }
+
+        do {
+            $code = strtolower(bin2hex(random_bytes(6))); // 12 hex chars
+            $taken = (int) Database::run(
+                'SELECT COUNT(*) FROM users WHERE referral_code = ?',
+                [$code]
+            )->fetchColumn();
+        } while ($taken > 0);
+
+        Database::run(
+            'UPDATE users SET referral_code = ? WHERE id = ? AND referral_code IS NULL',
+            [$code, $userId]
+        );
+
+        return $code;
+    }
+
+    /**
+     * Resolve a referral code to a user id, or null.
+     */
+    public static function findReferralUserId(string $code): ?int
+    {
+        $code = strtolower(trim($code));
+        if ($code === '' || !preg_match('/^[a-f0-9]{12}$/', $code)) {
+            return null;
+        }
+
+        $id = Database::run('SELECT id FROM users WHERE referral_code = ? LIMIT 1', [$code])->fetchColumn();
+
+        return $id !== false ? (int) $id : null;
+    }
+
+    /**
      * Generate and store a new email verification token. The raw token is
      * returned only to the caller so it can be placed in the email link.
      */

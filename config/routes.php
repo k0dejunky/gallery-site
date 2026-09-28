@@ -64,6 +64,8 @@ return [
     ['POST', '/collections/{id}/delete', 'CollectionController@delete'],
     ['POST', '/collections/{id}/galleries', 'CollectionController@addGallery'],
     ['POST', '/collections/{id}/galleries/{galleryId}/delete', 'CollectionController@removeGallery'],
+    ['GET', '/go/{code}', 'ReferralController@go'],
+    ['GET', '/account/referrals', 'ReferralController@page'],
 
     // Saved searches (active members)
     ['GET', '/saved-searches', 'SavedSearchController@index'],

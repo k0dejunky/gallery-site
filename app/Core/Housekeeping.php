@@ -133,6 +133,10 @@ class Housekeeping
         // (covers galleries published on schedule, not just "publish now").
         $out['new_gallery_notified'] = self::notifyNewGalleries();
 
+        // Refer-a-friend: +7 free days to referrers whose referred members
+        // have become paying.
+        $out['referral_rewards'] = self::rewardReferrals();
+
         @file_put_contents(
             $root . '/storage/logs/cron.log',
             implode(' | ', array_map(fn ($k, $v) => "$k=$v", array_keys($out), $out)) . "\n",
@@ -167,6 +171,57 @@ class Housekeeping
         }
 
         return $count;
+    }
+
+    /**
+     * Refer-a-friend rewards: when a referred member becomes a paying member
+     * (an active subscription that is not a trial), extend the referrer's
+     * active (expiring) subscription by 7 days — once per referred member.
+     */
+    private static function rewardReferrals(): int
+    {
+        $rows = Database::run(
+            "SELECT u.id AS referred_id, u.referred_by_user_id
+             FROM users u
+             JOIN subscriptions s ON s.user_id = u.id
+             WHERE u.referred_by_user_id IS NOT NULL
+               AND u.referred_by_rewarded_at IS NULL
+               AND s.status = 'active'
+               AND s.transaction_ref NOT LIKE 'TRIAL-%'
+               AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
+             GROUP BY u.id, u.referred_by_user_id
+             LIMIT 50"
+        )->fetchAll();
+
+        $rewarded = 0;
+        foreach ($rows as $row) {
+            $referrerId = (int) $row['referred_by_user_id'];
+
+            // Only extend expiring (non-lifetime) memberships.
+            $sub = Database::run(
+                "SELECT id FROM subscriptions
+                 WHERE user_id = ? AND status = 'active'
+                   AND expires_at IS NOT NULL AND expires_at > CURRENT_TIMESTAMP
+                 ORDER BY id DESC LIMIT 1",
+                [$referrerId]
+            )->fetch();
+
+            if ($sub === false) {
+                continue;
+            }
+
+            Database::run(
+                'UPDATE subscriptions SET expires_at = DATE_ADD(expires_at, INTERVAL 7 DAY) WHERE id = ?',
+                [(int) $sub['id']]
+            );
+            Database::run(
+                'UPDATE users SET referred_by_rewarded_at = CURRENT_TIMESTAMP WHERE id = ?',
+                [(int) $row['referred_id']]
+            );
+            $rewarded++;
+        }
+
+        return $rewarded;
     }
 
     /**

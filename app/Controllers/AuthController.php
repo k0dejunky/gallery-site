@@ -202,6 +202,15 @@ class AuthController extends Controller
         User::create($email, $password, 'user', $dob);
         $userId = (int) User::findByEmail($email)['id'];
         Traffic::attachSignup($userId, Traffic::attribution());
+
+        // Credit the referrer (if this browser arrived via a /go/{code} link).
+        if (!empty($_SESSION['referral_user_id'])) {
+            \App\Core\Database::run(
+                'UPDATE users SET referred_by_user_id = ? WHERE id = ?',
+                [(int) $_SESSION['referral_user_id'], $userId]
+            );
+            unset($_SESSION['referral_user_id']);
+        }
         $verificationToken = User::createVerificationToken($userId);
         $verificationUrl = rtrim(env_value('APP_URL', url('/')), '/')
             . '/verify-email?token=' . rawurlencode($verificationToken);
