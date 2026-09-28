@@ -205,10 +205,11 @@ class SettingsController extends Controller
         $user = Auth::user();
 
         \App\Core\Database::run(
-            'UPDATE users SET notify_new_gallery = ?, notify_live = ? WHERE id = ?',
+            'UPDATE users SET notify_new_gallery = ?, notify_live = ?, notify_chat_reply = ? WHERE id = ?',
             [
                 $this->request->post('notify_new_gallery') === '1' ? 1 : 0,
                 $this->request->post('notify_live') === '1' ? 1 : 0,
+                $this->request->post('notify_chat_reply') === '1' ? 1 : 0,
                 (int) $user['id'],
             ]
         );

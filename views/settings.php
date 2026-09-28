@@ -42,6 +42,9 @@
             <label style="display:inline-flex;align-items:center;gap:.4rem;">
                 <input type="checkbox" name="notify_live" value="1"<?= !empty($user['notify_live']) ? ' checked' : '' ?>> Live shows
             </label>
+            <label style="display:inline-flex;align-items:center;gap:.4rem;">
+                <input type="checkbox" name="notify_chat_reply" value="1"<?= !empty($user['notify_chat_reply']) ? ' checked' : '' ?>> Chat replies
+            </label>
         </div>
         <button type="submit" class="btn">Save notification preferences</button>
     </form>

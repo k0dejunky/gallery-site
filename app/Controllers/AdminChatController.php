@@ -301,6 +301,9 @@ class AdminChatController extends Controller
             ChatMessage::insertTrainingPair((string) $userMsg, $message);
         }
 
+        // Let the member know the operator replied (honours their opt-out).
+        \App\Models\EmailQueue::notifyChatReply($id);
+
         $this->flash('success', 'Operator reply sent (message #' . $newId . ').');
         $this->redirect('/admin/chat/' . $id);
     }

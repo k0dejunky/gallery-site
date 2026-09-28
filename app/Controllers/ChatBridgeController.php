@@ -450,6 +450,9 @@ class ChatBridgeController extends Controller
             if ($userMsg !== false && trim((string) $userMsg) !== '') {
                 ChatMessage::insertTrainingPair((string) $userMsg, $msg);
             }
+
+            // Let the member know the operator replied (honours opt-out).
+            \App\Models\EmailQueue::notifyChatReply((int) $cid);
         }
 
         // Replying implies the operator has read the thread: clear unread.

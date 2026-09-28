@@ -179,3 +179,23 @@ table td:nth-child(1) { overflow-wrap: anywhere; word-break: break-word; }
 .flash{position:relative}
 .flash[role=alert]{border-left:4px solid var(--btn-danger-bg, #c62828)}
 .flash[role=status]{border-left:4px solid var(--btn-bg, #7e22ce)}
+
+/* Custom video player (gallery MP4 + live HLS) */
+.gallery-player{position:relative;max-width:100%;border-radius:12px;overflow:hidden;background:#000;box-shadow:0 2px 14px rgba(59,7,100,.45);display:inline-block;vertical-align:top}
+.gallery-player video{display:block;max-width:100%;max-height:72vh;background:#000}
+.player-bar{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:.4rem;padding:.4rem .6rem;background:linear-gradient(180deg,rgba(15,5,28,0),rgba(15,5,28,.82));color:#fff;font-size:13px;opacity:0;transition:opacity .18s;z-index:3}
+.player-bar.show,.gallery-player:hover .player-bar{opacity:1}
+.player-btn{background:none;border:0;color:#fff;font-size:15px;line-height:1;cursor:pointer;padding:.25rem .35rem;border-radius:6px;font-family:inherit}
+.player-btn:hover{background:rgba(255,255,255,.18);color:#ffd0e8}
+.player-seek{flex:1;position:relative;display:flex;align-items:center;height:16px;cursor:pointer}
+.player-seek input[type=range]{width:100%;margin:0;appearance:none;-webkit-appearance:none;background:transparent;height:16px;cursor:pointer}
+.player-seek input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:rgba(255,255,255,.28)}
+.player-seek input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:12px;width:12px;border-radius:50%;background:#ff9fd4;border:2px solid #fff;margin-top:-4px}
+.player-seek input[type=range]::-moz-range-track{height:4px;border-radius:4px;background:rgba(255,255,255,.28)}
+.player-seek input[type=range]::-moz-range-thumb{height:12px;width:12px;border-radius:50%;background:#ff9fd4;border:2px solid #fff}
+.player-time{white-space:nowrap;color:rgba(255,255,255,.85);min-width:88px;text-align:center}
+.player-speed{font-weight:700}
+.player-quality{position:absolute;bottom:2.6rem;right:.5rem;display:flex;flex-direction:column;gap:.15rem;background:rgba(20,8,34,.94);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:.35rem;z-index:4;min-width:92px}
+.player-quality button{background:none;border:0;color:#fff;text-align:left;padding:.3rem .5rem;border-radius:6px;cursor:pointer;font-size:13px}
+.player-quality button:hover{background:rgba(255,255,255,.16);color:#ffd0e8}
+.player-live-dot{width:8px;height:8px;border-radius:50%;background:#ff4777;box-shadow:0 0 6px #ff4777;display:inline-block;margin-right:.3rem;vertical-align:middle}

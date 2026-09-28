@@ -479,3 +479,126 @@
     if(btn && btn.textContent.indexOf('Picture') === -1) btn.textContent = 'Picture in picture';
   });
 })();
+
+/* Custom video player: themed control bar for gallery MP4s and the live HLS
+   stream. Binds to [data-player] wrappers; builds play/pause, seek, time,
+   speed, volume, PiP and fullscreen controls, plus an HLS quality menu for
+   live. Falls back to the native controls if this script fails to run. */
+(function(){
+  var SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+  var liveHls = null;
+  function fmt(s){ s = Math.max(0, Math.floor(s)); var m = Math.floor(s/60); var x = Math.floor(s%60); return m + ':' + (x<10?'0':'') + x; }
+
+  function init(el){
+    var video = el.querySelector('video');
+    if(!video || video.__gplayer) return;
+    video.__gplayer = true;
+
+    var isLive = el.hasAttribute('data-live');
+    var fsTarget = el.getAttribute('data-fullscreen');
+    var bar = document.createElement('div');
+    bar.className = 'player-bar';
+    bar.innerHTML =
+      (isLive ? '<span class="player-live-dot" title="LIVE"></span>' : '') +
+      '<button type="button" class="player-btn" data-act="play" aria-label="Play or pause">&#9654;</button>' +
+      '<div class="player-seek"><input type="range" min="0" max="1000" value="0" step="1" aria-label="Seek"></div>' +
+      '<span class="player-time">0:00 / 0:00</span>' +
+      '<button type="button" class="player-btn player-speed" data-act="speed" title="Playback speed">1&#215;</button>' +
+      (isLive ? '<button type="button" class="player-btn" data-act="quality" title="Quality">&#9881;</button>' : '') +
+      '<button type="button" class="player-btn" data-act="vol" aria-label="Mute or unmute">&#128266;</button>' +
+      '<button type="button" class="player-btn" data-act="pip" title="Picture in picture">&#9210;</button>' +
+      '<button type="button" class="player-btn" data-act="fs" title="Full screen">&#9974;</button>';
+    el.appendChild(bar);
+
+    var seek = bar.querySelector('.player-seek input');
+    var time = bar.querySelector('.player-time');
+    var speedBtn = bar.querySelector('[data-act="speed"]');
+    var playBtn = bar.querySelector('[data-act="play"]');
+    var volBtn = bar.querySelector('[data-act="vol"]');
+    var speedIdx = SPEEDS.indexOf(1);
+
+    video.controls = false;
+
+    function setIcon(){
+      if(playBtn) playBtn.innerHTML = video.paused ? '&#9654;' : '&#10074;&#10074;';
+      el.classList.toggle('playing', !video.paused);
+    }
+    function updateSeek(){
+      if(isLive){ seek.value = 0; time.textContent = 'LIVE'; return; }
+      if(!video.duration || isNaN(video.duration)){ seek.value = 0; time.textContent = '0:00 / 0:00'; return; }
+      seek.value = Math.round(video.currentTime / video.duration * 1000);
+      time.textContent = fmt(video.currentTime) + ' / ' + fmt(video.duration);
+    }
+    if(playBtn) playBtn.addEventListener('click', function(){
+      if(video.paused){ video.play().catch(function(){}); } else { video.pause(); }
+    });
+    video.addEventListener('play', setIcon);
+    video.addEventListener('pause', setIcon);
+    video.addEventListener('timeupdate', updateSeek);
+    video.addEventListener('loadedmetadata', updateSeek);
+    seek.addEventListener('input', function(){
+      if(video.duration && !isLive){ video.currentTime = seek.value / 1000 * video.duration; }
+    });
+    if(speedBtn) speedBtn.addEventListener('click', function(){
+      speedIdx = (speedIdx + 1) % SPEEDS.length;
+      video.playbackRate = SPEEDS[speedIdx];
+      speedBtn.textContent = SPEEDS[speedIdx] + '\u00d7';
+    });
+    if(volBtn) volBtn.addEventListener('click', function(){
+      video.muted = !video.muted;
+      volBtn.innerHTML = video.muted ? '&#128263;' : '&#128266;';
+    });
+    bar.querySelector('[data-act="pip"]').addEventListener('click', function(){
+      if(document.pictureInPictureElement === video){ document.exitPictureInPicture().catch(function(){}); }
+      else if(typeof video.requestPictureInPicture === 'function'){ video.requestPictureInPicture().catch(function(){}); }
+    });
+    bar.querySelector('[data-act="fs"]').addEventListener('click', function(){
+      var target = fsTarget ? document.querySelector(fsTarget) : el;
+      if(!target) target = el;
+      if(document.fullscreenElement){ document.exitFullscreen().catch(function(){}); }
+      else if(target.requestFullscreen){ target.requestFullscreen().catch(function(){}); }
+      else if(video.webkitEnterFullscreen){ video.webkitEnterFullscreen(); }
+    });
+    var qualBtn = bar.querySelector('[data-act="quality"]');
+    if(qualBtn) qualBtn.addEventListener('click', function(){ toggleLevels(el); });
+
+    var hideTimer = null;
+    function scheduleHide(){ if(hideTimer) clearTimeout(hideTimer); if(!video.paused){ hideTimer = setTimeout(function(){ bar.classList.remove('show'); }, 2600); } }
+    el.addEventListener('mousemove', function(){ bar.classList.add('show'); scheduleHide(); });
+    el.addEventListener('mouseleave', function(){ if(!video.paused) bar.classList.remove('show'); });
+    video.addEventListener('pause', function(){ bar.classList.add('show'); });
+
+    setIcon();
+    updateSeek();
+    bar.classList.add('show');
+    setTimeout(function(){ if(video.paused) bar.classList.remove('show'); }, 3200);
+  }
+
+  function toggleLevels(el){
+    var menu = el.querySelector('.player-quality');
+    if(menu){ menu.remove(); return; }
+    if(!liveHls) return;
+    menu = document.createElement('div');
+    menu.className = 'player-quality';
+    var items = '<button type="button" data-l="auto">Auto</button>' +
+      (liveHls.levels || []).map(function(lv, i){ return '<button type="button" data-l="' + i + '">' + (lv.height ? lv.height + 'p' : 'Auto') + '</button>'; }).join('');
+    menu.innerHTML = items;
+    el.appendChild(menu);
+    menu.addEventListener('click', function(e){
+      var b = e.target && e.target.closest ? e.target.closest('[data-l]') : null;
+      if(!b) return;
+      liveHls.currentLevel = b.getAttribute('data-l') === 'auto' ? -1 : parseInt(b.getAttribute('data-l'), 10);
+      menu.remove();
+    });
+  }
+
+  window.PlayerUI = {
+    init: init,
+    setLevels: function(hls){ liveHls = hls; },
+    toggleLevels: toggleLevels
+  };
+
+  function initAll(){ document.querySelectorAll('[data-player]').forEach(function(el){ init(el); }); }
+  if(document.readyState !== 'loading'){ initAll(); } else { document.addEventListener('DOMContentLoaded', initAll); }
+  window.addEventListener('load', initAll);
+})();

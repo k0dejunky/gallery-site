@@ -322,6 +322,65 @@ class EmailQueue
     }
 
     /**
+     * Queue a single-recipient transactional notification to one member,
+     * honouring the global marketing opt-out and the per-type flag. Used for
+     * e.g. "you have a new chat reply". Returns 1 when queued, else 0.
+     */
+    public static function enqueueUser(int $userId, string $flagColumn, string $subject, string $html, string $text): int
+    {
+        $userId = max(0, (int) $userId);
+        if ($userId <= 0 || !in_array($flagColumn, ['notify_new_gallery', 'notify_live', 'notify_chat_reply'], true)) {
+            return 0;
+        }
+
+        $row = Database::run(
+            "SELECT u.id, u.email
+             FROM users u
+             WHERE u.id = ? AND u.status = 'active'
+               AND COALESCE(u.marketing_opt_out, 0) = 0
+               AND COALESCE(u.{$flagColumn}, 1) = 1
+             LIMIT 1",
+            [$userId]
+        )->fetch();
+
+        if ($row === false) {
+            return 0;
+        }
+
+        self::insertRows([['notification', (int) $row['id'], (string) $row['email'], $subject, $html, $text]]);
+
+        return 1;
+    }
+
+    /**
+     * Notify the member of a conversation that the operator replied to it.
+     * Fired from both operator reply paths (admin panel + operator app);
+     * honours users.notify_chat_reply and the global opt-out.
+     */
+    public static function notifyChatReply(int $conversationId): void
+    {
+        $conversationId = max(0, (int) $conversationId);
+        if ($conversationId <= 0) {
+            return;
+        }
+
+        $userId = (int) Database::run(
+            'SELECT user_id FROM chat_conversations WHERE id = ? LIMIT 1',
+            [$conversationId]
+        )->fetchColumn();
+
+        if ($userId <= 0) {
+            return;
+        }
+
+        $subject = 'You have a new reply';
+        $html    = render_email('chat_reply', ['conversation_id' => $conversationId]);
+        $text    = render_email('chat_reply.text', ['conversation_id' => $conversationId]);
+
+        self::enqueueUser($userId, 'notify_chat_reply', $subject, $html, $text);
+    }
+
+    /**
      * Batch-insert queued rows 200 at a time so even a large mailing stays
      * inside a single prepared statement.
      *
