@@ -18,10 +18,18 @@ $playlistQuery = isset($playlistQuery) ? (string) $playlistQuery : '';
 $backLabel = $gallery !== null
     ? '&larr; Back to &ldquo;' . e($gallery['title']) . '&rdquo;'
     : '&larr; Back to galleries';
+// When a gallery runs out of items, offer the neighbouring gallery so the
+// viewer is never stuck at a dead end.
+$prevGallery = $prevGallery ?? null;
+$nextGallery = $nextGallery ?? null;
+$prevGalleryUrl = $prevGallery !== null ? url('/galleries/' . (int) $prevGallery['id']) : null;
+$nextGalleryUrl = $nextGallery !== null ? url('/galleries/' . (int) $nextGallery['id']) : null;
 ?>
 <div class="media-nav">
     <?php if ($prevUrl !== null): ?>
-        <a class="btn" data-swap href="<?= e($prevUrl . '?' . $returnQuery . $playlistQuery) ?>">&larr; Previous</a>
+        <a class="btn" data-swap data-prev="1" href="<?= e($prevUrl . '?' . $returnQuery . $playlistQuery) ?>">&larr; Previous</a>
+    <?php elseif ($prevGalleryUrl !== null): ?>
+        <a class="btn" href="<?= e($prevGalleryUrl) ?>">&larr; Previous gallery</a>
     <?php else: ?>
         <span class="btn btn-disabled" aria-disabled="true">&larr; Previous</span>
     <?php endif; ?>
@@ -29,7 +37,9 @@ $backLabel = $gallery !== null
     <a class="btn btn-outline" href="<?= e($returnTo) ?>"><?= $backLabel ?></a>
 
     <?php if ($nextUrl !== null): ?>
-        <a class="btn" data-swap href="<?= e($nextUrl . '?' . $returnQuery . $playlistQuery) ?>">Next &rarr;</a>
+        <a class="btn" data-swap data-next="1" href="<?= e($nextUrl . '?' . $returnQuery . $playlistQuery) ?>">Next &rarr;</a>
+    <?php elseif ($nextGalleryUrl !== null): ?>
+        <a class="btn" href="<?= e($nextGalleryUrl) ?>">Next gallery &rarr;</a>
     <?php else: ?>
         <span class="btn btn-disabled" aria-disabled="true">Next &rarr;</span>
     <?php endif; ?>

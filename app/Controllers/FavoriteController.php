@@ -23,7 +23,8 @@ class FavoriteController extends Controller
     }
 
     /**
-     * Add or remove a category as a favourite for the current user.
+     * Add or remove a category as a favourite for the current user. Supports
+     * AJAX (JSON) so on-page category stars can toggle without a reload.
      */
     public function toggle(int $categoryId): void
     {
@@ -36,20 +37,33 @@ class FavoriteController extends Controller
         }
 
         $userId = (int) $_SESSION['user_id'];
+        $favorited = false;
 
         if (FavoriteCategory::isFavorite($userId, $categoryId)) {
             FavoriteCategory::remove($userId, $categoryId);
-            $this->flash('success', 'Removed "' . $category['name'] . '" from your favorites.');
         } else {
             Auth::requireMembershipLevel(
                 Plan::SILVER_LEVEL,
                 'Selecting favorite categories requires at least a Silver level membership.'
             );
             FavoriteCategory::add($userId, $categoryId);
-            $this->flash('success', 'Added "' . $category['name'] . '" to your favorites.');
+            $favorited = true;
         }
 
-        $this->redirect('/galleries');
+        $isAjax = $this->request->header('X-Requested-With') === 'XMLHttpRequest'
+            || str_contains((string) $this->request->header('Accept'), 'application/json');
+        if ($isAjax) {
+            $this->json(['ok' => true, 'favorited' => $favorited]);
+        }
+
+        $this->flash('success', ($favorited ? 'Added "' : 'Removed "') . $category['name'] . '" ' . ($favorited ? 'to' : 'from') . ' your favorites.');
+
+        $returnTo = (string) $this->request->query('return_to', $this->request->input('return_to', ''));
+        if (!preg_match('#^/(?!/)[^\\r\\n]*$#', $returnTo) || parse_url($returnTo, PHP_URL_HOST) !== null) {
+            $returnTo = '/galleries';
+        }
+
+        $this->redirect($returnTo);
     }
 
     public function index(): void

@@ -65,6 +65,50 @@
     <input type="number" name="trial_days" min="1" max="90" value="<?= (int) \App\Models\SiteConfig::trialDays() ?>" style="width:5rem;">
     <button type="submit" class="btn btn-sm btn-outline">Save</button>
 </form>
+
+<h2 style="margin-top:1rem;">Trial Links</h2>
+<p class="muted">Create a shareable link that grants a free trial at a chosen membership level for a chosen number of days, up to a signup quota. Share the link with prospective members; each account can only redeem one trial ever.</p>
+<form method="post" action="<?= url('/admin/trial-links') ?>" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem;">
+    <?= csrf_field() ?>
+    <select name="trial_level">
+        <option value="1">Silver</option>
+        <option value="2">Gold</option>
+        <option value="3">Platinum</option>
+    </select>
+    <label class="muted" style="font-size:.9rem;">Days</label>
+    <input type="number" name="trial_days" min="1" max="90" value="3" style="width:4.5rem;">
+    <label class="muted" style="font-size:.9rem;">Max signups</label>
+    <input type="number" name="max_uses" min="1" max="10000" value="1" style="width:5rem;">
+    <button type="submit" class="btn btn-sm">Create link</button>
+</form>
+<?php if (!empty($trialLinks)): ?>
+<table>
+    <thead><tr><th>Link</th><th>Level</th><th>Days</th><th>Uses</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+    <tbody>
+    <?php foreach ($trialLinks as $tl): ?>
+        <?php $linkUrl = url('/trial/' . rawurlencode($tl['code'])); ?>
+        <tr>
+            <td style="white-space:nowrap;"><code><?= e($tl['code']) ?></code> <a class="btn btn-sm btn-outline" style="font-size:.75rem;" href="#" onclick="var i=document.createElement('input');i.value='<?= e($linkUrl) ?>';document.body.appendChild(i);i.select();document.execCommand('copy');i.remove();this.textContent='Copied';return false;">Copy link</a></td>
+            <td><?= e(\App\Models\TrialLink::levelLabel((int) $tl['level'])) ?></td>
+            <td><?= (int) $tl['days'] ?></td>
+            <td><?= (int) $tl['used_count'] ?> / <?= (int) $tl['max_uses'] ?></td>
+            <td><?= (int) $tl['enabled'] ? '<span class="pill pill-ok">Enabled</span>' : '<span class="pill">Disabled</span>' ?></td>
+            <td><?= e((string) ($tl['created_by_email'] ?? '')) ?><br><small class="muted"><?= e(tzdate('Y-m-d H:i', $tl['created_at'])) ?></small></td>
+            <td style="white-space:nowrap;">
+                <form class="inline" method="post" action="<?= url('/admin/trial-links/' . (int) $tl['id'] . '/toggle') ?>">
+                    <?= csrf_field() ?><button type="submit" class="btn btn-sm btn-outline"><?= (int) $tl['enabled'] ? 'Disable' : 'Enable' ?></button>
+                </form>
+                <form class="inline" method="post" action="<?= url('/admin/trial-links/' . (int) $tl['id'] . '/delete') ?>" onsubmit="return confirm('Delete this trial link?');">
+                    <?= csrf_field() ?><button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+    <?php endforeach; ?>
+    </tbody>
+</table>
+<?php else: ?>
+<p class="muted">No trial links yet.</p>
+<?php endif; ?>
 <?php endif; ?>
 
 <h2>All Subscriptions</h2>

@@ -1,39 +1,17 @@
 <?php
-// Inline SVG fallback so a missing thumbnail never shows a broken image on
-// the guest landing page; also doubles as a "no picture" placeholder.
-$pictureBlank = 'data:image/svg+xml;utf8,' . rawurlencode(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" fill="#ffd9e8"/><rect x="130" y="102" width="140" height="96" rx="12" fill="none" stroke="#f472b6" stroke-width="8"/><circle cx="185" cy="145" r="14" fill="#ec4899"/><path d="M130 196l42-42 32 30 44-52 52 64" fill="none" stroke="#9333ea" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-);
-
-// Merge the recent images and videos into one ordered list, each card
-// linking to its own in-page viewer (image or video page).
-$recentItems = [];
-foreach ($recentImages as $photo) {
-    if ((int) $photo['gallery_id'] <= 0) {
-        continue;
-    }
-    $recentItems[] = [
-        'type'  => 'image',
-        'url'   => url('/images/' . (int) $photo['id']),
-        'thumb' => file_url($photo['filename'], 'blur'),
-        'filename' => (string) $photo['filename'],
-    ];
-}
-foreach ($recentVideos as $photo) {
-    if ((int) $photo['gallery_id'] <= 0) {
-        continue;
-    }
-    $recentItems[] = [
-        'type'  => 'video',
-        'url'   => url('/videos/' . (int) $photo['id']),
-        'thumb' => file_url($photo['filename'], 'blur'),
-        'filename' => (string) $photo['filename'],
-    ];
-}
+// Guest landing (the site root): a short value proposition plus the login
+// form, then a teaser of recent uploads with the site's media totals. Clicking
+// a teaser thumbnail goes to the media page, which (thanks to login return_to)
+// brings the guest straight back to it after signing in.
 ?>
 
+<div class="auth-hero">
+    <h1>Original member galleries</h1>
+    <p class="muted">Photos and videos made by real members — browse the catalog, save your favorites and chat. Log in to view, or sign up to start exploring.</p>
+</div>
+
 <div class="auth-panel">
-    <h1>Login</h1>
+    <h2 style="margin-top:0;">Login</h2>
 
     <form method="post" action="<?= url('/login') ?>">
         <?= csrf_field() ?>
@@ -63,46 +41,8 @@ foreach ($recentVideos as $photo) {
     </p>
 </div>
 
-<?php // Recent uploads shown as gallery cards; clicking one opens the
-     // image or video page it belongs to. ?>
-<?php if (!empty($recentImages)): ?>
-<section>
-    <?php // One row only: cards flow horizontally and overflow is clipped so only the pictures that fit the row are visible. ?>
-    <h2 class="section-title">Recent Pictures</h2>
-    <div class="recent-strip">
-        <?php foreach ($recentItems as $item): ?>
-            <?php if ($item['type'] !== 'image') { continue; } ?>
-            <div class="card recent-card">
-                <a class="card-link" href="<?= e($item['url']) ?>">
-                    <div class="card-cover">
-                        <picture>
-                            <source type="image/webp" srcset="<?= e(file_url($item['filename'], 'blur', 'webp')) ?>">
-                            <img src="<?= e($item['thumb']) ?>" alt="" loading="lazy" onerror="this.onerror=null;this.src='<?= e($pictureBlank) ?>'">
-                        </picture>
-                    </div>
-                </a>
-            </div>
-        <?php endforeach; ?>
-    </div>
-</section>
-<?php endif; ?>
-
-<?php if (!empty($recentVideos)): ?>
-<section>
-    <?php // Videos also stay on one row, clipped to whatever fits. ?>
-    <h2 class="section-title">Recent Videos</h2>
-    <div class="recent-strip">
-        <?php foreach ($recentItems as $item): ?>
-            <?php if ($item['type'] !== 'video') { continue; } ?>
-            <div class="card recent-card">
-                <a class="card-link" href="<?= e($item['url']) ?>">
-                    <div class="card-cover">
-                        <img src="<?= e($item['thumb']) ?>" alt="" loading="lazy" onerror="this.onerror=null;this.src='<?= e($pictureBlank) ?>'">
-                        <span class="play-badge">&#9654;</span>
-                    </div>
-                </a>
-            </div>
-        <?php endforeach; ?>
-    </div>
-</section>
-<?php endif; ?>
+<?php require __DIR__ . '/../partials/guest_teaser.php'; ?>
+<style>
+    .auth-hero { text-align: center; max-width: 640px; margin: 0 auto var(--spacing-lg); }
+    .auth-hero h1 { margin: 0 0 .35rem; }
+</style>

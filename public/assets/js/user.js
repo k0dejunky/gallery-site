@@ -331,6 +331,36 @@
   });
 })();
 
+/* Category favorite star (AJAX) — Silver+ members can favourite a category
+   straight from the gallery listing heading. */
+(function(){
+  document.addEventListener('DOMContentLoaded',function(){
+    document.querySelectorAll('.cat-fav-toggle').forEach(function(btn){
+      btn.addEventListener('click',function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        var catId=btn.getAttribute('data-cat-id');
+        var csrf=btn.getAttribute('data-csrf');
+        if(!catId||!csrf)return;
+        btn.disabled=true;
+        var fd=new FormData();
+        fd.append('_token',csrf);
+        var base=(document.body&&document.body.getAttribute('data-base'))||'';
+        fetch(base+'/favorites/categories/'+catId+'/toggle',{
+          method:'POST',
+          headers:{'X-Requested-With':'XMLHttpRequest'},
+          body:fd
+        }).then(function(r){return r.json()}).then(function(data){
+          if(data.ok){
+            btn.classList.toggle('selected', !!data.favorited);
+          }
+          btn.disabled=false;
+        }).catch(function(){btn.disabled=false});
+      });
+    });
+  });
+})();
+
 /* Gallery display options (settings page + gallery application) */
 (function(){
   var STORE_KEY='galleryDisplayPrefs';
@@ -703,7 +733,8 @@ document.addEventListener('leavepictureinpicture', function(){
       });
     });
 
-    // Auto-advance: when the current video ends, play the next playlist item.
+    // Auto-advance: when the current video ends, play the next playlist item,
+    // or the next media item in the same gallery when browsing normally.
     var video = wrap.querySelector('video');
     video.addEventListener('ended', function(){
       if(!document.hasFocus()) return;
@@ -711,8 +742,10 @@ document.addEventListener('leavepictureinpicture', function(){
       var next = active && active.nextElementSibling;
       if(next){
         var link = next.querySelector('a[data-swap]');
-        if(link){ link.click(); }
+        if(link){ link.click(); return; }
       }
+      var navNext = document.querySelector('.media-nav a[data-swap][data-next]');
+      if(navNext){ navNext.click(); }
     });
   }
   if(document.readyState !== 'loading'){ bind(); } else { document.addEventListener('DOMContentLoaded', bind); }
@@ -733,30 +766,78 @@ document.addEventListener('leavepictureinpicture', function(){
   function init(){
     var btn = document.getElementById('browse-galleries-btn');
     var panel = document.getElementById('player-browse');
-    if(!btn || !panel) return;
+    if(!btn || !panel || panel.__init) return;
+    panel.__init = true;
+    var body = panel.querySelector('.pb-body');
+    var back = document.getElementById('pb-back');
+    var search = document.getElementById('pb-search');
+    var view = 'list';
+    var base = (document.body && document.body.getAttribute('data-base')) || '';
+
+    function loadList(q, offset){
+      var url = base + '/browse/galleries';
+      var qs = [];
+      if(q){ qs.push('q=' + encodeURIComponent(q)); }
+      if(offset){ qs.push('offset=' + offset); }
+      if(qs.length){ url += '?' + qs.join('&'); }
+      return fetch(url).then(function(r){ return r.text(); });
+    }
+
+    function showList(q){
+      view = 'list';
+      if(back) back.hidden = true;
+      body.innerHTML = '<p class="muted">Loading&hellip;</p>';
+      loadList(q || '').then(function(html){ body.innerHTML = html; }).catch(function(){ body.innerHTML = '<p class="muted">Could not load galleries.</p>'; });
+    }
+
+    function openGallery(id){
+      view = 'gallery';
+      if(back) back.hidden = false;
+      body.innerHTML = '<p class="muted">Loading&hellip;</p>';
+      fetch(base + '/browse/galleries/' + id).then(function(r){ return r.text(); }).then(function(html){ body.innerHTML = html; }).catch(function(){ body.innerHTML = '<p class="muted">Could not load that gallery.</p>'; });
+    }
 
     btn.addEventListener('click', function(){
       panel.hidden = !panel.hidden;
-      if(!panel.hidden && !panel.dataset.loaded){
-        panel.dataset.loaded = '1';
-        var body = panel.querySelector('.pb-body');
-        fetch(btn.getAttribute('data-href') || '/browse/galleries')
-          .then(function(r){ return r.text(); })
-          .then(function(html){ body.innerHTML = html; })
-          .catch(function(){ body.innerHTML = '<p class="muted">Could not load galleries.</p>'; });
+      if(!panel.hidden && view !== 'list'){
+        // reopening always shows the gallery list, not a stale tile view
+        showList(search ? search.value : '');
+      } else if(!panel.hidden && !body.childNodes.length){
+        showList(search ? search.value : '');
       }
     });
+
+    // Debounced search re-fetches the gallery list.
+    var debounce = null;
+    if(search){
+      search.addEventListener('input', function(){
+        clearTimeout(debounce);
+        debounce = setTimeout(function(){ showList(search.value); }, 250);
+      });
+    }
+
+    if(back){
+      back.addEventListener('click', function(){ showList(search ? search.value : ''); });
+    }
 
     panel.addEventListener('click', function(e){
       var gal = e.target.closest('[data-browse-gallery]');
       if(gal){
         e.preventDefault();
-        var body = panel.querySelector('.pb-body');
-        body.innerHTML = '<p class="muted">Loading&hellip;</p>';
-        fetch('/browse/galleries/' + gal.getAttribute('data-browse-gallery'))
-          .then(function(r){ return r.text(); })
-          .then(function(html){ body.innerHTML = html; })
-          .catch(function(){ body.innerHTML = '<p class="muted">Could not load that gallery.</p>'; });
+        openGallery(gal.getAttribute('data-browse-gallery'));
+        return;
+      }
+      var more = e.target.closest('.pb-more');
+      if(more){
+        e.preventDefault();
+        loadList(more.getAttribute('data-q') || '', parseInt(more.getAttribute('data-offset'), 10) || 0)
+          .then(function(html){
+            var holder = document.createElement('div');
+            holder.innerHTML = html;
+            more.remove();
+            body.appendChild(holder);
+          })
+          .catch(function(){});
         return;
       }
       var vid = e.target.closest('[data-browse-video]');

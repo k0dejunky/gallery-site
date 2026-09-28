@@ -231,16 +231,19 @@ class Subscription
     }
 
     /**
-     * Grant a one-time free trial at the Silver level for the given number of
-     * days. Rejected when the user has already had a trial (TRIAL- ref) or
-     * already holds an active membership. Returns the new subscription id or
-     * null.
+     * Grant a one-time free trial at the given membership level for the given
+     * number of days. Rejected when the user has already had a trial (TRIAL-
+     * ref) or already holds an active membership. Level and days are clamped
+     * (1-3 / 1-90). Returns the new subscription id or null.
      */
-    public static function grantTrial(int $userId, int $days): ?int
+    public static function grantTrialFor(int $userId, int $level, int $days): ?int
     {
         if ($userId <= 0) {
             return null;
         }
+
+        $level = max(1, min(3, $level));
+        $days  = max(1, min(90, $days));
 
         $hadTrial = (int) Database::run(
             "SELECT COUNT(*) FROM subscriptions WHERE user_id = ? AND transaction_ref LIKE 'TRIAL-%'",
@@ -256,18 +259,18 @@ class Subscription
 
         $plan = Database::run(
             'SELECT id FROM plans WHERE level = ? AND active = 1 ORDER BY price ASC LIMIT 1',
-            [Plan::SILVER_LEVEL]
+            [$level]
         )->fetch();
         if ($plan === false) {
             return null;
         }
 
-        $expiresAt = gmdate('Y-m-d H:i:s', time() + max(1, min(90, $days)) * 86400);
+        $expiresAt = gmdate('Y-m-d H:i:s', time() + $days * 86400);
 
         Database::run(
             "INSERT INTO subscriptions (user_id, plan_id, status, price_paid, access_level, transaction_ref, expires_at, created_at, updated_at)
              VALUES (?, ?, 'active', 0, ?, 'TRIAL-" . bin2hex(random_bytes(6)) . "', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-            [$userId, (int) $plan['id'], Plan::SILVER_LEVEL, $expiresAt]
+            [$userId, (int) $plan['id'], $level, $expiresAt]
         );
         $id = (int) Database::connection()->lastInsertId();
         Database::run(
@@ -276,6 +279,16 @@ class Subscription
         );
 
         return $id;
+    }
+
+    /**
+     * Grant a one-time free trial at the Silver level for the given number of
+     * days (the original admin tool; see grantTrialFor for a configurable
+     * level).
+     */
+    public static function grantTrial(int $userId, int $days): ?int
+    {
+        return self::grantTrialFor($userId, Plan::SILVER_LEVEL, $days);
     }
 
     /**

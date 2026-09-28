@@ -26,6 +26,9 @@
     <p class="muted">Please do not include passwords or payment information.</p>
 <form method="post" action="<?= url('/support') ?>" class="support-form">
     <?= csrf_field() ?>
+    <?php if (!empty($returnTo)): ?>
+        <input type="hidden" name="return_to" value="<?= e($returnTo) ?>">
+    <?php endif; ?>
     <p><label for="support-subject">Subject</label><input type="text" id="support-subject" name="subject" maxlength="255" required></p>
     <p><label for="support-message">Message</label><textarea id="support-message" name="message" rows="9" maxlength="10000" required></textarea></p>
     <p class="support-form-actions">

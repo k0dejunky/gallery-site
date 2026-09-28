@@ -33,7 +33,10 @@
 
         <div class="chat-thread" id="chat-thread">
             <?php if (empty($messages)): ?>
-                <p class="muted">Say hello to start chatting.</p>
+                <div class="chat-empty empty-state" style="margin:1rem auto;max-width:420px;text-align:center;">
+                    <p class="muted" style="margin-top:0;">No messages yet. Say hello to start chatting.</p>
+                    <button type="button" class="btn btn-sm" onclick="var i=document.getElementById('chat-input');if(i){i.focus();}">Say hello</button>
+                </div>
             <?php else: ?>
                 <?php foreach ($messages as $m): ?>
                     <div class="chat-msg <?= e((string) $m['sender_role']) ?>"<?= !empty($m['content_refs']) ? ' data-refs="' . e(json_encode($m['content_refs'], JSON_UNESCAPED_SLASHES)) . '"' : '' ?>>
@@ -64,7 +67,7 @@
             <button type="submit" class="btn" id="chat-send">Send</button>
         </form>
         <?php else: ?>
-        <p class="muted">Replies are currently disabled for this conversation. Messages from the site will still appear here.</p>
+        <p class="muted">Replies are currently disabled for this conversation. Messages from the site will still appear here. If this looks wrong, <a href="<?= e(url('/support')) ?>">contact support</a>.</p>
         <?php endif; ?>
     <?php endif; ?>
 </div>

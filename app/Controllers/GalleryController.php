@@ -39,25 +39,48 @@ class GalleryController extends Controller
     /**
      * AJAX fragment for the player's in-page gallery browser: a compact grid
      * of visible gallery cards. No layout — raw HTML for fetch() to insert.
+     * Supports ?q= search and ?offset= paging (30 at a time) so the browser
+     * is not limited to the newest galleries.
      */
     public function browseGalleries(): void
     {
         Auth::requireLogin();
 
+        $q      = trim((string) $this->request->query('q', ''));
+        $offset = max(0, (int) $this->request->query('offset', 0));
+        $limit  = 30;
+
+        $where  = \App\Models\Gallery::publishedVisibleSql('g') . ' AND g.is_secret = 0';
+        $params = [];
+        if ($q !== '') {
+            $where  .= ' AND (g.title LIKE ? OR g.description LIKE ?)';
+            $params = ['%' . $q . '%', '%' . $q . '%'];
+        }
+
+        $total = (int) \App\Core\Database::run(
+            'SELECT COUNT(*) FROM galleries g WHERE ' . $where,
+            $params
+        )->fetchColumn();
+
         $galleries = \App\Core\Database::run(
             'SELECT g.*, (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count
              FROM galleries g
-             WHERE ' . \App\Models\Gallery::publishedVisibleSql('g') . " AND g.is_secret = 0
+             WHERE ' . $where . '
              ORDER BY g.created_at DESC
-             LIMIT 60"
+             LIMIT ' . $limit . ' OFFSET ' . $offset,
+            $params
         )->fetchAll();
 
         $covers = \App\Models\Gallery::firstPhotos(array_map('intval', array_column($galleries, 'id')));
 
         header('Content-Type: text/html; charset=utf-8');
         foreach ($galleries as $g) {
+            $gallery = $g;
             $cover = $covers[(int) $g['id']] ?? null;
             require __DIR__ . '/../../views/partials/browse_gallery_card.php';
+        }
+        if ($offset + count($galleries) < $total) {
+            echo '<button type="button" class="btn btn-sm btn-outline pb-more" data-offset="' . ($offset + $limit) . '" data-q="' . e($q) . '" style="margin:.5rem auto;display:block;">Load more galleries</button>';
         }
         exit;
     }
@@ -77,7 +100,7 @@ class GalleryController extends Controller
         if (empty($gallery['is_secret'])) {
             Auth::requireGalleryLevel(
                 (int) ($gallery['min_level'] ?? 0),
-                'A membership is required to view that gallery.'
+                'This gallery needs a ' . \App\Models\Subscription::levelLabel((int) ($gallery['min_level'] ?? 0)) . ' membership to view.'
             );
         }
 
@@ -232,7 +255,7 @@ class GalleryController extends Controller
         // listing above already covers the browse path, so skip the two
         // paginator queries (COUNT + SELECT) unless actually needed.
         $paginator = ($q !== '')
-            ? Gallery::paginate($page, 6, $filters)
+            ? Gallery::paginate($page, 24, $filters)
             : ['items' => [], 'total' => 0, 'page' => $page, 'pages' => 1];
 
         // A search that found nothing is tracked as a missed search.
@@ -383,7 +406,7 @@ class GalleryController extends Controller
         if (empty($gallery['is_secret'])) {
             Auth::requireGalleryLevel(
                 (int) ($gallery['min_level'] ?? 0),
-                'A membership is required to view that gallery.'
+                'This gallery needs a ' . \App\Models\Subscription::levelLabel((int) ($gallery['min_level'] ?? 0)) . ' membership to view.'
             );
         }
 
@@ -415,7 +438,7 @@ class GalleryController extends Controller
             'categories' => Gallery::categories($id),
             'currentUser' => Auth::user(),
             'photoCount' => $total,
-            'returnTo'   => url('/galleries/' . $id),
+            'returnTo'   => safe_return_to($this->request->query('return_to', '')) ?? url('/galleries/' . $id),
             'collections' => \App\Models\Collection::forUser((int) $user['id']),
         ]);
     }
@@ -440,7 +463,7 @@ class GalleryController extends Controller
         if (empty($gallery['is_secret'])) {
             Auth::requireGalleryLevel(
                 (int) ($gallery['min_level'] ?? 0),
-                'A membership is required to view that gallery.'
+                'This gallery needs a ' . \App\Models\Subscription::levelLabel((int) ($gallery['min_level'] ?? 0)) . ' membership to view.'
             );
         }
 
@@ -454,7 +477,7 @@ class GalleryController extends Controller
         }
 
         $photos  = Gallery::photosSlice($id, $pageSize, $offset);
-        $returnTo = url('/galleries/' . $id);
+        $returnTo = safe_return_to($this->request->query('return_to', '')) ?? url('/galleries/' . $id);
 
         header('Content-Type: text/html; charset=utf-8');
         foreach ($photos as $k => $photo) {

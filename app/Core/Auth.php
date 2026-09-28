@@ -609,14 +609,28 @@ class Auth
     }
 
     /**
-     * Guard for user pages: redirect anonymous visitors to the login page.
+     * Guard for user pages: redirect anonymous visitors to the login page. An
+     * optional return target is remembered in the session so a successful
+     * login returns the guest to where they were heading (by default the
+     * current request URI, captured only for GET requests — POST payloads are
+     * never replayed).
      */
-    public static function requireLogin(): void
+    public static function requireLogin(?string $returnTo = null): void
     {
-        if (!self::check()) {
-            header('Location: ' . url('/login'));
-            exit;
+        if (self::check()) {
+            return;
         }
+
+        if ($returnTo !== null && $returnTo !== '') {
+            $_SESSION['redirect_to'] = $returnTo;
+        } elseif (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+            $path  = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
+            $query = $_SERVER['QUERY_STRING'] ?? '';
+            $_SESSION['redirect_to'] = $path . ($query !== '' ? '?' . $query : '');
+        }
+
+        header('Location: ' . url('/login'));
+        exit;
     }
 
     /** Require a logged-in member and return their user row (redirects to login). */

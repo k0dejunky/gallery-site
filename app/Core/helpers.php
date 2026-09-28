@@ -471,6 +471,30 @@ function csrf_field(): string
 }
 
 /**
+ * Validate a relative, same-site "return to" URL used for back links that
+ * preserve listing/search context. Returns null when the value is missing or
+ * unsafe (absolute URL, scheme/host present, or outside this app's base path).
+ */
+function safe_return_to(mixed $value): ?string
+{
+    if (!is_string($value) || $value === '' || strpos($value, '//') === 0) {
+        return null;
+    }
+
+    $parts = parse_url($value);
+    if ($parts === false || isset($parts['scheme']) || isset($parts['host']) || empty($parts['path'])) {
+        return null;
+    }
+
+    $base = rtrim((string) config('app.base_path'), '/');
+    if ($base !== '' && strpos($parts['path'], $base . '/') !== 0 && $parts['path'] !== $base) {
+        return null;
+    }
+
+    return $value;
+}
+
+/**
  * Turn arbitrary text into a URL-friendly slug (lowercase, dashes instead of
  * spaces/symbols). Used to build clean category URLs. Optional $max caps the
  * length (e.g. short traffic-link codes) and $fallback is returned when the

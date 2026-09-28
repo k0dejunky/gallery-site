@@ -30,6 +30,7 @@ class AuthController extends Controller
             // Only the most recent uploads are shown on the login page.
             'recentImages' => Photo::recentImages(10),
             'recentVideos' => Photo::recentVideos(10),
+            'mediaCounts'  => Photo::siteCounts(),
             'title'        => 'Login',
             'noindex'      => true,
             'canonicalUrl' => absolute_url('/login'),
@@ -60,12 +61,29 @@ class AuthController extends Controller
 
         if ($result === true) {
             $this->flash('success', 'Welcome back!');
-            $this->redirect(Auth::homePath() . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
+            $this->redirect($this->loginRedirectPath());
         }
 
         $message = is_string($result) ? $result : 'Invalid email or password.';
         $this->flash('error', $message);
         $this->redirect('/login' . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
+    }
+
+    /**
+     * Where a successful login goes: the remembered "return to" target from
+     * before the login redirect (if it is a same-site app path), otherwise the
+     * role-appropriate home page.
+     */
+    private function loginRedirectPath(): string
+    {
+        $returnTo = $_SESSION['redirect_to'] ?? null;
+        unset($_SESSION['redirect_to']);
+
+        if (is_string($returnTo) && $returnTo !== '' && $returnTo[0] === '/' && strpos($returnTo, '//') !== 0) {
+            return $returnTo . ($this->request->query('se', '') === '1' ? '?se=1' : '');
+        }
+
+        return Auth::homePath() . ($this->request->query('se', '') === '1' ? '?se=1' : '');
     }
 
     /**
@@ -113,7 +131,7 @@ class AuthController extends Controller
         if (Auth::completeTwoFactor($code)) {
             unset($_SESSION['2fa_attempts']);
             $this->flash('success', 'Welcome back!');
-            $this->redirect(Auth::homePath());
+            $this->redirect($this->loginRedirectPath());
         }
 
         $_SESSION['2fa_attempts'] = $attempts + 1;
@@ -136,6 +154,7 @@ class AuthController extends Controller
         $this->view('auth/signup', [
             'recentImages' => Photo::recentImages(10),
             'recentVideos' => Photo::recentVideos(10),
+            'mediaCounts'  => Photo::siteCounts(),
             'title'        => 'Sign Up',
             'noindex'      => true,
             'canonicalUrl' => absolute_url('/signup'),
@@ -241,7 +260,7 @@ class AuthController extends Controller
          $this->flash('success', $mailSent
              ? 'Account created. Welcome! Check your email to verify your address.'
              : 'Account created. We could not send the verification email yet. You can resend it from your account settings.');
-         $this->redirect('/membership' . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
+         $this->redirect('/account' . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
     }
 
     /**

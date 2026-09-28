@@ -18,6 +18,10 @@ if (($sort ?? '') !== '') {
 $allUrl = $query ? $base . '?' . http_build_query($query) : $base;
 $imgUrl = url('/images') . ($query ? '?' . http_build_query($query) : '');
 $vidUrl = url('/videos') . ($query ? '?' . http_build_query($query) : '');
+
+// Back links from a gallery/media opened here return to this exact listing
+// (search/category/type/sort preserved) instead of the generic gallery page.
+$listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galleries');
 ?>
 
 <div class="hero">
@@ -59,9 +63,17 @@ $vidUrl = url('/videos') . ($query ? '?' . http_build_query($query) : '');
         <a class="btn btn-sm" href="<?= e(url('/support')) ?>">Contact support</a>
     </div>
 <?php else: ?>
+    <?php $favCatIds = array_map('intval', array_column((array) ($favorites ?? []), 'id')); ?>
     <?php foreach ($sections as $section): ?>
         <section class="fav-section">
             <h2>
+                <?php if (!empty($hasActive) && !empty($section['category']['id'])): ?>
+                    <button type="button" class="chip cat-fav-toggle<?= in_array((int) $section['category']['id'], $favCatIds, true) ? ' selected' : '' ?>"
+                            data-cat-id="<?= (int) $section['category']['id'] ?>"
+                            data-csrf="<?= e(\App\Core\Csrf::token()) ?>"
+                            title="Add/remove this category to your favorites"
+                            aria-label="Toggle favorite category">&#9733;</button>
+                <?php endif; ?>
                 <?= e($section['category']['name']) ?>
                 <?php if (!empty($section['category']['slug'])): ?>
                     <a href="<?= url('/galleries/category/' . e($section['category']['slug']) . ($type !== '' ? '?type=' . $type : '')) ?>">View all &rarr;</a>

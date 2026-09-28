@@ -769,6 +769,28 @@ class Gallery
     }
 
     /**
+     * The next (newer) or previous (older) visible gallery relative to
+     * $galleryId, ordered by id so the media viewers can offer a "next
+     * gallery" step when a gallery runs out of items. Only galleries the user
+     * can actually view (non-secret, published, within their level) count.
+     */
+    public static function neighborVisible(int $galleryId, string $direction, int $maxLevel): ?array
+    {
+        $op    = $direction === 'next' ? '<' : '>';
+        $order = $direction === 'next' ? 'DESC' : 'ASC';
+        $levelClause = $maxLevel >= PHP_INT_MAX ? '' : ' AND g.min_level <= ' . (int) $maxLevel;
+
+        $row = Database::run(
+            "SELECT g.id, g.title FROM galleries g
+             WHERE g.is_secret = 0 AND g.id $op ? AND " . self::publishedVisibleSql('g') . $levelClause . "
+             ORDER BY g.id $order LIMIT 1",
+            [$galleryId]
+        )->fetch();
+
+        return $row === false ? null : $row;
+    }
+
+    /**
      * Photos inside a gallery in display order.
      */
     public static function photos(int $galleryId): array

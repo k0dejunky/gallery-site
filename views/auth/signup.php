@@ -1,31 +1,7 @@
 <?php
-$pictureBlank = 'data:image/svg+xml;utf8,' . rawurlencode(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" fill="#ffd9e8"/><rect x="130" y="102" width="140" height="96" rx="12" fill="none" stroke="#f472b6" stroke-width="8"/><circle cx="185" cy="145" r="14" fill="#ec4899"/><path d="M130 196l42-42 32 30 44-52 52 64" fill="none" stroke="#9333ea" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-);
-
-$recentItems = [];
-foreach ($recentImages as $photo) {
-    if ((int) $photo['gallery_id'] <= 0) {
-        continue;
-    }
-    $recentItems[] = [
-        'type'  => 'image',
-        'url'   => url('/images/' . (int) $photo['id']),
-        'thumb' => file_url($photo['filename'], 'blur'),
-    ];
-}
-foreach ($recentVideos as $photo) {
-    if ((int) $photo['gallery_id'] <= 0) {
-        continue;
-    }
-    $recentItems[] = [
-        'type'  => 'video',
-        'url'   => url('/videos/' . (int) $photo['id']),
-        'thumb' => file_url($photo['filename'], 'blur'),
-    ];
-}
+// Signup page: account + optional billing columns, then the shared guest
+// teaser (recent uploads + site media totals).
 ?>
-
 <style>
     .auth-panel { max-width: 1200px; }
     .signup-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; text-align: left; }
@@ -65,10 +41,10 @@ foreach ($recentVideos as $photo) {
                     <label for="password_confirm">Confirm Password</label><br>
                     <input type="password" name="password_confirm" id="password_confirm" minlength="8" required>
                 </p>
-    <p>
-        <label for="date_of_birth">Date of Birth</label><br>
+                <p>
+                    <label for="date_of_birth">Date of Birth</label><br>
                     <input type="date" name="date_of_birth" id="date_of_birth" placeholder="MM/DD/YYYY" required onclick="if(window.HTMLInputElement&&HTMLInputElement.prototype.showPicker)this.showPicker()" onfocus="if(window.HTMLInputElement&&HTMLInputElement.prototype.showPicker)this.showPicker()">
-    </p>
+                </p>
             </div>
 
             <div>
@@ -120,39 +96,4 @@ foreach ($recentVideos as $photo) {
     <p class="auth-links">Already have an account? <a href="<?= url('/login') ?>">Log in</a> &middot; <a href="<?= url('/membership') ?>">Membership</a> &middot; <a href="<?= url('/admin') ?>">Admin login</a></p>
 </div>
 
-<?php if (!empty($recentImages)): ?>
-<section>
-    <h2 class="section-title">Recent Pictures</h2>
-    <div class="recent-strip">
-        <?php foreach ($recentItems as $item): ?>
-            <?php if ($item['type'] !== 'image') { continue; } ?>
-            <div class="card recent-card">
-                <a class="card-link" href="<?= e($item['url']) ?>">
-                    <div class="card-cover">
-                        <img src="<?= e($item['thumb']) ?>" alt="" loading="lazy" onerror="this.onerror=null;this.src='<?= e($pictureBlank) ?>'">
-                    </div>
-                </a>
-            </div>
-        <?php endforeach; ?>
-    </div>
-</section>
-<?php endif; ?>
-
-<?php if (!empty($recentVideos)): ?>
-<section>
-    <h2 class="section-title">Recent Videos</h2>
-    <div class="recent-strip">
-        <?php foreach ($recentItems as $item): ?>
-            <?php if ($item['type'] !== 'video') { continue; } ?>
-            <div class="card recent-card">
-                <a class="card-link" href="<?= e($item['url']) ?>">
-                    <div class="card-cover">
-                        <img src="<?= e($item['thumb']) ?>" alt="" loading="lazy" onerror="this.onerror=null;this.src='<?= e($pictureBlank) ?>'">
-                        <span class="play-badge">&#9654;</span>
-                    </div>
-                </a>
-            </div>
-        <?php endforeach; ?>
-    </div>
-</section>
-<?php endif; ?>
+<?php require __DIR__ . '/../partials/guest_teaser.php'; ?>

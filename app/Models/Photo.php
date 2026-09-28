@@ -228,6 +228,48 @@ class Photo
     }
 
     /**
+     * Total number of images and videos on the site, restricted to media in
+     * visible (non-secret, published, not-deleted) galleries. Used for the
+     * guest landing teaser. Cached for an hour.
+     */
+    public static function siteCounts(): array
+    {
+        $cached = \App\Core\Cache::rememberGen(
+            'media',
+            'site_counts',
+            3600,
+            static function (): string {
+                $rows = Database::run(
+                    'SELECT p.is_video, COUNT(DISTINCT p.id) AS c
+                     FROM photos p
+                     INNER JOIN gallery_photo gp ON gp.photo_id = p.id
+                     INNER JOIN galleries g ON g.id = gp.gallery_id
+                     WHERE g.is_secret = 0 AND ' . Gallery::publishedVisibleSql('g') . '
+                     GROUP BY p.is_video'
+                )->fetchAll();
+
+                $images = $videos = 0;
+                foreach ($rows as $row) {
+                    if ((int) $row['is_video'] === 1) {
+                        $videos = (int) $row['c'];
+                    } else {
+                        $images = (int) $row['c'];
+                    }
+                }
+
+                return json_encode(['images' => $images, 'videos' => $videos]);
+            }
+        );
+
+        $decoded = json_decode($cached, true);
+
+        return [
+            'images' => (int) ($decoded['images'] ?? 0),
+            'videos' => (int) ($decoded['videos'] ?? 0),
+        ];
+    }
+
+    /**
      * Shared query for recent images or videos, tagging each row with one of
      * its gallery ids so views can link to it. The media type comes from the
      * indexed <code>is_video</code> column (backed by

@@ -43,7 +43,7 @@ class MembershipController extends Controller
 
         $this->view('membership/dashboard', [
             'user'           => $user,
-            'emailUnverified' => false,
+            'emailUnverified' => !$siteEditorPreview && empty($user['email_verified_at']),
             'activeSub'      => $siteEditorPreview ? null : Subscription::activeFor($userId),
             'pendingSub'     => $siteEditorPreview ? null : Subscription::pendingFor($userId),
             'latestSub'      => $siteEditorPreview ? null : (Subscription::forUser($userId)[0] ?? null),

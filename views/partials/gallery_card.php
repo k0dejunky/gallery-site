@@ -1,7 +1,7 @@
 <?php
 $cover = $cover ?? \App\Models\Gallery::firstPhoto((int) $gallery['id']);
 $galleryCategories = $galleryCategories ?? \App\Models\Gallery::categories((int) $gallery['id']);
-$galleryUrl  = url('/galleries/' . (int) $gallery['id']);
+$galleryUrl  = url('/galleries/' . (int) $gallery['id']) . (!empty($listingReturnTo) ? '?' . http_build_query(['return_to' => $listingReturnTo]) : '');
 $isVideoCard = $cover !== null && is_video($cover['filename']);
 $viewedIds   = $viewedIds ?? [];
 $isViewed    = in_array((int) $gallery['id'], $viewedIds, true);

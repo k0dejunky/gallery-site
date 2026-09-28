@@ -5,6 +5,9 @@ $breadcrumbItems = [
     ['label' => $category['name']],
 ];
 require __DIR__ . '/../partials/breadcrumbs.php';
+
+// Back links from a gallery/media opened here return to this category page.
+$listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galleries/category/' . $category['slug']);
 ?>
 
 

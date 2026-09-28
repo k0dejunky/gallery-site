@@ -44,6 +44,7 @@ class SubscriptionController extends MembershipAdminController
             'subscriptions' => Subscription::all(),
             'plans'         => Plan::active(),
             'reconciliation'=> $pendingReconciliation,
+            'trialLinks'    => \App\Models\TrialLink::all(),
         ]);
     }
 
@@ -122,6 +123,60 @@ class SubscriptionController extends MembershipAdminController
         $days = max(1, min(90, (int) $this->request->post('trial_days', '3')));
         \App\Models\SiteConfig::setTrialDays($days);
         $this->flash('success', 'Free trial length set to ' . $days . ' day' . ($days === 1 ? '' : 's') . '.');
+        $this->redirect('/admin/subscriptions');
+    }
+
+    /**
+     * Create a shareable free-trial link (admin). The link grants a trial at
+     * the chosen level for the chosen number of days, redeemable up to
+     * max_uses times.
+     */
+    public function storeTrialLink(): void
+    {
+        $level   = max(1, min(3, (int) $this->request->post('trial_level', '1')));
+        $days    = max(1, min(90, (int) $this->request->post('trial_days', '3')));
+        $maxUses = max(1, (int) $this->request->post('max_uses', '1'));
+
+        $id = \App\Models\TrialLink::create((int) Auth::user()['id'], $level, $days, $maxUses);
+        AuditLog::record((int) Auth::user()['id'], 'create', 'trial_link', $id, 'Created trial link (' . \App\Models\TrialLink::levelLabel($level) . ', ' . $days . ' days, up to ' . $maxUses . ' uses)', null, ['level' => $level, 'days' => $days, 'max_uses' => $maxUses]);
+
+        $this->flash('success', 'Trial link created.');
+        $this->redirect('/admin/subscriptions');
+    }
+
+    /**
+     * Enable/disable a trial link (admin).
+     */
+    public function toggleTrialLink(int $id): void
+    {
+        $link = \App\Models\TrialLink::find($id);
+        if ($link === null) {
+            $this->notFound();
+            return;
+        }
+
+        \App\Models\TrialLink::toggle($id);
+        AuditLog::record((int) Auth::user()['id'], 'update', 'trial_link', $id, 'Toggled trial link ' . (int) $link['enabled'] ? 'off' : 'on', ['enabled' => (int) $link['enabled']], ['enabled' => 1 - (int) $link['enabled']]);
+
+        $this->flash('success', 'Trial link ' . ((int) $link['enabled'] ? 'disabled' : 'enabled') . '.');
+        $this->redirect('/admin/subscriptions');
+    }
+
+    /**
+     * Delete a trial link (admin).
+     */
+    public function destroyTrialLink(int $id): void
+    {
+        $link = \App\Models\TrialLink::find($id);
+        if ($link === null) {
+            $this->notFound();
+            return;
+        }
+
+        \App\Models\TrialLink::delete($id);
+        AuditLog::record((int) Auth::user()['id'], 'delete', 'trial_link', $id, 'Deleted trial link ' . $link['code'], ['level' => (int) $link['level'], 'days' => (int) $link['days']], null);
+
+        $this->flash('success', 'Trial link deleted.');
         $this->redirect('/admin/subscriptions');
     }
 

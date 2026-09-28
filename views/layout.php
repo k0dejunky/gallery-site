@@ -207,7 +207,7 @@ $isAuthPage = $isLoginPage
         .collapsible { overflow: hidden; transition: max-height .3s; }
         img { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
      </style>
-    <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=10">
+    <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=11">
 </head>
 <body data-base="<?= e(config('app.base_path')) ?>" data-user="<?= $user !== null ? '1' : '0' ?>">
 <a class="skip-link" href="#main-content">Skip to content</a>
@@ -283,7 +283,7 @@ $isAuthPage = $isLoginPage
             <a class="nav-brand" href="<?= url('/account') ?>" data-se-move-key="pub-dashboard">Dashboard</a>
             <a class="nav-item<?= $currentPath === url('/account') ? ' active' : '' ?>" href="<?= url('/account') ?>" data-se-move-key="pub-account">Dashboard</a>
             <a class="nav-item<?= strpos($currentPath, url('/galleries')) === 0 ? ' active' : '' ?>" href="<?= url('/galleries') ?>" data-se-move-key="pub-galleries">Galleries</a>
-            <a class="nav-item<?= strpos($currentPath, url('/favorites')) === 0 ? ' active' : '' ?>" href="<?= url('/favorites') ?>" data-se-move-key="pub-favorites">Favorites</a>
+            <a class="nav-item<?= strpos($currentPath, url('/favorites')) === 0 ? ' active' : '' ?>" href="<?= url('/favorites') ?>" data-se-move-key="pub-favorites">Favorites<?php if ($user !== null && !\App\Core\Auth::hasActiveSubscription()): ?> <span class="nav-gated" title="Favorites require a Silver or higher membership">Silver</span><?php endif; ?></a>
             <a class="nav-item<?= strpos($currentPath, url('/collections')) === 0 ? ' active' : '' ?>" href="<?= url('/collections') ?>" data-se-move-key="pub-collections">Collections</a>
             <a class="nav-item<?= strpos($currentPath, url('/membership')) === 0 ? ' active' : '' ?>" href="<?= url('/membership') ?>" data-se-move-key="pub-membership">Membership</a>
             <a class="nav-item<?= strpos($currentPath, url('/support')) === 0 ? ' active' : '' ?>" href="<?= url('/support') ?>" data-se-move-key="pub-support">Support<?php if (!empty($supportUnreadCount)): ?> <span class="nav-unread" aria-label="<?= (int) $supportUnreadCount ?> unread replies"><?= (int) $supportUnreadCount ?></span><?php endif; ?></a>
@@ -508,7 +508,7 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
 <?php endif; ?>
     <script>try{var p=JSON.parse(localStorage.getItem('galleryDisplayPrefs')||'{}');var v=p.view||'grid';var s=p.size||'md';document.documentElement.classList.add('g-view-'+v);document.documentElement.classList.add('g-size-'+s);if(p.masonry)document.documentElement.classList.add('g-masonry');}catch(e){document.documentElement.classList.add('g-view-grid');document.documentElement.classList.add('g-size-md');}</script>
     <?php require __DIR__ . '/partials/tour_targets.php'; ?>
-    <script src="<?= url('/assets/js/user.js') ?>?v=5" defer></script>
+    <script src="<?= url('/assets/js/user.js') ?>?v=6" defer></script>
     <script src="<?= url('/assets/js/tour.js') ?>?v=8" defer></script>
 </body>
 </html>

@@ -45,7 +45,7 @@ class ImageController extends Controller
         if (Photo::hasPublicGallery($id)) {
             Auth::requireGalleryLevel(
                 Photo::minimumGalleryLevel($id),
-                'A membership is required to view that media.'
+                'This media needs a ' . \App\Models\Subscription::levelLabel(Photo::minimumGalleryLevel($id)) . ' membership to view.'
             );
         }
 
@@ -56,6 +56,15 @@ class ImageController extends Controller
         [$currentIndex, $mediaCount, $prev, $next] = $galleryId !== null
             ? Gallery::neighborsAndIndex($galleryId, $id)
             : [0, 1, null, null];
+
+        // Neighbour galleries for the "next gallery" step at the end of a
+        // gallery's items (skips galleries the member cannot view).
+        $prevGallery = $nextGallery = null;
+        if ($galleryId !== null) {
+            $maxLevel = Auth::effectiveLevel();
+            $nextGallery = Gallery::neighborVisible((int) $galleryId, 'next', $maxLevel);
+            $prevGallery = Gallery::neighborVisible((int) $galleryId, 'prev', $maxLevel);
+        }
 
         // Optional collection-as-playlist: ?playlist={collectionId} plays the
         // collection's individual videos, and prev/next move within it.
@@ -101,6 +110,8 @@ class ImageController extends Controller
             'mediaCount' => $mediaCount,
             'currentIndex' => $currentIndex,
             'returnTo' => $returnTo,
+            'prevGallery' => $prevGallery,
+            'nextGallery' => $nextGallery,
             'collections'   => $collections,
             'playlist'      => $playlist,
             'playlistName'  => $playlistName,

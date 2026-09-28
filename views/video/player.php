@@ -8,7 +8,13 @@ $reportUrl = url('/support') . '?' . http_build_query(['return_to' => $_SERVER['
 $plUrl  = function (int $videoId) use ($playlistId): string {
     return url('/videos/' . $videoId) . ($playlistId > 0 ? '?playlist=' . $playlistId : '');
 };
+$breadcrumbItems = [
+    ['label' => 'Galleries', 'url' => url('/galleries')],
+    ['label' => 'Gallery', 'url' => url('/galleries/' . (int) ($gallery['id'] ?? 0))],
+    ['label' => $photo['caption'] ?: 'Video'],
+];
 ?>
+<?php require __DIR__ . '/../partials/breadcrumbs.php'; ?>
 <?php require __DIR__ . '/../partials/media_nav.php'; ?>
 
 <?php if (!empty($collections)): ?>
@@ -49,6 +55,10 @@ $plUrl  = function (int $videoId) use ($playlistId): string {
             <button type="button" class="btn btn-sm btn-outline" id="browse-galleries-btn">&#128269; Browse galleries</button>
         </div>
         <div id="player-browse" class="player-browse" hidden data-playlist="<?= (int) $playlistId ?>">
+            <div class="pb-toolbar">
+                <button type="button" class="btn btn-sm btn-outline" id="pb-back" hidden>&larr; Back to galleries</button>
+                <input type="search" id="pb-search" placeholder="Search galleries&hellip;" aria-label="Search galleries">
+            </div>
             <p class="muted" style="font-size:.85rem;">Pick a video to play or add to the playlist queue. The picture-in-picture window keeps playing while you browse.</p>
             <div class="pb-body"></div>
         </div>

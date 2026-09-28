@@ -83,7 +83,7 @@ class SettingsController extends Controller
                 $theme['title_image_url'] = url($theme['title_image']);
                 return $theme;
             })(),
-            'emailUnverified' => false,
+            'emailUnverified' => !$isPreview && empty($user['email_verified_at']),
             'user'            => $user,
             'siteEditorPreview' => $isPreview,
             'siteTimezone'    => SiteConfig::timezone(),

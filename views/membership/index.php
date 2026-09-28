@@ -87,7 +87,7 @@
     <?php endif; ?>
 
     <h2 style="text-align:center; margin-top: 1.5rem; order:5;">Choose a plan</h2>
-    <p class="muted" style="text-align:center; order:6;">All plans include full access to every gallery and video.</p>
+    <p class="muted" style="text-align:center; order:6;">Higher tiers unlock more of the catalog — each plan includes everything from the tiers below it.</p>
 
     <?php if (empty($plans)): ?>
         <p class="muted" style="text-align:center; order:7;">No plans are available right now. Please check back soon.</p>

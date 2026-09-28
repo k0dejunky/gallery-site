@@ -29,33 +29,36 @@ class SupportController extends Controller
             'title' => 'Support',
             'tickets' => $siteEditorPreview ? [] : SupportMessage::forUser((int) $user['id']),
             'siteEditorPreview' => $siteEditorPreview,
+            'returnTo' => safe_return_to($this->request->query('return_to', '')),
         ]);
     }
 
     /**
      * Validate and save a member support request, then notify the admin.
      */
-    public function submit(): void
+public function submit(): void
     {
         Auth::requireLogin();
 
+        $returnTo = safe_return_to($this->request->post('return_to', ''));
         $subject = $this->request->input('subject');
         $message = $this->request->input('message');
+        $redirectTo = '/support' . ($returnTo !== null ? '?return_to=' . rawurlencode($returnTo) : '');
 
         if ($subject === '' || mb_strlen($subject) > 255) {
             $this->flash('error', 'Please enter a subject of 255 characters or fewer.');
-            $this->redirect('/support');
+            $this->redirect($redirectTo);
         }
 
         if ($message === '' || mb_strlen($message) > 10000) {
             $this->flash('error', 'Please enter a message of 10,000 characters or fewer.');
-            $this->redirect('/support');
+            $this->redirect($redirectTo);
         }
 
         // Prevent user input from becoming additional mail headers.
         if (preg_match('/[\r\n]/', $subject)) {
             $this->flash('error', 'The subject contains invalid characters.');
-            $this->redirect('/support');
+            $this->redirect($redirectTo);
         }
 
         $user = Auth::user();
@@ -76,7 +79,7 @@ class SupportController extends Controller
         }
 
         $this->flash('success', 'Your support request was sent. We will get back to you soon.');
-        $this->redirect('/support/' . $id);
+        $this->redirect($returnTo !== null ? $returnTo : '/support/' . $id);
     }
 
     public function show(int $id): void
