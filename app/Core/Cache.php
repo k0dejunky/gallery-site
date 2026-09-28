@@ -61,6 +61,42 @@ class Cache
         }
 
         self::$local[$key] = ['value' => $value, 'expires' => time() + $ttl];
+        self::localPurge();
+    }
+
+    /**
+     * Bound the in-memory fallback so a Redis outage on a long-lived process
+     * (FPM worker that never recycles, cron/worker daemon, SSE loop) cannot
+     * grow memory without limit. Expired entries are dropped first, then the
+     * soonest-to-expire entries are evicted until the array fits the cap.
+     * Only used on the Redis-less fallback path; the live Redis path never
+     * touches this array.
+     */
+    private static function localPurge(int $keep = 500): void
+    {
+        if (count(self::$local) <= $keep) {
+            return;
+        }
+
+        $now  = time();
+        $alive = [];
+
+        foreach (self::$local as $key => $entry) {
+            $expires = (int) ($entry['expires'] ?? 0);
+            if ($expires <= $now) {
+                unset(self::$local[$key]);
+            } else {
+                $alive[$key] = $expires;
+            }
+        }
+
+        if (count(self::$local) > $keep) {
+            asort($alive);
+            $excess = count(self::$local) - $keep;
+            foreach (array_slice(array_keys($alive), 0, $excess) as $key) {
+                unset(self::$local[$key]);
+            }
+        }
     }
 
 /**

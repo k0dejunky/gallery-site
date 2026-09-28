@@ -92,6 +92,11 @@ class Database
             ];
 
             self::$slowQueries[] = $entry;
+            // Keep the in-memory ring bounded (same cap as the on-disk log):
+            // without this, a query that is consistently slow would append an
+            // entry per call and grow memory without limit inside a
+            // long-running worker/daemon (SSE polls, the cron/worker loops).
+            self::$slowQueries = array_slice(self::$slowQueries, -self::SLOW_LOG_MAX);
             self::persistSlowQuery($entry);
 
             error_log(sprintf(

@@ -940,6 +940,22 @@ class SmokeChecks
             return strpos($adminLayout, '$user =') === false ? $ok('no $user assignment') : $bad('views/admin/layout.php must not assign $user (viewAdmin() scope collision)');
         });
 
+        // ------------------------------------------------------ Memory
+        $databaseCore = $read("$root/app/Core/Database.php");
+        $cacheCore    = $read("$root/app/Core/Cache.php");
+        $add('smoke.memory.slow_ring', 'Smoke · Memory', 'Database in-memory slow-query ring is capped', static function () use ($databaseCore, $ok, $bad): array {
+            return strpos($databaseCore, 'array_slice(self::$slowQueries, -self::SLOW_LOG_MAX)') !== false
+                ? $ok('slow-query array trimmed to SLOW_LOG_MAX')
+                : $bad('Database::$slowQueries must be trimmed to SLOW_LOG_MAX so a slow query cannot grow memory in long-running processes');
+        });
+        $add('smoke.memory.cache_local_cap', 'Smoke · Memory', 'Cache in-memory fallback is size-capped', static function () use ($cacheCore, $ok, $bad): array {
+            return strpos($cacheCore, 'private static function localPurge(') !== false
+                && strpos($cacheCore, 'count(self::$local)') !== false
+                && strpos($cacheCore, 'unset(self::$local[$key])') !== false
+                ? $ok('Redis-less fallback evicts expired/soonest entries over the cap')
+                : $bad('Cache must cap its Redis-less in-memory fallback so a Redis outage cannot grow memory without limit');
+        });
+
         // -------------------------------------------------------- System
         $systemView = $read("$root/views/admin/system.php");
         $systemCtrl = $read("$root/app/Controllers/SystemController.php");
