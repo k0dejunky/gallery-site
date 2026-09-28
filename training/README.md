@@ -110,6 +110,60 @@ training round teaches the model to name galleries:
 Pairs are cleaned, junk-filtered and stored as `cleaned = 1`; re-importing is
 idempotent.
 
+### The kinky/adult chat corpus (persona-safe, large)
+
+`training/kinky-corpus-harvest.jsonl` (real sources) and
+`training/kinky-corpus-synth.jsonl` (operator-voice synthetic) are importer-ready
+`{user_message, operator_reply}` JSONL. Together they add hundreds of kinky
+adult-chat pairs to every training round.
+
+- **Real sources** (`training/kink-corpus/raw/`, curated): kink Q&A
+  (`jjmachan/NSFW-reddit`), sub/dom/bondage/petplay (`ResplendentAI/NSFW_RP_Format_DPO`),
+  and a clean dirty-talk bank (`baiango/NSFW-dirty-talk`). The DPO `prompt→chosen`
+  lines are extracted by `normalize.py`; `*...*` RP stage-actions are stripped so
+  replies stay plain first-person dialogue matching the operator voice.
+- **Synthetic** (`training/kink-corpus/scenarios/chatter/*.json` → `synthesize.py`):
+  ~20 scenario cards (dom/sub, degradation, pet names, toys, spanking, rope,
+  oral/body worship, aftercare, brat-taming, jealousy, sexting, denial, dirty-talk,
+  caregiver, soft/gentle, exhibition, roleplay, edging, praise, teaser) generate
+  flirty operator-voice exchanges via Ollama (`llama3.2-3b-abliterated`, run on
+  the production server — it has the RAM; the local box does not).
+- **Excluded** (would re-pollute the persona): the fantasy/novel ERP sources
+  (`Yoondi/bluemoon`, `openerotica/erotiquant`, `Delta-Vector` novels,
+  `nebulatgs/omegle-vicuna`, `QuixiAI/wizard_vicuna`, `Aesir CoT`, `jeiku/Hypno_ChatML`).
+  These were the 431k rows wiped from the corpus because they made the fine-tuned
+  model reply with off-persona nonsense.
+
+Build the harvest:
+
+```bash
+cd training/kink-corpus
+mkdir -p raw_kinky out_kinky
+cp raw/jjmachan__NSFW-reddit.jsonl raw/ResplendentAI__NSFW_RP_Format_DPO.jsonl \
+   raw/baiango__NSFW-dirty-talk.jsonl raw_kinky/
+.venv/bin/python normalize.py --dir raw_kinky --out out_kinky/unified.jsonl
+.venv/bin/python filter.py --in out_kinky/unified.jsonl --out out_kinky/filtered.jsonl
+.venv/bin/python export.py --mode chatter --in out_kinky/filtered.jsonl --out out_kinky/harvest.jsonl
+```
+
+Synthesize at scale (on the production server, which can run the models):
+
+```bash
+# ship synthesize.py/common.py/modes.yaml + scenarios/chatter/ to the server
+setsid nohup python3 -u synthesize.py --mode chatter --scenarios scenarios/chatter \
+    --out synth_big.jsonl --count 600 </dev/null > synth_big.log 2>&1 &
+```
+
+Validate + install both files the same way as the seeds:
+
+```bash
+php bin/chat_training_import.php --file=training/kinky-corpus-harvest.jsonl --dry-run
+php bin/chat_training_import.php --file=training/kinky-corpus-harvest.jsonl
+```
+
+The trainer picks everything up automatically once **≥ 20** cleaned pairs sit
+above its watermark (it processes ≤ 2000 pairs per round).
+
 ### Authoring new content-referral pairs
 
 Follow the same shape (keep each record well under the trainer's 512-token
