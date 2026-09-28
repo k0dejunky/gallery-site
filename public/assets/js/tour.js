@@ -20,9 +20,9 @@
     { url: function(){ return T().video; }, sel: '.player-keep', title: 'Keep PiP open', body: 'With "Keep open" checked (the default), the picture-in-picture window stays up after a video ends so you can replay it.' },
     { url: function(){ return T().video; }, sel: '#browse-galleries-btn', title: 'Browse & queue', body: 'Open this panel to browse other galleries without leaving the player — picture-in-picture keeps playing while you add videos to the queue.' },
     { url: function(){ return T().playlist; }, sel: '.player-playlist', title: 'Playlist', body: 'Videos you save to a collection play here as a playlist with thumbnails and durations — the playing one is highlighted and the next starts automatically.' },
-    { url: '/collections', sel: '.grid', title: 'Collections', body: 'Build collections of whole galleries and individual videos, then play a collection as a playlist in the video player.' },
+    { url: '/collections', sel: '.grid, .empty-state', title: 'Collections', body: 'Build collections of whole galleries and individual videos, then play a collection as a playlist in the video player.' },
     { url: '/favorites', sel: '.favorites-section', title: 'Favorites', body: 'Mark your favorite categories and galleries so your home page is built around them.' },
-    { url: '/chat', sel: '#chat-input', title: 'Chat', body: 'Chat with the operator. Retrieval and fine-tuned AI modes answer from real conversations; operator mode waits for a human.' },
+    { url: '/chat', sel: '#chat-input, .chat-page', title: 'Chat', body: 'Chat with the operator. Retrieval and fine-tuned AI modes answer from real conversations; operator mode waits for a human.' },
     { url: '/membership', sel: 'main', title: 'Membership', body: 'Review your membership tier, upgrade, or manage a trial.' },
     { url: '/settings', sel: '.settings-form', title: 'Settings', body: 'Manage your profile, notifications, timezone and theme — and replay this tour any time.' }
   ];
@@ -223,7 +223,17 @@
     var i = 0;
     try{ i = parseInt(sessionStorage.getItem(STEP) || '0', 10) || 0; }catch(e){}
     if(i < 0 || i >= list.length) i = 0;
-    goToStep(i);
+    idx = i;
+    var u = resolveUrl(list[idx]);
+    if(u && !samePage(u)){
+      // We arrived somewhere other than this step's page — e.g. the target
+      // gallery/video redirected because the member cannot view it. Skip the
+      // step and continue to the next one instead of chasing a reload loop.
+      idx++;
+      goToStep(idx);
+      return;
+    }
+    setTimeout(show, 400);
   }
 
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }

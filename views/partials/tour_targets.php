@@ -2,26 +2,31 @@
 // Server-provided sample URLs that the guided tour navigates to. The tour
 // walks a logged-in member through each feature's own page, so we hand it a
 // real gallery URL, a real video URL and (when the user has one) a playlist
-// URL for a collection that already holds videos. Cached for an hour; the
-// collection lookup is per-user and cheap, so it is not cached.
+// URL for a collection that already holds videos. Targets are restricted to
+// content the current member can actually view (their membership level), so
+// the tour never navigates into a gallery that redirects to the membership
+// page. Cached per level for an hour; the collection lookup is per-user and
+// cheap, so it is not cached.
 ?>
 <?php if (\App\Core\Auth::check()): ?>
 <?php
 $tourUser    = \App\Core\Auth::user();
-$tourMedia   = \App\Core\Cache::rememberGen('tour', 'first_media_v2', 3600, function () {
+$tourLevel   = \App\Core\Auth::effectiveLevel();
+$tourAdmin   = $tourLevel >= PHP_INT_MAX;
+$levelClause = $tourAdmin ? '' : ' AND g.min_level <= ' . (int) $tourLevel;
+$levelKey    = $tourAdmin ? 'admin' : 'l' . (int) $tourLevel;
+$tourMedia   = \App\Core\Cache::rememberGen('tour', 'first_media_v3_' . $levelKey, 3600, function () use ($levelClause) {
     $galleryRow = \App\Core\Database::run(
         'SELECT g.id FROM galleries g
-         WHERE g.is_secret = 0 AND ' . \App\Models\Gallery::publishedVisibleSql('g') . '
+         WHERE g.is_secret = 0 AND ' . \App\Models\Gallery::publishedVisibleSql('g') . $levelClause . '
          ORDER BY g.id DESC LIMIT 1'
     )->fetch();
 
-    // Prefer a video from the least-restrictive gallery so a free member can
-    // actually reach the player page.
     $videoRow = \App\Core\Database::run(
         'SELECT p.id FROM photos p
          INNER JOIN gallery_photo gp ON gp.photo_id = p.id
          INNER JOIN galleries g ON g.id = gp.gallery_id
-         WHERE p.is_video = 1 AND g.is_secret = 0 AND ' . \App\Models\Gallery::publishedVisibleSql('g') . '
+         WHERE p.is_video = 1 AND g.is_secret = 0 AND ' . \App\Models\Gallery::publishedVisibleSql('g') . $levelClause . '
          ORDER BY g.min_level ASC, p.id DESC LIMIT 1'
     )->fetch();
 
