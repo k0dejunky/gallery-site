@@ -84,24 +84,45 @@ class ChatModel
         }
 
         // Versioned name so a failed create never clobbers the live model.
-        $name = self::FINETUNED . ':' . substr(md5($adapter . filesize($adapter)), 0, 8);
+        // adapterPath() may return a directory (chat-lora/) or a single file;
+        // base the name on the real adapter file so a NEW adapter gets a NEW
+        // name instead of silently overwriting the current model.
+        $adapterFile = is_dir($adapter) ? rtrim($adapter, '/') . '/model.safetensors' : $adapter;
+        $name = self::FINETUNED . ':' . substr(is_file($adapterFile) ? md5_file($adapterFile) : md5($adapter . filesize($adapter)), 0, 8);
 
         $modelfile = sprintf("FROM %s\nADAPTER %s\n", self::BASE, $adapter);
         @file_put_contents(self::modelfilePath(), $modelfile);
 
         $created = self::ollamaCreate($name);
         if (!$created) {
-            return ['ok' => false, 'error' => 'ollama create failed for ' . $name];
+            return ['ok' => false, 'error' => 'ollama create failed for ' . $name, 'model' => $name];
         }
 
         // Smoke test the new model responds before swapping it in.
         if (!self::smoke($name)) {
-            return ['ok' => false, 'error' => 'fine-tuned model failed its smoke test'];
+            // A model that fails the smoke test must never be selectable:
+            // remove it now so discovery/currentFineTunedModel can't pick it up.
+            self::remove($name);
+            return ['ok' => false, 'error' => 'fine-tuned model failed its smoke test', 'model' => $name];
         }
 
         // Point ChatAi::FINETUNED_MODEL at the new versioned model. The model
         // name itself is versioned, so Ollama serves it; admin sees the name.
         return ['ok' => true, 'created' => $name];
+    }
+
+    /**
+     * Remove a model from Ollama (used to discard a fine-tuned build that
+     * failed its smoke test so it can never be selected by chat).
+     */
+    public static function remove(string $name): void
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return;
+        }
+        $cmd = escapeshellarg(self::ollamaBin()) . ' rm ' . escapeshellarg($name) . ' 2>&1';
+        @exec($cmd, $out, $rc);
     }
 
     private static function ollamaCreate(string $name): bool

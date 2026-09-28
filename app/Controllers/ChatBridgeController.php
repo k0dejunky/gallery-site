@@ -139,7 +139,7 @@ class ChatBridgeController extends Controller
                     SUBSTRING_INDEX(u.email, '@', 1) AS username,
                     (SELECT 1 FROM subscriptions s JOIN plans p ON p.id = s.plan_id
                       WHERE s.user_id = c.user_id AND p.can_chat = 1
-                        AND ' . \App\Models\Subscription::activeWhere('s') . '
+                        AND " . \App\Models\Subscription::activeWhere('s') . "
                       LIMIT 1) AS can_chat,
                     (SELECT m.message FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_message,
                     (SELECT m.sender_role FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_sender,
@@ -485,7 +485,7 @@ class ChatBridgeController extends Controller
             "SELECT u.id, u.email, SUBSTRING_INDEX(u.email, '@', 1) AS username,
                     (SELECT 1 FROM subscriptions s JOIN plans p ON p.id = s.plan_id
                       WHERE s.user_id = u.id AND p.can_chat = 1
-                        AND ' . \App\Models\Subscription::activeWhere('s') . '
+                        AND " . \App\Models\Subscription::activeWhere('s') . "
                       LIMIT 1) AS can_chat,
                     (SELECT c.id FROM chat_conversations c WHERE c.user_id = u.id ORDER BY c.id DESC LIMIT 1) AS conversation_id,
                     (SELECT c.member_reply_enabled FROM chat_conversations c WHERE c.user_id = u.id ORDER BY c.id DESC LIMIT 1) AS member_reply_enabled
@@ -830,15 +830,16 @@ class ChatBridgeController extends Controller
         // Persist the adapter metadata in the chat_settings table.
         \App\Core\ChatSettings::put('finetuned', $meta);
 
-        // Rebuild the Ollama fine-tuned model from the new adapter. If it
-        // fails, the model is left unchanged (versioned create + smoke test).
+        // Rebuild the Ollama fine-tuned model from the new adapter. The final
+        // meta (with created OR rebuild_error) is ALWAYS persisted so the admin
+        // sees the last rebuild outcome instead of a silently stale state.
         $rebuild = \App\Core\ChatModel::rebuild();
         if (!empty($rebuild['ok'])) {
             $meta['created'] = $rebuild['created'];
-            \App\Core\ChatSettings::put('finetuned', $meta);
         } else {
             $meta['rebuild_error'] = $rebuild['error'] ?? 'unknown';
         }
+        \App\Core\ChatSettings::put('finetuned', $meta);
 
         return ['dest' => $dest, 'meta' => $meta];
     }

@@ -60,12 +60,83 @@ class SystemController extends Controller
             'photoEditQueue' => $this->photoEditQueue(),
             'slowQueries' => \App\Core\Database::recentSlowQueries(),
             'apiHealth'  => $this->apiHealth(),
+            'ai'         => $this->aiStatus(),
             'analytics'  => [
                 'finance' => \App\Models\Stats::finance(6),
                 'traffic' => \App\Models\Stats::trafficMonthly(6),
                 'plans'   => \App\Models\Stats::planDistribution(),
             ],
         ]);
+    }
+
+    /**
+     * AI (Ollama) status for the system page: is the server up, which models
+     * are installed, does the base model generate, and is the fine-tuned
+     * model healthy. Includes the last adapter rebuild outcome so a failed
+     * fine-tune is visible instead of silently falling back to the base.
+     */
+    private function aiStatus(): array
+    {
+        $status = [
+            'ollama_up' => false,
+            'models' => [],
+            'base_ok' => false,
+            'fine_tuned' => null,
+            'fine_tuned_healthy' => null,
+            'finetuned_meta' => \App\Core\ChatSettings::all()['finetuned'] ?? [],
+        ];
+
+        [$code, , $body] = \App\Models\Http::request('http://127.0.0.1:11434/api/tags', [
+            'method' => 'GET', 'timeout' => 5,
+        ]);
+
+        if ($code < 200 || $code >= 300) {
+            return $status;
+        }
+
+        $status['ollama_up'] = true;
+        foreach ((json_decode($body, true)['models'] ?? []) as $m) {
+            $status['models'][] = (string) ($m['name'] ?? '');
+        }
+        $status['base_ok'] = in_array(\App\Core\ChatAi::BASE_MODEL, $status['models'], true)
+            || in_array(\App\Core\ChatAi::BASE_MODEL . ':latest', $status['models'], true);
+
+        $fine = \App\Core\ChatAi::currentFineTunedModel();
+        if ($fine !== \App\Core\ChatAi::FINETUNED_MODEL && in_array($fine, $status['models'], true)) {
+            $status['fine_tuned'] = $fine;
+            [$c2, , $b2] = \App\Models\Http::request('http://127.0.0.1:11434/api/generate', [
+                'method' => 'POST',
+                'headers' => ['Content-Type' => 'application/json'],
+                'json' => [
+                    'model' => $fine, 'prompt' => 'Reply with: hi', 'stream' => false,
+                    'options' => ['num_predict' => 8],
+                ],
+                'timeout' => 15,
+            ]);
+            $reply = trim((string) (json_decode($b2, true)['response'] ?? ''));
+            $status['fine_tuned_healthy'] = $c2 >= 200 && $c2 < 300 && $reply !== '';
+        }
+
+        return $status;
+    }
+
+    /**
+     * Rebuild the fine-tuned model from the installed LoRA adapter
+     * (admin-triggered after a trainer upload, or to recover a broken build).
+     */
+    public function aiRebuild(): void
+    {
+        $result = \App\Core\ChatModel::rebuild();
+        if (!empty($result['ok'])) {
+            \App\Core\ChatSettings::put('finetuned', array_merge(
+                \App\Core\ChatSettings::all()['finetuned'] ?? [],
+                ['created' => $result['created']]
+            ));
+            $this->flash('success', 'Fine-tuned model rebuilt as ' . $result['created'] . '.');
+        } else {
+            $this->flash('error', 'Fine-tuned rebuild failed: ' . ($result['error'] ?? 'unknown'));
+        }
+        $this->redirect('/admin/system');
     }
 
     /** Status values shown only on the existing admin system page. */

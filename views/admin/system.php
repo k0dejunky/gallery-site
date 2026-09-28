@@ -75,6 +75,30 @@
         </div>
     </div>
 
+    <!-- AI (Ollama) -->
+    <div class="sys-card">
+        <h2>AI (Ollama)</h2>
+        <table>
+            <tr><th>Server</th><td class="<?= $ai['ollama_up'] ? 'sys-ok' : 'sys-bad' ?>"><?= $ai['ollama_up'] ? 'up' : 'down (watchdog restarts it)' ?></td></tr>
+            <tr><th>Base model</th><td><?= e(\App\Core\ChatAi::BASE_MODEL) ?> — <?= $ai['base_ok'] ? '<span class="sys-ok">installed</span>' : '<span class="sys-bad">missing</span>' ?></td></tr>
+            <tr><th>Fine-tuned model</th><td><?= $ai['fine_tuned'] ? e($ai['fine_tuned']) : '<span class="sys-bad">none installed</span>' ?>
+                <?php if ($ai['fine_tuned_healthy'] === true): ?><span class="sys-ok"> · healthy</span>
+                <?php elseif ($ai['fine_tuned_healthy'] === false): ?><span class="sys-bad"> · broken (chat uses base)</span><?php endif; ?>
+            </td></tr>
+            <tr><th>Models</th><td class="muted"><?= e(implode(', ', $ai['models']) ?: '—') ?></td></tr>
+            <?php if (!empty($ai['finetuned_meta'])): ?>
+            <tr><th>Last adapter</th><td class="muted"><?= (int) ($ai['finetuned_meta']['pair_count'] ?? 0) ?> pairs · trained <?= e((string) ($ai['finetuned_meta']['trained_at'] ?? '')) ?>
+                <?php if (!empty($ai['finetuned_meta']['rebuild_error'])): ?><span class="sys-bad"> · rebuild error: <?= e((string) $ai['finetuned_meta']['rebuild_error']) ?></span><?php endif; ?>
+            </td></tr>
+            <?php endif; ?>
+        </table>
+        <form class="sys-actions" method="post" action="<?= url('/admin/system/ai-rebuild') ?>">
+            <?= csrf_field() ?>
+            <button class="btn" type="submit">Rebuild fine-tuned model</button>
+            <span class="muted">Re-applies the installed LoRA adapter to the base model and smoke-tests it.</span>
+        </form>
+    </div>
+
     <!-- Operational diagnostics -->
     <div class="sys-card">
         <h2>Operational diagnostics</h2>

@@ -181,6 +181,7 @@ return [
     ['POST', '/admin/system/backups/{file}/delete', 'SystemController@backupDelete', 'dashboard'],
     ['POST', '/admin/system/variants', 'SystemController@variantsRegenerate', 'dashboard'],
     ['POST', '/admin/system/db/optimize', 'SystemController@dbOptimize', 'dashboard'],
+    ['POST', '/admin/system/ai-rebuild', 'SystemController@aiRebuild', 'dashboard'],
     ['POST', '/admin/system/maintenance', 'SystemController@maintenanceToggle', 'dashboard'],
     ['POST', '/admin/system/housekeeping', 'SystemController@housekeepingRun', 'dashboard'],
     ['POST', '/admin/system/paypal-reconcile', 'SystemController@paypalReconcile', 'dashboard'],

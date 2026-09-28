@@ -128,14 +128,54 @@ class ChatAi
 
     /**
      * The fine-tuned model name to use. Prefers the versioned name recorded
-     * by ChatModel::rebuild() when an adapter has been installed; falls back
-     * to the default FINETUNED_MODEL name.
+     * by ChatModel::rebuild(); if that is missing/stale it falls back to
+     * discovering the installed chat-finetuned:* model directly from Ollama
+     * (e.g. when the persisted 'created' was lost to a request timeout).
+     * Smoke-failed builds are removed by ChatModel::rebuild(), so any model
+     * found here is a working build.
      */
     public static function currentFineTunedModel(): string
     {
         $finetuned = ChatSettings::all()['finetuned'] ?? [];
 
-        return !empty($finetuned['created']) ? (string) $finetuned['created'] : self::FINETUNED_MODEL;
+        $created = !empty($finetuned['created']) ? (string) $finetuned['created'] : '';
+        if ($created !== '' && self::modelExists($created)) {
+            return $created;
+        }
+
+        $installed = self::installedFineTunedModels();
+        if ($installed !== []) {
+            return $installed[0];
+        }
+
+        return self::FINETUNED_MODEL;
+    }
+
+    /**
+     * The chat-finetuned:* models currently installed in Ollama (newest
+     * first). Empty when none are present.
+     */
+    private static function installedFineTunedModels(): array
+    {
+        [$status, , $body] = \App\Models\Http::request(self::baseUrl() . '/api/tags', [
+            'method'  => 'GET',
+            'timeout' => 5,
+        ]);
+
+        if ($status < 200 || $status >= 300) {
+            return [];
+        }
+
+        $data = json_decode($body, true);
+        $names = [];
+        foreach (($data['models'] ?? []) as $m) {
+            $n = (string) ($m['name'] ?? '');
+            if (str_starts_with($n, self::FINETUNED_MODEL . ':')) {
+                $names[] = $n;
+            }
+        }
+
+        return $names;
     }
 
     private static function generate(string $model, string $prompt): array

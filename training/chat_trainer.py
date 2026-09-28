@@ -421,7 +421,14 @@ SYSTEM_PERSONA = (
 
 
 def build_training_records(pairs):
-    """Convert pairs to list of {text: <chat-format>} records, dropping junk."""
+    """Convert pairs to list of {text, prefix} chat-format records, dropping junk.
+
+    `prefix` is everything the model must read but not learn to reproduce
+    (persona + member message + assistant header); the LoRA loss is computed
+    only over the assistant reply tokens, so short replies are not drowned by
+    padding/special tokens (previously the EOS-as-pad made fine-tuned models
+    emit an immediate end-of-turn token -> empty replies).
+    """
     records = []
     for p in pairs:
         user = (p.get("user_message") or "").strip()
@@ -430,23 +437,22 @@ def build_training_records(pairs):
             continue
         if _is_junk(user) or _is_junk(reply):
             continue
-        text = (
+        prefix = (
             "<|start_header_id|>user<|end_header_id|>\n\n"
             + SYSTEM_PERSONA
             + "\n\n"
             + user
             + "<|eot_id|>\n<|start_header_id|>assistant<|end_header_id|>\n\n"
-            + reply
-            + "<|eot_id|>"
         )
-        records.append({"text": text})
+        text = prefix + reply + "<|eot_id|>"
+        records.append({"text": text, "prefix": prefix})
     return records
 
 
 def train_adapter(records, out_path):
     """Train a LoRA with transformers + PEFT on CPU. Returns True on success."""
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer
+    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer, DataCollatorWithPadding
     from peft import LoraConfig, get_peft_model
     from datasets import Dataset
 
@@ -472,9 +478,19 @@ def train_adapter(records, out_path):
     ds = Dataset.from_list(records)
 
     def tokenize(ex):
-        out = tokenizer(ex["text"], truncation=True, max_length=MAX_LEN, padding="max_length")
-        out["labels"] = out["input_ids"].copy()
-        return out
+        # Tokenize prefix and full text separately, then mask everything up to
+        # the assistant reply so the model only learns to produce the reply
+        # (standard chat SFT). No padding here: the collator pads to the batch
+        # max (batch=1 -> effectively none) and labels pad to -100, so the
+        # model is never trained to emit end-of-turn/padding tokens.
+        pre = tokenizer(ex["prefix"], truncation=True, max_length=MAX_LEN)
+        full = tokenizer(ex["text"], truncation=True, max_length=MAX_LEN)
+        cut = len(pre["input_ids"])
+        ids = full["input_ids"]
+        labels = [-100] * len(ids)
+        for i in range(min(cut, len(ids)), len(ids)):
+            labels[i] = ids[i]
+        return {"input_ids": ids, "attention_mask": full["attention_mask"], "labels": labels}
 
     ds = ds.map(tokenize)
 
@@ -491,7 +507,8 @@ def train_adapter(records, out_path):
         use_cpu=True,
         dataloader_pin_memory=False,
     )
-    trainer = Trainer(model=model, args=args, train_dataset=ds, callbacks=[ProgressCallback()])
+    collator = DataCollatorWithPadding(tokenizer, padding=True, label_pad_token_id=-100)
+    trainer = Trainer(model=model, args=args, train_dataset=ds, data_collator=collator, callbacks=[ProgressCallback()])
     trainer.train()
     write_status({"phase": "idle", "progress": None})
 

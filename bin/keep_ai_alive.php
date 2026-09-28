@@ -116,5 +116,38 @@ if ($gStatus < 200 || $gStatus >= 300) {
     exit(1);
 }
 
+// --- 4. Fine-tuned model health (if installed) ---------------------------------
+// A broken fine-tuned adapter is not fixed by a service restart, so we only
+// report it; the chat falls back to the base model, and the admin sees the
+// warning (the trainer re-uploads a fresh adapter on its next round).
+$fineNames = [];
+foreach ($names as $n) {
+    if (str_starts_with($n, 'chat-finetuned:')) {
+        $fineNames[] = $n;
+    }
+}
+
+if ($fineNames !== []) {
+    $fine = $fineNames[0];
+    [$fStatus, , $fBody] = Http::request($baseUrl . '/api/generate', [
+        'method'  => 'POST',
+        'timeout' => 20,
+        'json'    => [
+            'model'     => $fine,
+            'prompt'    => 'Reply with: hi',
+            'stream'    => false,
+            'keep_alive' => 300,
+            'options'   => ['num_predict' => 12],
+        ],
+    ]);
+
+    $fReply = trim((string) (json_decode($fBody, true)['response'] ?? ''));
+    if ($fStatus < 200 || $fStatus >= 300 || $fReply === '') {
+        $log("WARNING fine-tuned model {$fine} is unhealthy (HTTP {$fStatus}, empty reply); chat uses base fallback");
+    } else {
+        $log("fine-tuned model {$fine} responds ok");
+    }
+}
+
 $log('AI healthy (api ' . count($names) . ' model(s), generate ok)');
 exit(0);
