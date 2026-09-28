@@ -250,6 +250,64 @@ class PhotoController extends Controller
     }
 
     /**
+     * Set a caption on the selected photos in one gallery (background job).
+     */
+    public function bulkCaption(int $galleryId): void
+    {
+        if (Gallery::find($galleryId) === null) {
+            $this->notFound();
+            return;
+        }
+
+        $caption  = trim((string) $this->request->input('caption', ''));
+        $selected = array_values(array_unique(array_filter(
+            array_map('intval', (array) $this->request->post('photo_ids', [])),
+            static fn (int $id): bool => $id > 0
+        )));
+
+        if ($selected === []) {
+            $this->flash('error', 'Select at least one photo to caption.');
+            $this->redirect('/admin/galleries/' . $galleryId);
+        }
+
+        $userId = (int) Auth::user()['id'];
+        $jobId  = PhotoJob::createBulkCaption($userId, $galleryId, $caption, $selected);
+
+        AuditLog::record($userId, 'update', 'gallery', $galleryId, 'Queued bulk caption (background job #' . $jobId . ')', ['count' => count($selected)]);
+        $this->flash('success', count($selected) . ' photo' . (count($selected) === 1 ? '' : 's') . ' queued for captioning.');
+        $this->redirect('/admin/galleries/' . $galleryId);
+    }
+
+    /**
+     * Remove the selected photos from a gallery (background job; files are
+     * deleted only when a photo is no longer in any gallery).
+     */
+    public function bulkDelete(int $galleryId): void
+    {
+        if (Gallery::find($galleryId) === null) {
+            $this->notFound();
+            return;
+        }
+
+        $selected = array_values(array_unique(array_filter(
+            array_map('intval', (array) $this->request->post('photo_ids', [])),
+            static fn (int $id): bool => $id > 0
+        )));
+
+        if ($selected === []) {
+            $this->flash('error', 'Select at least one photo to remove.');
+            $this->redirect('/admin/galleries/' . $galleryId);
+        }
+
+        $userId = (int) Auth::user()['id'];
+        $jobId  = PhotoJob::createBulkDelete($userId, $galleryId, $selected);
+
+        AuditLog::record($userId, 'update', 'gallery', $galleryId, 'Queued bulk delete (background job #' . $jobId . ')', ['count' => count($selected)]);
+        $this->flash('success', count($selected) . ' photo' . (count($selected) === 1 ? '' : 's') . ' queued for removal.');
+        $this->redirect('/admin/galleries/' . $galleryId);
+    }
+
+    /**
      * Admin photo editor: show the current media and every available edit
      * tool. Images get the full toolset (blur, sharpen, resize, rotate, crop,
      * text, watermark, thumbnail), videos get thumbnail selection (upload,

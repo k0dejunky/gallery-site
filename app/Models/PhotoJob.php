@@ -32,6 +32,44 @@ class PhotoJob
         return (int) Database::connection()->lastInsertId();
     }
 
+    /** Queue a bulk-caption job for the selected photos. */
+    public static function createBulkCaption(int $userId, int $galleryId, string $caption, array $photoIds): int
+    {
+        Database::run(
+            'INSERT INTO photo_edit_jobs (user_id, gallery_id, operation, status, total, metadata_json)
+             VALUES (?, ?, ?, ?, ?, ?)',
+            [
+                $userId,
+                $galleryId,
+                'bulk_caption',
+                'queued',
+                count($photoIds),
+                json_encode(['caption' => $caption, 'photo_ids' => array_values($photoIds)]),
+            ]
+        );
+
+        return (int) Database::connection()->lastInsertId();
+    }
+
+    /** Queue a bulk-delete job for the selected photos. */
+    public static function createBulkDelete(int $userId, int $galleryId, array $photoIds): int
+    {
+        Database::run(
+            'INSERT INTO photo_edit_jobs (user_id, gallery_id, operation, status, total, metadata_json)
+             VALUES (?, ?, ?, ?, ?, ?)',
+            [
+                $userId,
+                $galleryId,
+                'bulk_delete',
+                'queued',
+                count($photoIds),
+                json_encode(['photo_ids' => array_values($photoIds)]),
+            ]
+        );
+
+        return (int) Database::connection()->lastInsertId();
+    }
+
     /** Latest job for a gallery (used to show status / disable buttons while running). */
     public static function latestForGallery(int $galleryId): ?array
     {

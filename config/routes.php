@@ -153,6 +153,8 @@ return [
     ['POST', '/admin/galleries/{galleryId}/photos/{photoId}/move', 'PhotoController@move', 'galleries'],
     ['POST', '/admin/galleries/{galleryId}/photos/{photoId}/rotate', 'PhotoController@rotate', 'galleries'],
     ['POST', '/admin/galleries/{galleryId}/photos/bulk-rotate', 'PhotoController@bulkRotate', 'galleries'],
+    ['POST', '/admin/galleries/{galleryId}/photos/bulk-caption', 'PhotoController@bulkCaption', 'galleries'],
+    ['POST', '/admin/galleries/{galleryId}/photos/bulk-delete', 'PhotoController@bulkDelete', 'galleries'],
     ['GET', '/admin/photos/{id}/edit', 'PhotoController@edit', 'galleries'],
     ['POST', '/admin/photos/{id}/edit', 'PhotoController@applyEdit', 'galleries'],
     ['GET', '/admin/videos/{id}/edit', 'VideoEditorController@edit', 'videos'],

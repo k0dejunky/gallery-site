@@ -538,6 +538,9 @@
             <?php endif; ?>
             <button type="submit" name="direction" value="left" class="btn btn-sm" disabled data-bulk-rotate>&larr; Rotate left</button>
             <button type="submit" name="direction" value="right" class="btn btn-sm" disabled data-bulk-rotate>Rotate right &rarr;</button>
+            <input type="text" name="caption" placeholder="Caption for selected…" style="max-width:170px;" disabled data-bulk-caption-input>
+            <button type="submit" class="btn btn-sm btn-outline" formaction="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/bulk-caption') ?>" disabled data-bulk-caption>Set caption</button>
+            <button type="submit" class="btn btn-sm btn-danger" formaction="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/bulk-delete') ?>" disabled data-bulk-delete onclick="return confirm('Remove the selected photos from this gallery? Files are deleted only if no other gallery uses them.');">Delete selected</button>
             <?php if (!empty($activeEditJob) && in_array($activeEditJob['status'], ['queued', 'running'], true)): ?>
                 <span class="muted" title="Another rotation is already processing this gallery.">Buttons disabled while a job runs.</span>
             <?php endif; ?>
@@ -671,7 +674,8 @@
     (function () {
         var all = document.getElementById('select-all-images');
         var boxes = Array.prototype.slice.call(document.querySelectorAll('[data-image-select]'));
-        var buttons = Array.prototype.slice.call(document.querySelectorAll('[data-bulk-rotate]'));
+        var buttons = Array.prototype.slice.call(document.querySelectorAll('[data-bulk-rotate], [data-bulk-caption], [data-bulk-delete]'));
+        var captionInput = document.querySelector('[data-bulk-caption-input]');
         var count = document.getElementById('selected-image-count');
         var jobActive = <?php echo (!empty($activeEditJob) && in_array($activeEditJob['status'], ['queued', 'running'], true)) ? 'true' : 'false'; ?>;
         if (jobActive) {
@@ -682,6 +686,7 @@
             var selected = boxes.filter(function (box) { return box.checked && !box.disabled; }).length;
             count.textContent = selected + ' selected';
             buttons.forEach(function (button) { button.disabled = selected === 0 || jobActive; });
+            if (captionInput) captionInput.disabled = selected === 0 || jobActive;
             if (all) all.checked = boxes.length > 0 && selected === boxes.length;
         }
         if (all) all.addEventListener('change', function () {

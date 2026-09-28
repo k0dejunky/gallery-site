@@ -27,6 +27,14 @@ switch ($job['operation']) {
         $ok = runBulkRotate((int) $job['id'], $job);
         exit($ok ? 0 : 1);
 
+    case 'bulk_caption':
+        $ok = runBulkCaption((int) $job['id'], $job);
+        exit($ok ? 0 : 1);
+
+    case 'bulk_delete':
+        $ok = runBulkDelete((int) $job['id'], $job);
+        exit($ok ? 0 : 1);
+
     default:
         PhotoJob::fail($jobId, 'Unknown operation: ' . $job['operation']);
         fwrite(STDERR, "[photo-edit] unknown operation\n");
@@ -102,5 +110,71 @@ function runBulkRotate(int $jobId, array $job): bool
 
     PhotoJob::complete($jobId);
     error_log(sprintf('[photo-edit] bulk rotate #%d done: %d rotated, %d skipped', $jobId, $done, $failed));
+    return true;
+}
+
+function runBulkCaption(int $jobId, array $job): bool
+{
+    $galleryId = (int) $job['gallery_id'];
+    $meta      = json_decode((string) ($job['metadata_json'] ?? '{}'), true) ?: [];
+    $caption   = trim((string) ($meta['caption'] ?? ''));
+    $selected  = array_values(array_unique(array_filter(
+        array_map('intval', (array) ($meta['photo_ids'] ?? [])),
+        static fn (int $id): bool => $id > 0
+    )));
+
+    if ($galleryId <= 0 || $selected === []) {
+        PhotoJob::fail($jobId, 'Gallery or photo selection missing.');
+        return false;
+    }
+
+    $done = 0;
+    foreach ($selected as $photoId) {
+        $photo = Photo::find($photoId);
+        if ($photo === null) {
+            continue;
+        }
+        Photo::updateCaption($photoId, $caption, (string) ($photo['link'] ?? ''));
+        $done++;
+        PhotoJob::markProgress($jobId, $done, 0);
+    }
+
+    PhotoJob::complete($jobId);
+    error_log(sprintf('[photo-edit] bulk caption #%d done: %d captioned', $jobId, $done));
+    return true;
+}
+
+function runBulkDelete(int $jobId, array $job): bool
+{
+    $galleryId = (int) $job['gallery_id'];
+    $meta      = json_decode((string) ($job['metadata_json'] ?? '{}'), true) ?: [];
+    $selected  = array_values(array_unique(array_filter(
+        array_map('intval', (array) ($meta['photo_ids'] ?? [])),
+        static fn (int $id): bool => $id > 0
+    )));
+
+    if ($galleryId <= 0 || $selected === []) {
+        PhotoJob::fail($jobId, 'Gallery or photo selection missing.');
+        return false;
+    }
+
+    $done = 0;
+    foreach ($selected as $photoId) {
+        $removed = \App\Core\Database::run(
+            'DELETE FROM gallery_photo WHERE gallery_id = ? AND photo_id = ?',
+            [$galleryId, $photoId]
+        )->rowCount() > 0;
+
+        if ($removed) {
+            Photo::deleteIfOrphan($photoId);
+            $done++;
+            PhotoJob::markProgress($jobId, $done, 0);
+        }
+    }
+
+    \App\Core\Cache::bump('gallery');
+    \App\Core\Cache::bump('media');
+    PhotoJob::complete($jobId);
+    error_log(sprintf('[photo-edit] bulk delete #%d done: %d removed', $jobId, $done));
     return true;
 }
