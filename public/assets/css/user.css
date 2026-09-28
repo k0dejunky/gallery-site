@@ -231,7 +231,6 @@ table td:nth-child(1) { overflow-wrap: anywhere; word-break: break-word; }
 .queue-prompt-actions .qp-cancel{border-color:var(--btn-danger-color,#b91c1c);color:var(--btn-danger-color,#b91c1c);background:transparent}
 
 /* Interactive site tour */
-.tour-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(20,8,34,.38);z-index:998;pointer-events:auto}
 .tour-spot{position:fixed;z-index:999;box-sizing:border-box;border:2px solid var(--purple-500,#7c3aed);border-radius:14px;box-shadow:inset 0 0 28px 6px rgba(124,58,237,.16),0 0 0 3px rgba(255,255,255,.1),0 0 18px 6px rgba(124,58,237,.45);pointer-events:none;animation:tourPulse 2.4s ease-in-out infinite}
 @keyframes tourPulse{0%,100%{box-shadow:inset 0 0 24px 5px rgba(124,58,237,.14),0 0 0 3px rgba(255,255,255,.1),0 0 14px 5px rgba(124,58,237,.38)}50%{box-shadow:inset 0 0 32px 8px rgba(124,58,237,.2),0 0 0 3px rgba(255,255,255,.16),0 0 26px 10px rgba(124,58,237,.6)}}
 .tour-card{position:fixed;z-index:1000;max-width:360px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;padding:.9rem;box-shadow:0 8px 30px rgba(20,8,34,.5),0 0 0 4px rgba(124,58,237,.16)}

@@ -64,7 +64,6 @@
   function cleanup(){
     var el = document.getElementById('tour-card'); if(el) el.remove();
     var sp = document.getElementById('tour-spot'); if(sp) sp.remove();
-    var ov = document.getElementById('tour-overlay'); if(ov) ov.remove();
     cleanupFns.forEach(function(fn){ try{ fn(); }catch(e){} });
     cleanupFns = [];
   }
@@ -78,9 +77,8 @@
     });
   }
 
-  // Spotlight: a light full-page dim with a generous cut-out over the target
-  // section so the page stays visible and only the feature is emphasised.
-  function placeSpotlight(ov, sp, target){
+  // Highlight ring around the feature — no page shading.
+  function placeRing(sp, target){
     var PAD = 14;
     var r = target.getBoundingClientRect();
     var vw = window.innerWidth, vh = window.innerHeight;
@@ -92,17 +90,11 @@
     if(h > vh) h = vh;
     x = Math.min(x, vw - w);
     y = Math.min(y, vh - h);
-    if(w <= 0 || h <= 0 || (w >= vw && h >= vh)){
-      ov.style.display = 'none';
+    if(w <= 0 || h <= 0){
       sp.style.display = 'none';
       return;
     }
-    ov.style.display = '';
     sp.style.display = '';
-    var x2 = Math.min(vw, x + w), y2 = Math.min(vh, y + h);
-    ov.style.clipPath =
-      'polygon(0 0, ' + vw + 'px 0, ' + vw + 'px ' + y + 'px, ' + x2 + 'px ' + y + 'px, ' +
-      x2 + 'px ' + y2 + 'px, ' + x + 'px ' + y2 + 'px, ' + x + 'px ' + y + 'px, 0 ' + y + 'px)';
     sp.style.top = y + 'px';
     sp.style.left = x + 'px';
     sp.style.width = w + 'px';
@@ -126,15 +118,11 @@
 
     if(target){
       try{ target.scrollIntoView({block:'center', behavior:'smooth'}); }catch(e){}
-      var ov = document.createElement('div');
-      ov.id = 'tour-overlay';
-      ov.className = 'tour-overlay';
-      document.body.appendChild(ov);
       var sp = document.createElement('div');
       sp.id = 'tour-spot';
       sp.className = 'tour-spot';
       document.body.appendChild(sp);
-      var place = function(){ placeSpotlight(ov, sp, target); };
+      var place = function(){ placeRing(sp, target); };
       place();
       onViewport(place);
     }

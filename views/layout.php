@@ -207,7 +207,7 @@ $isAuthPage = $isLoginPage
         .collapsible { overflow: hidden; transition: max-height .3s; }
         img { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
      </style>
-    <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=9">
+    <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=10">
 </head>
 <body data-base="<?= e(config('app.base_path')) ?>" data-user="<?= $user !== null ? '1' : '0' ?>">
 <a class="skip-link" href="#main-content">Skip to content</a>
@@ -509,6 +509,6 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
     <script>try{var p=JSON.parse(localStorage.getItem('galleryDisplayPrefs')||'{}');var v=p.view||'grid';var s=p.size||'md';document.documentElement.classList.add('g-view-'+v);document.documentElement.classList.add('g-size-'+s);if(p.masonry)document.documentElement.classList.add('g-masonry');}catch(e){document.documentElement.classList.add('g-view-grid');document.documentElement.classList.add('g-size-md');}</script>
     <?php require __DIR__ . '/partials/tour_targets.php'; ?>
     <script src="<?= url('/assets/js/user.js') ?>?v=5" defer></script>
-    <script src="<?= url('/assets/js/tour.js') ?>?v=7" defer></script>
+    <script src="<?= url('/assets/js/tour.js') ?>?v=8" defer></script>
 </body>
 </html>
