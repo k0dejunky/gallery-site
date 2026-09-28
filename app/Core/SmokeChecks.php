@@ -529,8 +529,8 @@ class SmokeChecks
         });
         $add('smoke.ap.timezone', 'Smoke · Auto Poster', 'Schedule times converted to/from configured timezone', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'displaySchedule') !== false && strpos($apq, 'schedulerTimezone') !== false
-                && strpos($apq, 'normalize_local_datetime($value, self::schedulerTimezone())') !== false
-                && strpos($apq, 'is_future_local_datetime($value, self::schedulerTimezone())') !== false
+                && strpos($apq, 'normalize_local_datetime($value, AutoPosterConfig::timezone())') !== false
+                && strpos($apq, 'is_future_local_datetime($value, AutoPosterConfig::timezone())') !== false
                 ? $ok('timezone conversion present (via shared helper)')
                 : $bad('auto-post queue must convert schedule times to/from the configured timezone');
         });
@@ -984,8 +984,8 @@ class SmokeChecks
                 && strpos($helpersSrc, 'function is_future_local_datetime(') !== false
                 && strpos($galleryModel, 'return normalize_local_datetime($value, site_timezone());') !== false
                 && strpos($galleryModel, 'return is_future_local_datetime($value, site_timezone());') !== false
-                && strpos($apqModel, 'normalize_local_datetime($value, self::schedulerTimezone())') !== false
-                && strpos($apqModel, 'is_future_local_datetime($value, self::schedulerTimezone())') !== false
+                && strpos($apqModel, 'normalize_local_datetime($value, AutoPosterConfig::timezone())') !== false
+                && strpos($apqModel, 'is_future_local_datetime($value, AutoPosterConfig::timezone())') !== false
                 ? $ok('gallery/auto-poster/chat all delegate to the shared normalizer')
                 : $bad('publish/schedule datetime parsing must delegate to normalize_local_datetime()/is_future_local_datetime() in helpers.php');
         });

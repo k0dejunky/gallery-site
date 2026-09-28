@@ -56,13 +56,14 @@ do {
             ));
         }
 
-        // Nothing scheduled right now: schedule fresh posts from random
-        // galleries so X / Reddit stay active (one per hour over the next
-        // 24 hours).
-        if ($due === []) {
-            $requeued = AutoPostQueue::scheduleRandomGalleriesWhenIdle(24, 24);
-            if ($requeued > 0) {
-                error_log('[autopost] idle queue: scheduled ' . $requeued . ' random gallery post(s) over 24h');
+        // Rolling pipeline refill: at :30 each hour, top each authorized
+        // platform back up to 24 hourly queued posts (also refill right away
+        // if a platform is completely empty), so the queue never runs dry.
+        $minute = (int) date('i');
+        if (($minute >= 28 && $minute <= 31) || !AutoPostQueue::hasQueued()) {
+            $refilled = AutoPostQueue::refillAhead(24);
+            if ($refilled > 0) {
+                error_log('[autopost] refilled pipeline with ' . $refilled . ' scheduled post(s)');
             }
         }
     } catch (Throwable $error) {

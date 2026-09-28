@@ -408,7 +408,7 @@ class AutoPostQueue
      */
     public static function validFutureSchedule(?string $value): bool
     {
-        return is_future_local_datetime($value, self::schedulerTimezone());
+        return is_future_local_datetime($value, AutoPosterConfig::timezone());
     }
 
     /**
@@ -735,6 +735,96 @@ class AutoPostQueue
                 '',
                 'info',
                 "Idle queue refilled: scheduled {$scheduled} post(s) across {$slots} hourly slot(s) from " . $poolCount . " gallery(ies) (first due now)"
+            );
+        }
+
+        return $scheduled;
+    }
+
+    /**
+     * Rolling pipeline refill: keeps each authorized platform topped up to
+     * $slots queued posts, one per hour ahead. Called by the worker every hour
+     * at :30 (and whenever a platform is empty), so the queue always has ~24
+     * hourly posts planned instead of only refilling when it hits zero.
+     * Galleries are sourced never-queued first, then recycled from previously
+     * posted/skipped/failed ones (never dismissed or currently queued).
+     *
+     * Returns the number of posts scheduled.
+     */
+    public static function refillAhead(int $slots = 24, ?string $platform = null): int
+    {
+        $slots     = max(1, min(48, $slots));
+        $platforms = $platform !== null && $platform !== '' ? [$platform] : ['twitter', 'reddit'];
+        $scheduled = 0;
+
+        foreach ($platforms as $pf) {
+            if (!self::platformAuthorized($pf)) {
+                continue;
+            }
+
+            $queued = (int) Database::run(
+                "SELECT COUNT(*) FROM auto_poster_queue WHERE platform = ? AND status = 'queued'",
+                [$pf]
+            )->fetchColumn();
+
+            $missing = $slots - $queued;
+            if ($missing <= 0) {
+                continue;
+            }
+
+            // First new slot: the hour after the newest queued post (or the
+            // top of the next hour when nothing is queued), so slots stay
+            // hourly and never collide with existing schedules.
+            $maxScheduled = (string) Database::run(
+                "SELECT COALESCE(MAX(scheduled_at), '') FROM auto_poster_queue WHERE platform = ? AND status = 'queued'",
+                [$pf]
+            )->fetchColumn();
+
+            $tz  = new DateTimeZone(self::schedulerTimezone()->getName());
+            $nowSite = (new DateTime('@' . time()))->setTimezone($tz);
+            if ($maxScheduled !== '') {
+                $next = new DateTime($maxScheduled, $tz);
+            } else {
+                // Top of the current site hour, then +1h = the next site hour.
+                $next = $nowSite->setTime((int) $nowSite->format('H'), 0, 0);
+            }
+            $next->modify('+1 hour');
+
+            $galleryIds = Database::run(
+                "SELECT g.id
+                 FROM galleries g
+                 JOIN gallery_photo gp ON gp.gallery_id = g.id
+                 JOIN photos p ON p.id = gp.photo_id
+                 WHERE g.deleted_at IS NULL
+                   AND NOT EXISTS (
+                       SELECT 1 FROM auto_poster_queue q
+                       WHERE q.gallery_id = g.id AND q.status IN ('dismissed', 'queued')
+                   )
+                 GROUP BY g.id
+                 ORDER BY RAND()
+                 LIMIT " . $missing,
+            )->fetchAll();
+
+            if ($galleryIds === []) {
+                continue;
+            }
+
+            $pool      = array_values($galleryIds);
+            $poolCount = max(1, count($pool));
+
+            for ($i = 0; $i < $missing; $i++) {
+                $gallery = $pool[$i % $poolCount];
+                $when    = (clone $next)->modify('+' . $i . ' hours')->format('Y-m-d\TH:i');
+                if (self::enqueue((int) $gallery['id'], null, $when, $pf) > 0) {
+                    $scheduled++;
+                }
+            }
+
+            AutoPosterConfig::log(
+                $pf === 'twitter' ? 'x' : $pf,
+                '',
+                'info',
+                "Pipeline refilled: queued was {$queued}, scheduled {$missing} more to reach {$slots} hourly post(s)"
             );
         }
 
@@ -1462,7 +1552,7 @@ class AutoPostQueue
      */
     private static function normalizeSchedule(?string $value): ?string
     {
-        return normalize_local_datetime($value, self::schedulerTimezone());
+        return normalize_local_datetime($value, AutoPosterConfig::timezone());
     }
 
     /**
