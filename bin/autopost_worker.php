@@ -54,6 +54,10 @@ do {
                         ? 'failed: ' . ($result['error'] ?? 'unknown')
                         : 'skipped: ' . ($result['error'] ?? 'platform not authorized'))
             ));
+
+            // Gentle pacing between posts so no channel's rate limit is hit by
+            // a burst (Discord allows ~5 webhook calls/2s; Telegram ~30 msg/s).
+            usleep(750000);
         }
 
         // Rolling pipeline refill: at :30 each hour, top each authorized

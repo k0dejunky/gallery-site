@@ -340,11 +340,18 @@ return [
     ['POST', '/admin/payment-processors/{id}/toggle', 'PaymentProcessorsController@toggle', 'payments'],
     ['POST', '/admin/payment-processors/{id}/delete', 'PaymentProcessorsController@destroy', 'payments'],
 
-    // Auto poster (admin only)
+    // Auto poster (admin only) — one page per posting option
     ['GET', '/admin/auto-poster', 'AutoPosterController@index', 'autoposter'],
-    ['GET', '/admin/auto-poster/reddit', 'AutoPosterController@reddit', 'autoposter'],
+    ['GET', '/admin/auto-poster/{platform}', 'AutoPosterController@platform', 'autoposter'],
+    ['GET', '/admin/auto-poster/{platform}/authorize', 'AutoPosterController@authorizeChannel', 'autoposter'],
+    ['GET', '/admin/auto-poster/{platform}/callback', 'AutoPosterController@callbackChannel', 'autoposter'],
     ['POST', '/admin/auto-poster/settings', 'AutoPosterController@saveSettings', 'autoposter'],
     ['POST', '/admin/auto-poster/template/save', 'AutoPosterController@saveTemplate', 'autoposter'],
+    ['POST', '/admin/auto-poster/channel/save', 'AutoPosterController@saveChannelSettings', 'autoposter'],
+    ['POST', '/admin/auto-poster/channel/instance', 'AutoPosterController@saveInstance', 'autoposter'],
+    ['POST', '/admin/auto-poster/channel/instance/remove', 'AutoPosterController@removeInstance', 'autoposter'],
+    ['POST', '/admin/auto-poster/channel/post', 'AutoPosterController@postNow', 'autoposter'],
+    ['POST', '/admin/auto-poster/channels/enable', 'AutoPosterController@enableChannels', 'autoposter'],
     ['GET', '/admin/auto-poster/reddit/authorize', 'AutoPosterController@authorizeReddit', 'autoposter'],
     ['GET', '/admin/auto-poster/reddit/callback', 'AutoPosterController@callbackReddit', 'autoposter'],
     ['GET', '/admin/auto-poster/twitter/authorize', 'AutoPosterController@authorizeTwitter', 'autoposter'],

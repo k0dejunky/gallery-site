@@ -503,10 +503,11 @@ class SmokeChecks
         $add('smoke.ap.domain', 'Smoke · Auto Poster', 'AutoPostQueue recommends the site domain', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'amethyst2213.com') !== false ? $ok('domain present') : $bad('auto-post recommendations must include the site domain');
         });
-        $add('smoke.ap.char_limit', 'Smoke · Auto Poster', 'Custom text capped per platform (X 280 / Reddit 40000)', static function () use ($apq, $ok, $bad): array {
-            return strpos($apq, 'mb_substr(trim($text), 0, 280)') !== false || substr_count($apq, "? 40000 : 280)") >= 2
-                ? $ok('280 / 40000 caps')
-                : $bad('auto-post queue must cap custom text at 280 characters for X and 40000 for Reddit');
+        $add('smoke.ap.char_limit', 'Smoke · Auto Poster', 'Custom text capped per platform (registry-driven)', static function () use ($apq, $ok, $bad): array {
+            return strpos($apq, "self::templateSettings(\$key)['max_length']") !== false
+                || strpos($apq, "self::templateSettings(\$canonical)['max_length']") !== false
+                ? $ok('per-platform max_length cap')
+                : $bad('auto-post queue must cap custom text at the platform registry max_length');
         });
         $add('smoke.ap.media_cap', 'Smoke · Auto Poster', 'Attachments capped at 4 media files', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'MAX_ATTACHED_MEDIA') !== false ? $ok('MAX_ATTACHED_MEDIA present') : $bad('auto-post queue must cap attachments at 4 media files');
@@ -564,14 +565,14 @@ class SmokeChecks
             $routes = $read("$root/config/routes.php");
             $ctrl   = $read("$root/app/Controllers/AutoPosterController.php");
             return strpos($routes, 'auto-poster/template/save') !== false
-                && strpos($routes, "'/admin/auto-poster/reddit'") !== false
-                    && strpos($routes, 'AutoPosterController@reddit') !== false
+                && strpos($routes, "'/admin/auto-poster/{platform}'") !== false
+                && strpos($routes, 'AutoPosterController@platform') !== false
                 && strpos($ctrl, 'public function saveTemplate()') !== false
                     && strpos($ctrl, 'AutoPosterConfig::saveTemplate(') !== false
                 && strpos($ctrl, 'private function renderPage(string $platform)') !== false
-                    && strpos($ctrl, "renderPage('x')") !== false && strpos($ctrl, "renderPage('reddit')") !== false
-                ? $ok('save route + controller wired for both pages')
-                : $bad('the auto-poster template save route/controller and the separate X + Reddit pages must exist');
+                    && strpos($ctrl, "renderPage('x')") !== false
+                ? $ok('save route + generic platform page wired')
+                : $bad('the auto-poster template save route/controller and the generic platform page must exist');
         });
         $apw = $read("$root/bin/autopost_worker.php");
         $add('smoke.ap.worker_due', 'Smoke · Auto Poster', 'Worker publishes due queue rows', static function () use ($apw, $ok, $bad): array {
@@ -579,6 +580,18 @@ class SmokeChecks
         });
         $add('smoke.ap.worker_lock', 'Smoke · Auto Poster', 'Worker locks against overlapping runs', static function () use ($apw, $ok, $bad): array {
             return strpos($apw, 'flock') !== false ? $ok('flock used') : $bad('autopost worker must lock against overlapping runs');
+        });
+        $platforms = $read("$root/app/Core/Platforms.php");
+        $add('smoke.ap.registry', 'Smoke · Auto Poster', 'Platform registry defines all channels', static function () use ($platforms, $ok, $bad): array {
+            return strpos($platforms, 'final class Platforms') !== false
+                && strpos($platforms, 'public static function all()') !== false
+                && strpos($platforms, 'canonicalize') !== false
+                ? $ok('registry present')
+                : $bad('app/Core/Platforms.php must define the channel registry');
+        });
+        $add('smoke.ap.migration', 'Smoke · Auto Poster', 'Multi-channel queue migration present', static function () use ($root, $read, $ok, $bad): array {
+            $m = $read("$root/database/migrations/051_autopost_multichannel.sql");
+            return strpos($m, 'MEDIUMTEXT') !== false ? $ok('051 widens queue text') : $bad('migration 051 must widen auto_poster_queue.text to MEDIUMTEXT');
         });
         $apv = $read("$root/views/admin/auto_poster.php");
         $add('smoke.ap.view_text', 'Smoke · Auto Poster', 'Recommended posts editable text field', static function () use ($apv, $ok, $bad): array {
@@ -598,9 +611,8 @@ class SmokeChecks
         });
         $add('smoke.ap.site_tz_fallback', 'Smoke · Auto Poster', 'Scheduler reads the site timezone (no stored override wins)', static function () use ($root, $read, $ok, $bad): array {
             $apc = $read("$root/app/Models/AutoPosterConfig.php");
-            return strpos($apc, 'function effectiveTimezone(') !== false
+            return strpos($apc, 'public static function timezone()') !== false
                 && strpos($apc, 'SiteConfig::timezone()') !== false
-                && strpos($apc, 'public static function timezone()') !== false
                 ? $ok('auto-poster scheduling always follows SiteConfig::timezone()')
                 : $bad('AutoPosterConfig::timezone() must delegate to SiteConfig::timezone() with no stored-value override');
         });
@@ -617,9 +629,9 @@ class SmokeChecks
                 && strpos($apv, 'post template') !== false
                 && strpos($apv, 'data-ap-template') !== false
                 && strpos($apv, 'input type="hidden" name="platform"') !== false
-                && strpos($apv, 'url(\'/admin/auto-poster/reddit\')') !== false
+                && strpos($apv, 'foreach ($enabledCh as $ch)') !== false
                 ? $ok('platform switch + editable template panel + live preview present')
-                : $bad('auto-poster page must render an X|Reddit platform switch, an editable template panel with hidden platform and a live preview');
+                : $bad('auto-poster page must render a per-channel platform switch, an editable template panel with hidden platform and a live preview');
         });
         $add('smoke.ap.requeue_schedule', 'Smoke · Auto Poster', 'Repost/reschedule rows always get a real schedule', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'function requeueFrom') !== false && strpos($apq, '$scheduled = self::defaultSchedule(null, $key);') !== false
@@ -631,16 +643,16 @@ class SmokeChecks
                 ? $ok('both recent-post schedulers prefill the latest-post-aware default')
                 : $bad('recent-posts Reschedule/Repost pickers must prefill AutoPostQueue::rescheduleDefault() instead of the item\'s stale scheduled_at');
         });
-        $add('smoke.ap.platform_recs', 'Smoke · Auto Poster', 'Recommended posts work per platform on both pages', static function () use ($apq, $apv, $root, $read, $ok, $bad): array {
+        $add('smoke.ap.platform_recs', 'Smoke · Auto Poster', 'Recommended posts work per platform', static function () use ($apq, $apv, $root, $read, $ok, $bad): array {
             $ctrl = $read("$root/app/Controllers/AutoPosterController.php");
             return strpos($apq, 'public static function recommendations(int $limit = 8, string $platform') !== false
                 && strpos($apq, "q.status IN ('queued', 'posted', 'failed', 'skipped', 'dismissed')") !== false
                 && strpos($apq, 'public static function enqueue(int $galleryId, ?string $text = null, ?string $scheduledAt = null, string $platform') !== false
-                && strpos($ctrl, 'AutoPostQueue::recommendations(8, $isX ? \'x\' : \'reddit\')') !== false
+                && strpos($ctrl, 'AutoPostQueue::recommendations(8, $platform)') !== false
                 && strpos($apv, 'queue/recommend') !== false
                 && strpos($apv, '<input type="hidden" name="platform" value="<?= e($platform) ?>">') !== false
-                ? $ok('per-platform recommendations on both pages')
-                : $bad('recommendations must be generated per platform on both X and Reddit pages, excluding only pending/dismissed galleries');
+                ? $ok('per-platform recommendations on every channel page')
+                : $bad('recommendations must be generated per platform, excluding only pending/dismissed galleries');
         });
         $add('smoke.ap.post_guarded', 'Smoke · Auto Poster', 'Client exceptions mark the row failed, never left queued', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'catch (\Throwable $e)') !== false && strpos($apq, 'thrown by the platform client') !== false
@@ -669,12 +681,13 @@ class SmokeChecks
                 ? $ok('validated timezone')
                 : $bad('auto-poster config must persist a validated timezone');
         });
-        $add('smoke.ap.log_scope', 'Smoke · Auto Poster', 'Log scoping maps x→twitter and keeps twitter/reddit', static function () use ($apc, $ok, $bad): array {
-            return strpos($apc, '$platform = $platform === \'x\' ? \'twitter\' : $platform;') !== false
+        $add('smoke.ap.log_scope', 'Smoke · Auto Poster', 'Log scoping maps x→twitter via the registry', static function () use ($apc, $ok, $bad): array {
+            return strpos($apc, 'Platforms::canonicalize($platform)') !== false
+                && strpos($apc, 'Platforms::dbKey($canonical)') !== false
                 && strpos($apc, "function logEntries(int \$limit = 100, ?string \$platform = null)") !== false
                 && strpos($apc, "function clearLog(?string \$platform = null)") !== false
-                ? $ok('log + clear scoped per platform')
-                : $bad('auto-poster logEntries/clearLog must map platform "x"→"twitter" and keep "twitter"/"reddit" unchanged, or the X page shows the other log');
+                ? $ok('log + clear scoped per platform (x→twitter)')
+                : $bad('auto-poster logEntries/clearLog must scope by the platform dbKey (x→twitter) via the registry');
         });
         $twc = $read("$root/app/Models/TwitterClient.php");
         $add('smoke.ap.twitter_oauth1', 'Smoke · Auto Poster', 'X uploads signed with OAuth1.0a', static function () use ($twc, $ok, $bad): array {
@@ -692,14 +705,19 @@ class SmokeChecks
                 ? $ok('secrets read')
                 : $bad('twitter client must read OAuth1 consumer/access-token secrets');
         });
-        $add('smoke.ap.view_twitter_fields', 'Smoke · Auto Poster', 'Settings expose OAuth1 media-upload fields', static function () use ($apv, $ok, $bad): array {
-            return strpos($apv, 'twitter_consumer_key') !== false && strpos($apv, 'twitter_oauth_token_secret') !== false
+        $add('smoke.ap.view_twitter_fields', 'Smoke · Auto Poster', 'Settings expose OAuth1 media-upload fields (registry-driven)', static function () use ($apv, $platforms, $ok, $bad): array {
+            return strpos($platforms, "'consumer_key'") !== false && strpos($platforms, "'oauth_token_secret'") !== false
+                && strpos($apv, 'foreach ($apFields as $field)') !== false
                 ? $ok('fields present')
-                : $bad('auto-poster settings must expose OAuth1 media-upload fields');
+                : $bad('auto-poster settings must render the channel fields (incl. X OAuth1 media-upload fields) from the registry');
         });
         $apcCtrl = $read("$root/app/Controllers/AutoPosterController.php");
-        $add('smoke.ap.controller_token', 'Smoke · Auto Poster', 'Settings save persists OAuth1 token secret', static function () use ($apcCtrl, $ok, $bad): array {
-            return strpos($apcCtrl, 'twitter_oauth_token_secret') !== false ? $ok('persisted') : $bad('auto-poster settings save must persist the OAuth1 token secret');
+        $add('smoke.ap.controller_token', 'Smoke · Auto Poster', 'Settings save persists channel credential fields', static function () use ($apcCtrl, $ok, $bad): array {
+            return strpos($apcCtrl, 'public function saveChannelSettings()') !== false
+                && strpos($apcCtrl, "foreach ((\$meta['fields'] ?? []) as \$field)") !== false
+                && strpos($apcCtrl, 'AutoPosterConfig::saveChannel(') !== false
+                ? $ok('persisted via registry fields')
+                : $bad('auto-poster settings save must persist each channel\'s credential fields from the registry');
         });
         $migReadme = $read("$root/database/migrations/README.md");
         $add('smoke.ap.migration_readme', 'Smoke · Auto Poster', 'Migrations README documents schema_migrations', static function () use ($migReadme, $ok, $bad): array {

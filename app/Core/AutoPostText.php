@@ -12,6 +12,10 @@ use App\Models\AutoPostQueue;
  * per-platform template settings and post-body composition. Kept separate from
  * the queue model so the text rules (editable on the Auto Poster page) live in
  * one small, DB-free class. All methods are static and side-effect free.
+ *
+ * Formatting is registry-driven: every platform's defaults (pattern, character
+ * limit, hashtag style, media rules) come from App\Core\Platforms so each
+ * posting method auto-formats correctly the moment it is enabled.
  */
 final class AutoPostText
 {
@@ -48,34 +52,42 @@ final class AutoPostText
             ) ?? $result;
         }
 
-        $result = preg_replace('/\s{2,}/u', ' ', $result) ?? $result;
+        $result = preg_replace('/[ \t]{2,}/u', ' ', $result) ?? $result;
 
         return trim($result);
     }
 
     /**
      * The per-platform auto-post template settings (editable on the Auto Poster
-     * page under the X and Reddit tabs), stored in the config file and filled
-     * with the AutoPostQueue defaults whenever a value is missing or out of
-     * range.
+     * page under each channel's tab), stored in the settings table and filled
+     * with that channel's registry defaults whenever a value is missing or out
+     * of range — so a newly enabled channel formats correctly with no manual
+     * edits.
      *
-     * @param string $platform 'x' (or 'twitter') or 'reddit'
+     * @param string $platform canonical platform key ('x', 'telegram', ...)
      */
     public static function templateSettings(string $platform = 'x'): array
     {
         $platform = self::normalizePlatform($platform);
+        $defaults = Platforms::templateDefaults($platform);
         $t = is_array(AutoPosterConfig::all()['template_' . $platform] ?? null) ? AutoPosterConfig::all()['template_' . $platform] : [];
+        [$minLength, $maxLength] = Platforms::maxLengthClamp($platform);
 
         return [
-            'pattern'          => self::clampPattern((string) ($t['pattern'] ?? '')),
-            'max_tags'         => self::clampInt($t['max_tags'] ?? null, 0, 60, AutoPostQueue::MAX_TAGS),
-            'max_length'       => self::clampInt($t['max_length'] ?? null, 50, 280, 280),
+            'pattern'          => self::clampPattern((string) ($t['pattern'] ?? ''), $platform),
+            'max_tags'         => self::clampInt($t['max_tags'] ?? null, 0, 60, $defaults['max_tags']),
+            'max_length'       => self::clampInt($t['max_length'] ?? null, $minLength, $maxLength, $defaults['max_length']),
             'schedule_minutes' => self::clampInt($t['schedule_minutes'] ?? null, 1, 10080, AutoPostQueue::DEFAULT_SCHEDULE_MINUTES),
             'recent_days'      => self::clampInt($t['recent_days'] ?? null, 1, 90, AutoPostQueue::RECENT_WINDOW_DAYS),
-            'max_media'        => self::clampInt($t['max_media'] ?? null, 1, AutoPostQueue::MAX_ATTACHED_MEDIA, AutoPostQueue::MAX_ATTACHED_MEDIA),
-            'blur_percent'     => self::clampInt($t['blur_percent'] ?? null, 0, 100, AutoPostQueue::POST_IMAGE_BLUR_PERCENT),
+            'max_media'        => self::clampInt($t['max_media'] ?? null, 0, $defaults['media_max'], $defaults['max_media']),
+            'blur_percent'     => self::clampInt($t['blur_percent'] ?? null, 0, 100, $defaults['blur_percent']),
             'screenshots'      => self::clampInt($t['screenshots'] ?? null, 1, 4, AutoPostQueue::VIDEO_SCREENSHOTS),
             'banned_words'     => self::parseBannedWords(is_array($t['banned_words'] ?? null) ? implode(',', $t['banned_words']) : (string) ($t['banned_words'] ?? '')),
+            'hashtag_style'    => (string) $defaults['hashtag_style'],
+            'structure'        => (string) $defaults['structure'],
+            'media'            => (bool) $defaults['media'],
+            'video'            => (string) $defaults['video'],
+            'sensitive'        => (string) $defaults['sensitive'],
         ];
     }
 
@@ -86,6 +98,7 @@ final class AutoPostText
     public static function buildText(array $gallery, array $tags = [], ?array $settings = null): string
     {
         $settings = $settings ?? self::templateSettings('x');
+        $keepBreaks = (string) ($settings['structure'] ?? 'single') === 'title_body';
 
         $pattern = self::composePattern($settings['pattern'], $gallery);
 
@@ -97,13 +110,15 @@ final class AutoPostText
 
         $cleanTags = self::cleanHashtags($tags, (int) $settings['max_tags'], $mentionedBody);
         $maxLength = (int) $settings['max_length'];
+        $style     = (string) ($settings['hashtag_style'] ?? 'hash');
 
         // Full text first; when it overflows, hashtags are dropped one at a
         // time (cheapest to cut) before any of the pattern text is touched.
         $count = count($cleanTags);
         for ($n = $count; $n >= 0; $n--) {
-            $text = self::singleSpace(
-                (string) str_replace('{hashtags}', self::hashtagsBlock(array_slice($cleanTags, 0, $n)), $pattern)
+            $text = self::squashText(
+                (string) str_replace('{hashtags}', self::hashtagsBlock(array_slice($cleanTags, 0, $n), $style), $pattern),
+                $keepBreaks
             );
 
             if (mb_strlen($text) <= $maxLength) {
@@ -123,12 +138,47 @@ final class AutoPostText
     }
 
     /**
-     * Canonicalise a platform name for the template store. Queue rows use
-     * 'twitter'/'reddit'; the template keys are 'x'/'reddit'.
+     * Split a composed post into a {title, body} pair for the title/body
+     * platforms (Lemmy, Blogger, PeerTube, ...). The title is the first line
+     * (capped at 300 chars); the remainder is the body. Single-body platforms
+     * get an empty title and the whole text as the body.
+     *
+     * @return array{title: string, body: string}
+     */
+    public static function splitForPlatform(string $text, string $platform = 'x'): array
+    {
+        $platform = self::normalizePlatform($platform);
+        $text     = trim((string) $text);
+
+        if (!Platforms::isTitleBody($platform)) {
+            return ['title' => '', 'body' => $text];
+        }
+
+        $lines = preg_split('/\r?\n/', $text) ?: [];
+        $title = trim((string) array_shift($lines));
+        $body  = trim(implode("\n", $lines));
+
+        if ($title === '') {
+            $title = 'New upload';
+        }
+
+        // Title caps per platform: Lemmy 200, Blogger/PeerTube generous.
+        $titleCap = $platform === 'lemmy' ? 200 : 300;
+        $title    = mb_substr($title, 0, $titleCap);
+
+        return ['title' => $title, 'body' => $body];
+    }
+
+    /**
+     * Canonicalise a platform name for the template store. Queue rows use the
+     * platform dbKey ('twitter' for x, else the canonical key); template keys
+     * are the canonical key. Unknown platforms fall back to 'x'.
      */
     public static function normalizePlatform(string $platform): string
     {
-        return strtolower($platform) === 'reddit' ? 'reddit' : 'x';
+        $canonical = Platforms::canonicalize($platform);
+
+        return $canonical !== '' ? $canonical : 'x';
     }
 
     /**
@@ -187,12 +237,17 @@ final class AutoPostText
 
     /**
      * The post pattern to compose recommendations from, defaulting to the
-     * built-in default pattern when blank or wonky. The pattern must stay short
-     * enough to leave room for real content, so it is capped at 2048 chars.
+     * platform's registry pattern when blank or wonky. The pattern must stay
+     * short enough to leave room for real content, so it is capped at 2048.
      */
-    private static function clampPattern(string $pattern): string
+    private static function clampPattern(string $pattern, string $platform = 'x'): string
     {
         $pattern = trim($pattern);
+
+        if ($pattern === '') {
+            $defaults = Platforms::templateDefaults($platform);
+            $pattern  = (string) $defaults['pattern'];
+        }
 
         return $pattern === '' ? AutoPostQueue::DEFAULT_PATTERN : mb_substr($pattern, 0, 2048);
     }
@@ -252,15 +307,33 @@ final class AutoPostText
 
     /**
      * Render a list of tag names as the in-post hashtag text (" #a #b"), or an
-     * empty string when there are none.
+     * empty string when there are none. Style 'hash' prefixes each tag with '#';
+     * any other style (e.g. 'none') renders nothing.
      */
-    private static function hashtagsBlock(array $tags): string
+    private static function hashtagsBlock(array $tags, string $style = 'hash'): string
     {
-        if ($tags === []) {
+        if ($tags === [] || $style !== 'hash') {
             return '';
         }
 
         return ' #' . implode(' #', $tags);
+    }
+
+    /**
+     * Squash whitespace in a piece of text. Single-body platforms collapse
+     * everything to single spaces; title/body platforms keep single/two
+     * newlines so the first line can become the post title.
+     */
+    private static function squashText(string $text, bool $keepBreaks): string
+    {
+        if (!$keepBreaks) {
+            return self::singleSpace($text);
+        }
+
+        $text = (string) preg_replace('/[ \t]+/u', ' ', $text);
+        $text = (string) preg_replace('/\n{3,}/u', "\n\n", $text);
+
+        return trim($text);
     }
 
     /**

@@ -3,28 +3,31 @@
 namespace App\Models;
 
 use App\Core\Database;
+use App\Core\Platforms;
 use DateTimeZone;
 
 /**
- * Persists Auto Poster configuration (Reddit + X/Twitter API credentials and
+ * Persists Auto Poster configuration (API credentials per channel and
  * per-platform post templates) in the autoposter_settings key/value table
  * (migrated from storage/autoposter.json, so credentials never live in the
  * repo — storage/autoposter.json remains gitignored). The posting log stays in
  * the database as before.
  *
- * On the first read of an existing install whose table is empty, the legacy
- * storage/autoposter.json is imported once so tokens/templates are preserved.
+ * Channels are keyed by their canonical platform key ('x', 'telegram',
+ * 'mastodon', ...). 'x' is stored under its legacy dbKey 'twitter' for queue
+ * compatibility. On the first read of an existing install whose table is
+ * empty, the legacy storage/autoposter.json is imported once so tokens and
+ * templates are preserved.
  */
 class AutoPosterConfig
 {
     private const TABLE = 'autoposter_settings';
 
     /**
-     * Load the saved credentials. Returns an array with 'reddit' and 'twitter'
-     * sub-arrays (each may be empty), the validated 'timezone' and the separate
-     * 'template_x' / 'template_reddit' settings used to generate post text per
-     * platform (each may be empty, in which case the encoder falls back to its
-     * built-in defaults).
+     * Load every saved setting. Returns each stored channel config under its
+     * key, the validated 'timezone', the 'enabled_channels' list and the
+     * per-platform 'template_<key>' settings (each may be empty, in which case
+     * the encoder falls back to its registry defaults).
      */
     public static function all(): array
     {
@@ -51,20 +54,23 @@ class AutoPosterConfig
 
         $legacy = is_array($data['template'] ?? null) ? $data['template'] : [];
 
-        return [
-            'reddit'          => is_array($data['reddit'] ?? null) ? $data['reddit'] : [],
-            'twitter'         => is_array($data['twitter'] ?? null) ? $data['twitter'] : [],
-            'timezone'        => self::effectiveTimezone($data['timezone'] ?? null),
-            'template_x'      => is_array($data['template_x'] ?? null) ? $data['template_x'] : $legacy,
-            'template_reddit' => is_array($data['template_reddit'] ?? null) ? $data['template_reddit'] : $legacy,
-        ];
+        $out = $data;
+        $out['reddit']   = is_array($data['reddit'] ?? null) ? $data['reddit'] : [];
+        $out['twitter']  = is_array($data['twitter'] ?? null) ? $data['twitter'] : [];
+        $out['timezone'] = self::timezone();
+        $out['enabled_channels'] = is_array($data['enabled_channels'] ?? null)
+            ? array_values(array_filter(array_map('strval', $data['enabled_channels'])))
+            : Platforms::defaultEnabledKeys();
+        $out['template_x']      = is_array($data['template_x'] ?? null) ? $data['template_x'] : $legacy;
+        $out['template_reddit'] = is_array($data['template_reddit'] ?? null) ? $data['template_reddit'] : $legacy;
+
+        return $out;
     }
 
     /**
      * The timezone the scheduler displays and schedules in. The auto-poster
      * has no timezone of its own: it always follows the site-wide timezone
-     * set on the Settings page, so every picker and the queue show the same
-     * zone the rest of the site uses.
+     * set on the Settings page.
      */
     public static function timezone(): string
     {
@@ -72,9 +78,98 @@ class AutoPosterConfig
     }
 
     /**
-     * Persist the credentials. When a template argument is null the
-     * corresponding currently saved template is carried over, so a
-     * credentials-only save never wipes either platform's post template.
+     * The saved credential block for a channel (canonical key or dbKey).
+     * Returns an empty array when the platform is unknown.
+     */
+    public static function channel(string $platform): array
+    {
+        $canonical = Platforms::canonicalize($platform);
+        if ($canonical === '') {
+            return [];
+        }
+
+        $all   = self::all();
+        $dbKey = Platforms::dbKey($canonical);
+
+        $stored = $all[$dbKey] ?? $all[$canonical] ?? [];
+
+        return is_array($stored) ? $stored : [];
+    }
+
+    /**
+     * Persist a channel's credential/target fields, merging over the current
+     * values so a partial save never wipes tokens the form leaves blank.
+     */
+    public static function saveChannel(string $platform, array $values): void
+    {
+        $canonical = Platforms::canonicalize($platform);
+        if ($canonical === '') {
+            return;
+        }
+
+        $current = self::channel($canonical);
+        $merged  = array_merge($current, $values);
+        self::put(Platforms::dbKey($canonical), $merged);
+    }
+
+    /**
+     * Persist a single token/credential field for a channel (used by OAuth
+     * callbacks), preserving everything else.
+     */
+    public static function saveChannelToken(string $platform, string $field, string $value): void
+    {
+        $canonical = Platforms::canonicalize($platform);
+        if ($canonical === '' || trim($value) === '') {
+            return;
+        }
+
+        self::saveChannel($canonical, [$field => trim($value)]);
+    }
+
+    /**
+     * The list of canonical channel keys the admin has enabled (participate in
+     * the tabs + queue/refill). Falls back to all registry-enabled channels.
+     *
+     * @return list<string>
+     */
+    public static function enabledChannels(): array
+    {
+        $all = self::all();
+        $keys = is_array($all['enabled_channels'] ?? null) ? $all['enabled_channels'] : [];
+
+        $clean = [];
+        foreach ($keys as $key) {
+            $canonical = Platforms::canonicalize((string) $key);
+            if ($canonical !== '' && Platforms::isEnabled($canonical)) {
+                $clean[] = $canonical;
+            }
+        }
+
+        return $clean !== [] ? $clean : Platforms::defaultEnabledKeys();
+    }
+
+    /**
+     * Persist the enabled-channel selection.
+     *
+     * @param list<string> $keys canonical channel keys
+     */
+    public static function setEnabledChannels(array $keys): void
+    {
+        $clean = [];
+        foreach ($keys as $key) {
+            $canonical = Platforms::canonicalize((string) $key);
+            if ($canonical !== '' && Platforms::isEnabled($canonical) && !in_array($canonical, $clean, true)) {
+                $clean[] = $canonical;
+            }
+        }
+
+        self::put('enabled_channels', $clean);
+    }
+
+    /**
+     * Persist the legacy two-platform credentials + timezone (used by the
+     * original X/Reddit save form and any callers that predate the channel
+     * registry). Templates are carried over when null.
      */
     public static function save(array $reddit, array $twitter, string $timezone = 'UTC', ?array $templateX = null, ?array $templateReddit = null): void
     {
@@ -91,14 +186,13 @@ class AutoPosterConfig
 
     /**
      * Persist one platform's auto-post template settings, preserving
-     * credentials, the timezone and the other platform's template. Valid
-     * platforms: 'x' (alias 'twitter') and 'reddit'.
+     * credentials, the timezone and the other platforms' templates. The
+     * platform is any canonical key (or its dbKey).
      */
     public static function saveTemplate(array $template, string $platform = 'x'): void
     {
-        $config = self::all();
-        $key = strtolower($platform) === 'reddit' ? 'template_reddit' : 'template_x';
-        self::put($key, $template);
+        $canonical = Platforms::canonicalize($platform) ?: 'x';
+        self::put('template_' . $canonical, $template);
     }
 
     /**
@@ -149,8 +243,8 @@ class AutoPosterConfig
     }
 
     /**
-     * The most recent log entries, newest first. Pass a platform ('x'/'twitter'
-     * or 'reddit') to show only that platform's entries.
+     * The most recent log entries, newest first. Pass a platform (canonical
+     * key or dbKey) to show only that channel's entries.
      */
     public static function logEntries(int $limit = 100, ?string $platform = null): array
     {
@@ -161,9 +255,9 @@ class AutoPosterConfig
         $bind  = [];
 
         if ($platform !== null && $platform !== '') {
-            $platform = $platform === 'x' ? 'twitter' : $platform;
-            $where    = 'platform = ?';
-            $bind[]   = $platform;
+            $canonical = Platforms::canonicalize($platform) ?: 'x';
+            $where     = 'platform = ?';
+            $bind[]    = Platforms::dbKey($canonical);
         }
 
         return Database::run(
@@ -173,13 +267,13 @@ class AutoPosterConfig
     }
 
     /**
-     * Remove log entries. Pass a platform to clear only that platform's rows.
+     * Remove log entries. Pass a platform to clear only that channel's rows.
      */
     public static function clearLog(?string $platform = null): void
     {
         if ($platform !== null && $platform !== '') {
-            $platform = $platform === 'x' ? 'twitter' : $platform;
-            Database::run('DELETE FROM auto_poster_log WHERE platform = ?', [$platform]);
+            $canonical = Platforms::canonicalize($platform) ?: 'x';
+            Database::run('DELETE FROM auto_poster_log WHERE platform = ?', [Platforms::dbKey($canonical)]);
             return;
         }
 
@@ -205,8 +299,7 @@ class AutoPosterConfig
     }
 
     /**
-     * Validate a PHP IANA timezone identifier, defaulting to UTC. Callers use
-     * this so a stale/typoed stored value can never break future scheduling.
+     * Validate a PHP IANA timezone identifier, defaulting to UTC.
      */
     private static function validatedTimezone(string $timezone): string
     {
@@ -215,16 +308,6 @@ class AutoPosterConfig
         }
 
         return 'UTC';
-    }
-
-    /**
-     * The scheduler timezone to use: always the site-wide timezone. Kept as
-     * a narrow shim so callers read one consistent source (SiteConfig) and a
-     * legacy "timezone" stored value can never reintroduce an unrelated zone.
-     */
-    private static function effectiveTimezone(?string $stored): string
-    {
-        return SiteConfig::timezone();
     }
 
     /**

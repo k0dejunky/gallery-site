@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\Platforms;
 use App\Core\Request;
 use App\Models\AutoPosterConfig;
 use App\Models\AuditLog;
@@ -21,8 +22,7 @@ class AutoPosterController extends Controller
     }
 
     /**
-     * Show the X (Twitter) Auto Poster page: X template, X credentials, Post
-     * to X, recommended posts, the X queue and the X posting log.
+     * Show the X (Twitter) Auto Poster page.
      */
     public function index(): void
     {
@@ -30,46 +30,56 @@ class AutoPosterController extends Controller
     }
 
     /**
-     * Show the Reddit Auto Poster page: Reddit template, Reddit credentials,
-     * Post to Reddit, the Reddit queue and the Reddit posting log.
+     * Show any channel's Auto Poster page (generic platform route). Disabled
+     * or unknown platforms fall back to X.
      */
-    public function reddit(): void
+    public function platform(string $platform): void
     {
-        $this->renderPage('reddit');
+        $canonical = Platforms::canonicalize($platform);
+
+        if ($canonical === '' || !Platforms::isEnabled($canonical)) {
+            $this->redirectPath('x');
+            return;
+        }
+
+        $this->renderPage($canonical);
     }
 
     /**
-     * Build the Auto Poster page for one platform. The queue, recent posts,
-     * status counts and posting log are all scoped to that platform, and the
-     * template panel shows only that platform's blueprint.
+     * Show the Reddit Auto Poster page (kept for route compatibility; Reddit
+     * is a disabled channel and this redirects to X).
+     */
+    public function reddit(): void
+    {
+        $this->redirectPath('x');
+    }
+
+    /**
+     * Build the Auto Poster page for one canonical platform. Every section —
+     * template, credentials, recommended, queue, recent posts and log — is
+     * scoped to that platform and driven by the platform registry.
      */
     private function renderPage(string $platform): void
     {
-        $isX       = $platform !== 'reddit';
-        $queueKey  = $isX ? 'twitter' : 'reddit';
+        $platform = Platforms::canonicalize($platform) ?: 'x';
+
+        $meta      = Platforms::get($platform);
+        $platformName = (string) ($meta['label'] ?? ucfirst($platform));
+        $queueKey  = Platforms::dbKey($platform);
         $template  = AutoPostQueue::templateSettings($platform);
         $config    = AutoPosterConfig::all();
+        $channel   = AutoPosterConfig::channel($platform);
+        $enabled   = Platforms::enabled();
 
-        // Live authorization health: the page's "Authorized" indicator must
-        // reflect whether the stored token actually works, not just that a
-        // token string exists. A dead/expired token shows a warning + the
-        // re-authorize button instead of a false green checkmark.
+        // Live authorization health: ping the channel's client when it is
+        // configured, so the page reflects a working connection rather than
+        // just a stored token string.
         $authHealth = null;
-        if ($isX) {
-            $twitter = new TwitterClient($config['twitter']);
-            if ($twitter->isConfigured() && $twitter->isUserAuthorized()) {
-                $ping  = $twitter->ping();
-                $authHealth = $ping['ok']
-                    ? ['ok' => true,  'note' => (string) ($ping['note'] ?? 'connected')]
-                    : ['ok' => false, 'note' => (string) ($ping['error'] ?? 'token invalid')];
-            }
-        } else {
-            $reddit = new RedditClient($config['reddit']);
-            if ($reddit->isConfigured() && $reddit->isUserAuthorized()) {
-                $ping  = $reddit->ping();
-                $authHealth = $ping['ok']
-                    ? ['ok' => true,  'note' => (string) ($ping['note'] ?? 'connected')]
-                    : ['ok' => false, 'note' => (string) ($ping['error'] ?? 'token invalid')];
+        $clientClass = Platforms::clientClass($platform);
+        if ($clientClass !== null) {
+            $client = new $clientClass($channel);
+            if ($client->isConfigured() && $client->isUserAuthorized()) {
+                $authHealth = $client->ping();
             }
         }
 
@@ -77,22 +87,26 @@ class AutoPosterController extends Controller
         $recentPosts = AutoPostQueue::recentPostsPage($recentPage, 25, $queueKey);
 
         $this->viewAdmin('auto_poster', [
-            'platform'        => $isX ? 'x' : 'reddit',
+            'platform'        => $platform,
+            'platformName'    => $platformName,
+            'platformMeta'    => $meta,
+            'enabledChannels' => $enabled,
             'config'          => $config,
+            'channel'         => $channel,
             'authHealth'      => $authHealth,
             'apTemplate'      => $template,
             'templatePreview' => AutoPostQueue::buildText([
                 'gallery_title' => 'Example gallery',
                 'caption'       => 'Fresh uploads',
             ], ['amateur', 'redhead', 'new'], $template),
-            'recommended'     => AutoPostQueue::recommendations(8, $isX ? 'x' : 'reddit'),
+            'recommended'     => AutoPostQueue::recommendations(8, $platform),
             'queue'           => AutoPostQueue::queued(0, $queueKey),
             'queueCounts'     => AutoPostQueue::statusCounts($queueKey),
             'recentPosts'     => $recentPosts['items'],
             'recentTotal'     => $recentPosts['total'],
             'recentPage'      => $recentPosts['page'],
             'recentPages'     => $recentPosts['pages'],
-            'log'             => AutoPosterConfig::logEntries(100, $queueKey),
+            'log'             => AutoPosterConfig::logEntries(100, $platform),
         ]);
     }
 
@@ -118,7 +132,245 @@ class AutoPosterController extends Controller
             'banned_words'     => $post('banned_words'),
         ], $platform);
 
-        $this->flash('success', ($platform === 'reddit' ? 'Reddit' : 'X') . ' template saved — new posts use it.');
+        $this->flash('success', Platforms::label($platform) . ' template saved — new posts use it.');
+        $this->redirectPath($platform);
+    }
+
+    /**
+     * Save a channel's credential/target fields. The platform is picked from
+     * the page's hidden field and the field list comes from the registry, so
+     * each channel tab manages exactly its own settings.
+     */
+    public function saveChannelSettings(): void
+    {
+        $platform = $this->platformFromPost();
+        $meta     = Platforms::get($platform);
+        $current  = AutoPosterConfig::channel($platform);
+        $values   = [];
+
+        foreach (($meta['fields'] ?? []) as $field) {
+            [$name] = $field;
+            $value = trim((string) $this->request->post($name, ''));
+
+            // Secret-type fields keep the stored value when left blank.
+            $secret = count($field) >= 5 ? (bool) $field[4] : false;
+            if ($value === '' && $secret && !empty($current[$name])) {
+                $value = (string) $current[$name];
+            }
+
+            if ($name !== '') {
+                $values[$name] = $value;
+            }
+        }
+
+        AutoPosterConfig::saveChannel($platform, $values);
+
+        $this->flash('success', Platforms::label($platform) . ' settings saved.');
+        $this->redirectPath($platform);
+    }
+
+    /**
+     * Add or replace one instance token for a multi-instance channel
+     * (Mastodon / Pleroma / Akkoma / GoToSocial).
+     */
+    public function saveInstance(): void
+    {
+        $platform = $this->platformFromPost();
+        $host  = trim((string) $this->request->post('instance_host', ''));
+        $token = trim((string) $this->request->post('instance_token', ''));
+
+        if ($host === '' || $token === '') {
+            $this->flash('error', 'Instance host and token are required.');
+            $this->redirectPath($platform);
+            return;
+        }
+
+        $host  = (string) preg_replace('#^https?://#', '', $host);
+        $current = AutoPosterConfig::channel($platform);
+        $instances = is_array($current['instances'] ?? null) ? $current['instances'] : [];
+        $instances[$host] = $token;
+
+        AutoPosterConfig::saveChannel($platform, ['instances' => $instances]);
+
+        $this->flash('success', 'Instance ' . $host . ' saved.');
+        $this->redirectPath($platform);
+    }
+
+    /**
+     * Remove one instance token from a multi-instance channel.
+     */
+    public function removeInstance(): void
+    {
+        $platform = $this->platformFromPost();
+        $host  = (string) preg_replace('#^https?://#', '', trim((string) $this->request->post('instance_host', '')));
+
+        $current = AutoPosterConfig::channel($platform);
+        $instances = is_array($current['instances'] ?? null) ? $current['instances'] : [];
+        unset($instances[$host]);
+
+        AutoPosterConfig::saveChannel($platform, ['instances' => $instances]);
+
+        $this->flash('success', 'Instance ' . $host . ' removed.');
+        $this->redirectPath($platform);
+    }
+
+    /**
+     * Redirect to a channel's OAuth2 authorization page (Blogger, DeviantArt).
+     * Stores a state token in the session for the callback.
+     */
+    public function authorizeChannel(string $platform): void
+    {
+        $platform = Platforms::canonicalize($platform) ?: 'x';
+        $meta     = Platforms::get($platform);
+        $clientClass = Platforms::clientClass($platform);
+        $channel  = AutoPosterConfig::channel($platform);
+
+        if ($clientClass === null || empty($meta['oauth'])) {
+            $this->flash('error', 'This channel has no OAuth flow.');
+            $this->redirectPath($platform);
+            return;
+        }
+
+        $client = new $clientClass($channel);
+        if (!$client->isConfigured()) {
+            $this->flash('error', 'Save your client credentials first.');
+            $this->redirectPath($platform);
+            return;
+        }
+
+        $state = bin2hex(random_bytes(16));
+        $_SESSION['ap_oauth_state_' . $platform] = $state;
+
+        $redirectUri = $this->absoluteUrl('/admin/auto-poster/' . $platform . '/callback');
+
+        header('Location: ' . $client->authorizationUrl($state, $redirectUri));
+        exit;
+    }
+
+    /**
+     * Handle an OAuth2 callback for a channel (Blogger, DeviantArt). Verifies
+     * the state token, exchanges the code for a refresh token and stores it.
+     */
+    public function callbackChannel(string $platform): void
+    {
+        $platform = Platforms::canonicalize($platform) ?: 'x';
+        $clientClass = Platforms::clientClass($platform);
+        $channel  = AutoPosterConfig::channel($platform);
+
+        $code  = trim((string) $this->request->query('code', ''));
+        $state = trim((string) $this->request->query('state', ''));
+        $error = trim((string) $this->request->query('error', ''));
+
+        if ($error !== '') {
+            $this->flash('error', Platforms::label($platform) . ' authorization failed: ' . $error);
+            $this->redirectPath($platform);
+            return;
+        }
+
+        $expected = $_SESSION['ap_oauth_state_' . $platform] ?? '';
+        unset($_SESSION['ap_oauth_state_' . $platform]);
+
+        if ($state === '' || !hash_equals($expected, $state)) {
+            $this->flash('error', Platforms::label($platform) . ' authorization state mismatch.');
+            $this->redirectPath($platform);
+            return;
+        }
+
+        if ($code === '' || $clientClass === null) {
+            $this->flash('error', Platforms::label($platform) . ' did not return an authorization code.');
+            $this->redirectPath($platform);
+            return;
+        }
+
+        $redirectUri = $this->absoluteUrl('/admin/auto-poster/' . $platform . '/callback');
+        $result = (new $clientClass($channel))->exchangeCode($code, $redirectUri);
+
+        if (!$result['ok']) {
+            $this->flash('error', $result['error'] ?? Platforms::label($platform) . ' authorization failed.');
+            $this->redirectPath($platform);
+            return;
+        }
+
+        AutoPosterConfig::saveChannelToken($platform, 'refresh_token', (string) ($result['refresh_token'] ?? ''));
+        if (!empty($result['access_token'])) {
+            AutoPosterConfig::saveChannelToken($platform, 'access_token', (string) $result['access_token']);
+        }
+
+        $this->flash('success', Platforms::label($platform) . ' authorized successfully.');
+        $this->redirectPath($platform);
+    }
+
+    /**
+     * Persist the enabled-channel selection (which channels participate in the
+     * tabs, the posting queue and the refill pipeline).
+     */
+    public function enableChannels(): void
+    {
+        $keys = (array) $this->request->post('channels', []);
+        AutoPosterConfig::setEnabledChannels(array_map('strval', $keys));
+        $this->flash('success', 'Channel selection updated — the queue now feeds the enabled channels.');
+        $this->redirectPath($this->platformFromPost());
+    }
+
+    /**
+     * Compose and post to the current channel right away (the "Post now" form
+     * on each tab). Accepts text, an optional media file and any per-post
+     * target fields the channel supports.
+     */
+    public function postNow(): void
+    {
+        $platform = $this->platformFromPost();
+        $clientClass = Platforms::clientClass($platform);
+        $meta     = Platforms::get($platform);
+        $channel  = AutoPosterConfig::channel($platform);
+
+        if ($clientClass === null) {
+            $this->flash('error', 'Unsupported platform.');
+            $this->redirectPath($platform);
+            return;
+        }
+
+        $client = new $clientClass($channel);
+        if (!$client->isConfigured() || !$client->isUserAuthorized()) {
+            $this->flash('error', Platforms::label($platform) . ' is not authorized yet.');
+            $this->redirectPath($platform);
+            return;
+        }
+
+        $text  = trim((string) $this->request->post('text', ''));
+        $media = $this->uploadedFiles($this->request->file('media'));
+
+        $postMeta = [];
+        foreach (Platforms::targetFieldNames($platform) as $field) {
+            $value = trim((string) $this->request->post($field, ''));
+            if ($value !== '') {
+                $postMeta[$field] = $value;
+            }
+        }
+        if (Platforms::get($platform)['sensitive'] === 'boolean') {
+            $postMeta['sensitive'] = (bool) $this->request->post('sensitive');
+        }
+        if ($platform !== 'x') {
+            $postMeta['title'] = trim((string) $this->request->post('title', ''));
+        }
+
+        try {
+            $result = $client->post($text, $media, $postMeta);
+        } catch (\Throwable $e) {
+            $result = ['ok' => false, 'error' => $e->getMessage()];
+        }
+
+        AutoPosterConfig::log(
+            Platforms::dbKey($platform),
+            (string) ($postMeta['chat_id'] ?? $postMeta['community'] ?? ''),
+            $result['ok'] ? 'success' : 'failed',
+            $result['ok'] ? ($result['url'] ?? 'Posted') : ($result['error'] ?? 'Unknown error'),
+            (int) Auth::user()['id']
+        );
+
+        $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
+            ? 'Posted to ' . Platforms::label($platform) . ': ' . ($result['url'] ?? '')
+            : 'Post failed: ' . ($result['error'] ?? 'Unknown error'));
         $this->redirectPath($platform);
     }
 
@@ -643,7 +895,7 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
     {
         $platform = $this->platformFromPost();
         AutoPosterConfig::clearLog($platform);
-        $this->flash('success', ($platform === 'reddit' ? 'Reddit' : 'X') . ' posting log cleared.');
+        $this->flash('success', Platforms::label($platform) . ' posting log cleared.');
         $this->redirectPath($platform);
     }
 
@@ -658,8 +910,7 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
         $text        = (string) $this->request->post('text', '');
         $scheduledAt = (string) $this->request->post('scheduled_at', '');
         $platform    = $this->platformFromPost();
-        $queueKey    = $platform === 'reddit' ? 'reddit' : 'twitter';
-        $queueId     = AutoPostQueue::enqueue($galleryId, $text, $scheduledAt, $queueKey);
+        $queueId     = AutoPostQueue::enqueue($galleryId, $text, $scheduledAt, $platform);
 
         if ($queueId <= 0) {
             $this->flash('error', 'Gallery not found or not eligible.');
@@ -692,8 +943,8 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
         if ($id <= 0 && $galleryId > 0) {
             $text        = (string) $this->request->post('text', '');
             $scheduledAt = (string) $this->request->post('scheduled_at', '');
-            $queueKey    = $this->platformFromPost() === 'reddit' ? 'reddit' : 'twitter';
-            $id          = AutoPostQueue::enqueue($galleryId, $text, $scheduledAt, $queueKey);
+            $platform    = $this->platformFromPost();
+            $id          = AutoPostQueue::enqueue($galleryId, $text, $scheduledAt, $platform);
         }
 
         if ($id <= 0) {
@@ -852,19 +1103,22 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
     }
 
     /**
-     * The platform ("twitter"/"reddit") read from the page's hidden field.
+     * The canonical platform ("x", "telegram", ...) read from the page's
+     * hidden field; unknown values fall back to x.
      */
     private function platformFromPost(): string
     {
-        return trim((string) $this->request->post('platform', 'x')) === 'reddit' ? 'reddit' : 'x';
+        return Platforms::canonicalize((string) $this->request->post('platform', 'x')) ?: 'x';
     }
 
     /**
-     * The admin path for a platform: the X Auto Poster page or the Reddit one.
+     * The admin path for a platform's Auto Poster page.
      */
     private function platformPath(string $platform): string
     {
-        return ($platform === 'reddit') ? '/admin/auto-poster/reddit' : '/admin/auto-poster';
+        $key = Platforms::canonicalize($platform) ?: 'x';
+
+        return $key === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/' . $key;
     }
 
     /**
@@ -884,11 +1138,11 @@ $this->flash($result['ok'] ? 'success' : 'error', $result['ok']
     }
 
     /**
-     * Human-friendly label for a queue platform ('X' for 'twitter', 'Reddit').
+     * Human-friendly label for a queue platform (from the registry).
      */
     private function platformLabel(string $platform): string
     {
-        return $platform === 'reddit' ? 'Reddit' : 'X';
+        return Platforms::label($platform);
     }
 
     /**

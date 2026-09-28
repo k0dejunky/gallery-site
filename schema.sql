@@ -489,11 +489,12 @@ CREATE TABLE IF NOT EXISTS autoposter_settings (
 -- publishes the row.
 CREATE TABLE IF NOT EXISTS auto_poster_queue (
     id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    platform    VARCHAR(20) NOT NULL DEFAULT 'twitter',
+    platform    VARCHAR(32) NOT NULL DEFAULT 'twitter',
     photo_id    INT UNSIGNED NULL,
     gallery_id  INT UNSIGNED NULL,
     media_ids   VARCHAR(400) NULL,
-    text        VARCHAR(280) NOT NULL,
+    meta        TEXT NULL,
+    text        MEDIUMTEXT NOT NULL,
     status      ENUM('queued','posted','failed','dismissed','skipped') NOT NULL DEFAULT 'queued',
     post_url    VARCHAR(500) NULL,
     error       VARCHAR(500) NULL,

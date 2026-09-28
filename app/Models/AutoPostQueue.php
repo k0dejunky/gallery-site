@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Core\Database;
 use App\Core\AutoPostText;
+use App\Core\Platforms;
 use DateTime;
 use DateTimeZone;
 
@@ -370,10 +371,10 @@ class AutoPostQueue
      */
     public static function rescheduleDefault(string $platform = 'x'): string
     {
-        // Match the stored platform value: 'twitter'/'reddit' (normalizePlatform
-        // maps to 'x'/'reddit', which would not match the queue rows).
-        $dbKey = strtolower($platform) === 'reddit' ? 'reddit' : 'twitter';
-        $sched = strtolower($platform) === 'reddit' ? 'reddit' : 'x';
+        // Match the stored queue platform value (dbKey) for the canonical key.
+        $canonical = AutoPostText::normalizePlatform($platform);
+        $dbKey     = Platforms::dbKey($canonical);
+        $sched     = $canonical;
 
         // The base for the default is the most recent of "now" and the last
         // auto-post: with a recent post the reschedule lands one hour after
@@ -433,9 +434,10 @@ class AutoPostQueue
             return 0;
         }
 
-        $key   = AutoPostText::normalizePlatform($platform);
-        $tpl   = self::templateSettings($key);
-        $dbKey = $key === 'reddit' ? 'reddit' : 'twitter';
+        $key     = AutoPostText::normalizePlatform($platform);
+        $tpl     = self::templateSettings($key);
+        $dbKey   = Platforms::dbKey($key);
+        $maxLen  = (int) $tpl['max_length'];
 
         $media = self::galleryMedia($galleryId, null, $key);
         $mediaIds = array_map(static function (array $photo): int {
@@ -448,7 +450,7 @@ class AutoPostQueue
                 'caption'       => (string) $gallery['description'],
             ], self::categoryHashtags($galleryId, null, $key), $tpl);
         } else {
-            $text = mb_substr(trim($text), 0, $key === 'reddit' ? 40000 : 280);
+            $text = mb_substr(trim($text), 0, $maxLen);
         }
 
         // Banned-word filter: strip offending words from an admin-provided
@@ -492,13 +494,17 @@ class AutoPostQueue
         $queued    = [];
         $duplicate = [];
 
-        foreach (['twitter' => 'X', 'reddit' => 'Reddit'] as $platform => $label) {
+        foreach (Platforms::enabled() as $channel) {
+            $key     = (string) $channel['key'];
+            $dbKey   = Platforms::dbKey($key);
+            $label   = (string) $channel['label'];
+
             $alreadyQueued = Database::run(
                 'SELECT q.id FROM auto_poster_queue q
                  WHERE q.gallery_id = ? AND q.platform = ?
                    AND q.status IN (?, ?, ?, ?, ?)
                  LIMIT 1',
-                [$galleryId, $platform, 'queued', 'posted', 'failed', 'skipped', 'dismissed']
+                [$galleryId, $dbKey, 'queued', 'posted', 'failed', 'skipped', 'dismissed']
             )->fetch();
 
             if ($alreadyQueued) {
@@ -506,7 +512,7 @@ class AutoPostQueue
                 continue;
             }
 
-            $queueId = self::enqueue($galleryId, null, $scheduledAtSiteTz, $platform);
+            $queueId = self::enqueue($galleryId, null, $scheduledAtSiteTz, $key);
             if ($queueId > 0) {
                 $queued[] = $label;
             }
@@ -528,24 +534,43 @@ class AutoPostQueue
             return;
         }
 
+        [$inSql, $bind] = self::enabledPlatformPlaceholders();
+        $bind[] = $scheduledAtUtc;
+
         Database::run(
             'UPDATE auto_poster_queue SET scheduled_at = ?
-             WHERE gallery_id = ? AND platform IN (?, ?) AND status = ?',
-            [$scheduledAtUtc, $galleryId, 'twitter', 'reddit', 'queued']
+             WHERE gallery_id = ? AND platform IN (' . $inSql . ') AND status = ?',
+            [$scheduledAtUtc, $galleryId, 'queued']
         );
     }
 
     /**
-     * Make a gallery's pending X/Reddit auto-post rows due immediately
+     * Make a gallery's pending auto-post rows due immediately
      * (used by publish-now and schedule-cleared flows).
      */
     public static function advanceGalleryPosts(int $galleryId): void
     {
+        [$inSql, $bind] = self::enabledPlatformPlaceholders();
+
         Database::run(
             'UPDATE auto_poster_queue SET scheduled_at = CURRENT_TIMESTAMP
-             WHERE gallery_id = ? AND platform IN (?, ?) AND status = ?',
-            [$galleryId, 'twitter', 'reddit', 'queued']
+             WHERE gallery_id = ? AND platform IN (' . $inSql . ') AND status = ?',
+            [$galleryId, 'queued']
         );
+    }
+
+    /**
+     * Placeholder list + bound dbKeys for every enabled channel's queue
+     * platform value, for platform IN (...) filters.
+     *
+     * @return array{0: string, 1: list<string>}
+     */
+    private static function enabledPlatformPlaceholders(): array
+    {
+        $dbKeys = array_map(static fn (array $p): string => Platforms::dbKey((string) $p['key']), Platforms::enabled());
+        $dbKeys = array_values(array_unique($dbKeys));
+
+        return [implode(',', array_fill(0, count($dbKeys), '?')), $dbKeys];
     }
 
     /**
@@ -663,14 +688,14 @@ class AutoPostQueue
         $hours = max(1, min(168, $hours));
 
         $platforms = $platform !== null && $platform !== ''
-            ? [$platform]
-            : ['twitter', 'reddit'];
+            ? [AutoPostText::normalizePlatform($platform)]
+            : Platforms::enabledKeys();
 
         // Only refill platforms that have nothing queued AND are actually able to
         // post (an unauthorized platform's rows would just be marked skipped).
         $idlePlatforms = array_values(array_filter(
             $platforms,
-            static fn (string $pf): bool => !self::hasQueued($pf) && self::platformAuthorized($pf)
+            static fn (string $pf): bool => !self::hasQueued(Platforms::dbKey($pf)) && self::platformAuthorized($pf)
         ));
 
         if ($idlePlatforms === []) {
@@ -752,7 +777,9 @@ class AutoPostQueue
     public static function refillAhead(int $slots = 24, ?string $platform = null): int
     {
         $slots     = max(1, min(48, $slots));
-        $platforms = $platform !== null && $platform !== '' ? [$platform] : ['twitter', 'reddit'];
+        $platforms = $platform !== null && $platform !== ''
+            ? [AutoPostText::normalizePlatform($platform)]
+            : Platforms::enabledKeys();
         $scheduled = 0;
 
         foreach ($platforms as $pf) {
@@ -760,9 +787,11 @@ class AutoPostQueue
                 continue;
             }
 
+            $dbKey = Platforms::dbKey($pf);
+
             $queued = (int) Database::run(
                 "SELECT COUNT(*) FROM auto_poster_queue WHERE platform = ? AND status = 'queued'",
-                [$pf]
+                [$dbKey]
             )->fetchColumn();
 
             $missing = $slots - $queued;
@@ -775,7 +804,7 @@ class AutoPostQueue
             // hourly and never collide with existing schedules.
             $maxScheduled = (string) Database::run(
                 "SELECT COALESCE(MAX(scheduled_at), '') FROM auto_poster_queue WHERE platform = ? AND status = 'queued'",
-                [$pf]
+                [$dbKey]
             )->fetchColumn();
 
             $tz  = new DateTimeZone(self::schedulerTimezone()->getName());
@@ -829,11 +858,11 @@ class AutoPostQueue
             }
 
             AutoPosterConfig::log(
-                $pf === 'twitter' ? 'x' : $pf,
-            '',
-            'info',
-            "Pipeline refilled: queued was {$queued}, scheduled {$toSchedule} distinct gallery post(s) (target {$slots})"
-        );
+                $pf,
+                '',
+                'info',
+                "Pipeline refilled: queued was {$queued}, scheduled {$toSchedule} distinct gallery post(s) (target {$slots})"
+            );
         }
 
         return $scheduled;
@@ -1015,7 +1044,7 @@ class AutoPostQueue
         }
 
         $newText = ($text !== null && trim($text) !== '')
-            ? mb_substr(trim($text), 0, $key === 'reddit' ? 40000 : 280)
+            ? mb_substr(trim($text), 0, (int) self::templateSettings($key)['max_length'])
             : (string) $src['text'];
 
         Database::run(
@@ -1044,25 +1073,20 @@ class AutoPostQueue
      */
     public static function platformAuthorized(string $platform): bool
     {
-        $config = AutoPosterConfig::all();
-        $cfg    = $config[$platform] ?? [];
+        $canonical = AutoPostText::normalizePlatform($platform);
 
-        $client = match ($platform) {
-            'twitter' => new TwitterClient($cfg),
-            'reddit'  => new RedditClient($cfg),
-            default   => null,
-        };
-
-        if ($client === null || !$client->isConfigured() || !$client->isUserAuthorized()) {
+        if (!Platforms::isEnabled($canonical)) {
             return false;
         }
 
-        // Reddit posting additionally requires a target subreddit.
-        if ($platform === 'reddit') {
-            return trim((string) ($cfg['subreddit'] ?? '')) !== '';
+        $clientClass = Platforms::clientClass($canonical);
+        if ($clientClass === null) {
+            return false;
         }
 
-        return true;
+        $client = new $clientClass(AutoPosterConfig::channel($canonical));
+
+        return $client->isConfigured() && $client->isUserAuthorized();
     }
 
     /**
@@ -1186,8 +1210,8 @@ class AutoPostQueue
             return false;
         }
 
-        $key  = strtolower((string) $row['platform']) === 'reddit' ? 'reddit' : 'x';
-        $text = mb_substr(trim($text), 0, $key === 'reddit' ? 40000 : 280);
+        $key  = AutoPostText::normalizePlatform((string) $row['platform']);
+        $text = mb_substr(trim($text), 0, (int) self::templateSettings($key)['max_length']);
 
         $scheduled = null;
         if (trim((string) $scheduledAt) !== '') {
@@ -1338,6 +1362,13 @@ class AutoPostQueue
             return ['ok' => false, 'skipped' => true, 'error' => $note];
         }
 
+        $canonical = AutoPostText::normalizePlatform($platform);
+        $tpl       = self::templateSettings($canonical);
+        $videoRule = (string) $tpl['video'];
+        $blur      = (int) $tpl['blur_percent'];
+        $meta      = json_decode((string) ($item['meta'] ?? ''), true);
+        $meta      = is_array($meta) ? $meta : [];
+
         $media    = [];
         $blurredTmp = [];
         foreach (self::mediaFiles($item) as $photo) {
@@ -1349,19 +1380,12 @@ class AutoPostQueue
 
             $isVideo = (int) $photo['is_video'] === 1;
 
-            // Images get blurred in a throwaway temp copy (source is never
-            // overwritten). Videos are too large for X on a standard account,
-            // so a few random frames are captured, blurred with the same
-            // preview blur, and posted as images instead of the video file.
-            if (!$isVideo) {
-                $copy = create_blurred_copy($path, (int) self::templateSettings($platform)['blur_percent']);
-
-                if ($copy !== null) {
-                    $blurredTmp[] = $copy;
-                    $path         = $copy;
-                }
-            } else {
-                 $frames = self::videoScreenshots($path, (int) self::templateSettings($platform)['screenshots'], $platform);
+            // Per-platform media rules: images get the configured preview blur
+            // (0 = untouched); videos are uploaded as-is ('upload'), reduced to
+            // blurred screenshots ('screenshots', the X approach) or skipped
+            // entirely ('none' — text-only channels).
+            if ($isVideo && $videoRule === 'screenshots') {
+                $frames = self::videoScreenshots($path, (int) $tpl['screenshots'], $canonical);
 
                 if ($frames !== []) {
                     foreach ($frames as $frame) {
@@ -1376,8 +1400,19 @@ class AutoPostQueue
                     continue;
                 }
 
-                // No screenshots could be extracted — fall back to the
-                // original file (previous behaviour).
+                // No screenshots could be extracted — fall back to attaching
+                // the original file (previous behaviour).
+            } elseif ($isVideo && $videoRule === 'none') {
+                continue;
+            }
+
+            if (!$isVideo && $blur > 0) {
+                $copy = create_blurred_copy($path, $blur);
+
+                if ($copy !== null) {
+                    $blurredTmp[] = $copy;
+                    $path         = $copy;
+                }
             }
 
             $media[] = [
@@ -1388,18 +1423,30 @@ class AutoPostQueue
             ];
         }
 
-        $config   = AutoPosterConfig::all();
-
         // A throwing platform client (network error, bad response, encoding
         // failure) must never leave the row sitting 'queued' with no result —
         // it would then be silently published by the next worker run. Record
         // it as failed so it shows up in Recent posts for an explicit retry.
         try {
-            $result = match ($platform) {
-                'twitter' => (new TwitterClient($config['twitter']))->post((string) $item['text'], $media),
-                'reddit'  => self::postReddit($config['reddit'], (string) $item['text'], $media),
-                default   => ['ok' => false, 'error' => 'Unsupported platform: ' . $platform],
-            };
+            $clientClass = Platforms::clientClass($canonical);
+            if ($clientClass === null) {
+                throw new \RuntimeException('No posting client for platform: ' . $canonical);
+            }
+
+            $client = new $clientClass(AutoPosterConfig::channel($canonical));
+
+            // Title/body platforms get the post split into {title, body}; the
+            // title is carried through meta so the client can place it.
+            $title = '';
+            $text  = (string) $item['text'];
+            if (Platforms::isTitleBody($canonical)) {
+                $split = AutoPostText::splitForPlatform($text, $canonical);
+                $title = $split['title'];
+                $text  = $split['body'];
+            }
+            $meta['title'] = $title;
+
+            $result = $client->post($text, $media, $meta);
         } catch (\Throwable $e) {
             $result = ['ok' => false, 'error' => $e->getMessage() . ' (thrown by the platform client)'];
         }
@@ -1412,9 +1459,11 @@ class AutoPostQueue
             $result['error'] = ($result['error'] ?? 'Unknown error') . ' (logged as failed)';
         }
 
+        $target = (string) ($meta['chat_id'] ?? $meta['community'] ?? $meta['instance'] ?? $meta['relay'] ?? '');
+
         AutoPosterConfig::log(
-            (string) $platform,
-            '',
+            $platform,
+            $target,
             $result['ok'] ? 'success' : 'failed',
             $result['ok'] ? ($result['url'] ?? 'Posted') : ($result['error'] ?? 'Unknown error')
         );

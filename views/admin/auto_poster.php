@@ -1,34 +1,60 @@
 <?php
-$isReddit     = ($platform ?? 'x') === 'reddit';
-$platformName = $isReddit ? 'Reddit' : 'X (Twitter)';
-$title        = 'Auto Poster — ' . ($isReddit ? 'Reddit' : 'X');
-$reddit       = $config['reddit'] ?? [];
-$twitter      = $config['twitter'] ?? [];
+use App\Core\Platforms;
+$platform      = (string) ($platform ?? 'x');
+$platformName  = (string) ($platformName ?? 'Auto Poster');
+$platformMeta  = is_array($platformMeta ?? null) ? $platformMeta : Platforms::get($platform);
+$enabledCh    = is_array($enabledChannels ?? null) ? $enabledChannels : [];
+$channel       = is_array($channel ?? null) ? $channel : [];
+$apMaxLength   = (int) ($apTemplate['max_length'] ?? Platforms::maxLength($platform));
+$apMinLength   = (int) ($platformMeta['max_length_min'] ?? 50);
+$apLenCeil     = (int) ($platformMeta['max_length_max'] ?? $apMaxLength);
+$apMediaMax    = (int) ($platformMeta['media_max'] ?? 4);
+$apMedia       = (bool) ($platformMeta['media'] ?? false);
+$apSensitive   = (string) ($platformMeta['sensitive'] ?? 'none');
+$apInstances   = (bool) ($platformMeta['instances'] ?? false);
+$apOAuth       = is_array($platformMeta['oauth'] ?? null) ? $platformMeta['oauth'] : null;
+$apFields      = (array) ($platformMeta['fields'] ?? []);
+$apTargetNames = Platforms::targetFieldNames($platform);
+$apIsTitleBody = Platforms::isTitleBody($platform);
+$title         = 'Auto Poster — ' . $platformName;
+$platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/' . $platform;
 ?>
 
-<?php // ----- Platform switch: the whole page is scoped to X or Reddit ----- ?>
+<?php // ----- Platform switch: one tab per enabled posting option ----- ?>
 <div class="stats-panel" style="margin-bottom:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <h2>Auto Poster</h2>
-        <div role="tablist" aria-label="Platform" id="ap-platform-switch" style="display:inline-flex;gap:.25rem;border:1px solid #d1d5db;border-radius:8px;padding:.25rem;">
-            <a role="tab" id="ap-tab-x" aria-selected="<?= $isReddit ? 'false' : 'true' ?>" href="<?= url('/admin/auto-poster') ?>"
-               style="padding:.35rem .9rem;border-radius:6px;text-decoration:none;font-size:.9rem;<?= $isReddit ? 'color:#374151;' : 'background:#4f46e5;color:#fff;font-weight:600;' ?>">X (Twitter)</a>
-            <a role="tab" id="ap-tab-reddit" aria-selected="<?= $isReddit ? 'true' : 'false' ?>" href="<?= url('/admin/auto-poster/reddit') ?>"
-               style="padding:.35rem .9rem;border-radius:6px;text-decoration:none;font-size:.9rem;<?= $isReddit ? 'background:#4f46e5;color:#fff;font-weight:600;' : 'color:#374151;' ?>">Reddit</a>
+        <div role="tablist" aria-label="Platform" id="ap-platform-switch" style="display:inline-flex;gap:.25rem;border:1px solid #d1d5db;border-radius:8px;padding:.25rem;flex-wrap:wrap;">
+            <?php foreach ($enabledCh as $ch): ?>
+                <?php $chKey = (string) $ch['key']; $chLabel = (string) $ch['label']; $active = $chKey === $platform; ?>
+                <a role="tab" id="ap-tab-<?= e($chKey) ?>" aria-selected="<?= $active ? 'true' : 'false' ?>"
+                   href="<?= e($chKey === 'x' ? url('/admin/auto-poster') : url('/admin/auto-poster/' . $chKey)) ?>"
+                   style="padding:.35rem .9rem;border-radius:6px;text-decoration:none;font-size:.9rem;<?= $active ? 'background:#4f46e5;color:#fff;font-weight:600;' : 'color:#374151;' ?>"><?= e($chLabel) ?></a>
+            <?php endforeach; ?>
         </div>
     </div>
     <p class="muted" style="font-size:.85rem;margin:0;">
-        <?= $isReddit
-            ? 'Everything here belongs to Reddit: its post template, credentials, Post to Reddit, the Reddit queue and the Reddit posting log.'
-            : 'Everything here belongs to X (Twitter): its post template, credentials, recommended posts, the X queue and the X posting log.' ?>
+        Everything here belongs to <?= e($platformName) ?>: its post template, credentials, recommended posts, the posting queue and the posting log.
+        Each tab formats its posts automatically for that channel.
+        Schedule times use the site timezone set on Settings.
     </p>
+    <form method="post" action="<?= url('/admin/auto-poster/channels/enable') ?>" style="margin-top:.6rem;">
+        <?= csrf_field() ?>
+        <input type="hidden" name="platform" value="<?= e($platform) ?>">
+        <span class="muted" style="font-size:.8rem;">Channels enabled for the auto-queue:</span>
+        <?php foreach (Platforms::enabled() as $ch): ?>
+            <?php $chKey = (string) $ch['key']; ?>
+            <label class="chip" style="margin-left:.4rem;"><input type="checkbox" name="channels[]" value="<?= e($chKey) ?>" <?= in_array($chKey, (array) ($config['enabled_channels'] ?? Platforms::enabledKeys()), true) ? 'checked' : '' ?>> <?= e((string) $ch['label']) ?></label>
+        <?php endforeach; ?>
+        <button type="submit" class="btn btn-sm" style="margin-left:.5rem;">Save channels</button>
+    </form>
 </div>
 
 <?php // ----- Platform post template ----- ?>
 <div class="stats-panel" style="margin-bottom:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <h2><?= e($platformName) ?> post template</h2>
-        <span class="muted" style="font-size:.85rem;">The blueprint every <?= $isReddit ? 'Reddit' : 'X' ?> post is generated from. Edit the wording, link and how many hashtags are used — new posts pick it up immediately.</span>
+        <span class="muted" style="font-size:.85rem;">The blueprint every <?= e($platformName) ?> post is generated from. Auto-loaded defaults are fine as-is; edit the wording, link and hashtag count &mdash; new posts pick it up immediately.</span>
     </div>
     <form method="post" action="<?= url('/admin/auto-poster/template/save') ?>" data-ap-template>
         <?= csrf_field() ?>
@@ -45,15 +71,19 @@ $twitter      = $config['twitter'] ?? [];
                     <label style="font-size:.85rem;"><span class="muted">Hashtags per post:</span><br>
                         <input type="number" name="max_tags" min="0" max="60" value="<?= (int) $apTemplate['max_tags'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
                     <label style="font-size:.85rem;"><span class="muted">Max characters:</span><br>
-                        <input type="number" name="max_length" min="50" max="280" value="<?= (int) $apTemplate['max_length'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="max_length" min="<?= $apMinLength ?>" max="<?= $apLenCeil ?>" value="<?= (int) $apTemplate['max_length'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
                     <label style="font-size:.85rem;"><span class="muted">Default schedule (min):</span><br>
                         <input type="number" name="schedule_minutes" min="1" max="10080" value="<?= (int) $apTemplate['schedule_minutes'] ?>" style="width:7rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
                     <label style="font-size:.85rem;"><span class="muted">Recent window (days):</span><br>
                         <input type="number" name="recent_days" min="1" max="90" value="<?= (int) $apTemplate['recent_days'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                    <?php if ($apMedia): ?>
                     <label style="font-size:.85rem;"><span class="muted">Media per post:</span><br>
-                        <input type="number" name="max_media" min="1" max="4" value="<?= (int) $apTemplate['max_media'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="max_media" min="0" max="<?= $apMediaMax ?>" value="<?= (int) $apTemplate['max_media'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                    <?php endif; ?>
+                    <?php if (($apTemplate['video'] ?? 'none') === 'screenshots'): ?>
                     <label style="font-size:.85rem;"><span class="muted">Video screenshots:</span><br>
                         <input type="number" name="screenshots" min="1" max="4" value="<?= (int) $apTemplate['screenshots'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                    <?php endif; ?>
                     <label style="font-size:.85rem;"><span class="muted">Preview blur %:</span><br>
                         <input type="number" name="blur_percent" min="0" max="100" value="<?= (int) $apTemplate['blur_percent'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
                 </div>
@@ -67,7 +97,7 @@ $twitter      = $config['twitter'] ?? [];
                 <div style="border:1px dashed #d1d5db;border-radius:6px;padding:.6rem .75rem;">
                     <div style="display:flex;align-items:center;justify-content:space-between;">
                         <span class="muted" style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Live preview</span>
-                        <span id="ap-preview-count" class="muted" style="font-size:.75rem;font-variant-numeric:tabular-nums;">0/280</span>
+                        <span id="ap-preview-count" class="muted" style="font-size:.75rem;font-variant-numeric:tabular-nums;">0/<?= $apMaxLength ?></span>
                     </div>
                     <p id="ap-preview" style="font-size:.88rem;color:#374151;margin:.4rem 0 0;word-wrap:break-word;white-space:pre-wrap;">&mdash;</p>
                 </div>
@@ -85,7 +115,7 @@ $twitter      = $config['twitter'] ?? [];
 <div class="stats-panel" style="margin-bottom:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <h2>Recommended posts</h2>
-        <span class="muted" style="font-size:.85rem;">One post per <?= e($platformName) ?> gallery with uploads in the last <?= (int) ($apTemplate['recent_days'] ?? 14) ?> days, carrying up to <?= (int) ($apTemplate['max_media'] ?? 4) ?> of its newest images (or a single video). A gallery already handled here&mdash;queued, posted, or dismissed&mdash;isn&rsquo;t offered again.</span>
+        <span class="muted" style="font-size:.85rem;">One post per <?= e($platformName) ?> gallery with uploads in the last <?= (int) ($apTemplate['recent_days'] ?? 14) ?> days, carrying up to <?= (int) ($apTemplate['max_media'] ?? 0) ?> of its newest media. A gallery already handled here&mdash;queued, posted, or dismissed&mdash;isn&rsquo;t offered again.</span>
     </div>
     <?php if (empty($recommended)): ?>
         <p class="muted">No recently-updated galleries to recommend. Upload new media, or every recent gallery already has a pending post (or was dismissed).</p>
@@ -115,8 +145,8 @@ $twitter      = $config['twitter'] ?? [];
                         <?= csrf_field() ?>
                         <input type="hidden" name="platform" value="<?= e($platform) ?>">
                         <input type="hidden" name="gallery_id" value="<?= (int) $rec['gallery_id'] ?>">
-                        <textarea name="text" rows="2" maxlength="<?= $isReddit ? 40000 : 280 ?>" data-char-count data-char-count-id="rec-<?= (int) $rec['gallery_id'] ?>" style="font-size:.85rem;color:#374151;background:#fff;padding:.5rem .6rem;border-radius:4px;border:1px solid #d1d5db;word-wrap:break-word;resize:vertical;box-sizing:border-box;width:100%;"><?= e((string) $rec['suggested_text']) ?></textarea>
-                        <div class="muted" style="font-size:.72rem;text-align:right;"><span data-char-count-out="rec-<?= (int) $rec['gallery_id'] ?>">0</span>/<?= $isReddit ? 40000 : 280 ?></div>
+                        <textarea name="text" rows="2" maxlength="<?= $apMaxLength ?>" data-char-count data-char-count-id="rec-<?= (int) $rec['gallery_id'] ?>" style="font-size:.85rem;color:#374151;background:#fff;padding:.5rem .6rem;border-radius:4px;border:1px solid #d1d5db;word-wrap:break-word;resize:vertical;box-sizing:border-box;width:100%;"><?= e((string) $rec['suggested_text']) ?></textarea>
+                        <div class="muted" style="font-size:.72rem;text-align:right;"><span data-char-count-out="rec-<?= (int) $rec['gallery_id'] ?>">0</span>/<?= $apMaxLength ?></div>
                         <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
                             <label for="sched_<?= (int) $rec['gallery_id'] ?>" class="muted" style="font-size:.8rem;">Publish</label>
                             <input type="datetime-local" name="scheduled_at" id="sched_<?= (int) $rec['gallery_id'] ?>" value="<?= e((string) $rec['default_scheduled_at']) ?>" style="font-size:.85rem;padding:.2rem .35rem;border:1px solid #d1d5db;border-radius:4px;">
@@ -164,7 +194,7 @@ $twitter      = $config['twitter'] ?? [];
     </div>
     <div id="ap-queue-body">
     <?php if (empty($queue)): ?>
-        <p class="muted">The queue is empty — <?= $isReddit ? 'add a recommended post above or repost a past Reddit post below.' : 'add a recommended post above.' ?></p>
+        <p class="muted">The queue is empty — add a recommended post above.</p>
     <?php else: ?>
         <table>
             <thead>
@@ -230,10 +260,10 @@ $twitter      = $config['twitter'] ?? [];
                                 <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
                                 <div>
                                     <label class="muted" style="display:block;margin-bottom:.2rem;font-size:.8rem;">Post text</label>
-                                    <textarea name="text" rows="3" maxlength="<?= ((string) $item['platform'] === 'reddit') ? 40000 : 280 ?>" data-char-count data-char-count-id="qedit-<?= (int) $item['id'] ?>"
+                                    <textarea name="text" rows="3" maxlength="<?= $apMaxLength ?>" data-char-count data-char-count-id="qedit-<?= (int) $item['id'] ?>"
                                               style="width:100%;box-sizing:border-box;font-size:.85rem;font-family:inherit;padding:.4rem .5rem;border:1px solid #d1d5db;border-radius:4px;"
                                               aria-label="Editable text for queued post #<?= (int) $item['id'] ?>"><?= e((string) $item['text']) ?></textarea>
-                                <div class="muted" style="font-size:.72rem;text-align:right;"><span data-char-count-out="qedit-<?= (int) $item['id'] ?>">0</span>/<?= ((string) $item['platform'] === 'reddit') ? 40000 : 280 ?></div>
+                                <div class="muted" style="font-size:.72rem;text-align:right;"><span data-char-count-out="qedit-<?= (int) $item['id'] ?>">0</span>/<?= $apMaxLength ?></div>
                                 </div>
                                 <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
                                     <label class="muted" style="font-size:.8rem;">Schedule:</label>
@@ -257,10 +287,10 @@ $twitter      = $config['twitter'] ?? [];
 <div class="stats-panel" style="margin-bottom:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <h2>Recent <?= e($platformName) ?> posts</h2>
-        <span class="muted" style="font-size:.85rem;">Re-publish a past <?= $isReddit ? 'Reddit' : 'X' ?> post now, or schedule it to go out again later.</span>
+        <span class="muted" style="font-size:.85rem;">Re-publish a past <?= e($platformName) ?> post now, or schedule it to go out again later.</span>
     </div>
     <?php if (empty($recentPosts)): ?>
-        <p class="muted">No <?= $isReddit ? 'Reddit' : 'X' ?> posts recorded yet — posted, failed and skipped items will appear here.</p>
+        <p class="muted">No <?= e($platformName) ?> posts recorded yet — posted, failed and skipped items will appear here.</p>
     <?php else: ?>
         <div style="overflow-x:auto;">
             <table class="ap-table">
@@ -280,19 +310,20 @@ $twitter      = $config['twitter'] ?? [];
                     $rpStatus = (string) ($rp['status'] ?? 'posted');
                     $rpPill   = $rpStatus === 'posted' ? 'success' : ($rpStatus === 'failed' ? 'failed' : 'pending');
                     $rpTs     = strtotime((string) ($rp['posted_at'] ?? $rp['created_at'] ?? ''));
+                    $rpMax    = \App\Core\Platforms::maxLength((string) ($rp['platform'] ?? ''));
                     ?>
                     <?php $rpEditable = $rpStatus === 'failed'; ?>
                     <tr>
                         <td><span class="ap-pill ap-pill-<?= e($rpPill) ?>"><span class="ap-dot"></span><?= e(ucfirst($rpStatus)) ?></span></td>
-                        <td><?= e(ucfirst((string) ($rp['platform'] ?? ''))) ?></td>
+                        <td><?= e(\App\Core\Platforms::label((string) ($rp['platform'] ?? ''))) ?></td>
                         <td class="muted" style="font-size:.8rem;"><?= e((string) $rp['gallery_title']) ?></td>
                         <?php if ($rpEditable): ?>
                             <?php // Failed posts: editable text so the wording can be fixed, then reposted/scheduled. ?>
                             <td style="max-width:340px;font-size:.85rem;" class="rp-edit">
-                                <textarea name="text" form="ap-edit-<?= (int) $rp['id'] ?>" maxlength="<?= ((string) ($rp['platform'] ?? '') === 'reddit') ? 40000 : 280 ?>" rows="2" data-char-count data-char-count-id="rp-<?= (int) $rp['id'] ?>"
+                                <textarea name="text" form="ap-edit-<?= (int) $rp['id'] ?>" maxlength="<?= $rpMax ?>" rows="2" data-char-count data-char-count-id="rp-<?= (int) $rp['id'] ?>"
                                           style="width:100%;box-sizing:border-box;font-size:.85rem;font-family:inherit;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;"
                                           aria-label="Editable text for post #<?= (int) $rp['id'] ?>"><?= e((string) $rp['text']) ?></textarea>
-                                <div class="muted" style="font-size:.72rem;margin-top:.15rem;text-align:right;"><span data-char-count-out="rp-<?= (int) $rp['id'] ?>">0</span>/<?= ((string) ($rp['platform'] ?? '') === 'reddit') ? 40000 : 280 ?> &middot; Edit the wording, then click Repost now or Reschedule.</div>
+                                <div class="muted" style="font-size:.72rem;margin-top:.15rem;text-align:right;"><span data-char-count-out="rp-<?= (int) $rp['id'] ?>">0</span>/<?= $rpMax ?> &middot; Edit the wording, then click Repost now or Reschedule.</div>
                             </td>
                         <?php else: ?>
                             <td style="max-width:320px;font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?= e((string) $rp['text']) ?>">
@@ -348,7 +379,7 @@ $twitter      = $config['twitter'] ?? [];
                 <span class="muted" style="font-size:.8rem;">Page <?= (int) ($recentPage ?? 1) ?> of <?= (int) $recentPages ?> &middot; <?= number_format((int) ($recentTotal ?? 0)) ?> recorded post<?= ((int) ($recentTotal ?? 0)) === 1 ? '' : 's' ?></span>
                 <span style="display:flex;gap:.35rem;flex-wrap:wrap;">
                     <?php
-                    $recentBase = $isReddit ? url('/admin/auto-poster/reddit') : url('/admin/auto-poster');
+                    $recentBase = $platformPath;
                     $recentCur  = (int) ($recentPage ?? 1);
                     $recentMax  = (int) $recentPages;
                     $window     = 5;
@@ -372,175 +403,130 @@ $twitter      = $config['twitter'] ?? [];
 </div>
 
 <div class="stats-grid">
-    <?php // ----- Platform credentials ----- ?>
+    <?php // ----- Platform credentials (registry-driven) ----- ?>
     <div class="stats-panel">
         <h2><?= e($platformName) ?> credentials</h2>
-        <?php if ($isReddit): ?>
-        <form method="post" action="<?= url('/admin/auto-poster/settings') ?>">
+        <form method="post" action="<?= url('/admin/auto-poster/channel/save') ?>">
             <?= csrf_field() ?>
-            <input type="hidden" name="platform" value="reddit">
-            <p class="muted" style="font-size:0.85rem;">
-                Create a Reddit <strong>"web app"</strong> (not a script app) at
-                <a href="https://www.reddit.com/prefs/apps" target="_blank" rel="noopener">reddit.com/prefs/apps</a>,
-                set its redirect URI to <code><?= e(absolute_url('/admin/auto-poster/reddit/callback')) ?></code>,
-                then enter its client ID, secret and username below.
-            </p>
-            <p>
-                <label for="reddit_client_id">Client ID</label><br>
-                <input type="text" name="reddit_client_id" id="reddit_client_id" value="<?= e($reddit['client_id'] ?? '') ?>" style="width:100%;box-sizing:border-box;">
-            </p>
-            <p>
-                <label for="reddit_client_secret">Client Secret</label><br>
-                <input type="password" name="reddit_client_secret" id="reddit_client_secret" value="" placeholder="<?= empty($reddit['client_secret']) ? '' : 'Leave blank to keep the saved secret' ?>" style="width:100%;box-sizing:border-box;">
-            </p>
-            <p>
-                <label for="reddit_username">Reddit username</label><br>
-                <input type="text" name="reddit_username" id="reddit_username" value="<?= e($reddit['username'] ?? '') ?>" style="width:100%;box-sizing:border-box;">
-            </p>
-            <p>
-                <label for="reddit_app_name">App name (User-Agent)</label><br>
-                <input type="text" name="reddit_app_name" id="reddit_app_name" value="<?= e($reddit['app_name'] ?? 'gallery-auto-poster') ?>" style="width:100%;box-sizing:border-box;">
-            </p>
-            <button type="submit" class="btn">Save Reddit Settings</button>
+            <input type="hidden" name="platform" value="<?= e($platform) ?>">
+            <?php foreach ($apFields as $field): ?>
+                <?php
+                [$fName, $fLabel, $fType, $fPlaceholder] = array_pad($field, 4, '');
+                $fSecret = count($field) >= 5 ? (bool) $field[4] : false;
+                $fValue  = (string) ($channel[$fName] ?? '');
+                ?>
+                <p>
+                    <label for="apf-<?= e($fName) ?>"><?= e($fLabel) ?></label><br>
+                    <?php if ($fType === 'textarea'): ?>
+                        <textarea name="<?= e($fName) ?>" id="apf-<?= e($fName) ?>" rows="3" placeholder="<?= e((string) $fPlaceholder) ?>" style="width:100%;box-sizing:border-box;"><?= e($fValue) ?></textarea>
+                    <?php else: ?>
+                        <input type="<?= e($fType) ?>" name="<?= e($fName) ?>" id="apf-<?= e($fName) ?>" value="<?= $fType === 'password' ? '' : e($fValue) ?>" placeholder="<?= $fSecret && $fValue !== '' ? 'Leave blank to keep the saved value' : e((string) $fPlaceholder) ?>" style="width:100%;box-sizing:border-box;">
+                    <?php endif; ?>
+                </p>
+            <?php endforeach; ?>
+            <button type="submit" class="btn">Save <?= e($platformName) ?> Settings</button>
         </form>
-        <p style="margin-top:0.75rem;">
-            <?php if (!empty($authHealth)): ?>
-                <?php if ($authHealth['ok']): ?>
-                    <span style="color:var(--success,#2e7d32);font-weight:600;">&#10003; Authorized — <?= e((string) $authHealth['note']) ?></span>
-                <?php else: ?>
-                    <span style="color:var(--danger,#c62828);font-weight:600;">&#9888; Token invalid — <?= e((string) $authHealth['note']) ?></span><br>
-                    <span class="muted" style="display:block;margin:.4rem 0 .5rem;">The stored token is rejected by Reddit. Re-authorize below to restore posting.</span>
-                    <a class="btn" href="<?= url('/admin/auto-poster/reddit/authorize') ?>">Re-authorize Reddit</a>
-                <?php endif; ?>
-            <?php elseif (!empty($reddit['refresh_token'])): ?>
-                <span class="muted" style="display:block;margin-bottom:0.5rem;">Authorization state unknown — could not verify the token.</span>
-                <a class="btn" href="<?= url('/admin/auto-poster/reddit/authorize') ?>">Re-authorize Reddit</a>
+
+        <?php if ($apInstances): ?>
+            <?php // Multi-instance accounts (Mastodon family): per-instance tokens. ?>
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:.75rem 0;">
+            <p style="font-size:.85rem;margin:.4rem 0;"><strong>Instances</strong> — one bot account + token per instance.</p>
+            <?php if (!empty($channel['instances']) && is_array($channel['instances'])): ?>
+                <ul style="margin:.4rem 0 .75rem;padding-left:1.1rem;font-size:.85rem;">
+                    <?php foreach ($channel['instances'] as $instHost => $instToken): ?>
+                        <li style="margin-bottom:.3rem;">
+                            <?= e((string) $instHost) ?>
+                            <form class="inline" method="post" action="<?= url('/admin/auto-poster/channel/instance/remove') ?>" style="display:inline;">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="platform" value="<?= e($platform) ?>">
+                                <input type="hidden" name="instance_host" value="<?= e((string) $instHost) ?>">
+                                <button type="submit" class="btn btn-sm btn-outline" style="font-size:.72rem;">Remove</button>
+                            </form>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
             <?php else: ?>
-                <span class="muted" style="display:block;margin-bottom:0.5rem;">Not authorized yet. Complete the flow below to enable posting.</span>
-                <a class="btn" href="<?= url('/admin/auto-poster/reddit/authorize') ?>">Authorize Reddit</a>
+                <p class="muted" style="font-size:.8rem;">No instances configured yet.</p>
             <?php endif; ?>
-        </p>
-        <p class="muted" style="font-size:0.8rem;margin-top:.5rem;">The schedule timezone is shared and set on the X page.</p>
-        <?php else: ?>
-        <form method="post" action="<?= url('/admin/auto-poster/settings') ?>">
-            <?= csrf_field() ?>
-            <input type="hidden" name="platform" value="x">
-            <p class="muted" style="font-size:0.85rem;">
-                Create an app in the <a href="https://developer.x.com" target="_blank" rel="noopener">X developer portal</a>
-                and set its <strong>callback URL</strong> to
-                <code><?= e((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . url('/admin/auto-poster/twitter/callback')) ?></code>.
-                Grant <code>tweet.read tweet.write users.read offline.access</code> and paste the app's Client ID and Client Secret below.
-            </p>
-            <p>
-                <label for="twitter_client_id">Client ID</label><br>
-                <input type="text" name="twitter_client_id" id="twitter_client_id" value="<?= e($twitter['client_id'] ?? '') ?>" style="width:100%;box-sizing:border-box;">
-            </p>
-            <p>
-                <label for="twitter_client_secret">Client Secret</label><br>
-                <input type="password" name="twitter_client_secret" id="twitter_client_secret" value="" placeholder="<?= empty($twitter['client_secret']) ? '' : 'Leave blank to keep the saved secret' ?>" style="width:100%;box-sizing:border-box;">
-            </p>
-            <hr style="border:none;border-top:1px solid #e5e7eb;margin:.5rem 0;">
-            <p style="font-size:0.85rem;margin:.5rem 0;">
-                <strong>Media upload (OAuth 1.0a)</strong> — X 403s image/video uploads made with the
-                OAuth2 bearer token. Paste the app's API Key/Secret and the account's Access Token/Secret
-                (Developer Portal &rarr; Keys and tokens &rarr; <em>Read and write</em> + <em>Media</em>)
-                so attached images are uploaded instead of failing.
-            </p>
-            <p>
-                <label for="twitter_consumer_key">API Key (consumer key)</label><br>
-                <input type="text" name="twitter_consumer_key" id="twitter_consumer_key" value="<?= e($twitter['consumer_key'] ?? '') ?>" placeholder="(optional) enables media uploads" style="width:100%;box-sizing:border-box;">
-            </p>
-            <p>
-                <label for="twitter_consumer_secret">API Secret (consumer secret)</label><br>
-                <input type="password" name="twitter_consumer_secret" id="twitter_consumer_secret" value="" placeholder="<?= empty($twitter['consumer_secret']) ? '' : 'Leave blank to keep the saved secret' ?>" style="width:100%;box-sizing:border-box;">
-            </p>
-            <p>
-                <label for="twitter_oauth_token">Access Token</label><br>
-                <input type="text" name="twitter_oauth_token" id="twitter_oauth_token" value="<?= e($twitter['oauth_token'] ?? '') ?>" placeholder="555555555-TokenHere" style="width:100%;box-sizing:border-box;">
-            </p>
-            <p>
-                <label for="twitter_oauth_token_secret">Access Token Secret</label><br>
-                <input type="password" name="twitter_oauth_token_secret" id="twitter_oauth_token_secret" value="" placeholder="<?= empty($twitter['oauth_token_secret']) ? '' : 'Leave blank to keep the saved secret' ?>" style="width:100%;box-sizing:border-box;">
-            </p>
-            <span class="muted" style="font-size:0.8rem;">Schedule times use the site timezone set on Settings. Picking a schedule here is shown in that zone; posting happens at the equivalent UTC moment.</span>
-            <button type="submit" class="btn">Save X Settings</button>
-        </form>
-        <p style="margin-top:0.75rem;">
-            <?php if (!empty($authHealth)): ?>
-                <?php if ($authHealth['ok']): ?>
-                    <span style="color:var(--success,#2e7d32);font-weight:600;">&#10003; Authorized — <?= e((string) $authHealth['note']) ?></span>
-                <?php else: ?>
-                    <span style="color:var(--danger,#c62828);font-weight:600;">&#9888; Token invalid — <?= e((string) $authHealth['note']) ?></span><br>
-                    <span class="muted" style="display:block;margin:.4rem 0 .5rem;">The stored token is rejected by X. Re-authorize below to restore posting.</span>
-                    <a class="btn" href="<?= url('/admin/auto-poster/twitter/authorize') ?>">Re-authorize X</a>
-                <?php endif; ?>
-            <?php elseif (!empty($twitter['refresh_token'])): ?>
-                <span class="muted" style="display:block;margin-bottom:0.5rem;">Authorization state unknown — could not verify the token.</span>
-                <a class="btn" href="<?= url('/admin/auto-poster/twitter/authorize') ?>">Re-authorize X</a>
-            <?php else: ?>
-                <span class="muted" style="display:block;margin-bottom:0.5rem;">Not authorized yet. Complete the flow below to enable posting.</span>
-                <a class="btn" href="<?= url('/admin/auto-poster/twitter/authorize') ?>">Authorize X</a>
-            <?php endif; ?>
-        </p>
+            <form method="post" action="<?= url('/admin/auto-poster/channel/instance') ?>">
+                <?= csrf_field() ?>
+                <input type="hidden" name="platform" value="<?= e($platform) ?>">
+                <p><label style="font-size:.85rem;">Instance host</label><br><input type="text" name="instance_host" placeholder="mastodon.social" style="width:100%;box-sizing:border-box;"></p>
+                <p><label style="font-size:.85rem;">Access token</label><br><input type="password" name="instance_token" style="width:100%;box-sizing:border-box;"></p>
+                <button type="submit" class="btn btn-sm">Add instance</button>
+            </form>
         <?php endif; ?>
+
+        <?php if ($apOAuth): ?>
+            <p style="margin-top:.75rem;">
+                <?php if (!empty($authHealth) && $authHealth['ok']): ?>
+                    <span style="color:var(--success,#2e7d32);font-weight:600;">&#10003; Authorized — <?= e((string) ($authHealth['note'] ?? 'connected')) ?></span>
+                <?php elseif (!empty($authHealth)): ?>
+                    <span style="color:var(--danger,#c62828);font-weight:600;">&#9888; Token invalid — <?= e((string) ($authHealth['error'] ?? 'token invalid')) ?></span><br>
+                    <a class="btn" style="margin-top:.5rem;" href="<?= url('/admin/auto-poster/' . $platform . '/authorize') ?>">Re-authorize <?= e($platformName) ?></a>
+                <?php elseif (!empty($channel['refresh_token'])): ?>
+                    <span class="muted" style="display:block;margin-bottom:.5rem;">Authorization state unknown — could not verify the token.</span>
+                    <a class="btn" href="<?= url('/admin/auto-poster/' . $platform . '/authorize') ?>">Re-authorize <?= e($platformName) ?></a>
+                <?php else: ?>
+                    <span class="muted" style="display:block;margin-bottom:.5rem;">Not authorized yet. Complete the flow below to enable posting.</span>
+                    <a class="btn" href="<?= url('/admin/auto-poster/' . $platform . '/authorize') ?>">Authorize <?= e($platformName) ?></a>
+                <?php endif; ?>
+            </p>
+        <?php elseif (!empty($authHealth)): ?>
+            <p style="margin-top:.75rem;">
+                <?php if ($authHealth['ok']): ?>
+                    <span style="color:var(--success,#2e7d32);font-weight:600;">&#10003; Connected — <?= e((string) ($authHealth['note'] ?? 'connected')) ?></span>
+                <?php else: ?>
+                    <span style="color:var(--danger,#c62828);font-weight:600;">&#9888; <?= e((string) ($authHealth['error'] ?? 'token invalid')) ?></span>
+                <?php endif; ?>
+            </p>
+        <?php else: ?>
+            <p class="muted" style="margin-top:.75rem;font-size:.82rem;">Not authorized yet. Save the credentials above to connect this channel.</p>
+        <?php endif; ?>
+
+        <p class="muted" style="font-size:.8rem;margin-top:.5rem;">
+            <strong>Setup:</strong> <?= e((string) ($platformMeta['requires'] ?? '')) ?>
+        </p>
     </div>
 
-    <?php // ----- Compose a post on this platform ----- ?>
+    <?php // ----- Compose a post on this platform (auto-formatted) ----- ?>
     <div class="stats-panel">
-        <?php if ($isReddit): ?>
-        <h2>Post to Reddit</h2>
-        <form method="post" action="<?= url('/admin/auto-poster/post/reddit') ?>" enctype="multipart/form-data">
+        <h2>Post to <?= e($platformName) ?></h2>
+        <form method="post" action="<?= url('/admin/auto-poster/channel/post') ?>" enctype="multipart/form-data">
             <?= csrf_field() ?>
-            <input type="hidden" name="platform" value="reddit">
+            <input type="hidden" name="platform" value="<?= e($platform) ?>">
+            <?php if ($apIsTitleBody): ?>
+                <p>
+                    <label for="ap-post-title">Title</label><br>
+                    <input type="text" name="title" id="ap-post-title" maxlength="300" style="width:100%;box-sizing:border-box;">
+                </p>
+            <?php endif; ?>
             <p>
-                <label for="reddit_subreddit">Subreddit</label><br>
-                <input type="text" name="reddit_subreddit" id="reddit_subreddit" placeholder="e.g. pics" required style="width:100%;box-sizing:border-box;">
+                <label for="ap-post-text">Text</label><br>
+                <textarea name="text" id="ap-post-text" rows="5" maxlength="<?= $apMaxLength ?>" data-char-count data-char-count-id="compose" placeholder="Post content (max <?= $apMaxLength ?> characters)..." style="width:100%;box-sizing:border-box;"></textarea>
+                <span class="muted" style="font-size:0.8rem;"><span data-char-count-out="compose">0</span>/<?= $apMaxLength ?></span>
             </p>
+            <?php if ($apMedia): ?>
             <p>
-                <label for="reddit_title">Title</label><br>
-                <input type="text" name="reddit_title" id="reddit_title" required style="width:100%;box-sizing:border-box;">
+                <label for="ap-post-media">Images / video (optional)</label><br>
+                <input type="file" name="media[]" id="ap-post-media" accept="image/*,video/*" multiple style="width:100%;box-sizing:border-box;">
+                <span class="muted" style="font-size:0.8rem;">Up to <?= $apMediaMax ?> media items.</span>
             </p>
-            <p>
-                <label for="reddit_media">Image (optional — one image per post)</label><br>
-                <input type="file" name="reddit_media" id="reddit_media" accept="image/*" style="width:100%;box-sizing:border-box;">
-                <span class="muted" style="font-size:0.8rem;">Uploading an image posts it as an image post.</span>
-            </p>
-            <p>
-                <label>Type (when no image)</label><br>
-                <label class="chip"><input type="radio" name="reddit_type" value="link" checked> Link</label>
-                <label class="chip"><input type="radio" name="reddit_type" value="self"> Text</label>
-            </p>
-            <p id="reddit-url-row">
-                <label for="reddit_url">URL</label><br>
-                <input type="url" name="reddit_url" id="reddit_url" placeholder="https://..." style="width:100%;box-sizing:border-box;">
-            </p>
-            <p id="reddit-text-row" style="display:none;">
-                <label for="reddit_text">Text</label><br>
-                <textarea name="reddit_text" id="reddit_text" rows="4" data-char-count data-char-count-id="reddit-compose" style="width:100%;box-sizing:border-box;"></textarea>
-                <span class="muted" style="font-size:0.8rem;"><span data-char-count-out="reddit-compose">0</span>/40000</span>
-            </p>
-            <button type="submit" class="btn">Submit to Reddit</button>
+            <?php endif; ?>
+            <?php foreach ($apTargetNames as $tField): ?>
+                <?php $tLabel = ucwords(str_replace('_', ' ', $tField)); ?>
+                <p>
+                    <label for="ap-post-<?= e($tField) ?>"><?= e($tLabel) ?> <span class="muted">(optional — defaults to the saved value)</span></label><br>
+                    <input type="text" name="<?= e($tField) ?>" id="ap-post-<?= e($tField) ?>" value="<?= e((string) ($channel[$tField] ?? '')) ?>" style="width:100%;box-sizing:border-box;">
+                </p>
+            <?php endforeach; ?>
+            <?php if ($apSensitive === 'boolean'): ?>
+                <p>
+                    <label class="chip"><input type="checkbox" name="sensitive" value="1" checked> Mark as sensitive / NSFW</label>
+                </p>
+            <?php endif; ?>
+            <button type="submit" class="btn">Post to <?= e($platformName) ?></button>
         </form>
-        <?php else: ?>
-        <h2>Post to X (Twitter)</h2>
-        <form method="post" action="<?= url('/admin/auto-poster/post/twitter') ?>" enctype="multipart/form-data">
-            <?= csrf_field() ?>
-            <input type="hidden" name="platform" value="x">
-            <p>
-                <label for="twitter_text">Text</label><br>
-                <textarea name="twitter_text" id="twitter_text" rows="5" maxlength="280" data-char-count data-char-count-id="twitter-compose" placeholder="Post content (max 280 characters)..." style="width:100%;box-sizing:border-box;"></textarea>
-                <span class="muted" style="font-size:0.8rem;"><span data-char-count-out="twitter-compose">0</span>/280</span>
-            </p>
-            <p>
-                <label for="twitter_media">Images / video (optional)</label><br>
-                <input type="file" name="twitter_media[]" id="twitter_media" accept="image/*,video/*" multiple style="width:100%;box-sizing:border-box;">
-                <span class="muted" style="font-size:0.8rem;">
-                    Up to 4 images, or 1 video. Images ≤5 MB; video ≤512 MB.
-                </span>
-            </p>
-            <button type="submit" class="btn">Post to X</button>
-        </form>
-        <?php endif; ?>
     </div>
 </div>
 
@@ -594,7 +580,7 @@ $twitter      = $config['twitter'] ?? [];
         </summary>
         <div class="ap-log-body">
         <?php if (empty($log)): ?>
-            <div class="ap-log-empty">No <?= $isReddit ? 'Reddit' : 'X' ?> posts have been made yet.</div>
+            <div class="ap-log-empty">No <?= e($platformName) ?> posts have been made yet.</div>
         <?php else: ?>
             <div style="overflow-x:auto;">
                 <table class="ap-table">
@@ -621,7 +607,7 @@ $twitter      = $config['twitter'] ?? [];
                                     <span class="ap-time-relative" data-uts="<?= $apTs ?: 0 ?>">&mdash;</span>
                                     <span class="ap-time-absolute"><?= $apTs ? e(tzdate('Y-m-d H:i', $apTs)) : '&mdash;' ?></span>
                                 </td>
-                                <td><?= e(ucfirst((string) ($entry['platform'] ?? ''))) ?></td>
+                                <td><?= e(\App\Core\Platforms::label((string) ($entry['platform'] ?? ''))) ?></td>
                                 <td class="ap-target"><?= e((string) ($entry['target'] ?? '')) ?></td>
                                 <td>
                                     <span class="ap-pill ap-pill-<?= e($apPillCls) ?>">
@@ -654,24 +640,7 @@ $twitter      = $config['twitter'] ?? [];
 
 <script>
 (function () {
-    var typeRadios = document.querySelectorAll('input[name="reddit_type"]');
-    var urlRow = document.getElementById('reddit-url-row');
-    var textRow = document.getElementById('reddit-text-row');
-    function updateType() {
-        var self = document.querySelector('input[name="reddit_type"]:checked');
-        var isSelf = self && self.value === 'self';
-        if (urlRow) { urlRow.style.display = isSelf ? 'none' : ''; }
-        if (textRow) { textRow.style.display = isSelf ? '' : 'none'; }
-    }
-    if (typeRadios.length) {
-        typeRadios.forEach(function (r) { r.addEventListener('change', updateType); });
-        updateType();
-    }
-
-    // Real-time character counters for every post-text field (recommended
-    // posts, queue edits, recent-post edits, and the X/Reddit compose boxes).
-    // The textarea carries data-char-count + a unique id; its matching
-    // counter output is data-char-count-out=<id>.
+    // Real-time character counters for every post-text field.
     (function () {
         var fields = document.querySelectorAll('textarea[data-char-count]');
         function update(ta) {
@@ -685,9 +654,7 @@ $twitter      = $config['twitter'] ?? [];
         });
     })();
 
-    // Live countdown to each queued post's publish time. The server stamps
-    // the target (data-until) and its own clock (data-synced) so the client
-    // shows a correct countdown regardless of clock skew.
+    // Live countdown to each queued post's publish time.
     (function () {
         var load = Date.now() / 1000;
         var pad = function (n) { return (n < 10 ? '0' : '') + n; };
@@ -732,8 +699,7 @@ $twitter      = $config['twitter'] ?? [];
         setInterval(tick, 1000);
     })();
 
-    // Relative timestamps for the posting log ("5m ago" / "just now"),
-    // refreshing every 30 seconds.
+    // Relative timestamps for the posting log.
     (function () {
         var UNITS = [
             [31536000, 'y'], [2592000, 'mo'], [86400, 'd'], [3600, 'h'], [60, 'm'], [1, 's']
@@ -757,7 +723,8 @@ $twitter      = $config['twitter'] ?? [];
         render();
         setInterval(render, 30000);
     })();
-// Collapse/expand the Posting queue section.
+
+    // Collapse/expand the Posting queue section.
     (function () {
         document.querySelectorAll('.ap-queue-toggle').forEach(function (btn) {
             btn.addEventListener('click', function () {
@@ -771,7 +738,7 @@ $twitter      = $config['twitter'] ?? [];
         });
     })();
 
-// Show/hide the inline editor for a queued post.
+    // Show/hide the inline editor for a queued post.
     (function () {
         function rowFor(id) { return document.getElementById('ap-queue-edit-' + id); }
         function btnFor(id) { return document.querySelector('[data-edit-queue="' + id + '"]'); }
@@ -803,8 +770,7 @@ $twitter      = $config['twitter'] ?? [];
         });
     })();
 
-    // Live preview of the current platform's post template: substitute the
-    // tokens with sample content so the admin sees the post shape while typing.
+    // Live preview of the current platform's post template.
     (function () {
         var form = document.querySelector('form[data-ap-template]');
         if (!form) { return; }
