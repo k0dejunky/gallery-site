@@ -100,7 +100,7 @@
     </div>
 </div>
 
-<script src="<?= url('/assets/js/hls.min.js') ?>"></script>
+<script src="<?= url('/assets/js/hls.min.js?v=1') ?>"></script>
 <script>
 (function () {
     var video = document.getElementById('live-video');

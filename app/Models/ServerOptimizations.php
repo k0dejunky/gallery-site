@@ -32,8 +32,8 @@ class ServerOptimizations
             'mysql_slow_query_log'    => true,
             'mysql_long_query_time'   => 1.0,
             'cache_category_ttl'      => 3600,
-            'cache_listing_ttl'       => 60,
-            'cache_recent_ttl'        => 60,
+            'cache_listing_ttl'       => 600,
+            'cache_recent_ttl'        => 600,
         ];
     }
 

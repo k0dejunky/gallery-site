@@ -15,14 +15,18 @@ class FavoriteCategory
      */
     public static function forUser(int $userId): array
     {
-        return Database::run(
-            'SELECT c.id, c.name, c.slug
-             FROM user_favorite_categories uf
-             INNER JOIN categories c ON c.id = uf.category_id
-             WHERE uf.user_id = ?
-             ORDER BY uf.created_at ASC',
-            [$userId]
-        )->fetchAll();
+        // Cached per user; invalidated via bump('favorites') on add/remove so
+        // the sidebar always reflects the latest favourites.
+        return \App\Core\Cache::rememberGen('favorites', 'nav:u' . $userId, 300, static function () use ($userId): array {
+            return Database::run(
+                'SELECT c.id, c.name, c.slug
+                 FROM user_favorite_categories uf
+                 INNER JOIN categories c ON c.id = uf.category_id
+                 WHERE uf.user_id = ?
+                 ORDER BY uf.created_at ASC',
+                [$userId]
+            )->fetchAll();
+        });
     }
 
     /**
@@ -52,6 +56,8 @@ class FavoriteCategory
              VALUES (?, ?, CURRENT_TIMESTAMP)',
             [$userId, $categoryId]
         );
+
+        \App\Core\Cache::bump('favorites');
     }
 
     /**
@@ -63,6 +69,8 @@ class FavoriteCategory
             'DELETE FROM user_favorite_categories WHERE user_id = ? AND category_id = ?',
             [$userId, $categoryId]
         );
+
+        \App\Core\Cache::bump('favorites');
     }
 
     /**
@@ -86,5 +94,7 @@ class FavoriteCategory
                 $insert->execute([$userId, $categoryId]);
             }
         }
+
+        \App\Core\Cache::bump('favorites');
     }
 }
