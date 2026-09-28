@@ -1075,4 +1075,70 @@ class Gallery
 
         return $galleries;
     }
+
+    /**
+     * Personalized "you might like" recommendations: galleries that share a
+     * category with the user's favourite categories or their recently-viewed
+     * galleries, excluding anything they have already viewed, favourited, or
+     * that is already on the current page. Returns up to $limit with covers.
+     */
+    public static function recommended(int $userId, array $excludeIds = [], int $limit = 6): array
+    {
+        if ($userId <= 0 || $limit <= 0) {
+            return [];
+        }
+
+        // Categories from favourites + recently-viewed galleries.
+        $favCats = array_map('intval', array_column(FavoriteCategory::forUser($userId), 'id'));
+        $recentCatIds = [];
+        foreach (self::recentlyViewed($userId, 8) as $g) {
+            foreach (self::categories((int) $g['id']) as $c) {
+                $recentCatIds[] = (int) $c['id'];
+            }
+        }
+        $catIds = array_values(array_unique(array_filter(array_merge($favCats, $recentCatIds))));
+        if ($catIds === []) {
+            return [];
+        }
+
+        $byCat = self::inCategories($catIds, '', PHP_INT_MAX, $userId);
+        $cand = [];
+        foreach ($byCat as $galleries) {
+            foreach ($galleries as $g) {
+                $cand[(int) $g['id']] = $g;
+            }
+        }
+        if ($cand === []) {
+            return [];
+        }
+
+        $candIds = array_keys($cand);
+        $viewed  = array_flip(self::viewedByIds($userId, $candIds));
+        $faved   = array_flip(self::favoriteIds($userId, $candIds));
+        $exclude = array_flip(array_map('intval', $excludeIds));
+
+        $keep = array_values(array_filter(
+            $candIds,
+            static fn (int $id): bool => !isset($viewed[$id]) && !isset($faved[$id]) && !isset($exclude[$id])
+        ));
+        if ($keep === []) {
+            return [];
+        }
+
+        shuffle($keep);
+        $pick = array_slice($keep, 0, $limit);
+
+        $out = [];
+        foreach ($pick as $id) {
+            $out[] = $cand[$id];
+        }
+
+        $covers = self::firstPhotos(array_column($out, 'id'));
+        foreach ($out as &$gallery) {
+            $gallery['first_photo'] = $covers[(int) $gallery['id']] ?? null;
+        }
+        unset($gallery);
+
+        return $out;
+    }
 }

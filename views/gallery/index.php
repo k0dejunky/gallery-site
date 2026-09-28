@@ -80,6 +80,24 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
         </section>
     <?php endforeach; ?>
 <?php endif; ?>
+
+<?php if (!empty($recommended)): ?>
+<section class="fav-section">
+    <h2>Recommended for you</h2>
+    <p class="muted">Galleries similar to your favourites and recent views.</p>
+    <div class="grid">
+        <?php
+        $recCats = \App\Models\Gallery::categoriesBulk(array_map('intval', array_column($recommended, 'id')));
+        foreach ($recommended as $gallery):
+            $gid = (int) $gallery['id'];
+            $cover = $gallery['first_photo'] ?? null;
+            $galleryCategories = $recCats[$gid] ?? [];
+            require __DIR__ . '/../partials/gallery_card.php';
+        endforeach;
+        ?>
+    </div>
+</section>
+<?php endif; ?>
 <?php else: ?>
 <section>
     <h2 class="section-title">Search results</h2>

@@ -76,6 +76,9 @@
     <div class="live-grid">
         <div class="live-player-wrap">
             <video id="live-video" controls autoplay muted playsinline></video>
+            <div style="position:absolute;top:.5rem;right:.5rem;z-index:2;">
+                <button type="button" class="btn btn-sm btn-outline" data-pip style="background:rgba(0,0,0,.55);color:#fff;">Picture in picture</button>
+            </div>
             <div class="live-offline" id="live-offline">
                 <p>The model is not live right now. Check back soon — a live show could start any moment.</p>
             </div>

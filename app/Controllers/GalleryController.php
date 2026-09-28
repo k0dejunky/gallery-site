@@ -198,6 +198,7 @@ class GalleryController extends Controller
             'recentlyViewed' => $recentlyViewed,
             'favoriteGalleryIds' => $favoriteGalleryIds,
             'favoriteGalleries' => $favoriteGalleries,
+            'recommended'  => $user !== null ? \App\Models\Gallery::recommended((int) $user['id'], $viewedIds, 6) : [],
         ]);
     }
 

@@ -448,3 +448,34 @@
     }
   });
 })();
+
+/* Picture-in-picture: [data-pip] button toggles PiP for the nearest <video>
+   in the same wrapper. Falls back gracefully when the browser does not
+   support PiP (the button stays inert). */
+(function(){
+  function togglePip(video, btn){
+    if(!video || typeof video.requestPictureInPicture !== 'function') return;
+    if(document.pictureInPictureElement === video){
+      document.exitPictureInPicture().catch(function(){});
+    }else{
+      video.requestPictureInPicture().catch(function(){});
+    }
+  }
+  document.addEventListener('click', function(e){
+    var btn = e.target && e.target.closest ? e.target.closest('[data-pip]') : null;
+    if(!btn) return;
+    e.preventDefault();
+    var video = btn.closest('figure, .live-player-wrap, .player-wrap')
+      ? btn.closest('figure, .live-player-wrap, .player-wrap').querySelector('video')
+      : btn.parentElement.querySelector('video');
+    togglePip(video, btn);
+  });
+  document.addEventListener('enterpictureinpicture', function(e){
+    var btn = document.querySelector('[data-pip]');
+    if(btn && btn.textContent.indexOf('Close') === -1) btn.textContent = 'Close picture in picture';
+  });
+  document.addEventListener('leavepictureinpicture', function(e){
+    var btn = document.querySelector('[data-pip]');
+    if(btn && btn.textContent.indexOf('Picture') === -1) btn.textContent = 'Picture in picture';
+  });
+})();
