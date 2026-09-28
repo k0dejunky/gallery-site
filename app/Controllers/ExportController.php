@@ -42,6 +42,30 @@ class ExportController extends Controller
         $this->csv('subscriptions-' . date('Ymd-His') . '.csv', $rows);
     }
 
+    /**
+     * Galleries as CSV (for backup/audit or spreadsheet editing). Photos are
+     * not included — media is managed through the normal upload UI.
+     */
+    public function galleries(): void
+    {
+        Auth::requirePermission('galleries');
+
+        $rows = Database::run(
+            "SELECT g.id, g.title, g.description, g.type, g.min_level, g.is_secret,
+                    g.published_at, g.created_at, g.views,
+                    GROUP_CONCAT(DISTINCT c.name ORDER BY c.name SEPARATOR ' | ') AS categories,
+                    (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count
+             FROM galleries g
+             LEFT JOIN gallery_category gc ON gc.gallery_id = g.id
+             LEFT JOIN categories c ON c.id = gc.category_id
+             WHERE g.deleted_at IS NULL
+             GROUP BY g.id
+             ORDER BY g.id"
+        )->fetchAll();
+
+        $this->csv('galleries-' . date('Ymd-His') . '.csv', $rows);
+    }
+
     private function csv(string $filename, array $rows): void
     {
         header('Content-Type: text/csv; charset=utf-8');

@@ -400,6 +400,151 @@ class GalleryController extends Controller
     }
 
     /**
+     * Admin: bulk gallery import. A CSV creates gallery shells (title,
+     * description, type, min-level, secret, publish schedule, categories);
+     * photos are added afterward through the normal upload UI. Supports a
+     * dry-run that previews what would be created without writing anything.
+     */
+    public function galleryImportForm(): void
+    {
+        Auth::requirePermission('galleries');
+
+        $this->viewAdmin('gallery_import', [
+            'categories' => Category::all(),
+            'preview'    => [],
+            'summary'    => null,
+        ]);
+    }
+
+    public function galleryImport(): void
+    {
+        Auth::requirePermission('galleries');
+        $dryRun = $this->request->post('dry_run') === '1';
+        $file   = $this->request->file('csv');
+
+        if ($file === null || empty($file['tmp_name']) || !is_file($file['tmp_name'])) {
+            $this->flash('error', 'Upload a CSV file.');
+            $this->redirect('/admin/galleries/import');
+        }
+
+        $content = (string) file_get_contents($file['tmp_name']);
+        $rows    = self::parseGalleryCsv($content);
+        if ($rows === []) {
+            $this->flash('error', 'No usable rows found. Expected a header: title,description,type,min_level,is_secret,published_at,categories.');
+            $this->redirect('/admin/galleries/import');
+        }
+
+        // Category name -> id lookup (existing categories only).
+        $cats = Category::all();
+        $catIdsByName = [];
+        foreach ($cats as $c) {
+            $catIdsByName[strtolower((string) $c['name'])] = (int) $c['id'];
+        }
+
+        $created = 0;
+        $errors  = [];
+        $preview = [];
+
+        foreach ($rows as $i => $row) {
+            $rowNum = $i + 2; // 1-indexed + header
+            $title  = trim((string) ($row['title'] ?? ''));
+
+            if ($title === '') {
+                $errors[] = "Row {$rowNum}: missing title.";
+                continue;
+            }
+
+            $type     = strtolower(trim((string) ($row['type'] ?? ''))) === 'videos' ? 'videos' : 'images';
+            $minLevel = max(0, min(3, (int) ($row['min_level'] ?? 0)));
+            $isSecret = !empty($row['is_secret']) && (int) $row['is_secret'] === 1;
+            $publishedAt = Gallery::normalizePublishAt($row['published_at'] ?? null);
+
+            $categoryIds = [];
+            foreach (array_filter(array_map('trim', explode('|', (string) ($row['categories'] ?? '')))) as $name) {
+                if (isset($catIdsByName[strtolower($name)])) {
+                    $categoryIds[] = $catIdsByName[strtolower($name)];
+                }
+            }
+
+            if ($dryRun) {
+                $preview[] = [
+                    'row'       => $rowNum,
+                    'title'     => $title,
+                    'type'      => $type,
+                    'min_level' => $minLevel,
+                    'secret'    => $isSecret ? 'yes' : 'no',
+                    'published' => $publishedAt ?: '(immediate)',
+                    'categories' => count($categoryIds),
+                    'ok'        => true,
+                ];
+                continue;
+            }
+
+            try {
+                $galleryId = Gallery::create($title, (string) ($row['description'] ?? ''), $type, $minLevel, $publishedAt, $isSecret);
+                Gallery::setCategories($galleryId, $categoryIds);
+                $created++;
+            } catch (\Throwable $e) {
+                $errors[] = "Row {$rowNum}: " . $e->getMessage();
+            }
+        }
+
+        if ($dryRun) {
+            $this->viewAdmin('gallery_import', [
+                'categories' => Category::all(),
+                'preview'    => $preview,
+                'summary'    => ['dry_run' => true, 'would_create' => count($preview), 'errors' => count($errors)],
+                'errors'     => $errors,
+            ]);
+            return;
+        }
+
+        $this->flash(
+            $errors === [] ? 'success' : ($created > 0 ? 'warning' : 'error'),
+            "Imported {$created} gallery" . ($created === 1 ? '' : 'ies') . ($errors !== [] ? ' with ' . count($errors) . ' row error(s).' : '.')
+        );
+        $this->redirect('/admin/galleries/import');
+    }
+
+    /**
+     * Parse a gallery CSV into rows. Accepts optional header; columns in
+     * order: title, description, type, min_level, is_secret, published_at,
+     * categories (pipe-separated).
+     */
+    private static function parseGalleryCsv(string $content): array
+    {
+        $lines = preg_split('/\r?\n/', trim($content)) ?: [];
+        if ($lines === []) {
+            return [];
+        }
+
+        $rows   = [];
+        $header = false;
+        foreach ($lines as $line) {
+            $cols = str_getcsv($line);
+            if ($cols === []) {
+                continue;
+            }
+            // Skip the header line if the first cell matches a known column.
+            if (!$header && isset($cols[0]) && strtolower(trim((string) $cols[0])) === 'title') {
+                $header = true;
+                continue;
+            }
+            $rows[] = [
+                'title'       => (string) ($cols[0] ?? ''),
+                'description' => (string) ($cols[1] ?? ''),
+                'type'        => (string) ($cols[2] ?? 'images'),
+                'min_level'   => (int) ($cols[3] ?? 0),
+                'is_secret'   => (string) ($cols[4] ?? '0'),
+                'published_at'=> (string) ($cols[5] ?? ''),
+                'categories'  => (string) ($cols[6] ?? ''),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
      * Admin: show the create-gallery form. Staged uploads already in this
      * session's pending area are shown (and can be removed tile-by-tile), so a
      * plain GET never destroys files an admin is mid-way through staging —

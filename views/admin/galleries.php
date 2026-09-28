@@ -115,6 +115,8 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
             <?php endif; ?>
         </div>
         <a class="btn btn-sm" href="<?= url('/admin/galleries/create') ?>">New Gallery</a>
+        <a class="btn btn-sm btn-outline" href="<?= url('/admin/galleries/import') ?>">Import CSV</a>
+        <a class="btn btn-sm btn-outline" href="<?= url('/admin/galleries/export') ?>">Export CSV</a>
     </div>
 
     <?php // Collapsible gallery queue: galleries waiting for a future publish moment. ?>
