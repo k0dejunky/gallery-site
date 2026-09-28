@@ -452,7 +452,7 @@ def build_training_records(pairs):
 def train_adapter(records, out_path):
     """Train a LoRA with transformers + PEFT on CPU. Returns True on success."""
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer, DataCollatorWithPadding
+    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer
     from peft import LoraConfig, get_peft_model
     from datasets import Dataset
 
@@ -480,9 +480,9 @@ def train_adapter(records, out_path):
     def tokenize(ex):
         # Tokenize prefix and full text separately, then mask everything up to
         # the assistant reply so the model only learns to produce the reply
-        # (standard chat SFT). No padding here: the collator pads to the batch
-        # max (batch=1 -> effectively none) and labels pad to -100, so the
-        # model is never trained to emit end-of-turn/padding tokens.
+        # (standard chat SFT). Padding is done here to a fixed length with
+        # -100 labels (and 0 attention), so the trainer never learns to emit
+        # end-of-turn/padding tokens and no special data collator is needed.
         pre = tokenizer(ex["prefix"], truncation=True, max_length=MAX_LEN)
         full = tokenizer(ex["text"], truncation=True, max_length=MAX_LEN)
         cut = len(pre["input_ids"])
@@ -490,7 +490,13 @@ def train_adapter(records, out_path):
         labels = [-100] * len(ids)
         for i in range(min(cut, len(ids)), len(ids)):
             labels[i] = ids[i]
-        return {"input_ids": ids, "attention_mask": full["attention_mask"], "labels": labels}
+        attn = full["attention_mask"]
+        pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+        if len(ids) < MAX_LEN:
+            ids = ids + [pad_id] * (MAX_LEN - len(ids))
+            labels = labels + [-100] * (MAX_LEN - len(labels))
+            attn = attn + [0] * (MAX_LEN - len(attn))
+        return {"input_ids": ids[:MAX_LEN], "attention_mask": attn[:MAX_LEN], "labels": labels[:MAX_LEN]}
 
     ds = ds.map(tokenize)
 
@@ -507,8 +513,7 @@ def train_adapter(records, out_path):
         use_cpu=True,
         dataloader_pin_memory=False,
     )
-    collator = DataCollatorWithPadding(tokenizer, padding=True, label_pad_token_id=-100)
-    trainer = Trainer(model=model, args=args, train_dataset=ds, data_collator=collator, callbacks=[ProgressCallback()])
+    trainer = Trainer(model=model, args=args, train_dataset=ds, callbacks=[ProgressCallback()])
     trainer.train()
     write_status({"phase": "idle", "progress": None})
 
