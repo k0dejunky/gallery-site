@@ -130,6 +130,15 @@ img.is-loaded{animation:none;opacity:1;transition:opacity .2s ease}
 .gallery-item figcaption a{color:var(--purple-600);text-decoration:none}
 .gallery-item figcaption a:hover{text-decoration:underline}
 
+/* Gallery grid items as tidy cards (gallery detail page): fixed-ratio image
+   area, card border/background, hover lift + subtle zoom. */
+.gallery-item{background:var(--card-bg,#fff);border:1px solid var(--card-border,#f3d1e4);border-radius:var(--card-radius,12px);overflow:hidden;margin:0;display:flex;flex-direction:column;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.gallery-item:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(40,10,50,.16);border-color:var(--purple-400,#c084fc)}
+.gallery-item a{display:block;overflow:hidden;aspect-ratio:4/3;background:#000;position:relative}
+.gallery-item a img{width:100%;height:100%;object-fit:cover;border-radius:0;transition:transform .3s ease}
+.gallery-item:hover a img{transform:scale(1.06)}
+.gallery-item figcaption{padding:.5rem .65rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:auto}
+
 /* "Load more" for large galleries */
 .load-more-wrap{display:flex;flex-direction:column;align-items:center;gap:var(--spacing-sm);margin:var(--spacing-lg) 0;text-align:center}
 .load-more-wrap .btn[hidden]{display:none}
