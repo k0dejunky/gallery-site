@@ -740,6 +740,12 @@ class GalleryController extends Controller
                 return;
             }
 
+            // Move moov to the front so browsers can start/seek without
+            // downloading the whole file.
+            if (!$meta['is_image']) {
+                faststart_video_if_needed($dest);
+            }
+
             $list[] = [
                 'filename' => $filename,
                 'original' => $files['name'][$i],
@@ -887,6 +893,10 @@ class GalleryController extends Controller
             $this->removeChunks($uid);
             $this->json(['ok' => false, 'error' => $originalName . ': could not generate a preview (file may be corrupt or unsupported).']);
             return;
+        }
+
+        if (!$meta['is_image']) {
+            faststart_video_if_needed($dir . '/' . $filename);
         }
 
         $this->removeChunks($uid);

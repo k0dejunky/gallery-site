@@ -287,6 +287,81 @@ function mime_for_extension(string $filename): string
 }
 
 /**
+ * Whether an mp4/mov has its moov atom at the END (mdat before moov). Browsers
+ * need moov to start playback/seek, so such files are slow to load — they must
+ * be remuxed with +faststart to move moov to the front.
+ */
+function video_needs_faststart(string $path): bool
+{
+    if (!is_file($path)) {
+        return false;
+    }
+
+    $fh = @fopen($path, 'rb');
+    if ($fh === false) {
+        return false;
+    }
+    $head = fread($fh, 2 * 1024 * 1024);
+    fclose($fh);
+
+    if ($head === false || strlen($head) < 8) {
+        return false;
+    }
+
+    $pos = 0;
+    $len = strlen($head);
+    while ($pos + 8 <= $len) {
+        $size = unpack('N', substr($head, $pos, 4))[1];
+        $type = substr($head, $pos + 4, 4);
+
+        if ($type === 'moov') {
+            return false; // moov at the front -> fine
+        }
+        if ($type === 'mdat') {
+            return true;  // media before moov -> needs faststart
+        }
+        if ($size < 8 || $pos + $size > $len) {
+            return false;
+        }
+        $pos += $size;
+    }
+
+    return false;
+}
+
+/**
+ * Remux a video with `-movflags +faststart` (stream copy — no re-encode, no
+ * quality loss) so the moov atom sits at the front and browsers can start
+ * playback and seek immediately. No-op when the file is already faststart.
+ * Returns true when the file was remuxed.
+ */
+function faststart_video_if_needed(string $path): bool
+{
+    if (!video_needs_faststart($path)) {
+        return false;
+    }
+
+    $tmp = $path . '.faststart.tmp';
+    $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
+    // -f mp4 forces the mp4 muxer because the temp filename's extension is
+    // not .mp4 (ffmpeg would otherwise reject the unknown muxer).
+    $cmd = escapeshellarg($ffmpeg) . ' -nostdin -y -i ' . escapeshellarg($path)
+        . ' -c copy -movflags +faststart -f mp4 ' . escapeshellarg($tmp) . ' 2>&1';
+    @exec($cmd, $out, $rc);
+
+    if ($rc === 0 && is_file($tmp)) {
+        @chmod($tmp, 0644);
+        if (@rename($tmp, $path)) {
+            return true; // atomic overwrite on POSIX
+        }
+    }
+
+    @unlink($tmp);
+
+    return false;
+}
+
+/**
  * Whether a file actually contains a decodable video stream, probed with
  * ffprobe (used to reject corrupt/polyglot uploads and to sanity-check
  * live recordings). Empty string when there is no probe or no video stream.

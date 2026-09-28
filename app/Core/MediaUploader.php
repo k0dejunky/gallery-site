@@ -160,6 +160,13 @@ class MediaUploader
         }
 
         if (self::generateVariants($destPath, $isImage, $config)) {
+            // Videos are remuxed (stream copy, no re-encode) so the moov atom
+            // sits at the front — browsers otherwise wait for the whole file
+            // before they can start playback or seek.
+            if (!$isImage) {
+                faststart_video_if_needed($destPath);
+            }
+
             return true;
         }
 
