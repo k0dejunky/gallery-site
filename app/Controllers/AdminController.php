@@ -150,14 +150,17 @@ class AdminController extends Controller
 
     /**
      * Save the folder-import app settings from the gallery management page.
-     * The settings are stored on the site; the Windows app / Ubuntu importer
-     * pull them on each import run.
+     * The settings are stored on the site; each machine's folder-import worker
+     * pulls the settings for its own machine name on every import run. When a
+     * machine name is supplied, the host/posted folders are stored under that
+     * machine so multiple boxes each keep their own local paths.
      */
     public function saveImportSettings(): void
     {
         Auth::requirePermission('galleries');
 
-        $post = fn (string $key, string $default = ''): string => trim((string) $this->request->post($key, $default));
+        $post    = fn (string $key, string $default = ''): string => trim((string) $this->request->post($key, $default));
+        $machine = $post('import_machine');
 
         $current = \App\Models\ImportSettings::all();
         $token   = $post('import_token');
@@ -169,16 +172,16 @@ class AdminController extends Controller
             'enabled'          => !empty($this->request->post('import_enabled', '0')),
             'schedule'         => $post('import_schedule'),
             'interval_minutes' => $post('import_interval_minutes', '0'),
-            'host_folder'      => $post('import_host_folder'),
-            'posted_folder'    => $post('import_posted_folder'),
             'import_token'     => $token,
             'spacing_hours'    => $post('import_spacing_hours', '24'),
             'min_level'        => $post('import_min_level', '0'),
             'description'      => $post('import_description'),
             'is_secret'        => !empty($this->request->post('import_is_secret', '0')),
-        ]);
+            'host_folder'      => $post('import_host_folder'),
+            'posted_folder'    => $post('import_posted_folder'),
+        ], $machine);
 
-        $this->flash('success', 'Import app settings saved — the folder-import app picks them up on its next run.');
+        $this->flash('success', 'Import app settings saved — the ' . ($machine !== '' ? $machine . ' ' : '') . 'folder-import app picks them up on its next run.');
         $this->redirect('/admin/galleries');
     }
 

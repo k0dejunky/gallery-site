@@ -186,6 +186,7 @@ class ImportScheduler:
         return {
             "host_folder": str(cfg.get("host_folder", "")).strip(),
             "posted_folder": str(cfg.get("posted_folder", "")).strip(),
+            "machine": str(cfg.get("machine", "")).strip(),
             "server_base": str(cfg.get("server_base", "")).rstrip("/"),
             "import_token": str(cfg.get("import_token", "")).strip(),
             "spacing_hours": int(cfg.get("spacing_hours", 24) or 24),
@@ -350,7 +351,7 @@ def apply_save(body: dict) -> dict:
                 "state_file", "pause_file", "force_train_file", "log_file",
                 "status_file", "base_model",
                 "import_schedule", "host_folder", "posted_folder", "import_token",
-                "description", "import_status_file", "import_log_file")
+                "machine", "description", "import_status_file", "import_log_file")
     bool_keys = ("import_enabled", "is_secret")
 
     for k in str_keys:
@@ -801,6 +802,7 @@ var FIELDS = [
   ['status_file','text','Status file'],
   ['import_enabled','text','Import enabled (1/0)'],
   ['import_schedule','text','Import schedule (HH:MM daily, blank=off)'],
+  ['machine','text','Machine name (for per-machine site folders)'],
   ['import_interval_minutes','number','Import interval (minutes, 0=off)'],
   ['host_folder','text','Host folder'],
   ['posted_folder','text','Posted folder'],
@@ -938,8 +940,10 @@ def main():
     if not os.path.isfile(CONFIG_FILE):
         write_config_file(dict(DEFAULT_CONFIG))
 
-    # Bring the trainer up if it wasn't explicitly stopped.
-    supervisor.spawn()
+    # Bring the trainer up if it wasn't explicitly stopped (skipped on Linux,
+    # where there is no chat trainer to supervise).
+    if os.environ.get("SKIP_TRAINER") != "1":
+        supervisor.spawn()
 
     # Start the gallery folder importer scheduler (on-demand + schedule).
     import_scheduler.start()

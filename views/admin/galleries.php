@@ -130,6 +130,11 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
             <?= csrf_field() ?>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.75rem 1rem;">
                 <div>
+                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Machine name (host/posted below apply to this machine)</label>
+                    <input type="text" name="import_machine" value="<?= e((string) ($importS['machine_name'] ?? '')) ?>" placeholder="win-box / linux" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                    <span class="muted" style="font-size:.72rem;">Each machine keeps its own host/posted folders; blank = shared default.</span>
+                </div>
+                <div>
                     <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Enabled</label>
                     <label class="chip"><input type="checkbox" name="import_enabled" value="1" <?= !empty($importS['enabled']) ? 'checked' : '' ?>> Run the importer on schedule</label>
                 </div>

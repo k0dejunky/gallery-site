@@ -625,16 +625,17 @@ class SmokeChecks
                 ? $ok('probe fix present')
                 : $bad('video_has_stream must tolerate the trailing comma new ffprobe adds to csv output');
         });
-        $add('smoke.import.settings_endpoint', 'Smoke · Gallery Import', 'ImportController exposes GET /webhooks/import/settings', static function () use ($importCtrl, $ok, $bad): array {
-            return strpos($importCtrl, 'public function settings()') !== false && strpos($importCtrl, 'ImportSettings::all()') !== false
+        $add('smoke.import.settings_endpoint', 'Smoke · Gallery Import', 'ImportController exposes GET /webhooks/import/settings (per machine)', static function () use ($importCtrl, $ok, $bad): array {
+            return strpos($importCtrl, 'public function settings()') !== false && strpos($importCtrl, 'ImportSettings::allForMachine(') !== false
                 ? $ok('settings endpoint wired')
-                : $bad('ImportController must implement /webhooks/import/settings');
+                : $bad('ImportController must implement /webhooks/import/settings with per-machine resolution');
         });
-        $add('smoke.import.settings_model', 'Smoke · Gallery Import', 'ImportSettings model stores web-configurable settings', static function () use ($root, $read, $ok, $bad): array {
+        $add('smoke.import.settings_model', 'Smoke · Gallery Import', 'ImportSettings stores per-machine host/posted folders', static function () use ($root, $read, $ok, $bad): array {
             $m = $read("$root/app/Models/ImportSettings.php");
-            return strpos($m, 'class ImportSettings') !== false && strpos($m, 'autoposter_settings') !== false
-                ? $ok('model present')
-                : $bad('app/Models/ImportSettings.php must persist settings in autoposter_settings');
+            return strpos($m, 'class ImportSettings') !== false && strpos($m, "'machines'") !== false
+                && strpos($m, 'allForMachine') !== false
+                ? $ok('model present with per-machine folders')
+                : $bad('app/Models/ImportSettings.php must persist per-machine host/posted folders');
         });
         $add('smoke.import.admin_page', 'Smoke · Gallery Import', 'Gallery management page edits import settings', static function () use ($root, $read, $ok, $bad): array {
             $routes = $read("$root/config/routes.php");

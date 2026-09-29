@@ -75,10 +75,11 @@ class ImportController extends Controller
     }
 
     /**
-     * GET /webhooks/import/settings
+     * GET /webhooks/import/settings?machine=<name>
      * Returns the import-app settings stored on the site (editable on the
-     * gallery management page). The Windows app / Ubuntu importer pulls these
-     * on each run so they can be configured from the web instead of the box.
+     * gallery management page), with host/posted folders resolved for the
+     * given machine. The Windows app / Ubuntu importer pull these on each run
+     * so they can be configured from the web instead of on the box.
      */
     public function settings(): void
     {
@@ -87,7 +88,8 @@ class ImportController extends Controller
             return;
         }
 
-        $this->json(['ok' => true, 'settings' => ImportSettings::all()]);
+        $machine = trim((string) $this->request->query('machine', ''));
+        $this->json(['ok' => true, 'settings' => ImportSettings::allForMachine($machine)]);
     }
 
     /**

@@ -20,6 +20,7 @@ import json
 import mimetypes
 import os
 import shutil
+import socket
 import sys
 import threading
 import time
@@ -28,6 +29,7 @@ import uuid
 from datetime import datetime, timedelta
 from urllib import request as urlrequest
 from urllib import error as urlerror
+from urllib import parse as urlparse
 
 IMAGE_EXT = ("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif", "avif", "tiff")
 VIDEO_EXT = ("mp4", "webm", "mov", "m4v", "ogg", "avi", "mkv", "3gp", "3g2", "mpg", "mpeg",
@@ -36,6 +38,7 @@ VIDEO_EXT = ("mp4", "webm", "mov", "m4v", "ogg", "avi", "mkv", "3gp", "3g2", "mp
 DEFAULT_CONFIG = {
     "host_folder": "",           # set at load (folder picker / --host / config)
     "posted_folder": "",         # default: <host_folder>/posted
+    "machine": "",               # machine name for per-machine site settings
     "server_base": "https://amethyst2213.com/gallery",
     "import_token": "",
     "spacing_hours": 24,
@@ -257,20 +260,30 @@ def run_once(cfg=None):
 
 def pull_site_settings(cfg):
     """Merge the import settings stored on the site (gallery management page)
-    into the local config. The site is the source of truth when reachable."""
+    into the local config. The site is the source of truth when reachable;
+    host/posted folders are resolved per machine (cfg['machine']). Local
+    host/posted are kept when the site has no entry for this machine."""
     base = (cfg.get("server_base") or "").rstrip("/")
     token = (cfg.get("import_token") or "").strip()
     if not base or not token:
         return cfg
     try:
-        status, data = _http_json(base + "/webhooks/import/settings", token, timeout=30)
+        machine = str(cfg.get("machine") or socket.gethostname()).strip()
+        url = base + "/webhooks/import/settings"
+        if machine:
+            url += "?machine=" + urlparse.quote(machine)
+        status, data = _http_json(url, token, timeout=30)
         if status == 200 and data.get("ok"):
             settings = data.get("settings") or {}
-            for key in ("host_folder", "posted_folder", "import_token", "spacing_hours",
-                        "min_level", "description", "is_secret", "enabled",
-                        "schedule", "interval_minutes"):
+            for key in ("import_token", "spacing_hours", "min_level", "description",
+                        "is_secret", "enabled", "schedule", "interval_minutes"):
                 if key in settings and settings[key] not in (None, ""):
                     cfg[key] = settings[key]
+            # Machine-resolved host/posted override local only when present.
+            if settings.get("host_folder"):
+                cfg["host_folder"] = settings["host_folder"]
+            if settings.get("posted_folder"):
+                cfg["posted_folder"] = settings["posted_folder"]
     except Exception:
         pass
     return cfg
