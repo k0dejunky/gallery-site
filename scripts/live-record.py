@@ -95,9 +95,11 @@ def main():
                 break
             time.sleep(1)
 
-    if os.path.getsize(OUT) < 100 * 1024:
-        os.unlink(OUT)
 
-
-if __name__ == "__main__":
+try:
     main()
+except KeyboardInterrupt:
+    # MediaMTX kills the runOnReady child (SIGINT) when the publisher stops.
+    # That is a normal end-of-stream, not an error: exit quietly and leave the
+    # .ts for /live/stop or the orphan importer to finalize.
+    pass
