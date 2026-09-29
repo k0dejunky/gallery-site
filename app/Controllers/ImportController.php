@@ -187,6 +187,220 @@ class ImportController extends Controller
     }
 
     /**
+     * POST /webhooks/import/gallery/{id}/files/chunk
+     * Accept one chunk (multipart field "chunk") of a resumable large-file
+     * upload for an import gallery. Chunks are written as part-<index> files
+     * under storage/uploads/pending/import/{gallery}/{upload_uid}/ so a failed
+     * request can be retried (overwriting the same part) — this is what makes
+     * multi-GB videos uploadable: many small fast requests instead of one long
+     * request that the webserver/proxy timeouts would kill. The full file is
+     * validated and attached in chunkComplete().
+     */
+    public function chunk(int $galleryId): void
+    {
+        if (!$this->authorized()) {
+            $this->deny();
+            return;
+        }
+
+        $gallery = Gallery::find($galleryId);
+        if ($gallery === null) {
+            $this->json(['ok' => false, 'error' => 'gallery not found'], 404);
+            return;
+        }
+
+        $uid   = $this->sanitizeUid((string) $this->request->input('upload_uid', ''));
+        $index = max(0, (int) $this->request->input('chunk_index', '-1'));
+        $total = max(1, (int) $this->request->input('total_chunks', '0'));
+        $chunk = $this->request->file('chunk');
+        $tmp   = is_array($chunk['tmp_name'] ?? null) ? ($chunk['tmp_name'][0] ?? null) : ($chunk['tmp_name'] ?? null);
+        $err   = is_array($chunk['error'] ?? null) ? ($chunk['error'][0] ?? UPLOAD_ERR_NO_FILE) : ($chunk['error'] ?? UPLOAD_ERR_NO_FILE);
+
+        if ($uid === '' || $total > 200000 || $index >= $total || $tmp === null || $tmp === '' || $err !== UPLOAD_ERR_OK) {
+            $this->json(['ok' => false, 'error' => 'Invalid chunk parameters.'], 422);
+            return;
+        }
+
+        $config     = config('app.uploads');
+        $chunkSize  = (int) ($config['chunk_size'] ?? 0);
+        $chunkBytes = is_file($tmp) ? (int) filesize($tmp) : 0;
+        if ($chunkSize > 0 && $chunkBytes > $chunkSize) {
+            $this->json(['ok' => false, 'error' => 'Chunk exceeds the configured chunk size.'], 422);
+            return;
+        }
+
+        $parts = $this->chunksDir($galleryId, $uid);
+        if (!is_dir($parts) && !@mkdir($parts, 0775, true)) {
+            $this->json(['ok' => false, 'error' => 'Could not allocate upload space.']);
+            return;
+        }
+
+        $partFile = $parts . '/part-' . str_pad((string) $index, 6, '0', STR_PAD_LEFT);
+
+        if (!move_uploaded_file($tmp, $partFile)) {
+            $this->json(['ok' => false, 'error' => 'Could not save chunk.']);
+            return;
+        }
+
+        $this->json(['ok' => true, 'index' => $index]);
+    }
+
+    /**
+     * POST /webhooks/import/gallery/{id}/files/chunk/complete
+     * Reassemble all uploaded chunks for an upload identifier, then validate,
+     * store and attach the file exactly like a direct upload (MediaUploader
+     * pipeline: MIME sniff + ffprobe, variants, duration).
+     */
+    public function chunkComplete(int $galleryId): void
+    {
+        if (!$this->authorized()) {
+            $this->deny();
+            return;
+        }
+
+        $gallery = Gallery::find($galleryId);
+        if ($gallery === null) {
+            $this->json(['ok' => false, 'error' => 'gallery not found'], 404);
+            return;
+        }
+
+        $uid          = $this->sanitizeUid((string) $this->request->input('upload_uid', ''));
+        $originalName = trim((string) $this->request->input('original_name', 'upload'));
+        $totalChunks  = (int) $this->request->input('total_chunks', '1');
+        $config       = config('app.uploads');
+        $type         = (string) $gallery['type'];
+
+        if ($uid === '' || $totalChunks < 1 || $totalChunks > 200000) {
+            $this->json(['ok' => false, 'error' => 'Invalid upload parameters.'], 422);
+            return;
+        }
+
+        $assembled = $this->reassembleChunks($galleryId, $uid, $totalChunks);
+        if ($assembled === null) {
+            $this->json(['ok' => false, 'error' => 'Upload is incomplete. Some chunks are missing; please retry.'], 409);
+            return;
+        }
+
+        $files = [
+            'name'     => [$originalName],
+            'tmp_name' => [$assembled],
+            'size'     => [(int) filesize($assembled)],
+            'error'    => [UPLOAD_ERR_OK],
+        ];
+
+        $meta = MediaUploader::inspect($files, 0, $config, $type);
+        if ($meta === null) {
+            @unlink($assembled);
+            $this->removeChunks($galleryId, $uid);
+            $this->json(['ok' => false, 'error' => $originalName . ': ' . (MediaUploader::error() ?? 'invalid file')], 422);
+            return;
+        }
+
+        $filename = uniqid('g', true) . '.' . $meta['extension'];
+        $dest     = $config['dir'] . '/' . $filename;
+
+        if (!@rename($assembled, $dest)) {
+            @unlink($assembled);
+            $this->removeChunks($galleryId, $uid);
+            $this->json(['ok' => false, 'error' => $originalName . ': could not be saved.']);
+            return;
+        }
+
+        set_time_limit(0);
+
+        if (!MediaUploader::generateVariants($dest, $meta['is_image'], $config)) {
+            foreach ([$dest, $config['dir'] . '/web_' . $filename, $config['dir'] . '/thumb_' . $filename] as $f) {
+                if (is_file($f)) {
+                    @unlink($f);
+                }
+            }
+            $this->removeChunks($galleryId, $uid);
+            $this->json(['ok' => false, 'error' => $originalName . ': could not generate a preview.'], 422);
+            return;
+        }
+
+        if (!$meta['is_image']) {
+            faststart_video_if_needed($dest);
+            create_video_web_rendition($dest, $config['dir'] . '/web_' . $filename);
+        }
+
+        $photoId = MediaUploader::commit($galleryId, $filename, $meta['hash']);
+        $this->removeChunks($galleryId, $uid);
+
+        $this->json([
+            'ok'         => true,
+            'photo_id'   => $photoId,
+            'gallery_id' => $galleryId,
+            'url'        => url('/galleries/' . $galleryId),
+        ], 201);
+    }
+
+    private function sanitizeUid(string $uid): string
+    {
+        $uid = trim($uid);
+        if (strlen($uid) > 128) {
+            $uid = substr($uid, 0, 128);
+        }
+
+        return preg_replace('/[^A-Za-z0-9_\-]/', '_', $uid) ?: '';
+    }
+
+    private function chunksDir(int $galleryId, string $uid): string
+    {
+        return config('app.uploads.dir') . '/pending/import/' . $galleryId . '/' . $uid;
+    }
+
+    private function reassembleChunks(int $galleryId, string $uid, int $totalChunks): ?string
+    {
+        $parts = $this->chunksDir($galleryId, $uid);
+        $out   = $parts . '/.assembled';
+
+        $fh = @fopen($out, 'wb');
+        if ($fh === false) {
+            return null;
+        }
+
+        for ($i = 0; $i < $totalChunks; $i++) {
+            $part = $parts . '/part-' . str_pad((string) $i, 6, '0', STR_PAD_LEFT);
+            if (!is_file($part)) {
+                fclose($fh);
+                @unlink($out);
+                return null;
+            }
+            $in = @fopen($part, 'rb');
+            if ($in === false) {
+                fclose($fh);
+                @unlink($out);
+                return null;
+            }
+            stream_copy_to_stream($in, $fh);
+            fclose($in);
+        }
+
+        fclose($fh);
+
+        return $out;
+    }
+
+    private function removeChunks(int $galleryId, string $uid): void
+    {
+        $parts = $this->chunksDir($galleryId, $uid);
+
+        if (!is_dir($parts)) {
+            return;
+        }
+
+        foreach (array_merge(glob($parts . '/*') ?: [], glob($parts . '/.*') ?: []) as $file) {
+            if (is_file($file)) {
+                @unlink($file);
+            }
+        }
+
+        @rmdir($parts);
+        @rmdir(dirname($parts));
+    }
+
+    /**
      * Validate, store and attach a set of uploaded files to a gallery via the
      * standard MediaUploader pipeline. When $rollbackEmpty is true and nothing
      * imports, the gallery is removed so no empty scheduled gallery is left.

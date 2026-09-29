@@ -599,17 +599,20 @@ class SmokeChecks
         $add('smoke.import.controller', 'Smoke · Gallery Import', 'ImportController defines queue + gallery endpoints', static function () use ($importCtrl, $ok, $bad): array {
             return strpos($importCtrl, 'public function queue()') !== false
                 && strpos($importCtrl, 'public function gallery()') !== false
+                && strpos($importCtrl, 'public function chunk(int $galleryId)') !== false
+                && strpos($importCtrl, 'public function chunkComplete(int $galleryId)') !== false
                 && strpos($importCtrl, "GALLERY_IMPORT_KEY") !== false
                 && strpos($importCtrl, 'MediaUploader::commit(') !== false
-                ? $ok('queue + gallery endpoints wired')
-                : $bad('ImportController must implement /webhooks/import/queue and /webhooks/import/gallery');
+                ? $ok('queue + gallery + chunk endpoints wired')
+                : $bad('ImportController must implement the queue, gallery and chunked-upload endpoints');
         });
         $add('smoke.import.routes', 'Smoke · Gallery Import', 'Import routes registered', static function () use ($root, $read, $ok, $bad): array {
             $routes = $read("$root/config/routes.php");
             return strpos($routes, "'/webhooks/import/queue'") !== false
                 && strpos($routes, "'/webhooks/import/gallery'") !== false
+                && strpos($routes, "'/webhooks/import/gallery/{id}/files/chunk'") !== false
                 ? $ok('import routes present')
-                : $bad('routes.php must register /webhooks/import/queue and /webhooks/import/gallery');
+                : $bad('routes.php must register /webhooks/import/queue, /webhooks/import/gallery and the chunk routes');
         });
         $add('smoke.import.env', 'Smoke · Gallery Import', 'GALLERY_IMPORT_KEY documented in .env.example', static function () use ($root, $read, $ok, $bad): array {
             $env = $read("$root/.env.example");

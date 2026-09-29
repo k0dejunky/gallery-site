@@ -35,6 +35,14 @@ IMAGE_EXT = ("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif", "avif",
 VIDEO_EXT = ("mp4", "webm", "mov", "m4v", "ogg", "avi", "mkv", "3gp", "3g2", "mpg", "mpeg",
              "wmv", "flv", "ts", "mts", "m2ts", "vob", "asf")
 
+# Resumable chunked upload: files at/above CHUNK_MIN bytes are sliced into
+# CHUNK_SIZE parts and uploaded as many small requests (each safely within the
+# server's proxy/timeout limits), so multi-GB videos upload reliably instead of
+# stalling in a single long request. Values must match the server's
+# config('app.uploads') chunk_size/chunk_min.
+CHUNK_SIZE = 16 * 1024 * 1024   # 16 MiB
+CHUNK_MIN = 8 * 1024 * 1024     # 8 MiB
+
 DEFAULT_CONFIG = {
     "host_folder": "",           # set at load (folder picker / --host / config)
     "posted_folder": "",         # default: <host_folder>/posted
@@ -137,6 +145,35 @@ def _http_json(url, token, fields=None, files=None, timeout=900):
         return resp.status, json.loads(resp.read().decode("utf-8") or "{}")
 
 
+def _post_chunk(url, token, fields, chunk_bytes, timeout=600):
+    """Multipart POST of one raw chunk (field "chunk") with the given fields.
+    Used by the resumable chunked upload; each request carries at most one
+    CHUNK_SIZE part so it stays well within server timeout limits."""
+    boundary = "----galleryImport" + uuid.uuid4().hex
+    parts = []
+    for key, value in (fields or {}).items():
+        parts.append(
+            ("--%s\r\nContent-Disposition: form-data; name=\"%s\"\r\n\r\n%s\r\n"
+             % (boundary, key, value)).encode("utf-8"))
+    parts.append(
+        ("--%s\r\nContent-Disposition: form-data; name=\"chunk\"; filename=\"chunk\"\r\n"
+         "Content-Type: application/octet-stream\r\n\r\n" % boundary).encode("utf-8"))
+    parts.append(chunk_bytes)
+    parts.append(b"\r\n")
+    parts.append(("--%s--\r\n" % boundary).encode("utf-8"))
+    body = b"".join(parts)
+
+    req = urlrequest.Request(
+        url, data=body, method="POST",
+        headers={
+            "Authorization": "Bearer " + token,
+            "Content-Type": "multipart/form-data; boundary=" + boundary,
+            "Content-Length": str(len(body)),
+        })
+    with urlrequest.urlopen(req, timeout=timeout) as resp:
+        return resp.status, json.loads(resp.read().decode("utf-8") or "{}")
+
+
 def fetch_next_slot(cfg):
     """The next publish slot from the gallery queue (24h after the last post)."""
     base = (cfg["server_base"] or "").rstrip("/")
@@ -178,18 +215,59 @@ def bucket_files(folder, cfg):
     return sorted(images), sorted(videos)
 
 
-def _http_retry(url, token, fields=None, files=None, timeout=900, attempts=3):
-    """_http_json with retries for transient connection resets (the box's
-    network intermittently drops connections with WinError 10053/10054). Safe:
-    re-creating a gallery is idempotent (title+type) and files dedupe by hash."""
+def _http_retry(url, token, fields=None, files=None, timeout=900, attempts=3, raw=None):
+    """_http_json (or _post_chunk when raw is given) with retries for transient
+    connection resets (the box's network intermittently drops connections with
+    WinError 10053/10054). Safe: re-creating a gallery is idempotent
+    (title+type), files dedupe by hash, and chunk parts simply overwrite."""
     last = None
     for i in range(attempts):
         try:
+            if raw is not None:
+                return _post_chunk(url, token, fields, raw, timeout)
             return _http_json(url, token, fields, files, timeout)
         except Exception as exc:
             last = exc
             time.sleep(2)
     raise last
+
+
+def _upload_chunked(cfg, gid, path, original_name):
+    """Upload one file to an import gallery in CHUNK_SIZE parts. Each part is
+    its own request with per-part retry, so large videos upload reliably even
+    over flaky/slow links; the server reassembles + validates on completion."""
+    token = (cfg["import_token"] or "").strip()
+    base = (cfg["server_base"] or "").rstrip("/")
+    chunk_url = base + "/webhooks/import/gallery/%d/files/chunk" % gid
+    complete_url = base + "/webhooks/import/gallery/%d/files/chunk/complete" % gid
+    uid = uuid.uuid4().hex
+    size = os.path.getsize(path)
+    total = max(1, (size + CHUNK_SIZE - 1) // CHUNK_SIZE)
+
+    with open(path, "rb") as fh:
+        for index in range(total):
+            data = fh.read(CHUNK_SIZE)
+            if not data:
+                break
+            fields = {
+                "upload_uid": uid,
+                "chunk_index": str(index),
+                "total_chunks": str(total),
+            }
+            status, resp = _http_retry(chunk_url, token, fields, None, 600, 3, raw=data)
+            if status not in (200, 201) or not resp.get("ok"):
+                raise RuntimeError("chunk %d/%d: HTTP %d: %s" %
+                                   (index, total, status, resp.get("error") or resp))
+
+    fields = {
+        "upload_uid": uid,
+        "original_name": original_name,
+        "total_chunks": str(total),
+    }
+    status, resp = _http_retry(complete_url, token, fields, None, 1200, 3)
+    if status not in (200, 201) or not resp.get("ok"):
+        raise RuntimeError("chunk complete: HTTP %d: %s" % (status, resp.get("error") or resp))
+    return resp
 
 
 def post_gallery(cfg, title, gtype, slot, files):
@@ -216,9 +294,20 @@ def post_gallery(cfg, title, gtype, slot, files):
     uploaded = 0
     errors = []
     for fname in files:
-        status, data = _http_retry(base + "/webhooks/import/gallery/%d/files" % gid, token,
-                                   None, [fname], timeout=900)
-        if status in (200, 201) and data.get("ok"):
+        try:
+            if os.path.getsize(fname) >= CHUNK_MIN:
+                # Large file → resumable chunked upload (many small requests).
+                data = _upload_chunked(cfg, gid, fname, os.path.basename(fname))
+                status, ok = 201, bool(data.get("ok"))
+            else:
+                status, data = _http_retry(base + "/webhooks/import/gallery/%d/files" % gid, token,
+                                           None, [fname], timeout=900)
+                ok = data.get("ok")
+        except Exception as exc:
+            errors.append("%s: %s" % (os.path.basename(fname), exc))
+            continue
+
+        if status in (200, 201) and ok:
             uploaded += 1
         else:
             errors.append("%s: HTTP %d: %s" % (os.path.basename(fname), status, data.get("error") or data))
@@ -329,6 +418,7 @@ def _run(cfg):
             result["errors"].append("%s: scan failed: %s" % (name, exc))
             _log(cfg, "scan failed: %s (%s)" % (name, exc))
             continue
+
         if not images and not videos:
             result["errors"].append("%s: no recognized image/video files (left in place)" % name)
             _log(cfg, "skipped (no media): %s" % name)
@@ -369,6 +459,11 @@ def _run(cfg):
                 failed = True
                 result["errors"].append("%s: move failed: %s" % (name, exc))
                 _log(cfg, "move failed: %s (%s)" % (name, exc))
+
+        # Refresh the status file after every folder so the control UI's stats
+        # keep updating even during a long multi-folder run.
+        result["next_slot"] = slot
+        _write_status(cfg, result, slot)
 
     result["next_slot"] = slot
     _write_status(cfg, result, slot)
