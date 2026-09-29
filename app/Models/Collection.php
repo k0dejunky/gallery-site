@@ -176,7 +176,13 @@ class Collection
      * The collection's individual video items in manual order, each with its
      * thumb/web URLs, page URL and cached duration (for playlist rows).
      */
-    public static function videos(int $collectionId, int $userId): array
+    /**
+     * All media (images and videos) in a collection, in position order. Each
+     * item carries thumb/web URLs and a viewer URL (/videos/{id} or
+     * /images/{id}). $isVideo filters to videos (true) or images (false);
+     * null returns everything (used by the player's mixed playlist).
+     */
+    public static function media(int $collectionId, int $userId, ?bool $isVideo = null): array
     {
         $items = Database::run(
             'SELECT ci.photo_id
@@ -193,11 +199,11 @@ class Collection
         }
 
         $placeholders = implode(',', array_fill(0, count($photoIds), '?'));
-        $photos = Database::run(
-            'SELECT p.* FROM photos p
-             WHERE p.id IN (' . $placeholders . ') AND p.is_video = 1',
-            $photoIds
-        )->fetchAll();
+        $sql = 'SELECT p.* FROM photos p WHERE p.id IN (' . $placeholders . ')';
+        if ($isVideo !== null) {
+            $sql .= $isVideo ? ' AND p.is_video = 1' : ' AND p.is_video = 0';
+        }
+        $photos = Database::run($sql, $photoIds)->fetchAll();
 
         $byId = [];
         foreach ($photos as $p) {
@@ -210,12 +216,24 @@ class Collection
                 $p = $byId[$id];
                 $p['thumb'] = file_url((string) $p['filename'], 'thumb');
                 $p['web']   = file_url((string) $p['filename'], 'web');
-                $p['url']   = url('/videos/' . (int) $p['id']);
+                $p['url']   = url('/' . (is_video((string) $p['filename']) ? 'videos' : 'images') . '/' . (int) $p['id']);
                 $ordered[]  = $p;
             }
         }
 
         return $ordered;
+    }
+
+    /** A collection's videos only (in position order). */
+    public static function videos(int $collectionId, int $userId): array
+    {
+        return self::media($collectionId, $userId, true);
+    }
+
+    /** A collection's images only (in position order). */
+    public static function images(int $collectionId, int $userId): array
+    {
+        return self::media($collectionId, $userId, false);
     }
 
     /** Add a gallery to a collection owned by the user (deduped). */

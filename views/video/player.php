@@ -39,7 +39,15 @@ $breadcrumbItems = [
         <figure id="video-player-wrap" style="margin: 1rem 0; text-align: center;">
             <p class="media-progress" role="status">Item <?= (int) ($currentIndex + 1) ?> of <?= (int) ($mediaCount ?? 1) ?></p>
             <div class="gallery-player" data-player>
-                <video id="gallery-video-<?= (int) $photo['id'] ?>" data-video-id="<?= (int) $photo['id'] ?>" src="<?= e($src) ?>" controls preload="metadata" playsinline aria-label="<?= e($title) ?>"></video>
+                <?php if (is_video($photo['filename'])): ?>
+                    <video id="gallery-video-<?= (int) $photo['id'] ?>" data-video-id="<?= (int) $photo['id'] ?>" data-media-type="video" src="<?= e($src) ?>" controls preload="metadata" playsinline aria-label="<?= e($title) ?>"></video>
+                <?php else: ?>
+                    <img id="slideshow-img" data-video-id="<?= (int) $photo['id'] ?>" data-media-type="image" src="<?= e($src) ?>" alt="<?= e($title) ?>" style="max-width:100%;max-height:calc(100dvh - 260px);height:auto;border-radius:10px;box-shadow:0 2px 14px rgba(59,7,100,.35);">
+                    <div class="slideshow-bar" data-slideshow-bar>
+                        <span class="slideshow-note muted">Auto-advances in a few seconds</span>
+                        <button type="button" class="btn btn-sm btn-outline" data-slideshow-toggle>Pause slideshow</button>
+                    </div>
+                <?php endif; ?>
             </div>
             <div class="video-resume" hidden role="status">Resume from <span class="video-resume-time">0:00</span> <button type="button" class="btn btn-sm">Resume</button></div>
             <figcaption class="muted" style="margin-top: 0.5rem">

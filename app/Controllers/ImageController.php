@@ -82,7 +82,10 @@ class ImageController extends Controller
             if ($playlistId > 0 && \App\Models\Collection::owns($playlistId, $userId)) {
                 $collection   = \App\Models\Collection::find($playlistId);
                 $playlistName = $collection !== false ? (string) $collection['name'] : 'Collection';
-                $playlist     = \App\Models\Collection::videos($playlistId, $userId);
+                // A collection plays as a mixed playlist: images show as a
+                // slideshow frame, videos play normally, and prev/next moves
+                // through both.
+                $playlist     = \App\Models\Collection::media($playlistId, $userId);
 
                 if ($playlist !== []) {
                     $playlistQuery = '&playlist=' . $playlistId;
@@ -100,7 +103,11 @@ class ImageController extends Controller
         $returnTo = $this->safeReturnTo($this->request->query('return_to', ''))
             ?? ($galleryId !== null ? url('/galleries/' . $galleryId) : url('/galleries'));
 
-        $view = $requireVideo ? 'video/player' : 'gallery/image_full';
+        // Inside a collection playlist both media types render through the
+        // player view (images as a slideshow frame); outside it, videos use
+        // the player and images use the full-size image page.
+        $inPlaylist = $playlistId > 0 && $playlist !== [];
+        $view = $inPlaylist ? 'video/player' : ($requireVideo ? 'video/player' : 'gallery/image_full');
 
         $this->view($view, [
             'photo'   => $photo,

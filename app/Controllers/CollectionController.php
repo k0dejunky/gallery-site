@@ -43,13 +43,17 @@ class CollectionController extends Controller
 
         $collection = Collection::find($id);
         $galleries  = Collection::galleries($id, $userId);
-        $videos     = Collection::videos($id, $userId);
+        $media      = Collection::media($id, $userId);
+        $videos     = array_values(array_filter($media, static fn ($m) => is_video((string) $m['filename'])));
+        $images     = array_values(array_filter($media, static fn ($m) => !is_video((string) $m['filename'])));
 
         $this->view('collections/show', [
             'collection' => $collection,
             'galleries'  => $galleries,
             'videos'     => $videos,
-            'firstVideoId' => $videos !== [] ? (int) $videos[0]['id'] : 0,
+            'images'     => $images,
+            'firstMediaId' => $media !== [] ? (int) $media[0]['id'] : 0,
+            'firstMediaIsVideo' => $media !== [] ? is_video((string) $media[0]['filename']) : false,
             'favoriteGalleryIds' => Gallery::favoriteIds($userId, array_map('intval', array_column($galleries, 'id'))),
         ]);
     }

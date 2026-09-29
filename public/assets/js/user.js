@@ -683,52 +683,105 @@ document.addEventListener('leavepictureinpicture', function(){
    move through the gallery. The <video> element is preserved and only its
    source is swapped. Also swaps the collection playlist panel + highlights. */
 (function(){
-  function updatePlaylist(doc, href, video){
-    // Replace the playlist aside (if the new page has one) and highlight the
-    // active row; keep a reference to the next item for auto-advance.
+  var slideshowTimer = null;
+  var slideshowPaused = false;
+
+  function clearSlideshowTimer(){
+    if(slideshowTimer){ clearTimeout(slideshowTimer); slideshowTimer = null; }
+  }
+
+  // Advance to the next playlist item (slideshow / video-ended). Prefers the
+  // active playlist row, then the media-nav Next link. Skips when the tab is
+  // hidden so a backgrounded slideshow doesn't burn through.
+  function advanceNext(){
+    if(document.hidden) return;
+    var active = document.querySelector('.player-playlist .pl-item.active');
+    var next = active && active.nextElementSibling;
+    if(next){
+      var link = next.querySelector('a[data-swap]') || next.querySelector('a');
+      if(link){ link.click(); return; }
+    }
+    var navNext = document.querySelector('.media-nav a[data-swap][data-next]');
+    if(navNext){ navNext.click(); }
+  }
+
+  // When the current item is an image (slideshow frame), auto-advance after
+  // a few seconds unless paused or the tab is hidden.
+  function scheduleSlideshow(){
+    clearSlideshowTimer();
+    var wrap = document.getElementById('video-player-wrap');
+    var note = document.querySelector('.slideshow-note');
+    if(!wrap || !wrap.querySelector('#slideshow-img')) return;
+    if(slideshowPaused){ if(note) note.textContent = 'Slideshow paused'; return; }
+    if(note) note.textContent = 'Auto-advances in a few seconds';
+    slideshowTimer = setTimeout(function(){
+      slideshowTimer = null;
+      advanceNext();
+    }, 4000);
+  }
+
+  // Bind the video-ended auto-advance to a (possibly replaced) video element.
+  function bindVideo(video){
+    if(!video || video.__advBound) return;
+    video.__advBound = true;
+    video.addEventListener('ended', function(){ clearSlideshowTimer(); advanceNext(); });
+  }
+
+  function updatePlaylist(doc){
     var npl = doc.querySelector('.player-playlist');
     var opl = document.querySelector('.player-playlist');
     if(npl && opl){ opl.outerHTML = npl.outerHTML; }
-    var vidId = null;
+    var mediaId = null;
     var nv = doc.querySelector('#video-player-wrap video');
-    if(nv) vidId = nv.getAttribute('data-video-id');
-    var active = null, next = null;
-    document.querySelectorAll('.player-playlist .pl-item').forEach(function(li, i, arr){
+    var ni = doc.querySelector('#video-player-wrap img#slideshow-img');
+    if(nv) mediaId = nv.getAttribute('data-video-id');
+    else if(ni) mediaId = ni.getAttribute('data-video-id');
+    document.querySelectorAll('.player-playlist .pl-item').forEach(function(li){
       li.classList.remove('active');
-      if(li.getAttribute('data-video-id') === vidId){ li.classList.add('active'); active = li; }
-      if(active && !next && i > Array.prototype.indexOf.call(arr, active)){ next = li; }
+      if(li.getAttribute('data-video-id') === mediaId){ li.classList.add('active'); }
     });
+    var active = document.querySelector('.player-playlist .pl-item.active');
     var list = document.querySelector('.player-playlist ul');
     if(active && list && active.scrollIntoView){ try{ active.scrollIntoView({block:'nearest'}); }catch(e){} }
-    if(video){ video.__plNext = next ? (next.querySelector('a') ? next.querySelector('a').getAttribute('href') : null) : null; }
     if(window.GalleryQueue) window.GalleryQueue.render();
     // The aside (and nav) were replaced with fresh markup — rebind the swap
     // links so playlist rows keep working after the first navigation.
     bindAllSwap();
+    scheduleSlideshow();
   }
 
-  // Swap the current video to the link's target (prev/next, playlist rows).
-  // Guarded so re-running after the nav/playlist DOM is replaced never binds
-  // the same link twice.
+  // Swap the current media to the link's target (prev/next, playlist rows).
+  // A video->video swap keeps the same <video> element so PiP persists; a
+  // change between video and image replaces the whole media area.
   function bindSwapLink(a){
     if(a.__swapBound) return;
     a.__swapBound = true;
     a.addEventListener('click', function(e){
       e.preventDefault();
+      clearSlideshowTimer();
       var href = a.getAttribute('href');
       fetch(href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(function(r){ return r.text(); })
         .then(function(html){
           var doc = new DOMParser().parseFromString(html, 'text/html');
           var wrap = document.getElementById('video-player-wrap');
+          if(!wrap) return;
           var nv = doc.querySelector('#video-player-wrap video');
-          if(!wrap || !nv || !nv.getAttribute('src')) return;
-          var video = wrap.querySelector('video');
-          var wasPlaying = video && !video.paused;
-          video.src = nv.getAttribute('src');
-          video.load();
-          if(wasPlaying){ video.play().catch(function(){}); }
-          // Update caption, progress and nav from the fetched fragment.
+          var ni = doc.querySelector('#video-player-wrap img#slideshow-img');
+          var curV = wrap.querySelector('video');
+          if(nv && curV && nv.getAttribute('src')){
+            var video = curV;
+            var wasPlaying = video && !video.paused;
+            video.src = nv.getAttribute('src');
+            video.load();
+            if(wasPlaying){ video.play().catch(function(){}); }
+          } else {
+            var ngp = doc.querySelector('.gallery-player');
+            var ogp = wrap.querySelector('.gallery-player');
+            if(ngp && ogp){ ogp.outerHTML = ngp.outerHTML; }
+          }
+          var video2 = wrap.querySelector('video');
+          if(video2) bindVideo(video2);
           var swap = function(sel){
             var nd = doc.querySelector(sel);
             var old = wrap.querySelector(sel);
@@ -742,10 +795,24 @@ document.addEventListener('leavepictureinpicture', function(){
           var rep = doc.querySelector('#video-player-wrap + p a, figure + p a');
           var oldRep = document.querySelector('#video-player-wrap + p a, figure + p a');
           if(rep && oldRep){ oldRep.href = rep.getAttribute('href'); }
-          updatePlaylist(doc, href, video);
+          updatePlaylist(doc);
           history.pushState({}, '', href);
+          bindSlideshowToggle();
         })
         .catch(function(){});
+    });
+  }
+
+  function bindSlideshowToggle(){
+    var btn = document.querySelector('[data-slideshow-toggle]');
+    if(!btn || btn.__ssBound) return;
+    btn.__ssBound = true;
+    btn.addEventListener('click', function(){
+      slideshowPaused = !slideshowPaused;
+      var note = document.querySelector('.slideshow-note');
+      btn.textContent = slideshowPaused ? 'Resume slideshow' : 'Pause slideshow';
+      if(slideshowPaused){ clearSlideshowTimer(); if(note) note.textContent = 'Slideshow paused'; }
+      else { scheduleSlideshow(); }
     });
   }
 
@@ -755,25 +822,14 @@ document.addEventListener('leavepictureinpicture', function(){
 
   function bind(){
     var wrap = document.getElementById('video-player-wrap');
-    if(!wrap || !wrap.querySelector('video') || wrap.__navBound) return;
+    if(!wrap || wrap.__navBound) return;
     wrap.__navBound = true;
 
     bindAllSwap();
-
-    // Auto-advance: when the current video ends, play the next playlist item,
-    // or the next media item in the same gallery when browsing normally.
+    bindSlideshowToggle();
     var video = wrap.querySelector('video');
-    video.addEventListener('ended', function(){
-      if(!document.hasFocus()) return;
-      var active = document.querySelector('.player-playlist .pl-item.active');
-      var next = active && active.nextElementSibling;
-      if(next){
-        var link = next.querySelector('a[data-swap]');
-        if(link){ link.click(); return; }
-      }
-      var navNext = document.querySelector('.media-nav a[data-swap][data-next]');
-      if(navNext){ navNext.click(); }
-    });
+    if(video) bindVideo(video);
+    scheduleSlideshow();
   }
   if(document.readyState !== 'loading'){ bind(); } else { document.addEventListener('DOMContentLoaded', bind); }
   window.addEventListener('load', bind);
