@@ -7,7 +7,6 @@
     .auth-hero h1 { margin: 0 0 .35rem; }
     .auth-splash .auth-panel { flex: 0 1 auto; width: auto; max-width: 1000px; }
     .auth-splash-side { flex: 1 1 300px; }
-    .guest-grid { max-height: calc(100dvh - 390px); }
     .signup-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; text-align: left; }
     .signup-grid h3 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--purple-800); }
     .signup-grid input[type="text"], .signup-grid input[type="email"], .signup-grid input[type="password"], .signup-grid input[type="date"] { width: 100%; box-sizing: border-box; }
@@ -18,9 +17,6 @@
     @media (max-width: 750px) { .signup-grid { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 500px) { .signup-grid { grid-template-columns: 1fr; } }
 </style>
-
-<?php // The teaser grids show up to 4 rows so the last row is never clipped. ?>
-<?php $guestMaxRows = 4; ?>
 
 <div class="auth-hero">
     <h1>Exclusive photos and videos</h1>
