@@ -7,6 +7,8 @@
     .auth-splash-side { flex: 1 1 300px; }
     .auth-panel .auth-hero { text-align: center; margin: 0 0 var(--spacing-md); }
     .auth-panel .auth-hero h1 { margin: 0 0 .35rem; font-size: 1.35rem; }
+    .auth-panel > h1 { margin: 0 0 .25rem; }
+    .auth-panel > h1 + p { margin: 0 0 var(--spacing-md); }
     .auth-panel .guest-teaser-stats { margin: var(--spacing-md) 0; }
     .signup-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; text-align: left; }
     .signup-grid h3 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--purple-800); }
@@ -40,8 +42,7 @@
             </p>
 
             <div class="signup-grid">
-                <div>
-                    <h3>Account</h3>
+                    <div>
                     <p>
                         <label for="email">Email</label><br>
                         <input type="email" name="email" id="email" required autofocus>
