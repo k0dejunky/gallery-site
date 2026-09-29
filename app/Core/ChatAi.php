@@ -88,7 +88,7 @@ class ChatAi
         }
 
         $prompt .= "Conversation so far:\n";
-        foreach ($history as $h) {
+        foreach (array_slice($history, -12) as $h) {
             $who = ($h['sender_role'] ?? '') === 'user' ? 'member' : 'assistant';
             $prompt .= $who . ": " . ($h['message'] ?? '') . "\n";
         }
@@ -102,6 +102,13 @@ class ChatAi
         // so the chat still answers instead of appearing unresponsive.
         if ($model !== self::BASE_MODEL && !self::looksLikeReply($result['reply'] ?? '')) {
             $result = self::generate(self::BASE_MODEL, $prompt);
+        }
+
+        // The prompt ends with "assistant:" and the model sometimes echoes the
+        // label back at the start of its reply — drop it so the stored message
+        // reads cleanly.
+        if (isset($result['reply'])) {
+            $result['reply'] = trim((string) preg_replace('/^\s*(?:assistant|model|operator)\s*:\s*/i', '', (string) $result['reply']));
         }
 
         return $result;
@@ -194,7 +201,7 @@ class ChatAi
             'method'  => 'POST',
             'headers' => ['Content-Type' => 'application/json'],
             'json'    => $payload,
-            'timeout' => 60,
+            'timeout' => 180,
         ]);
 
         if ($status < 200 || $status >= 300) {

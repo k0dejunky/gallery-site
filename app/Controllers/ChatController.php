@@ -130,7 +130,10 @@ class ChatController extends Controller
             $aiReply = ChatAi::reply(
                 $convMode,
                 $message,
-                ChatMessage::messages($cid, 0, false),
+                // Only the most recent messages feed the model — the full
+                // history makes a single generation exceed the HTTP timeout
+                // on slow conversations.
+                ChatMessage::messagesLatest($cid, 12),
                 ChatMessage::similarContext($message),
                 $content
             );
