@@ -535,12 +535,11 @@ class AutoPostQueue
         }
 
         [$inSql, $bind] = self::enabledPlatformPlaceholders();
-        $bind[] = $scheduledAtUtc;
 
         Database::run(
             'UPDATE auto_poster_queue SET scheduled_at = ?
              WHERE gallery_id = ? AND platform IN (' . $inSql . ') AND status = ?',
-            [$scheduledAtUtc, $galleryId, 'queued']
+            array_merge([$scheduledAtUtc, $galleryId], $bind, ['queued'])
         );
     }
 
@@ -555,7 +554,7 @@ class AutoPostQueue
         Database::run(
             'UPDATE auto_poster_queue SET scheduled_at = CURRENT_TIMESTAMP
              WHERE gallery_id = ? AND platform IN (' . $inSql . ') AND status = ?',
-            [$galleryId, 'queued']
+            array_merge([$galleryId], $bind, ['queued'])
         );
     }
 
