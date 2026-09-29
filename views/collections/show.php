@@ -68,16 +68,16 @@
         <h2 class="section-title" style="<?= !empty($videos) ? 'margin-top:1.5rem;' : '' ?>">Galleries</h2>
         <div class="grid">
             <?php foreach ($galleries as $gallery): ?>
-                <?php
-                $gid = (int) $gallery['id'];
-                $cover = $gallery['first_photo'] ?? null;
-                $galleryCategories = \App\Models\Gallery::categoriesBulk([$gid])[$gid] ?? [];
-                require __DIR__ . '/../partials/gallery_card.php';
-                ?>
-                <div style="text-align:center;margin-top:-.4rem;margin-bottom:1rem;">
-                    <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/galleries/' . $gid . '/delete') ?>">
+                <div class="collection-gallery-cell">
+                    <?php
+                    $gid = (int) $gallery['id'];
+                    $cover = $gallery['first_photo'] ?? null;
+                    $galleryCategories = \App\Models\Gallery::categoriesBulk([$gid])[$gid] ?? [];
+                    require __DIR__ . '/../partials/gallery_card.php';
+                    ?>
+                    <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/galleries/' . $gid . '/delete') ?>" style="padding:.6rem;">
                         <?= csrf_field() ?>
-                        <button type="submit" class="btn btn-sm btn-outline">Remove from collection</button>
+                        <button type="submit" class="btn btn-sm btn-outline" style="width:100%;">Remove from collection</button>
                     </form>
                 </div>
             <?php endforeach; ?>
