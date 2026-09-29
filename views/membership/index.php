@@ -1,5 +1,20 @@
 <?php $title = 'Membership'; ?>
-
+<?php
+$metaDescription = 'Membership plans on ' . config('app.site_name') . ' — unlock every photo and video gallery on the site.';
+$canonicalUrl = absolute_url('/membership');
+$ogImage = (function (): string {
+    $recent = \App\Models\Photo::recentImages(1);
+    return $recent !== [] && !empty($recent[0]['filename']) ? file_url($recent[0]['filename'], 'web') : '';
+})();
+$ldJson = [
+    '@context' => 'https://schema.org',
+    '@type'    => 'WebPage',
+    'name'     => 'Membership',
+    'url'      => $canonicalUrl,
+    'description' => $metaDescription,
+    'isPartOf' => ['@type' => 'WebSite', 'name' => config('app.site_name'), 'url' => absolute_url('')],
+];
+?>
 <?php
 // Membership pricing page. Users who already have access see their current
 // plan first; everyone sees the available plans with a subscribe button.

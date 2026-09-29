@@ -5,6 +5,27 @@
 $title = $photo['caption'] !== '' ? $photo['caption'] : ($gallery !== null ? $gallery['title'] : 'Video');
 $src   = file_url($photo['filename'], 'web');
 $reportUrl = url('/support') . '?' . http_build_query(['return_to' => $_SERVER['REQUEST_URI'] ?? url('/galleries')]);
+$galleryTitle = $gallery !== null ? (string) $gallery['title'] : '';
+$metaDescription = $photo['caption'] !== ''
+    ? $photo['caption'] . ($galleryTitle !== '' ? ' — a video from "' . $galleryTitle . '" on ' . config('app.site_name') . '.' : '')
+    : 'A video from ' . ($galleryTitle !== '' ? '"' . $galleryTitle . '"' : 'the gallery') . ' on ' . config('app.site_name') . '.';
+$canonicalUrl = absolute_url('/videos/' . (int) $photo['id']);
+$ogImage = file_url($photo['filename'], 'web');
+$videoObject = [
+    '@context' => 'https://schema.org',
+    '@type'    => 'VideoObject',
+    'name'     => $title,
+    'url'      => $canonicalUrl,
+    'contentUrl' => $src,
+    'description' => $metaDescription,
+    'thumbnailUrl' => file_url($photo['filename'], 'thumb'),
+    'uploadDate' => (string) ($photo['created_at'] ?? ''),
+    'author'   => ['@type' => 'Organization', 'name' => config('app.site_name'), 'url' => absolute_url('')],
+];
+if (!empty($photo['duration_seconds'])) {
+    $videoObject['duration'] = 'PT' . (int) $photo['duration_seconds'] . 'S';
+}
+$ldJson = $videoObject;
 $plUrl  = function (int $videoId) use ($playlistId): string {
     return url('/videos/' . $videoId) . ($playlistId > 0 ? '?playlist=' . $playlistId : '');
 };

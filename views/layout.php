@@ -71,6 +71,17 @@ $isAuthPage = $isLoginPage
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="<?= e(isset($title) ? $title . ' — ' . config('app.site_name') : config('app.site_name')) ?>">
     <meta name="twitter:description" content="<?= e($metaDescription ?? (config('app.site_name') . ' — curated galleries of original photos and videos.')) ?>">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": <?= json_encode(config('app.site_name'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+        "url": <?= json_encode(absolute_url(''), JSON_UNESCAPED_SLASHES) ?>
+    }
+    </script>
+    <?php if (isset($ldJson) && is_array($ldJson)): ?>
+    <script type="application/ld+json"><?= json_encode($ldJson, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
+    <?php endif; ?>
     <style>
 <?= \App\Models\Theme::cssUser($userThemePreset) ?>
 <?= \App\Models\Theme::cssLayoutUser($userThemePreset) ?>
@@ -318,11 +329,11 @@ $isAuthPage = $isLoginPage
         </nav>
         </div>
         <main id="main-content" class="home-main">
-            <?php require $content; ?>
+            <?php echo $content; ?>
         </main>
     </div>
     <?php else: ?>
-    <main id="main-content"><?php require $content; ?></main>
+    <main id="main-content"><?php echo $content; ?></main>
     <?php endif; ?>
     <?php if ($sidebarNav && $user !== null): ?>
     <nav class="media-bottom-nav" aria-label="Mobile site menu">

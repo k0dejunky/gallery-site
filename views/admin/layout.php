@@ -439,7 +439,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             <?php endforeach; ?>
             </div>
 
-            <?php require $content; ?>
+            <?php echo $content; ?>
         </main>
     </div>
 

@@ -1,5 +1,21 @@
 <?php $title = $gallery['title']; ?>
 <?php
+$galleryDescription = trim((string) ($gallery['description'] ?? ''));
+$metaDescription = $galleryDescription !== ''
+    ? $galleryDescription
+    : 'Browse "' . $title . '" — ' . number_format((int) ($total ?? 0)) . ' items on ' . config('app.site_name') . '.';
+$canonicalUrl = absolute_url('/galleries/' . (int) $gallery['id']);
+$ogImage = isset($photos[0]['filename']) && $photos[0]['filename'] !== '' ? file_url($photos[0]['filename'], 'web') : '';
+$ldJson = [
+    '@context' => 'https://schema.org',
+    '@type'    => 'CollectionPage',
+    'name'     => $title,
+    'url'      => $canonicalUrl,
+    'description' => $galleryDescription !== '' ? $galleryDescription : $metaDescription,
+    'isPartOf' => ['@type' => 'WebSite', 'name' => config('app.site_name'), 'url' => absolute_url('')],
+];
+?>
+<?php
 $breadcrumbItems = [
     ['label' => 'Galleries', 'url' => url('/galleries')],
     ['label' => $gallery['title']],

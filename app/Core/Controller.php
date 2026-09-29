@@ -61,6 +61,9 @@ class Controller
         extract($data);
 
         $content = __DIR__ . '/../../views/' . $template . '.php';
+        ob_start();
+        require $content;
+        $content = ob_get_clean();
 
         require __DIR__ . '/../../views/layout.php';
     }
@@ -87,13 +90,18 @@ class Controller
     }
 
     /**
-     * Render a view inside the admin layout (admin panel pages).
+     * Render a view inside the admin layout (admin panel pages). The view is
+     * buffered first so head variables ($title etc.) it sets reach the
+     * layout's <head>, then the markup is injected as $content.
      */
     protected function viewAdmin(string $template, array $data = []): void
     {
         extract($data);
 
         $content = __DIR__ . '/../../views/admin/' . $template . '.php';
+        ob_start();
+        require $content;
+        $content = ob_get_clean();
 
         require __DIR__ . '/../../views/admin/layout.php';
     }

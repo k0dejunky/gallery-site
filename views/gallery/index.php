@@ -1,5 +1,16 @@
 <?php $title = config('app.site_name'); ?>
-
+<?php
+$metaDescription = 'Browse every gallery on ' . config('app.site_name') . ' — original photos and videos across all categories, updated regularly.';
+$canonicalUrl = absolute_url('/galleries');
+$ldJson = [
+    '@context' => 'https://schema.org',
+    '@type'    => 'CollectionPage',
+    'name'     => $title . ' — Galleries',
+    'url'      => $canonicalUrl,
+    'description' => $metaDescription,
+    'isPartOf' => ['@type' => 'WebSite', 'name' => $title, 'url' => absolute_url('')],
+];
+?>
 <?php
 // Build the type-filter links (All / Images / Videos) preserving the current
 // search and category so switching a chip never loses the active filter.

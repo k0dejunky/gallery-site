@@ -12,6 +12,23 @@ use App\Models\Gallery;
 class StaticPageController extends Controller
 {
     /**
+     * A representative image (a recent photo's web variant) for social / OG
+     * cards on the static pages. Falls back to the gallery cover or empty.
+     */
+    private function staticOgImage(): string
+    {
+        $recent = \App\Models\Photo::recentImages(1);
+        if ($recent !== [] && !empty($recent[0]['filename'])) {
+            return file_url($recent[0]['filename'], 'web');
+        }
+        $first = Gallery::firstPhotos([1]);
+        $photo = reset($first);
+        return is_array($photo) && !empty($photo['filename'])
+            ? file_url($photo['filename'], 'web')
+            : '';
+    }
+
+    /**
      * Render the About page.
      */
     public function about(): void
@@ -20,6 +37,9 @@ class StaticPageController extends Controller
             'title'            => 'About Us',
             'siteName'         => (string) config('app.site_name'),
             'supportEmail'     => 'support@' . (string) config('app.site_name') . '.com',
+            'metaDescription'  => 'About ' . config('app.site_name') . ' — a personal collection of original photos and videos, updated regularly.',
+            'canonicalUrl'     => absolute_url('/about'),
+            'ogImage'          => $this->staticOgImage(),
         ]);
     }
 
@@ -33,6 +53,9 @@ class StaticPageController extends Controller
             'siteName'         => (string) config('app.site_name'),
             'supportEmail'     => 'support@' . (string) config('app.site_name') . '.com',
             'lastUpdated'      => 'September 10, 2026',
+            'metaDescription'  => 'The terms of service for ' . config('app.site_name') . ' — the rules for browsing, membership and the content on the site.',
+            'canonicalUrl'     => absolute_url('/terms'),
+            'ogImage'          => $this->staticOgImage(),
         ]);
     }
 
@@ -46,6 +69,9 @@ class StaticPageController extends Controller
             'siteName'         => (string) config('app.site_name'),
             'supportEmail'     => 'support@' . (string) config('app.site_name') . '.com',
             'lastUpdated'      => 'August 31, 2026',
+            'metaDescription'  => 'How ' . config('app.site_name') . ' collects, uses and protects your personal information.',
+            'canonicalUrl'     => absolute_url('/privacy'),
+            'ogImage'          => $this->staticOgImage(),
         ]);
     }
 
@@ -63,7 +89,10 @@ class StaticPageController extends Controller
             $base   = $scheme . '://' . $host . rtrim((string) config('app.base_path'), '/');
         }
 
-        $urls = ['/', '/about', '/terms', '/privacy', '/membership', '/galleries'];
+        // Only pages that render 200 for guests belong in the sitemap.
+        // Gallery/photo/video detail pages are behind the login wall, so they
+        // are intentionally excluded (they redirect guests to /login).
+        $urls = ['/', '/about', '/terms', '/privacy', '/membership'];
 
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
             . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";

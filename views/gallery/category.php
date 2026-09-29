@@ -1,5 +1,17 @@
 <?php $title = $category['name']; ?>
 <?php
+$metaDescription = 'Browse the ' . $category['name'] . ' galleries on ' . config('app.site_name') . ' — original photos and videos in this category.';
+$canonicalUrl = absolute_url('/galleries/category/' . e($category['slug']));
+$ldJson = [
+    '@context' => 'https://schema.org',
+    '@type'    => 'CollectionPage',
+    'name'     => $category['name'],
+    'url'      => $canonicalUrl,
+    'description' => $metaDescription,
+    'isPartOf' => ['@type' => 'WebSite', 'name' => config('app.site_name'), 'url' => absolute_url('')],
+];
+?>
+<?php
 $breadcrumbItems = [
     ['label' => 'Galleries', 'url' => url('/galleries')],
     ['label' => $category['name']],

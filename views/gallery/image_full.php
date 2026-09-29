@@ -1,5 +1,23 @@
 <?php $title = $photo['caption'] !== '' ? $photo['caption'] : 'Full-size image'; ?>
 <?php
+$galleryTitle = $gallery !== null ? (string) $gallery['title'] : '';
+$metaDescription = $photo['caption'] !== ''
+    ? $photo['caption'] . ($galleryTitle !== '' ? ' — from "' . $galleryTitle . '" on ' . config('app.site_name') . '.' : '')
+    : 'An image from ' . ($galleryTitle !== '' ? '"' . $galleryTitle . '"' : 'the gallery') . ' on ' . config('app.site_name') . '.';
+$canonicalUrl = absolute_url('/images/' . (int) $photo['id']);
+$ogImage = file_url($photo['filename'], 'web');
+$ldJson = [
+    '@context' => 'https://schema.org',
+    '@type'    => 'ImageObject',
+    'name'     => $photo['caption'] !== '' ? $photo['caption'] : $title,
+    'url'      => $canonicalUrl,
+    'contentUrl' => file_url($photo['filename']),
+    'caption'  => $photo['caption'],
+    'description' => $metaDescription,
+    'author'   => ['@type' => 'Organization', 'name' => config('app.site_name'), 'url' => absolute_url('')],
+];
+?>
+<?php
 $breadcrumbItems = [
     ['label' => 'Galleries', 'url' => url('/galleries')],
     ['label' => 'Gallery', 'url' => url('/galleries/' . (int) ($gallery['id'] ?? 0))],
