@@ -58,7 +58,7 @@ $breadcrumbItems = [
             <div class="pb-toolbar">
                 <input type="search" id="pb-search" placeholder="Search galleries&hellip;" aria-label="Search galleries">
             </div>
-            <p class="muted" style="font-size:.85rem;">Click a gallery to add its video to the playlist. The picture-in-picture window keeps playing while you browse.</p>
+            <p class="muted" style="font-size:.85rem;">Click a video to play or add it to the playlist. The picture-in-picture window keeps playing while you browse.</p>
             <div class="pb-body"></div>
         </div>
     </div>

@@ -1,0 +1,256 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Controllers;
+
+use App\Core\Controller;
+use App\Core\MediaUploader;
+use App\Core\Request;
+use App\Models\Gallery;
+use App\Models\Photo;
+use DateTime;
+use DateTimeZone;
+
+/**
+ * Machine-to-machine import endpoints for the gallery. The folder-import app
+ * (Windows 7 box + Ubuntu) posts new galleries here with their media; the
+ * server runs the same creation pipeline a web upload uses (Gallery::create
+ * + MediaUploader) and returns the created gallery.
+ *
+ * Authenticated with the shared GALLERY_IMPORT_KEY Bearer token. No session,
+ * no CSRF (all /webhooks/* are CSRF-exempt).
+ */
+class ImportController extends Controller
+{
+    private const SPACING_HOURS = 24;
+
+    public function __construct(Request $request)
+    {
+        parent::__construct($request);
+        // Intentionally no Auth::requireLogin(): machine-to-machine.
+    }
+
+    /**
+     * GET /webhooks/import/queue
+     * Returns the scheduled gallery queue (future published_at, oldest first)
+     * plus the next available publish slot: the last queued published_at plus
+     * spacing_hours (default 24), or now + spacing_hours when the queue is
+     * empty. The app posts new galleries using next_slot so every gallery is
+     * exactly 24 hours after the last gallery-queue post.
+     */
+    public function queue(): void
+    {
+        if (!$this->authorized()) {
+            $this->deny();
+            return;
+        }
+
+        $spacing = max(1, min(168, (int) $this->request->query('spacing_hours', (string) self::SPACING_HOURS)));
+        $rows    = Gallery::queuedForPublishing(true);
+
+        $queue = [];
+        $last  = null;
+        foreach ($rows as $row) {
+            $queue[] = [
+                'gallery_id'   => (int) $row['id'],
+                'title'        => (string) $row['title'],
+                'type'         => (string) $row['type'],
+                'min_level'    => (int) $row['min_level'],
+                'published_at' => (string) $row['published_at'],
+            ];
+            if ($last === null || $row['published_at'] > $last) {
+                $last = (string) $row['published_at'];
+            }
+        }
+
+        $this->json([
+            'ok'           => true,
+            'queue'        => $queue,
+            'next_slot'    => $this->slotAfter($last, $spacing),
+            'count'        => count($queue),
+            'spacing_hours' => $spacing,
+        ]);
+    }
+
+    /**
+     * POST /webhooks/import/gallery
+     * Create a gallery the proper way and upload its media. Multipart fields:
+     *   title, type (images|videos), published_at (UTC, optional → auto next
+     *   slot), description, min_level, is_secret, files[].
+     * Idempotent: a gallery with the same (title, type, published_at) is
+     * returned instead of duplicated (safe retries after partial failures).
+     */
+    public function gallery(): void
+    {
+        if (!$this->authorized()) {
+            $this->deny();
+            return;
+        }
+
+        $title = trim((string) $this->request->post('title', ''));
+        if ($title === '') {
+            $this->json(['ok' => false, 'error' => 'title is required'], 422);
+            return;
+        }
+
+        $type        = strtolower(trim((string) $this->request->post('type', 'images'))) === 'videos' ? 'videos' : 'images';
+        $description = (string) $this->request->post('description', '');
+        $minLevel    = max(0, min(3, (int) $this->request->post('min_level', '0')));
+        $isSecret    = !empty($this->request->post('is_secret', '0'));
+        $spacing     = max(1, min(168, (int) $this->request->post('spacing_hours', (string) self::SPACING_HOURS)));
+        $publishedAt = $this->normalizePublishedAt((string) $this->request->post('published_at', ''));
+
+        $files = $this->request->file('files');
+        if ($files === null || !is_array($files) || empty($files['tmp_name'] ?? [])) {
+            $this->json(['ok' => false, 'error' => 'no files uploaded (multipart field "files[]")'], 422);
+            return;
+        }
+
+        // Idempotency guard: an identical scheduled gallery already exists.
+        if ($publishedAt !== null) {
+            $existing = Gallery::findBySchedule($title, $type, $publishedAt);
+            if ($existing !== null) {
+                $this->json([
+                    'ok'         => true,
+                    'existing'   => true,
+                    'gallery_id' => (int) $existing['id'],
+                    'url'        => url('/galleries/' . (int) $existing['id']),
+                    'uploaded'   => 0,
+                ]);
+                return;
+            }
+        }
+
+        // No explicit schedule → auto-fill the next available slot.
+        if ($publishedAt === null) {
+            $publishedAt = $this->slotAfter(Gallery::lastScheduledAt(), $spacing);
+        }
+
+        $config    = config('app.uploads');
+        $galleryId = Gallery::create($title, $description, $type, $minLevel, $publishedAt, $isSecret);
+        $photoIds  = [];
+        $uploaded  = 0;
+        $errors    = [];
+
+        try {
+            $count = count($files['tmp_name']);
+            for ($i = 0; $i < $count; $i++) {
+                if (($files['error'][$i] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                    $errors[] = 'file #' . ($i + 1) . ': upload error ' . (string) ($files['error'][$i] ?? 'unknown');
+                    continue;
+                }
+
+                $meta = MediaUploader::inspect($files, $i, $config, $type);
+                if ($meta === null) {
+                    $errors[] = 'file #' . ($i + 1) . ': ' . (MediaUploader::error() ?? 'invalid file');
+                    continue;
+                }
+
+                $filename = uniqid('g', true) . '.' . (string) $meta['extension'];
+                $dest     = $config['dir'] . '/' . $filename;
+
+                if (!MediaUploader::saveFinal((string) $files['tmp_name'][$i], $dest, (bool) $meta['is_image'], $config)) {
+                    $errors[] = 'file #' . ($i + 1) . ': ' . (MediaUploader::error() ?? 'could not save');
+                    continue;
+                }
+
+                $photoIds[] = MediaUploader::commit($galleryId, $filename, (string) $meta['hash']);
+                $uploaded++;
+            }
+        } catch (\Throwable $e) {
+            $errors[] = 'exception: ' . $e->getMessage();
+        }
+
+        // Nothing imported: remove the empty scheduled gallery + orphan photos.
+        if ($uploaded === 0) {
+            foreach ($photoIds as $pid) {
+                Photo::deleteIfOrphan((int) $pid);
+            }
+            Gallery::softDelete($galleryId);
+            $this->json([
+                'ok'        => false,
+                'error'     => implode('; ', $errors) ?: 'no files imported',
+                'uploaded'  => 0,
+            ], 422);
+            return;
+        }
+
+        if ($errors !== []) {
+            // Partial import: keep the gallery + imported files, surface errors.
+            $this->json([
+                'ok'         => true,
+                'partial'    => true,
+                'gallery_id' => $galleryId,
+                'url'        => url('/galleries/' . $galleryId),
+                'uploaded'   => $uploaded,
+                'errors'     => $errors,
+            ], 201);
+            return;
+        }
+
+        $this->json([
+            'ok'         => true,
+            'gallery_id' => $galleryId,
+            'url'        => url('/galleries/' . $galleryId),
+            'uploaded'   => $uploaded,
+        ], 201);
+    }
+
+    private function normalizePublishedAt(string $value): ?string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        $dt = DateTime::createFromFormat('Y-m-d H:i:s', $value, new DateTimeZone('UTC'));
+        if ($dt === false) {
+            try {
+                $dt = new DateTime($value, new DateTimeZone('UTC'));
+            } catch (\Throwable $e) {
+                return null;
+            }
+        }
+
+        return $dt->format('Y-m-d H:i:s');
+    }
+
+    private function slotAfter(?string $lastUtc, int $spacingHours): string
+    {
+        $base = new DateTime('now', new DateTimeZone('UTC'));
+        if ($lastUtc !== null && $lastUtc !== '') {
+            $parsed = DateTime::createFromFormat('Y-m-d H:i:s', $lastUtc, new DateTimeZone('UTC'));
+            if ($parsed !== false) {
+                $base = $parsed;
+            }
+        }
+
+        $base->modify('+' . $spacingHours . ' hours');
+
+        return $base->format('Y-m-d H:i:s');
+    }
+
+    private function presentedToken(): string
+    {
+        $given = trim((string) $this->request->header('Authorization', ''));
+        if (stripos($given, 'bearer ') === 0) {
+            $given = trim(substr($given, 7));
+        }
+
+        return $given;
+    }
+
+    private function authorized(): bool
+    {
+        $expected = env_value('GALLERY_IMPORT_KEY', '');
+        $given    = $this->presentedToken();
+
+        return $expected !== '' && $given !== '' && hash_equals($expected, $given);
+    }
+
+    private function deny(): void
+    {
+        $this->json(['ok' => false, 'error' => 'unauthorized'], 401);
+    }
+}

@@ -37,6 +37,62 @@ class GalleryController extends Controller
     }
 
     /**
+     * AJAX fragment for the player's in-page browser: every video across the
+     * visible video galleries, shown individually (not grouped by gallery).
+     * No layout — raw HTML for fetch() to insert. Supports ?q= search and
+     * ?offset= paging (30 at a time).
+     */
+    public function browseVideos(): void
+    {
+        Auth::requireLogin();
+
+        $q      = trim((string) $this->request->query('q', ''));
+        $offset = max(0, (int) $this->request->query('offset', 0));
+        $limit  = 30;
+        $maxLevel = Auth::effectiveLevel();
+        $levelSql = $maxLevel >= PHP_INT_MAX ? '' : ' AND g.min_level <= ' . (int) $maxLevel;
+
+        $where  = "g.type = 'videos' AND g.is_secret = 0 AND " . \App\Models\Gallery::publishedVisibleSql('g') . $levelSql;
+        $params = [];
+        if ($q !== '') {
+            $where  .= ' AND (p.caption LIKE ? OR g.title LIKE ?)';
+            $params = ['%' . $q . '%', '%' . $q . '%'];
+        }
+
+        $total = (int) \App\Core\Database::run(
+            'SELECT COUNT(*) FROM photos p
+             INNER JOIN gallery_photo gp ON gp.photo_id = p.id
+             INNER JOIN galleries g ON g.id = gp.gallery_id
+             WHERE p.is_video = 1 AND ' . $where,
+            $params
+        )->fetchColumn();
+
+        $photos = \App\Core\Database::run(
+            'SELECT p.* FROM photos p
+             INNER JOIN gallery_photo gp ON gp.photo_id = p.id
+             INNER JOIN galleries g ON g.id = gp.gallery_id
+             WHERE p.is_video = 1 AND ' . $where . '
+             GROUP BY p.id
+             ORDER BY p.created_at DESC
+             LIMIT ' . $limit . ' OFFSET ' . $offset,
+            $params
+        )->fetchAll();
+
+        header('Content-Type: text/html; charset=utf-8');
+        if ($photos === []) {
+            echo '<p class="muted" style="padding:1rem;">No videos found.</p>';
+            exit;
+        }
+        foreach ($photos as $photo) {
+            require __DIR__ . '/../../views/partials/browse_video_tile.php';
+        }
+        if ($offset + count($photos) < $total) {
+            echo '<button type="button" class="btn btn-sm btn-outline pb-more" data-offset="' . ($offset + $limit) . '" data-q="' . e($q) . '" style="margin:.5rem auto;display:block;">Load more videos</button>';
+        }
+        exit;
+    }
+
+    /**
      * AJAX fragment for the player's in-page gallery browser: a compact grid
      * of video gallery cards. No layout — raw HTML for fetch() to insert.
      * Supports ?q= search and ?offset= paging (30 at a time) so the browser

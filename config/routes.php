@@ -17,6 +17,7 @@ return [
     ['GET', '/galleries/category/{slug}', 'GalleryController@category'],
     ['GET', '/galleries/{id}/photos', 'GalleryController@photosPage'],
     ['GET', '/galleries/{id}', 'GalleryController@show'],
+    ['GET', '/browse/videos', 'GalleryController@browseVideos'],
     ['GET', '/browse/galleries', 'GalleryController@browseGalleries'],
     ['GET', '/browse/galleries/{id}', 'GalleryController@browseGallery'],
     ['GET', '/unsubscribe', 'UnsubscribeController@index'],
@@ -27,6 +28,10 @@ return [
     // Biller postbacks (server-to-server; no session, no CSRF — see Router)
     ['GET', '/webhooks/{provider}', 'WebhookController@handle'],
     ['POST', '/webhooks/{provider}', 'WebhookController@handle'],
+
+    // Gallery import API (folder-import app; Bearer GALLERY_IMPORT_KEY)
+    ['GET', '/webhooks/import/queue', 'ImportController@queue'],
+    ['POST', '/webhooks/import/gallery', 'ImportController@gallery'],
 
     // Live streaming (MediaMTX auth webhook is server-to-server, CSRF-exempt)
     ['POST', '/webhooks/live/auth', 'LiveController@auth'],

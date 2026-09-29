@@ -785,7 +785,7 @@ document.addEventListener('leavepictureinpicture', function(){
     var base = (document.body && document.body.getAttribute('data-base')) || '';
 
     function loadList(q, offset){
-      var url = base + '/browse/galleries';
+      var url = base + '/browse/videos';
       var qs = [];
       if(q){ qs.push('q=' + encodeURIComponent(q)); }
       if(offset){ qs.push('offset=' + offset); }
@@ -795,7 +795,7 @@ document.addEventListener('leavepictureinpicture', function(){
 
     function showList(q){
       body.innerHTML = '<p class="muted">Loading&hellip;</p>';
-      loadList(q || '').then(function(html){ body.innerHTML = html; }).catch(function(){ body.innerHTML = '<p class="muted">Could not load galleries.</p>'; });
+      loadList(q || '').then(function(html){ body.innerHTML = html; }).catch(function(){ body.innerHTML = '<p class="muted">Could not load videos.</p>'; });
     }
 
     btn.addEventListener('click', function(){
@@ -805,7 +805,7 @@ document.addEventListener('leavepictureinpicture', function(){
       }
     });
 
-    // Debounced search re-fetches the gallery list.
+    // Debounced search re-fetches the video list.
     var debounce = null;
     if(search){
       search.addEventListener('input', function(){
@@ -815,21 +815,6 @@ document.addEventListener('leavepictureinpicture', function(){
     }
 
     panel.addEventListener('click', function(e){
-      var gal = e.target.closest('[data-browse-gallery]');
-      if(gal){
-        e.preventDefault();
-        // Queue the gallery's first video into the playlist.
-        var id = gal.getAttribute('data-video-id');
-        if(!id){ return; }
-        chooseAction({
-          id: id,
-          title: gal.getAttribute('data-video-title') || gal.getAttribute('title') || 'Video',
-          thumb: gal.getAttribute('data-video-thumb') || '',
-          web: gal.getAttribute('data-video-web') || '',
-          url: gal.getAttribute('data-video-url') || (base + '/videos/' + id)
-        });
-        return;
-      }
       var more = e.target.closest('.pb-more');
       if(more){
         e.preventDefault();
@@ -842,6 +827,17 @@ document.addEventListener('leavepictureinpicture', function(){
           })
           .catch(function(){});
         return;
+      }
+      var vid = e.target.closest('[data-browse-video]');
+      if(vid){
+        e.preventDefault();
+        chooseAction({
+          id: vid.getAttribute('data-browse-video'),
+          title: vid.getAttribute('data-video-title') || 'Video',
+          thumb: vid.getAttribute('data-video-thumb') || '',
+          web: vid.getAttribute('data-video-web') || '',
+          url: vid.getAttribute('data-video-url') || (base + '/videos/' + vid.getAttribute('data-browse-video'))
+        });
       }
     });
   }
