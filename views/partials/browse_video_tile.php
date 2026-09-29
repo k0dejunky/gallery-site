@@ -12,6 +12,7 @@ $vidUrl = url('/videos/' . (int) $photo['id']);
        data-video-web="<?= e($vidWeb) ?>"
        data-video-title="<?= e($photo['caption'] !== '' ? (string) $photo['caption'] : 'Video') ?>"
        data-video-thumb="<?= e(file_url($photo['filename'], 'thumb')) ?>"
+       data-video-duration="<?= e(!empty($photo['duration_seconds']) ? gmdate('i:s', (int) $photo['duration_seconds']) : '') ?>"
        title="Play item">
         <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>" alt="" loading="lazy" decoding="async">
         <span class="play-badge">&#9654;</span>

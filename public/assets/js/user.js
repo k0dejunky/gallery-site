@@ -865,7 +865,8 @@ document.addEventListener('leavepictureinpicture', function(){
           title: vid.getAttribute('data-video-title') || 'Video',
           thumb: vid.getAttribute('data-video-thumb') || '',
           web: vid.getAttribute('data-video-web') || '',
-          url: vid.getAttribute('data-video-url') || (base + '/videos/' + vid.getAttribute('data-browse-video'))
+          url: vid.getAttribute('data-video-url') || (base + '/videos/' + vid.getAttribute('data-browse-video')),
+          duration: vid.getAttribute('data-video-duration') || ''
         });
       }
     });
@@ -946,7 +947,9 @@ document.addEventListener('leavepictureinpicture', function(){
     var sep = ul.querySelector('.pl-queued-sep');
     if(sep) sep.remove();
     var empty = aside.querySelector('.pl-empty');
+    var clearBtn = aside.querySelector('.pl-clear');
     if(!queue.length){
+      if(clearBtn) clearBtn.remove();
       // Keep the empty state only when there is no collection playlist either.
       if(!ul.querySelector('.pl-item') && !empty){
         empty = document.createElement('p');
@@ -958,6 +961,20 @@ document.addEventListener('leavepictureinpicture', function(){
       return;
     }
     if(empty) empty.remove();
+    if(!clearBtn){
+      clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'btn btn-sm btn-outline pl-clear';
+      clearBtn.textContent = 'Clear playlist';
+      clearBtn.addEventListener('click', function(e){
+        e.stopPropagation();
+        queue = [];
+        saveQ();
+        renderQueue();
+      });
+      var h3 = aside.querySelector('h3');
+      if(h3) h3.appendChild(clearBtn);
+    }
     var wrap = document.createElement('li');
     wrap.className = 'pl-item pl-queued-sep';
     wrap.innerHTML = '<div class="pl-title" style="font-weight:600;">Up next</div>';
@@ -970,12 +987,20 @@ document.addEventListener('leavepictureinpicture', function(){
       li.innerHTML = '<a href="' + esc(item.url) + '">' +
         (item.thumb ? '<img src="' + esc(item.thumb) + '" alt="" loading="lazy">' : '') +
         '<span class="pl-title">' + esc(item.title) + '</span>' +
-        '</a>';
+        (item.duration ? '<span class="pl-duration">' + esc(item.duration) + '</span>' : '') +
+        '</a>' +
+        '<button type="button" class="pl-remove" data-id="' + esc(item.id) + '" aria-label="Remove from playlist" title="Remove from playlist">&times;</button>';
       ul.appendChild(li);
       li.querySelector('a').addEventListener('click', function(e){
         e.preventDefault();
         var video = document.querySelector('#video-player-wrap video');
         if(video && item.web){ video.src = item.web; video.load(); video.play().catch(function(){}); }
+      });
+      li.querySelector('.pl-remove').addEventListener('click', function(e){
+        e.stopPropagation();
+        queue = queue.filter(function(q){ return String(q.id) !== String(item.id); });
+        saveQ();
+        renderQueue();
       });
     });
     // auto-advance flows into queued rows via the playlist ended handler
