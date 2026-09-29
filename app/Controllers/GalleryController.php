@@ -38,7 +38,7 @@ class GalleryController extends Controller
 
     /**
      * AJAX fragment for the player's in-page gallery browser: a compact grid
-     * of visible gallery cards. No layout — raw HTML for fetch() to insert.
+     * of video gallery cards. No layout — raw HTML for fetch() to insert.
      * Supports ?q= search and ?offset= paging (30 at a time) so the browser
      * is not limited to the newest galleries.
      */
@@ -50,7 +50,8 @@ class GalleryController extends Controller
         $offset = max(0, (int) $this->request->query('offset', 0));
         $limit  = 30;
 
-        $where  = \App\Models\Gallery::publishedVisibleSql('g') . ' AND g.is_secret = 0';
+        // Only video galleries make sense to pick from on the video player.
+        $where  = \App\Models\Gallery::publishedVisibleSql('g') . ' AND g.is_secret = 0 AND g.type = \'videos\'';
         $params = [];
         if ($q !== '') {
             $where  .= ' AND (g.title LIKE ? OR g.description LIKE ?)';
