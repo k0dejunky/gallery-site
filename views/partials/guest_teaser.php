@@ -28,7 +28,7 @@ foreach ($source as $photo) {
 <?php if ($items !== []): ?>
 <section class="guest-teaser">
     <h2 class="section-title"><?= e($heading) ?></h2>
-    <div class="guest-grid">
+    <div class="guest-grid" data-guest-grid>
         <?php foreach ($items as $item): ?>
             <div class="card recent-card">
                 <a class="card-link" href="<?= e($item['url']) ?>">
@@ -49,4 +49,29 @@ foreach ($source as $photo) {
         <?php endforeach; ?>
     </div>
 </section>
+<script>
+// Fit each teaser grid to whole rows so the "extra" thumbnails are dropped
+// cleanly at the page bottom instead of showing a clipped partial row. The
+// inline cap is reset first so a re-fit never shrinks from a previous fit.
+(function () {
+    function fitGrids() {
+        document.querySelectorAll('[data-guest-grid]').forEach(function (grid) {
+            var tile = grid.querySelector('.recent-card');
+            if (!tile) return;
+            grid.style.maxHeight = '';
+            var cs = getComputedStyle(grid);
+            var maxH = parseFloat(cs.maxHeight);
+            if (!isFinite(maxH) || maxH <= 0) return;
+            var gap = parseFloat(cs.rowGap) || 0;
+            var rowH = tile.getBoundingClientRect().height + gap;
+            if (!(rowH > 0)) return;
+            var rows = Math.max(1, Math.floor(maxH / rowH));
+            grid.style.maxHeight = (rows * rowH - gap) + 'px';
+        });
+    }
+    if (document.readyState !== 'loading') { fitGrids(); }
+    else { document.addEventListener('DOMContentLoaded', fitGrids); }
+    window.addEventListener('load', fitGrids);
+})();
+</script>
 <?php endif; ?>
