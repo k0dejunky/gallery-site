@@ -27,7 +27,7 @@
 
     <div class="auth-panel">
         <div class="auth-hero">
-            <h1>Exclusive photos and videos</h1>
+            <h1>Amethyst's Private Collection</h1>
             <p class="muted">A personal collection of photos and videos from the site's model, updated regularly — browse the catalog, save your favorites and chat. Sign up to start exploring.</p>
         </div>
 
