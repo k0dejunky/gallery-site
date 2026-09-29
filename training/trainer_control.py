@@ -29,6 +29,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import urllib.request
 import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -260,6 +261,11 @@ class ImportScheduler:
                             self.last_result = gallery_import.run_once(eff)
                         except Exception as exc:
                             self.last_result = {"ok": False, "errors": [str(exc)]}
+                            try:
+                                gallery_import._log(eff, "SCHEDULER CRASH: %s\n%s" %
+                                                    (exc, traceback.format_exc()))
+                            except Exception:
+                                pass
                     else:
                         self.last_result = {"ok": False, "errors": ["host_folder not set"]}
             except Exception:

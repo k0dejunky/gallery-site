@@ -296,12 +296,14 @@ def _run(cfg):
         raise RuntimeError("host_folder does not exist: %r" % host)
     posted = (cfg.get("posted_folder") or "").strip() or os.path.join(host, "posted")
 
+    slot = ""
     try:
         slot = fetch_next_slot(cfg)
     except Exception as exc:
         result["ok"] = False
         result["errors"].append("queue: %s" % exc)
         _log(cfg, "import run failed before posting: %s" % exc)
+        _write_status(cfg, result, slot)
         return result
 
     result["next_slot"] = slot
@@ -312,20 +314,26 @@ def _run(cfg):
     except OSError as exc:
         result["ok"] = False
         result["errors"].append(str(exc))
+        _write_status(cfg, result, slot)
         return result
 
     for name in names:
         folder = os.path.join(host, name)
         if not os.path.isdir(folder) or os.path.abspath(folder) == os.path.abspath(posted):
             continue
-        images, videos = bucket_files(folder, cfg)
+        created = []
+        failed = False
+        try:
+            images, videos = bucket_files(folder, cfg)
+        except Exception as exc:
+            result["errors"].append("%s: scan failed: %s" % (name, exc))
+            _log(cfg, "scan failed: %s (%s)" % (name, exc))
+            continue
         if not images and not videos:
             result["errors"].append("%s: no recognized image/video files (left in place)" % name)
             _log(cfg, "skipped (no media): %s" % name)
             continue
 
-        created = []
-        failed = False
         for gtype, files in (("images", images), ("videos", videos)):
             if not files:
                 continue
@@ -338,7 +346,13 @@ def _run(cfg):
                 created.append((gtype, gid))
                 result["galleries"].append({"folder": name, "type": gtype, "gallery_id": gid})
                 _log(cfg, "created %s gallery #%s for %s -> %s" % (gtype, gid, name, slot))
-                slot = _bump_slot(slot, cfg.get("spacing_hours") or 24)
+                try:
+                    slot = _bump_slot(slot, cfg.get("spacing_hours") or 24)
+                except Exception as exc:
+                    failed = True
+                    result["errors"].append("%s: slot advance failed: %s" % (name, exc))
+                    _log(cfg, "slot advance failed for %s: %s" % (name, exc))
+                    break
             else:
                 failed = True
                 msg = "%s/%s: %s" % (name, gtype, data.get("error") or "unknown")
@@ -347,14 +361,19 @@ def _run(cfg):
                 break
 
         if created and not failed:
-            moved = move_to_posted(folder, posted)
-            result["imported_folders"].append(name)
-            _log(cfg, "moved %s -> %s" % (name, moved or posted))
+            try:
+                moved = move_to_posted(folder, posted)
+                result["imported_folders"].append(name)
+                _log(cfg, "moved %s -> %s" % (name, moved or posted))
+            except Exception as exc:
+                failed = True
+                result["errors"].append("%s: move failed: %s" % (name, exc))
+                _log(cfg, "move failed: %s (%s)" % (name, exc))
 
     result["next_slot"] = slot
     _write_status(cfg, result, slot)
-    _log(cfg, "import run finished: %d folder(s) imported, %d gallery(s)" %
-         (len(result["imported_folders"]), len(result["galleries"])))
+    _log(cfg, "import run finished: %d folder(s) imported, %d gallery(s), %d error(s)" %
+         (len(result["imported_folders"]), len(result["galleries"]), len(result["errors"])))
     return result
 
 
