@@ -28,8 +28,8 @@ class AuthController extends Controller
 
         $this->view('auth/login', [
             // Only the most recent uploads are shown on the login page.
-            'recentImages' => Photo::recentImages(10),
-            'recentVideos' => Photo::recentVideos(10),
+            'recentImages' => Photo::recentImages(25),
+            'recentVideos' => Photo::recentVideos(25),
             'mediaCounts'  => Photo::siteCounts(),
             'title'        => 'Login',
             'noindex'      => true,
@@ -152,8 +152,8 @@ class AuthController extends Controller
         PageVisit::record('signup', $this->request->ip());
 
         $this->view('auth/signup', [
-            'recentImages' => Photo::recentImages(10),
-            'recentVideos' => Photo::recentVideos(10),
+            'recentImages' => Photo::recentImages(25),
+            'recentVideos' => Photo::recentVideos(25),
             'mediaCounts'  => Photo::siteCounts(),
             'title'        => 'Sign Up',
             'noindex'      => true,

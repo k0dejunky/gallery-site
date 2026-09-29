@@ -230,7 +230,7 @@ table td:nth-child(1) { overflow-wrap: anywhere; word-break: break-word; }
 .auth-splash-side{flex:1 1 300px;min-width:0}
 .guest-teaser{margin:0}
 .guest-teaser .section-title{text-align:left;font-size:1rem}
-.guest-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.75rem;align-content:start;max-height:calc(100dvh - 310px);overflow:hidden}
+.guest-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.75rem;align-content:start;max-height:calc(100dvh - 310px);overflow:hidden}
 .guest-grid .recent-card{width:auto;aspect-ratio:1/1}
 .guest-grid .recent-card .card-cover{aspect-ratio:1/1;height:auto;margin-bottom:0}
 .guest-grid .recent-card .card-cover img{height:100%}
