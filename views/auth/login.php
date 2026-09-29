@@ -62,5 +62,4 @@
 <style>
     .auth-hero { text-align: center; max-width: 640px; margin: 0 auto var(--spacing-lg); }
     .auth-hero h1 { margin: 0 0 .35rem; }
-    .guest-grid { max-height: calc(100dvh - 428px); }
 </style>

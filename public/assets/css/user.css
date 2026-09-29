@@ -225,9 +225,9 @@ table td:nth-child(1) { overflow-wrap: anywhere; word-break: break-word; }
 .slideshow-bar{display:flex;align-items:center;justify-content:center;gap:.5rem;margin-top:.5rem;flex-wrap:wrap}
 .slideshow-note{font-size:.8rem}
 .collection-gallery-cell{display:flex;flex-direction:column}
-.auth-splash{display:flex;gap:var(--spacing-lg);align-items:flex-start;justify-content:center}
+.auth-splash{display:flex;gap:var(--spacing-lg);align-items:center;justify-content:center;min-height:calc(100dvh - 320px)}
 .auth-splash .auth-panel{flex:0 1 auto;width:auto;max-width:520px}
-.auth-splash-side{flex:1 1 300px;min-width:0}
+.auth-splash-side{flex:1 1 300px;min-width:0;align-self:stretch;display:flex;flex-direction:column}
 .guest-teaser{margin:0}
 .guest-teaser .section-title{text-align:left;font-size:1rem}
 .guest-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.75rem;align-content:start;max-height:calc(100dvh - 310px);overflow:hidden}
