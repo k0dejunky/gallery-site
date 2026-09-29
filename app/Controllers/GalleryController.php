@@ -52,7 +52,7 @@ class GalleryController extends Controller
         $maxLevel = Auth::effectiveLevel();
         $levelSql = $maxLevel >= PHP_INT_MAX ? '' : ' AND g.min_level <= ' . (int) $maxLevel;
 
-        $baseWhere = "g.type = 'videos' AND g.is_secret = 0 AND " . \App\Models\Gallery::publishedVisibleSql('g') . $levelSql;
+        $baseWhere = "g.is_secret = 0 AND " . \App\Models\Gallery::publishedVisibleSql('g') . $levelSql;
         $params = [];
         if ($q !== '') {
             $baseWhere .= ' AND (p.caption LIKE ? OR g.title LIKE ?)';
