@@ -19,7 +19,7 @@ import time
 import urllib.request
 import urllib.error
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox
 
 # GUI connection settings are persisted here so the app remembers the control
 # server host/port/token across launches (env vars act as first-run defaults).
@@ -240,7 +240,14 @@ class TrainerGUI:
         self.logtxt.config(yscrollcommand=sbar.set)
 
     def _pick(self, entry, initial=None):
-        """Folder picker (Windows 7 native dialog) that fills an entry."""
+        """Folder picker (Windows 7 native dialog) that fills an entry. The
+        filedialog submodule is imported lazily so a frozen build that lacks it
+        falls back to typing the path instead of crashing at startup."""
+        try:
+            from tkinter import filedialog
+        except Exception:
+            messagebox.showwarning("Import", "Folder picker unavailable - type the path in the box instead.")
+            return
         d = filedialog.askdirectory(initialdir=initial or os.getcwd(), title="Choose folder")
         if d:
             entry.delete(0, "end")
