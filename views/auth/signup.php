@@ -3,10 +3,11 @@
 // recent pictures on the left and recent videos on the right.
 ?>
 <style>
-    .auth-hero { text-align: center; max-width: 640px; margin: 0 auto var(--spacing-lg); }
-    .auth-hero h1 { margin: 0 0 .35rem; }
     .auth-splash .auth-panel { flex: 0 1 auto; width: auto; max-width: 1000px; }
     .auth-splash-side { flex: 1 1 300px; }
+    .auth-panel .auth-hero { text-align: center; margin: 0 0 var(--spacing-md); }
+    .auth-panel .auth-hero h1 { margin: 0 0 .35rem; font-size: 1.35rem; }
+    .auth-panel .guest-teaser-stats { margin: var(--spacing-md) 0; }
     .signup-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; text-align: left; }
     .signup-grid h3 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--purple-800); }
     .signup-grid input[type="text"], .signup-grid input[type="email"], .signup-grid input[type="password"], .signup-grid input[type="date"] { width: 100%; box-sizing: border-box; }
@@ -18,24 +19,17 @@
     @media (max-width: 500px) { .signup-grid { grid-template-columns: 1fr; } }
 </style>
 
-<div class="auth-hero">
-    <h1>Exclusive photos and videos</h1>
-    <p class="muted">A personal collection of photos and videos from the site's model, updated regularly — browse the catalog, save your favorites and chat. Sign up to start exploring.</p>
-</div>
-
-<?php if (!empty($mediaCounts)): ?>
-<p class="guest-teaser-stats muted">
-    <strong><?= number_format((int) $mediaCounts['images']) ?></strong> pictures &middot;
-    <strong><?= number_format((int) $mediaCounts['videos']) ?></strong> videos across the site
-</p>
-<?php endif; ?>
-
 <div class="auth-splash">
     <div class="auth-splash-side">
         <?php $guestSide = 'pics'; require __DIR__ . '/../partials/guest_teaser.php'; ?>
     </div>
 
     <div class="auth-panel">
+        <div class="auth-hero">
+            <h1>Exclusive photos and videos</h1>
+            <p class="muted">A personal collection of photos and videos from the site's model, updated regularly — browse the catalog, save your favorites and chat. Sign up to start exploring.</p>
+        </div>
+
         <h1>Create an Account</h1>
 
         <p class="muted">Create a free account to browse <?= e(config('app.site_name')) ?>'s exclusive photos and videos.</p>
@@ -113,6 +107,13 @@
                 </div>
             </div>
         </form>
+
+        <?php if (!empty($mediaCounts)): ?>
+        <p class="guest-teaser-stats muted">
+            <strong><?= number_format((int) $mediaCounts['images']) ?></strong> pictures &middot;
+            <strong><?= number_format((int) $mediaCounts['videos']) ?></strong> videos across the site
+        </p>
+        <?php endif; ?>
 
         <p class="auth-links">Already have an account? <a href="<?= url('/login') ?>">Log in</a> &middot; <a href="<?= url('/membership') ?>">Membership</a> &middot; <a href="<?= url('/admin') ?>">Admin login</a></p>
     </div>

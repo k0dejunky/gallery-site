@@ -6,24 +6,17 @@
 // return_to) brings the guest straight back to it after signing in.
 ?>
 
-<div class="auth-hero">
-    <h1>Exclusive photos and videos</h1>
-    <p class="muted">A personal collection of photos and videos from the site's model, updated regularly — browse the catalog, save your favorites and chat. Log in to view, or sign up to start exploring.</p>
-</div>
-
-<?php if (!empty($mediaCounts)): ?>
-<p class="guest-teaser-stats muted">
-    <strong><?= number_format((int) $mediaCounts['images']) ?></strong> pictures &middot;
-    <strong><?= number_format((int) $mediaCounts['videos']) ?></strong> videos across the site
-</p>
-<?php endif; ?>
-
 <div class="auth-splash">
     <div class="auth-splash-side">
         <?php $guestSide = 'pics'; require __DIR__ . '/../partials/guest_teaser.php'; ?>
     </div>
 
     <div class="auth-panel">
+        <div class="auth-hero">
+            <h1>Exclusive photos and videos</h1>
+            <p class="muted">A personal collection of photos and videos from the site's model, updated regularly — browse the catalog, save your favorites and chat. Log in to view, or sign up to start exploring.</p>
+        </div>
+
         <h2 style="margin-top:0;">Login</h2>
 
         <form method="post" action="<?= url('/login') ?>">
@@ -43,10 +36,17 @@
                     Keep me signed in on this device
                 </label>
             </p>
-            <p>
+            <p style="text-align:center;">
                 <button type="submit" class="btn">Login</button>
             </p>
         </form>
+
+        <?php if (!empty($mediaCounts)): ?>
+        <p class="guest-teaser-stats muted">
+            <strong><?= number_format((int) $mediaCounts['images']) ?></strong> pictures &middot;
+            <strong><?= number_format((int) $mediaCounts['videos']) ?></strong> videos across the site
+        </p>
+        <?php endif; ?>
 
         <p class="auth-links">No account yet? <a href="<?= url('/signup') ?>">Sign up</a> &middot; <a href="<?= url('/membership') ?>">Membership</a> &middot; <a href="<?= url('/admin') ?>">Admin login</a></p>
         <p class="muted" style="text-align:center;font-size:0.8rem;margin-bottom:0;">
@@ -60,6 +60,7 @@
 </div>
 
 <style>
-    .auth-hero { text-align: center; max-width: 640px; margin: 0 auto var(--spacing-lg); }
-    .auth-hero h1 { margin: 0 0 .35rem; }
+    .auth-panel .auth-hero { text-align: center; margin: 0 0 var(--spacing-md); }
+    .auth-panel .auth-hero h1 { margin: 0 0 .35rem; font-size: 1.35rem; }
+    .auth-panel .guest-teaser-stats { margin: var(--spacing-md) 0; }
 </style>
