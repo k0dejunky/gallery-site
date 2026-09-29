@@ -823,7 +823,8 @@ document.addEventListener('leavepictureinpicture', function(){
             var holder = document.createElement('div');
             holder.innerHTML = html;
             more.remove();
-            body.appendChild(holder);
+            // Append each child directly so the grid pattern is preserved.
+            Array.prototype.forEach.call(holder.children, function(child){ body.appendChild(child); });
           })
           .catch(function(){});
         return;

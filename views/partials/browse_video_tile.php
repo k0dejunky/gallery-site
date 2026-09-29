@@ -13,7 +13,7 @@ $vidUrl = url('/videos/' . (int) $photo['id']);
        data-video-title="<?= e($photo['caption'] !== '' ? (string) $photo['caption'] : 'Video') ?>"
        data-video-thumb="<?= e(file_url($photo['filename'], 'thumb')) ?>"
        title="Play item">
-        <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>" alt="" loading="lazy">
+        <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>" alt="" loading="lazy" decoding="async">
         <span class="play-badge">&#9654;</span>
     </a>
 </figure>

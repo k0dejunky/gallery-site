@@ -48,35 +48,34 @@ class GalleryController extends Controller
 
         $q      = trim((string) $this->request->query('q', ''));
         $offset = max(0, (int) $this->request->query('offset', 0));
-        $limit  = 30;
+        $limit  = 18;
         $maxLevel = Auth::effectiveLevel();
         $levelSql = $maxLevel >= PHP_INT_MAX ? '' : ' AND g.min_level <= ' . (int) $maxLevel;
 
-        $where  = "g.type = 'videos' AND g.is_secret = 0 AND " . \App\Models\Gallery::publishedVisibleSql('g') . $levelSql;
+        $baseWhere = "g.type = 'videos' AND g.is_secret = 0 AND " . \App\Models\Gallery::publishedVisibleSql('g') . $levelSql;
         $params = [];
         if ($q !== '') {
-            $where  .= ' AND (p.caption LIKE ? OR g.title LIKE ?)';
+            $baseWhere .= ' AND (p.caption LIKE ? OR g.title LIKE ?)';
             $params = ['%' . $q . '%', '%' . $q . '%'];
         }
 
-        $total = (int) \App\Core\Database::run(
-            'SELECT COUNT(*) FROM photos p
-             INNER JOIN gallery_photo gp ON gp.photo_id = p.id
-             INNER JOIN galleries g ON g.id = gp.gallery_id
-             WHERE p.is_video = 1 AND ' . $where,
-            $params
-        )->fetchColumn();
-
-        $photos = \App\Core\Database::run(
+        // Fetch limit+1 to know whether more pages exist (avoids a separate
+        // COUNT). The EXISTS keeps the outer scan on the (is_video,
+        // created_at) index and drops the old GROUP BY temp-table/filesort.
+        $rows = \App\Core\Database::run(
             'SELECT p.* FROM photos p
-             INNER JOIN gallery_photo gp ON gp.photo_id = p.id
-             INNER JOIN galleries g ON g.id = gp.gallery_id
-             WHERE p.is_video = 1 AND ' . $where . '
-             GROUP BY p.id
+             WHERE p.is_video = 1 AND EXISTS (
+                 SELECT 1 FROM gallery_photo gp
+                 INNER JOIN galleries g ON g.id = gp.gallery_id
+                 WHERE gp.photo_id = p.id AND ' . $baseWhere . '
+             )
              ORDER BY p.created_at DESC
-             LIMIT ' . $limit . ' OFFSET ' . $offset,
+             LIMIT ' . ($limit + 1) . ' OFFSET ' . $offset,
             $params
         )->fetchAll();
+
+        $hasMore = count($rows) > $limit;
+        $photos  = array_slice($rows, 0, $limit);
 
         header('Content-Type: text/html; charset=utf-8');
         if ($photos === []) {
@@ -86,7 +85,7 @@ class GalleryController extends Controller
         foreach ($photos as $photo) {
             require __DIR__ . '/../../views/partials/browse_video_tile.php';
         }
-        if ($offset + count($photos) < $total) {
+        if ($hasMore) {
             echo '<button type="button" class="btn btn-sm btn-outline pb-more" data-offset="' . ($offset + $limit) . '" data-q="' . e($q) . '" style="margin:.5rem auto;display:block;">Load more videos</button>';
         }
         exit;
