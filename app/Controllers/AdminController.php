@@ -141,6 +141,7 @@ class AdminController extends Controller
         $this->viewAdmin('galleries', [
             'galleries'   => $galleries,
             'covers'      => Gallery::firstPhotos($galleryIds),
+            'galleryCategories' => \App\Models\Gallery::categoriesBulk($galleryIds),
             'filterType'  => $type,
             'filterLevel' => $level,
             'queuedGalleries' => Gallery::queuedForPublishing(Auth::isSuperAdmin()),

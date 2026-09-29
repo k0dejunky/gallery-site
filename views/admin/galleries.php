@@ -231,6 +231,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                     <th>Cover</th>
                     <th>Gallery</th>
                     <th>Type</th>
+                    <th>Categories</th>
                     <th>Media</th>
                     <th>Level</th>
                     <th>Created</th>
@@ -267,6 +268,19 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                                 <span class="pill pill-info">Videos</span>
                             <?php else: ?>
                                 <span class="pill pill-muted">Images</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="mg-categories">
+                            <?php $cats = $galleryCategories[$gid] ?? []; ?>
+                            <?php if ($cats === []): ?>
+                                <span class="pill pill-err" title="This gallery has no categories">Uncategorized</span>
+                            <?php else: ?>
+                                <?php foreach (array_slice($cats, 0, 2) as $cat): ?>
+                                    <span class="pill pill-muted"><?= e((string) $cat['name']) ?></span>
+                                <?php endforeach; ?>
+                                <?php if (count($cats) > 2): ?>
+                                    <span class="pill pill-muted">+<?= count($cats) - 2 ?></span>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </td>
                         <td class="mg-media">
