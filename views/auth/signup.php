@@ -3,7 +3,7 @@
 // left and recent videos on the right.
 ?>
 <style>
-    .auth-splash .auth-panel { flex: 0 1 auto; width: auto; max-width: 480px; }
+    .auth-splash .auth-panel { flex: 0 1 auto; width: auto; max-width: 520px; }
     .auth-splash-side { flex: 1 1 300px; }
     .auth-panel .auth-hero { text-align: center; margin: 0 0 var(--spacing-md); }
     .auth-panel .auth-hero h1 { margin: 0 0 .35rem; font-size: 1.35rem; }
