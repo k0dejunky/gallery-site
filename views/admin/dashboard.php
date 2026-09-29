@@ -100,6 +100,20 @@
     <div class="stat-card"><b><?= number_format($summary['logged_in_members']) ?></b><small>Logged In Members</small></div>
 </div>
 
+<?php // Media statistics: total, queued (scheduled for future publish) and
+    // currently-published photos/videos. ?>
+<div class="sys-card" style="margin-top:var(--spacing-lg);">
+    <h2 style="margin:0 0 .75rem;">Media statistics</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;">
+        <div class="stat-card"><b><?= number_format($summary['photos']) ?></b><small>Total Photos</small></div>
+        <div class="stat-card"><b><?= number_format($summary['videos']) ?></b><small>Total Videos</small></div>
+        <div class="stat-card"><b><?= number_format($summary['queued_photos']) ?></b><small>Queued Photos</small></div>
+        <div class="stat-card"><b><?= number_format($summary['queued_videos']) ?></b><small>Queued Videos</small></div>
+        <div class="stat-card"><b><?= number_format($summary['published_photos']) ?></b><small>Published Photos</small></div>
+        <div class="stat-card"><b><?= number_format($summary['published_videos']) ?></b><small>Published Videos</small></div>
+    </div>
+</div>
+
 <?php // Gallery access-level breakdown: how many galleries are behind each tier. ?>
 <div class="sys-card" style="margin-top:var(--spacing-lg);">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
