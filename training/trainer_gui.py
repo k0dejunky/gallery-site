@@ -342,6 +342,7 @@ class TrainerGUI:
 
         # Control-server connection: host/port/token, persisted so the app
         # remembers the sign-on across launches.
+        conn = ttk.LabelFrame(f, text="Control server connection", padding=6)
         conn.pack(fill="x", pady=(0, 8))
         crow = ttk.Frame(conn)
         crow.pack(fill="x")
