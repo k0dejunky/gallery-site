@@ -15,7 +15,8 @@
     .signup-grid input[type="text"], .signup-grid input[type="email"], .signup-grid input[type="password"], .signup-grid input[type="date"] { width: 100%; box-sizing: border-box; }
     .signup-grid input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.7; font-size: 1.1rem; }
     .signup-grid input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
-    .signup-actions { grid-column: 1 / -1; text-align: center; margin-top: 0.5rem; }
+    .signup-actions { grid-column: 1 / -1; text-align: center; margin-top: calc(-1.5rem); }
+    .signup-grid > div > p:last-child { margin-bottom: 0; }
     @media (max-width: 1352px) { .auth-splash { flex-direction: column; } .auth-splash .auth-panel { order: -1; } }
 </style>
 
