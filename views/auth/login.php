@@ -6,8 +6,8 @@
 ?>
 
 <div class="auth-hero">
-    <h1>Original member galleries</h1>
-    <p class="muted">Photos and videos made by real members — browse the catalog, save your favorites and chat. Log in to view, or sign up to start exploring.</p>
+    <h1>Exclusive photos and videos</h1>
+    <p class="muted">A personal collection of photos and videos from the site's model, updated regularly — browse the catalog, save your favorites and chat. Log in to view, or sign up to start exploring.</p>
 </div>
 
 <div class="auth-panel">

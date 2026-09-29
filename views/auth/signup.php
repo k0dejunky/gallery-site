@@ -17,7 +17,7 @@
 <div class="auth-panel">
     <h1>Create an Account</h1>
 
-    <p class="muted">You need an account to browse <?= e(config('app.site_name')) ?>.</p>
+    <p class="muted">Create a free account to browse <?= e(config('app.site_name')) ?>'s exclusive photos and videos.</p>
 
     <form method="post" action="<?= url('/signup') ?>">
         <?= csrf_field() ?>
