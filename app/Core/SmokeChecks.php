@@ -594,12 +594,22 @@ class SmokeChecks
             return strpos($m, 'MEDIUMTEXT') !== false ? $ok('051 widens queue text') : $bad('migration 051 must widen auto_poster_queue.text to MEDIUMTEXT');
         });
         $apq = $read("$root/app/Models/AutoPostQueue.php");
-        $add('smoke.ap.refill_utc', 'Smoke · Auto Poster', 'refillAhead parses stored scheduled_at as UTC (hourly slots)', static function () use ($apq, $ok, $bad): array {
-            return strpos($apq, 'new DateTime($maxScheduled, new DateTimeZone(\'UTC\'))') !== false
+        $add('smoke.ap.refill_utc', 'Smoke · Auto Poster', 'refillAhead fills the earliest free hour (no multi-hour gaps)', static function () use ($apq, $ok, $bad): array {
+            return strpos($apq, "setTime((int) \$next->format('H'), 0, 0)") !== false
+                && strpos($apq, "\$next->modify('+1 hour')") !== false
+                && strpos($apq, "\$takenTs[\$candidate->getTimestamp()]") !== false
                 && strpos($apq, "g.published_at > CURRENT_TIMESTAMP") !== false
                 && strpos($apq, "g.published_at IS NULL OR g.published_at <= CURRENT_TIMESTAMP") !== false
-                ? $ok('refill parses UTC + prioritizes scheduled galleries + visible-only random pool')
-                : $bad('refillAhead must parse scheduled_at as UTC and schedule publish-queue galleries at their publish moment');
+                ? $ok('refill anchors to the next hour, skips taken hours, prioritizes scheduled galleries, visible-only pool')
+                : $bad('refillAhead must fill from the next free hour and schedule publish-queue galleries at their publish moment');
+        });
+        $add('smoke.ap.no_media_fix', 'Smoke · Auto Poster', 'No-media posts prevented (galleryMedia fallback + enqueue/post guards)', static function () use ($apq, $ok, $bad): array {
+            return strpos($apq, '$photos === []') !== false
+                && strpos($apq, "AND p.created_at >= DATE_SUB(NOW(), INTERVAL") !== false
+                && strpos($apq, "if (\$media === []) {") !== false
+                && strpos($apq, 'Queue item has no media to post.') !== false
+                ? $ok('galleryMedia falls back to all media; enqueue/post refuse text-only rows')
+                : $bad('galleryMedia must fall back past recent_days and enqueue()/post() must never publish a media-less post');
         });
 
         // ------------------------------------------------- Gallery import API

@@ -213,16 +213,27 @@ class AutoPostQueue
         $tpl   = self::templateSettings($key);
         $limit = max(1, min((int) $tpl['max_media'], $limit ?? (int) $tpl['max_media']));
 
+        $select = "SELECT p.id, p.filename, p.is_video, p.caption
+                   FROM photos p
+                   JOIN gallery_photo gp ON gp.photo_id = p.id
+                   WHERE gp.gallery_id = ?";
+
+        // Prefer recently-added media, but never post text-only: when a gallery's
+        // photos are ALL older than recent_days, fall back to its most recent
+        // media regardless of age.
         $photos = Database::run(
-            "SELECT p.id, p.filename, p.is_video, p.caption
-             FROM photos p
-             JOIN gallery_photo gp ON gp.photo_id = p.id
-             WHERE gp.gallery_id = ?
-               AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) $tpl['recent_days'] . " DAY)
-             ORDER BY p.created_at DESC, p.id DESC
-             LIMIT $limit",
+            $select . " AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) $tpl['recent_days'] . " DAY)
+                       ORDER BY p.created_at DESC, p.id DESC
+                       LIMIT $limit",
             [$galleryId]
         )->fetchAll();
+
+        if ($photos === []) {
+            $photos = Database::run(
+                $select . " ORDER BY p.created_at DESC, p.id DESC LIMIT $limit",
+                [$galleryId]
+            )->fetchAll();
+        }
 
         foreach ($photos as $photo) {
             if ((int) $photo['is_video'] === 1) {
@@ -290,6 +301,44 @@ class AutoPostQueue
             }
             if (count($media[$gid]) < $limit) {
                 $media[$gid][] = $photo;
+            }
+        }
+
+        // Galleries whose photos are all older than recent_days fell out of the
+        // filtered query — fall back to their most recent media regardless of age
+        // so a post never goes out text-only.
+        $emptyGids = array_values(array_filter(array_keys($media), static fn (int $gid): bool => $media[$gid] === []));
+        if ($emptyGids !== []) {
+            $emptyIn    = implode(',', array_fill(0, count($emptyGids), '?'));
+            $fallback   = Database::run(
+                "SELECT gp.gallery_id AS gid, p.id, p.filename, p.is_video, p.caption,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY gp.gallery_id
+                            ORDER BY p.created_at DESC, p.id DESC
+                        ) AS rn
+                 FROM photos p
+                 JOIN gallery_photo gp ON gp.photo_id = p.id
+                 WHERE gp.gallery_id IN ($emptyIn)
+                 ORDER BY gp.gallery_id, p.created_at DESC, p.id DESC",
+                $emptyGids
+            )->fetchAll();
+            foreach ($fallback as $row) {
+                $gid = (int) $row['gid'];
+                $photo = [
+                    'id'       => (int) $row['id'],
+                    'filename' => (string) $row['filename'],
+                    'is_video' => (int) $row['is_video'],
+                    'caption'  => (string) $row['caption'],
+                ];
+                if ($photo['is_video'] === 1) {
+                    if ($media[$gid] === []) {
+                        $media[$gid][] = $photo;
+                    }
+                    continue;
+                }
+                if (count($media[$gid]) < $limit) {
+                    $media[$gid][] = $photo;
+                }
             }
         }
 
@@ -440,6 +489,13 @@ class AutoPostQueue
         $maxLen  = (int) $tpl['max_length'];
 
         $media = self::galleryMedia($galleryId, null, $key);
+
+        // Never enqueue a text-only post: a gallery with no usable media has
+        // nothing to post, so skip it instead of creating a media-less row.
+        if ($media === []) {
+            return 0;
+        }
+
         $mediaIds = array_map(static function (array $photo): int {
             return (int) $photo['id'];
         }, $media);
@@ -852,25 +908,14 @@ class AutoPostQueue
                 continue;
             }
 
-            // First random slot: the top of the hour after the newest queued
-            // post (or the top of the next site hour when nothing is queued),
-            // so slots stay hourly and never collide with existing schedules.
-            $maxScheduled = (string) Database::run(
-                "SELECT COALESCE(MAX(scheduled_at), '') FROM auto_poster_queue WHERE platform = ? AND status = 'queued'",
-                [$dbKey]
-            )->fetchColumn();
-
-            if ($maxScheduled !== '') {
-                // $maxScheduled is stored in UTC — parse it as UTC, view it in
-                // the site timezone, and align to the top of the NEXT hour.
-                $next = (new DateTime($maxScheduled, new DateTimeZone('UTC')))->setTimezone($tz);
-                $next->setTime((int) $next->format('H'), 0, 0);
-                $next->modify('+1 hour');
-            } else {
-                $next = (new DateTime('@' . $nowTs))->setTimezone($tz);
-                $next->setTime((int) $next->format('H'), 0, 0);
-                $next->modify('+1 hour');
-            }
+            // First random slot: the top of the next site hour. The $takenTs skip below
+            // keeps every slot out of hours already occupied (scheduled-gallery
+            // posts, already-queued hourly rows), so the fill lands in the
+            // earliest free hour — a queue never sits idle with a multi-hour
+            // gap just because the newest queued post is hours away.
+            $next = (new DateTime('@' . $nowTs))->setTimezone($tz);
+            $next->setTime((int) $next->format('H'), 0, 0);
+            $next->modify('+1 hour');
 
             $galleryIds = Database::run(
                 "SELECT g.id
@@ -1481,6 +1526,17 @@ class AutoPostQueue
                 'type'     => (string) (mime_content_type($path) ?: 'application/octet-stream'),
                 'size'     => (int) filesize($path),
             ];
+        }
+
+        // Defensive guard: a row that was stored with no media at all (broken
+        // legacy rows, or a gallery whose files vanished) must not be published
+        // text-only. Text-only platforms are unaffected — their rows carry
+        // media_ids, they just don't attach the files.
+        if ($media === [] && (empty($item['media_ids']) || $item['media_ids'] === '[]')) {
+            self::markSkipped((int) $item['id'], 'Queue item has no media to post.');
+            AutoPosterConfig::log($platform, '', 'skipped', 'Queue item has no media to post.');
+
+            return ['ok' => false, 'skipped' => true, 'error' => 'Queue item has no media to post.'];
         }
 
         // A throwing platform client (network error, bad response, encoding
