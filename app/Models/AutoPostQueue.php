@@ -128,6 +128,7 @@ class AutoPostQueue
         $rows = Database::run(
             "SELECT g.id AS gallery_id, g.title AS gallery_title,
                     g.description AS gallery_description,
+                    g.published_at AS published_at,
                     MAX(p.created_at) AS newest_media_at
              FROM galleries g
              JOIN gallery_photo gp ON gp.gallery_id = g.id
@@ -164,7 +165,7 @@ class AutoPostQueue
                 'gallery_title' => (string) $row['gallery_title'],
                 'caption'       => (string) $row['gallery_description'],
             ], self::hashtagsFromCategories($catsByGid[$gid] ?? [], $maxTags), $tpl);
-            $row['default_scheduled_at'] = self::defaultSchedule(null, $key);
+            $row['default_scheduled_at'] = self::galleryPublishSchedule((string) ($row['published_at'] ?? ''), $key);
         }
         unset($row);
 
@@ -391,6 +392,27 @@ class AutoPostQueue
     }
 
     /**
+     * The publish schedule to use when no explicit time is given for a queued
+     * post: the gallery's scheduled publish moment (published_at, when in the
+     * future) or the platform default. This makes a recommended post fire at
+     * the same time the gallery itself is scheduled to go live. Returns a
+     * datetime-local string in the scheduler timezone.
+     */
+    private static function galleryPublishSchedule(string $publishedAtUtc, string $key): string
+    {
+        $publishedAtUtc = trim($publishedAtUtc);
+
+        if ($publishedAtUtc !== '') {
+            $dt = DateTime::createFromFormat('Y-m-d H:i:s', $publishedAtUtc, new DateTimeZone('UTC'));
+            if ($dt !== false && $dt->getTimestamp() > time()) {
+                return $dt->setTimezone(self::schedulerTimezone())->format('Y-m-d\TH:i:s');
+            }
+        }
+
+        return self::defaultSchedule(null, $key);
+    }
+
+    /**
      * Render a stored UTC scheduled_at as a datetime-local string in the
      * scheduler timezone for the admin picker. Missing/invalid values fall
      * back to the default schedule.
@@ -474,7 +496,7 @@ class AutoPostQueue
     public static function enqueue(int $galleryId, ?string $text = null, ?string $scheduledAt = null, string $platform = 'twitter'): int
     {
         $gallery = Database::run(
-            'SELECT id, title, description FROM galleries
+            'SELECT id, title, description, published_at FROM galleries
              WHERE id = ? AND deleted_at IS NULL LIMIT 1',
             [$galleryId]
         )->fetch();
@@ -514,7 +536,17 @@ class AutoPostQueue
         // gallery itself is still queued).
         $text = self::stripBannedWords($text);
 
-        $scheduled = self::normalizeSchedule($scheduledAt) ?? self::defaultSchedule(null, $key);
+        // Publish schedule: the admin's chosen time when given, otherwise the
+        // gallery's scheduled publish moment (published_at), otherwise the
+        // platform default — a recommended post fires when the gallery goes
+        // live. galleryPublishSchedule() returns a site-timezone datetime-local
+        // string (for the admin picker), so normalize it to UTC for the column.
+        $scheduled = self::normalizeSchedule($scheduledAt);
+        if ($scheduled === null) {
+            $scheduled = self::normalizeSchedule(
+                self::galleryPublishSchedule((string) ($gallery['published_at'] ?? ''), $key)
+            );
+        }
 
         Database::run(
             'INSERT INTO auto_poster_queue

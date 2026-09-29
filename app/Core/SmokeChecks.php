@@ -611,6 +611,14 @@ class SmokeChecks
                 ? $ok('galleryMedia falls back to all media; enqueue/post refuse text-only rows')
                 : $bad('galleryMedia must fall back past recent_days and enqueue()/post() must never publish a media-less post');
         });
+        $add('smoke.ap.publish_time_schedule', 'Smoke · Auto Poster', 'Recommended posts use the gallery publish time by default', static function () use ($apq, $ok, $bad): array {
+            return strpos($apq, 'galleryPublishSchedule') !== false
+                && strpos($apq, "\$scheduled = self::normalizeSchedule(\$scheduledAt);") !== false
+                && strpos($apq, "self::galleryPublishSchedule((string) (\$gallery['published_at'] ?? ''), \$key)") !== false
+                && strpos($apq, 'self::galleryPublishSchedule((string) ($row[\'published_at\'] ?? \'\'), $key)') !== false
+                ? $ok('enqueue + recommendations fall back to the gallery published_at when no explicit schedule is given')
+                : $bad('enqueue()/recommendations() must use the gallery scheduled publish time as the queue post time');
+        });
 
         // ------------------------------------------------- Gallery import API
         $importCtrl = $read("$root/app/Controllers/ImportController.php");
