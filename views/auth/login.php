@@ -8,7 +8,7 @@
 
 <div class="auth-splash">
     <div class="auth-splash-side">
-        <?php $guestSide = 'pics'; require __DIR__ . '/../partials/guest_teaser.php'; ?>
+        <?php $guestSide = 'pics'; $guestMaxRows = 4; require __DIR__ . '/../partials/guest_teaser.php'; ?>
     </div>
 
     <div class="auth-panel">
@@ -55,7 +55,7 @@
     </div>
 
     <div class="auth-splash-side">
-        <?php $guestSide = 'videos'; require __DIR__ . '/../partials/guest_teaser.php'; ?>
+        <?php $guestSide = 'videos'; $guestMaxRows = 4; require __DIR__ . '/../partials/guest_teaser.php'; ?>
     </div>
 </div>
 

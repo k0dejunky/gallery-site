@@ -14,9 +14,14 @@ $isVideo = $guestSide === 'videos';
 $heading = $guestSide === 'videos' ? 'Recent Videos' : 'Recent Pictures';
 
 $items = [];
+$guestMaxRows = (int) ($guestMaxRows ?? 0);
+$maxItems = $guestMaxRows > 0 ? $guestMaxRows * 5 : 25;
 foreach ($source as $photo) {
     if ((int) $photo['gallery_id'] <= 0) {
         continue;
+    }
+    if (count($items) >= $maxItems) {
+        break;
     }
     $items[] = [
         'url'      => url(($isVideo ? '/videos/' : '/images/') . (int) $photo['id']),
