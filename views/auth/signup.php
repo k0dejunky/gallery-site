@@ -5,9 +5,9 @@
 <style>
     .auth-splash .auth-panel { flex: 0 1 auto; width: auto; max-width: 520px; }
     .auth-splash-side { flex: 1 1 300px; }
-    .auth-panel .auth-hero { text-align: center; margin: 0 0 var(--spacing-md); }
+    .auth-panel .auth-hero { text-align: center; margin: 0 0 .5rem; }
     .auth-panel .auth-hero h1 { margin: 0 0 .35rem; font-size: 1.35rem; }
-    .auth-panel > h1 { margin: 0 0 .25rem; }
+    .auth-panel > h1 { margin: 0 0 .25rem; font-size: 1.1rem; }
     .auth-panel > h1 + p { margin: 0 0 var(--spacing-md); }
     .auth-panel .guest-teaser-stats { margin: var(--spacing-md) 0; }
     .signup-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; text-align: left; }
@@ -15,7 +15,7 @@
     .signup-grid input[type="text"], .signup-grid input[type="email"], .signup-grid input[type="password"], .signup-grid input[type="date"] { width: 100%; box-sizing: border-box; }
     .signup-grid input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.7; font-size: 1.1rem; }
     .signup-grid input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
-    .signup-actions { grid-column: 1 / -1; text-align: center; margin-top: calc(-1.5rem); }
+    .signup-actions { grid-column: 1 / -1; text-align: center; margin-top: calc(-1rem); }
     .signup-grid > div > p:last-child { margin-bottom: 0; }
     @media (max-width: 1352px) { .auth-splash { flex-direction: column; } .auth-splash .auth-panel { order: -1; } }
 </style>
