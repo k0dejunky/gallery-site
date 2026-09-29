@@ -98,8 +98,9 @@ def _log(cfg, line):
 
 
 def _http_json(url, token, fields=None, files=None, timeout=900):
-    """Multipart POST (or GET) to the import API; returns (status, parsed)."""
-    if files is None:
+    """HTTP call to the import API. GET when no fields/files; otherwise a
+    multipart POST (fields, files, or both). Returns (status, parsed)."""
+    if not fields and not files:
         req = urlrequest.Request(url, headers={"Authorization": "Bearer " + token})
         with urlrequest.urlopen(req, timeout=timeout) as resp:
             return resp.status, json.loads(resp.read().decode("utf-8") or "{}")
@@ -110,7 +111,7 @@ def _http_json(url, token, fields=None, files=None, timeout=900):
         parts.append(
             ("--%s\r\nContent-Disposition: form-data; name=\"%s\"\r\n\r\n%s\r\n"
              % (boundary, key, value)).encode("utf-8"))
-    for fname in files:
+    for fname in (files or []):
         ctype = mimetypes.guess_type(fname)[0] or "application/octet-stream"
         parts.append(
             ("--%s\r\nContent-Disposition: form-data; name=\"files[]\"; filename=\"%s\"\r\n"
@@ -123,7 +124,7 @@ def _http_json(url, token, fields=None, files=None, timeout=900):
     body = b"".join(parts)
 
     req = urlrequest.Request(
-        url, data=body,
+        url, data=body, method="POST",
         headers={
             "Authorization": "Bearer " + token,
             "Content-Type": "multipart/form-data; boundary=" + boundary,
@@ -155,22 +156,45 @@ def _bump_slot(slot, hours):
 
 
 def bucket_files(folder, cfg):
+    """Collect image/video files from a reference folder, scanning nested
+    subfolders recursively (reference folders often wrap their media in a
+    subfolder)."""
     images, videos = [], []
     image_ext = set(cfg.get("image_ext") or IMAGE_EXT)
     video_ext = set(cfg.get("video_ext") or VIDEO_EXT)
-    for name in sorted(os.listdir(folder)):
-        full = os.path.join(folder, name)
-        if not os.path.isfile(full):
-            continue
-        ext = (name.rsplit(".", 1)[-1] if "." in name else "").lower()
-        if ext in image_ext:
-            images.append(full)
-        elif ext in video_ext:
-            videos.append(full)
-    return images, videos
+    for root, _dirs, names in os.walk(folder):
+        for name in names:
+            full = os.path.join(root, name)
+            if not os.path.isfile(full):
+                continue
+            ext = (name.rsplit(".", 1)[-1] if "." in name else "").lower()
+            if ext in image_ext:
+                images.append(full)
+            elif ext in video_ext:
+                videos.append(full)
+    return sorted(images), sorted(videos)
+
+
+def _http_retry(url, token, fields=None, files=None, timeout=900, attempts=3):
+    """_http_json with retries for transient connection resets (the box's
+    network intermittently drops connections with WinError 10053/10054). Safe:
+    re-creating a gallery is idempotent (title+type) and files dedupe by hash."""
+    last = None
+    for i in range(attempts):
+        try:
+            return _http_json(url, token, fields, files, timeout)
+        except Exception as exc:
+            last = exc
+            time.sleep(2)
+    raise last
 
 
 def post_gallery(cfg, title, gtype, slot, files):
+    """Create the scheduled gallery (metadata only), then upload each file in
+    its own request so no single upload is huge (avoids server input timeouts
+    on large folders / long videos)."""
+    base = (cfg["server_base"] or "").rstrip("/")
+    token = (cfg["import_token"] or "").strip()
     fields = {
         "title": title,
         "type": gtype,
@@ -179,14 +203,30 @@ def post_gallery(cfg, title, gtype, slot, files):
         "min_level": str(int(cfg.get("min_level") or 0)),
         "is_secret": "1" if cfg.get("is_secret") else "0",
     }
-    status, data = _http_json(
-        (cfg["server_base"].rstrip("/")) + "/webhooks/import/gallery",
-        (cfg["import_token"] or "").strip(), fields, files)
-    if status not in (200, 201):
-        return {"ok": False, "error": "HTTP %d: %s" % (status, data.get("error") or data)}
-    if not data.get("ok"):
-        return {"ok": False, "error": str(data.get("error") or "import failed")}
-    return data
+    status, data = _http_retry(base + "/webhooks/import/gallery", token, fields, None, timeout=60)
+    if status not in (200, 201) or not data.get("ok"):
+        return {"ok": False, "error": "create HTTP %d: %s" % (status, data.get("error") or data)}
+    gid = int(data.get("gallery_id") or 0)
+    if not gid:
+        return {"ok": False, "error": "create returned no gallery_id"}
+
+    uploaded = 0
+    errors = []
+    for fname in files:
+        status, data = _http_retry(base + "/webhooks/import/gallery/%d/files" % gid, token,
+                                   None, [fname], timeout=900)
+        if status in (200, 201) and data.get("ok"):
+            uploaded += 1
+        else:
+            errors.append("%s: HTTP %d: %s" % (os.path.basename(fname), status, data.get("error") or data))
+
+    if errors:
+        # Partial failure: report it as a failure so the folder stays put and
+        # the real per-file error is logged. A re-run resumes the same gallery
+        # (idempotent by title+type) and uploads the missing files.
+        return {"ok": False, "error": "%s (uploaded %d of %d)" %
+                (errors[0], uploaded, len(files)), "gallery_id": gid, "uploaded": uploaded}
+    return {"ok": True, "gallery_id": gid, "url": str(data.get("url") or ""), "uploaded": uploaded}
 
 
 def move_to_posted(folder, posted):

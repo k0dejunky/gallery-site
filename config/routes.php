@@ -33,6 +33,7 @@ return [
     ['GET', '/webhooks/import/queue', 'ImportController@queue'],
     ['GET', '/webhooks/import/settings', 'ImportController@settings'],
     ['POST', '/webhooks/import/gallery', 'ImportController@gallery'],
+    ['POST', '/webhooks/import/gallery/{id}/files', 'ImportController@files'],
 
     // Live streaming (MediaMTX auth webhook is server-to-server, CSRF-exempt)
     ['POST', '/webhooks/live/auth', 'LiveController@auth'],

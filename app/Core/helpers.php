@@ -451,14 +451,16 @@ function video_has_stream(string $path): bool
     $probe   = [];
     $rc      = 0;
 
+    // nokey output prints just the value ("video") without the trailing comma
+    // that -of csv=p=0 adds on newer ffprobe (6.x), which broke the === check.
     @exec(
-        escapeshellarg($ffprobe) . ' -v error -select_streams v:0 -show_entries stream=codec_type -of csv=p=0 '
+        escapeshellarg($ffprobe) . ' -v error -select_streams v:0 -show_entries stream=codec_type -of default=noprint_wrappers=1:nokey=1 '
         . escapeshellarg($path) . ' 2>/dev/null',
         $probe,
         $rc
     );
 
-    return $rc === 0 && trim(implode('', $probe)) === 'video';
+    return $rc === 0 && rtrim(trim(implode('', $probe)), ',') === 'video';
 }
 
 /**

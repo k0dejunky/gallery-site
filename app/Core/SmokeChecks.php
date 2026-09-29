@@ -619,6 +619,12 @@ class SmokeChecks
             $mu = $read("$root/app/Core/MediaUploader.php");
             return strpos($mu, '$config = \\config(\'app.uploads\');') !== false ? $ok('commit resolves config') : $bad('MediaUploader::commit must resolve config("app.uploads") for video duration');
         });
+        $add('smoke.import.video_probe_fix', 'Smoke · Gallery Import', 'video_has_stream uses nokey ffprobe output (ffprobe 6.x trailing-comma regression)', static function () use ($root, $read, $ok, $bad): array {
+            $h = $read("$root/app/Core/helpers.php");
+            return strpos($h, 'nokey=1') !== false && strpos($h, "rtrim(trim(implode('', \$probe)), ',') === 'video'") !== false
+                ? $ok('probe fix present')
+                : $bad('video_has_stream must tolerate the trailing comma new ffprobe adds to csv output');
+        });
         $add('smoke.import.settings_endpoint', 'Smoke · Gallery Import', 'ImportController exposes GET /webhooks/import/settings', static function () use ($importCtrl, $ok, $bad): array {
             return strpos($importCtrl, 'public function settings()') !== false && strpos($importCtrl, 'ImportSettings::all()') !== false
                 ? $ok('settings endpoint wired')

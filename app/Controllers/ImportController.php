@@ -119,24 +119,20 @@ class ImportController extends Controller
         $publishedAt = $this->normalizePublishedAt((string) $this->request->post('published_at', ''));
 
         $files = $this->request->file('files');
-        if ($files === null || !is_array($files) || empty($files['tmp_name'] ?? [])) {
-            $this->json(['ok' => false, 'error' => 'no files uploaded (multipart field "files[]")'], 422);
-            return;
-        }
+        $hasFiles = $files !== null && is_array($files) && !empty($files['tmp_name'] ?? []);
 
-        // Idempotency guard: an identical scheduled gallery already exists.
-        if ($publishedAt !== null) {
-            $existing = Gallery::findBySchedule($title, $type, $publishedAt);
-            if ($existing !== null) {
-                $this->json([
-                    'ok'         => true,
-                    'existing'   => true,
-                    'gallery_id' => (int) $existing['id'],
-                    'url'        => url('/galleries/' . (int) $existing['id']),
-                    'uploaded'   => 0,
-                ]);
-                return;
-            }
+        // Idempotency guard: a gallery with the same title+type already exists
+        // (a re-run after a partial failure resumes it instead of duplicating).
+        $existing = Gallery::findByTitleType($title, $type);
+        if ($existing !== null) {
+            $this->json([
+                'ok'         => true,
+                'existing'   => true,
+                'gallery_id' => (int) $existing['id'],
+                'url'        => url('/galleries/' . (int) $existing['id']),
+                'uploaded'   => 0,
+            ]);
+            return;
         }
 
         // No explicit schedule → auto-fill the next available slot.
@@ -144,8 +140,58 @@ class ImportController extends Controller
             $publishedAt = $this->slotAfter(Gallery::lastScheduledAt(), $spacing);
         }
 
-        $config    = config('app.uploads');
         $galleryId = Gallery::create($title, $description, $type, $minLevel, $publishedAt, $isSecret);
+
+        // Gallery-only create (the app uploads media via /{id}/files per-file).
+        if (!$hasFiles) {
+            $this->json([
+                'ok'         => true,
+                'gallery_id' => $galleryId,
+                'url'        => url('/galleries/' . $galleryId),
+                'uploaded'   => 0,
+            ], 201);
+            return;
+        }
+
+        $this->ingestFiles($galleryId, $type, $files, $title, true);
+    }
+
+    /**
+     * POST /webhooks/import/gallery/{id}/files
+     * Add one or more media files to an existing scheduled gallery. One file
+     * (or a small batch) per request keeps each upload small and reliable.
+     */
+    public function files(int $galleryId): void
+    {
+        if (!$this->authorized()) {
+            $this->deny();
+            return;
+        }
+
+        $gallery = Gallery::find($galleryId);
+        if ($gallery === null) {
+            $this->json(['ok' => false, 'error' => 'gallery not found'], 404);
+            return;
+        }
+
+        $type = (string) $gallery['type'];
+        $files = $this->request->file('files');
+        if ($files === null || !is_array($files) || empty($files['tmp_name'] ?? [])) {
+            $this->json(['ok' => false, 'error' => 'no files uploaded (multipart field "files[]")'], 422);
+            return;
+        }
+
+        $this->ingestFiles((int) $gallery['id'], $type, $files, (string) $gallery['title'], false);
+    }
+
+    /**
+     * Validate, store and attach a set of uploaded files to a gallery via the
+     * standard MediaUploader pipeline. When $rollbackEmpty is true and nothing
+     * imports, the gallery is removed so no empty scheduled gallery is left.
+     */
+    private function ingestFiles(int $galleryId, string $type, array $files, string $title, bool $rollbackEmpty): void
+    {
+        $config    = config('app.uploads');
         $photoIds  = [];
         $uploaded  = 0;
         $errors    = [];
@@ -180,7 +226,7 @@ class ImportController extends Controller
         }
 
         // Nothing imported: remove the empty scheduled gallery + orphan photos.
-        if ($uploaded === 0) {
+        if ($uploaded === 0 && $rollbackEmpty) {
             foreach ($photoIds as $pid) {
                 Photo::deleteIfOrphan((int) $pid);
             }

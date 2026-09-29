@@ -207,6 +207,23 @@ class Gallery
     }
 
     /**
+     * Find the newest non-deleted gallery for a title/type. Used by the import
+     * API's idempotency guard so a re-run after a partial failure resumes the
+     * existing scheduled gallery instead of creating a duplicate.
+     */
+    public static function findByTitleType(string $title, string $type): ?array
+    {
+        $row = Database::run(
+            'SELECT id, title, type, published_at FROM galleries
+             WHERE title = ? AND type = ? AND deleted_at IS NULL
+             ORDER BY id DESC LIMIT 1',
+            [$title, $type]
+        )->fetch();
+
+        return $row ?: null;
+    }
+
+    /**
      * Every gallery newest first, each with its image and video counts.
      */
     public static function all(array $filters = []): array

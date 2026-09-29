@@ -160,8 +160,9 @@ supervisor = TrainerSupervisor()
 # ------------------------------------------------------------------ import scheduler
 class ImportScheduler:
     """Runs the gallery folder importer on a schedule / on demand, in a daemon
-    thread. Single source of truth for import config lives in the control config
-    (chat_trainer_config.json); gallery_import.run_once() guards double-runs."""
+    thread. The site's stored import settings (gallery management page) are the
+    source of truth when reachable; the local control config is the fallback.
+    gallery_import.run_once() guards double-runs."""
 
     def __init__(self):
         self._trigger = threading.Event()
@@ -169,6 +170,7 @@ class ImportScheduler:
         self._thread = None
         self.last_run = None
         self.last_result = None
+        self._eff_cache = (0.0, None)
 
     def start(self):
         if self._thread is None:
@@ -190,28 +192,41 @@ class ImportScheduler:
             "min_level": int(cfg.get("min_level", 0) or 0),
             "description": str(cfg.get("description", "")),
             "is_secret": bool(cfg.get("is_secret", False)),
+            "enabled": bool(cfg.get("import_enabled", False)),
+            "schedule": str(cfg.get("import_schedule", "") or ""),
+            "interval_minutes": int(cfg.get("import_interval_minutes", 0) or 0),
             "status_file": str(cfg.get("import_status_file",
                                        r"C:\work\.gallery_import_status.json")),
             "log_file": str(cfg.get("import_log_file", r"C:\work\gallery_import.log")),
         }
 
+    def effective_cfg(self, force=False):
+        """The config that will actually be used: local settings, overridden by
+        the site-stored settings when the site is reachable. Cached ~60s so the
+        10s scheduler loop doesn't hammer the site."""
+        now = time.time()
+        if not force and self._eff_cache[0] and now - self._eff_cache[0] < 60:
+            return self._eff_cache[1]
+        eff = gallery_import.pull_site_settings(self.import_cfg())
+        self._eff_cache = (now, eff)
+        return eff
+
     def status(self):
-        cfg = self.import_cfg()
-        icfg = read_config_file()
-        data = gallery_import.read_status(cfg)
-        data["enabled"] = bool(icfg.get("import_enabled", False))
-        data["schedule"] = str(icfg.get("import_schedule", "") or "")
-        data["interval_minutes"] = int(icfg.get("import_interval_minutes", 0) or 0)
-        data["host_folder"] = cfg["host_folder"]
-        data["posted_folder"] = cfg["posted_folder"] or (cfg["host_folder"] and cfg["host_folder"] + os.sep + "posted")
+        eff = self.effective_cfg()
+        data = gallery_import.read_status(eff)
+        data["enabled"] = bool(eff.get("enabled", False))
+        data["schedule"] = str(eff.get("schedule", "") or "")
+        data["interval_minutes"] = int(eff.get("interval_minutes", 0) or 0)
+        data["host_folder"] = eff.get("host_folder", "")
+        data["posted_folder"] = eff.get("posted_folder", "") or (eff.get("host_folder") and eff["host_folder"] + os.sep + "posted")
         if self.last_run:
             data["last_run_control"] = time.strftime("%Y-%m-%d %H:%M:%S",
                                                      time.localtime(self.last_run))
         return data
 
     def log_tail(self, lines=60):
-        cfg = self.import_cfg()
-        path = cfg["log_file"]
+        eff = self.effective_cfg()
+        path = eff.get("log_file") or r"C:\work\gallery_import.log"
         try:
             if not os.path.isfile(path):
                 return ""
@@ -223,12 +238,12 @@ class ImportScheduler:
     def _loop(self):
         while not self._stop.is_set():
             try:
-                cfg = read_config_file()
-                enabled = bool(cfg.get("import_enabled", False))
+                eff = self.effective_cfg()
+                enabled = bool(eff.get("enabled", False))
                 due = False
                 if enabled:
-                    interval = int(cfg.get("import_interval_minutes", 0) or 0)
-                    sched = str(cfg.get("import_schedule", "")).strip()
+                    interval = int(eff.get("interval_minutes", 0) or 0)
+                    sched = str(eff.get("schedule", "") or "").strip()
                     if interval > 0:
                         due = self.last_run is None or time.time() - self.last_run >= interval * 60
                     elif sched:
@@ -237,11 +252,11 @@ class ImportScheduler:
                         due = last_day != today and time.strftime("%H:%M") >= sched
                 if self._trigger.is_set() or due:
                     self._trigger.clear()
-                    icfg = self.import_cfg()
-                    if icfg["host_folder"]:
+                    eff = self.effective_cfg(force=True)
+                    if eff.get("host_folder"):
                         self.last_run = time.time()
                         try:
-                            self.last_result = gallery_import.run_once(icfg)
+                            self.last_result = gallery_import.run_once(eff)
                         except Exception as exc:
                             self.last_result = {"ok": False, "errors": [str(exc)]}
                     else:
