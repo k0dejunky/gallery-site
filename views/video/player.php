@@ -16,12 +16,17 @@ $videoObject = [
     '@type'    => 'VideoObject',
     'name'     => $title,
     'url'      => $canonicalUrl,
-    'contentUrl' => $src,
     'description' => $metaDescription,
     'thumbnailUrl' => file_url($photo['filename'], 'thumb'),
     'uploadDate' => (string) ($photo['created_at'] ?? ''),
     'author'   => ['@type' => 'Organization', 'name' => config('app.site_name'), 'url' => absolute_url('')],
 ];
+$sampleClipUrl = video_sample_url((int) $photo['id'], (string) $photo['filename']);
+if ($sampleClipUrl !== '') {
+    // Point Google at the short public sample clip so it can verify + index
+    // the video; the full-length file stays behind the membership gate.
+    $videoObject['contentUrl'] = $sampleClipUrl;
+}
 if (!empty($photo['duration_seconds'])) {
     $videoObject['duration'] = 'PT' . (int) $photo['duration_seconds'] . 'S';
 }

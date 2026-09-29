@@ -24,6 +24,7 @@ return [
     ['GET', '/images/{id}', 'ImageController@show'],
     ['GET', '/videos/{id}', 'VideoController@show'],
     ['GET', '/files/{file}', 'StorageController@serve'],
+    ['GET', '/previews/{id}', 'StorageController@preview'],
 
     // Biller postbacks (server-to-server; no session, no CSRF — see Router)
     ['GET', '/webhooks/{provider}', 'WebhookController@handle'],

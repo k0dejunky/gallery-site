@@ -1079,6 +1079,7 @@ class GalleryController extends Controller
             set_time_limit(0);
             faststart_video_if_needed($dir . '/' . $filename);
             create_video_web_rendition($dir . '/' . $filename, $dir . '/web_' . $filename);
+            create_video_sample_clip($dir . '/' . $filename, video_sample_path($filename));
         }
 
         $this->removeChunks($uid);

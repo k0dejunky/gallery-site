@@ -169,6 +169,7 @@ class MediaUploader
                 set_time_limit(0);
                 faststart_video_if_needed($destPath);
                 create_video_web_rendition($destPath, dirname($destPath) . '/web_' . basename($destPath));
+                create_video_sample_clip($destPath, video_sample_path(basename($destPath)));
             }
 
             return true;
@@ -195,7 +196,8 @@ class MediaUploader
     {
         $bootstrap = realpath(__DIR__ . '/../bootstrap.php');
         $code = 'require $argv[1]; faststart_video_if_needed($argv[2]);'
-            . ' create_video_web_rendition($argv[2], dirname($argv[2]) . "/web_" . basename($argv[2]));';
+            . ' create_video_web_rendition($argv[2], dirname($argv[2]) . "/web_" . basename($argv[2]));'
+            . ' create_video_sample_clip($argv[2], video_sample_path(basename($argv[2])));';
         // setsid detaches the job into its own session so the php-fpm worker's
         // cleanup on request completion can't reap it (nohup alone was killed).
         $cmd = 'setsid ' . escapeshellarg(PHP_BINARY) . ' -r ' . escapeshellarg($code)

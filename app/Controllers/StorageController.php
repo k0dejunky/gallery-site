@@ -178,6 +178,43 @@ class StorageController extends Controller
     }
 
     /**
+     * Serve a video's short public sample clip (for search-engine video
+     * indexing). Intentionally small (first ~12s, ≤480p) and intentionally
+     * public — no session, token or membership gate — so Google can fetch it
+     * to verify and index the video. Only ever serves the generated clip for
+     * a real video photo; originals and full web renditions are never
+     * reachable here.
+     */
+    public function preview(int $id): void
+    {
+        if ($id <= 0) {
+            $this->notFound();
+            return;
+        }
+
+        $photo = Photo::find($id);
+
+        if ($photo === null || (int) ($photo['is_video'] ?? 0) !== 1) {
+            $this->notFound();
+            return;
+        }
+
+        $path = video_sample_path((string) $photo['filename']);
+
+        if (!is_file($path)) {
+            $this->notFound();
+            return;
+        }
+
+        header('Content-Type: video/mp4');
+        header('Accept-Ranges: bytes');
+        header('Cache-Control: public, max-age=86400');
+        // Apache (mod_xsendfile) streams the file and honours HTTP Range
+        // requests, so seeking works without buffering bytes through PHP.
+        header('X-Sendfile: ' . $path);
+    }
+
+    /**
      * Generate a blurred preview copy from an existing thumbnail using the
      * same heavy blur the auto-poster applies to preview images. Returns the
      * destination path on success, or null when GD cannot process the image

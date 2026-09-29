@@ -14,4 +14,7 @@ Disallow: /video-editor
 Disallow: /verify-email
 Disallow: /reset-password
 
+# Short public video sample clips (Google Video indexing) are crawlable.
+Allow: /previews/
+
 Sitemap: https://amethyst2213.com/gallery/sitemap.xml

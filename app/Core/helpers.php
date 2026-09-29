@@ -378,6 +378,65 @@ function create_video_web_rendition(string $src, string $dest): bool
 }
 
 /**
+ * Generate a short public sample clip (first ~12s, ≤480p) from a video for
+ * search-engine indexing (Google Video). The full video stays behind the
+ * membership gate; only this small preview is served publicly. Returns false
+ * when the source is missing or the extraction fails.
+ */
+function create_video_sample_clip(string $src, string $dest): bool
+{
+    if (!is_file($src)) {
+        return false;
+    }
+
+    $dir = dirname($dest);
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0775, true);
+    }
+
+    $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
+    // Fit within 480x480 preserving aspect, then snap both dimensions to even
+    // (H.264 requires even width/height) without upscaling. The filter is
+    // shell-quoted: the '*' glob would otherwise be expanded by the shell.
+    $vf = 'scale=480:480:force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2';
+    $cmd = escapeshellarg($ffmpeg) . ' -nostdin -y -i ' . escapeshellarg($src)
+        . ' -t 12 -vf ' . escapeshellarg($vf)
+        . ' -c:v libx264 -preset veryfast -crf 30 -maxrate 1.5M -bufsize 3M'
+        . ' -c:a aac -b:a 96k -movflags +faststart -f mp4 ' . escapeshellarg($dest) . ' 2>&1';
+
+    @exec($cmd, $out, $rc);
+
+    if ($rc === 0 && is_file($dest)) {
+        @chmod($dest, 0644);
+        return true;
+    }
+
+    @unlink($dest);
+
+    return false;
+}
+
+/**
+ * Absolute path of a video's public sample clip on disk ('' if missing).
+ * Clips live in uploads/previews/ keyed by the source filename, mirroring
+ * the thumb_/web_ variant naming so a regenerated source gets a fresh clip.
+ */
+function video_sample_path(string $filename): string
+{
+    return rtrim((string) config('app.uploads.dir'), '/') . '/previews/preview_' . basename($filename);
+}
+
+/**
+ * Public URL of a video's sample clip for search engines, or '' when the
+ * clip has not been generated yet. Crawlable — never gated by session or
+ * membership.
+ */
+function video_sample_url(int $photoId, string $filename): string
+{
+    return is_file(video_sample_path($filename)) ? url('/previews/' . (int) $photoId) : '';
+}
+
+/**
  * Remux a video with `-movflags +faststart` (stream copy — no re-encode, no
  * quality loss) so the moov atom sits at the front and browsers can start
  * playback and seek immediately. No-op when the file is already faststart.
