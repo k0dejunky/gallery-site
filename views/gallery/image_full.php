@@ -25,10 +25,25 @@ $breadcrumbItems = [
 ];
 ?>
 <?php require __DIR__ . '/../partials/breadcrumbs.php'; ?>
+<?php if (!empty($canViewFull)): ?>
 <?php require __DIR__ . '/../partials/media_nav.php'; ?>
+<?php endif; ?>
 <?php $reportUrl = url('/support') . '?' . http_build_query(['return_to' => $_SERVER['REQUEST_URI'] ?? url('/galleries')]); ?>
 
 <figure style="margin: 1rem 0; text-align: center;">
+    <?php if (empty($canViewFull)): ?>
+        <?php // Blurred, indexable preview for guests and below-level members. ?>
+        <img src="<?= e(file_url($photo['filename'], 'blur')) ?>"
+             alt="<?= e($photo['caption']) ?>"
+             decoding="async"
+             style="max-width:100%;height:auto;border-radius:10px;box-shadow:0 2px 12px rgba(59,7,100,.35);">
+        <?php
+        $gateTitle = $photo['caption'] !== '' ? $photo['caption'] : 'This image';
+        $gateLevel = 0;
+        $gateMedia = 'image';
+        require __DIR__ . '/../partials/membership_gate.php';
+        ?>
+    <?php else: ?>
     <p class="media-progress" role="status">Item <?= (int) ($currentIndex + 1) ?> of <?= (int) ($mediaCount ?? 1) ?></p>
     <picture>
         <source type="image/webp" srcset="<?= e(file_url($photo['filename'], 'web', 'webp')) ?>">
@@ -49,6 +64,7 @@ $breadcrumbItems = [
         <button id="fullsize-toggle" class="btn" type="button">View full size</button>
         <span>&middot; <?= number_format((int) ($photo['views'] ?? 0)) ?> views &middot; <?= number_format((int) ($photo['unique_views'] ?? 0)) ?> unique</span>
     </figcaption>
+    <?php endif; ?>
 </figure>
 <p style="text-align:center"><a href="<?= e($reportUrl) ?>">Report broken media</a></p>
 <script>

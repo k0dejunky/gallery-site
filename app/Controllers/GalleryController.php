@@ -212,11 +212,9 @@ class GalleryController extends Controller
     public function index(): void
     {
         // Searching/browsing galleries is allowed without a membership, but
-        // opening an individual gallery still requires one (show()).
-        // The site editor loads a public, non-personalized preview in an
-        // iframe. Normal gallery browsing still requires authentication.
+        // opening an individual gallery still applies its own membership
+        // preview gate in show().
         $siteEditorPreview = $this->request->query('se', '') === 'user';
-        if (!$siteEditorPreview) Auth::requireLogin();
 
         $page  = (int) $this->request->query('page', 1);
         $q     = trim((string) $this->request->query('q', ''));
@@ -230,7 +228,10 @@ class GalleryController extends Controller
 
         $user      = Auth::user();
         $isMember  = Auth::hasActiveSubscription();
-        $maxLevel  = Auth::effectiveLevel();
+        // Guests (and search engines) see every public gallery in the listing
+        // (secret galleries stay filtered); logged-in users are capped by
+        // their membership level.
+        $maxLevel  = $user === null ? PHP_INT_MAX : Auth::effectiveLevel();
         $favorites = $user !== null && $isMember ? FavoriteCategory::forUser((int) $user['id']) : [];
 
         // Full listing: every gallery grouped under its category — never
@@ -397,9 +398,8 @@ class GalleryController extends Controller
     public function category(string $slug): void
     {
         // Category listings (including their scoped search) are browsable
-        // without a membership, matching the gallery search page.
-        Auth::requireLogin();
-
+        // without a membership or login — guests and search engines can
+        // crawl them.
         $category = Category::findBySlug($slug);
 
         if ($category === null) {
@@ -422,7 +422,7 @@ class GalleryController extends Controller
             ? (string) $this->request->query('sort')
             : '';
 
-        $filters       = ['q' => $q, 'category' => (int) $category['id'], 'max_level' => Auth::effectiveLevel(), 'user_id' => (int) $user['id']];
+        $filters       = ['q' => $q, 'category' => (int) $category['id'], 'max_level' => $user === null ? PHP_INT_MAX : Auth::effectiveLevel(), 'user_id' => (int) ($user['id'] ?? 0)];
         if ($sort !== '') {
             $filters['sort'] = $sort;
         }
@@ -468,30 +468,36 @@ class GalleryController extends Controller
     }
 
     /**
-     * A gallery's photo/video viewer page. Level 0 (free) galleries are open
-     * to any logged-in user; higher levels require a matching subscription.
+     * A gallery's photo/video viewer page. Public galleries (non-secret,
+     * published) render a blurred preview for guests and search engines so
+     * the page stays indexable; members who meet the gallery's level see the
+     * full grid. Level 0 (free) galleries open to any logged-in user; higher
+     * levels require a matching subscription.
      */
     public function show(int $id): void
     {
-        Auth::requireLogin();
-
-        $gallery = Gallery::findPublic($id, (int) Auth::user()['id']);
+        $user    = Auth::user();
+        $gallery = Gallery::findPublic($id, $user !== null ? (int) $user['id'] : null);
 
         if ($gallery === null) {
             $this->notFound();
             return;
         }
 
-        if (empty($gallery['is_secret'])) {
-            Auth::requireGalleryLevel(
-                (int) ($gallery['min_level'] ?? 0),
-                'This gallery needs a ' . \App\Models\Subscription::levelLabel((int) ($gallery['min_level'] ?? 0)) . ' membership to view.'
-            );
+        $minLevel  = (int) ($gallery['min_level'] ?? 0);
+        if ($user === null) {
+            $canViewFull = false;
+        } elseif (\App\Core\Auth::isSuperAdmin()) {
+            $canViewFull = true;
+        } elseif (!empty($gallery['is_secret'])) {
+            // Secret galleries are gated by the allow-list (findPublic already
+            // resolved access); the level gate does not apply to them.
+            $canViewFull = true;
+        } else {
+            $canViewFull = Auth::effectiveLevel() >= $minLevel;
         }
 
-        $user = Auth::user();
-
-        if ($user !== null) {
+        if ($user !== null && $canViewFull) {
             Gallery::recordView($id, (int) $user['id']);
 
             \App\Models\UserActivity::record(
@@ -507,7 +513,11 @@ class GalleryController extends Controller
         // in the initial response; the remainder loads via "Load more" AJAX.
         $pageSize = max(1, (int) config('app.gallery_page_size', 48));
         $total    = Gallery::photoCount($id);
-        $photos   = Gallery::photosSlice($id, $pageSize, 0);
+        // Full members see the paginated slice; the preview shows only a
+        // handful of blurred thumbs (all blur variants are lightweight).
+        $photos = $canViewFull
+            ? Gallery::photosSlice($id, $pageSize, 0)
+            : Gallery::photosSlice($id, 8, 0);
 
         $this->view('gallery/show', [
             'gallery'    => $gallery,
@@ -515,10 +525,11 @@ class GalleryController extends Controller
             'total'      => $total,
             'pageSize'   => $pageSize,
             'categories' => Gallery::categories($id),
-            'currentUser' => Auth::user(),
+            'currentUser' => $user,
+            'canViewFull' => $canViewFull,
             'photoCount' => $total,
             'returnTo'   => safe_return_to($this->request->query('return_to', '')) ?? url('/galleries/' . $id),
-            'collections' => \App\Models\Collection::forUser((int) $user['id']),
+            'collections' => $user !== null ? \App\Models\Collection::forUser((int) $user['id']) : [],
         ]);
     }
 

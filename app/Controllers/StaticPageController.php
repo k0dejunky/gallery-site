@@ -89,10 +89,37 @@ class StaticPageController extends Controller
             $base   = $scheme . '://' . $host . rtrim((string) config('app.base_path'), '/');
         }
 
-        // Only pages that render 200 for guests belong in the sitemap.
-        // Gallery/photo/video detail pages are behind the login wall, so they
-        // are intentionally excluded (they redirect guests to /login).
+        // Static pages render 200 for guests; content pages now serve a
+        // public, indexable blurred preview too, so they belong in the map.
         $urls = ['/', '/about', '/terms', '/privacy', '/membership'];
+
+        $rows = \App\Core\Database::run('SELECT slug FROM categories ORDER BY name')->fetchAll();
+        foreach ($rows as $row) {
+            $urls[] = '/galleries/category/' . rawurlencode((string) $row['slug']);
+        }
+
+        $galleries = \App\Core\Database::run(
+            'SELECT id FROM galleries WHERE deleted_at IS NULL AND is_secret = 0 AND '
+            . Gallery::publishedVisibleSql('galleries')
+        )->fetchAll();
+        foreach ($galleries as $g) {
+            $urls[] = '/galleries/' . (int) $g['id'];
+        }
+
+        $media = \App\Core\Database::run(
+            'SELECT DISTINCT p.id, p.is_video
+             FROM photos p
+             INNER JOIN gallery_photo gp ON gp.photo_id = p.id
+             INNER JOIN galleries g ON g.id = gp.gallery_id
+             WHERE g.deleted_at IS NULL AND g.is_secret = 0 AND '
+            . Gallery::publishedVisibleSql('g')
+        )->fetchAll();
+        foreach ($media as $m) {
+            $urls[] = ((int) ($m['is_video'] ?? 0) === 1 ? '/videos/' : '/images/') . (int) $m['id'];
+        }
+
+        // Stay comfortably under Google's 50k URLs / 50MB sitemap limits.
+        $urls = array_slice($urls, 0, 45000);
 
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
             . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";

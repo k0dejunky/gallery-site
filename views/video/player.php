@@ -36,6 +36,7 @@ $breadcrumbItems = [
 ];
 ?>
 <?php require __DIR__ . '/../partials/breadcrumbs.php'; ?>
+<?php if (!empty($canViewFull)): ?>
 <?php require __DIR__ . '/../partials/media_nav.php'; ?>
 
 <?php if (!empty($collections)): ?>
@@ -54,10 +55,27 @@ $breadcrumbItems = [
 <?php else: ?>
     <p class="muted" style="font-size:.9rem;margin:.25rem 0 .75rem;"><a href="<?= url('/collections') ?>">Create a collection</a> to save this video.</p>
 <?php endif; ?>
+<?php endif; ?>
 
 <div class="player-layout"<?= !empty($playlist) ? ' data-has-playlist="1"' : '' ?>>
     <div class="player-main">
         <figure id="video-player-wrap" style="margin: 1rem 0; text-align: center;">
+            <?php if (empty($canViewFull)): ?>
+                <?php // Blurred, indexable preview for guests and below-level
+                    // members; playback stays behind the membership gate. ?>
+                <img src="<?= e(file_url($photo['filename'], 'blur')) ?>"
+                     alt="<?= e($title) ?>" decoding="async" style="max-width:100%;max-height:calc(100dvh - 260px);height:auto;border-radius:10px;box-shadow:0 2px 14px rgba(59,7,100,.35);">
+                <figcaption class="muted" style="margin-top:.5rem">
+                    <?php if ($photo['caption'] !== ''): ?><span><?= e($photo['caption']) ?></span><br><?php endif; ?>
+                    <span><?= number_format((int) ($photo['views'] ?? 0)) ?> views &middot; <?= number_format((int) ($photo['unique_views'] ?? 0)) ?> unique</span>
+                </figcaption>
+                <?php
+                $gateTitle = $title;
+                $gateLevel = 0;
+                $gateMedia = 'video';
+                require __DIR__ . '/../partials/membership_gate.php';
+                ?>
+            <?php else: ?>
             <p class="media-progress" role="status">Item <?= (int) ($currentIndex + 1) ?> of <?= (int) ($mediaCount ?? 1) ?></p>
             <div class="gallery-player" data-player>
                 <?php if (is_video($photo['filename'])): ?>
@@ -77,10 +95,12 @@ $breadcrumbItems = [
                 <?php endif; ?>
                 <span><?= number_format((int) ($photo['views'] ?? 0)) ?> views &middot; <?= number_format((int) ($photo['unique_views'] ?? 0)) ?> unique</span>
             </figcaption>
+            <?php endif; ?>
         </figure>
         <p style="text-align:center"><a href="<?= e($reportUrl) ?>">Report broken media</a></p>
     </div>
 
+    <?php if (!empty($canViewFull)): ?>
     <div class="player-side">
         <aside class="player-playlist" id="player-playlist">
             <h3><?= !empty($playlistName) ? e($playlistName) : 'Up next' ?><?= !empty($playlist) ? ' <span class="muted" style="font-weight:400;">(' . count($playlist) . ')</span>' : '' ?></h3>
@@ -113,4 +133,5 @@ $breadcrumbItems = [
             <div class="pb-body"></div>
         </div>
     </div>
+    <?php endif; ?>
 </div>

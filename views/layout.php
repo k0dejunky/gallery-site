@@ -37,6 +37,8 @@ $isAuthPage = $isLoginPage
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="rating" content="RTA-5042-1996-1400-1577-RTA">
+    <meta name="icra" content="nudity, sexual content, adult content">
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-H9LH86H11C"></script>
     <script>

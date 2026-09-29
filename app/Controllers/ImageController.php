@@ -24,8 +24,6 @@ class ImageController extends Controller
      */
     protected function showMedia(int $id, bool $requireVideo): void
     {
-        Auth::requireLogin();
-
         $photo = Photo::find($id);
 
         if ($photo === null || is_video($photo['filename']) !== $requireVideo) {
@@ -37,54 +35,67 @@ class ImageController extends Controller
         $gallery   = $galleryId !== null ? Gallery::find($galleryId) : null;
         $user      = Auth::user();
 
-        if ($user === null || !Photo::userCanView($id, (int) $user['id'])) {
-            $this->notFound();
-            return;
+        // Media sitting in a published, non-secret gallery is indexable: it
+        // renders a blurred preview for guests and search engines, while the
+        // full-resolution view stays behind login + membership level.
+        $isPublic = Photo::hasPublicGallery($id);
+
+        if ($user === null) {
+            if (!$isPublic) {
+                $this->notFound();
+                return;
+            }
+            $canViewFull = false;
+        } else {
+            if (!Photo::userCanView($id, (int) $user['id'])) {
+                $this->notFound();
+                return;
+            }
+            if (\App\Core\Auth::isSuperAdmin()) {
+                $canViewFull = true;
+            } elseif (!$isPublic) {
+                // Secret / allow-listed gallery: access is by the allow-list,
+                // the level gate does not apply.
+                $canViewFull = true;
+            } else {
+                $canViewFull = Auth::effectiveLevel() >= Photo::minimumGalleryLevel($id);
+            }
         }
 
-        if (Photo::hasPublicGallery($id)) {
-            Auth::requireGalleryLevel(
-                Photo::minimumGalleryLevel($id),
-                'This media needs a ' . \App\Models\Subscription::levelLabel(Photo::minimumGalleryLevel($id)) . ' membership to view.'
-            );
-        }
-
-        if ($user !== null) {
+        if ($user !== null && $canViewFull) {
             Photo::recordView($id, (int) $user['id']);
         }
 
-        [$currentIndex, $mediaCount, $prev, $next] = $galleryId !== null
-            ? Gallery::neighborsAndIndex($galleryId, $id)
-            : [0, 1, null, null];
+        $currentIndex = 0;
+        $mediaCount   = 1;
+        $prev = $next = $prevGallery = $nextGallery = null;
 
-        // Neighbour galleries for the "next gallery" step at the end of a
-        // gallery's items (skips galleries the member cannot view).
-        $prevGallery = $nextGallery = null;
-        if ($galleryId !== null) {
-            $maxLevel = Auth::effectiveLevel();
-            $nextGallery = Gallery::neighborVisible((int) $galleryId, 'next', $maxLevel);
-            $prevGallery = Gallery::neighborVisible((int) $galleryId, 'prev', $maxLevel);
-        }
-
-        // Optional collection-as-playlist: ?playlist={collectionId} plays the
-        // collection's individual videos, and prev/next move within it.
+        // Neighbour navigation, playlists and collections only matter for the
+        // full view; the guest preview is a single blurred frame.
         $playlist      = [];
         $playlistName  = null;
         $playlistQuery = '';
         $playlistId    = 0;
         $collections   = [];
-        $userId = $user !== null ? (int) $user['id'] : 0;
 
-        if ($userId > 0) {
+        if ($canViewFull && $user !== null) {
+            [$currentIndex, $mediaCount, $prev, $next] = $galleryId !== null
+                ? Gallery::neighborsAndIndex($galleryId, $id)
+                : [0, 1, null, null];
+
+            if ($galleryId !== null) {
+                $maxLevel    = Auth::effectiveLevel();
+                $nextGallery = Gallery::neighborVisible((int) $galleryId, 'next', $maxLevel);
+                $prevGallery = Gallery::neighborVisible((int) $galleryId, 'prev', $maxLevel);
+            }
+
+            $userId = (int) $user['id'];
             $collections = \App\Models\Collection::forUser($userId);
 
             $playlistId = (int) $this->request->query('playlist', 0);
             if ($playlistId > 0 && \App\Models\Collection::owns($playlistId, $userId)) {
                 $collection   = \App\Models\Collection::find($playlistId);
                 $playlistName = $collection !== false ? (string) $collection['name'] : 'Collection';
-                // A collection plays as a mixed playlist: images show as a
-                // slideshow frame, videos play normally, and prev/next moves
-                // through both.
                 $playlist     = \App\Models\Collection::media($playlistId, $userId);
 
                 if ($playlist !== []) {
@@ -103,9 +114,6 @@ class ImageController extends Controller
         $returnTo = $this->safeReturnTo($this->request->query('return_to', ''))
             ?? ($galleryId !== null ? url('/galleries/' . $galleryId) : url('/galleries'));
 
-        // Inside a collection playlist both media types render through the
-        // player view (images as a slideshow frame); outside it, videos use
-        // the player and images use the full-size image page.
         $inPlaylist = $playlistId > 0 && $playlist !== [];
         $view = $inPlaylist ? 'video/player' : ($requireVideo ? 'video/player' : 'gallery/image_full');
 
@@ -124,6 +132,7 @@ class ImageController extends Controller
             'playlistName'  => $playlistName,
             'playlistQuery' => $playlistQuery,
             'playlistId'    => $playlistId,
+            'canViewFull'   => $canViewFull,
         ]);
     }
 
