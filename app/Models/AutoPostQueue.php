@@ -118,13 +118,37 @@ class AutoPostQueue
      *
      * @return array<int, array{gallery_id: int, gallery_title: string, gallery_description: string, newest_media_at: string, media: array<int, array{id: int, filename: string, is_video: int, caption: string}>, media_count: int, suggested_text: string, default_scheduled_at: string}>
      */
-    public static function recommendations(int $limit = 8, string $platform = 'x'): array
+    public static function recommendations(int $page = 1, int $perPage = 14, string $platform = 'x'): array
     {
-        $limit = max(1, min(50, $limit));
-        $key   = AutoPostText::normalizePlatform($platform);
-        $tpl   = self::templateSettings($key);
-        $dbKey = $key === 'reddit' ? 'reddit' : 'twitter';
+        $perPage   = max(1, min(50, $perPage));
+        $page      = max(1, $page);
+        $key       = AutoPostText::normalizePlatform($platform);
+        $tpl       = self::templateSettings($key);
+        $dbKey     = $key === 'reddit' ? 'reddit' : 'twitter';
+        $recent    = (int) $tpl['recent_days'];
+        $defaultMin = max(1, (int) $tpl['schedule_minutes']);
 
+        $where = "g.deleted_at IS NULL
+                  AND p.created_at >= DATE_SUB(NOW(), INTERVAL $recent DAY)
+                  AND NOT EXISTS (SELECT 1 FROM auto_poster_queue q
+                                  WHERE q.gallery_id = g.id
+                                    AND q.platform = '$dbKey'
+                                    AND q.status IN ('queued', 'posted', 'failed', 'skipped', 'dismissed'))";
+
+        $total = (int) Database::run(
+            "SELECT COUNT(DISTINCT g.id) FROM galleries g
+             JOIN gallery_photo gp ON gp.gallery_id = g.id
+             JOIN photos p ON p.id = gp.photo_id
+             WHERE $where"
+        )->fetchColumn();
+
+        $pages  = max(1, (int) ceil($total / $perPage));
+        $page   = min($page, $pages);
+        $offset = ($page - 1) * $perPage;
+
+        // "Next to process first": order by the post time — a gallery's future
+        // published_at when set, otherwise the platform default schedule (now +
+        // schedule_minutes). Soonest post time first.
         $rows = Database::run(
             "SELECT g.id AS gallery_id, g.title AS gallery_title,
                     g.description AS gallery_description,
@@ -133,43 +157,47 @@ class AutoPostQueue
              FROM galleries g
              JOIN gallery_photo gp ON gp.gallery_id = g.id
              JOIN photos p ON p.id = gp.photo_id
-             WHERE g.deleted_at IS NULL
-               AND p.created_at >= DATE_SUB(NOW(), INTERVAL " . (int) $tpl['recent_days'] . " DAY)
-               AND NOT EXISTS (SELECT 1 FROM auto_poster_queue q
-                               WHERE q.gallery_id = g.id
-                                 AND q.platform = '$dbKey'
-                                 AND q.status IN ('queued', 'posted', 'failed', 'skipped', 'dismissed'))
+             WHERE $where
              GROUP BY g.id
-             ORDER BY newest_media_at DESC, g.id DESC
-             LIMIT $limit"
+             ORDER BY COALESCE(
+                        CASE WHEN g.published_at > CURRENT_TIMESTAMP THEN g.published_at END,
+                        DATE_ADD(CURRENT_TIMESTAMP, INTERVAL $defaultMin MINUTE)
+                      ) ASC, g.id ASC
+             LIMIT $perPage OFFSET $offset"
         )->fetchAll();
 
-        if ($rows === []) {
-            return [];
+        $items = [];
+        if ($rows !== []) {
+            // Batch the per-gallery media + category lookups into two queries so
+            // the loop below never issues N+1 queries per recommendation.
+            $galleryIds = array_map('intval', array_column($rows, 'gallery_id'));
+            $mediaByGid = self::galleryMediaBulk($galleryIds, $key);
+            $catsByGid  = \App\Models\Gallery::categoriesBulk($galleryIds);
+            $maxTags    = max(0, (int) $tpl['max_tags']);
+
+            foreach ($rows as &$row) {
+                $gid              = (int) $row['gallery_id'];
+                $media            = $mediaByGid[$gid] ?? [];
+                $row['platform']  = $dbKey;
+                $row['media']     = $media;
+                $row['media_count'] = count($media);
+                $row['suggested_text'] = self::buildText([
+                    'gallery_title' => (string) $row['gallery_title'],
+                    'caption'       => (string) $row['gallery_description'],
+                ], self::hashtagsFromCategories($catsByGid[$gid] ?? [], $maxTags), $tpl);
+                $row['default_scheduled_at'] = self::galleryPublishSchedule((string) ($row['published_at'] ?? ''), $key);
+            }
+            unset($row);
+            $items = $rows;
         }
 
-        // Batch the per-gallery media + category lookups into two queries so
-        // the loop below never issues N+1 queries per recommendation.
-        $galleryIds = array_map('intval', array_column($rows, 'gallery_id'));
-        $mediaByGid = self::galleryMediaBulk($galleryIds, $key);
-        $catsByGid  = \App\Models\Gallery::categoriesBulk($galleryIds);
-        $maxTags    = max(0, (int) $tpl['max_tags']);
-
-        foreach ($rows as &$row) {
-            $gid              = (int) $row['gallery_id'];
-            $media            = $mediaByGid[$gid] ?? [];
-            $row['platform']  = $dbKey;
-            $row['media']     = $media;
-            $row['media_count'] = count($media);
-            $row['suggested_text'] = self::buildText([
-                'gallery_title' => (string) $row['gallery_title'],
-                'caption'       => (string) $row['gallery_description'],
-            ], self::hashtagsFromCategories($catsByGid[$gid] ?? [], $maxTags), $tpl);
-            $row['default_scheduled_at'] = self::galleryPublishSchedule((string) ($row['published_at'] ?? ''), $key);
-        }
-        unset($row);
-
-        return $rows;
+        return [
+            'items'    => $items,
+            'total'    => $total,
+            'page'     => $page,
+            'per_page' => $perPage,
+            'pages'    => $pages,
+        ];
     }
 
     /**

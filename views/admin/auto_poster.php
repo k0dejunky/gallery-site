@@ -115,57 +115,11 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
 <div class="stats-panel" style="margin-bottom:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <h2>Recommended posts</h2>
-        <span class="muted" style="font-size:.85rem;">One post per <?= e($platformName) ?> gallery with uploads in the last <?= (int) ($apTemplate['recent_days'] ?? 14) ?> days, carrying up to <?= (int) ($apTemplate['max_media'] ?? 0) ?> of its newest media. A gallery already handled here&mdash;queued, posted, or dismissed&mdash;isn&rsquo;t offered again.</span>
+        <span class="muted" style="font-size:.85rem;">One post per <?= e($platformName) ?> gallery with uploads in the last <?= (int) ($apTemplate['recent_days'] ?? 14) ?> days, carrying up to <?= (int) ($apTemplate['max_media'] ?? 0) ?> of its newest media. A gallery already handled here&mdash;queued, posted, or dismissed&mdash;isn&rsquo;t offered again. Ordered by post time, next to process first.</span>
     </div>
-    <?php if (empty($recommended)): ?>
-        <p class="muted">No recently-updated galleries to recommend. Upload new media, or every recent gallery already has a pending post (or was dismissed).</p>
-    <?php else: ?>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem;margin-top:.75rem;">
-            <?php foreach ($recommended as $rec): ?>
-                <div style="border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius,.5rem);padding:.75rem;display:flex;flex-direction:column;gap:.5rem;">
-                    <div style="display:flex;gap:.75rem;align-items:center;">
-                        <?php if (!empty($rec['media'])): ?>
-                            <img src="<?= e(file_url((string) $rec['media'][0]['filename'], 'thumb')) ?>" alt="" width="64" height="48" style="border-radius:4px;object-fit:cover;flex-shrink:0;background:#000;">
-                        <?php else: ?>
-                            <div style="width:64px;height:48px;border-radius:4px;background:#f3f4f6;flex-shrink:0;"></div>
-                        <?php endif; ?>
-                        <div style="min-width:0;">
-                            <div style="font-weight:600;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= e((string) $rec['gallery_title'] ?: 'Untitled gallery') ?></div>
-                            <div class="muted" style="font-size:.8rem;"><?= e(tzdate('M j, Y', $rec['newest_media_at'])) ?> &middot; <?= (int) $rec['media_count'] ?> file(s)</div>
-                        </div>
-                    </div>
-                    <?php if (count($rec['media']) > 1): ?>
-                        <div style="display:flex;gap:.25rem;flex-wrap:wrap;">
-                            <?php foreach ($rec['media'] as $mf): ?>
-                                <img src="<?= e(file_url((string) $mf['filename'], 'thumb')) ?>" alt="" width="56" height="42" style="border-radius:4px;object-fit:cover;background:#000;">
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
-                    <form method="post" action="<?= url('/admin/auto-poster/queue/recommend') ?>" style="display:flex;flex-direction:column;gap:.5rem;">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="platform" value="<?= e($platform) ?>">
-                        <input type="hidden" name="gallery_id" value="<?= (int) $rec['gallery_id'] ?>">
-                        <textarea name="text" rows="2" maxlength="<?= $apMaxLength ?>" data-char-count data-char-count-id="rec-<?= (int) $rec['gallery_id'] ?>" style="font-size:.85rem;color:#374151;background:#fff;padding:.5rem .6rem;border-radius:4px;border:1px solid #d1d5db;word-wrap:break-word;resize:vertical;box-sizing:border-box;width:100%;"><?= e((string) $rec['suggested_text']) ?></textarea>
-                        <div class="muted" style="font-size:.72rem;text-align:right;"><span data-char-count-out="rec-<?= (int) $rec['gallery_id'] ?>">0</span>/<?= $apMaxLength ?></div>
-                        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
-                            <label for="sched_<?= (int) $rec['gallery_id'] ?>" class="muted" style="font-size:.8rem;">Publish</label>
-                            <input type="datetime-local" name="scheduled_at" id="sched_<?= (int) $rec['gallery_id'] ?>" value="<?= e((string) $rec['default_scheduled_at']) ?>" style="font-size:.85rem;padding:.2rem .35rem;border:1px solid #d1d5db;border-radius:4px;">
-                            <span class="muted" style="font-size:.75rem;">auto-posts when the time passes</span>
-                        </div>
-                        <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
-                            <button type="submit" class="btn btn-sm">Add to queue</button>
-                            <button type="submit" class="btn btn-sm" style="background:#0ea5e9;color:#fff;"
-                                    formaction="<?= url('/admin/auto-poster/queue/post') ?>"
-                                    onclick="return confirm('Post this now to <?= e($platformName) ?>?');">Post now</button>
-                            <button type="submit" class="btn btn-sm btn-danger"
-                                    formaction="<?= url('/admin/auto-poster/queue/dismiss') ?>"
-                                    onclick="return confirm('Dismiss this recommended post?');">Dismiss</button>
-                        </div>
-                    </form>
-                </div>
-            <?php endforeach; ?>
-        </div>
-    <?php endif; ?>
+    <div id="ap-rec-body" style="margin-top:.75rem;">
+        <?php require __DIR__ . '/partials/recommendations.php'; ?>
+    </div>
 </div>
 
 <?php // ----- Pending queue (scoped to this platform) ----- ?>
@@ -561,6 +515,25 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
     .ap-msg a.ap-link { color: var(--purple-700); text-decoration: none; font-weight: 600; }
     .ap-msg a.ap-link:hover { text-decoration: underline; }
     .ap-msg .ap-err { color: #b3261e; }
+    .ap-rec-grid { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: .6rem; }
+    .ap-rec-card { border: 1px solid var(--border,#e5e7eb); border-radius: .5rem; padding: .5rem; display: flex; flex-direction: column; gap: .4rem; background: #fff; min-width: 0; }
+    .ap-rec-thumb { aspect-ratio: 16/9; border-radius: 4px; overflow: hidden; background: #f3f4f6; }
+    .ap-rec-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .ap-rec-title { font-weight: 600; font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ap-rec-sub { font-size: .72rem; }
+    .ap-rec-form { display: flex; flex-direction: column; gap: .35rem; font-size: .78rem; }
+    .ap-rec-form textarea { width: 100%; box-sizing: border-box; font-size: .75rem; color: #374151; background: #fff; padding: .35rem .4rem; border-radius: 4px; border: 1px solid #d1d5db; resize: vertical; }
+    .ap-rec-count { font-size: .68rem; text-align: right; }
+    .ap-rec-form input[type="datetime-local"] { width: 100%; box-sizing: border-box; font-size: .75rem; padding: .15rem .25rem; border: 1px solid #d1d5db; border-radius: 4px; }
+    .ap-rec-actions { display: flex; gap: .3rem; flex-wrap: wrap; }
+    .ap-rec-actions .btn { flex: 1 1 auto; font-size: .72rem; padding: .25rem .4rem; margin: 0; }
+    .ap-rec-post { background: #0ea5e9 !important; color: #fff !important; }
+    .ap-rec-pager { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+    .ap-rec-pager .btn { margin: 0 .2rem .2rem 0; }
+    .ap-rec-loading { opacity: .5; pointer-events: none; transition: opacity .15s; }
+    @media (max-width: 1500px) { .ap-rec-grid { grid-template-columns: repeat(5, minmax(0,1fr)); } }
+    @media (max-width: 1100px) { .ap-rec-grid { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+    @media (max-width: 640px)  { .ap-rec-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
     @media (max-width: 600px) {
         .ap-log .ap-table th { display: none; }
         .ap-log .ap-table, .ap-log .ap-table tbody, .ap-log .ap-table tr, .ap-log .ap-table td { display: block; width: 100%; }
@@ -642,16 +615,19 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
 (function () {
     // Real-time character counters for every post-text field.
     (function () {
-        var fields = document.querySelectorAll('textarea[data-char-count]');
         function update(ta) {
             var id = ta.getAttribute('data-char-count-id');
             var out = document.querySelector('[data-char-count-out="' + id + '"]');
             if (out) { out.textContent = ta.value.length; }
         }
-        fields.forEach(function (ta) {
-            update(ta);
-            ta.addEventListener('input', function () { update(ta); });
-        });
+        window.initApCharCounts = function () {
+            document.querySelectorAll('textarea[data-char-count]').forEach(function (ta) {
+                update(ta);
+                ta.removeEventListener('input', update);
+                ta.addEventListener('input', function () { update(ta); });
+            });
+        };
+        window.initApCharCounts();
     })();
 
     // Live countdown to each queued post's publish time.
@@ -807,6 +783,40 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
         tagsEl.addEventListener('input', render);
         lengthEl.addEventListener('input', render);
         render();
+    })();
+// AJAX pagination for Recommended posts: reloads only this section with the
+    // next/previous 14 posts (2 rows of 7) without a full page refresh.
+    (function () {
+        var body = document.getElementById('ap-rec-body');
+        if (!body) { return; }
+        var base = '<?= e($platformPath) ?>' + '/recommendations';
+
+        function bind() {
+            body.querySelectorAll('[data-rec-page]').forEach(function (btn) {
+                if (btn.dataset.recBound) { return; }
+                btn.dataset.recBound = '1';
+                btn.addEventListener('click', function () {
+                    var page = parseInt(btn.getAttribute('data-rec-page'), 10) || 1;
+                    body.classList.add('ap-rec-loading');
+                    fetch(base + '?page=' + page, { headers: { 'Accept': 'text/html' } })
+                        .then(function (r) {
+                            if (!r.ok) { throw new Error('HTTP ' + r.status); }
+                            return r.text();
+                        })
+                        .then(function (html) {
+                            body.innerHTML = html;
+                            bind();
+                            if (window.initApCharCounts) { window.initApCharCounts(); }
+                            body.classList.remove('ap-rec-loading');
+                        })
+                        .catch(function () {
+                            body.classList.remove('ap-rec-loading');
+                            alert('Could not load that page of recommendations.');
+                        });
+                });
+            });
+        }
+        bind();
     })();
 })();
 </script>

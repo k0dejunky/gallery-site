@@ -55,6 +55,45 @@ class AutoPosterController extends Controller
     }
 
     /**
+     * AJAX fragment for the Recommended posts section: renders just the cards
+     * + pager for one page (14 recommendations, ordered by post time) so the
+     * section can page without reloading the whole auto-poster page.
+     */
+    public function recommendationsPage(string $platform): void
+    {
+        $canonical = Platforms::canonicalize($platform) ?: 'x';
+        $page      = max(1, (int) $this->request->query('page', '1'));
+
+        $this->renderRecommendationsFragment(AutoPostQueue::recommendations($page, 14, $canonical), $canonical);
+    }
+
+    /**
+     * Render the recommendation cards + pagination partial. Used both for the
+     * initial page render (the partial is also included by the view) and for
+     * the AJAX paging endpoint.
+     */
+    private function renderRecommendationsFragment(array $recs, string $platform): void
+    {
+        $meta         = Platforms::get($platform);
+        $platformName = (string) ($meta['label'] ?? ucfirst($platform));
+        $template     = AutoPostQueue::templateSettings($platform);
+
+        $data = [
+            'recommended'  => $recs['items'],
+            'recTotal'     => $recs['total'],
+            'recPage'      => $recs['page'],
+            'recPages'     => $recs['pages'],
+            'platform'     => $platform,
+            'platformName' => $platformName,
+            'apTemplate'   => $template,
+            'apMaxLength'  => (int) ($template['max_length'] ?? Platforms::maxLength($platform)),
+        ];
+
+        extract($data);
+        require __DIR__ . '/../../views/admin/partials/recommendations.php';
+    }
+
+    /**
      * Build the Auto Poster page for one canonical platform. Every section —
      * template, credentials, recommended, queue, recent posts and log — is
      * scoped to that platform and driven by the platform registry.
@@ -86,6 +125,8 @@ class AutoPosterController extends Controller
         $recentPage = max(1, (int) $this->request->query('page', '1'));
         $recentPosts = AutoPostQueue::recentPostsPage($recentPage, 25, $queueKey);
 
+        $recs = AutoPostQueue::recommendations(1, 14, $platform);
+
         $this->viewAdmin('auto_poster', [
             'platform'        => $platform,
             'platformName'    => $platformName,
@@ -99,7 +140,10 @@ class AutoPosterController extends Controller
                 'gallery_title' => 'Example gallery',
                 'caption'       => 'Fresh uploads',
             ], ['amateur', 'redhead', 'new'], $template),
-            'recommended'     => AutoPostQueue::recommendations(8, $platform),
+            'recommended'     => $recs['items'],
+            'recTotal'        => $recs['total'],
+            'recPage'         => $recs['page'],
+            'recPages'        => $recs['pages'],
             'queue'           => AutoPostQueue::queued(0, $queueKey),
             'queueCounts'     => AutoPostQueue::statusCounts($queueKey),
             'recentPosts'     => $recentPosts['items'],

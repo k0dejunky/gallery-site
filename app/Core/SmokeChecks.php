@@ -727,15 +727,19 @@ class SmokeChecks
                 : $bad('recent-posts Reschedule/Repost pickers must prefill AutoPostQueue::rescheduleDefault() instead of the item\'s stale scheduled_at');
         });
         $add('smoke.ap.platform_recs', 'Smoke · Auto Poster', 'Recommended posts work per platform', static function () use ($apq, $apv, $root, $read, $ok, $bad): array {
-            $ctrl = $read("$root/app/Controllers/AutoPosterController.php");
-            return strpos($apq, 'public static function recommendations(int $limit = 8, string $platform') !== false
+            $ctrl  = $read("$root/app/Controllers/AutoPosterController.php");
+            $recv  = $read("$root/views/admin/partials/recommendations.php");
+            return strpos($apq, 'public static function recommendations(int $page = 1, int $perPage = 14, string $platform') !== false
                 && strpos($apq, "q.status IN ('queued', 'posted', 'failed', 'skipped', 'dismissed')") !== false
+                && strpos($apq, "ORDER BY COALESCE(") !== false
                 && strpos($apq, 'public static function enqueue(int $galleryId, ?string $text = null, ?string $scheduledAt = null, string $platform') !== false
-                && strpos($ctrl, 'AutoPostQueue::recommendations(8, $platform)') !== false
-                && strpos($apv, 'queue/recommend') !== false
-                && strpos($apv, '<input type="hidden" name="platform" value="<?= e($platform) ?>">') !== false
-                ? $ok('per-platform recommendations on every channel page')
-                : $bad('recommendations must be generated per platform, excluding only pending/dismissed galleries');
+                && strpos($ctrl, 'AutoPostQueue::recommendations(1, 14, $platform)') !== false
+                && strpos($ctrl, 'public function recommendationsPage(') !== false
+                && strpos($apv, 'partials/recommendations.php') !== false
+                && strpos($recv, 'queue/recommend') !== false
+                && strpos($recv, '<input type="hidden" name="platform" value="<?= e($platform) ?>">') !== false
+                ? $ok('per-platform recommendations, paginated 14 at a time, ordered by post time')
+                : $bad('recommendations must be generated per platform, paginated 14/page, excluding only pending/dismissed galleries');
         });
         $add('smoke.ap.post_guarded', 'Smoke · Auto Poster', 'Client exceptions mark the row failed, never left queued', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'catch (\Throwable $e)') !== false && strpos($apq, 'thrown by the platform client') !== false

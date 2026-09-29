@@ -357,6 +357,7 @@ return [
     // Auto poster (admin only) — one page per posting option
     ['GET', '/admin/auto-poster', 'AutoPosterController@index', 'autoposter'],
     ['GET', '/admin/auto-poster/{platform}', 'AutoPosterController@platform', 'autoposter'],
+    ['GET', '/admin/auto-poster/{platform}/recommendations', 'AutoPosterController@recommendationsPage', 'autoposter'],
     ['GET', '/admin/auto-poster/{platform}/authorize', 'AutoPosterController@authorizeChannel', 'autoposter'],
     ['GET', '/admin/auto-poster/{platform}/callback', 'AutoPosterController@callbackChannel', 'autoposter'],
     ['POST', '/admin/auto-poster/settings', 'AutoPosterController@saveSettings', 'autoposter'],
