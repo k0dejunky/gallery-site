@@ -74,10 +74,33 @@ class GalleryController extends Controller
 
         $covers = \App\Models\Gallery::firstPhotos(array_map('intval', array_column($galleries, 'id')));
 
+        // First video of each gallery, so a card click can queue a playable
+        // video straight from the player without an extra round-trip.
+        $firstVideos = [];
+        if ($galleries !== []) {
+            $gids = array_map('intval', array_column($galleries, 'id'));
+            $placeholders = implode(',', array_fill(0, count($gids), '?'));
+            $videoRows = \App\Core\Database::run(
+                "SELECT gp.gallery_id, p.id, p.filename, p.caption, p.duration_seconds
+                 FROM gallery_photo gp
+                 INNER JOIN photos p ON p.id = gp.photo_id AND p.is_video = 1
+                 WHERE gp.gallery_id IN ($placeholders)
+                 ORDER BY gp.gallery_id ASC, gp.position ASC, p.id ASC",
+                $gids
+            )->fetchAll();
+            foreach ($videoRows as $videoRow) {
+                $gid = (int) $videoRow['gallery_id'];
+                if (!isset($firstVideos[$gid])) {
+                    $firstVideos[$gid] = $videoRow;
+                }
+            }
+        }
+
         header('Content-Type: text/html; charset=utf-8');
         foreach ($galleries as $g) {
             $gallery = $g;
             $cover = $covers[(int) $g['id']] ?? null;
+            $firstVideo = $firstVideos[(int) $g['id']] ?? null;
             require __DIR__ . '/../../views/partials/browse_gallery_card.php';
         }
         if ($offset + count($galleries) < $total) {

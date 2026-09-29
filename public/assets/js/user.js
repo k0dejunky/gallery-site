@@ -701,6 +701,7 @@ document.addEventListener('leavepictureinpicture', function(){
     var list = document.querySelector('.player-playlist ul');
     if(active && list && active.scrollIntoView){ try{ active.scrollIntoView({block:'nearest'}); }catch(e){} }
     if(video){ video.__plNext = next ? (next.querySelector('a') ? next.querySelector('a').getAttribute('href') : null) : null; }
+    if(window.GalleryQueue) window.GalleryQueue.render();
   }
 
   function bind(){
@@ -780,9 +781,7 @@ document.addEventListener('leavepictureinpicture', function(){
     if(!btn || !panel || panel.__init) return;
     panel.__init = true;
     var body = panel.querySelector('.pb-body');
-    var back = document.getElementById('pb-back');
     var search = document.getElementById('pb-search');
-    var view = 'list';
     var base = (document.body && document.body.getAttribute('data-base')) || '';
 
     function loadList(q, offset){
@@ -795,25 +794,13 @@ document.addEventListener('leavepictureinpicture', function(){
     }
 
     function showList(q){
-      view = 'list';
-      if(back) back.hidden = true;
       body.innerHTML = '<p class="muted">Loading&hellip;</p>';
       loadList(q || '').then(function(html){ body.innerHTML = html; }).catch(function(){ body.innerHTML = '<p class="muted">Could not load galleries.</p>'; });
     }
 
-    function openGallery(id){
-      view = 'gallery';
-      if(back) back.hidden = false;
-      body.innerHTML = '<p class="muted">Loading&hellip;</p>';
-      fetch(base + '/browse/galleries/' + id).then(function(r){ return r.text(); }).then(function(html){ body.innerHTML = html; }).catch(function(){ body.innerHTML = '<p class="muted">Could not load that gallery.</p>'; });
-    }
-
     btn.addEventListener('click', function(){
       panel.hidden = !panel.hidden;
-      if(!panel.hidden && view !== 'list'){
-        // reopening always shows the gallery list, not a stale tile view
-        showList(search ? search.value : '');
-      } else if(!panel.hidden && !body.childNodes.length){
+      if(!panel.hidden && !body.childNodes.length){
         showList(search ? search.value : '');
       }
     });
@@ -827,15 +814,20 @@ document.addEventListener('leavepictureinpicture', function(){
       });
     }
 
-    if(back){
-      back.addEventListener('click', function(){ showList(search ? search.value : ''); });
-    }
-
     panel.addEventListener('click', function(e){
       var gal = e.target.closest('[data-browse-gallery]');
       if(gal){
         e.preventDefault();
-        openGallery(gal.getAttribute('data-browse-gallery'));
+        // Queue the gallery's first video into the playlist.
+        var id = gal.getAttribute('data-video-id');
+        if(!id){ return; }
+        chooseAction({
+          id: id,
+          title: gal.getAttribute('data-video-title') || gal.getAttribute('title') || 'Video',
+          thumb: gal.getAttribute('data-video-thumb') || '',
+          web: gal.getAttribute('data-video-web') || '',
+          url: gal.getAttribute('data-video-url') || (base + '/videos/' + id)
+        });
         return;
       }
       var more = e.target.closest('.pb-more');
@@ -851,18 +843,6 @@ document.addEventListener('leavepictureinpicture', function(){
           .catch(function(){});
         return;
       }
-      var vid = e.target.closest('[data-browse-video]');
-      if(vid){
-        e.preventDefault();
-        var item = {
-          id: vid.getAttribute('data-browse-video'),
-          title: vid.getAttribute('data-video-title') || 'Video',
-          thumb: vid.getAttribute('data-video-thumb') || '',
-          web: vid.getAttribute('data-video-web') || '',
-          url: vid.getAttribute('data-video-url') || ('/videos/' + vid.getAttribute('data-browse-video'))
-        };
-        chooseAction(item);
-      }
     });
   }
 
@@ -873,7 +853,7 @@ document.addEventListener('leavepictureinpicture', function(){
     var doIt = function(how){
       if(!already){
         if(how === 'front'){ queue.unshift(item); }
-        else if(how === 'end'){ queue.push(item); }
+        else { queue.push(item); } // 'end' and 'play' both add it to the playlist
       }
       saveQ();
       renderQueue();
@@ -932,13 +912,26 @@ document.addEventListener('leavepictureinpicture', function(){
   }
 
   function renderQueue(){
-    var ul = document.querySelector('.player-playlist ul');
-    if(!ul) return;
+    var aside = document.querySelector('.player-playlist');
+    var ul = aside ? aside.querySelector('ul') : null;
+    if(!aside || !ul) return;
     // remove previously rendered queued rows (marked data-queued)
     ul.querySelectorAll('.pl-item[data-queued]').forEach(function(x){ x.remove(); });
     var sep = ul.querySelector('.pl-queued-sep');
     if(sep) sep.remove();
-    if(!queue.length) return;
+    var empty = aside.querySelector('.pl-empty');
+    if(!queue.length){
+      // Keep the empty state only when there is no collection playlist either.
+      if(!ul.querySelector('.pl-item') && !empty){
+        empty = document.createElement('p');
+        empty.className = 'pl-empty muted';
+        empty.style.cssText = 'padding:.5rem;margin:.25rem 0 0;font-size:.85rem;';
+        empty.textContent = 'No videos queued. Browse galleries to add to the playlist.';
+        aside.appendChild(empty);
+      }
+      return;
+    }
+    if(empty) empty.remove();
     var wrap = document.createElement('li');
     wrap.className = 'pl-item pl-queued-sep';
     wrap.innerHTML = '<div class="pl-title" style="font-weight:600;">Up next</div>';
@@ -965,4 +958,7 @@ document.addEventListener('leavepictureinpicture', function(){
   loadQ();
   if(document.readyState !== 'loading'){ init(); } else { document.addEventListener('DOMContentLoaded', init); }
   window.addEventListener('load', function(){ init(); renderQueue(); });
+  // Expose for the media-nav swap handler to re-render queued rows after a
+  // prev/next navigation replaces the playlist aside.
+  window.GalleryQueue = { render: renderQueue };
 })();

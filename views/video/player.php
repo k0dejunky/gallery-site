@@ -56,18 +56,17 @@ $breadcrumbItems = [
         </div>
         <div id="player-browse" class="player-browse" hidden data-playlist="<?= (int) $playlistId ?>">
             <div class="pb-toolbar">
-                <button type="button" class="btn btn-sm btn-outline" id="pb-back" hidden>&larr; Back to galleries</button>
                 <input type="search" id="pb-search" placeholder="Search galleries&hellip;" aria-label="Search galleries">
             </div>
-            <p class="muted" style="font-size:.85rem;">Pick a video to play or add to the playlist queue. The picture-in-picture window keeps playing while you browse.</p>
+            <p class="muted" style="font-size:.85rem;">Click a gallery to add its video to the playlist. The picture-in-picture window keeps playing while you browse.</p>
             <div class="pb-body"></div>
         </div>
     </div>
 
-    <?php if (!empty($playlist)): ?>
-        <aside class="player-playlist" id="player-playlist">
-            <h3><?= e($playlistName ?? 'Playlist') ?> <span class="muted" style="font-weight:400;">(<?= count($playlist) ?>)</span></h3>
-            <ul>
+    <aside class="player-playlist" id="player-playlist">
+        <h3><?= !empty($playlistName) ? e($playlistName) : 'Up next' ?><?= !empty($playlist) ? ' <span class="muted" style="font-weight:400;">(' . count($playlist) . ')</span>' : '' ?></h3>
+        <ul>
+            <?php if (!empty($playlist)): ?>
                 <?php foreach ($playlist as $item): ?>
                     <li class="pl-item<?= (int) $item['id'] === (int) $photo['id'] ? ' active' : '' ?>" data-video-id="<?= (int) $item['id'] ?>">
                         <a data-swap href="<?= e($plUrl((int) $item['id'])) ?>">
@@ -77,7 +76,10 @@ $breadcrumbItems = [
                         </a>
                     </li>
                 <?php endforeach; ?>
-            </ul>
-        </aside>
-    <?php endif; ?>
+            <?php endif; ?>
+        </ul>
+        <?php if (empty($playlist)): ?>
+            <p class="pl-empty muted" style="padding:.5rem;margin:.25rem 0 0;font-size:.85rem;">No videos queued. Browse galleries to add to the playlist.</p>
+        <?php endif; ?>
+    </aside>
 </div>
