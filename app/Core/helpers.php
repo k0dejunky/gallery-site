@@ -396,9 +396,10 @@ function create_video_sample_clip(string $src, string $dest): bool
 
     $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
     // Fit within 480x480 preserving aspect, then snap both dimensions to even
-    // (H.264 requires even width/height) without upscaling. The filter is
-    // shell-quoted: the '*' glob would otherwise be expanded by the shell.
-    $vf = 'scale=480:480:force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2';
+    // (H.264 requires even width/height) without upscaling, then apply a heavy
+    // boxblur so no recognizable content leaks through the public clip. The
+    // filter is shell-quoted: the '*' glob would otherwise be expanded.
+    $vf = 'scale=480:480:force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2,boxblur=30:2';
     $cmd = escapeshellarg($ffmpeg) . ' -nostdin -y -i ' . escapeshellarg($src)
         . ' -t 12 -vf ' . escapeshellarg($vf)
         . ' -c:v libx264 -preset veryfast -crf 30 -maxrate 1.5M -bufsize 3M'

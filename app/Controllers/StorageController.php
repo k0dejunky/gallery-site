@@ -179,10 +179,11 @@ class StorageController extends Controller
 
     /**
      * Serve a video's short public sample clip (for search-engine video
-     * indexing). Intentionally small (first ~12s, ≤480p) and intentionally
-     * public — no session, token or membership gate — so Google can fetch it
-     * to verify and index the video. Only ever serves the generated clip for
-     * a real video photo; originals and full web renditions are never
+     * indexing). Intentionally small (first ~12s, ≤480p, blurred) and
+     * intentionally public — no session, token or membership gate — so Google
+     * can fetch it to verify and index the video. Only ever serves the
+     * generated clip for a real video in a published, non-secret gallery;
+     * unpublished/scheduled or secret media (and full-length files) are never
      * reachable here.
      */
     public function preview(int $id): void
@@ -195,6 +196,12 @@ class StorageController extends Controller
         $photo = Photo::find($id);
 
         if ($photo === null || (int) ($photo['is_video'] ?? 0) !== 1) {
+            $this->notFound();
+            return;
+        }
+
+        // Never leak clips for unpublished/scheduled or secret videos.
+        if (!Photo::hasPublicGallery($id)) {
             $this->notFound();
             return;
         }
