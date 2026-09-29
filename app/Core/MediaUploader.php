@@ -186,6 +186,25 @@ class MediaUploader
     }
 
     /**
+     * Run the expensive video post-processing (faststart remux + web rendition)
+     * in a detached background process so a multi-GB video never holds an
+     * upload request open (the gallery is committed first; the web_ rendition
+     * appears when the job finishes). Returns immediately.
+     */
+    public static function finalizeVideoAsync(string $path): void
+    {
+        $bootstrap = realpath(__DIR__ . '/../bootstrap.php');
+        $code = 'require $argv[1]; faststart_video_if_needed($argv[2]);'
+            . ' create_video_web_rendition($argv[2], dirname($argv[2]) . "/web_" . basename($argv[2]));';
+        // setsid detaches the job into its own session so the php-fpm worker's
+        // cleanup on request completion can't reap it (nohup alone was killed).
+        $cmd = 'setsid ' . escapeshellarg(PHP_BINARY) . ' -r ' . escapeshellarg($code)
+            . ' ' . escapeshellarg($bootstrap) . ' ' . escapeshellarg($path)
+            . ' >/dev/null 2>&1 &';
+        @exec($cmd);
+    }
+
+    /**
      * Commit a saved file into a gallery: skip when a photo with the same
      * content hash already exists (attach the existing one), otherwise create
      * the photo row and attach it. Returns the photo id.
