@@ -3,9 +3,9 @@
 // recent pictures on the left and recent videos on the right.
 ?>
 <style>
-    .auth-splash { display: flex; gap: var(--spacing-lg); align-items: flex-start; justify-content: center; }
-    .auth-splash-side { flex: 1 1 160px; min-width: 130px; }
-    .auth-splash .auth-panel { flex: 0 0 auto; width: auto; max-width: 1045px; }
+    .auth-splash .auth-panel { flex: 0 1 auto; width: auto; max-width: 1000px; }
+    .auth-splash-side { flex: 1 1 300px; }
+    .guest-grid { max-height: calc(100dvh - 274px); }
     .signup-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; text-align: left; }
     .signup-grid h3 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--purple-800); }
     .signup-grid input[type="text"], .signup-grid input[type="email"], .signup-grid input[type="password"], .signup-grid input[type="date"] { width: 100%; box-sizing: border-box; }

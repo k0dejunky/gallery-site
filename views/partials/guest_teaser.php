@@ -28,7 +28,7 @@ foreach ($source as $photo) {
 <?php if ($items !== []): ?>
 <section class="guest-teaser">
     <h2 class="section-title"><?= e($heading) ?></h2>
-    <div class="guest-stack">
+    <div class="guest-grid">
         <?php foreach ($items as $item): ?>
             <div class="card recent-card">
                 <a class="card-link" href="<?= e($item['url']) ?>">
