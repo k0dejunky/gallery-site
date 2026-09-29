@@ -50,8 +50,30 @@ $breadcrumbItems = [
             </figcaption>
         </figure>
         <p style="text-align:center"><a href="<?= e($reportUrl) ?>">Report broken media</a></p>
+    </div>
 
-        <div style="text-align:center;margin-top:.5rem;">
+    <div class="player-side">
+        <aside class="player-playlist" id="player-playlist">
+            <h3><?= !empty($playlistName) ? e($playlistName) : 'Up next' ?><?= !empty($playlist) ? ' <span class="muted" style="font-weight:400;">(' . count($playlist) . ')</span>' : '' ?></h3>
+            <ul>
+                <?php if (!empty($playlist)): ?>
+                    <?php foreach ($playlist as $item): ?>
+                        <li class="pl-item<?= (int) $item['id'] === (int) $photo['id'] ? ' active' : '' ?>" data-video-id="<?= (int) $item['id'] ?>">
+                            <a data-swap href="<?= e($plUrl((int) $item['id'])) ?>">
+                                <img src="<?= e((string) $item['thumb']) ?>" alt="" loading="lazy">
+                                <span class="pl-title"><?= e($item['caption'] !== '' ? (string) $item['caption'] : 'Video ' . ((int) array_search((int) $item['id'], array_map('intval', array_column($playlist, 'id')), true) + 1)) ?></span>
+                                <span class="pl-duration"><?= e(!empty($item['duration_seconds']) ? gmdate('i:s', (int) $item['duration_seconds']) : '') ?></span>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </ul>
+            <?php if (empty($playlist)): ?>
+                <p class="pl-empty muted" style="padding:.5rem;margin:.25rem 0 0;font-size:.85rem;">No videos queued. Browse galleries to add to the playlist.</p>
+            <?php endif; ?>
+        </aside>
+
+        <div style="text-align:center;">
             <button type="button" class="btn btn-sm btn-outline" id="browse-galleries-btn">&#128269; Browse galleries</button>
         </div>
         <div id="player-browse" class="player-browse" hidden data-playlist="<?= (int) $playlistId ?>">
@@ -62,24 +84,4 @@ $breadcrumbItems = [
             <div class="pb-body"></div>
         </div>
     </div>
-
-    <aside class="player-playlist" id="player-playlist">
-        <h3><?= !empty($playlistName) ? e($playlistName) : 'Up next' ?><?= !empty($playlist) ? ' <span class="muted" style="font-weight:400;">(' . count($playlist) . ')</span>' : '' ?></h3>
-        <ul>
-            <?php if (!empty($playlist)): ?>
-                <?php foreach ($playlist as $item): ?>
-                    <li class="pl-item<?= (int) $item['id'] === (int) $photo['id'] ? ' active' : '' ?>" data-video-id="<?= (int) $item['id'] ?>">
-                        <a data-swap href="<?= e($plUrl((int) $item['id'])) ?>">
-                            <img src="<?= e((string) $item['thumb']) ?>" alt="" loading="lazy">
-                            <span class="pl-title"><?= e($item['caption'] !== '' ? (string) $item['caption'] : 'Video ' . ((int) array_search((int) $item['id'], array_map('intval', array_column($playlist, 'id')), true) + 1)) ?></span>
-                            <span class="pl-duration"><?= e(!empty($item['duration_seconds']) ? gmdate('i:s', (int) $item['duration_seconds']) : '') ?></span>
-                        </a>
-                    </li>
-                <?php endforeach; ?>
-            <?php endif; ?>
-        </ul>
-        <?php if (empty($playlist)): ?>
-            <p class="pl-empty muted" style="padding:.5rem;margin:.25rem 0 0;font-size:.85rem;">No videos queued. Browse galleries to add to the playlist.</p>
-        <?php endif; ?>
-    </aside>
 </div>

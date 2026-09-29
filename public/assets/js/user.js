@@ -775,6 +775,18 @@ document.addEventListener('leavepictureinpicture', function(){
   function saveQ(){ try{ sessionStorage.setItem(QKEY, JSON.stringify(queue)); }catch(e){} }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 
+  // Remove browse tiles whose video is already in the playlist/queue, so a
+  // queued video no longer appears in the browse list.
+  function removeQueuedTiles(){
+    if(!queue.length) return;
+    var ids = {};
+    queue.forEach(function(q){ ids[String(q.id)] = true; });
+    document.querySelectorAll('#player-browse .browse-video-tile').forEach(function(tile){
+      var a = tile.querySelector('[data-browse-video]');
+      if(a && ids[a.getAttribute('data-browse-video')]){ tile.remove(); }
+    });
+  }
+
   function init(){
     var btn = document.getElementById('browse-galleries-btn');
     var panel = document.getElementById('player-browse');
@@ -795,7 +807,7 @@ document.addEventListener('leavepictureinpicture', function(){
 
     function showList(q){
       body.innerHTML = '<p class="muted">Loading&hellip;</p>';
-      loadList(q || '').then(function(html){ body.innerHTML = html; }).catch(function(){ body.innerHTML = '<p class="muted">Could not load videos.</p>'; });
+      loadList(q || '').then(function(html){ body.innerHTML = html; removeQueuedTiles(); }).catch(function(){ body.innerHTML = '<p class="muted">Could not load videos.</p>'; });
     }
 
     btn.addEventListener('click', function(){
@@ -825,6 +837,7 @@ document.addEventListener('leavepictureinpicture', function(){
             more.remove();
             // Append each child directly so the grid pattern is preserved.
             Array.prototype.forEach.call(holder.children, function(child){ body.appendChild(child); });
+            removeQueuedTiles();
           })
           .catch(function(){});
         return;
@@ -854,6 +867,7 @@ document.addEventListener('leavepictureinpicture', function(){
       }
       saveQ();
       renderQueue();
+      removeQueuedTiles();
       if(how === 'front' || how === 'play'){
         playItem(item);
       }
