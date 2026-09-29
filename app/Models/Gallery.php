@@ -174,6 +174,39 @@ class Gallery
     }
 
     /**
+     * The latest scheduled publish moment among the upcoming queue (used by the
+     * import API to compute the next 24h slot), or null when nothing is queued.
+     */
+    public static function lastScheduledAt(): ?string
+    {
+        $value = Database::run(
+            'SELECT MAX(published_at) FROM galleries
+             WHERE deleted_at IS NULL
+               AND published_at IS NOT NULL
+               AND published_at > CURRENT_TIMESTAMP'
+        )->fetchColumn();
+
+        return ($value === false || $value === null) ? null : (string) $value;
+    }
+
+    /**
+     * Find a gallery with an exact title/type/scheduled-publish triple. Used by
+     * the import API's idempotency guard so a re-run after a partial failure
+     * never duplicates a scheduled gallery.
+     */
+    public static function findBySchedule(string $title, string $type, string $publishedAt): ?array
+    {
+        $row = Database::run(
+            'SELECT id, title, type, published_at FROM galleries
+             WHERE title = ? AND type = ? AND published_at = ? AND deleted_at IS NULL
+             ORDER BY id DESC LIMIT 1',
+            [$title, $type, $publishedAt]
+        )->fetch();
+
+        return $row ?: null;
+    }
+
+    /**
      * Every gallery newest first, each with its image and video counts.
      */
     public static function all(array $filters = []): array

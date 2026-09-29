@@ -192,6 +192,8 @@ class MediaUploader
      */
     public static function commit(int $galleryId, string $filename, string $hash): int
     {
+        $config = \config('app.uploads');
+
         $existing = \App\Models\Photo::findByHash($hash);
 
         if ($existing !== null) {

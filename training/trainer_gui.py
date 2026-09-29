@@ -19,7 +19,7 @@ import time
 import urllib.request
 import urllib.error
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 
 # GUI connection settings are persisted here so the app remembers the control
 # server host/port/token across launches (env vars act as first-run defaults).
@@ -156,11 +156,14 @@ class TrainerGUI:
         self.nb = ttk.Notebook(self.root)
         self.nb.pack(fill="both", expand=True, padx=16, pady=(4, 12))
         self.tab_trainer = ttk.Frame(self.nb, padding=12)
+        self.tab_import = ttk.Frame(self.nb, padding=12)
         self.tab_admin = ttk.Frame(self.nb, padding=12)
         self.nb.add(self.tab_trainer, text="Trainer")
+        self.nb.add(self.tab_import, text="Import")
         self.nb.add(self.tab_admin, text="Admin")
 
         self.build_trainer()
+        self.build_import()
         self.build_admin()
 
     def build_trainer(self):
@@ -236,12 +239,102 @@ class TrainerGUI:
         sbar.pack(side="right", fill="y")
         self.logtxt.config(yscrollcommand=sbar.set)
 
+    def _pick(self, entry, initial=None):
+        """Folder picker (Windows 7 native dialog) that fills an entry."""
+        d = filedialog.askdirectory(initialdir=initial or os.getcwd(), title="Choose folder")
+        if d:
+            entry.delete(0, "end")
+            entry.insert(0, d)
+
+    def build_import(self):
+        f = self.tab_import
+        self.import_entries = {}
+        self.import_metrics = {}
+
+        # Paths — picked at load / any time via the native folder dialog.
+        paths = ttk.LabelFrame(f, text="Paths (picked at load)", padding=6)
+        paths.pack(fill="x", pady=(0, 8))
+
+        row1 = ttk.Frame(paths)
+        row1.pack(fill="x", pady=2)
+        ttk.Label(row1, text="Host folder").pack(side="left", padx=(0, 6))
+        self.e_host_folder = ttk.Entry(row1)
+        self.e_host_folder.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        ttk.Button(row1, text="Browse…", command=lambda: self._pick(self.e_host_folder)).pack(side="left")
+
+        row2 = ttk.Frame(paths)
+        row2.pack(fill="x", pady=2)
+        ttk.Label(row2, text="Posted folder").pack(side="left", padx=(0, 6))
+        self.e_posted_folder = ttk.Entry(row2)
+        self.e_posted_folder.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        ttk.Button(row2, text="Browse…", command=lambda: self._pick(self.e_posted_folder)).pack(side="left")
+        ttk.Label(paths, text="Posted defaults to <host>/posted when blank.",
+                  style="Mut.TLabel").pack(anchor="w", pady=(2, 0))
+
+        # Import settings (persisted to the control-server config).
+        settings = ttk.LabelFrame(f, text="Import settings", padding=6)
+        settings.pack(fill="x", pady=(0, 8))
+        grid = ttk.Frame(settings)
+        grid.pack(fill="x")
+
+        IMPORT_FIELDS = [
+            ("server_base", "text", "Server URL"),
+            ("import_token", "password", "Import token"),
+            ("import_enabled", "text", "Enabled (1/0)"),
+            ("import_schedule", "text", "Schedule (HH:MM daily)"),
+            ("import_interval_minutes", "number", "Interval (minutes)"),
+            ("spacing_hours", "number", "Spacing (hours)"),
+            ("min_level", "number", "Min level"),
+            ("description", "text", "Description"),
+            ("is_secret", "text", "Secret (1/0)"),
+        ]
+        for i, (key, kind, label) in enumerate(IMPORT_FIELDS):
+            cell = ttk.Frame(grid, padding=4)
+            cell.grid(row=i // 3, column=i % 3, sticky="ew", padx=4, pady=2)
+            ttk.Label(cell, text=label).pack(anchor="w")
+            e = ttk.Entry(cell, show="" if kind == "password" else None)
+            e.pack(fill="x")
+            self.import_entries[key] = e
+        for c in range(3):
+            grid.grid_columnconfigure(c, weight=1)
+
+        bf = ttk.Frame(f)
+        bf.pack(fill="x", pady=(0, 8))
+        self.btn_save_import = ttk.Button(bf, text="Save import settings",
+                                          style="Primary.TButton", command=self.save_import_cfg)
+        self.btn_save_import.pack(side="left", padx=(0, 8))
+        self.btn_run_import = ttk.Button(bf, text="Run import now",
+                                         style="Primary.TButton", command=self.run_import)
+        self.btn_run_import.pack(side="left")
+
+        # Status metrics
+        mf = ttk.Frame(f)
+        mf.pack(fill="x", pady=(0, 8))
+        for i, key in enumerate(["last_run", "next_slot", "imported", "galleries", "errors"]):
+            cell = tk.Frame(mf, bg=CARD, borderwidth=1, relief="solid", padx=8, pady=6)
+            cell.grid(row=0, column=i, padx=4, sticky="nsew")
+            tk.Label(cell, text=key.replace("_", " ").title(), bg=CARD, fg=MUT,
+                     font=("Segoe UI", 8)).pack(anchor="w")
+            self.import_metrics[key] = tk.Label(cell, text="—", bg=CARD, fg=FG,
+                                                font=("Segoe UI", 12, "bold"))
+            self.import_metrics[key].pack(anchor="w")
+            mf.grid_columnconfigure(i, weight=1)
+
+        # Import log
+        lf = ttk.LabelFrame(f, text="Import log", padding=6)
+        lf.pack(fill="both", expand=True)
+        self.import_logtxt = tk.Text(lf, bg="#0f0d15", fg=FG, insertbackground=FG, wrap="none",
+                                     font=("Consolas", 9), relief="flat", state="disabled")
+        self.import_logtxt.pack(side="left", fill="both", expand=True)
+        sb = ttk.Scrollbar(lf, command=self.import_logtxt.yview)
+        sb.pack(side="right", fill="y")
+        self.import_logtxt.config(yscrollcommand=sb.set)
+
     def build_admin(self):
         f = self.tab_admin
 
         # Control-server connection: host/port/token, persisted so the app
         # remembers the sign-on across launches.
-        conn = ttk.LabelFrame(f, text="Control server connection", padding=6)
         conn.pack(fill="x", pady=(0, 8))
         crow = ttk.Frame(conn)
         crow.pack(fill="x")
@@ -349,6 +442,73 @@ class TrainerGUI:
         messagebox.showinfo("Trainer", "Saved - trainer restarted with new settings.")
         self.refresh_config()
 
+    def save_import_cfg(self):
+        """Persist the import settings (host/posted paths + options) to the
+        control-server config, so the always-on app uses them."""
+        body = {
+            "host_folder": self.e_host_folder.get().strip(),
+            "posted_folder": self.e_posted_folder.get().strip(),
+        }
+        for key, e in self.import_entries.items():
+            body[key] = e.get()
+        try:
+            res = fetch("/api/config", method="POST", body=body, timeout=15)
+        except Exception as e:
+            messagebox.showerror("Import", "Save failed:\n%s" % e)
+            return
+        if not res.get("ok"):
+            messagebox.showerror("Import", "Invalid settings:\n%s" % json.dumps(res.get("errors", {})))
+            return
+        messagebox.showinfo("Import", "Import settings saved (trainer restarted to apply).")
+        self.refresh_config()
+        self.refresh_import()
+
+    def run_import(self):
+        try:
+            res = fetch("/api/import/run", method="POST", timeout=10)
+        except Exception as e:
+            messagebox.showerror("Import", "Could not trigger import:\n%s" % e)
+            return
+        messagebox.showinfo("Import", res.get("note", "Import triggered."))
+        time.sleep(2)
+        self.refresh_import()
+
+    def refresh_import(self):
+        try:
+            d = fetch("/api/import/status", timeout=10)
+            self.render_import(d.get("import", {}))
+        except Exception:
+            self.render_import({})
+        try:
+            d = fetch("/api/import/log", timeout=10)
+            self.render_import_log(d.get("log", ""))
+        except Exception:
+            pass
+
+    def render_import(self, imp):
+        def val(k, fallback="—"):
+            v = imp.get(k)
+            return fallback if v in (None, "") else v
+        self.import_metrics["last_run"].config(text=val("last_run"))
+        self.import_metrics["next_slot"].config(text=val("next_slot"))
+        self.import_metrics["imported"].config(text=str(len(imp.get("imported_folders") or [])))
+        self.import_metrics["galleries"].config(text=str(imp.get("gallery_count") or 0))
+        self.import_metrics["errors"].config(text=str(len(imp.get("errors") or [])))
+        # Keep the path entries in sync with the control-server config.
+        if imp.get("host_folder"):
+            if not self.e_host_folder.get():
+                self.e_host_folder.insert(0, imp["host_folder"])
+        if imp.get("posted_folder") and not self.e_posted_folder.get():
+            self.e_posted_folder.insert(0, imp["posted_folder"])
+
+    def render_import_log(self, text):
+        if not text:
+            return
+        self.import_logtxt.config(state="normal")
+        self.import_logtxt.delete("1.0", "end")
+        self.import_logtxt.insert("1.0", text)
+        self.import_logtxt.config(state="disabled")
+
     def reset_cfg(self):
         if not messagebox.askyesno("Trainer", "Reset all settings to defaults?"):
             return
@@ -396,6 +556,8 @@ class TrainerGUI:
         # thread-safe queue so Tk is only ever touched on the main thread.
         status = None
         log = None
+        imp_status = None
+        imp_log = None
         try:
             status = fetch("/api/status").get("status", {})
         except Exception:
@@ -404,9 +566,17 @@ class TrainerGUI:
             log = fetch("/api/log").get("log", "")
         except Exception:
             log = None
+        try:
+            imp_status = fetch("/api/import/status").get("import", {})
+        except Exception:
+            imp_status = None
+        try:
+            imp_log = fetch("/api/import/log").get("log", "")
+        except Exception:
+            imp_log = None
         self._polling = False
         try:
-            self._q.put(("poll", status, log))
+            self._q.put(("poll", status, log, imp_status, imp_log))
         except Exception:
             pass
 
@@ -416,9 +586,9 @@ class TrainerGUI:
             return
         try:
             while True:
-                kind, a, b = self._q.get_nowait()
+                kind, a, b, c, d = self._q.get_nowait()
                 if kind == "poll":
-                    self.apply_poll(a, b)
+                    self.apply_poll(a, b, c, d)
         except queue.Empty:
             pass
         self.root.after(100, self._drain)
@@ -427,7 +597,7 @@ class TrainerGUI:
         self.running_flag = False
         self.root.destroy()
 
-    def apply_poll(self, status, log):
+    def apply_poll(self, status, log, imp_status, imp_log):
         if status is None:
             self.status = {}
             self.show_banner()
@@ -438,11 +608,16 @@ class TrainerGUI:
         if log is not None and log != self._log_prev:
             self._log_prev = log
             self.render_log(log)
+        if imp_status is not None:
+            self.render_import(imp_status)
+        if imp_log is not None:
+            self.render_import_log(imp_log)
 
     def refresh_all(self):
         self.refresh_status()
         self.refresh_config()
         self.refresh_log()
+        self.refresh_import()
 
     def refresh_status(self):
         try:

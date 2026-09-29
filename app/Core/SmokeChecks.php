@@ -593,6 +593,32 @@ class SmokeChecks
             $m = $read("$root/database/migrations/051_autopost_multichannel.sql");
             return strpos($m, 'MEDIUMTEXT') !== false ? $ok('051 widens queue text') : $bad('migration 051 must widen auto_poster_queue.text to MEDIUMTEXT');
         });
+
+        // ------------------------------------------------- Gallery import API
+        $importCtrl = $read("$root/app/Controllers/ImportController.php");
+        $add('smoke.import.controller', 'Smoke · Gallery Import', 'ImportController defines queue + gallery endpoints', static function () use ($importCtrl, $ok, $bad): array {
+            return strpos($importCtrl, 'public function queue()') !== false
+                && strpos($importCtrl, 'public function gallery()') !== false
+                && strpos($importCtrl, "GALLERY_IMPORT_KEY") !== false
+                && strpos($importCtrl, 'MediaUploader::commit(') !== false
+                ? $ok('queue + gallery endpoints wired')
+                : $bad('ImportController must implement /webhooks/import/queue and /webhooks/import/gallery');
+        });
+        $add('smoke.import.routes', 'Smoke · Gallery Import', 'Import routes registered', static function () use ($root, $read, $ok, $bad): array {
+            $routes = $read("$root/config/routes.php");
+            return strpos($routes, "'/webhooks/import/queue'") !== false
+                && strpos($routes, "'/webhooks/import/gallery'") !== false
+                ? $ok('import routes present')
+                : $bad('routes.php must register /webhooks/import/queue and /webhooks/import/gallery');
+        });
+        $add('smoke.import.env', 'Smoke · Gallery Import', 'GALLERY_IMPORT_KEY documented in .env.example', static function () use ($root, $read, $ok, $bad): array {
+            $env = $read("$root/.env.example");
+            return strpos($env, 'GALLERY_IMPORT_KEY') !== false ? $ok('env key documented') : $bad('.env.example must document GALLERY_IMPORT_KEY');
+        });
+        $add('smoke.import.uploader_fix', 'Smoke · Gallery Import', 'MediaUploader::commit resolves the uploads dir (bug fix)', static function () use ($root, $read, $ok, $bad): array {
+            $mu = $read("$root/app/Core/MediaUploader.php");
+            return strpos($mu, '$config = \\config(\'app.uploads\');') !== false ? $ok('commit resolves config') : $bad('MediaUploader::commit must resolve config("app.uploads") for video duration');
+        });
         $apv = $read("$root/views/admin/auto_poster.php");
         $add('smoke.ap.view_text', 'Smoke · Auto Poster', 'Recommended posts editable text field', static function () use ($apv, $ok, $bad): array {
             return strpos($apv, 'name="text"') !== false ? $ok('text field') : $bad('auto-poster recommended posts must be editable text');

@@ -27,10 +27,15 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+# The gallery folder importer lives next to this script; make it importable.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gallery_import
 
 # ------------------------------------------------------------------ config
 HOST = os.environ.get("CONTROL_HOST", "0.0.0.0")
@@ -70,6 +75,19 @@ DEFAULT_CONFIG = {
     "log_file": LOG_FILE,
     "status_file": STATUS_FILE,
     "base_model": "llama3.2:3b",
+    # Gallery import (folder -> scheduled galleries).
+    "import_enabled": False,
+    "import_schedule": "",            # "HH:MM" daily, or "" for interval/manual
+    "import_interval_minutes": 0,     # >0 = run every N minutes
+    "host_folder": "",
+    "posted_folder": "",              # default: <host_folder>/posted
+    "import_token": "",
+    "spacing_hours": 24,
+    "min_level": 0,
+    "description": "",
+    "is_secret": False,
+    "import_status_file": r"C:\work\.gallery_import_status.json",
+    "import_log_file": r"C:\work\gallery_import.log",
 }
 
 MASK = "********"  # placeholder shown for the bridge token in GET /api/config
@@ -139,6 +157,103 @@ class TrainerSupervisor:
 supervisor = TrainerSupervisor()
 
 
+# ------------------------------------------------------------------ import scheduler
+class ImportScheduler:
+    """Runs the gallery folder importer on a schedule / on demand, in a daemon
+    thread. Single source of truth for import config lives in the control config
+    (chat_trainer_config.json); gallery_import.run_once() guards double-runs."""
+
+    def __init__(self):
+        self._trigger = threading.Event()
+        self._stop = threading.Event()
+        self._thread = None
+        self.last_run = None
+        self.last_result = None
+
+    def start(self):
+        if self._thread is None:
+            self._thread = threading.Thread(target=self._loop, name="import-scheduler",
+                                            daemon=True)
+            self._thread.start()
+
+    def trigger(self):
+        self._trigger.set()
+
+    def import_cfg(self):
+        cfg = read_config_file()
+        return {
+            "host_folder": str(cfg.get("host_folder", "")).strip(),
+            "posted_folder": str(cfg.get("posted_folder", "")).strip(),
+            "server_base": str(cfg.get("server_base", "")).rstrip("/"),
+            "import_token": str(cfg.get("import_token", "")).strip(),
+            "spacing_hours": int(cfg.get("spacing_hours", 24) or 24),
+            "min_level": int(cfg.get("min_level", 0) or 0),
+            "description": str(cfg.get("description", "")),
+            "is_secret": bool(cfg.get("is_secret", False)),
+            "status_file": str(cfg.get("import_status_file",
+                                       r"C:\work\.gallery_import_status.json")),
+            "log_file": str(cfg.get("import_log_file", r"C:\work\gallery_import.log")),
+        }
+
+    def status(self):
+        cfg = self.import_cfg()
+        icfg = read_config_file()
+        data = gallery_import.read_status(cfg)
+        data["enabled"] = bool(icfg.get("import_enabled", False))
+        data["schedule"] = str(icfg.get("import_schedule", "") or "")
+        data["interval_minutes"] = int(icfg.get("import_interval_minutes", 0) or 0)
+        data["host_folder"] = cfg["host_folder"]
+        data["posted_folder"] = cfg["posted_folder"] or (cfg["host_folder"] and cfg["host_folder"] + os.sep + "posted")
+        if self.last_run:
+            data["last_run_control"] = time.strftime("%Y-%m-%d %H:%M:%S",
+                                                     time.localtime(self.last_run))
+        return data
+
+    def log_tail(self, lines=60):
+        cfg = self.import_cfg()
+        path = cfg["log_file"]
+        try:
+            if not os.path.isfile(path):
+                return ""
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                return "".join(fh.readlines()[-lines:])
+        except Exception:
+            return ""
+
+    def _loop(self):
+        while not self._stop.is_set():
+            try:
+                cfg = read_config_file()
+                enabled = bool(cfg.get("import_enabled", False))
+                due = False
+                if enabled:
+                    interval = int(cfg.get("import_interval_minutes", 0) or 0)
+                    sched = str(cfg.get("import_schedule", "")).strip()
+                    if interval > 0:
+                        due = self.last_run is None or time.time() - self.last_run >= interval * 60
+                    elif sched:
+                        today = time.strftime("%Y-%m-%d")
+                        last_day = self.last_run and time.strftime("%Y-%m-%d", time.localtime(self.last_run))
+                        due = last_day != today and time.strftime("%H:%M") >= sched
+                if self._trigger.is_set() or due:
+                    self._trigger.clear()
+                    icfg = self.import_cfg()
+                    if icfg["host_folder"]:
+                        self.last_run = time.time()
+                        try:
+                            self.last_result = gallery_import.run_once(icfg)
+                        except Exception as exc:
+                            self.last_result = {"ok": False, "errors": [str(exc)]}
+                    else:
+                        self.last_result = {"ok": False, "errors": ["host_folder not set"]}
+            except Exception:
+                pass
+            self._stop.wait(10)
+
+
+import_scheduler = ImportScheduler()
+
+
 # ------------------------------------------------------------------ config helpers
 def read_config_file() -> dict:
     data = {}
@@ -197,10 +312,12 @@ def pending_count() -> dict:
 
 
 def public_config() -> dict:
-    """Config with the bridge token masked."""
+    """Config with the bridge + import tokens masked."""
     cfg = read_config_file()
     if cfg.get("bridge_token"):
         cfg["bridge_token"] = MASK
+    if cfg.get("import_token"):
+        cfg["import_token"] = MASK
     cfg["_config_file"] = CONFIG_FILE
     return cfg
 
@@ -211,11 +328,15 @@ def apply_save(body: dict) -> dict:
     errors = {}
     int_keys = ("poll_seconds", "min_new_pairs", "max_pairs_per_run", "lora_r",
                 "lora_alpha", "max_len", "steps",
-                "required_idle_seconds", "cpu_threads")
+                "required_idle_seconds", "cpu_threads",
+                "import_interval_minutes", "spacing_hours", "min_level")
     float_keys = ("lr", "lora_dropout")
     str_keys = ("server_base", "bridge_token", "model_dir", "output_adapter",
                 "state_file", "pause_file", "force_train_file", "log_file",
-                "status_file", "base_model")
+                "status_file", "base_model",
+                "import_schedule", "host_folder", "posted_folder", "import_token",
+                "description", "import_status_file", "import_log_file")
+    bool_keys = ("import_enabled", "is_secret")
 
     for k in str_keys:
         if k in body:
@@ -232,11 +353,16 @@ def apply_save(body: dict) -> dict:
                 cfg[k] = float(body[k])
             except (TypeError, ValueError):
                 errors[k] = "must be a number"
+    for k in bool_keys:
+        if k in body:
+            v = str(body[k]).strip().lower()
+            cfg[k] = v in ("1", "true", "yes", "on")
 
-    # Keep the stored token if the masked placeholder was submitted unchanged.
-    if cfg.get("bridge_token") == MASK:
-        stored = read_config_file()
-        cfg["bridge_token"] = stored.get("bridge_token", "")
+    # Keep stored tokens if the masked placeholders were submitted unchanged.
+    stored = read_config_file()
+    for token_key in ("bridge_token", "import_token"):
+        if cfg.get(token_key) == MASK:
+            cfg[token_key] = stored.get(token_key, "")
 
     if errors:
         return {"ok": False, "errors": errors}
@@ -318,6 +444,24 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True, "log": self.log_tail()})
         elif path == "/api/autostart":
             self._json(autostart_status())
+        elif path == "/api/import/status":
+            self._json({"ok": True, "import": import_scheduler.status()})
+        elif path == "/api/import/config":
+            cfg = read_config_file()
+            self._json({"ok": True, "config": {
+                "import_enabled": bool(cfg.get("import_enabled", False)),
+                "import_schedule": str(cfg.get("import_schedule", "") or ""),
+                "import_interval_minutes": int(cfg.get("import_interval_minutes", 0) or 0),
+                "host_folder": str(cfg.get("host_folder", "") or ""),
+                "posted_folder": str(cfg.get("posted_folder", "") or ""),
+                "import_token": MASK if cfg.get("import_token") else "",
+                "spacing_hours": int(cfg.get("spacing_hours", 24) or 24),
+                "min_level": int(cfg.get("min_level", 0) or 0),
+                "description": str(cfg.get("description", "") or ""),
+                "is_secret": bool(cfg.get("is_secret", False)),
+            }})
+        elif path == "/api/import/log":
+            self._json({"ok": True, "log": import_scheduler.log_tail()})
         else:
             self._json({"ok": False, "error": "not found"}, 404)
 
@@ -341,6 +485,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/train-now":
             self._touch(FORCE_TRAIN_FILE)
             self._json({"ok": True, "note": "train-now marker set"})
+        elif path == "/api/import/run":
+            import_scheduler.trigger()
+            self._json({"ok": True, "note": "import triggered"})
         elif path == "/api/config":
             body = self._read_body()
             if body is None:
@@ -467,6 +614,7 @@ border-radius:8px;padding:10px 14px;display:none;max-width:380px}
   <h1>Chat trainer — <span id="host"></span></h1>
   <nav>
     <a href="#panel" data-view="panel" class="active">Trainer</a>
+    <a href="#import" data-view="import">Import</a>
     <a href="#admin" data-view="admin">Admin</a>
   </nav>
 </header>
@@ -520,6 +668,33 @@ border-radius:8px;padding:10px 14px;display:none;max-width:380px}
     <button id="btnAutoOn" class="primary">Enable run at logon</button>
     <button id="btnAutoOff" class="danger">Disable</button>
     <span id="autoState" style="color:var(--mut);font-size:12px;margin-left:6px"></span>
+  </div>
+</section>
+
+<!-- ======================= IMPORT VIEW ======================= -->
+<section id="view-import" style="display:none">
+  <div class="card">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
+      <h2 style="margin:0;font-size:15px">Gallery import</h2>
+      <span id="importBadge" class="badge stop">disabled</span>
+    </div>
+    <p style="margin:0 0 8px;color:var(--mut);font-size:12px">
+      Reads <code id="importHost">—</code>, creates an images + a videos gallery
+      per folder (title = folder name), schedules each 24h after the last
+      gallery-queue post, then moves the folder to
+      <code id="importPosted">—</code>. Set the paths + token on the Admin tab
+      (or pick them when the GUI loads).
+    </p>
+    <div>
+      <button id="btnImportRun" class="primary">Run import now</button>
+    </div>
+  </div>
+
+  <div class="grid" id="importMetrics"></div>
+
+  <div class="card">
+    <h2 style="margin:0 0 8px;font-size:15px">Import log</h2>
+    <pre id="importLog"></pre>
   </div>
 </section>
 </main>
@@ -609,6 +784,18 @@ var FIELDS = [
   ['force_train_file','text','Force-train file'],
   ['log_file','text','Log file'],
   ['status_file','text','Status file'],
+  ['import_enabled','text','Import enabled (1/0)'],
+  ['import_schedule','text','Import schedule (HH:MM daily, blank=off)'],
+  ['import_interval_minutes','number','Import interval (minutes, 0=off)'],
+  ['host_folder','text','Host folder'],
+  ['posted_folder','text','Posted folder'],
+  ['import_token','password','Import token (GALLERY_IMPORT_KEY)'],
+  ['spacing_hours','number','Spacing (hours between galleries)'],
+  ['min_level','number','Min membership level'],
+  ['description','text','Gallery description'],
+  ['is_secret','text','Secret gallery (1/0)'],
+  ['import_status_file','text','Import status file'],
+  ['import_log_file','text','Import log file'],
 ];
 
 function renderConfig(cfg){
@@ -650,6 +837,30 @@ function refreshAutostart(){
   }).catch(function(){});
 }
 
+function renderImport(imp){
+  var badge = $('importBadge');
+  badge.className = 'badge ' + (imp.enabled ? 'run' : 'stop');
+  badge.textContent = imp.enabled ? 'enabled' : 'disabled';
+  $('importHost').textContent = imp.host_folder || '—';
+  $('importPosted').textContent = imp.posted_folder || '—';
+  var cells = [
+    ['Last run', imp.last_run || '—'],
+    ['Next slot', imp.next_slot || '—'],
+    ['Folders imported', imp.imported_folders ? imp.imported_folders.length : 0],
+    ['Galleries', imp.gallery_count != null ? imp.gallery_count : '—'],
+    ['Errors', imp.errors ? imp.errors.length : 0],
+    ['Schedule', (imp.schedule || '') + (imp.interval_minutes ? ' / every '+imp.interval_minutes+'m' : '')],
+  ];
+  $('importMetrics').innerHTML = cells.map(function(c){
+    return '<div class="metric"><div class="k">'+c[0]+'</div><div class="v">'+c[1]+'</div></div>';
+  }).join('');
+}
+
+function refreshImport(){
+  req('/api/import/status').then(function(d){ if (d.import) renderImport(d.import); }).catch(function(){});
+  req('/api/import/log').then(function(d){ if (d.log) $('importLog').textContent = d.log; }).catch(function(){});
+}
+
 $('btnPause').onclick = function(){ req('/api/pause','POST').then(refreshStatus); };
 $('btnResume').onclick = function(){ req('/api/resume','POST').then(refreshStatus); };
 $('btnStop').onclick = function(){
@@ -673,6 +884,12 @@ $('btnDefaults').onclick = function(){
 };
 $('btnAutoOn').onclick = function(){ req('/api/autostart',{method:'POST',body:{enabled:true}}).then(function(d){ toast(d.detail || 'ok'); refreshAutostart(); }); };
 $('btnAutoOff').onclick = function(){ req('/api/autostart',{method:'POST',body:{enabled:false}}).then(function(d){ toast(d.detail || 'ok'); refreshAutostart(); }); };
+$('btnImportRun').onclick = function(){
+  req('/api/import/run',{ method:'POST' }).then(function(){
+    toast('Import triggered');
+    setTimeout(refreshImport, 2500);
+  });
+};
 
 document.querySelectorAll('nav a').forEach(function(a){
   a.onclick = function(e){
@@ -681,16 +898,19 @@ document.querySelectorAll('nav a').forEach(function(a){
     a.classList.add('active');
     var v = a.getAttribute('data-view');
     $('view-panel').style.display = v === 'panel' ? '' : 'none';
+    $('view-import').style.display = v === 'import' ? '' : 'none';
     $('view-admin').style.display = v === 'admin' ? '' : 'none';
     if (v === 'admin'){ refreshConfig(); refreshAutostart(); }
+    if (v === 'import'){ refreshImport(); }
   };
 });
 
 $('host').textContent = location.host;
 
-refreshStatus(); refreshConfig(); refreshLog(); refreshAutostart();
+refreshStatus(); refreshConfig(); refreshLog(); refreshAutostart(); refreshImport();
 state.logTimer = setInterval(refreshLog, 4000);
 setInterval(refreshStatus, 3000);
+setInterval(refreshImport, 5000);
 </script>
 </body>
 </html>
@@ -705,6 +925,9 @@ def main():
 
     # Bring the trainer up if it wasn't explicitly stopped.
     supervisor.spawn()
+
+    # Start the gallery folder importer scheduler (on-demand + schedule).
+    import_scheduler.start()
 
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print("[control] listening on http://%s:%d  (ctrl-c to stop)" % (HOST, PORT), flush=True)
