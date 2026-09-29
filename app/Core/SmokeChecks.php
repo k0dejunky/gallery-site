@@ -593,6 +593,14 @@ class SmokeChecks
             $m = $read("$root/database/migrations/051_autopost_multichannel.sql");
             return strpos($m, 'MEDIUMTEXT') !== false ? $ok('051 widens queue text') : $bad('migration 051 must widen auto_poster_queue.text to MEDIUMTEXT');
         });
+        $apq = $read("$root/app/Models/AutoPostQueue.php");
+        $add('smoke.ap.refill_utc', 'Smoke · Auto Poster', 'refillAhead parses stored scheduled_at as UTC (hourly slots)', static function () use ($apq, $ok, $bad): array {
+            return strpos($apq, 'new DateTime($maxScheduled, new DateTimeZone(\'UTC\'))') !== false
+                && strpos($apq, "g.published_at > CURRENT_TIMESTAMP") !== false
+                && strpos($apq, "g.published_at IS NULL OR g.published_at <= CURRENT_TIMESTAMP") !== false
+                ? $ok('refill parses UTC + prioritizes scheduled galleries + visible-only random pool')
+                : $bad('refillAhead must parse scheduled_at as UTC and schedule publish-queue galleries at their publish moment');
+        });
 
         // ------------------------------------------------- Gallery import API
         $importCtrl = $read("$root/app/Controllers/ImportController.php");

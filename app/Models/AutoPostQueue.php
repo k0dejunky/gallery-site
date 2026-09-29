@@ -768,8 +768,13 @@ class AutoPostQueue
      * $slots queued posts, one per hour ahead. Called by the worker every hour
      * at :30 (and whenever a platform is empty), so the queue always has ~24
      * hourly posts planned instead of only refilling when it hits zero.
-     * Galleries are sourced never-queued first, then recycled from previously
-     * posted/skipped/failed ones (never dismissed or currently queued).
+     *
+     * Galleries scheduled to publish in the near future (galleries.published_at
+     * within the refill window) are enqueued FIRST, AT their publish moment, so
+     * the auto-post fires exactly when the gallery becomes visible. The
+     * remaining slots are filled hourly with never-queued galleries first,
+     * then recycled from previously posted/skipped/failed ones (never
+     * dismissed or currently queued), skipping hours already taken.
      *
      * Returns the number of posts scheduled.
      */
@@ -787,8 +792,57 @@ class AutoPostQueue
             }
 
             $dbKey = Platforms::dbKey($pf);
+            $tz    = new DateTimeZone(self::schedulerTimezone()->getName());
+            $nowTs = time();
 
-            $queued = (int) Database::run(
+            // 1) Galleries scheduled to publish within the refill window get
+            //    their auto-post at exactly the publish moment (the gallery
+            //    queue feeds the auto-post queue). Skips galleries that already
+            //    have a queued row for this platform.
+            $windowEnd = (new DateTime('@' . ($nowTs + $slots * 3600)))->format('Y-m-d H:i:s');
+            $future = Database::run(
+                "SELECT g.id, g.published_at
+                 FROM galleries g
+                 JOIN gallery_photo gp ON gp.gallery_id = g.id
+                 JOIN photos p ON p.id = gp.photo_id
+                 WHERE g.deleted_at IS NULL
+                   AND g.is_secret = 0
+                   AND g.published_at IS NOT NULL
+                   AND g.published_at > CURRENT_TIMESTAMP
+                   AND g.published_at <= ?
+                   AND NOT EXISTS (
+                       SELECT 1 FROM auto_poster_queue q
+                       WHERE q.gallery_id = g.id AND q.platform = ? AND q.status = 'queued'
+                   )
+                 GROUP BY g.id
+                 ORDER BY g.published_at ASC
+                 LIMIT " . $slots,
+                [$windowEnd, $dbKey]
+            )->fetchAll();
+
+            // Hour boundaries (UTC epochs) already occupied by queued rows, so
+            // the random hourly fill never double-books an hour.
+            $takenTs = [];
+            foreach (Database::run(
+                "SELECT scheduled_at FROM auto_poster_queue
+                 WHERE platform = ? AND status = 'queued' AND scheduled_at IS NOT NULL",
+                [$dbKey]
+            )->fetchAll() as $row) {
+                $dt = new DateTime((string) $row['scheduled_at'], new DateTimeZone('UTC'));
+                $takenTs[$dt->getTimestamp() - ((int) $dt->format('i')) * 60 - ((int) $dt->format('s'))] = true;
+            }
+
+            foreach ($future as $g) {
+                $pubUtc   = new DateTime((string) $g['published_at'], new DateTimeZone('UTC'));
+                $slotTs   = $pubUtc->getTimestamp() - ((int) $pubUtc->format('i')) * 60 - ((int) $pubUtc->format('s'));
+                $whenSite = $pubUtc->setTimezone($tz)->format('Y-m-d\TH:i:s');
+                if (self::enqueue((int) $g['id'], null, $whenSite, $pf) > 0) {
+                    $scheduled++;
+                    $takenTs[$slotTs] = true;
+                }
+            }
+
+            $queued  = (int) Database::run(
                 "SELECT COUNT(*) FROM auto_poster_queue WHERE platform = ? AND status = 'queued'",
                 [$dbKey]
             )->fetchColumn();
@@ -798,23 +852,25 @@ class AutoPostQueue
                 continue;
             }
 
-            // First new slot: the hour after the newest queued post (or the
-            // top of the next hour when nothing is queued), so slots stay
-            // hourly and never collide with existing schedules.
+            // First random slot: the top of the hour after the newest queued
+            // post (or the top of the next site hour when nothing is queued),
+            // so slots stay hourly and never collide with existing schedules.
             $maxScheduled = (string) Database::run(
                 "SELECT COALESCE(MAX(scheduled_at), '') FROM auto_poster_queue WHERE platform = ? AND status = 'queued'",
                 [$dbKey]
             )->fetchColumn();
 
-            $tz  = new DateTimeZone(self::schedulerTimezone()->getName());
-            $nowSite = (new DateTime('@' . time()))->setTimezone($tz);
             if ($maxScheduled !== '') {
-                $next = new DateTime($maxScheduled, $tz);
+                // $maxScheduled is stored in UTC — parse it as UTC, view it in
+                // the site timezone, and align to the top of the NEXT hour.
+                $next = (new DateTime($maxScheduled, new DateTimeZone('UTC')))->setTimezone($tz);
+                $next->setTime((int) $next->format('H'), 0, 0);
+                $next->modify('+1 hour');
             } else {
-                // Top of the current site hour, then +1h = the next site hour.
-                $next = $nowSite->setTime((int) $nowSite->format('H'), 0, 0);
+                $next = (new DateTime('@' . $nowTs))->setTimezone($tz);
+                $next->setTime((int) $next->format('H'), 0, 0);
+                $next->modify('+1 hour');
             }
-            $next->modify('+1 hour');
 
             $galleryIds = Database::run(
                 "SELECT g.id
@@ -823,6 +879,7 @@ class AutoPostQueue
                  JOIN photos p ON p.id = gp.photo_id
                  WHERE g.deleted_at IS NULL
                    AND g.is_secret = 0
+                   AND (g.published_at IS NULL OR g.published_at <= CURRENT_TIMESTAMP)
                    AND NOT EXISTS (
                        SELECT 1 FROM auto_poster_queue q
                        WHERE q.gallery_id = g.id AND q.status = 'queued'
@@ -842,17 +899,21 @@ class AutoPostQueue
                 continue;
             }
 
-            // Use each gallery at most once per generation — never cycle the pool
-            // to fill the window. When fewer distinct galleries are available than
-            // the target, we schedule exactly that many (a gallery is never queued
-            // twice in one random refill).
             $toSchedule = min($missing, $poolCount);
 
             for ($i = 0; $i < $toSchedule; $i++) {
-                $gallery = $pool[$i];
-                $when    = (clone $next)->modify('+' . $i . ' hours')->format('Y-m-d\TH:i');
+                $gallery   = $pool[$i];
+                $candidate = (clone $next)->modify('+' . $i . ' hours');
+                // Skip hours already occupied (scheduled-gallery posts, etc.).
+                $guard = 0;
+                while (isset($takenTs[$candidate->getTimestamp()]) && $guard < 48) {
+                    $candidate->modify('+1 hour');
+                    $guard++;
+                }
+                $when = $candidate->format('Y-m-d\TH:i');
                 if (self::enqueue((int) $gallery['id'], null, $when, $pf) > 0) {
                     $scheduled++;
+                    $takenTs[$candidate->getTimestamp()] = true;
                 }
             }
 
