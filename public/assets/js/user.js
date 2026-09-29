@@ -702,6 +702,55 @@ document.addEventListener('leavepictureinpicture', function(){
     if(active && list && active.scrollIntoView){ try{ active.scrollIntoView({block:'nearest'}); }catch(e){} }
     if(video){ video.__plNext = next ? (next.querySelector('a') ? next.querySelector('a').getAttribute('href') : null) : null; }
     if(window.GalleryQueue) window.GalleryQueue.render();
+    // The aside (and nav) were replaced with fresh markup — rebind the swap
+    // links so playlist rows keep working after the first navigation.
+    bindAllSwap();
+  }
+
+  // Swap the current video to the link's target (prev/next, playlist rows).
+  // Guarded so re-running after the nav/playlist DOM is replaced never binds
+  // the same link twice.
+  function bindSwapLink(a){
+    if(a.__swapBound) return;
+    a.__swapBound = true;
+    a.addEventListener('click', function(e){
+      e.preventDefault();
+      var href = a.getAttribute('href');
+      fetch(href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r){ return r.text(); })
+        .then(function(html){
+          var doc = new DOMParser().parseFromString(html, 'text/html');
+          var wrap = document.getElementById('video-player-wrap');
+          var nv = doc.querySelector('#video-player-wrap video');
+          if(!wrap || !nv || !nv.getAttribute('src')) return;
+          var video = wrap.querySelector('video');
+          var wasPlaying = video && !video.paused;
+          video.src = nv.getAttribute('src');
+          video.load();
+          if(wasPlaying){ video.play().catch(function(){}); }
+          // Update caption, progress and nav from the fetched fragment.
+          var swap = function(sel){
+            var nd = doc.querySelector(sel);
+            var old = wrap.querySelector(sel);
+            if(nd && old){ old.outerHTML = nd.outerHTML; }
+          };
+          swap('.media-progress');
+          swap('figcaption');
+          var nvNav = doc.querySelector('.media-nav');
+          var oldNav = document.querySelector('.media-nav');
+          if(nvNav && oldNav){ oldNav.outerHTML = nvNav.outerHTML; }
+          var rep = doc.querySelector('#video-player-wrap + p a, figure + p a');
+          var oldRep = document.querySelector('#video-player-wrap + p a, figure + p a');
+          if(rep && oldRep){ oldRep.href = rep.getAttribute('href'); }
+          updatePlaylist(doc, href, video);
+          history.pushState({}, '', href);
+        })
+        .catch(function(){});
+    });
+  }
+
+  function bindAllSwap(){
+    document.querySelectorAll('.media-nav a[data-swap], .player-playlist a[data-swap]').forEach(bindSwapLink);
   }
 
   function bind(){
@@ -709,41 +758,7 @@ document.addEventListener('leavepictureinpicture', function(){
     if(!wrap || !wrap.querySelector('video') || wrap.__navBound) return;
     wrap.__navBound = true;
 
-    document.querySelectorAll('.media-nav a[data-swap], .player-playlist a[data-swap]').forEach(function(a){
-      a.addEventListener('click', function(e){
-        e.preventDefault();
-        var href = a.getAttribute('href');
-        fetch(href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-          .then(function(r){ return r.text(); })
-          .then(function(html){
-            var doc = new DOMParser().parseFromString(html, 'text/html');
-            var nv = doc.querySelector('#video-player-wrap video');
-            if(!nv || !nv.getAttribute('src')) return;
-            var video = wrap.querySelector('video');
-            var wasPlaying = video && !video.paused;
-            video.src = nv.getAttribute('src');
-            video.load();
-            if(wasPlaying){ video.play().catch(function(){}); }
-            // Update caption, progress and nav from the fetched fragment.
-            var swap = function(sel){
-              var nd = doc.querySelector(sel);
-              var old = wrap.querySelector(sel);
-              if(nd && old){ old.outerHTML = nd.outerHTML; }
-            };
-            swap('.media-progress');
-            swap('figcaption');
-            var nvNav = doc.querySelector('.media-nav');
-            var oldNav = document.querySelector('.media-nav');
-            if(nvNav && oldNav){ oldNav.outerHTML = nvNav.outerHTML; }
-            var rep = doc.querySelector('#video-player-wrap + p a, figure + p a');
-            var oldRep = document.querySelector('#video-player-wrap + p a, figure + p a');
-            if(rep && oldRep){ oldRep.href = rep.getAttribute('href'); }
-            updatePlaylist(doc, href, video);
-            history.pushState({}, '', href);
-          })
-          .catch(function(){});
-      });
-    });
+    bindAllSwap();
 
     // Auto-advance: when the current video ends, play the next playlist item,
     // or the next media item in the same gallery when browsing normally.
