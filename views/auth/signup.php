@@ -1,22 +1,20 @@
 <?php
-// Signup page: account + optional billing columns in the middle, with the
-// recent pictures on the left and recent videos on the right.
+// Signup page: account form in the middle, with the recent pictures on the
+// left and recent videos on the right.
 ?>
 <style>
-    .auth-splash .auth-panel { flex: 0 1 auto; width: auto; max-width: 1000px; }
+    .auth-splash .auth-panel { flex: 0 1 auto; width: auto; max-width: 480px; }
     .auth-splash-side { flex: 1 1 300px; }
     .auth-panel .auth-hero { text-align: center; margin: 0 0 var(--spacing-md); }
     .auth-panel .auth-hero h1 { margin: 0 0 .35rem; font-size: 1.35rem; }
     .auth-panel .guest-teaser-stats { margin: var(--spacing-md) 0; }
-    .signup-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; text-align: left; }
+    .signup-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; text-align: left; }
     .signup-grid h3 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--purple-800); }
     .signup-grid input[type="text"], .signup-grid input[type="email"], .signup-grid input[type="password"], .signup-grid input[type="date"] { width: 100%; box-sizing: border-box; }
     .signup-grid input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.7; font-size: 1.1rem; }
     .signup-grid input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
     .signup-actions { grid-column: 1 / -1; text-align: center; margin-top: 0.5rem; }
     @media (max-width: 1352px) { .auth-splash { flex-direction: column; } .auth-splash .auth-panel { order: -1; } }
-    @media (max-width: 750px) { .signup-grid { grid-template-columns: 1fr 1fr; } }
-    @media (max-width: 500px) { .signup-grid { grid-template-columns: 1fr; } }
 </style>
 
 <div class="auth-splash">
@@ -59,46 +57,6 @@
                     <p>
                         <label for="date_of_birth">Date of Birth</label><br>
                         <input type="date" name="date_of_birth" id="date_of_birth" placeholder="MM/DD/YYYY" required onclick="if(window.HTMLInputElement&&HTMLInputElement.prototype.showPicker)this.showPicker()" onfocus="if(window.HTMLInputElement&&HTMLInputElement.prototype.showPicker)this.showPicker()">
-                    </p>
-                </div>
-
-                <div>
-                    <h3>Billing <span class="muted">(optional)</span></h3>
-                    <p>
-                        <label for="billing_first_name">First Name</label><br>
-                        <input type="text" name="billing_first_name" id="billing_first_name">
-                    </p>
-                    <p>
-                        <label for="billing_last_name">Last Name</label><br>
-                        <input type="text" name="billing_last_name" id="billing_last_name">
-                    </p>
-                    <p>
-                        <label for="billing_address_line1">Address Line 1</label><br>
-                        <input type="text" name="billing_address_line1" id="billing_address_line1">
-                    </p>
-                    <p>
-                        <label for="billing_address_line2">Address Line 2</label><br>
-                        <input type="text" name="billing_address_line2" id="billing_address_line2">
-                    </p>
-                </div>
-
-                <div>
-                    <h3>&nbsp;</h3>
-                    <p>
-                        <label for="billing_city">City</label><br>
-                        <input type="text" name="billing_city" id="billing_city">
-                    </p>
-                    <p>
-                        <label for="billing_state">State</label><br>
-                        <input type="text" name="billing_state" id="billing_state" maxlength="50">
-                    </p>
-                    <p>
-                        <label for="billing_zip">ZIP / Postal Code</label><br>
-                        <input type="text" name="billing_zip" id="billing_zip" maxlength="20">
-                    </p>
-                    <p>
-                        <label for="billing_country">Country</label><br>
-                        <input type="text" name="billing_country" id="billing_country" maxlength="2" placeholder="US">
                     </p>
                 </div>
 
