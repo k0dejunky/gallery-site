@@ -92,8 +92,6 @@
 <?php // Headline stat cards: lifetime totals for the whole site. ?>
 <div class="stat-cards">
     <div class="stat-card"><b><?= number_format($summary['total_views']) ?></b><small>Total Views</small></div>
-    <div class="stat-card"><b><?= number_format($summary['photos']) ?></b><small>Photos</small></div>
-    <div class="stat-card"><b><?= number_format($summary['videos']) ?></b><small>Videos</small></div>
     <div class="stat-card"><b><?= number_format($summary['galleries']) ?></b><small>Galleries</small></div>
     <div class="stat-card"><b><?= number_format($summary['total_members']) ?></b><small>Members</small></div>
     <div class="stat-card"><b><?= number_format($summary['total_users']) ?></b><small>Users</small></div>
