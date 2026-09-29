@@ -320,11 +320,17 @@ class ImportController extends Controller
         }
 
         if (!$meta['is_image']) {
-            faststart_video_if_needed($dest);
-            create_video_web_rendition($dest, $config['dir'] . '/web_' . $filename);
+            // Commit the video first, then run the expensive faststart remux +
+            // web rendition in a detached background process. A multi-GB video
+            // must not hold this request open (proxy timeouts would kill it and
+            // the import would stall); the gallery streams the original until
+            // the web_ rendition is ready.
+            $photoId = MediaUploader::commit($galleryId, $filename, $meta['hash']);
+            MediaUploader::finalizeVideoAsync($dest);
+        } else {
+            $photoId = MediaUploader::commit($galleryId, $filename, $meta['hash']);
         }
 
-        $photoId = MediaUploader::commit($galleryId, $filename, $meta['hash']);
         $this->removeChunks($galleryId, $uid);
 
         $this->json([
