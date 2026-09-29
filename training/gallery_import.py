@@ -64,6 +64,37 @@ _LOCK = threading.Lock()
 _CONFIG_FILE = None
 STATUS_MASK = "********"
 
+# Live activity reported to the control server UI: the folder/file being
+# processed and, for chunked uploads, byte-accurate progress of the current
+# file. Written from the run thread, read from the status endpoint thread.
+PROGRESS_LOCK = threading.Lock()
+PROGRESS = {
+    "running": False,
+    "stage": "idle",          # idle|queue|scan|uploading|moving|done|error
+    "folder": "",
+    "gallery_type": "",
+    "file": "",
+    "file_index": 0,
+    "files_total": 0,
+    "file_bytes": 0,
+    "file_total": 0,
+    "message": "",
+    "started_at": "",
+    "last_update": "",
+}
+
+
+def current_progress():
+    """Snapshot of live import activity for the control UI."""
+    with PROGRESS_LOCK:
+        return dict(PROGRESS)
+
+
+def _set_progress(**kw):
+    with PROGRESS_LOCK:
+        PROGRESS.update(kw)
+        PROGRESS["last_update"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
 
 def set_config_file(path):
     global _CONFIG_FILE
@@ -258,6 +289,7 @@ def _upload_chunked(cfg, gid, path, original_name):
             if status not in (200, 201) or not resp.get("ok"):
                 raise RuntimeError("chunk %d/%d: HTTP %d: %s" %
                                    (index, total, status, resp.get("error") or resp))
+            _set_progress(file_bytes=min(size, (index + 1) * CHUNK_SIZE))
 
     fields = {
         "upload_uid": uid,
@@ -293,9 +325,14 @@ def post_gallery(cfg, title, gtype, slot, files):
 
     uploaded = 0
     errors = []
-    for fname in files:
+    for idx, fname in enumerate(files, 1):
         try:
-            if os.path.getsize(fname) >= CHUNK_MIN:
+            fsize = os.path.getsize(fname)
+            _set_progress(file=os.path.basename(fname), file_index=idx,
+                          files_total=len(files), file_bytes=0, file_total=fsize,
+                          stage="uploading",
+                          message="uploading %s" % os.path.basename(fname))
+            if fsize >= CHUNK_MIN:
                 # Large file → resumable chunked upload (many small requests).
                 data = _upload_chunked(cfg, gid, fname, os.path.basename(fname))
                 status, ok = 201, bool(data.get("ok"))
@@ -385,6 +422,11 @@ def _run(cfg):
         raise RuntimeError("host_folder does not exist: %r" % host)
     posted = (cfg.get("posted_folder") or "").strip() or os.path.join(host, "posted")
 
+    _set_progress(running=True, stage="queue", folder="", gallery_type="",
+                  file="", file_index=0, files_total=0, file_bytes=0, file_total=0,
+                  message="looking up next publish slot",
+                  started_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
     slot = ""
     try:
         slot = fetch_next_slot(cfg)
@@ -392,6 +434,7 @@ def _run(cfg):
         result["ok"] = False
         result["errors"].append("queue: %s" % exc)
         _log(cfg, "import run failed before posting: %s" % exc)
+        _set_progress(running=False, stage="error", message="queue lookup failed: %s" % exc)
         _write_status(cfg, result, slot)
         return result
 
@@ -403,6 +446,7 @@ def _run(cfg):
     except OSError as exc:
         result["ok"] = False
         result["errors"].append(str(exc))
+        _set_progress(running=False, stage="error", message="cannot read host folder: %s" % exc)
         _write_status(cfg, result, slot)
         return result
 
@@ -412,6 +456,9 @@ def _run(cfg):
             continue
         created = []
         failed = False
+        _set_progress(folder=name, gallery_type="", file="", file_index=0,
+                      files_total=0, file_bytes=0, file_total=0,
+                      stage="scan", message="scanning folder")
         try:
             images, videos = bucket_files(folder, cfg)
         except Exception as exc:
@@ -427,6 +474,9 @@ def _run(cfg):
         for gtype, files in (("images", images), ("videos", videos)):
             if not files:
                 continue
+            _set_progress(gallery_type=gtype, file="", file_index=0,
+                          files_total=len(files), file_bytes=0, file_total=0,
+                          stage="uploading", message="posting %s gallery" % gtype)
             try:
                 data = post_gallery(cfg, name, gtype, slot, files)
             except Exception as exc:
@@ -452,6 +502,7 @@ def _run(cfg):
 
         if created and not failed:
             try:
+                _set_progress(stage="moving", file="", message="moving folder to posted")
                 moved = move_to_posted(folder, posted)
                 result["imported_folders"].append(name)
                 _log(cfg, "moved %s -> %s" % (name, moved or posted))
@@ -467,6 +518,7 @@ def _run(cfg):
 
     result["next_slot"] = slot
     _write_status(cfg, result, slot)
+    _set_progress(running=False, stage="done", file="", message="run finished")
     _log(cfg, "import run finished: %d folder(s) imported, %d gallery(s), %d error(s)" %
          (len(result["imported_folders"]), len(result["galleries"]), len(result["errors"])))
     return result

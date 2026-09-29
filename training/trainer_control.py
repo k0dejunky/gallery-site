@@ -221,6 +221,7 @@ class ImportScheduler:
         data["interval_minutes"] = int(eff.get("interval_minutes", 0) or 0)
         data["host_folder"] = eff.get("host_folder", "")
         data["posted_folder"] = eff.get("posted_folder", "") or (eff.get("host_folder") and eff["host_folder"] + os.sep + "posted")
+        data["current"] = gallery_import.current_progress()
         if self.last_run:
             data["last_run_control"] = time.strftime("%Y-%m-%d %H:%M:%S",
                                                      time.localtime(self.last_run))
@@ -610,6 +611,12 @@ main{padding:20px;max-width:1100px;margin:0 auto}
 .metric{background:var(--btn);border-radius:8px;padding:10px 12px}
 .metric .k{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
 .metric .v{font-size:18px;font-weight:700;margin-top:2px}
+.actrow{font-size:13px;margin:5px 0}
+.actrow .lbl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.progress{height:10px;background:#0f0d15;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-top:8px}
+.progress>span{display:block;height:100%;background:var(--acc);width:0%;transition:width .4s}
+.progress.indet>span{width:40%;animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
 .badge{padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700}
 .run{background:rgba(61,220,132,.15);color:var(--ok)}
 .stop{background:rgba(255,107,107,.15);color:var(--err)}
@@ -713,6 +720,11 @@ border-radius:8px;padding:10px 14px;display:none;max-width:380px}
   </div>
 
   <div class="grid" id="importMetrics"></div>
+
+  <div class="card" id="importActivityCard" style="display:none">
+    <h2 style="margin:0 0 8px;font-size:15px">Current activity</h2>
+    <div id="importActivity"></div>
+  </div>
 
   <div class="card">
     <h2 style="margin:0 0 8px;font-size:15px">Import log</h2>
@@ -860,6 +872,14 @@ function refreshAutostart(){
   }).catch(function(){});
 }
 
+function fmtBytes(b){
+  b = b || 0;
+  if (b >= 1073741824) return (b/1073741824).toFixed(2)+' GB';
+  if (b >= 1048576) return (b/1048576).toFixed(1)+' MB';
+  if (b >= 1024) return Math.round(b/1024)+' KB';
+  return b+' B';
+}
+
 function renderImport(imp){
   var badge = $('importBadge');
   badge.className = 'badge ' + (imp.enabled ? 'run' : 'stop');
@@ -877,6 +897,39 @@ function renderImport(imp){
   $('importMetrics').innerHTML = cells.map(function(c){
     return '<div class="metric"><div class="k">'+c[0]+'</div><div class="v">'+c[1]+'</div></div>';
   }).join('');
+
+  var cur = imp.current || {};
+  var card = $('importActivityCard');
+  if (!cur.running){
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+  var total = cur.file_total || 0, done = cur.file_bytes || 0;
+  var pct = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
+  var showBar = !!cur.file && (cur.stage === 'uploading');
+  var indet = showBar && total <= 0;
+  var fileProgress = '—';
+  if (showBar){
+    fileProgress = total > 0
+      ? pct + '% (' + fmtBytes(done) + ' / ' + fmtBytes(total) + ')'
+      : 'uploading…';
+  }
+  var rows = [
+    ['Stage', cur.stage || '—'],
+    ['Folder', cur.folder || '—'],
+    ['File', cur.file || '—'],
+    ['File progress', fileProgress],
+    ['Files', cur.files_total ? ((cur.file_index || 0) + ' / ' + cur.files_total) : '—'],
+    ['Message', cur.message || '—'],
+  ];
+  var html = rows.map(function(r){
+    return '<div class="actrow"><span class="lbl">'+r[0]+'</span> — <b>'+r[1]+'</b></div>';
+  }).join('');
+  if (showBar){
+    html += '<div class="progress' + (indet ? ' indet' : '') + '"><span style="width:' + pct + '%"></span></div>';
+  }
+  $('importActivity').innerHTML = html;
 }
 
 function refreshImport(){
