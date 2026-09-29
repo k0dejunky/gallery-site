@@ -838,6 +838,7 @@ class ChatBridgeController extends Controller
         // sees the last rebuild outcome instead of a silently stale state.
         $rebuild = \App\Core\ChatModel::rebuild();
         if (!empty($rebuild['ok'])) {
+            unset($meta['rebuild_error']);
             $meta['created'] = $rebuild['created'];
         } else {
             $meta['rebuild_error'] = $rebuild['error'] ?? 'unknown';

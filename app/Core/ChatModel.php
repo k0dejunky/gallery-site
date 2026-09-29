@@ -156,9 +156,24 @@ class ChatModel
         $data = json_decode($body, true);
         $text = trim((string) ($data['response'] ?? ''));
 
-        // Reject degenerate output (bad adapters can produce stray quotes /
-        // punctuation instead of an actual reply), so a broken fine-tune never
-        // replaces a working model.
-        return $status >= 200 && $status < 300 && \App\Core\ChatAi::looksLikeReply($text);
+        // Accept a short, coherent reply ("ok") — the prompt asks for exactly
+        // "ok", so enforcing a minimum length would reject a healthy model.
+        // Reject only degenerate output (empty / stray punctuation), which a
+        // broken adapter produces instead of an actual reply.
+        return $status >= 200 && $status < 300 && self::smokeLooksValid($text);
+    }
+
+    /** A smoke-test reply is valid when it is not empty or punctuation-only. */
+    private static function smokeLooksValid(string $text): bool
+    {
+        $t = trim($text);
+        if ($t === '') {
+            return false;
+        }
+        if (preg_match('/^[\s"\'\.,!?\-—:;…*~]+$/u', $t)) {
+            return false;
+        }
+
+        return true;
     }
 }

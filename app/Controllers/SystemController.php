@@ -128,10 +128,10 @@ class SystemController extends Controller
     {
         $result = \App\Core\ChatModel::rebuild();
         if (!empty($result['ok'])) {
-            \App\Core\ChatSettings::put('finetuned', array_merge(
-                \App\Core\ChatSettings::all()['finetuned'] ?? [],
-                ['created' => $result['created']]
-            ));
+            $meta = \App\Core\ChatSettings::all()['finetuned'] ?? [];
+            unset($meta['rebuild_error']);
+            $meta['created'] = $result['created'];
+            \App\Core\ChatSettings::put('finetuned', $meta);
             $this->flash('success', 'Fine-tuned model rebuilt as ' . $result['created'] . '.');
         } else {
             $this->flash('error', 'Fine-tuned rebuild failed: ' . ($result['error'] ?? 'unknown'));
