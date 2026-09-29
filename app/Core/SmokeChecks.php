@@ -619,6 +619,27 @@ class SmokeChecks
             $mu = $read("$root/app/Core/MediaUploader.php");
             return strpos($mu, '$config = \\config(\'app.uploads\');') !== false ? $ok('commit resolves config') : $bad('MediaUploader::commit must resolve config("app.uploads") for video duration');
         });
+        $add('smoke.import.settings_endpoint', 'Smoke · Gallery Import', 'ImportController exposes GET /webhooks/import/settings', static function () use ($importCtrl, $ok, $bad): array {
+            return strpos($importCtrl, 'public function settings()') !== false && strpos($importCtrl, 'ImportSettings::all()') !== false
+                ? $ok('settings endpoint wired')
+                : $bad('ImportController must implement /webhooks/import/settings');
+        });
+        $add('smoke.import.settings_model', 'Smoke · Gallery Import', 'ImportSettings model stores web-configurable settings', static function () use ($root, $read, $ok, $bad): array {
+            $m = $read("$root/app/Models/ImportSettings.php");
+            return strpos($m, 'class ImportSettings') !== false && strpos($m, 'autoposter_settings') !== false
+                ? $ok('model present')
+                : $bad('app/Models/ImportSettings.php must persist settings in autoposter_settings');
+        });
+        $add('smoke.import.admin_page', 'Smoke · Gallery Import', 'Gallery management page edits import settings', static function () use ($root, $read, $ok, $bad): array {
+            $routes = $read("$root/config/routes.php");
+            $ctrl   = $read("$root/app/Controllers/AdminController.php");
+            $view   = $read("$root/views/admin/galleries.php");
+            return strpos($routes, 'admin/galleries/import-settings') !== false
+                && strpos($ctrl, 'function saveImportSettings()') !== false
+                && strpos($view, 'import_host_folder') !== false
+                ? $ok('admin page + save route wired')
+                : $bad('galleries page must edit import settings and persist them');
+        });
         $apv = $read("$root/views/admin/auto_poster.php");
         $add('smoke.ap.view_text', 'Smoke · Auto Poster', 'Recommended posts editable text field', static function () use ($apv, $ok, $bad): array {
             return strpos($apv, 'name="text"') !== false ? $ok('text field') : $bad('auto-poster recommended posts must be editable text');

@@ -8,6 +8,7 @@ use App\Core\Controller;
 use App\Core\MediaUploader;
 use App\Core\Request;
 use App\Models\Gallery;
+use App\Models\ImportSettings;
 use App\Models\Photo;
 use DateTime;
 use DateTimeZone;
@@ -71,6 +72,22 @@ class ImportController extends Controller
             'count'        => count($queue),
             'spacing_hours' => $spacing,
         ]);
+    }
+
+    /**
+     * GET /webhooks/import/settings
+     * Returns the import-app settings stored on the site (editable on the
+     * gallery management page). The Windows app / Ubuntu importer pulls these
+     * on each run so they can be configured from the web instead of the box.
+     */
+    public function settings(): void
+    {
+        if (!$this->authorized()) {
+            $this->deny();
+            return;
+        }
+
+        $this->json(['ok' => true, 'settings' => ImportSettings::all()]);
     }
 
     /**

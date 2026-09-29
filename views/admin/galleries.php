@@ -119,6 +119,66 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
         <a class="btn btn-sm btn-outline" href="<?= url('/admin/galleries/export') ?>">Export CSV</a>
     </div>
 
+    <?php // Folder-import app settings (pulled by the Windows app / Ubuntu importer). ?>
+    <?php $importS = is_array($importSettings ?? null) ? $importSettings : []; ?>
+    <details class="mg-import-settings" style="border:1px solid var(--pink-300);border-radius:var(--card-radius,8px);padding:1rem 1.25rem;background:var(--pink-100);margin-bottom:1rem;">
+        <summary style="cursor:pointer;font-weight:600;">
+            Folder import app settings
+            <span class="muted" style="font-weight:400;font-size:.82rem;">— the Windows app / Ubuntu importer pulls these on each run</span>
+        </summary>
+        <form method="post" action="<?= url('/admin/galleries/import-settings') ?>" style="margin-top:.75rem;">
+            <?= csrf_field() ?>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.75rem 1rem;">
+                <div>
+                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Enabled</label>
+                    <label class="chip"><input type="checkbox" name="import_enabled" value="1" <?= !empty($importS['enabled']) ? 'checked' : '' ?>> Run the importer on schedule</label>
+                </div>
+                <div>
+                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Daily schedule (HH:MM, blank = interval only)</label>
+                    <input type="text" name="import_schedule" value="<?= e((string) ($importS['schedule'] ?? '')) ?>" placeholder="06:00" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                </div>
+                <div>
+                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Interval (minutes, 0 = off)</label>
+                    <input type="number" name="import_interval_minutes" min="0" value="<?= (int) ($importS['interval_minutes'] ?? 0) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                </div>
+                <div>
+                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Host folder (on the Windows box / Ubuntu)</label>
+                    <input type="text" name="import_host_folder" value="<?= e((string) ($importS['host_folder'] ?? '')) ?>" placeholder="C:\work\incoming" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                </div>
+                <div>
+                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Posted folder (defaults to &lt;host&gt;/posted)</label>
+                    <input type="text" name="import_posted_folder" value="<?= e((string) ($importS['posted_folder'] ?? '')) ?>" placeholder="C:\work\incoming\posted" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                </div>
+                <div>
+                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Import token (GALLERY_IMPORT_KEY)</label>
+                    <input type="password" name="import_token" value="" placeholder="<?= empty($importS['import_token']) ? 'set the key' : 'Leave blank to keep the saved key' ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                </div>
+                <div>
+                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Spacing (hours between galleries)</label>
+                    <input type="number" name="import_spacing_hours" min="1" max="168" value="<?= (int) ($importS['spacing_hours'] ?? 24) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                </div>
+                <div>
+                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Min membership level</label>
+                    <input type="number" name="import_min_level" min="0" max="3" value="<?= (int) ($importS['min_level'] ?? 0) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                </div>
+                <div>
+                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Gallery description</label>
+                    <input type="text" name="import_description" value="<?= e((string) ($importS['description'] ?? '')) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                </div>
+                <div>
+                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Secret gallery</label>
+                    <label class="chip"><input type="checkbox" name="import_is_secret" value="1" <?= !empty($importS['is_secret']) ? 'checked' : '' ?>> Imported galleries are secret</label>
+                </div>
+            </div>
+            <div style="margin-top:.75rem;">
+                <button type="submit" class="btn btn-sm">Save import settings</button>
+                <span class="muted" style="font-size:.78rem;margin-left:.5rem;">
+                    Used by <code>gallery_import.py</code> on the training PC (192.168.1.250) and the Ubuntu cron.
+                </span>
+            </div>
+        </form>
+    </details>
+
     <?php // Collapsible gallery queue: galleries waiting for a future publish moment. ?>
     <details style="border:1px solid var(--pink-300);border-radius:var(--card-radius,8px);padding:1rem 1.25rem;background:var(--pink-100);margin-bottom:1rem;">
         <summary style="cursor:pointer;font-weight:600;">Gallery queue (<?= count($queuedGalleries ?? []) ?>)</summary>

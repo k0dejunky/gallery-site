@@ -31,6 +31,7 @@ return [
 
     // Gallery import API (folder-import app; Bearer GALLERY_IMPORT_KEY)
     ['GET', '/webhooks/import/queue', 'ImportController@queue'],
+    ['GET', '/webhooks/import/settings', 'ImportController@settings'],
     ['POST', '/webhooks/import/gallery', 'ImportController@gallery'],
 
     // Live streaming (MediaMTX auth webhook is server-to-server, CSRF-exempt)
@@ -137,6 +138,7 @@ return [
     ['POST', '/admin/categories/{id}', 'CategoryController@update', 'categories'],
     ['POST', '/admin/categories/{id}/delete', 'CategoryController@destroy', 'categories'],
     ['GET', '/admin/galleries', 'AdminController@galleries', 'galleries'],
+    ['POST', '/admin/galleries/import-settings', 'AdminController@saveImportSettings', 'galleries'],
     ['GET', '/admin/galleries/export', 'ExportController@galleries', 'galleries'],
     ['GET', '/admin/galleries/import', 'GalleryController@galleryImportForm', 'galleries'],
     ['POST', '/admin/galleries/import', 'GalleryController@galleryImport', 'galleries'],

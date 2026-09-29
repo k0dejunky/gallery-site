@@ -206,10 +206,34 @@ def run_once(cfg=None):
     """Scan the host folder, create + schedule galleries, move folders to posted.
 
     Returns a result dict; raises only on unrecoverable config problems.
+    Settings are pulled from the site first (editable on the gallery management
+    page), falling back to the local config when the site is unreachable.
     """
     cfg = cfg or read_config()
+    cfg = pull_site_settings(cfg)
     with _LOCK:
         return _run(cfg)
+
+
+def pull_site_settings(cfg):
+    """Merge the import settings stored on the site (gallery management page)
+    into the local config. The site is the source of truth when reachable."""
+    base = (cfg.get("server_base") or "").rstrip("/")
+    token = (cfg.get("import_token") or "").strip()
+    if not base or not token:
+        return cfg
+    try:
+        status, data = _http_json(base + "/webhooks/import/settings", token, timeout=30)
+        if status == 200 and data.get("ok"):
+            settings = data.get("settings") or {}
+            for key in ("host_folder", "posted_folder", "import_token", "spacing_hours",
+                        "min_level", "description", "is_secret", "enabled",
+                        "schedule", "interval_minutes"):
+                if key in settings and settings[key] not in (None, ""):
+                    cfg[key] = settings[key]
+    except Exception:
+        pass
+    return cfg
 
 
 def _run(cfg):
