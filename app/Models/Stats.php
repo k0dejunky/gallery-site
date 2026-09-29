@@ -56,8 +56,8 @@ class Stats
         $row = Database::run(
             'SELECT
                 (SELECT COALESCE(SUM(g.views), 0) FROM galleries g WHERE g.deleted_at IS NULL) AS total_views,
-                (SELECT COUNT(DISTINCT gp.photo_id) FROM gallery_photo gp JOIN galleries g ON g.id = gp.gallery_id JOIN photos p ON p.id = gp.photo_id WHERE g.deleted_at IS NULL AND p.is_video = 0) AS photos,
-                (SELECT COUNT(DISTINCT gp.photo_id) FROM gallery_photo gp JOIN galleries g ON g.id = gp.gallery_id JOIN photos p ON p.id = gp.photo_id WHERE g.deleted_at IS NULL AND p.is_video = 1) AS videos,
+                (SELECT COUNT(*) FROM photos WHERE is_video = 0) AS photos,
+                (SELECT COUNT(*) FROM photos WHERE is_video = 1) AS videos,
                 (SELECT COUNT(DISTINCT gp.photo_id) FROM gallery_photo gp JOIN galleries g ON g.id = gp.gallery_id JOIN photos p ON p.id = gp.photo_id WHERE g.deleted_at IS NULL AND p.is_video = 0 AND g.published_at IS NOT NULL AND g.published_at > CURRENT_TIMESTAMP) AS queued_photos,
                 (SELECT COUNT(DISTINCT gp.photo_id) FROM gallery_photo gp JOIN galleries g ON g.id = gp.gallery_id JOIN photos p ON p.id = gp.photo_id WHERE g.deleted_at IS NULL AND p.is_video = 1 AND g.published_at IS NOT NULL AND g.published_at > CURRENT_TIMESTAMP) AS queued_videos,
                 (SELECT COUNT(DISTINCT gp.photo_id) FROM gallery_photo gp JOIN galleries g ON g.id = gp.gallery_id JOIN photos p ON p.id = gp.photo_id WHERE g.deleted_at IS NULL AND p.is_video = 0 AND (g.published_at IS NULL OR g.published_at <= CURRENT_TIMESTAMP)) AS published_photos,
