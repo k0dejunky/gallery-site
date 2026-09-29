@@ -28,7 +28,7 @@ foreach ($source as $photo) {
 <?php if ($items !== []): ?>
 <section class="guest-teaser">
     <h2 class="section-title"><?= e($heading) ?></h2>
-    <div class="guest-grid" data-guest-grid>
+    <div class="guest-grid" data-guest-grid<?= !empty($guestMaxRows) ? ' data-max-rows="' . (int) $guestMaxRows . '"' : '' ?>>
         <?php foreach ($items as $item): ?>
             <div class="card recent-card">
                 <a class="card-link" href="<?= e($item['url']) ?>">
@@ -63,9 +63,19 @@ foreach ($source as $photo) {
             var maxH = parseFloat(cs.maxHeight);
             if (!isFinite(maxH) || maxH <= 0) return;
             var gap = parseFloat(cs.rowGap) || 0;
-            var rowH = tile.getBoundingClientRect().height + gap;
-            if (!(rowH > 0)) return;
+            // Use the real row pitch (top of the 6th tile minus the 1st, or the
+            // tile height + gap as a fallback) — grid auto-rows can be taller
+            // than the tile, which otherwise clips the last visible row.
+            var rowH = 0;
+            if (grid.children.length > 5) {
+                var first = grid.children[0].getBoundingClientRect();
+                var sixth = grid.children[5].getBoundingClientRect();
+                rowH = sixth.top - first.top;
+            }
+            if (!(rowH > 0)) { rowH = tile.getBoundingClientRect().height + gap; }
             var rows = Math.max(1, Math.floor(maxH / rowH));
+            var maxRows = parseInt(grid.getAttribute('data-max-rows'), 10);
+            if (isFinite(maxRows) && maxRows > 0) { rows = Math.min(rows, maxRows); }
             grid.style.maxHeight = (rows * rowH - gap) + 'px';
         });
     }
