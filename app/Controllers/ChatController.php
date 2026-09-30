@@ -46,6 +46,8 @@ class ChatController extends Controller
             'replyEnabled' => $conv['id'] > 0 ? ChatMessage::memberReplyEnabled((int) $conv['id']) : $eligible,
             'dailyMessage' => \App\Core\ChatSettings::dailyMessage(),
             'aiEnabled'    => \App\Core\ChatSettings::aiEnabled(),
+            'operatorOnline' => \App\Core\ChatSettings::operatorOnline(),
+            'awayMessage'  => \App\Core\ChatSettings::operatorAwayMessage(),
             'conversation' => $conv,
             'messages'     => $messages,
             'hasMore'      => $hasMore,
@@ -161,7 +163,21 @@ class ChatController extends Controller
                 $result['ai_pending'] = true; // model down; operator can respond via the Android app
             }
         } else {
-            $result['awaiting_operator'] = true; // AI off or operator-only mode
+            // AI off or operator-only mode: operator answers manually.
+            $result['awaiting_operator'] = true;
+
+            // When the operator chat is not online and a default/away message
+            // is configured, auto-respond with it (once per away period — never
+            // repeat the same away message back-to-back).
+            $awayMessage = \App\Core\ChatSettings::operatorAwayMessage();
+            if ($awayMessage !== '' && !\App\Core\ChatSettings::operatorOnline()) {
+                if (ChatMessage::lastMessageText($cid) !== $awayMessage) {
+                    ChatMessage::addMessage($cid, ChatMessage::ROLE_MODEL, $awayMessage);
+                    $result['ai_reply']     = $awayMessage;
+                    $result['ai_reply_id']  = ChatMessage::latestId($cid);
+                    $result['away_message'] = true;
+                }
+            }
         }
 
         $this->json($result);

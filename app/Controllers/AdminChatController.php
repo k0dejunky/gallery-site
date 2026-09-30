@@ -26,6 +26,8 @@ class AdminChatController extends Controller
 
     public function index(): void
     {
+        \App\Core\ChatSettings::markOperatorOnline();
+
         $q      = trim((string) $this->request->query('q', ''));
         $mode   = (string) $this->request->query('mode', '');
         $page   = max(1, (int) $this->request->query('page', 1));
@@ -76,6 +78,8 @@ class AdminChatController extends Controller
             'filterMode'   => $mode,
             'ai'           => $ai,
             'state'        => $state,
+            'operatorOnline' => \App\Core\ChatSettings::operatorOnline(),
+            'awayMessage'  => \App\Core\ChatSettings::operatorAwayMessage(),
             'finetunedModel' => \App\Core\ChatAi::currentFineTunedModel(),
             'adapterInstalled' => \App\Core\ChatModel::adapterPath() !== null,
             'trainingCount'=> ChatMessage::trainingPairCount(),
@@ -124,6 +128,8 @@ class AdminChatController extends Controller
 
     public function show(int $id): void
     {
+        \App\Core\ChatSettings::markOperatorOnline();
+
         $conv = ChatMessage::find($id);
         if ($conv === null) {
             $this->notFound();
@@ -258,6 +264,8 @@ class AdminChatController extends Controller
     /** Reply as the human operator (harvested into training data). */
     public function operatorReply(int $id): void
     {
+        \App\Core\ChatSettings::markOperatorOnline();
+
         $message = trim((string) $this->request->input('message'));
 
         // Optional attachment (image / video / text / etc.).
@@ -431,6 +439,32 @@ class AdminChatController extends Controller
 
         $this->flash('success', 'Daily message ' . ($message === '' ? 'cleared' : 'saved') . '.');
         $this->redirect('/admin/chat');
+    }
+
+    /** Save the default/away auto-response used when the operator chat is offline. */
+    public function saveAwayMessage(): void
+    {
+        $message = trim((string) $this->request->post('away_message', ''));
+        if (mb_strlen($message) > 5000) {
+            $this->flash('error', 'Away message must be 5,000 characters or fewer.');
+            $this->redirect('/admin/chat');
+            return;
+        }
+
+        $state = \App\Core\ChatSettings::all();
+        $state['operator_away_message'] = $message;
+
+        \App\Core\ChatSettings::save($state);
+
+        $this->flash('success', 'Away message ' . ($message === '' ? 'cleared' : 'saved') . '.');
+        $this->redirect('/admin/chat');
+    }
+
+    /** Presence heartbeat: marks the operator online (admin chat page JS). */
+    public function heartbeat(): void
+    {
+        \App\Core\ChatSettings::markOperatorOnline();
+        $this->json(['ok' => true, 'online' => \App\Core\ChatSettings::operatorOnline()]);
     }
 
     /** Create a daily chat broadcast: schedule it or send it now. */

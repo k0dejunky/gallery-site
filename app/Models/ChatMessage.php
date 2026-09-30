@@ -571,6 +571,19 @@ class ChatMessage
         return (int) $id;
     }
 
+    /**
+     * The text of the most recent message in a conversation ('' when none).
+     */
+    public static function lastMessageText(int $conversationId): string
+    {
+        $text = Database::run(
+            'SELECT message FROM chat_messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1',
+            [$conversationId]
+        )->fetchColumn();
+
+        return $text === false || $text === null ? '' : (string) $text;
+    }
+
     /** The earliest message id in a conversation, or 0 when empty. */
     public static function firstId(int $conversationId): int
     {

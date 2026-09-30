@@ -269,6 +269,8 @@ return [
     ['POST', '/admin/chat/settings', 'AdminChatController@saveSettings', 'chat'],
     ['POST', '/admin/chat/ai-toggle', 'AdminChatController@toggleAi', 'chat'],
     ['POST', '/admin/chat/daily-message', 'AdminChatController@saveDailyMessage', 'chat'],
+    ['POST', '/admin/chat/away-message', 'AdminChatController@saveAwayMessage', 'chat'],
+    ['POST', '/admin/chat/heartbeat', 'AdminChatController@heartbeat', 'chat'],
     ['POST', '/admin/chat/daily-broadcast', 'AdminChatController@createDailyBroadcast', 'chat'],
     ['POST', '/admin/chat/daily-broadcast/{id}/send', 'AdminChatController@runDailyBroadcast', 'chat'],
     ['POST', '/admin/chat/daily-broadcast/{id}/cancel', 'AdminChatController@cancelDailyBroadcast', 'chat'],

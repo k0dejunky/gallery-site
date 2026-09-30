@@ -18,6 +18,16 @@
             <a class="btn btn-sm" href="<?= url('/assets/apk/' . e($latestApk['file'])) ?>" download>Download operator app (Android APK v<?= e($latestApk['version']) ?>)</a>
         <?php endif; ?>
         <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat/export-training') ?>" onclick="return confirm('Write the cleaned training export?');">Export training</a>
+    <div style="margin-top:.5rem;">
+        <span class="muted" style="font-size:.85rem;">
+            Operator chat:
+            <?php if (!empty($operatorOnline)): ?>
+                <strong style="color:#15803d;">&#9679; online</strong>
+            <?php else: ?>
+                <strong style="color:#b45309;">&#9679; away</strong>
+            <?php endif; ?>
+            &middot; while you're on this page you're marked online (members get the away auto-response when nobody is).
+        </span>
     </div>
 </div>
 
@@ -168,6 +178,14 @@
     <div><button type="submit" class="btn btn-sm">Save daily message</button></div>
 </form>
 
+<?php // Default/away auto-response when the operator chat is not online ?>
+<form method="post" action="<?= url('/admin/chat/away-message') ?>" style="display:flex;flex-direction:column;gap:.35rem;margin-bottom:1rem;max-width:640px;">
+    <?= csrf_field() ?>
+    <label class="muted" style="font-size:.85rem;">Away auto-response (default message) — sent to members automatically when the operator chat is not online. Leave empty to disable:</label>
+    <textarea name="away_message" rows="3" maxlength="5000" placeholder="e.g. Thanks for your message! I'm away right now and will reply as soon as I'm back."><?= e((string) ($awayMessage ?? '')) ?></textarea>
+    <div><button type="submit" class="btn btn-sm">Save away message</button></div>
+</form>
+
 <?php // Daily chat broadcast: schedule or send now, plus the send log ?>
 <form method="post" action="<?= url('/admin/chat/daily-broadcast') ?>" style="display:flex;flex-direction:column;gap:.35rem;margin-bottom:.5rem;max-width:640px;">
     <?= csrf_field() ?>
@@ -285,3 +303,19 @@
         </div>
     <?php endif; ?>
 <?php endif; ?>
+
+<script>
+// Presence heartbeat: while this admin chat page is open, the operator is
+// marked online so members don't get the away auto-response.
+(function () {
+    var url = '<?= e(url('/admin/chat/heartbeat')) ?>';
+    var csrf = document.querySelector('input[name="_token"]');
+    function beat() {
+        var body = new FormData();
+        if (csrf) { body.append('_token', csrf.value); }
+        fetch(url, { method: 'POST', body: body }).catch(function () {});
+    }
+    beat();
+    setInterval(beat, 60000);
+})();
+</script>

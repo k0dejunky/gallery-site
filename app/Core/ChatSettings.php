@@ -41,6 +41,8 @@ class ChatSettings
             'ai_content_search_max' => 6,
             'live_chat_filters'    => [],
             'trainer_trained_pairs' => 0,
+            'operator_away_message'  => '',
+            'operator_online_at'     => 0,
         ];
     }
 
@@ -103,6 +105,31 @@ class ChatSettings
     public static function aiEnabled(): bool
     {
         return !empty(self::all()['ai_enabled']);
+    }
+
+    /**
+     * The default/away message auto-responded when the operator chat is not
+     * online (empty = no auto-response).
+     */
+    public static function operatorAwayMessage(): string
+    {
+        return trim((string) (self::all()['operator_away_message'] ?? ''));
+    }
+
+    /**
+     * Whether the operator chat is considered online: a human (admin chat page
+     * or the operator Android app) has been active within the window.
+     */
+    public static function operatorOnline(int $windowSec = 180): bool
+    {
+        $at = (int) (self::all()['operator_online_at'] ?? 0);
+        return $at > 0 && (time() - $at) < $windowSec;
+    }
+
+    /** Record operator presence (admin chat page or operator app activity). */
+    public static function markOperatorOnline(): void
+    {
+        self::put('operator_online_at', time());
     }
 
     /**

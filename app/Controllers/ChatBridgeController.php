@@ -54,6 +54,16 @@ class ChatBridgeController extends Controller
         return $expected !== '' && hash_equals($expected, $given);
     }
 
+    /**
+     * Record operator presence. Called by the operator-app endpoints (inbox,
+     * stream, events, reply) so the operator chat is "online" while the Android
+     * app is actively used. The training PC's endpoints never call this.
+     */
+    private function presence(): void
+    {
+        \App\Core\ChatSettings::markOperatorOnline();
+    }
+
     public function __construct($request)
     {
         parent::__construct($request);
@@ -82,6 +92,8 @@ class ChatBridgeController extends Controller
             'status'       => $conv ? (string) $conv['status'] : 'closed',
             'pending'      => $pending,
             'user_id'      => $conv ? (int) $conv['user_id'] : 0,
+            'operator_online' => \App\Core\ChatSettings::operatorOnline(),
+            'away_message'    => \App\Core\ChatSettings::operatorAwayMessage(),
         ]);
     }
 
@@ -111,6 +123,8 @@ class ChatBridgeController extends Controller
      */
     public function inbox(): void
     {
+        $this->presence();
+
         $limit = max(1, min(100, (int) $this->request->query('limit', 50)));
         $search = trim((string) $this->request->query('q', ''));
         $where = ["c.status = 'open'"];
@@ -244,6 +258,8 @@ class ChatBridgeController extends Controller
      */
     public function stream(): void
     {
+        $this->presence();
+
         $cid = max(0, (int) $this->request->query('conversation', 0));
         $since = max(0, (int) $this->request->query('since', 0));
         $conv = $cid > 0 ? ChatMessage::find($cid) : null;
@@ -292,6 +308,8 @@ class ChatBridgeController extends Controller
      */
     public function events(): void
     {
+        $this->presence();
+
         $since = max(0, (int) $this->request->query('since', 0));
 
         start_sse();
@@ -353,6 +371,8 @@ class ChatBridgeController extends Controller
      */
     public function reply(): void
     {
+        $this->presence();
+
         // Support both JSON (text only) and multipart (text + optional file).
         $data = json_decode($this->rawBody(), true);
         if (!is_array($data)) {

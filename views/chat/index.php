@@ -29,7 +29,13 @@
         <p class="muted">Chat is available to members on the <strong>Platinum</strong>, <strong>Yearly</strong>, <strong>Lifetime</strong>, or <strong>Chat add-on</strong> plans. Upgrade in <a href="<?= url('/membership') ?>">Membership</a> to start chatting.</p>
     <?php else: ?>
         <h1>Chat</h1>
-        <p class="chat-status">Messages are answered as quickly as possible.</p>
+        <p class="chat-status">
+            <?php if (!empty($operatorOnline)): ?>
+                <span style="color:#15803d;">&#9679; The operator is online — you'll get a reply shortly.</span>
+            <?php else: ?>
+                <span style="color:#b45309;">&#9679; The operator is away right now — messages are answered automatically and personally as soon as possible.</span>
+            <?php endif; ?>
+        </p>
 
         <div class="chat-thread" id="chat-thread">
             <?php if (empty($messages)): ?>
