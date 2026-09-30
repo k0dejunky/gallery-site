@@ -36,7 +36,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
     </script>
     <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') . ' Admin' : e(config('app.site_name')) . ' Admin' ?></title>
     <link rel="stylesheet" href="<?= e(url('/assets/admin-shared.css')) ?>">
-    <link rel="stylesheet" href="<?= e(url('/assets/css/user.css')) ?>?v=29">
+    <link rel="stylesheet" href="<?= e(url('/assets/css/user.css')) ?>?v=30">
     <style>
 <?= \App\Models\Theme::css(\App\Models\Theme::SCOPE_ADMIN) ?>
 <?= \App\Models\Theme::cssLayout(\App\Models\Theme::SCOPE_ADMIN) ?>
@@ -353,7 +353,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
         details.sys-card > summary .collapsible-meta { margin-left: auto; font-size: var(--font-size-sm); }
     </style>
 </head>
-<body class="admin-theme" data-base="<?= e(config('app.base_path')) ?>" data-user="1">
+<body class="admin-theme site-compact" data-base="<?= e(config('app.base_path')) ?>" data-user="1">
 <?php $isSiteEditor = strpos($_SERVER['REQUEST_URI'] ?? '', '/admin/site-editor') !== false; ?>
 <?php if (!empty($_SESSION['impersonator_id'])): ?>
     <div style="background:#7f1d1d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;justify-content:center;border-radius:var(--border-radius);margin-bottom:var(--spacing-md);">

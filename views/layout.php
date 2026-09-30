@@ -220,9 +220,9 @@ $isAuthPage = $isLoginPage
         .collapsible { overflow: hidden; transition: max-height .3s; }
         img { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
      </style>
-    <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=29">
+    <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=30">
 </head>
-<body data-base="<?= e(config('app.base_path')) ?>" data-user="<?= $user !== null ? '1' : '0' ?>">
+<body<?= $isAuthPage ? '' : ' class="site-compact"' ?> data-base="<?= e(config('app.base_path')) ?>" data-user="<?= $user !== null ? '1' : '0' ?>">
 <a class="skip-link" href="#main-content">Skip to content</a>
 <?php if (!empty($_SESSION['impersonator_id'])): ?>
     <div style="background:#7f1d1d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;justify-content:center;border-radius:var(--border-radius);margin-bottom:1rem;">

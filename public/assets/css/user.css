@@ -283,3 +283,31 @@ table td:nth-child(1) { overflow-wrap: anywhere; word-break: break-word; }
 .tour-text{margin:.35rem 0 .75rem;font-size:.9rem;color:var(--text-color)}
 .tour-actions{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
 .tour-count{margin-right:auto;font-size:.8rem;color:var(--text-muted)}
+
+/* Site-wide compact scale (non-auth pages + admin). Login/signup do not get
+   the site-compact class and keep the default design tokens. */
+body.site-compact {
+    --font-size-xs: 0.62rem;
+    --font-size-sm: 0.74rem;
+    --font-size-base: 0.85rem;
+    --font-size-lg: 1rem;
+    --font-size-xl: 1.2rem;
+    --font-size-h1: 1.4rem;
+    --line-height: 1.35;
+    --spacing-xs: 0.18rem;
+    --spacing-sm: 0.35rem;
+    --spacing-md: 0.65rem;
+    --spacing-lg: 0.9rem;
+    --spacing-xl: 1.3rem;
+    --btn-padding: 0.3rem 0.6rem;
+    --btn-font-size: 0.78rem;
+    --input-padding: 0.25rem 0.45rem;
+    --card-padding: 0.5rem;
+    --chip-padding: 0.2rem 0.55rem;
+    --border-radius-lg: 9px;
+    padding: .6rem .9rem;
+}
+body.site-compact .admin-nav,
+body.site-compact .home-nav-wrap { flex-basis: 185px; }
+body.site-compact th, body.site-compact td { padding: .3rem .4rem; }
+body.site-compact .title-header img { max-width: 400px; }
