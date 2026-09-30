@@ -789,7 +789,7 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
     (function () {
         var body = document.getElementById('ap-rec-body');
         if (!body) { return; }
-        var base = '<?= e($platformPath) ?>' + '/recommendations';
+        var base = '<?= e(url('/admin/auto-poster/' . $platform . '/recommendations')) ?>';
 
         function bind() {
             body.querySelectorAll('[data-rec-page]').forEach(function (btn) {
