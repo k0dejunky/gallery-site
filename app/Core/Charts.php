@@ -46,7 +46,7 @@ class Charts
         $id   = 'g' . substr(md5($line), 0, 6);
 
         return sprintf(
-            '<svg viewBox="0 0 %1$d %2$d" width="%1$d" height="%2$d" role="img" style="display:block">'
+            '<svg viewBox="0 0 %1$d %2$d" width="100%%" role="img" style="display:block;width:100%%;height:auto">'
             . '<defs><linearGradient id="%6$s" x1="0" y1="0" x2="0" y2="1">'
             . '<stop offset="0%%" stop-color="%5$s" stop-opacity="0.25"/>'
             . '<stop offset="100%%" stop-color="%5$s" stop-opacity="0"/></linearGradient></defs>'
@@ -84,7 +84,7 @@ class Charts
         $plotH  = $h - $labelH;
         $slot   = $w / $n;
         $barW   = max(6, (int) floor($slot * 0.62));
-        $svg    = sprintf('<svg viewBox="0 0 %d %d" width="100%%" height="%d" preserveAspectRatio="xMidYMid meet" style="display:block">', $w, $h, $h);
+        $svg    = sprintf('<svg viewBox="0 0 %d %d" width="100%%" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%%;height:auto">', $w, $h);
 
         foreach ($values as $i => $v) {
             $bh = $v > 0 ? max(2, (int) round($v / $max * ($plotH - 6))) : 0;
@@ -125,15 +125,15 @@ class Charts
         $total = array_sum(array_map(static fn (array $s): float => (float) $s['value'], $slices));
 
         if ($total <= 0) {
-            return '<svg viewBox="0 0 ' . $w . ' ' . $h . '" width="' . $w . '" height="' . $h . '" role="img" style="display:block"></svg>';
+            return '<svg viewBox="0 0 ' . $w . ' ' . $h . '" width="100%" role="img" style="display:block;width:100%;height:auto"></svg>';
         }
 
         $cx = $w / 2;
         $cy = $h / 2;
         $r  = min($w, $h) / 2 - 4;
         $svg = sprintf(
-            '<svg viewBox="0 0 %d %d" width="%d" height="%d" role="img" style="display:block">',
-            $w, $h, $w, $h
+            '<svg viewBox="0 0 %d %d" width="100%%" role="img" style="display:block;width:100%%;height:auto">',
+            $w, $h
         );
 
         $angle = -M_PI / 2;

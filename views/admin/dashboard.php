@@ -203,10 +203,10 @@
             </span>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:center;margin-top:.75rem;">
-            <div style="flex:0 0 auto;">
+            <div style="flex:1 1 280px;min-width:220px;max-width:380px;">
                 <?= \App\Core\Charts::pie($diskSlices, 230, 230) ?>
             </div>
-            <div style="flex:1 1 280px;min-width:220px;">
+            <div style="flex:1 1 320px;min-width:260px;">
                 <?php foreach ($diskSlices as $slice): ?>
                     <div style="display:flex;align-items:center;gap:.6rem;margin:.45rem 0;">
                         <i style="flex:0 0 auto;width:.85rem;height:.85rem;border-radius:.2rem;background:<?= e($slice['color']) ?>;display:inline-block;"></i>
