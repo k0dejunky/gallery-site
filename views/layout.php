@@ -220,7 +220,7 @@ $isAuthPage = $isLoginPage
         .collapsible { overflow: hidden; transition: max-height .3s; }
         img { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
      </style>
-    <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=30">
+    <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=31">
 </head>
 <body<?= $isAuthPage ? '' : ' class="site-compact"' ?> data-base="<?= e(config('app.base_path')) ?>" data-user="<?= $user !== null ? '1' : '0' ?>">
 <a class="skip-link" href="#main-content">Skip to content</a>
