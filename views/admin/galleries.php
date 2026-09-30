@@ -259,7 +259,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                                         <td style="padding:.3rem .5rem;" class="muted"><?= (int) $dup['photo_count'] ?> photos</td>
                                         <td style="padding:.3rem .5rem;" class="muted">#<?= $dupId ?></td>
                                         <td style="padding:.3rem .5rem;text-align:right;">
-                                            <form class="inline dup-remove-form" method="post"
+                                            <form class="inline dup-remove-form" method="post" data-no-progress
                                                   action="<?= url('/admin/galleries/' . $dupId . '/delete') ?>"
                                                   data-title="<?= e((string) $dup['title']) ?>" data-id="<?= $dupId ?>">
                                                 <?= csrf_field() ?>
