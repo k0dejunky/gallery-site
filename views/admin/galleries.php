@@ -222,7 +222,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
         // galleries. The admin picks which gallery to remove (soft-delete —
         // photos are shared, so removing a copy never touches the media). ?>
     <details style="border:1px solid var(--pink-300);border-radius:var(--card-radius,8px);padding:1rem 1.25rem;background:var(--pink-100);margin-bottom:1rem;">
-        <summary style="cursor:pointer;font-weight:600;">Duplicate galleries (<?= count($duplicateReport['exact'] ?? []) ?> group<?= count($duplicateReport['exact'] ?? []) === 1 ? '' : 's' ?>)</summary>
+        <summary style="cursor:pointer;font-weight:600;" id="dup-galleries-summary">Duplicate galleries (<?= count($duplicateReport['exact'] ?? []) ?> group<?= count($duplicateReport['exact'] ?? []) === 1 ? '' : 's' ?>)</summary>
         <div style="margin-top:.75rem;">
             <p class="muted" style="font-size:.85rem;">
                 Galleries that reference the same media, sometimes under different names (re-imports).
@@ -242,7 +242,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                 <p class="muted" style="margin:.5rem 0 0;">No duplicate galleries found.</p>
             <?php else: ?>
                 <?php foreach ($exact as $group): ?>
-                    <div style="border:1px solid var(--pink-300);border-radius:6px;padding:.75rem 1rem;margin-bottom:.75rem;background:#fff;">
+                    <div class="dup-group" style="border:1px solid var(--pink-300);border-radius:6px;padding:.75rem 1rem;margin-bottom:.75rem;background:#fff;">
                         <h4 style="margin:0 0 .4rem;font-size:.95rem;">
                             <?= count($group['galleries']) ?> galleries share the same <?= (int) $group['photos'] ?> photos
                         </h4>
@@ -250,7 +250,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                             <tbody>
                                 <?php foreach ($group['galleries'] as $dup): ?>
                                     <?php $dupId = (int) $dup['id']; ?>
-                                    <tr>
+                                    <tr data-gallery-id="<?= $dupId ?>">
                                         <td style="padding:.3rem .5rem;">
                                             <a href="<?= url('/admin/galleries/' . $dupId) ?>"><?= e((string) $dup['title']) ?></a>
                                             <?php if (!empty($dup['is_secret'])): ?><span class="pill pill-warn">Secret</span><?php endif; ?>
@@ -259,8 +259,9 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                                         <td style="padding:.3rem .5rem;" class="muted"><?= (int) $dup['photo_count'] ?> photos</td>
                                         <td style="padding:.3rem .5rem;" class="muted">#<?= $dupId ?></td>
                                         <td style="padding:.3rem .5rem;text-align:right;">
-                                            <form class="inline" method="post" action="<?= url('/admin/galleries/' . $dupId . '/delete') ?>"
-                                                  onsubmit="return confirm('Soft-delete gallery <?= e((string) $dup['title']) ?> (#<?= $dupId ?>)? Its photos are shared with the other copies and will not be deleted.');">
+                                            <form class="inline dup-remove-form" method="post"
+                                                  action="<?= url('/admin/galleries/' . $dupId . '/delete') ?>"
+                                                  data-title="<?= e((string) $dup['title']) ?>" data-id="<?= $dupId ?>">
                                                 <?= csrf_field() ?>
                                                 <button type="submit" class="btn btn-sm btn-danger">Remove</button>
                                             </form>
@@ -313,7 +314,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
         </div>
     <?php else: ?>
     <div class="mg-table-wrap">
-        <table>
+        <table id="mg-table">
             <thead>
                 <tr>
                     <th>Cover</th>
@@ -331,7 +332,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                     <?php $gid   = (int) $gallery['id']; ?>
                     <?php $cover = $covers[$gid] ?? null; ?>
                     <?php $level = (int) ($gallery['min_level'] ?? 0); ?>
-                    <tr>
+                    <tr data-gallery-id="<?= $gid ?>">
                         <td>
                             <?php if ($cover !== null): ?>
                                 <img class="mg-cover" src="<?= e(file_url((string) $cover['filename'], 'thumb')) ?>" alt="" loading="lazy">
@@ -407,3 +408,55 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
     </div>
     <?php endif; ?>
 <?php endif; ?>
+<script>
+// Remove a duplicate gallery without reloading the page: the collapsible
+// section stays open and the scroll position is preserved. On success the
+// gallery row disappears from the duplicate list (and the main table) and,
+// when a pair is broken, the whole group block + the summary count update.
+(function () {
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!form.classList || !form.classList.contains('dup-remove-form')) { return; }
+        e.preventDefault();
+
+        var group = form.closest('.dup-group');
+        var row   = form.closest('tr[data-gallery-id]');
+        var gid   = row ? row.getAttribute('data-gallery-id') : null;
+        var title = form.getAttribute('data-title') || 'this gallery';
+        var btn   = form.querySelector('button[type=submit]');
+
+        if (!window.confirm('Soft-delete "' + title + '" (#' + (form.getAttribute('data-id') || '') + ')? Its photos are shared with the other copies and will not be deleted.')) {
+            return;
+        }
+
+        btn.disabled = true;
+        fetch(form.action, { method: 'POST', body: new FormData(form) })
+            .then(function (r) {
+                if (!r.ok) { throw new Error('HTTP ' + r.status); }
+                if (row && row.parentNode) { row.parentNode.removeChild(row); }
+                var mainRow = gid && document.querySelector('#mg-table tbody tr[data-gallery-id="' + gid + '"]');
+                if (mainRow && mainRow.parentNode) { mainRow.parentNode.removeChild(mainRow); }
+                if (group) {
+                    var remaining = group.querySelectorAll('tr[data-gallery-id]');
+                    if (remaining.length <= 1) {
+                        if (group.parentNode) { group.parentNode.removeChild(group); }
+                        updateCount();
+                    }
+                }
+            })
+            .catch(function () {
+                alert('Could not delete the gallery. Please try again.');
+            })
+            .finally(function () {
+                btn.disabled = false;
+            });
+    });
+
+    function updateCount() {
+        var summary = document.getElementById('dup-galleries-summary');
+        if (!summary) { return; }
+        var n = document.querySelectorAll('.dup-group').length;
+        summary.textContent = 'Duplicate galleries (' + n + ' group' + (n === 1 ? '' : 's') + ')';
+    }
+})();
+</script>
