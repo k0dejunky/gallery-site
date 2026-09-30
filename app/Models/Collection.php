@@ -47,10 +47,12 @@ class Collection
 
         $gCovers = $galleryIds !== [] ? Gallery::firstPhotos($galleryIds) : [];
         $pThumbs = [];
+        $pVideo  = [];
         if ($photoIds !== []) {
             $ph = implode(',', array_fill(0, count($photoIds), '?'));
-            foreach (Database::run("SELECT id, filename FROM photos WHERE id IN ($ph)", $photoIds)->fetchAll() as $p) {
+            foreach (Database::run("SELECT id, filename, is_video FROM photos WHERE id IN ($ph)", $photoIds)->fetchAll() as $p) {
                 $pThumbs[(int) $p['id']] = file_url((string) $p['filename'], 'thumb');
+                $pVideo[(int) $p['id']]  = (int) $p['is_video'] === 1;
             }
         }
 
@@ -58,12 +60,20 @@ class Collection
             $r['gallery_count'] = (int) $r['gallery_count'];
             $r['video_count']   = (int) $r['video_count'];
             $r['cover']         = null;
+            $r['play_url']      = '';
             if (!empty($r['first_item'])) {
                 [$type, $id] = explode(':', (string) $r['first_item'], 2);
-                if ($type === 'gallery' && isset($gCovers[(int) $id])) {
-                    $r['cover'] = file_url((string) $gCovers[(int) $id]['filename'], 'thumb');
-                } elseif (isset($pThumbs[(int) $id])) {
-                    $r['cover'] = $pThumbs[(int) $id];
+                $id = (int) $id;
+                if ($type === 'gallery' && isset($gCovers[$id])) {
+                    $r['cover'] = file_url((string) $gCovers[$id]['filename'], 'thumb');
+                    // Playing a collection whose first item is a gallery starts
+                    // at the gallery's cover media with the full playlist.
+                    $r['play_url'] = url('/' . (is_video((string) $gCovers[$id]['filename']) ? 'videos' : 'images') . '/' . (int) $gCovers[$id]['id']
+                        . '?playlist=' . (int) $r['id']);
+                } elseif (isset($pThumbs[$id])) {
+                    $r['cover'] = $pThumbs[$id];
+                    $r['play_url'] = url('/' . (!empty($pVideo[$id]) ? 'videos' : 'images') . '/' . $id
+                        . '?playlist=' . (int) $r['id']);
                 }
             }
             unset($r['first_item']);
@@ -185,25 +195,66 @@ class Collection
     public static function media(int $collectionId, int $userId, ?bool $isVideo = null): array
     {
         $items = Database::run(
-            'SELECT ci.photo_id
+            'SELECT ci.photo_id, ci.gallery_id
              FROM collection_items ci
              JOIN collections c ON c.id = ci.collection_id
-             WHERE ci.collection_id = ? AND c.user_id = ? AND ci.photo_id IS NOT NULL
+             WHERE ci.collection_id = ? AND c.user_id = ?
              ORDER BY ci.position ASC, ci.id ASC',
             [$collectionId, $userId]
         )->fetchAll();
 
-        $photoIds = array_map('intval', array_column($items, 'photo_id'));
-        if ($photoIds === []) {
+        if ($items === []) {
             return [];
         }
 
-        $placeholders = implode(',', array_fill(0, count($photoIds), '?'));
+        // Bulk-load each gallery's media so gallery items expand into all of
+        // their photos (videos in video galleries + images in image galleries).
+        $galleryIds = [];
+        foreach ($items as $item) {
+            if (!empty($item['gallery_id'])) {
+                $galleryIds[] = (int) $item['gallery_id'];
+            }
+        }
+        $galleryPhotos = [];
+        if ($galleryIds !== []) {
+            $galleryIds = array_values(array_unique($galleryIds));
+            $ph = implode(',', array_fill(0, count($galleryIds), '?'));
+            $rows = Database::run(
+                'SELECT gp.gallery_id, gp.photo_id
+                 FROM gallery_photo gp
+                 WHERE gp.gallery_id IN (' . $ph . ')
+                 ORDER BY gp.position ASC, gp.photo_id ASC',
+                $galleryIds
+            )->fetchAll();
+            foreach ($rows as $r) {
+                $galleryPhotos[(int) $r['gallery_id']][] = (int) $r['photo_id'];
+            }
+        }
+
+        // Interleave in collection order: a photo item is one media item; a
+        // gallery item expands to all of its media in gallery order.
+        $orderedIds = [];
+        foreach ($items as $item) {
+            if (!empty($item['photo_id'])) {
+                $orderedIds[] = (int) $item['photo_id'];
+            } elseif (!empty($item['gallery_id'])) {
+                foreach ($galleryPhotos[(int) $item['gallery_id']] ?? [] as $pid) {
+                    $orderedIds[] = $pid;
+                }
+            }
+        }
+
+        if ($orderedIds === []) {
+            return [];
+        }
+
+        $uniqueIds = array_values(array_unique($orderedIds));
+        $placeholders = implode(',', array_fill(0, count($uniqueIds), '?'));
         $sql = 'SELECT p.* FROM photos p WHERE p.id IN (' . $placeholders . ')';
         if ($isVideo !== null) {
             $sql .= $isVideo ? ' AND p.is_video = 1' : ' AND p.is_video = 0';
         }
-        $photos = Database::run($sql, $photoIds)->fetchAll();
+        $photos = Database::run($sql, $uniqueIds)->fetchAll();
 
         $byId = [];
         foreach ($photos as $p) {
@@ -211,14 +262,20 @@ class Collection
         }
 
         $ordered = [];
-        foreach ($photoIds as $id) {
-            if (isset($byId[$id])) {
-                $p = $byId[$id];
-                $p['thumb'] = file_url((string) $p['filename'], 'thumb');
-                $p['web']   = file_url((string) $p['filename'], 'web');
-                $p['url']   = url('/' . (is_video((string) $p['filename']) ? 'videos' : 'images') . '/' . (int) $p['id']);
-                $ordered[]  = $p;
+        $seen    = [];
+        foreach ($orderedIds as $id) {
+            if (isset($seen[$id])) {
+                continue;
             }
+            $seen[$id] = true;
+            if (!isset($byId[$id])) {
+                continue;
+            }
+            $p = $byId[$id];
+            $p['thumb'] = file_url((string) $p['filename'], 'thumb');
+            $p['web']   = file_url((string) $p['filename'], 'web');
+            $p['url']   = url('/' . (is_video((string) $p['filename']) ? 'videos' : 'images') . '/' . (int) $p['id']);
+            $ordered[]  = $p;
         }
 
         return $ordered;

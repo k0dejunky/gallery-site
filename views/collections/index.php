@@ -36,10 +36,15 @@
                         </p>
                     </div>
                 </a>
-                <form method="post" action="<?= url('/collections/' . (int) $c['id'] . '/delete') ?>" onsubmit="return confirm('Delete this collection?');" style="padding:.6rem;">
-                    <?= csrf_field() ?>
-                    <button type="submit" class="btn btn-sm btn-outline" style="width:100%;">Delete</button>
-                </form>
+                <div style="display:flex;gap:.35rem;padding:.6rem;">
+                    <?php if (!empty($c['play_url'])): ?>
+                        <a class="btn btn-sm" href="<?= e($c['play_url']) ?>">&#9654; Play</a>
+                    <?php endif; ?>
+                    <form method="post" action="<?= url('/collections/' . (int) $c['id'] . '/delete') ?>" onsubmit="return confirm('Delete this collection?');" style="margin:0;">
+                        <?= csrf_field() ?>
+                        <button type="submit" class="btn btn-sm btn-outline">Delete</button>
+                    </form>
+                </div>
             </div>
         <?php endforeach; ?>
     </div>
