@@ -34,6 +34,10 @@ class Housekeeping
         self::watchBackupSync($root);
         self::watchRestoreDrill($root);
 
+        // Weekly duplicate-gallery report (throttled to once per 7 days
+        // inside sendWeeklyReport) so re-imports never pile up unnoticed.
+        DuplicateGalleries::sendWeeklyReport();
+
         // One-off abandoned-signup recovery emails (max once per day).
         $out['recovery_emails'] = self::sendRecoveryEmails($root);
 

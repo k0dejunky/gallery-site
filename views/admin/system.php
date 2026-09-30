@@ -203,6 +203,44 @@
 
     <!-- Media variants -->
     <div class="sys-card">
+        <h2>Duplicate galleries</h2>
+        <?php $dup = $duplicateReport ?? []; ?>
+        <?php $dupExact = $dup['exact'] ?? []; ?>
+        <?php $dupRedundant = 0; foreach ($dupExact as $g) { $dupRedundant += max(0, count($g['galleries']) - 1); } ?>
+        <p class="muted" style="font-size:.85rem;">
+            Galleries that reference the same media under different names (re-imports).
+            Scanned <?= e((string) ($dup['scanned_at'] ?? 'never')) ?> ·
+            <?= count($dupExact) ?> identical group<?= count($dupExact) === 1 ? '' : 's' ?> ·
+            <?= $dupRedundant ?> redundant gallery<?= $dupRedundant === 1 ? '' : 's' ?> ·
+            <?= count($dup['near'] ?? []) ?> near-duplicate pair<?= count($dup['near'] ?? []) === 1 ? '' : 's' ?>.
+        </p>
+        <?php if ($dupExact !== []): ?>
+            <ul style="margin:0 0 .75rem;padding-left:1.2rem;">
+                <?php foreach (array_slice($dupExact, 0, 6) as $g): ?>
+                    <li style="font-size:.85rem;">
+                        <?php foreach ($g['galleries'] as $i => $gg): ?>
+                            <?= $i > 0 ? ' <span class="muted">vs</span> ' : '' ?>
+                            <a href="<?= url('/admin/galleries/' . (int) $gg['id']) ?>"><?= e((string) $gg['title']) ?></a>
+                        <?php endforeach; ?>
+                        <span class="muted">(<?= (int) $g['photos'] ?> photos)</span>
+                    </li>
+                <?php endforeach; ?>
+                <?php if (count($dupExact) > 6): ?>
+                    <li class="muted" style="font-size:.85rem;">… and <?= count($dupExact) - 6 ?> more group<?= count($dupExact) - 6 === 1 ? '' : 's' ?>.</li>
+                <?php endif; ?>
+            </ul>
+        <?php else: ?>
+            <p class="muted" style="margin:.25rem 0 .75rem;">No duplicate galleries found.</p>
+        <?php endif; ?>
+        <form class="sys-actions" method="post" action="<?= url('/admin/system/duplicates/scan') ?>">
+            <?= csrf_field() ?>
+            <button class="btn" type="submit">Scan now</button>
+        </form>
+        <p class="muted" style="font-size:.8rem;margin:.5rem 0 0;">Remove copies from the gallery management page's <b>Duplicate galleries</b> section (soft-delete; shared media is preserved). A summary is also emailed weekly when duplicates exist.</p>
+    </div>
+
+    <!-- Media variants -->
+    <div class="sys-card">
         <h2>Media thumbnails</h2>
         <?php if ($variants['running']): ?>
             <p><b style="color:#b45309;">Regeneration in progress… refresh to update.</b></p>

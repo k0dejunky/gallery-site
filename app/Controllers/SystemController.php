@@ -61,6 +61,7 @@ class SystemController extends Controller
             'slowQueries' => \App\Core\Database::recentSlowQueries(),
             'apiHealth'  => $this->apiHealth(),
             'ai'         => $this->aiStatus(),
+            'duplicateReport' => \App\Core\DuplicateGalleries::report(),
             'analytics'  => [
                 'finance' => \App\Models\Stats::finance(6),
                 'traffic' => \App\Models\Stats::trafficMonthly(6),
@@ -1135,6 +1136,22 @@ PHP;
             'Housekeeping done — %d sub(s) expired, %d stale staging dir(s) removed, %d old backup(s) pruned.',
             $summary['expired_subs'], $summary['pending_dirs'], $summary['backups_pruned']
         ));
+        $this->redirect('/admin/system');
+    }
+
+    /**
+     * Re-run the duplicate-gallery scan on demand from the system tab and
+     * refresh the persisted report.
+     */
+    public function duplicateScan(): void
+    {
+        $report = \App\Core\DuplicateGalleries::scan();
+        \App\Core\DuplicateGalleries::persist($report);
+
+        $groups = count($report['exact'] ?? []);
+        $redundant = \App\Core\DuplicateGalleries::redundantCount($report);
+
+        $this->flash('success', "Duplicate scan done — {$groups} identical group(s), {$redundant} redundant gallery(s).");
         $this->redirect('/admin/system');
     }
 

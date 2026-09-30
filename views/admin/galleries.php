@@ -218,6 +218,94 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
         <?php endif; ?>
     </details>
 
+    <?php // Collapsible duplicate-gallery scan: identical media in multiple
+        // galleries. The admin picks which gallery to remove (soft-delete —
+        // photos are shared, so removing a copy never touches the media). ?>
+    <details style="border:1px solid var(--pink-300);border-radius:var(--card-radius,8px);padding:1rem 1.25rem;background:var(--pink-100);margin-bottom:1rem;">
+        <summary style="cursor:pointer;font-weight:600;">Duplicate galleries (<?= count($duplicateReport['exact'] ?? []) ?> group<?= count($duplicateReport['exact'] ?? []) === 1 ? '' : 's' ?>)</summary>
+        <div style="margin-top:.75rem;">
+            <p class="muted" style="font-size:.85rem;">
+                Galleries that reference the same media, sometimes under different names (re-imports).
+                Scanned <?= e((string) ($duplicateReport['scanned_at'] ?? 'never')) ?> —
+                <?= (int) ($duplicateReport['total_galleries'] ?? 0) ?> galleries. Removing a copy soft-deletes
+                the gallery only; the media stays in the kept gallery.
+            </p>
+            <form class="inline" method="post" action="<?= url('/admin/galleries/duplicates/scan') ?>" style="margin-bottom:.75rem;">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-sm">Scan now</button>
+            </form>
+
+            <?php $exact = $duplicateReport['exact'] ?? []; ?>
+            <?php $near  = $duplicateReport['near'] ?? []; ?>
+            <?php $contained = $duplicateReport['contained'] ?? []; ?>
+            <?php if ($exact === [] && $near === [] && $contained === []): ?>
+                <p class="muted" style="margin:.5rem 0 0;">No duplicate galleries found.</p>
+            <?php else: ?>
+                <?php foreach ($exact as $group): ?>
+                    <div style="border:1px solid var(--pink-300);border-radius:6px;padding:.75rem 1rem;margin-bottom:.75rem;background:#fff;">
+                        <h4 style="margin:0 0 .4rem;font-size:.95rem;">
+                            <?= count($group['galleries']) ?> galleries share the same <?= (int) $group['photos'] ?> photos
+                        </h4>
+                        <table style="width:100%;border-collapse:collapse;">
+                            <tbody>
+                                <?php foreach ($group['galleries'] as $dup): ?>
+                                    <?php $dupId = (int) $dup['id']; ?>
+                                    <tr>
+                                        <td style="padding:.3rem .5rem;">
+                                            <a href="<?= url('/admin/galleries/' . $dupId) ?>"><?= e((string) $dup['title']) ?></a>
+                                            <?php if (!empty($dup['is_secret'])): ?><span class="pill pill-warn">Secret</span><?php endif; ?>
+                                            <?php if (!empty($dup['published_at']) && $dup['published_at'] > gmdate('Y-m-d H:i:s')): ?><span class="pill pill-warn">Scheduled</span><?php endif; ?>
+                                        </td>
+                                        <td style="padding:.3rem .5rem;" class="muted"><?= (int) $dup['photo_count'] ?> photos</td>
+                                        <td style="padding:.3rem .5rem;" class="muted">#<?= $dupId ?></td>
+                                        <td style="padding:.3rem .5rem;text-align:right;">
+                                            <form class="inline" method="post" action="<?= url('/admin/galleries/' . $dupId . '/delete') ?>"
+                                                  onsubmit="return confirm('Soft-delete gallery <?= e((string) $dup['title']) ?> (#<?= $dupId ?>)? Its photos are shared with the other copies and will not be deleted.');">
+                                                <?= csrf_field() ?>
+                                                <button type="submit" class="btn btn-sm btn-danger">Remove</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endforeach; ?>
+
+                <?php if ($near !== []): ?>
+                    <h4 style="margin:.9rem 0 .4rem;font-size:.9rem;">Near-duplicates (share most photos)</h4>
+                    <table style="width:100%;border-collapse:collapse;">
+                        <tbody>
+                            <?php foreach (array_slice($near, 0, 8) as $pair): ?>
+                                <tr>
+                                    <td style="padding:.3rem .5rem;">
+                                        <a href="<?= url('/admin/galleries/' . (int) $pair['a']['id']) ?>"><?= e((string) $pair['a']['title']) ?></a>
+                                        <span class="muted">vs</span>
+                                        <a href="<?= url('/admin/galleries/' . (int) $pair['b']['id']) ?>"><?= e((string) $pair['b']['title']) ?></a>
+                                    </td>
+                                    <td style="padding:.3rem .5rem;text-align:right;" class="muted"><?= (int) round($pair['similarity'] * 100) ?>% shared</td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
+
+                <?php if ($contained !== []): ?>
+                    <h4 style="margin:.9rem 0 .4rem;font-size:.9rem;">Contained (one gallery inside another)</h4>
+                    <ul style="margin:0;padding-left:1.2rem;">
+                        <?php foreach (array_slice($contained, 0, 8) as $pair): ?>
+                            <li class="muted" style="font-size:.85rem;">
+                                <a href="<?= url('/admin/galleries/' . (int) $pair['a']['id']) ?>"><?= e((string) $pair['a']['title']) ?></a>
+                                fully inside
+                                <a href="<?= url('/admin/galleries/' . (int) $pair['b']['id']) ?>"><?= e((string) $pair['b']['title']) ?></a>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
+    </details>
+
     <?php if (empty($galleries)): ?>
         <div class="mg-empty">
             <p>No galleries match the selected filters.</p>

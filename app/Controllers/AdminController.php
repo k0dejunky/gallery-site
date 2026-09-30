@@ -146,7 +146,28 @@ class AdminController extends Controller
             'filterLevel' => $level,
             'queuedGalleries' => Gallery::queuedForPublishing(Auth::isSuperAdmin()),
             'importSettings'  => \App\Models\ImportSettings::all(),
+            'duplicateReport' => \App\Core\DuplicateGalleries::report(),
         ]);
+    }
+
+    /**
+     * Re-run the duplicate-gallery scan on demand and refresh the persisted
+     * report used by the gallery management page and the system tab.
+     */
+    public function duplicateScan(): void
+    {
+        Auth::requirePermission('galleries');
+
+        $report = \App\Core\DuplicateGalleries::scan();
+        \App\Core\DuplicateGalleries::persist($report);
+
+        $groups = count($report['exact'] ?? []);
+        $redundant = \App\Core\DuplicateGalleries::redundantCount($report);
+        \App\Models\AuditLog::record((int) (Auth::user()['id'] ?? 0), 'read', 'duplicate_scan', null,
+            "Duplicate-gallery scan: {$groups} identical groups, {$redundant} redundant galleries");
+
+        $this->flash('success', "Duplicate scan done — {$groups} identical group(s), {$redundant} redundant gallery(s).");
+        $this->redirect('/admin/galleries');
     }
 
     /**
