@@ -351,9 +351,9 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                                 <span class="pill <?= $levelPill[$level] ?? 'pill' ?>"><?= $levelNames[$level] ?? 'Level ' . $level ?></span>
                             <?php endif; ?>
                         </td>
-                        <td class="mg-scheduled" style="white-space:nowrap;">
+                        <td class="mg-date mg-scheduled">
                             <?php if (!empty($gallery['published_at']) && $gallery['published_at'] > gmdate('Y-m-d H:i:s')): ?>
-                                <span style="font-size:.8rem;color:#b91c1c;"><?= e(tzdate('Y-m-d H:i', $gallery['published_at'])) ?></span>
+                                <span style="color:#b91c1c;"><?= e(tzdate('Y-m-d H:i', $gallery['published_at'])) ?></span>
                             <?php else: ?>
                                 <span style="color:#15803d;"><?= e(tzdate('Y-m-d H:i', !empty($gallery['published_at']) ? $gallery['published_at'] : $gallery['created_at'])) ?></span>
                             <?php endif; ?>
