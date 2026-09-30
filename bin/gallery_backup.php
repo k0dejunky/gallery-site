@@ -128,11 +128,31 @@ fi
 BASH;
 }
 
+// Pre-flight disk check: the 4 GB parts need roughly the size of the media on
+// disk (videos/images don't compress), so abort before starting if there is
+// not enough free space — a backup must never fill the disk mid-run.
+$mediaBytes = 0;
+$duOut = [];
+exec('du -sk ' . escapeshellarg($root . '/storage/uploads') . ' 2>/dev/null', $duOut, $duRc);
+if ($duRc === 0 && isset($duOut[0])) {
+    $mediaBytes = (int) trim((string) preg_split('/\s+/', (string) $duOut[0])[0] ?? '0') * 1024;
+}
+$freeBytes = @disk_free_space($root);
+$requiredBytes = $mediaBytes * 1.05 + 5 * 1073741824;
+if ($freeBytes !== false && $freeBytes < $requiredBytes) {
+    @file_put_contents($backupDir . '/.failed', date('Y-m-d H:i:s') . " backup aborted (disk pre-flight: need ~"
+        . round($requiredBytes / 1073741824, 1) . " GB free, have " . round($freeBytes / 1073741824, 1) . " GB)\n", FILE_APPEND);
+    fwrite(STDERR, "Backup aborted: ~" . round($requiredBytes / 1073741824, 1)
+        . " GB free needed (media ~" . round($mediaBytes / 1073741824, 1)
+        . " GB + margin), only " . round($freeBytes / 1073741824, 1) . " GB available.\n");
+    exit(1);
+}
+
 $script = <<<BASH
 #!/bin/bash
 set -e
 cd {$root}
-trap 'rm -f {$backupDir}/.running; if [ ! -f {$backupDir}/.last_ok ]; then echo "\$(date "+%F %T") backup aborted (dump/tar/verify failed)" >> {$backupDir}/.failed; fi' EXIT
+trap 'rm -f {$backupDir}/.running {$target}.part-* {$sqlt}; if [ ! -f {$backupDir}/.last_ok ]; then echo "\$(date "+%F %T") backup aborted (dump/tar/verify failed)" >> {$backupDir}/.failed; fi' EXIT
 rm -f {$backupDir}/.failed {$backupDir}/.last_ok
 DUMP=\$(mktemp /tmp/gallery-dump-XXXXXX.sql)
 # DB password goes via MYSQL_PWD (not -p) so it never shows in ps.
@@ -141,17 +161,18 @@ TARGET={$target}
 SQLT={$sqlt}
 # .env deliberately excluded: it holds DB/mail/cron secrets. Back it up
 # separately in the secrets vault so a leaked archive cannot expose them.
-tar czf "\$TARGET" --warning=no-file-changed --ignore-failed-read -C {$root} storage/uploads storage/*.json storage/cron
-test \$? -le 1
+# Stream the tar straight into 4 GB parts — no single intermediate tar, so the
+# backup never needs 2x the media size on disk (videos don't compress).
+tar czf - --warning=no-file-changed --ignore-failed-read -C {$root} storage/uploads storage/*.json storage/cron | split -b 4G -d - "\$TARGET.part-"
+PARTS=\$(ls -1 "\$TARGET".part-* | wc -l)
+test "\$PARTS" -ge 1 || { echo "\$(date "+%F %T") tar/split failed for \$TARGET" >> {$backupDir}/.failed; exit 1; }
+# Each part is a chunk of one gzip stream: zcat concatenates + decompresses
+# them together to verify the whole archive reads back cleanly.
+zcat "\$TARGET".part-* > /dev/null || { echo "\$(date "+%F %T") media archive verification failed: \$TARGET" >> {$backupDir}/.failed; exit 1; }
 gzip -c "\$DUMP" > "\$SQLT"
 rm -f "\$DUMP"
-gzip -t "\$TARGET" || { echo "\$(date "+%F %T") media archive verification failed: \$TARGET" >> {$backupDir}/.failed; exit 1; }
 gzip -t "\$SQLT" || { echo "\$(date "+%F %T") db dump verification failed: \$SQLT" >> {$backupDir}/.failed; exit 1; }
-split -b 4G -d "\$TARGET" "\$TARGET.part-"
-PARTS=\$(ls -1 "\$TARGET".part-* | wc -l)
-test "\$PARTS" -ge 1 || { echo "\$(date "+%F %T") split failed for \$TARGET" >> {$backupDir}/.failed; exit 1; }
 (cd {$backupDir} && sha256sum \$(basename "\$TARGET").part-* > \$(basename "\$TARGET").sha256)
-rm -f "\$TARGET"
 {$syncBlock}
 printf '{"ok":true,"at":"%s","file":"%s","parts":%d,"db":"%s","sync_rc":%s}\n' "\$(date +%FT%T)" "\$(basename "\$TARGET")" "\$PARTS" "\$(basename "\$SQLT")" "\${SYNC_RC:-0}" > {$backupDir}/.last_sync
 touch {$backupDir}/.last_ok
