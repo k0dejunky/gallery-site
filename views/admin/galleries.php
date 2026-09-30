@@ -33,26 +33,27 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
 ?>
 
 <style>
-    .mg-table-wrap { background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 10px; overflow: hidden; margin-top: 1rem; }
-    .mg-table-wrap table { margin: 0; border: none; }
-    .mg-table-wrap th, .mg-table-wrap td { border-color: var(--pink-200); }
+    .mg-table-wrap { background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 10px; overflow-x: auto; margin-top: 1rem; }
+    .mg-table-wrap table { margin: 0; border: none; width: 100%; }
+    .mg-table-wrap th, .mg-table-wrap td { border-color: var(--pink-200); padding: .35rem .4rem; }
     .mg-table-wrap thead th { background: var(--pink-200); text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; color: var(--purple-700); }
     .mg-table-wrap tbody tr { transition: background .12s ease; }
     .mg-table-wrap tbody tr:hover { background: var(--pink-200); }
 
-    .mg-cover { width: 76px; height: 52px; border-radius: 6px; object-fit: cover; display: block; background: var(--purple-900); border: 1px solid var(--pink-300); }
-    .mg-cover-empty { width: 76px; height: 52px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: var(--pink-200); border: 1px dashed var(--pink-400); color: var(--purple-700); font-size: .7rem; }
+    .mg-cover { width: 64px; height: 44px; border-radius: 6px; object-fit: cover; display: block; background: var(--purple-900); border: 1px solid var(--pink-300); }
+    .mg-cover-empty { width: 64px; height: 44px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: var(--pink-200); border: 1px dashed var(--pink-400); color: var(--purple-700); font-size: .68rem; }
 
     .mg-title { font-weight: 600; color: var(--purple-900); text-decoration: none; }
     .mg-title:hover { text-decoration: underline; }
-    .mg-desc { color: var(--purple-800); opacity: .7; font-size: .8rem; margin: .15rem 0 0; max-width: 34rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .mg-desc { color: var(--purple-800); opacity: .7; font-size: .8rem; margin: .15rem 0 0; max-width: 18rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-    .mg-media { white-space: nowrap; font-size: .85rem; color: var(--purple-800); }
+    .mg-media { white-space: nowrap; font-size: .78rem; color: var(--purple-800); }
     .mg-media b { color: var(--purple-900); }
 
     .mg-date { white-space: nowrap; font-size: .82rem; color: var(--purple-800); }
 
-    .mg-actions { display: flex; gap: .35rem; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+    .mg-actions { display: flex; gap: .2rem; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+    .mg-actions .btn { padding: .2rem .45rem; font-size: .75rem; }
 
     .mg-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin: .75rem 0; }
     .mg-filters { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; }
