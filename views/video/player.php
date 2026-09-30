@@ -67,9 +67,18 @@ $breadcrumbItems = [
         <figure id="video-player-wrap" style="margin: 1rem 0; text-align: center;">
             <?php if (empty($canViewFull)): ?>
                 <?php // Blurred, indexable preview for guests and below-level
-                    // members; playback stays behind the membership gate. ?>
-                <img src="<?= e(file_url($photo['filename'], 'blur')) ?>"
-                     alt="<?= e($title) ?>" decoding="async" style="max-width:100%;max-height:calc(100dvh - 260px);height:auto;border-radius:10px;box-shadow:0 2px 14px rgba(59,7,100,.35);">
+                    // members: play the short blurred sample clip, or fall
+                    // back to the blurred poster when no clip exists yet. ?>
+                <?php $sampleUrl = video_sample_url((int) $photo['id'], (string) $photo['filename']); ?>
+                <?php if ($sampleUrl !== ''): ?>
+                    <video id="preview-video" src="<?= e($sampleUrl) ?>" controls playsinline
+                           preload="metadata" poster="<?= e(file_url($photo['filename'], 'blur')) ?>"
+                           aria-label="<?= e($title) ?>"
+                           style="max-width:100%;max-height:calc(100dvh - 260px);border-radius:10px;background:#000;box-shadow:0 2px 14px rgba(59,7,100,.35);"></video>
+                <?php else: ?>
+                    <img src="<?= e(file_url($photo['filename'], 'blur')) ?>"
+                         alt="<?= e($title) ?>" decoding="async" style="max-width:100%;max-height:calc(100dvh - 260px);height:auto;border-radius:10px;box-shadow:0 2px 14px rgba(59,7,100,.35);">
+                <?php endif; ?>
                 <figcaption class="muted" style="margin-top:.5rem">
                     <?php if ($photo['caption'] !== ''): ?><span><?= e($photo['caption']) ?></span><br><?php endif; ?>
                     <span><?= number_format((int) ($photo['views'] ?? 0)) ?> views &middot; <?= number_format((int) ($photo['unique_views'] ?? 0)) ?> unique</span>
