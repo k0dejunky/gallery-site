@@ -1,5 +1,6 @@
 <?php
 $cover = $cover ?? \App\Models\Gallery::firstPhoto((int) $gallery['id']);
+$coverSize = \App\Core\Auth::check() ? 'thumb' : 'blur';
 $galleryCategories = $galleryCategories ?? \App\Models\Gallery::categories((int) $gallery['id']);
 $galleryUrl  = url('/galleries/' . (int) $gallery['id']) . (!empty($listingReturnTo) ? '?' . http_build_query(['return_to' => $listingReturnTo]) : '');
 $isVideoCard = $cover !== null && is_video($cover['filename']);
@@ -31,7 +32,11 @@ $cardId = 'card-' . (int) $gallery['id'];
         <?php else: ?>
             <div class="card-cover">
                 <?php if ($isVideoCard): ?>
-                    <img src="<?= e(file_url($cover['filename'], 'thumb')) ?>" alt="" loading="lazy" onerror="this.onerror=null;this.src='<?= e($placeholder) ?>'">
+                    <img src="<?= e(file_url($cover['filename'], $coverSize)) ?>" alt="" loading="lazy" onerror="this.onerror=null;this.src='<?= e($placeholder) ?>'">
+                <?php elseif ($coverSize === 'blur'): ?>
+                    <?php // Guests (and search engines) only ever see the blurred
+                        // preview cover; the real thumbnail is for members. ?>
+                    <img src="<?= e(file_url($cover['filename'], 'blur')) ?>" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='<?= e($placeholder) ?>'">
                 <?php else: ?>
                     <picture>
                         <source type="image/webp" srcset="<?= e(file_url($cover['filename'], 'thumb', 'webp')) ?>">
