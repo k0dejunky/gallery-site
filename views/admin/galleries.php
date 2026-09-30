@@ -184,40 +184,6 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
         </form>
     </details>
 
-    <?php // Collapsible gallery queue: galleries waiting for a future publish moment. ?>
-    <details style="border:1px solid var(--pink-300);border-radius:var(--card-radius,8px);padding:1rem 1.25rem;background:var(--pink-100);margin-bottom:1rem;">
-        <summary style="cursor:pointer;font-weight:600;">Gallery queue (<?= count($queuedGalleries ?? []) ?>)</summary>
-        <?php if (empty($queuedGalleries)): ?>
-            <p class="muted" style="margin-top:.75rem;">No galleries are scheduled for a future publication.</p>
-        <?php else: ?>
-            <table style="width:100%;border-collapse:collapse;margin-top:.75rem;">
-                <thead>
-                    <tr>
-                        <th style="text-align:left;padding:.4rem .5rem;">Gallery</th>
-                        <th style="text-align:left;padding:.4rem .5rem;">Scheduled</th>
-                        <th style="text-align:right;padding:.4rem .5rem;">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($queuedGalleries as $queued): ?>
-                        <tr>
-                            <td style="padding:.4rem .5rem;">
-                                <a href="<?= url('/admin/galleries/' . (int) $queued['id']) ?>"><?= e((string) $queued['title']) ?></a>
-                            </td>
-                            <td style="padding:.4rem .5rem;" class="muted"><?= e(tzdate('Y-m-d H:i', (string) $queued['published_at'])) ?></td>
-                            <td style="padding:.4rem .5rem;text-align:right;">
-                                <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $queued['id'] . '/publish-now') ?>">
-                                    <?= csrf_field() ?>
-                                    <button type="submit" class="btn btn-sm">Publish now</button>
-                                </form>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php endif; ?>
-    </details>
-
     <?php // Collapsible duplicate-gallery scan: identical media in multiple
         // galleries. The admin picks which gallery to remove (soft-delete —
         // photos are shared, so removing a copy never touches the media). ?>
@@ -323,6 +289,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                     <th>Categories</th>
                     <th>Media</th>
                     <th>Level</th>
+                    <th>Scheduled</th>
                     <th>Created</th>
                     <th style="text-align:right;">Actions</th>
                 </tr>
@@ -382,6 +349,14 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                                 <span class="pill pill-muted">Free</span>
                             <?php else: ?>
                                 <span class="pill <?= $levelPill[$level] ?? 'pill' ?>"><?= $levelNames[$level] ?? 'Level ' . $level ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="mg-scheduled" style="white-space:nowrap;">
+                            <?php if (!empty($gallery['published_at']) && $gallery['published_at'] > gmdate('Y-m-d H:i:s')): ?>
+                                <span class="pill pill-warn">Scheduled</span>
+                                <span class="muted" style="font-size:.8rem;"><?= e(tzdate('Y-m-d H:i', $gallery['published_at'])) ?></span>
+                            <?php else: ?>
+                                <span class="muted"><?= e(tzdate('Y-m-d H:i', !empty($gallery['published_at']) ? $gallery['published_at'] : $gallery['created_at'])) ?></span>
                             <?php endif; ?>
                         </td>
                         <td class="mg-date"><?= !empty($gallery['created_at']) ? e(tzdate('Y-m-d H:i', $gallery['created_at'])) : '' ?></td>
