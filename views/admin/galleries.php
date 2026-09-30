@@ -353,7 +353,6 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                         </td>
                         <td class="mg-scheduled" style="white-space:nowrap;">
                             <?php if (!empty($gallery['published_at']) && $gallery['published_at'] > gmdate('Y-m-d H:i:s')): ?>
-                                <span class="pill pill-warn">Scheduled</span>
                                 <span class="muted" style="font-size:.8rem;"><?= e(tzdate('Y-m-d H:i', $gallery['published_at'])) ?></span>
                             <?php else: ?>
                                 <span class="muted"><?= e(tzdate('Y-m-d H:i', !empty($gallery['published_at']) ? $gallery['published_at'] : $gallery['created_at'])) ?></span>
