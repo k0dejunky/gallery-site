@@ -353,9 +353,9 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                         </td>
                         <td class="mg-scheduled" style="white-space:nowrap;">
                             <?php if (!empty($gallery['published_at']) && $gallery['published_at'] > gmdate('Y-m-d H:i:s')): ?>
-                                <span class="muted" style="font-size:.8rem;"><?= e(tzdate('Y-m-d H:i', $gallery['published_at'])) ?></span>
+                                <span style="font-size:.8rem;color:#b91c1c;"><?= e(tzdate('Y-m-d H:i', $gallery['published_at'])) ?></span>
                             <?php else: ?>
-                                <span class="muted"><?= e(tzdate('Y-m-d H:i', !empty($gallery['published_at']) ? $gallery['published_at'] : $gallery['created_at'])) ?></span>
+                                <span style="color:#15803d;"><?= e(tzdate('Y-m-d H:i', !empty($gallery['published_at']) ? $gallery['published_at'] : $gallery['created_at'])) ?></span>
                             <?php endif; ?>
                         </td>
                         <td class="mg-date"><?= !empty($gallery['created_at']) ? e(tzdate('Y-m-d H:i', $gallery['created_at'])) : '' ?></td>
