@@ -606,6 +606,7 @@ class Gallery
             [$id]
         );
         \App\Core\Cache::bump('gallery');
+        \App\Core\DuplicateGalleries::invalidate();
     }
 
     /**
@@ -618,6 +619,7 @@ class Gallery
             [$id]
         );
         \App\Core\Cache::bump('gallery');
+        \App\Core\DuplicateGalleries::invalidate();
     }
 
     /**
@@ -675,6 +677,7 @@ class Gallery
         );
 
         \App\Core\Cache::bump('gallery');
+        \App\Core\DuplicateGalleries::invalidate();
 
         return (int) Database::connection()->lastInsertId();
     }
@@ -748,6 +751,7 @@ class Gallery
 
         \App\Core\Cache::bump('gallery');
         \App\Core\Cache::bump('media');
+        \App\Core\DuplicateGalleries::invalidate();
     }
 
     /**

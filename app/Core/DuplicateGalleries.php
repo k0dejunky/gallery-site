@@ -193,6 +193,16 @@ class DuplicateGalleries
         );
     }
 
+    /**
+     * Drop the persisted report so the next read re-scans. Called whenever a
+     * gallery is created, deleted or restored so the duplicate list never
+     * shows galleries that were just removed (or hides new duplicates).
+     */
+    public static function invalidate(): void
+    {
+        @unlink(self::stateFile());
+    }
+
     /** Number of redundant galleries across all exact duplicate groups. */
     public static function redundantCount(array $report): int
     {
