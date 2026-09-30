@@ -132,6 +132,12 @@ class ChatSettings
         self::put('operator_online_at', time());
     }
 
+    /** Clear operator presence (e.g. an admin viewing the member-side chat). */
+    public static function clearOperatorOnline(): void
+    {
+        self::put('operator_online_at', 0);
+    }
+
     /**
      * The admin's daily broadcast shown to users who are not chat-eligible,
      * or '' when none has been written.

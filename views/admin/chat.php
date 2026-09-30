@@ -20,11 +20,11 @@
         <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat/export-training') ?>" onclick="return confirm('Write the cleaned training export?');">Export training</a>
     <div style="margin-top:.5rem;">
         <span class="muted" style="font-size:.85rem;">
-            Operator chat:
+            Amethyst chat:
             <?php if (!empty($operatorOnline)): ?>
-                <strong style="color:#15803d;">&#9679; online</strong>
+                <strong style="color:#15803d;">&#9679; Amethyst is online</strong>
             <?php else: ?>
-                <strong style="color:#b45309;">&#9679; away</strong>
+                <strong style="color:#b45309;">&#9679; Amethyst is away</strong>
             <?php endif; ?>
             &middot; while you're on this page you're marked online (members get the away auto-response when nobody is).
         </span>

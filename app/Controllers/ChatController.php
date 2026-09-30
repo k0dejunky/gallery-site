@@ -20,6 +20,13 @@ class ChatController extends Controller
         $user = Auth::requireUser();
         $userId = (int) $user['id'];
 
+        // An admin on the member side of the chat is NOT the operator: viewing
+        // the user-side chat clears operator presence so the site isn't shown
+        // as online when only an admin is browsing as a member.
+        if (Auth::isAdmin()) {
+            \App\Core\ChatSettings::clearOperatorOnline();
+        }
+
         $eligible = ChatMessage::canChat($userId);
 
         // The chat feature is visible to every logged-in user. Users without

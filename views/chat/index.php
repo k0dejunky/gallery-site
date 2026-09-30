@@ -31,9 +31,9 @@
         <h1>Chat</h1>
         <p class="chat-status">
             <?php if (!empty($operatorOnline)): ?>
-                <span style="color:#15803d;">&#9679; The operator is online — you'll get a reply shortly.</span>
+                <span style="color:#15803d;">&#9679; Amethyst is online — you'll get a reply shortly.</span>
             <?php else: ?>
-                <span style="color:#b45309;">&#9679; The operator is away right now — messages are answered automatically and personally as soon as possible.</span>
+                <span style="color:#b45309;">&#9679; Amethyst is away right now — messages are answered automatically and personally as soon as possible.</span>
             <?php endif; ?>
         </p>
 
