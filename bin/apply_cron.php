@@ -62,6 +62,9 @@ $ppMin    = $clamp($intOr($json['paypal-reconcile']['every_minutes'] ?? null, 5)
 $dcMin    = $clamp($intOr($json['daily_chat'      ]['every_minutes'] ?? null, 5), 1, 1440);
 $backupH  = $clamp($intOr($json['backup']['hour']   ?? null, 3), 0, 23);
 $backupM  = $clamp($intOr($json['backup']['minute'] ?? null, 0), 0, 59);
+$backupD  = $clamp($intOr($json['backup']['day_of_month'] ?? null, 1), 1, 28);
+$dbDumpH  = $clamp($intOr($json['db_dump']['hour']   ?? null, 4), 0, 23);
+$dbDumpM  = $clamp($intOr($json['db_dump']['minute'] ?? null, 0), 0, 59);
 $drillD   = $clamp($intOr($json['restore-drill']['dow']      ?? null, 0), 0, 6);
 $drillH   = $clamp($intOr($json['restore-drill']['hour']     ?? null, 4), 0, 23);
 $drillM   = $clamp($intOr($json['restore-drill']['minute']   ?? null, 0), 0, 59);
@@ -80,7 +83,11 @@ $crond['gallery-emailer'] =
 $crond['gallery-daily-chat'] =
     "*/{$dcMin} * * * * {$php}/bin/daily_chat_worker.php --once >> " . SITE_ROOT . "/storage/logs/daily-chat.log 2>&1\n";
 $crond['gallery-backup'] =
-    "{$backupM} {$backupH} * * * {$php}/bin/gallery_backup.php >> " . SITE_ROOT . "/storage/logs/backup.log 2>&1\n";
+    "{$backupM} {$backupH} {$backupD} * * {$php}/bin/gallery_backup.php >> " . SITE_ROOT . "/storage/logs/backup.log 2>&1\n";
+// Daily small DB-only dump (cheap safety net on top of the monthly full
+// backup): keeps the database recoverable even between full backups.
+$crond['gallery-db-dump'] =
+    "{$dbDumpM} {$dbDumpH} * * * {$php}/bin/gallery_backup.php --db-only >> " . SITE_ROOT . "/storage/logs/backup.log 2>&1\n";
 $crond['gallery-restore-drill'] =
     "{$drillM} {$drillH} * * {$drillD} root /usr/local/bin/restore-drill >> " . SITE_ROOT . "/storage/logs/drill.log 2>&1\n";
 $crond['gallery-ai-watchdog'] =

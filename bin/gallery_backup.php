@@ -68,6 +68,52 @@ $mysqldump = 'mysqldump --single-transaction --quick --no-tablespaces'
     . ' -u ' . escapeshellarg($dbUser)
     . ' ' . escapeshellarg($dbName);
 
+// Daily DB-only mode: a cheap, frequent snapshot so the database stays
+// recoverable between full (monthly) backups. Writes to storage/backups/db/
+// (a subdir the full-backup retention globs never match) and prunes dumps
+// older than DB_DUMP_KEEP_DAYS. Skips the media tar, verify and offsite sync.
+if (in_array('--db-only', $argv, true)) {
+    $dbDir = $backupDir . '/db';
+    if (!is_dir($dbDir)) {
+        @mkdir($dbDir, 0775, true);
+    }
+
+    // Respect an in-progress full backup's lock; a stale lock older than 6h
+    // is reclaimed below, so never block forever.
+    if (is_file($backupDir . '/.running')) {
+        $mtime = @filemtime($backupDir . '/.running');
+        if ($mtime !== false && time() - (int) $mtime > 6 * 3600) {
+            @unlink($backupDir . '/.running');
+        } else {
+            fwrite(STDERR, "Another backup is already running (.running exists).\n");
+            exit(1);
+        }
+    }
+
+    $dump = $dbDir . "/gallery-db-{$stamp}.sql.gz";
+    $rc   = 1;
+    $out  = [];
+    @exec('MYSQL_PWD=' . escapeshellarg($dbPass) . ' ' . $mysqldump . ' | gzip > ' . escapeshellarg($dump), $out, $rc);
+
+    if ($rc !== 0 || !is_file($dump)) {
+        @unlink($dump);
+        fwrite(STDERR, "DB-only dump failed\n");
+        exit(1);
+    }
+    @chmod($dump, 0664);
+
+    // Prune dumps older than the retention window.
+    $keepDays = max(1, (int) ($get('DB_DUMP_KEEP_DAYS', '30') ?: 30));
+    foreach (glob($dbDir . '/gallery-db-*.sql.gz') ?: [] as $old) {
+        if (@filemtime($old) < time() - $keepDays * 86400) {
+            @unlink($old);
+        }
+    }
+
+    echo "DB-only dump: {$dump}\n";
+    exit(0);
+}
+
 // Build the bash backup script
 $target = $backupDir . "/gallery-backup-{$stamp}.tar.gz";
 $sqlt   = $backupDir . "/gallery-db-{$stamp}.sql.gz";

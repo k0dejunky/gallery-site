@@ -29,10 +29,21 @@ class Housekeeping
             'backups_pruned' => 0,
             'paypal_reconciled' => 0,
             'disk_free_gb'  => null,
+            'temp_files_removed' => 0,
+            'disk_growth_alerted' => false,
         ];
 
         self::watchBackupSync($root);
         self::watchRestoreDrill($root);
+
+        // Orphaned PHP temp files (e.g. interrupted uploads/workers) pile up
+        // in /tmp and /var/tmp; prune anything older than 48h so the disk
+        // never silently fills with leftovers.
+        $out['temp_files_removed'] = self::cleanupOrphanedTemp();
+
+        // Alert when media grows unusually fast (a bulk import) so the disk
+        // is not discovered full after the fact.
+        $out['disk_growth_alerted'] = self::alertOnDiskGrowth();
 
         // Weekly duplicate-gallery report (throttled to once per 7 days
         // inside sendWeeklyReport) so re-imports never pile up unnoticed.
@@ -497,6 +508,80 @@ class Housekeeping
         }
 
         return $bytes;
+    }
+
+    /**
+     * Remove orphaned PHP temp files (`php*`) from /tmp and /var/tmp that are
+     * older than the threshold. Interrupted uploads/workers leave these behind
+     * and, without cleanup, they can accumulate gigabytes. Files younger than
+     * the threshold are left alone — no live operation keeps a temp file for
+     * that long.
+     *
+     * @return int number of files removed
+     */
+    private static function cleanupOrphanedTemp(): int
+    {
+        $maxAgeHours = max(1, (int) env_value('DISK_TEMP_MAX_AGE_HOURS', '48'));
+        $cutoff      = time() - $maxAgeHours * 3600;
+        $removed     = 0;
+
+        foreach (['/tmp', '/var/tmp'] as $dir) {
+            foreach (glob($dir . '/php*') ?: [] as $file) {
+                if (is_file($file) && @filemtime($file) < $cutoff) {
+                    if (@unlink($file)) {
+                        $removed++;
+                    }
+                }
+            }
+        }
+
+        return $removed;
+    }
+
+    /**
+     * Alert when the media on disk grows unusually fast within a day (e.g. a
+     * bulk video import), using the 15-minute storage_snapshots history. This
+     * catches the kind of silent 40-50 GB growth that the low-disk alert (which
+     * only fires at a low absolute free figure) misses.
+     *
+     * @return bool true when an alert was emitted this run
+     */
+    private static function alertOnDiskGrowth(): bool
+    {
+        $thresholdGb = max(1, (int) env_value('DISK_GROWTH_ALERT_GB', '5'));
+
+        $nowBytes = Database::run(
+            'SELECT uploads_bytes FROM storage_snapshots ORDER BY captured_at DESC LIMIT 1'
+        )->fetchColumn();
+        $dayAgoBytes = Database::run(
+            'SELECT uploads_bytes FROM storage_snapshots
+             WHERE captured_at <= (CURRENT_TIMESTAMP - INTERVAL 24 HOUR)
+             ORDER BY captured_at DESC LIMIT 1'
+        )->fetchColumn();
+
+        if ($nowBytes === false || $nowBytes === null
+            || $dayAgoBytes === false || $dayAgoBytes === null) {
+            return false;
+        }
+
+        $growthGb = ((int) $nowBytes - (int) $dayAgoBytes) / 1073741824;
+        if ($growthGb < $thresholdGb) {
+            return false;
+        }
+
+        $freeGb = round((float) @disk_free_space(dirname(__DIR__, 2)) / 1073741824, 1);
+
+        Mailer::adminAlert(
+            'disk-growth',
+            'Disk usage growing fast',
+            sprintf(
+                "Media grew by %.1f GB in the last 24 hours (threshold %.0f GB).\nOnly %.1f GB free now.\nA bulk import may be in progress — review before the disk fills.",
+                $growthGb, $thresholdGb, $freeGb
+            ),
+            86400
+        );
+
+        return true;
     }
 
     /**

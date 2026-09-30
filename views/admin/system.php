@@ -24,6 +24,22 @@
     .sys-api-table .ap-test-col { width: 5.5rem; white-space: nowrap; text-align: right; }
 </style>
 
+<?php if ($diskFree !== false && !empty($diskTotal) && (float) $diskTotal > 0): ?>
+    <?php
+        $diskPct = (float) $diskFree / (float) $diskTotal * 100;
+        if ($diskPct < 10): ?>
+        <div style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.9rem;">
+            <b>Danger:</b> only <?= number_format((float) $diskFree / 1073741824, 1) ?> GB free (<?= number_format($diskPct, 1) ?>%).
+            Free disk space is critically low — clean up or extend the volume soon.
+        </div>
+    <?php elseif ($diskPct < 25): ?>
+        <div style="background:#fffbeb;border:1px solid #fde68a;color:#b45309;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.9rem;">
+            <b>Warning:</b> <?= number_format((float) $diskFree / 1073741824, 1) ?> GB free (<?= number_format($diskPct, 1) ?>%).
+            Consider cleaning up or extending storage.
+        </div>
+    <?php endif; ?>
+<?php endif; ?>
+
 <p class="muted">Disk free: <b><?= $diskFree !== false ? number_format((float) $diskFree / 1048576) . ' MB' : 'unknown' ?></b></p>
 
 <div class="sys-grid">
@@ -354,7 +370,8 @@
                     'autopost'       => ['Auto-poster', 'Publish queued auto-posts to X/Reddit once their scheduled time passes'],
                     'paypal-reconcile' => ['PayPal reconciliation', 'Auto-approve paid PayPal memberships by confirming their status with PayPal'],
                     'daily-chat'     => ['Daily chat', 'Deliver scheduled daily chat broadcasts to chat-eligible members'],
-                    'backup'         => ['Backup', 'Full DB + media archive, split into 4 GB parts and synced offsite'],
+                    'backup'         => ['Backup', 'Monthly full DB + media archive (day of month), split into 4 GB parts and synced offsite'],
+                    'db-dump'        => ['DB dump (daily)', 'Small daily database snapshot so the DB stays recoverable between monthly full backups'],
                     'restore-drill'  => ['Restore drill', 'Restore a recent backup into a scratch DB to prove backups are restorable'],
                 ];
                 $cronCardStates = [];
@@ -406,7 +423,11 @@
                                                aria-label="<?= e($cronCard[0]) ?> interval in minutes">
                                         <span class="muted">min</span>
                                     <?php elseif ($cronCardId === 'backup'): ?>
-                                        daily at
+                                        monthly on the
+                                        <input type="number" name="cron_backup_day" min="1" max="28"
+                                               value="<?= (int) ($cronSchedule['backup']['day_of_month'] ?? 1) ?>" style="width:3.4rem;"
+                                               aria-label="Backup day of month">
+                                        at
                                         <input type="number" name="cron_backup_hour" min="0" max="23"
                                                value="<?= (int) ($cronSchedule['backup']['hour'] ?? 3) ?>" style="width:3.4rem;"
                                                aria-label="Backup hour">
@@ -414,6 +435,15 @@
                                         <input type="number" name="cron_backup_minute" min="0" max="59"
                                                value="<?= (int) ($cronSchedule['backup']['minute'] ?? 0) ?>" style="width:3.4rem;"
                                                aria-label="Backup minute">
+                                    <?php elseif ($cronCardId === 'db-dump'): ?>
+                                        daily at
+                                        <input type="number" name="cron_db_dump_hour" min="0" max="23"
+                                               value="<?= (int) ($cronSchedule['db_dump']['hour'] ?? 4) ?>" style="width:3.4rem;"
+                                               aria-label="DB dump hour">
+                                        :
+                                        <input type="number" name="cron_db_dump_minute" min="0" max="59"
+                                               value="<?= (int) ($cronSchedule['db_dump']['minute'] ?? 0) ?>" style="width:3.4rem;"
+                                               aria-label="DB dump minute">
                                     <?php elseif ($cronCardId === 'restore-drill'): ?>
                                         <select name="cron_drill_dow" aria-label="Restore drill day of week">
                                             <?php $cronDow = (int) ($cronSchedule['restore-drill']['dow'] ?? 0); ?>

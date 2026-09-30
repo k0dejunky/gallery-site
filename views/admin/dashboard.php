@@ -165,6 +165,21 @@
 
 <?php // System health: disk space pie + security summary. ?>
 <?php if (!empty($disk)): ?>
+    <?php if ((float) $disk['total'] > 0): ?>
+        <?php
+            $diskFreePct = (float) $disk['free'] / (float) $disk['total'] * 100;
+            if ($diskFreePct < 10): ?>
+            <div style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.9rem;">
+                <b>Danger:</b> only <?= number_format((float) $disk['free'] / 1073741824, 1) ?> GB free (<?= number_format($diskFreePct, 1) ?>%).
+                Free disk space is critically low — clean up or extend the volume soon.
+            </div>
+        <?php elseif ($diskFreePct < 25): ?>
+            <div style="background:#fffbeb;border:1px solid #fde68a;color:#b45309;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.9rem;">
+                <b>Warning:</b> <?= number_format((float) $disk['free'] / 1073741824, 1) ?> GB free (<?= number_format($diskFreePct, 1) ?>%).
+                Consider cleaning up or extending storage.
+            </div>
+        <?php endif; ?>
+    <?php endif; ?>
     <?php
         $diskHelpers = [
             'gb' => static fn (float $b): string => number_format($b / 1073741824, 1),

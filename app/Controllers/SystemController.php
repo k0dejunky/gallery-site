@@ -55,6 +55,7 @@ class SystemController extends Controller
             'retention'   => (int) env_value('HOUSEKEEPING_KEEP_BACKUPS', '10'),
             'schemaDiff'  => $this->schemaDiff(),
             'diskFree'    => @disk_free_space($this->storage),
+            'diskTotal'   => @disk_total_space($this->storage),
             'diagnostics' => $this->operationalDiagnostics(),
             'exportQueue' => $this->videoExportQueue(),
             'photoEditQueue' => $this->photoEditQueue(),
@@ -832,7 +833,8 @@ class SystemController extends Controller
             'autopost'       => ['every_minutes' => 1],
             'paypal-reconcile' => ['every_minutes' => 5],
             'daily_chat'     => ['every_minutes' => 5],
-            'backup'         => ['hour' => 3, 'minute' => 0],
+            'backup'         => ['hour' => 3, 'minute' => 0, 'day_of_month' => 1],
+            'db_dump'        => ['hour' => 4, 'minute' => 0],
             'restore-drill'  => ['dow' => 0, 'hour' => 4, 'minute' => 0],
         ];
         $file = $this->cronSchedulesFile();
@@ -868,7 +870,7 @@ class SystemController extends Controller
             $this->redirect('/admin/system');
         }
 
-        $valid = ['housekeeping', 'autopost', 'paypal-reconcile', 'daily-chat', 'backup', 'restore-drill'];
+        $valid = ['housekeeping', 'autopost', 'paypal-reconcile', 'daily-chat', 'backup', 'db-dump', 'restore-drill'];
         if (!in_array($job, $valid, true)) {
             $this->flash('error', 'Unknown cron job.');
             $this->redirect('/admin/system');
@@ -895,6 +897,13 @@ class SystemController extends Controller
                 $sched['backup'] = [
                     'hour'   => $clamp((int) $req->post('cron_backup_hour', 3), 0, 23),
                     'minute' => $clamp((int) $req->post('cron_backup_minute', 0), 0, 59),
+                    'day_of_month' => $clamp((int) $req->post('cron_backup_day', 1), 1, 28),
+                ];
+                break;
+            case 'db-dump':
+                $sched['db_dump'] = [
+                    'hour'   => $clamp((int) $req->post('cron_db_dump_hour', 4), 0, 23),
+                    'minute' => $clamp((int) $req->post('cron_db_dump_minute', 0), 0, 59),
                 ];
                 break;
             case 'restore-drill':
