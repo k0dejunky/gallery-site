@@ -66,6 +66,14 @@ class UserActivity
         }
 
         $from = 'FROM user_activity a LEFT JOIN users u ON u.id = a.user_id';
+
+        // Staff/admin accounts (operators, editors, moderators) are excluded
+        // from the member activity feed.
+        $adminRoles = \App\Core\Auth::ADMIN_ROLES;
+        $adminPh    = implode(',', array_fill(0, count($adminRoles), '?'));
+        $where[]    = "u.role NOT IN ($adminPh)";
+        array_push($params, ...$adminRoles);
+
         $whereSql = $where === [] ? '' : (' WHERE ' . implode(' AND ', $where));
 
         $total = (int) Database::run('SELECT COUNT(*) ' . $from . $whereSql, $params)->fetchColumn();
@@ -96,16 +104,21 @@ class UserActivity
      * The most recent distinct activity row per user (used for the profile
      * header on the monitor page, e.g. "last seen" snapshot).
      */
-    public static function lastSeenByUser(int $limit = 25): array
+public static function lastSeenByUser(int $limit = 25): array
     {
+        $adminRoles = \App\Core\Auth::ADMIN_ROLES;
+        $adminPh    = implode(',', array_fill(0, count($adminRoles), '?'));
+
         return Database::run(
             'SELECT a.*, u.email AS user_email
              FROM user_activity a
              JOIN users u ON u.id = a.user_id
-             WHERE a.id IN (
+             WHERE u.role NOT IN (' . $adminPh . ')
+               AND a.id IN (
                  SELECT MAX(x.id) FROM user_activity x GROUP BY x.user_id
-             )
-             ORDER BY a.id DESC LIMIT ' . max(1, $limit)
+               )
+             ORDER BY a.id DESC LIMIT ' . max(1, $limit),
+            $adminRoles
         )->fetchAll();
     }
 }
