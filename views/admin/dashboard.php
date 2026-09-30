@@ -203,7 +203,7 @@
             </span>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:center;margin-top:.75rem;">
-            <div style="flex:1 1 280px;min-width:220px;max-width:380px;">
+            <div style="flex:1 1 280px;min-width:220px;max-width:280px;">
                 <?= \App\Core\Charts::pie($diskSlices, 230, 230) ?>
             </div>
             <div style="flex:1 1 320px;min-width:260px;">
@@ -326,13 +326,15 @@
             <p style="margin:.25rem 0 .5rem;"><b style="font-size:1.15rem;">$<?= number_format((float) $finance['mtd_revenue'], 2) ?></b>
                 <span class="muted">month-to-date</span> ·
                 <b>$<?= number_format((float) $finance['total_12mo'], 2) ?></b> <span class="muted">trailing 12 mo</span></p>
-            <?= \App\Core\Charts::bars(
-                array_map(fn ($l, $i) => $l, $finance['labels'], array_keys($finance['labels'])),
-                $finance['revenue'],
-                480, 120, '#16a34a',
-                '$%s'
-            ) ?>
-            <p class="muted" style="margin:.35rem 0 0;font-size:.85rem;">Bars = collected revenue per month (hover for exact).</p>
+            <div style="max-width:680px;">
+                <?= \App\Core\Charts::bars(
+                    array_map(fn ($l, $i) => $l, $finance['labels'], array_keys($finance['labels'])),
+                    $finance['revenue'],
+                    480, 120, '#16a34a',
+                    '$%s'
+                ) ?>
+                <p class="muted" style="margin:.35rem 0 0;font-size:.85rem;">Bars = collected revenue per month (hover for exact).</p>
+            </div>
         </div>
         <div style="flex:1 1 200px;">
             <table style="width:auto;">
@@ -389,7 +391,9 @@
                 <span class="muted" style="font-size:.8rem;"><?= e((string) reset($storageTrend['gb'])) ?> GB → <?= e((string) end($storageTrend['gb'])) ?> GB</span>
             </div>
         </div>
-        <?= \App\Core\Charts::sparkline($storageTrend['gb'], 720, 90, '#0ea5e9') ?>
+        <div style="max-width:760px;">
+            <?= \App\Core\Charts::sparkline($storageTrend['gb'], 720, 90, '#0ea5e9') ?>
+            </div>
         <p class="muted" style="margin:.35rem 0 0;font-size:.85rem;">
             <?= count($storageTrend['gb']) ?> <?= e($granLabels[$storageTrend['granularity']] ?? 'points') ?>
             · snapshots every ~15 min<?php if (!empty($storageTrend['first_snapshot'])): ?>
@@ -427,8 +431,10 @@
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
             <div style="flex:2 1 400px;min-width:300px;">
-                <?= \App\Core\Charts::bars($viewTrends['labels'], $viewTrends['total'], 520, 140, '#0ea5e9', '%s') ?>
-                <p class="muted" style="margin:.15rem 0 0;font-size:.8rem;">Gallery + photo views</p>
+                <div style="max-width:640px;">
+                    <?= \App\Core\Charts::bars($viewTrends['labels'], $viewTrends['total'], 520, 140, '#0ea5e9', '%s') ?>
+                    <p class="muted" style="margin:.15rem 0 0;font-size:.8rem;">Gallery + photo views</p>
+                </div>
             </div>
             <div style="flex:1 1 180px;min-width:160px;">
                 <p class="muted" style="margin:0 0 .35rem;font-size:.85rem;">Gallery vs photo views</p>
@@ -445,8 +451,10 @@
                 <?php if (!$anyVisits): ?>
                     <p class="muted">No page visits tracked yet — a visit to the login or signup form records a unique-IP count from now on.</p>
                 <?php else: ?>
-                    <?= \App\Core\Charts::bars($pageVisits['labels'], $pageVisits['total'], 520, 140, '#2563eb', '%s') ?>
-                    <p class="muted" style="margin:.15rem 0 0;font-size:.8rem;">Unique IPs on the login + signup pages<?php if ($pageVisits['granularity'] === 'month'): ?> per month<?php endif; ?></p>
+                    <div style="max-width:640px;">
+                        <?= \App\Core\Charts::bars($pageVisits['labels'], $pageVisits['total'], 520, 140, '#2563eb', '%s') ?>
+                        <p class="muted" style="margin:.15rem 0 0;font-size:.8rem;">Unique IPs on the login + signup pages<?php if ($pageVisits['granularity'] === 'month'): ?> per month<?php endif; ?></p>
+                    </div>
                 <?php endif; ?>
             </div>
             <div style="flex:1 1 180px;min-width:160px;">
@@ -467,13 +475,15 @@
     <summary><h2>Content &amp; membership growth — last 6 months</h2></summary>
     <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
         <div style="flex:2 1 420px;min-width:320px;">
-            <p class="muted" style="margin:0 0 .35rem;font-size:.85rem;">New galleries</p>
-            <?= \App\Core\Charts::sparkline($growthSeries['galleries'], 520, 40, '#16a34a') ?>
-            <p class="muted" style="margin:.5rem 0 .35rem;font-size:.85rem;">New photos</p>
-            <?= \App\Core\Charts::sparkline($growthSeries['photos'], 520, 40, '#0ea5e9') ?>
-            <p class="muted" style="margin:.5rem 0 .35rem;font-size:.85rem;">New signups</p>
-            <?= \App\Core\Charts::sparkline($growthSeries['users'], 520, 40, '#a855f7') ?>
-            <p class="muted" style="margin:.35rem 0 0;font-size:.8rem;">Labels across the series: <?= e(implode(' · ', $growthSeries['labels'])) ?></p>
+            <div style="max-width:640px;">
+                <p class="muted" style="margin:0 0 .35rem;font-size:.85rem;">New galleries</p>
+                <?= \App\Core\Charts::sparkline($growthSeries['galleries'], 520, 40, '#16a34a') ?>
+                <p class="muted" style="margin:.5rem 0 .35rem;font-size:.85rem;">New photos</p>
+                <?= \App\Core\Charts::sparkline($growthSeries['photos'], 520, 40, '#0ea5e9') ?>
+                <p class="muted" style="margin:.5rem 0 .35rem;font-size:.85rem;">New signups</p>
+                <?= \App\Core\Charts::sparkline($growthSeries['users'], 520, 40, '#a855f7') ?>
+                <p class="muted" style="margin:.35rem 0 0;font-size:.8rem;">Labels across the series: <?= e(implode(' · ', $growthSeries['labels'])) ?></p>
+            </div>
         </div>
         <div style="flex:1 1 240px;min-width:220px;">
             <table>
