@@ -181,9 +181,6 @@
         <?php endif; ?>
     <?php endif; ?>
     <?php
-        $diskHelpers = [
-            'bar' => static fn (float $f): string => 'width:' . number_format($f / (float) $disk['total'] * 100, 2) . '%;',
-        ];
         $diskSlices = array_values(array_filter([
             ['label' => 'Free disk',        'value' => (float) $disk['free'],         'color' => '#16a34a'],
             ['label' => 'Images',           'value' => (float) $disk['images'],       'color' => '#0ea5e9'],
@@ -213,23 +210,22 @@
             </span>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:center;margin-top:.75rem;">
-            <div style="flex:1 1 280px;min-width:220px;max-width:280px;">
-                <?= \App\Core\Charts::pie($diskSlices, 230, 230, static fn (float $b): string => format_bytes($b)) ?>
+            <div style="flex:1 1 320px;min-width:260px;max-width:320px;">
+                <?= \App\Core\Charts::pie($diskSlices, 260, 260, static fn (float $b): string => format_bytes($b)) ?>
             </div>
-            <div style="flex:1 1 360px;min-width:280px;">
-                <?php foreach ($diskSlices as $slice): ?>
-                    <div style="display:flex;align-items:center;gap:.6rem;margin:.45rem 0;">
-                        <i style="flex:0 0 auto;width:.85rem;height:.85rem;border-radius:.2rem;background:<?= e($slice['color']) ?>;display:inline-block;"></i>
-                        <span style="flex:0 0 120px;"><?= e($slice['label']) ?></span>
-                        <div style="flex:1 1 auto;min-width:60px;height:.55rem;background:rgba(120,120,140,.15);border-radius:.3rem;overflow:hidden;">
-                            <div style="<?= $diskHelpers['bar']((float) $slice['value']) ?>;height:100%;background:<?= e($slice['color']) ?>;"></div>
+            <div style="flex:1 1 420px;min-width:320px;">
+                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.55rem 1.5rem;align-items:center;">
+                    <?php foreach ($diskSlices as $slice): ?>
+                        <div style="display:flex;align-items:center;gap:.45rem;min-width:0;">
+                            <i style="flex:0 0 auto;width:.75rem;height:.75rem;border-radius:.2rem;background:<?= e($slice['color']) ?>;display:inline-block;"></i>
+                            <span style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?= e($slice['label']) ?>"><?= e($slice['label']) ?></span>
+                            <b style="flex:0 0 auto;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;">
+                                <?= format_bytes((float) $slice['value']) ?>
+                                <span class="muted" style="font-size:.78rem;">(<?= number_format((float) $slice['value'] / (float) $disk['total'] * 100, 1) ?>%)</span>
+                            </b>
                         </div>
-                        <b style="flex:0 0 130px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;">
-                            <?= format_bytes((float) $slice['value']) ?>
-                            <span class="muted" style="font-size:.8rem;">(<?= number_format((float) $slice['value'] / (float) $disk['total'] * 100, 1) ?>%)</span>
-                        </b>
-                    </div>
-                <?php endforeach; ?>
+                    <?php endforeach; ?>
+                </div>
                 <p class="muted" style="margin:.6rem 0 0;font-size:.85rem;">
                     Images/Videos = original uploads; Web/Thumb variants = the generated display copies.
                     Pending uploads, chat media, sample previews, video projects, orphan thumb cache,
