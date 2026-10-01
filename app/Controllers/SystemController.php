@@ -35,9 +35,24 @@ class SystemController extends Controller
 
     public function index(): void
     {
+        // Orphans are paginated so the grid only ever renders two rows of
+        // gallery cards (one page of thumbnail/video requests) instead of
+        // every unreferenced file at once.
+        $orphans   = $this->orphanFiles();
+        $orphanTotal = count($orphans);
+        $perPage   = 12;
+        $pages     = max(1, (int) ceil($orphanTotal / $perPage));
+        $page      = min(max(1, (int) $this->request->query('page', 1)), $pages);
+        $orphanSlice = array_slice($orphans, ($page - 1) * $perPage, $perPage);
+
         $this->viewAdmin('system', [
             'pendingDirs' => $this->pendingDirs(),
-            'orphans'     => $this->orphanFiles(),
+            'orphans'     => $orphanSlice,
+            'orphanPage'  => $page,
+            'orphanPages' => $pages,
+            'orphanTotal' => $orphanTotal,
+            'orphanStart' => $orphanTotal === 0 ? 0 : ($page - 1) * $perPage + 1,
+            'orphanEnd'   => min($page * $perPage, $orphanTotal),
             'backups'     => $this->backups(),
             'backupRunning' => file_exists($this->backupDir . '/.running'),
             'backupFailure' => Housekeeping::consumeBackupFailure(),
@@ -1345,10 +1360,67 @@ PHP;
             $mime = mime_for_extension($name);
         }
 
+        $this->serveOrphanFile($path, $name, $mime);
+    }
+
+    /**
+     * Stream an orphaned file with HTTP Range support so browsers can seek
+     * in videos and <video preload="metadata"> fetches only the index (moov)
+     * instead of the whole multi-GB file — the previous readfile() made the
+     * grid's videos hang on large files. Single range requests only.
+     */
+    private function serveOrphanFile(string $path, string $name, string $mime): void
+    {
+        $len   = (int) filesize($path);
+        $start = 0;
+        $end   = $len - 1;
+
         header('Content-Type: ' . $mime);
         header('Content-Disposition: inline; filename="' . addcslashes($name, '"') . '"');
-        header('Content-Length: ' . (string) filesize($path));
-        readfile($path);
+        header('Accept-Ranges: bytes');
+
+        $range = (string) ($_SERVER['HTTP_RANGE'] ?? '');
+        if ($range !== '' && preg_match('/^bytes=(\d*)-(\d*)/', $range, $m) === 1) {
+            if ($m[1] === '' && $m[2] !== '') {
+                // Suffix range (bytes=-N): last N bytes.
+                $start = max(0, $len - (int) $m[2]);
+                $end   = $len - 1;
+            } elseif ($m[1] !== '') {
+                $start = (int) $m[1];
+                $end   = $m[2] !== '' ? min((int) $m[2], $len - 1) : $len - 1;
+            }
+
+            if ($start > $end || $start >= $len) {
+                http_response_code(416);
+                header('Content-Range: bytes */' . $len);
+                exit;
+            }
+
+            http_response_code(206);
+            header('Content-Range: bytes ' . $start . '-' . $end . '/' . $len);
+        }
+
+        header('Content-Length: ' . ($end - $start + 1));
+
+        $fh = fopen($path, 'rb');
+        if ($fh === false) {
+            $this->notFound();
+            return;
+        }
+        if ($start > 0) {
+            fseek($fh, $start);
+        }
+
+        $remaining = $end - $start + 1;
+        while ($remaining > 0 && !feof($fh)) {
+            $buf = fread($fh, (int) min(1048576, $remaining));
+            if ($buf === false || $buf === '') {
+                break;
+            }
+            echo $buf;
+            $remaining -= strlen($buf);
+        }
+        fclose($fh);
         exit;
     }
 

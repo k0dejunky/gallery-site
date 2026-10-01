@@ -509,8 +509,11 @@
         <?php if (empty($orphans)): ?>
             <p class="muted">Every file in storage/uploads belongs to a photo record.</p>
         <?php else: ?>
-            <p><?= count($orphans) ?> unreferenced file(s), <?= number_format(array_sum(array_column($orphans, 'size')) / 1048576, 1) ?> MB total.
-            Click a preview to view the full file.</p>
+            <p>
+                <?= number_format((int) $orphanTotal) ?> unreferenced file(s),
+                <?= number_format(array_sum(array_column($orphans, 'size')) / 1048576, 1) ?> MB shown.
+                Click a preview to view the full file.
+            </p>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:.75rem;margin:.5rem 0 .75rem;">
                 <?php foreach ($orphans as $orphan): ?>
                     <?php $viewUrl = url('/admin/system/orphans/view/' . rawurlencode((string) $orphan['name'])); ?>
@@ -538,8 +541,34 @@
                     </div>
                 <?php endforeach; ?>
             </div>
+            <?php if ($orphanPages > 1): ?>
+                <?php
+                    $pageUrl = static fn (int $p): string => url('/admin/system' . ($p > 1 ? '?page=' . $p : ''));
+                ?>
+                <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem;">
+                    <span class="muted" style="font-size:.8rem;">
+                        Page <?= (int) $orphanPage ?> of <?= (int) $orphanPages ?> (<?= (int) $orphanStart ?>–<?= (int) $orphanEnd ?>)
+                    </span>
+                    <?php if ($orphanPage > 1): ?>
+                        <a class="btn btn-sm" href="<?= $pageUrl((int) $orphanPage - 1) ?>">&laquo; Prev</a>
+                    <?php endif; ?>
+                    <?php
+                        $from = max(1, (int) $orphanPage - 3);
+                        $to   = min((int) $orphanPages, (int) $orphanPage + 3);
+                        for ($p = $from; $p <= $to; $p++): ?>
+                            <?php if ($p === (int) $orphanPage): ?>
+                                <span style="font-weight:bold;padding:.2rem .5rem;"><?= $p ?></span>
+                            <?php else: ?>
+                                <a class="btn btn-sm" href="<?= $pageUrl($p) ?>"><?= $p ?></a>
+                            <?php endif; ?>
+                    <?php endfor; ?>
+                    <?php if ($orphanPage < $orphanPages): ?>
+                        <a class="btn btn-sm" href="<?= $pageUrl((int) $orphanPage + 1) ?>">Next &raquo;</a>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
             <form class="sys-actions" method="post" action="<?= url('/admin/system/cleanup/orphans') ?>"
-                  onsubmit="return confirm('Delete all <?= count($orphans) ?> orphaned files permanently?');">
+                  onsubmit="return confirm('Delete all <?= (int) $orphanTotal ?> orphaned files permanently?');">
                 <?= csrf_field() ?>
                 <button class="btn btn-danger" type="submit">Delete orphans</button>
             </form>
