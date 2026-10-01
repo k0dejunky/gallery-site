@@ -3,6 +3,8 @@
 <?php if (empty($uploads)): ?>
     <p>No abandoned uploads.</p>
 <?php else: ?>
+    <?php $hasResumable = count(array_filter($uploads, static fn (array $u): bool => empty($u['incomplete']))) > 0; ?>
+    <?php if ($hasResumable): ?>
     <div style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.75rem 0;">
         <strong>With selected:</strong>
         <button type="button" class="btn" id="resume-btn">Resume New Gallery</button>
@@ -12,11 +14,12 @@
     <form method="post" action="<?= url('/admin/abandoned-uploads/resume') ?>" id="resume-form">
         <?= csrf_field() ?>
     </form>
+    <?php endif; ?>
 
     <table>
         <thead>
             <tr>
-                <th><input type="checkbox" id="check-all" title="Select all"></th>
+                <th><?= $hasResumable ? '<input type="checkbox" id="check-all" title="Select all">' : '' ?></th>
                 <th>Preview</th>
                 <th>File</th>
                 <th>Type</th>
@@ -26,6 +29,25 @@
         </thead>
         <tbody>
             <?php foreach ($uploads as $upload): ?>
+                <?php if (!empty($upload['incomplete'])): ?>
+                    <tr style="background:rgba(180,90,40,.06);">
+                        <td></td>
+                        <td><div style="width:120px;height:40px;display:flex;align-items:center;justify-content:center;background:rgba(180,90,40,.12);border-radius:6px;font-size:1.2rem;" title="Interrupted chunked upload">&#9888;</div></td>
+                        <td><code><?= e((string) $upload['filename']) ?></code>
+                            <span class="muted" style="font-size:.78rem;">(<?= (int) ($upload['chunks'] ?? 0) ?> chunks, never completed)</span></td>
+                        <td><span class="pill pill-warn">Incomplete</span></td>
+                        <td><?= number_format((int) $upload['size']) ?> B</td>
+                        <td>
+                            <form method="post" action="<?= url('/admin/abandoned-uploads/chunks-delete') ?>"
+                                  onsubmit="return confirm('Delete these <?= (int) ($upload['chunks'] ?? 0) ?> incomplete upload chunks?');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="session" value="<?= e((string) $upload['session']) ?>">
+                                <input type="hidden" name="file" value="<?= e((string) $upload['filename']) ?>">
+                                <button type="submit" class="btn btn-sm btn-danger">Delete chunks</button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php else: ?>
                 <?php $isVideo = (int) ($upload['is_video'] ?? 0) === 1; ?>
                 <?php $session = rawurlencode($upload['session']); ?>
                 <?php $file = rawurlencode($upload['filename']); ?>
@@ -60,9 +82,11 @@
                         </form>
                     </td>
                 </tr>
+                <?php endif; ?>
             <?php endforeach; ?>
         </tbody>
     </table>
+    <?php if ($hasResumable): ?>
     <script>
     (function () {
         var all = document.getElementById('check-all');
@@ -104,4 +128,5 @@
         }
     })();
     </script>
+    <?php endif; ?>
 <?php endif; ?>

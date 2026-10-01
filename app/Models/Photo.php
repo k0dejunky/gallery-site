@@ -202,6 +202,7 @@ class Photo
         foreach (glob($base . '/*', GLOB_ONLYDIR) ?: [] as $sessionDir) {
             $session = basename($sessionDir);
 
+            // Completed staged uploads (resumable/assignable).
             foreach (glob($sessionDir . '/pending_*') ?: [] as $file) {
                 $name = basename($file);
 
@@ -210,12 +211,27 @@ class Photo
                 }
 
                 $rows[] = [
-                    'session'  => $session,
-                    'filename' => $name,
-                    'is_video' => is_video($name) ? 1 : 0,
-                    'size'     => (int) @filesize($file),
-                    'modified' => @filemtime($file) ?: null,
+                    'session'    => $session,
+                    'filename'   => $name,
+                    'is_video'   => is_video($name) ? 1 : 0,
+                    'size'       => (int) @filesize($file),
+                    'modified'   => @filemtime($file) ?: null,
+                    'incomplete' => false,
                 ];
+            }
+
+            // Interrupted chunked uploads: parts staged under .chunks/<uid>/
+            // but never assembled into a pending_* file, so they were invisible
+            // to the abandoned-uploads page before.
+            foreach (glob($sessionDir . '/.chunks/*', GLOB_ONLYDIR) ?: [] as $chunkSet) {
+                self::appendChunkRow($rows, $session, basename($chunkSet), $chunkSet);
+            }
+
+            // Folder-import staging (pending/import/<gallery>/<uid>/part-*).
+            if ($session === 'import') {
+                foreach (glob($sessionDir . '/*/*', GLOB_ONLYDIR) ?: [] as $chunkSet) {
+                    self::appendChunkRow($rows, $session, basename(dirname($chunkSet)) . '/' . basename($chunkSet), $chunkSet);
+                }
             }
         }
 
@@ -224,6 +240,24 @@ class Photo
         });
 
         return $rows;
+    }
+
+    /** Add one incomplete chunk-set row (parts present, no assembled file). */
+    private static function appendChunkRow(array &$rows, string $session, string $label, string $chunkSet): void
+    {
+        $parts = glob($chunkSet . '/part-*') ?: [];
+        if ($parts === []) {
+            return;
+        }
+        $rows[] = [
+            'session'    => $session,
+            'filename'   => $label,
+            'is_video'   => 0,
+            'size'       => array_sum(array_map(static fn (string $p): int => (int) @filesize($p), $parts)),
+            'modified'   => @filemtime($chunkSet) ?: null,
+            'incomplete' => true,
+            'chunks'     => count($parts),
+        ];
     }
 
     /**

@@ -281,6 +281,66 @@ class AdminController extends Controller
     }
 
     /**
+     * Admin: remove an interrupted chunked upload (session .chunks/<uid> or
+     * the folder-import staging set) that never produced a usable file.
+     */
+    public function deleteAbandonedChunks(): void
+    {
+        Auth::requirePermission('galleries');
+
+        $session = (string) $this->request->post('session', '');
+        $file    = (string) $this->request->post('file', '');
+
+        if ($session === 'import') {
+            // file = "<gallery>/<uid>"
+            if (!preg_match('#^[A-Za-z0-9_-]+/[A-Za-z0-9_-]+$#', $file)) {
+                $this->flash('error', 'Invalid upload reference.');
+                $this->redirect('/admin/abandoned-uploads');
+                return;
+            }
+            [$gallery, $uid] = explode('/', $file, 2);
+            $target = config('app.uploads.dir') . '/pending/import/' . $gallery . '/' . $uid;
+        } else {
+            if (!preg_match('/^[A-Za-z0-9_,-]+$/', $session)
+                || !preg_match('/^[A-Za-z0-9_-]+$/', $file)) {
+                $this->flash('error', 'Invalid upload reference.');
+                $this->redirect('/admin/abandoned-uploads');
+                return;
+            }
+            $target = config('app.uploads.dir') . '/pending/' . $session . '/.chunks/' . $file;
+        }
+
+        $base   = realpath(config('app.uploads.dir') . '/pending');
+        $target = realpath($target);
+
+        if ($base === false || $target === false
+            || strncmp($target, $base, strlen($base)) !== 0
+            || !is_dir($target)) {
+            $this->flash('error', 'That upload is no longer available.');
+            $this->redirect('/admin/abandoned-uploads');
+            return;
+        }
+
+        self::rrmdir($target);
+
+        \App\Models\AuditLog::record((int) Auth::user()['id'], 'delete', 'abandoned_upload', null,
+            'Deleted incomplete upload chunks "' . $file . '" (' . $session . ')');
+        $this->flash('success', 'Incomplete upload removed.');
+        $this->redirect('/admin/abandoned-uploads');
+    }
+
+    private static function rrmdir(string $dir): void
+    {
+        foreach (new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        ) as $item) {
+            $item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
+        }
+        @rmdir($dir);
+    }
+
+    /**
      * Admin: serve a staged file (original, web or thumb) from an abandoned
      * session's pending directory so admins can preview before assigning.
      */

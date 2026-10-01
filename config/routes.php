@@ -132,6 +132,7 @@ return [
     ['POST', '/admin', 'AdminController@login'],
     ['GET', '/admin/abandoned-uploads', 'AdminController@abandonedUploads', 'galleries'],
     ['POST', '/admin/abandoned-uploads/resume', 'AdminController@resumeAbandoned', 'galleries'],
+    ['POST', '/admin/abandoned-uploads/chunks-delete', 'AdminController@deleteAbandonedChunks', 'galleries'],
     ['GET', '/admin/abandoned-uploads/{session}/{file}', 'AdminController@abandonedFile', 'galleries'],
     ['POST', '/admin/abandoned-uploads/{session}/{file}', 'AdminController@assignAbandoned', 'galleries'],
     ['GET', '/admin/search', 'SearchController@index', 'dashboard'],
