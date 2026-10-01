@@ -52,8 +52,12 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
 
     .mg-date { white-space: nowrap; font-size: .82rem; color: var(--purple-800); }
 
-    .mg-actions { display: flex; gap: .2rem; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
-    .mg-actions .btn { padding: .2rem .45rem; font-size: .75rem; }
+    .mg-actions { display: flex; gap: .25rem; flex-wrap: nowrap; justify-content: flex-end; align-items: center; white-space: nowrap; }
+    .mg-actions form { display: contents; }
+    .mg-actions .btn { padding: .18rem .4rem; font-size: .72rem; line-height: 1.15; white-space: nowrap; }
+    /* Keep all four action buttons on one row even when the table is narrow;
+       the wrapper scrolls horizontally instead of stacking them. */
+    #mg-table th:last-child, #mg-table td:last-child { min-width: 15rem; }
 
     .mg-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin: .75rem 0; }
     .mg-filters { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; }
