@@ -90,6 +90,10 @@ $formatBytes = static function (?int $bytes): string {
                         <?php if (!empty($row['source_filename'])): ?>
                         <a class="btn small" href="<?= url('/admin/videos/' . (int) $row['source_photo_id'] . '/edit') ?>">Edit</a>
                         <?php endif; ?>
+                        <form method="post" action="<?= url('/admin/video-projects/' . (int) $row['id'] . '/delete') ?>" style="display:inline"
+                              onsubmit="return confirm('Delete this video project<?= (int) ($row['export_count'] ?? 0) > 0 ? ' and its export record(s)' : '' ?>? This removes the saved editor state.');">
+                            <?= csrf_field() ?><button class="btn small" type="submit" style="background:#b42318;color:#fff">Delete</button>
+                        </form>
                     </td>
                 </tr>
                 <?php endforeach; ?>

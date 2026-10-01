@@ -292,6 +292,47 @@ LEFT JOIN photos ph ON ph.id = p.source_photo_id
     }
 
     /**
+     * Delete a saved video project (and, via the DB cascade, its export jobs).
+     * Any exported output files that are not owned by a gallery are removed
+     * from disk; files referenced by a gallery photo are left in place.
+     */
+    public function deleteProject(int $id): void
+    {
+        $project = Database::run('SELECT * FROM video_projects WHERE id = ?', [$id])->fetch();
+        if ($project === null) {
+            $this->notFound();
+            return;
+        }
+
+        $uploadsDir = config('app.uploads')['dir'];
+        $outputs = Database::run(
+            "SELECT output_file FROM video_export_jobs WHERE project_id = ? AND output_file IS NOT NULL AND output_file <> ''",
+            [$id]
+        )->fetchAll(\PDO::FETCH_COLUMN);
+        foreach ($outputs as $output) {
+            $base = basename((string) $output);
+            $photo = Database::run(
+                'SELECT p.id FROM photos p JOIN gallery_photo gp ON gp.photo_id = p.id
+                 WHERE p.filename = ? COLLATE utf8mb4_unicode_ci LIMIT 1',
+                [$base]
+            )->fetch();
+            if ($photo !== false) {
+                continue; // the gallery owns this file; leave it alone
+            }
+            foreach ([$uploadsDir . '/exports/' . $base, $uploadsDir . '/' . $base] as $candidate) {
+                if (is_file($candidate)) @unlink($candidate);
+            }
+        }
+
+        Database::run('DELETE FROM video_projects WHERE id = ?', [$id]);
+
+        AuditLog::record((int) Auth::user()['id'], 'delete', 'video_project', $id,
+            'Deleted video project "' . (string) ($project['title'] ?? '') . '"', null, ['id' => $id]);
+        $this->flash('success', 'Video project deleted.');
+        $this->redirect('/admin/video-projects');
+    }
+
+    /**
      * Purge an exported file that has already been turned into a gallery.
      *
      * Before removing the export job, this verifies that the exported file has

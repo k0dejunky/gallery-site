@@ -178,6 +178,7 @@ return [
     ['GET', '/admin/videos', 'VideoEditorController@videoList', 'videos'],
     ['GET', '/admin/video-projects', 'VideoEditorController@dashboard', 'videos'],
     ['POST', '/admin/video-projects/{id}', 'VideoEditorController@save', 'videos'],
+    ['POST', '/admin/video-projects/{id}/delete', 'VideoEditorController@deleteProject', 'videos'],
     ['POST', '/admin/video-projects/{id}/export', 'VideoEditorController@export', 'videos'],
     ['GET', '/admin/video-exports/{id}', 'VideoEditorController@status', 'videos'],
     ['GET', '/admin/video-exports/{id}/stream', 'VideoEditorController@stream', 'videos'],
