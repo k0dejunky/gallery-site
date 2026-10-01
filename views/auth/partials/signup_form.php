@@ -40,6 +40,22 @@
             </p>
         </div>
 
+        <div style="grid-column:1 / -1;">
+            <p style="margin-bottom:.4rem;">
+                <label for="promo">Promotion code (optional)</label><br>
+                <input type="text" name="promo" id="promo" value="<?= e((string) ($promo ?? '')) ?>" autocomplete="off" placeholder="Have a promotion code? Enter it here">
+            </p>
+            <?php if (($promoInfo['ok'] ?? null) === true): ?>
+                <p class="muted" style="font-size:.85rem;margin:0;">
+                    This promotion grants a free <?= (int) $promoInfo['days'] ?>-day <?= e((string) $promoInfo['level']) ?> trial when you sign up.
+                </p>
+            <?php elseif (($promoInfo['ok'] ?? null) === false): ?>
+                <p style="color:#b91c1c;font-size:.85rem;margin:0;">
+                    That promotion code is not available or has been fully used.
+                </p>
+            <?php endif; ?>
+        </div>
+
         <div class="signup-actions">
             <button type="submit" class="btn">Sign Up</button>
         </div>

@@ -9,7 +9,9 @@ use App\Core\RateLimiter;
 use App\Models\PageVisit;
 use App\Models\PasswordReset;
 use App\Models\Photo;
+use App\Models\Subscription;
 use App\Models\Traffic;
+use App\Models\TrialLink;
 use App\Models\User;
 
 class AuthController extends Controller
@@ -151,10 +153,24 @@ class AuthController extends Controller
 
         PageVisit::record('signup', $this->request->ip());
 
+        // A /trial/{code} link pre-fills the promotion-code box; validate it so
+        // the form can show whether the promo is good to go (it is only
+        // consumed when the signup actually happens).
+        $promo     = trim((string) $this->request->query('promo', ''));
+        $promoInfo = null;
+        if ($promo !== '') {
+            $link = TrialLink::redeemable($promo);
+            $promoInfo = $link !== null
+                ? ['ok' => true, 'days' => (int) $link['days'], 'level' => TrialLink::levelLabel((int) $link['level'])]
+                : ['ok' => false];
+        }
+
         $this->view('auth/signup', [
             'recentImages' => Photo::recentImages(25),
             'recentVideos' => Photo::recentVideos(25),
             'mediaCounts'  => Photo::siteCounts(),
+            'promo'        => $promo,
+            'promoInfo'    => $promoInfo,
             'title'        => 'Sign Up',
             'noindex'      => true,
             'canonicalUrl' => absolute_url('/signup'),
@@ -176,6 +192,11 @@ class AuthController extends Controller
         $confirm  = (string) $this->request->post('password_confirm', '');
         $honey    = (string) $this->request->input('website');
         $dob      = $this->request->input('date_of_birth') ?: null;
+        $promo    = trim((string) $this->request->post('promo', ''));
+
+        // Re-route back to the signup form keeping the promo code so a
+        // validation failure doesn't drop the pre-filled promotion.
+        $signupBack = static fn (): string => '/signup' . ($promo !== '' ? '?promo=' . rawurlencode($promo) : '');
 
         if ($honey !== '') {
             $this->redirect('/signup');
@@ -193,12 +214,12 @@ class AuthController extends Controller
 
         if ($errors !== []) {
             $this->flash('error', implode(' ', $errors));
-            $this->redirect('/signup');
+            $this->redirect($signupBack());
         }
 
         if ($password !== $confirm) {
             $this->flash('error', 'Passwords do not match.');
-            $this->redirect('/signup');
+            $this->redirect($signupBack());
         }
 
         if (User::findByEmail($email) !== null) {
@@ -209,13 +230,13 @@ class AuthController extends Controller
         $dobDate = date_create($dob);
         if ($dobDate === false) {
             $this->flash('error', 'Invalid date of birth.');
-            $this->redirect('/signup');
+            $this->redirect($signupBack());
         }
 
         $age = (new \DateTime())->diff($dobDate)->y;
         if ($age < 18) {
             $this->flash('error', 'You must be at least 18 years old to create an account.');
-            $this->redirect('/signup');
+            $this->redirect($signupBack());
         }
 
         User::create($email, $password, 'user', $dob);
@@ -257,9 +278,29 @@ class AuthController extends Controller
 
         Auth::loginUser($userId);
 
-         $this->flash('success', $mailSent
+        // Apply a promotion (trial link) code: validate it now and, if it is
+        // still redeemable, grant the trial and mark the link used. A link is
+        // only consumed here — never on a plain visit.
+        $promoNote = '';
+        if ($promo !== '') {
+            $link = TrialLink::redeemable($promo);
+            if ($link !== null) {
+                $trialId = Subscription::grantTrialFor($userId, (int) $link['level'], (int) $link['days']);
+                if ($trialId !== null) {
+                    TrialLink::consume((int) $link['id']);
+                    $promoNote = ' Your ' . (int) $link['days'] . '-day '
+                        . TrialLink::levelLabel((int) $link['level']) . ' trial is active — enjoy!';
+                } else {
+                    $promoNote = ' (your promotion code could not be applied).';
+                }
+            } else {
+                $promoNote = ' (that promotion code is not available or has been fully used).';
+            }
+        }
+
+         $this->flash('success', ($mailSent
              ? 'Account created. Welcome! Check your email to verify your address.'
-             : 'Account created. We could not send the verification email yet. You can resend it from your account settings.');
+             : 'Account created. We could not send the verification email yet. You can resend it from your account settings.') . $promoNote);
          $this->redirect('/account' . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
     }
 

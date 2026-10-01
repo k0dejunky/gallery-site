@@ -40,6 +40,26 @@ class TrialLink
         return $row === false ? null : $row;
     }
 
+    /**
+     * Return the link when it can still be redeemed — it exists, is enabled
+     * and has not reached its signup quota. A link only counts as "used" when
+     * someone actually signs up with it (consume() is called then), never on
+     * a plain visit.
+     */
+    public static function redeemable(string $code): ?array
+    {
+        $link = self::findByCode($code);
+
+        if ($link === null || !(int) $link['enabled']) {
+            return null;
+        }
+        if ((int) $link['used_count'] >= (int) $link['max_uses']) {
+            return null;
+        }
+
+        return $link;
+    }
+
     public static function all(): array
     {
         return Database::run(
