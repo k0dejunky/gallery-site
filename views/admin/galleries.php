@@ -43,8 +43,9 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
     .mg-cover { width: 64px; height: 44px; border-radius: 6px; object-fit: cover; display: block; background: var(--purple-900); border: 1px solid var(--pink-300); }
     .mg-cover-empty { width: 64px; height: 44px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: var(--pink-200); border: 1px dashed var(--pink-400); color: var(--purple-700); font-size: .68rem; }
 
-    .mg-title { font-weight: 600; color: var(--purple-900); text-decoration: none; }
+    .mg-title { font-weight: 600; color: var(--purple-900); text-decoration: none; display: inline-block; max-width: 8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
     .mg-title:hover { text-decoration: underline; }
+    @media (min-width: 1440px) { .mg-title { max-width: 13rem; } }
     .mg-desc { color: var(--purple-800); opacity: .7; font-size: .8rem; margin: .15rem 0 0; max-width: 18rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
     .mg-media { white-space: nowrap; font-size: .78rem; color: var(--purple-800); }
@@ -313,7 +314,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                             <?php endif; ?>
                         </td>
                         <td>
-                            <a class="mg-title" href="<?= url('/admin/galleries/' . $gid) ?>"><?= e((string) $gallery['title']) ?></a>
+                            <a class="mg-title" href="<?= url('/admin/galleries/' . $gid) ?>" title="<?= e((string) $gallery['title']) ?>"><?= e((string) $gallery['title']) ?></a>
                             <?php if (!empty($gallery['is_secret'])): ?>
                                 <span class="pill pill-warn">Secret</span>
                             <?php endif; ?>
