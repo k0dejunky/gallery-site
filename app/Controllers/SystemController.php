@@ -1352,7 +1352,7 @@ PHP;
             return;
         }
 
-        if ($this->request->query('thumb') === '1' && str_starts_with(\sniff_mime($path), 'image/')) {
+        if ($this->request->query('thumb') === '1') {
             $this->serveOrphanThumbnail($name, $path);
             return;
         }
@@ -1440,9 +1440,10 @@ PHP;
     }
 
     /**
-     * Serve (and cache) a small JPEG thumbnail of an orphaned image so the
-     * system page grid stays light even for large photos. Falls back to the
-     * original file when a thumbnail cannot be generated.
+     * Serve (and cache) a small thumbnail of an orphaned file so the grid
+     * only ever downloads a few KB per card — never the original, which can
+     * be a multi-hundred-MB video. Images go through GD; videos get an
+     * ffmpeg frame grab. Falls back to a placeholder when generation fails.
      */
     private function serveOrphanThumbnail(string $name, string $path): void
     {
@@ -1454,17 +1455,40 @@ PHP;
         $key = hash('sha1', $name . ':' . (string) filesize($path) . ':' . (string) filemtime($path));
         $out = $dir . '/' . $key . '.jpg';
 
-        if (!is_file($out) && !create_thumbnail($path, $out, 240, 180)) {
+        if (!is_file($out)) {
             $mime = \sniff_mime($path);
-            header('Content-Type: ' . ($mime ?: 'image/jpeg'));
-            header('Content-Length: ' . (string) filesize($path));
-            readfile($path);
-            exit;
+            if (str_starts_with($mime, 'video/')) {
+                create_video_thumbnail($path, $out, 240, 180);
+            } elseif (str_starts_with($mime, 'image/')) {
+                create_thumbnail($path, $out, 240, 180);
+            }
+
+            if (!is_file($out)) {
+                // Never stream a huge original into a grid card: show a
+                // placeholder so the page still loads quickly.
+                $this->serveOrphanThumbPlaceholder();
+                return;
+            }
         }
 
         header('Content-Type: ' . (\sniff_mime($out) ?: 'image/jpeg'));
         header('Content-Length: ' . (string) filesize($out));
         readfile($out);
+        exit;
+    }
+
+    /** Tiny dark placeholder served when a thumbnail cannot be generated. */
+    private function serveOrphanThumbPlaceholder(): void
+    {
+        header('Content-Type: image/png');
+        $im = @imagecreatetruecolor(240, 180);
+        if ($im === false) {
+            exit;
+        }
+        $bg = imagecolorallocate($im, 45, 26, 60);
+        imagefilledrectangle($im, 0, 0, 239, 179, $bg);
+        imagepng($im);
+        imagedestroy($im);
         exit;
     }
 
