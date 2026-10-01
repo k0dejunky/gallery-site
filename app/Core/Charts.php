@@ -115,8 +115,11 @@ class Charts
      * rendered separately by the caller so it can style the list freely.
      *
      * @param array<int, array{label:string, value:float, color:string}> $slices
+     * @param callable(float): string|null $format optional value formatter for
+     *        the hover <title> (e.g. a human-readable byte helper); defaults
+     *        to the raw number with no decimals.
      */
-    public static function pie(array $slices, int $w = 220, int $h = 220): string
+    public static function pie(array $slices, int $w = 220, int $h = 220, ?callable $format = null): string
     {
         $slices = array_values(array_filter($slices, static function (array $s): bool {
             return (float) $s['value'] > 0;
@@ -127,6 +130,10 @@ class Charts
         if ($total <= 0) {
             return '<svg viewBox="0 0 ' . $w . ' ' . $h . '" width="100%" role="img" style="display:block;width:100%;height:auto"></svg>';
         }
+
+        $fmt = static function (float $v) use ($format): string {
+            return $format !== null ? (string) $format($v) : number_format($v, 0);
+        };
 
         $cx = $w / 2;
         $cy = $h / 2;
@@ -146,7 +153,7 @@ class Charts
                 $cx, $cy, $r,
                 htmlspecialchars($slice['color'], ENT_QUOTES),
                 htmlspecialchars((string) $slice['label'], ENT_QUOTES),
-                htmlspecialchars(number_format((float) $slice['value'], 0), ENT_QUOTES)
+                htmlspecialchars($fmt((float) $slice['value']), ENT_QUOTES)
             );
             return $svg . '</svg>';
         }
@@ -169,7 +176,7 @@ class Charts
                 $cx, $cy, $x1, $y1, $r, $r, $largeArc, $x2, $y2,
                 htmlspecialchars($slice['color'], ENT_QUOTES),
                 htmlspecialchars((string) $slice['label'], ENT_QUOTES),
-                htmlspecialchars(number_format($value, 0), ENT_QUOTES)
+                htmlspecialchars($fmt($value), ENT_QUOTES)
             );
 
             $angle = $end;

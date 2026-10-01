@@ -182,52 +182,59 @@
     <?php endif; ?>
     <?php
         $diskHelpers = [
-            'gb' => static fn (float $b): string => number_format($b / 1073741824, 1),
             'bar' => static fn (float $f): string => 'width:' . number_format($f / (float) $disk['total'] * 100, 2) . '%;',
         ];
-        $diskSlices = [
-            ['label' => 'Free disk',      'value' => (float) $disk['free'],    'color' => '#16a34a'],
-            ['label' => 'Backups',        'value' => (float) $disk['backups'], 'color' => '#f43f5e'],
-            ['label' => 'Images',         'value' => (float) $disk['images'],  'color' => '#0ea5e9'],
-            ['label' => 'Videos',         'value' => (float) $disk['videos'],  'color' => '#a855f7'],
-            ['label' => 'Video projects', 'value' => (float) $disk['exports'], 'color' => '#14b8a6'],
-            ['label' => 'Other storage',  'value' => (float) $disk['other'],   'color' => '#84cc16'],
-            ['label' => 'Database',       'value' => (float) $disk['db'],      'color' => '#f59e0b'],
-            ['label' => 'AI models',      'value' => (float) $disk['ai'],      'color' => '#22d3ee'],
-            ['label' => 'OS',             'value' => (float) $disk['os'],      'color' => '#64748b'],
-        ];
+        $diskSlices = array_values(array_filter([
+            ['label' => 'Free disk',        'value' => (float) $disk['free'],         'color' => '#16a34a'],
+            ['label' => 'Images',           'value' => (float) $disk['images'],       'color' => '#0ea5e9'],
+            ['label' => 'Videos',           'value' => (float) $disk['videos'],       'color' => '#a855f7'],
+            ['label' => 'Web variants',     'value' => (float) $disk['web'],          'color' => '#f97316'],
+            ['label' => 'Thumb variants',   'value' => (float) $disk['thumb'],        'color' => '#eab308'],
+            ['label' => 'Pending uploads',  'value' => (float) $disk['pending'],      'color' => '#d946ef'],
+            ['label' => 'Chat media',       'value' => (float) $disk['chat'],         'color' => '#ec4899'],
+            ['label' => 'Sample previews',  'value' => (float) $disk['previews'],     'color' => '#14b8a6'],
+            ['label' => 'Video projects',   'value' => (float) $disk['exports'],      'color' => '#84cc16'],
+            ['label' => 'Orphan thumb cache','value' => (float) $disk['orphanThumbs'],'color' => '#10b981'],
+            ['label' => 'Backups',          'value' => (float) $disk['backups'],      'color' => '#f43f5e'],
+            ['label' => 'Logs',             'value' => (float) $disk['logs'],         'color' => '#9ca3af'],
+            ['label' => 'Test runs',        'value' => (float) $disk['testruns'],     'color' => '#a8a29e'],
+            ['label' => 'Config & state',   'value' => (float) $disk['config'],       'color' => '#b45309'],
+            ['label' => 'Misc storage',     'value' => (float) $disk['misc'],         'color' => '#52525b'],
+            ['label' => 'Database',         'value' => (float) $disk['db'],           'color' => '#f59e0b'],
+            ['label' => 'AI models',        'value' => (float) $disk['ai'],           'color' => '#22d3ee'],
+            ['label' => 'OS',               'value' => (float) $disk['os'],           'color' => '#64748b'],
+        ], static fn (array $s): bool => (float) $s['value'] > 0));
     ?>
     <div class="sys-card" style="margin-top:var(--spacing-lg);">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
             <h2 style="margin:0;">Disk space</h2>
             <span class="muted" style="font-size:.85rem;">
-                <?= $diskHelpers['gb']((float) $disk['total']) ?> GB total · <?= $diskHelpers['gb']((float) $disk['free']) ?> GB free
+                <?= format_bytes((float) $disk['total']) ?> total · <?= format_bytes((float) $disk['free']) ?> free
             </span>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:center;margin-top:.75rem;">
             <div style="flex:1 1 280px;min-width:220px;max-width:280px;">
-                <?= \App\Core\Charts::pie($diskSlices, 230, 230) ?>
+                <?= \App\Core\Charts::pie($diskSlices, 230, 230, static fn (float $b): string => format_bytes($b)) ?>
             </div>
-            <div style="flex:1 1 320px;min-width:260px;">
+            <div style="flex:1 1 360px;min-width:280px;">
                 <?php foreach ($diskSlices as $slice): ?>
                     <div style="display:flex;align-items:center;gap:.6rem;margin:.45rem 0;">
                         <i style="flex:0 0 auto;width:.85rem;height:.85rem;border-radius:.2rem;background:<?= e($slice['color']) ?>;display:inline-block;"></i>
-                        <span style="flex:0 0 90px;"><?= e($slice['label']) ?></span>
+                        <span style="flex:0 0 120px;"><?= e($slice['label']) ?></span>
                         <div style="flex:1 1 auto;min-width:60px;height:.55rem;background:rgba(120,120,140,.15);border-radius:.3rem;overflow:hidden;">
                             <div style="<?= $diskHelpers['bar']((float) $slice['value']) ?>;height:100%;background:<?= e($slice['color']) ?>;"></div>
                         </div>
-                        <b style="flex:0 0 118px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;">
-                            <?= $diskHelpers['gb']((float) $slice['value']) ?> GB
+                        <b style="flex:0 0 130px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;">
+                            <?= format_bytes((float) $slice['value']) ?>
                             <span class="muted" style="font-size:.8rem;">(<?= number_format((float) $slice['value'] / (float) $disk['total'] * 100, 1) ?>%)</span>
                         </b>
                     </div>
                 <?php endforeach; ?>
                 <p class="muted" style="margin:.6rem 0 0;font-size:.85rem;">
-                    OS = the operating system and the app code itself.
-                    Other storage = the site's non-media data: photo thumb/web variants,
-                    pending + orphaned uploads, chat media, logs, mail outbox, themes, cron state, scratch files.
-                    Video projects = exported editor files staged under storage/uploads/exports.
-                    AI models = the self-hosted Ollama model library plus uploaded LoRA adapters.
+                    Images/Videos = original uploads; Web/Thumb variants = the generated display copies.
+                    Pending uploads, chat media, sample previews, video projects, orphan thumb cache,
+                    logs, test runs and config/state are separate site-storage slices.
+                    OS = the operating system and app code. A slice only appears once it holds data.
                 </p>
             </div>
         </div>

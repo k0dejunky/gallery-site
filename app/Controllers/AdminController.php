@@ -499,7 +499,10 @@ class AdminController extends Controller
         $free  = @disk_free_space($root);
 
         if ($total === false || $free === false) {
-            return ['total' => 0, 'free' => 0, 'images' => 0, 'videos' => 0, 'exports' => 0, 'other' => 0, 'db' => 0, 'ai' => 0, 'os' => 0];
+            return ['total' => 0, 'free' => 0, 'images' => 0, 'videos' => 0, 'web' => 0, 'thumb' => 0,
+                    'exports' => 0, 'pending' => 0, 'chat' => 0, 'previews' => 0, 'orphanThumbs' => 0,
+                    'logs' => 0, 'testruns' => 0, 'config' => 0, 'misc' => 0,
+                    'backups' => 0, 'db' => 0, 'ai' => 0, 'os' => 0];
         }
 
         $uploads = (string) config('app.uploads.dir');
@@ -517,6 +520,20 @@ class AdminController extends Controller
                 $images += $size;
             }
         }
+
+        // Generated photo variants live in the uploads root as thumb_/web_
+        // prefixed files (plus their .webp copies) — a separate slice each.
+        $prefixBytes = static function (string $dir, string $prefix): float {
+            $total = 0.0;
+            foreach (glob($dir . '/' . $prefix . '*') ?: [] as $file) {
+                if (is_file($file)) {
+                    $total += (float) filesize($file);
+                }
+            }
+            return $total;
+        };
+        $web   = $prefixBytes($uploads, 'web_');
+        $thumb = $prefixBytes($uploads, 'thumb_');
 
         // The backup archive directory (.tar.gz chunks and .sql.gz dumps).
         $backupDir = $root . '/storage/backups';
@@ -546,32 +563,63 @@ class AdminController extends Controller
         $trainingBytes = $this->dirSize($root . '/storage/training');
         $ai = $this->aiStorageBytes() + $trainingBytes;
 
-        // Video project exports (storage/uploads/exports/) get their own slice.
-        $exports = $this->dirSize($uploads . '/exports');
+        // Each distinct storage area gets its own pie slice.
+        $storage = $root . '/storage';
+        $exports      = $this->dirSize($uploads . '/exports');      // video project exports
+        $pending      = $this->dirSize($uploads . '/pending');      // staged uploads
+        $chat         = $this->dirSize($uploads . '/chat');         // chat attachment media
+        $previews     = $this->dirSize($uploads . '/previews');     // public video sample clips
+        $orphanThumbs = $this->dirSize($uploads . '/orphan-thumbs'); // orphan viewer cache
+        $logs         = $this->dirSize($storage . '/logs');
+        $testruns     = $this->dirSize($storage . '/testruns');
+        $config       = $this->dirSize($storage . '/cron')
+                      + $this->dirSize($storage . '/scripts')
+                      + $this->dirSize($storage . '/cache')
+                      + $this->dirSize($storage . '/mail-outbox')
+                      + $this->dirSize($storage . '/themes')
+                      + $this->dirSize($storage . '/live-recordings')
+                      + $this->dirSize($storage . '/tmp');
 
-        // Everything else the site stores that isn't media/backups/db/AI:
-        // photo thumb/web variants, pending + orphaned uploads, chat media,
-        // logs, mail outbox, themes, cron state, scratch files. Keeping it out
-        // of the OS slice stops OS from being inflated by site data.
-        $otherStorage = max(0,
-            $this->dirSize($root . '/storage')
-            - $images - $videos - $backups - $exports - $trainingBytes
-        );
+        // Root-level config/state JSON files in storage (site_config.json,
+        // autoposter.json, emailer.json, chat.json, theme files, ...).
+        foreach (glob($storage . '/*.json') ?: [] as $file) {
+            if (is_file($file)) {
+                $config += (float) filesize($file);
+            }
+        }
+
+        // Safety net: any storage bytes not attributed above (unknown dirs or
+        // stray files) so the pie always reconciles back to the real totals.
+        $named = $images + $videos + $web + $thumb + $exports + $pending + $chat
+               + $previews + $orphanThumbs + $backups + $logs + $testruns
+               + $config + $trainingBytes;
+        $misc  = max(0, $this->dirSize($storage) - $named);
 
         $used = $total - $free;
-        $os   = max(0, $used - $images - $videos - $backups - $db - $ai - $exports - $otherStorage);
+        $os   = max(0, $used - $images - $videos - $web - $thumb - $exports - $pending
+                      - $chat - $previews - $orphanThumbs - $backups - $logs - $testruns
+                      - $config - $misc - $db - $ai);
 
         return [
-            'total'   => (float) $total,
-            'free'    => (float) $free,
-            'images'  => (float) $images,
-            'videos'  => (float) $videos,
-            'exports' => $exports,
-            'other'   => (float) $otherStorage,
-            'backups' => $backups,
-            'db'      => (float) $db,
-            'ai'      => (float) $ai,
-            'os'      => (float) $os,
+            'total'        => (float) $total,
+            'free'         => (float) $free,
+            'images'       => (float) $images,
+            'videos'       => (float) $videos,
+            'web'          => $web,
+            'thumb'        => $thumb,
+            'exports'      => $exports,
+            'pending'      => $pending,
+            'chat'         => $chat,
+            'previews'     => $previews,
+            'orphanThumbs' => $orphanThumbs,
+            'logs'         => $logs,
+            'testruns'     => $testruns,
+            'config'       => $config,
+            'misc'         => $misc,
+            'backups'      => $backups,
+            'db'           => (float) $db,
+            'ai'           => (float) $ai,
+            'os'           => (float) $os,
         ];
     }
 

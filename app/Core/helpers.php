@@ -576,6 +576,26 @@ function slugify(string $text, ?int $max = null, ?string $fallback = null): stri
 }
 
 /**
+ * Human-readable byte size in the largest unit where the value is at least
+ * one (B, KB, MB, GB, TB, PB). e.g. 3,563,759,256 -> "3.3 GB",
+ * 193,044,375 -> "184.1 MB", 4,600 -> "4.5 KB", 900 -> "900 B".
+ */
+function format_bytes(float|int $bytes, int $precision = 1): string
+{
+    $bytes = max(0, (float) $bytes);
+    $units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+
+    if ($bytes < 1024) {
+        return number_format($bytes, 0) . ' B';
+    }
+
+    $i = (int) floor(log($bytes, 1024));
+    $i = min($i, count($units) - 1);
+
+    return number_format($bytes / (1024 ** $i), $precision) . ' ' . $units[$i];
+}
+
+/**
  * Read a value from the config files under /config. The key is dotted, e.g.
  * 'app.uploads.thumb_width' -> config/app.php -> uploads -> thumb_width.
  */

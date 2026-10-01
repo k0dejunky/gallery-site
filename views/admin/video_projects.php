@@ -10,13 +10,7 @@ $exportStatusLabel = static function (string $status): string {
     $map = ['queued' => 'Queued', 'running' => 'Running', 'completed' => 'Completed', 'failed' => 'Failed'];
     return $map[$status] ?? ucfirst($status);
 };
-$formatBytes = static function (?int $bytes): string {
-    if ($bytes === null || $bytes < 0) return '-';
-    if ($bytes >= 1073741824) return number_format($bytes / 1073741824, 2) . ' GB';
-    if ($bytes >= 1048576) return number_format($bytes / 1048576, 1) . ' MB';
-    if ($bytes >= 1024) return number_format($bytes / 1024, 1) . ' KB';
-    return $bytes . ' B';
-};
+$formatBytes = static fn (?int $bytes): string => ($bytes === null || $bytes < 0) ? '-' : format_bytes($bytes);
 ?>
 <div class="subhead" style="margin-top:28px"><h2>Exported files</h2></div>
 <div class="card">
