@@ -499,7 +499,7 @@ class AdminController extends Controller
         $free  = @disk_free_space($root);
 
         if ($total === false || $free === false) {
-            return ['total' => 0, 'free' => 0, 'images' => 0, 'videos' => 0, 'db' => 0, 'ai' => 0, 'os' => 0];
+            return ['total' => 0, 'free' => 0, 'images' => 0, 'videos' => 0, 'exports' => 0, 'db' => 0, 'ai' => 0, 'os' => 0];
         }
 
         $uploads = (string) config('app.uploads.dir');
@@ -545,14 +545,18 @@ class AdminController extends Controller
         // web process, so the pie never silently shows 0.
         $ai = $this->aiStorageBytes() + $this->dirSize($root . '/storage/training');
 
+        // Video project exports (storage/uploads/exports/) get their own slice.
+        $exports = $this->dirSize($uploads . '/exports');
+
         $used = $total - $free;
-        $os   = max(0, $used - $images - $videos - $backups - $db - $ai);
+        $os   = max(0, $used - $images - $videos - $backups - $db - $ai - $exports);
 
         return [
             'total'   => (float) $total,
             'free'    => (float) $free,
             'images'  => (float) $images,
             'videos'  => (float) $videos,
+            'exports' => $exports,
             'backups' => $backups,
             'db'      => (float) $db,
             'ai'      => (float) $ai,

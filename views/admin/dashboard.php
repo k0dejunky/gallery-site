@@ -190,6 +190,7 @@
             ['label' => 'Backups',        'value' => (float) $disk['backups'], 'color' => '#f43f5e'],
             ['label' => 'Images',         'value' => (float) $disk['images'],  'color' => '#0ea5e9'],
             ['label' => 'Videos',         'value' => (float) $disk['videos'],  'color' => '#a855f7'],
+            ['label' => 'Video projects', 'value' => (float) $disk['exports'], 'color' => '#14b8a6'],
             ['label' => 'Database',       'value' => (float) $disk['db'],      'color' => '#f59e0b'],
             ['label' => 'AI models',      'value' => (float) $disk['ai'],      'color' => '#22d3ee'],
             ['label' => 'OS',             'value' => (float) $disk['os'],      'color' => '#64748b'],
@@ -223,6 +224,7 @@
                 <p class="muted" style="margin:.6rem 0 0;font-size:.85rem;">
                     OS = everything outside the site's uploads, backups and database (server, app, logs).
                     AI models = the self-hosted Ollama model library plus uploaded LoRA adapters.
+                    Video projects = exported editor files staged under storage/uploads/exports.
                 </p>
             </div>
         </div>
