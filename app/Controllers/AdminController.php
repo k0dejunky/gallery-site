@@ -499,7 +499,7 @@ class AdminController extends Controller
         $free  = @disk_free_space($root);
 
         if ($total === false || $free === false) {
-            return ['total' => 0, 'free' => 0, 'images' => 0, 'videos' => 0, 'exports' => 0, 'db' => 0, 'ai' => 0, 'os' => 0];
+            return ['total' => 0, 'free' => 0, 'images' => 0, 'videos' => 0, 'exports' => 0, 'other' => 0, 'db' => 0, 'ai' => 0, 'os' => 0];
         }
 
         $uploads = (string) config('app.uploads.dir');
@@ -543,13 +543,23 @@ class AdminController extends Controller
         // GGUF models) plus the site's uploaded LoRA adapters. Falls back to
         // the Ollama /api/tags sizes when the model dir is not readable by the
         // web process, so the pie never silently shows 0.
-        $ai = $this->aiStorageBytes() + $this->dirSize($root . '/storage/training');
+        $trainingBytes = $this->dirSize($root . '/storage/training');
+        $ai = $this->aiStorageBytes() + $trainingBytes;
 
         // Video project exports (storage/uploads/exports/) get their own slice.
         $exports = $this->dirSize($uploads . '/exports');
 
+        // Everything else the site stores that isn't media/backups/db/AI:
+        // photo thumb/web variants, pending + orphaned uploads, chat media,
+        // logs, mail outbox, themes, cron state, scratch files. Keeping it out
+        // of the OS slice stops OS from being inflated by site data.
+        $otherStorage = max(0,
+            $this->dirSize($root . '/storage')
+            - $images - $videos - $backups - $exports - $trainingBytes
+        );
+
         $used = $total - $free;
-        $os   = max(0, $used - $images - $videos - $backups - $db - $ai - $exports);
+        $os   = max(0, $used - $images - $videos - $backups - $db - $ai - $exports - $otherStorage);
 
         return [
             'total'   => (float) $total,
@@ -557,6 +567,7 @@ class AdminController extends Controller
             'images'  => (float) $images,
             'videos'  => (float) $videos,
             'exports' => $exports,
+            'other'   => (float) $otherStorage,
             'backups' => $backups,
             'db'      => (float) $db,
             'ai'      => (float) $ai,
