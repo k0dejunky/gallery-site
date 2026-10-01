@@ -1302,10 +1302,12 @@ PHP;
             if (is_dir($uploads . '/' . $file) || isset($known[$file])) {
                 continue;
             }
-            // Generated variants (thumb_/web_ prefixes) are never orphans:
-            // they derive from a canonical name and are rebuilt on demand,
-            // so deleting them here would break every thumbnail sitewide.
-            if (strpos($file, 'thumb_') === 0 || strpos($file, 'web_') === 0) {
+            // Generated variants (thumb_/web_/blur_thumb_ prefixes) are never
+            // orphans: they derive from a canonical name and are rebuilt on
+            // demand, so deleting them here would break thumbnails (and the
+            // blurred "Members-only" teaser previews) sitewide.
+            if (strpos($file, 'thumb_') === 0 || strpos($file, 'web_') === 0
+                || strpos($file, 'blur_thumb_') === 0) {
                 continue;
             }
             $orphans[] = [
@@ -1430,7 +1432,8 @@ PHP;
     private function isOrphanUpload(string $name): bool
     {
         if ($name === 'pending' || $name === 'exports'
-            || strpos($name, 'thumb_') === 0 || strpos($name, 'web_') === 0) {
+            || strpos($name, 'thumb_') === 0 || strpos($name, 'web_') === 0
+            || strpos($name, 'blur_thumb_') === 0) {
             return false;
         }
 
