@@ -505,38 +505,38 @@
 
     <!-- Orphaned files -->
     <div class="sys-card">
-        <h2>Orphaned upload files</h2>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;">
+            <h2 style="margin:0;">Orphaned upload files</h2>
+            <?php if (!empty($orphans)): ?>
+                <span class="muted" style="font-size:.85rem;">
+                    <?= number_format((int) $orphanTotal) ?> file<?= (int) $orphanTotal === 1 ? '' : 's' ?> ·
+                    <?= number_format((float) ($orphanBytes ?? 0) / 1048576, 1) ?> MB
+                </span>
+            <?php endif; ?>
+        </div>
         <?php if (empty($orphans)): ?>
-            <p class="muted">Every file in storage/uploads belongs to a photo record.</p>
+            <p class="muted" style="margin-top:.5rem;">Every file in storage/uploads belongs to a photo record.</p>
         <?php else: ?>
-            <p>
-                <?= number_format((int) $orphanTotal) ?> unreferenced file(s),
-                <?= number_format(array_sum(array_column($orphans, 'size')) / 1048576, 1) ?> MB shown.
-                Click a preview to view the full file.
-            </p>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:.75rem;margin:.5rem 0 .75rem;">
+            <p class="muted" style="margin:.5rem 0;">Click a card to view the full file in a new tab.</p>
+            <div class="media-grid">
                 <?php foreach ($orphans as $orphan): ?>
                     <?php $viewUrl = url('/admin/system/orphans/view/' . rawurlencode((string) $orphan['name'])); ?>
-                    <div style="border:1px solid var(--card-border, #e5e7eb);border-radius:8px;overflow:hidden;background:var(--card-bg);">
-                        <a href="<?= $viewUrl ?>" target="_blank" rel="noopener" style="display:block;background:#000;"
+                    <div class="media-item">
+                        <a href="<?= $viewUrl ?>" target="_blank" rel="noopener" style="position:relative;display:block;"
                            title="View <?= e((string) $orphan['name']) ?>">
                             <?php if ($orphan['type'] === 'image'): ?>
-                                <img src="<?= $viewUrl ?>?thumb=1" alt="<?= e((string) $orphan['name']) ?>" loading="lazy"
-                                     style="width:100%;height:120px;object-fit:cover;display:block;">
+                                <img src="<?= $viewUrl ?>?thumb=1" alt="<?= e((string) $orphan['name']) ?>" loading="lazy">
                             <?php elseif ($orphan['type'] === 'video'): ?>
-                                <video src="<?= $viewUrl ?>" preload="metadata" muted playsinline
-                                       style="width:100%;height:120px;object-fit:cover;display:block;background:#000;"
-                                       title="Click to play"></video>
+                                <video src="<?= $viewUrl ?>" muted preload="metadata" playsinline></video>
+                                <span style="position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:1.7rem;text-shadow:0 1px 5px rgba(0,0,0,.65);pointer-events:none;">&#9654;</span>
                             <?php else: ?>
-                                <div style="height:120px;display:flex;align-items:center;justify-content:center;color:var(--card-text-color, #6b7280);background:#f3f4f6;">&#128196; file</div>
+                                <div style="aspect-ratio:4/3;display:grid;place-items:center;background:var(--purple-900);color:var(--pink-200);font-size:1.5rem;">&#128196;</div>
                             <?php endif; ?>
                         </a>
-                        <div style="padding:.4rem .5rem;font-size:.75rem;line-height:1.4;">
-                            <div style="word-break:break-all;" title="<?= e((string) $orphan['name']) ?>"><code><?= e(mb_strimwidth((string) $orphan['name'], 0, 32, '…')) ?></code></div>
-                            <div class="muted" style="display:flex;justify-content:space-between;margin-top:.15rem;">
-                                <span><?= number_format($orphan['size'] / 1048576, 1) ?> MB</span>
-                                <a href="<?= $viewUrl ?>" target="_blank" rel="noopener">view</a>
-                            </div>
+                        <span class="media-name" title="<?= e((string) $orphan['name']) ?>"><?= e(mb_strimwidth((string) $orphan['name'], 0, 34, '…')) ?></span>
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:.25rem;">
+                            <span class="muted" style="font-size:.7rem;"><?= number_format($orphan['size'] / 1048576, 1) ?> MB</span>
+                            <a class="btn btn-sm btn-outline" href="<?= $viewUrl ?>" target="_blank" rel="noopener">View</a>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -544,26 +544,22 @@
             <?php if ($orphanPages > 1): ?>
                 <?php
                     $pageUrl = static fn (int $p): string => url('/admin/system' . ($p > 1 ? '?page=' . $p : ''));
+                    $from = max(1, (int) $orphanPage - 3);
+                    $to   = min((int) $orphanPages, (int) $orphanPage + 3);
                 ?>
-                <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem;">
-                    <span class="muted" style="font-size:.8rem;">
-                        Page <?= (int) $orphanPage ?> of <?= (int) $orphanPages ?> (<?= (int) $orphanStart ?>–<?= (int) $orphanEnd ?>)
-                    </span>
+                <div class="pagination">
                     <?php if ($orphanPage > 1): ?>
-                        <a class="btn btn-sm" href="<?= $pageUrl((int) $orphanPage - 1) ?>">&laquo; Prev</a>
+                        <a href="<?= $pageUrl((int) $orphanPage - 1) ?>">&laquo; Prev</a>
                     <?php endif; ?>
-                    <?php
-                        $from = max(1, (int) $orphanPage - 3);
-                        $to   = min((int) $orphanPages, (int) $orphanPage + 3);
-                        for ($p = $from; $p <= $to; $p++): ?>
-                            <?php if ($p === (int) $orphanPage): ?>
-                                <span style="font-weight:bold;padding:.2rem .5rem;"><?= $p ?></span>
-                            <?php else: ?>
-                                <a class="btn btn-sm" href="<?= $pageUrl($p) ?>"><?= $p ?></a>
-                            <?php endif; ?>
+                    <?php for ($p = $from; $p <= $to; $p++): ?>
+                        <?php if ($p === (int) $orphanPage): ?>
+                            <span class="current"><?= $p ?></span>
+                        <?php else: ?>
+                            <a href="<?= $pageUrl($p) ?>"><?= $p ?></a>
+                        <?php endif; ?>
                     <?php endfor; ?>
                     <?php if ($orphanPage < $orphanPages): ?>
-                        <a class="btn btn-sm" href="<?= $pageUrl((int) $orphanPage + 1) ?>">Next &raquo;</a>
+                        <a href="<?= $pageUrl((int) $orphanPage + 1) ?>">Next &raquo;</a>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>

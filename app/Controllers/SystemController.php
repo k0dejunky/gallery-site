@@ -40,6 +40,7 @@ class SystemController extends Controller
         // every unreferenced file at once.
         $orphans   = $this->orphanFiles();
         $orphanTotal = count($orphans);
+        $orphanBytes = (int) array_sum(array_column($orphans, 'size'));
         $perPage   = 12;
         $pages     = max(1, (int) ceil($orphanTotal / $perPage));
         $page      = min(max(1, (int) $this->request->query('page', 1)), $pages);
@@ -48,6 +49,7 @@ class SystemController extends Controller
         $this->viewAdmin('system', [
             'pendingDirs' => $this->pendingDirs(),
             'orphans'     => $orphanSlice,
+            'orphanBytes' => $orphanBytes,
             'orphanPage'  => $page,
             'orphanPages' => $pages,
             'orphanTotal' => $orphanTotal,
