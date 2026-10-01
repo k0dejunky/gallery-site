@@ -67,9 +67,8 @@ class VideoEditorController extends Controller
             'SELECT e.*, p.title AS project_title, ph.filename AS source_filename, u.email AS user_email
              FROM video_export_jobs e
              JOIN video_projects p ON p.id = e.project_id
-             LEFT JOIN photos ph ON ph.id = p.source_photo_id
+LEFT JOIN photos ph ON ph.id = p.source_photo_id
              LEFT JOIN users u ON u.id = p.user_id
-             WHERE e.status <> \'failed\'
              ORDER BY e.id DESC LIMIT 100'
         )->fetchAll();
         $uploadsDir = config('app.uploads')['dir'];
@@ -269,11 +268,11 @@ class VideoEditorController extends Controller
 
     public function deleteExport(int $id): void
     {
-        $job = VideoProject::exportJob($id, (int) Auth::user()['id']);
-        if ($job === null) { $this->notFound(); return; }
-
-        if (!in_array($job['status'], ['completed', 'failed'], true)) {
-            $this->redirect('/admin/video-projects');
+        // Admin-only route; deleting is not restricted to the project owner
+        // so stuck queued/running/failed exports can always be trimmed.
+        $job = Database::run('SELECT * FROM video_export_jobs WHERE id = ?', [$id])->fetch();
+        if ($job === null) {
+            $this->notFound();
             return;
         }
 
@@ -285,6 +284,10 @@ class VideoEditorController extends Controller
             }
         }
         Database::run('DELETE FROM video_export_jobs WHERE id = ?', [$id]);
+
+        AuditLog::record((int) Auth::user()['id'], 'delete', 'export', $id,
+            'Deleted export "' . (string) ($job['output_file'] ?? '') . '"', null, ['id' => $id]);
+        $this->flash('success', 'Export deleted.');
         $this->redirect('/admin/video-projects');
     }
 
