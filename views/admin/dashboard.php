@@ -181,6 +181,9 @@
         <?php endif; ?>
     <?php endif; ?>
     <?php
+        $diskHelpers = [
+            'bar' => static fn (float $f): string => 'width:' . number_format($f / (float) $disk['total'] * 100, 2) . '%;',
+        ];
         $diskSlices = array_values(array_filter([
             ['label' => 'Free disk',        'value' => (float) $disk['free'],         'color' => '#16a34a'],
             ['label' => 'Images',           'value' => (float) $disk['images'],       'color' => '#0ea5e9'],
@@ -213,12 +216,15 @@
             <div style="flex:1 1 320px;min-width:260px;max-width:320px;">
                 <?= \App\Core\Charts::pie($diskSlices, 260, 260, static fn (float $b): string => format_bytes($b)) ?>
             </div>
-            <div style="flex:1 1 420px;min-width:320px;">
+            <div style="flex:1 1 520px;min-width:380px;">
                 <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.55rem 1.5rem;align-items:center;">
                     <?php foreach ($diskSlices as $slice): ?>
                         <div style="display:flex;align-items:center;gap:.45rem;min-width:0;">
                             <i style="flex:0 0 auto;width:.75rem;height:.75rem;border-radius:.2rem;background:<?= e($slice['color']) ?>;display:inline-block;"></i>
-                            <span style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?= e($slice['label']) ?>"><?= e($slice['label']) ?></span>
+                            <span style="flex:0 0 auto;max-width:7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?= e($slice['label']) ?>"><?= e($slice['label']) ?></span>
+                            <div style="flex:1 1 auto;min-width:26px;height:.5rem;background:rgba(120,120,140,.15);border-radius:.25rem;overflow:hidden;">
+                                <div style="<?= $diskHelpers['bar']((float) $slice['value']) ?>;height:100%;background:<?= e($slice['color']) ?>;"></div>
+                            </div>
                             <b style="flex:0 0 auto;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;">
                                 <?= format_bytes((float) $slice['value']) ?>
                                 <span class="muted" style="font-size:.78rem;">(<?= number_format((float) $slice['value'] / (float) $disk['total'] * 100, 1) ?>%)</span>
