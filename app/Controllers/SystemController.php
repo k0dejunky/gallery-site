@@ -1291,12 +1291,107 @@ PHP;
             if (strpos($file, 'thumb_') === 0 || strpos($file, 'web_') === 0) {
                 continue;
             }
-            $orphans[] = ['name' => $file, 'size' => (int) filesize($uploads . '/' . $file)];
+            $orphans[] = [
+                'name' => $file,
+                'size' => (int) filesize($uploads . '/' . $file),
+                'type' => self::classifyOrphanType($uploads . '/' . $file),
+            ];
         }
 
         usort($orphans, fn (array $a, array $b): int => $b['size'] <=> $a['size']);
 
         return $orphans;
+    }
+
+    /** image / video / other — used by the system page to render previews. */
+    private static function classifyOrphanType(string $path): string
+    {
+        $mime = \sniff_mime($path);
+
+        if (str_starts_with($mime, 'image/')) {
+            return 'image';
+        }
+        if (str_starts_with($mime, 'video/')) {
+            return 'video';
+        }
+
+        // Phone uploads are sometimes stored as octet-stream even for media.
+        return is_video(basename($path)) ? 'video' : 'other';
+    }
+
+    /**
+     * Serve one orphaned upload file inline so admins can view the actual
+     * media (image or video) before deciding whether to delete it. Only files
+     * orphanFiles() would report are reachable here — never a referenced photo
+     * or a thumb_/web_ variant. Pass ?thumb=1 for a cached JPEG thumbnail.
+     */
+    public function orphanView(string $file): void
+    {
+        $name = basename($file);
+        $path = $this->storage . '/uploads/' . $name;
+
+        if ($name === '' || $name === '.' || $name === '..' || !$this->isOrphanUpload($name) || !is_file($path)) {
+            $this->notFound();
+            return;
+        }
+
+        if ($this->request->query('thumb') === '1' && str_starts_with(\sniff_mime($path), 'image/')) {
+            $this->serveOrphanThumbnail($name, $path);
+            return;
+        }
+
+        $mime = \sniff_mime($path);
+        if ($mime === '') {
+            $mime = mime_for_extension($name);
+        }
+
+        header('Content-Type: ' . $mime);
+        header('Content-Disposition: inline; filename="' . addcslashes($name, '"') . '"');
+        header('Content-Length: ' . (string) filesize($path));
+        readfile($path);
+        exit;
+    }
+
+    /** Whether $name is an unreferenced, viewable orphan in the uploads root. */
+    private function isOrphanUpload(string $name): bool
+    {
+        if ($name === 'pending' || $name === 'exports'
+            || strpos($name, 'thumb_') === 0 || strpos($name, 'web_') === 0) {
+            return false;
+        }
+
+        $known = Database::run('SELECT filename FROM photos WHERE filename = ?', [$name])->fetchColumn();
+
+        return $known === false;
+    }
+
+    /**
+     * Serve (and cache) a small JPEG thumbnail of an orphaned image so the
+     * system page grid stays light even for large photos. Falls back to the
+     * original file when a thumbnail cannot be generated.
+     */
+    private function serveOrphanThumbnail(string $name, string $path): void
+    {
+        $dir = $this->storage . '/uploads/orphan-thumbs';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+
+        $key = hash('sha1', $name . ':' . (string) filesize($path) . ':' . (string) filemtime($path));
+        $out = $dir . '/' . $key . '.jpg';
+
+        if (!is_file($out) && !create_thumbnail($path, $out, 240, 180)) {
+            $mime = \sniff_mime($path);
+            header('Content-Type: ' . ($mime ?: 'image/jpeg'));
+            header('Content-Length: ' . (string) filesize($path));
+            readfile($path);
+            exit;
+        }
+
+        header('Content-Type: ' . (\sniff_mime($out) ?: 'image/jpeg'));
+        header('Content-Length: ' . (string) filesize($out));
+        readfile($out);
+        exit;
     }
 
     public function cleanupPending(): void

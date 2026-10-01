@@ -209,6 +209,7 @@ return [
     ['GET', '/admin/system', 'SystemController@index', 'dashboard'],
     ['POST', '/admin/system/cleanup/pending', 'SystemController@cleanupPending', 'dashboard'],
     ['POST', '/admin/system/cleanup/orphans', 'SystemController@cleanupOrphans', 'dashboard'],
+    ['GET', '/admin/system/orphans/view/{file}', 'SystemController@orphanView', 'dashboard'],
     ['POST', '/admin/system/backup', 'SystemController@backupCreate', 'dashboard'],
     ['GET', '/admin/system/backups/{file}', 'SystemController@backupDownload', 'dashboard'],
     ['POST', '/admin/system/backups/{file}/delete', 'SystemController@backupDelete', 'dashboard'],

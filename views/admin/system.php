@@ -510,12 +510,34 @@
             <p class="muted">Every file in storage/uploads belongs to a photo record.</p>
         <?php else: ?>
             <p><?= count($orphans) ?> unreferenced file(s), <?= number_format(array_sum(array_column($orphans, 'size')) / 1048576, 1) ?> MB total.
-            Preview:</p>
-            <table>
-                <?php foreach (array_slice($orphans, 0, 8) as $orphan): ?>
-                    <tr><td><code><?= e($orphan['name']) ?></code></td><td><?= number_format($orphan['size'] / 1048576, 1) ?> MB</td></tr>
+            Click a preview to view the full file.</p>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:.75rem;margin:.5rem 0 .75rem;">
+                <?php foreach ($orphans as $orphan): ?>
+                    <?php $viewUrl = url('/admin/system/orphans/view/' . rawurlencode((string) $orphan['name'])); ?>
+                    <div style="border:1px solid var(--card-border, #e5e7eb);border-radius:8px;overflow:hidden;background:var(--card-bg);">
+                        <a href="<?= $viewUrl ?>" target="_blank" rel="noopener" style="display:block;background:#000;"
+                           title="View <?= e((string) $orphan['name']) ?>">
+                            <?php if ($orphan['type'] === 'image'): ?>
+                                <img src="<?= $viewUrl ?>?thumb=1" alt="<?= e((string) $orphan['name']) ?>" loading="lazy"
+                                     style="width:100%;height:120px;object-fit:cover;display:block;">
+                            <?php elseif ($orphan['type'] === 'video'): ?>
+                                <video src="<?= $viewUrl ?>" preload="metadata" muted playsinline
+                                       style="width:100%;height:120px;object-fit:cover;display:block;background:#000;"
+                                       title="Click to play"></video>
+                            <?php else: ?>
+                                <div style="height:120px;display:flex;align-items:center;justify-content:center;color:var(--card-text-color, #6b7280);background:#f3f4f6;">&#128196; file</div>
+                            <?php endif; ?>
+                        </a>
+                        <div style="padding:.4rem .5rem;font-size:.75rem;line-height:1.4;">
+                            <div style="word-break:break-all;" title="<?= e((string) $orphan['name']) ?>"><code><?= e(mb_strimwidth((string) $orphan['name'], 0, 32, '…')) ?></code></div>
+                            <div class="muted" style="display:flex;justify-content:space-between;margin-top:.15rem;">
+                                <span><?= number_format($orphan['size'] / 1048576, 1) ?> MB</span>
+                                <a href="<?= $viewUrl ?>" target="_blank" rel="noopener">view</a>
+                            </div>
+                        </div>
+                    </div>
                 <?php endforeach; ?>
-            </table>
+            </div>
             <form class="sys-actions" method="post" action="<?= url('/admin/system/cleanup/orphans') ?>"
                   onsubmit="return confirm('Delete all <?= count($orphans) ?> orphaned files permanently?');">
                 <?= csrf_field() ?>
