@@ -11,7 +11,6 @@ $pictureBlank = 'data:image/svg+xml;utf8,' . rawurlencode(
 $guestSide = $guestSide === 'videos' ? 'videos' : 'pics';
 $source = $guestSide === 'videos' ? $recentVideos : $recentImages;
 $isVideo = $guestSide === 'videos';
-$heading = $guestSide === 'videos' ? 'Recent Videos' : 'Recent Pictures';
 
 $items = [];
 foreach ($source as $photo) {
@@ -27,7 +26,6 @@ foreach ($source as $photo) {
 ?>
 <?php if ($items !== []): ?>
 <section class="guest-teaser">
-    <h2 class="section-title"><?= e($heading) ?></h2>
     <div class="guest-grid" data-guest-grid<?= !empty($guestMaxRows) ? ' data-max-rows="' . (int) $guestMaxRows . '"' : '' ?>>
         <?php foreach ($items as $item): ?>
             <div class="card recent-card">
