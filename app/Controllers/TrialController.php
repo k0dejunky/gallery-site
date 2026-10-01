@@ -26,6 +26,6 @@ class TrialController extends Controller
             return;
         }
 
-        $this->redirect('/signup?promo=' . rawurlencode($code));
+        $this->redirect('/signup/' . rawurlencode($code));
     }
 }

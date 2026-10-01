@@ -57,6 +57,7 @@ return [
     ['POST', '/login/2fa', 'AuthController@twoFactorVerify'],
     ['GET', '/signup', 'AuthController@signupForm'],
     ['POST', '/signup', 'AuthController@signup'],
+    ['GET', '/signup/{code}', 'AuthController@signupForm'],
     ['GET', '/trial/{code}', 'TrialController@redeem'],
     ['GET', '/verify-email', 'AuthController@verifyEmail'],
     ['POST', '/verify-email/resend', 'AuthController@resendVerification'],

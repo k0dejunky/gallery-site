@@ -86,7 +86,7 @@
     <thead><tr><th>Link</th><th>Level</th><th>Days</th><th>Uses</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
     <tbody>
     <?php foreach ($trialLinks as $tl): ?>
-        <?php $linkUrl = absolute_url('/trial/' . rawurlencode($tl['code'])); ?>
+        <?php $linkUrl = absolute_url('/signup/' . rawurlencode($tl['code'])); ?>
         <tr>
             <td style="white-space:nowrap;"><code><?= e($tl['code']) ?></code> <a class="btn btn-sm btn-outline" style="font-size:.75rem;" href="#" onclick="var i=document.createElement('input');i.value='<?= e($linkUrl) ?>';document.body.appendChild(i);i.select();document.execCommand('copy');i.remove();this.textContent='Copied';return false;">Copy link</a></td>
             <td><?= e(\App\Models\TrialLink::levelLabel((int) $tl['level'])) ?></td>

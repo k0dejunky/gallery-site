@@ -143,9 +143,11 @@ class AuthController extends Controller
 
     /**
      * The signup form. Mirrors the login page theme, including a preview of
-     * the most recent uploads.
+     * the most recent uploads. Accepts an optional promo code as the last URL
+     * path segment (…/signup/CODE) or a ?promo= query param, which pre-fills
+     * the promotion-code box so trial links land here ready to go.
      */
-    public function signupForm(): void
+    public function signupForm(?string $code = null): void
     {
         if (Auth::check()) {
             $this->redirect(Auth::homePath() . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
@@ -153,10 +155,11 @@ class AuthController extends Controller
 
         PageVisit::record('signup', $this->request->ip());
 
-        // A /trial/{code} link pre-fills the promotion-code box; validate it so
-        // the form can show whether the promo is good to go (it is only
-        // consumed when the signup actually happens).
-        $promo     = trim((string) $this->request->query('promo', ''));
+        // A trial link (…/signup/CODE or the legacy /trial/CODE, which
+        // redirects here) pre-fills the promotion-code box; validate it so the
+        // form can show whether the promo is good to go (it is only consumed
+        // when the signup actually happens).
+        $promo     = $code !== null && $code !== '' ? trim($code) : trim((string) $this->request->query('promo', ''));
         $promoInfo = null;
         if ($promo !== '') {
             $link = TrialLink::redeemable($promo);
