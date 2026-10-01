@@ -22,6 +22,8 @@
     .sys-api-table .ap-status-col { width: 6.5rem; }
     .sys-api-table .ap-summary-col { width: 50%; }
     .sys-api-table .ap-test-col { width: 5.5rem; white-space: nowrap; text-align: right; }
+    /* Orphan grid AJAX paging keeps the scroll position; dim while loading */
+    #orphan-results.is-loading { opacity: .55; pointer-events: none; transition: opacity .15s; }
 </style>
 
 <?php if ($diskFree !== false && !empty($diskTotal) && (float) $diskTotal > 0): ?>
@@ -518,51 +520,7 @@
             <p class="muted" style="margin-top:.5rem;">Every file in storage/uploads belongs to a photo record.</p>
         <?php else: ?>
             <p class="muted" style="margin:.5rem 0;">Click a card to view the full file in a new tab.</p>
-            <div class="media-grid">
-                <?php foreach ($orphans as $orphan): ?>
-                    <?php $viewUrl = url('/admin/system/orphans/view/' . rawurlencode((string) $orphan['name'])); ?>
-                    <div class="media-item">
-                        <a href="<?= $viewUrl ?>" target="_blank" rel="noopener" style="position:relative;display:block;"
-                           title="View <?= e((string) $orphan['name']) ?>">
-                            <?php if ($orphan['type'] === 'image' || $orphan['type'] === 'video'): ?>
-                                <img src="<?= $viewUrl ?>?thumb=1" alt="<?= e((string) $orphan['name']) ?>" loading="lazy">
-                                <?php if ($orphan['type'] === 'video'): ?>
-                                    <span style="position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:1.7rem;text-shadow:0 1px 5px rgba(0,0,0,.65);pointer-events:none;">&#9654;</span>
-                                <?php endif; ?>
-                            <?php else: ?>
-                                <div style="aspect-ratio:4/3;display:grid;place-items:center;background:var(--purple-900);color:var(--pink-200);font-size:1.5rem;">&#128196;</div>
-                            <?php endif; ?>
-                        </a>
-                        <span class="media-name" title="<?= e((string) $orphan['name']) ?>"><?= e(mb_strimwidth((string) $orphan['name'], 0, 34, '…')) ?></span>
-                        <div style="display:flex;justify-content:space-between;align-items:center;gap:.25rem;">
-                            <span class="muted" style="font-size:.7rem;"><?= number_format($orphan['size'] / 1048576, 1) ?> MB</span>
-                            <a class="btn btn-sm btn-outline" href="<?= $viewUrl ?>" target="_blank" rel="noopener">View</a>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-            <?php if ($orphanPages > 1): ?>
-                <?php
-                    $pageUrl = static fn (int $p): string => url('/admin/system' . ($p > 1 ? '?page=' . $p : ''));
-                    $from = max(1, (int) $orphanPage - 3);
-                    $to   = min((int) $orphanPages, (int) $orphanPage + 3);
-                ?>
-                <div class="pagination">
-                    <?php if ($orphanPage > 1): ?>
-                        <a href="<?= $pageUrl((int) $orphanPage - 1) ?>">&laquo; Prev</a>
-                    <?php endif; ?>
-                    <?php for ($p = $from; $p <= $to; $p++): ?>
-                        <?php if ($p === (int) $orphanPage): ?>
-                            <span class="current"><?= $p ?></span>
-                        <?php else: ?>
-                            <a href="<?= $pageUrl($p) ?>"><?= $p ?></a>
-                        <?php endif; ?>
-                    <?php endfor; ?>
-                    <?php if ($orphanPage < $orphanPages): ?>
-                        <a href="<?= $pageUrl((int) $orphanPage + 1) ?>">Next &raquo;</a>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
+            <?php require __DIR__ . '/partials/orphans_grid.php'; ?>
             <form class="sys-actions" method="post" action="<?= url('/admin/system/cleanup/orphans') ?>"
                   onsubmit="return confirm('Delete all <?= (int) $orphanTotal ?> orphaned files permanently?');">
                 <?= csrf_field() ?>
@@ -570,6 +528,57 @@
             </form>
         <?php endif; ?>
     </div>
+
+    <script>
+        (function () {
+            var results = document.getElementById('orphan-results');
+            if (!results) return;
+
+            var loading = false;
+
+            function currentPage() {
+                var p = parseInt(new URL(window.location.href).searchParams.get('page') || '1', 10);
+                return isNaN(p) || p < 1 ? 1 : p;
+            }
+
+            function loadPage(page) {
+                if (loading || page < 1) return;
+                loading = true;
+                results.classList.add('is-loading');
+                fetch(results.dataset.url + '?page=' + encodeURIComponent(page))
+                    .then(function (r) { return r.text(); })
+                    .then(function (html) {
+                        var tmp = document.createElement('div');
+                        tmp.innerHTML = html;
+                        var fresh = tmp.querySelector('#orphan-results');
+                        if (fresh) {
+                            results.replaceWith(fresh);
+                            results = fresh;
+                        }
+                        var u = new URL(window.location.href);
+                        if (page > 1) { u.searchParams.set('page', String(page)); }
+                        else { u.searchParams.delete('page'); }
+                        history.pushState({ orphanPage: page }, '', u.toString());
+                        loading = false;
+                    })
+                    .catch(function () {
+                        loading = false;
+                        window.location.href = results.dataset.url.slice(0, -'/orphans/page'.length) + (page > 1 ? '?page=' + page : '');
+                    });
+            }
+
+            document.addEventListener('click', function (e) {
+                var link = e.target && e.target.closest ? e.target.closest('#orphan-results .pagination a[data-page]') : null;
+                if (!link) return;
+                e.preventDefault();
+                loadPage(parseInt(link.getAttribute('data-page'), 10));
+            });
+
+            window.addEventListener('popstate', function () {
+                loadPage(currentPage());
+            });
+        })();
+    </script>
 
     <!-- Backups -->
     <div class="sys-card">

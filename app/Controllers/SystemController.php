@@ -1492,6 +1492,33 @@ PHP;
         exit;
     }
 
+    /**
+     * Render just the orphan grid + pagination fragment for one page, used by
+     * the system page's AJAX paging so the browser keeps its scroll position
+     * when moving between pages (instead of a full page reload).
+     */
+    public function orphansPage(): void
+    {
+        $orphans   = $this->orphanFiles();
+        $total     = count($orphans);
+        $perPage   = 12;
+        $pages     = max(1, (int) ceil($total / $perPage));
+        $page      = min(max(1, (int) $this->request->query('page', 1)), $pages);
+
+        $this->renderOrphansFragment([
+            'orphans'     => array_slice($orphans, ($page - 1) * $perPage, $perPage),
+            'orphanPage'  => $page,
+            'orphanPages' => $pages,
+        ]);
+    }
+
+    private function renderOrphansFragment(array $data): void
+    {
+        extract($data);
+        require __DIR__ . '/../../views/admin/partials/orphans_grid.php';
+        exit;
+    }
+
     public function cleanupPending(): void
     {
         $base  = realpath($this->storage . '/uploads/pending');
