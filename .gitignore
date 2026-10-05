@@ -48,3 +48,7 @@ storage/chat.json
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Backup archives (never commit)
+/storage/backups/
+/storage/cron/

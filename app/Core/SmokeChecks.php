@@ -1236,6 +1236,472 @@ class SmokeChecks
             return $count > 0 ? ['pass' => true, 'detail' => $count . ' smoke tests exposed'] : ['pass' => false, 'detail' => 'smoke checks missing from TestSuite registry'];
         });
 
+        // --------------------------------------------------- Web analytics
+        $analyticsFiles = [
+            'app/Core/AccessLogParser.php',
+            'app/Core/AccessLogAggregator.php',
+            'app/Models/WebStats.php',
+            'app/Controllers/AnalyticsController.php',
+            'views/admin/web-stats.php',
+            'bin/aggregate_access_log.php',
+            'database/migrations/053_web_stats.sql',
+            'tests/fixtures/access-log.sample',
+        ];
+        $missingAnalytics = array_values(array_filter(
+            $analyticsFiles,
+            static fn (string $rel): bool => !is_file($root . '/' . $rel)
+        ));
+        $add('smoke.analytics.files', 'Smoke · Web analytics', 'Analytics files present', static function () use ($missingAnalytics, $ok, $bad): array {
+            return $missingAnalytics === []
+                ? $ok('parser, aggregator, model, controller, view, CLI, migration and fixture all present')
+                : $bad('missing analytics files: ' . implode(', ', $missingAnalytics));
+        });
+        $add('smoke.analytics.routes', 'Smoke · Web analytics', 'Analytics routes + permission registered', static function () use ($root, $routesSrc, $ok, $bad): array {
+            $auth = (string) file_get_contents("$root/app/Core/Auth.php");
+
+            return strpos($routesSrc, "'/admin/analytics'") !== false
+                && strpos($routesSrc, "'/admin/analytics/reparse'") !== false
+                && strpos($routesSrc, "'/admin/analytics/export'") !== false
+                && strpos($routesSrc, "'analytics'") !== false
+                && strpos($auth, "'analytics'") !== false
+                ? $ok('index/reparse/export routed and gated behind the analytics permission')
+                : $bad('routes.php must register /admin/analytics, /admin/analytics/reparse and /admin/analytics/export with the analytics permission, and Auth::PERMISSIONS must grant it');
+        });
+        $migration = $read("$root/database/migrations/053_web_stats.sql");
+        $schemaSql = $read("$root/schema.sql");
+        $add('smoke.analytics.schema', 'Smoke · Web analytics', 'All nine rollup tables migrated and mirrored in schema.sql', static function () use ($migration, $schemaSql, $ok, $bad): array {
+            $tables = [
+                'web_stats_daily', 'web_stats_hourly', 'web_stats_urls', 'web_stats_referrers',
+                'web_stats_agents', 'web_stats_status', 'web_stats_filetypes', 'web_stats_ips', 'web_visits',
+            ];
+            $missing = [];
+            foreach ($tables as $table) {
+                if (stripos($migration, "CREATE TABLE IF NOT EXISTS {$table}") === false
+                    || stripos($schemaSql, "CREATE TABLE IF NOT EXISTS {$table}") === false) {
+                    $missing[] = $table;
+                }
+            }
+
+            return $missing === []
+                ? $ok(count($tables) . ' tables in the migration and in schema.sql')
+                : $bad('missing web stats tables in migration or schema.sql: ' . implode(', ', $missing));
+        });
+        $add('smoke.analytics.bot_split', 'Smoke · Web analytics', 'Human and robot traffic are stored side by side', static function () use ($root, $ok, $bad): array {
+            $parser = (string) file_get_contents("$root/app/Core/AccessLogParser.php");
+            $model  = (string) file_get_contents("$root/app/Models/WebStats.php");
+
+            foreach (['human_hits', 'bot_hits', 'page_views', 'bot_page_views'] as $column) {
+                if (strpos($parser, $column) === false || strpos($model, $column) === false) {
+                    return $bad("column {$column} must be written by the parser and read by WebStats");
+                }
+            }
+
+            return $ok('hits, page views, referrers, agents and per-IP rows all carry a robot split');
+        });
+
+        // --- Behavioural: the parser is pure, so the fixture can be asserted
+        //     without a database (the smoke suite must stay DB-free).
+        $fixture = "$root/tests/fixtures/access-log.sample";
+        $add('smoke.analytics.parser_fixture', 'Smoke · Web analytics', 'Parser folds the fixture into the expected daily numbers', static function () use ($fixture, $ok, $bad): array {
+            if (!is_file($fixture)) {
+                return $bad('missing fixture: tests/fixtures/access-log.sample');
+            }
+
+            $lines  = file($fixture, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+            $result = AccessLogParser::parse($lines, ['base_path' => '/gallery', 'timezone' => 'UTC']);
+
+            $expect = [
+                '2026-10-04' => ['hits' => 16, 'human_hits' => 10, 'bot_hits' => 6, 'page_views' => 6, 'bot_page_views' => 4, 'asset_hits' => 4, 'api_hits' => 2],
+                '2026-10-05' => ['hits' => 1, 'human_hits' => 1, 'bot_hits' => 0, 'page_views' => 1, 'bot_page_views' => 0, 'asset_hits' => 0, 'api_hits' => 0],
+            ];
+
+            if (count($result['days']) !== 2) {
+                return $bad('expected 2 days, got ' . count($result['days']));
+            }
+            foreach ($expect as $day => $counters) {
+                foreach ($counters as $column => $value) {
+                    $actual = (int) ($result['days'][$day][$column] ?? -1);
+                    if ($actual !== $value) {
+                        return $bad("{$day}.{$column} is {$actual}, expected {$value}");
+                    }
+                }
+            }
+
+            $hits = $result['days']['2026-10-04']['hits'] + $result['days']['2026-10-05']['hits'];
+            $pv   = $result['days']['2026-10-04']['page_views'] + $result['days']['2026-10-05']['page_views'];
+            $bv   = $result['days']['2026-10-04']['bot_page_views'] + $result['days']['2026-10-05']['bot_page_views'];
+            if ($hits !== $pv + $bv + 4 + 2) {
+                return $bad("page views ({$pv} human + {$bv} robot) plus assets and API must reconcile with {$hits} hits");
+            }
+            if ((int) $result['skipped'] !== 2) {
+                return $bad('expected 2 unparseable lines, got ' . (int) $result['skipped']);
+            }
+            if ((int) $result['lines'] !== 21) {
+                return $bad('expected 21 log lines, got ' . (int) $result['lines']);
+            }
+
+            return $ok('2 days, 17 public hits (2 private dropped, 2 unparseable), 13 visits');
+        });
+        $add('smoke.analytics.parser_stream_matches_parse', 'Smoke · Web analytics', 'Streaming parser agrees with the whole-file parser', static function () use ($fixture, $ok, $bad): array {
+            if (!is_file($fixture)) {
+                return $bad('missing fixture: tests/fixtures/access-log.sample');
+            }
+
+            $lines  = file($fixture, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+            $options = ['base_path' => '/gallery', 'timezone' => 'UTC'];
+            $whole   = AccessLogParser::parse($lines, $options);
+
+            // The callback receives that day's whole accumulator (days/hours/
+            // urls/... are still keyed by date inside it), so the row for the
+            // day being flushed lives at $accumulator['days'][$key].
+            $streamed = [];
+            $totals   = AccessLogParser::streamByDay($lines, $options, static function (array $day, string $key) use (&$streamed): void {
+                $streamed[$key] = $day['days'][$key] ?? [];
+            });
+
+            if (array_keys($whole['days']) !== array_keys($streamed)) {
+                return $bad('streamed days (' . implode(',', array_keys($streamed)) . ') differ from parsed days');
+            }
+            foreach ($whole['days'] as $day => $counters) {
+                foreach (['hits', 'human_hits', 'bot_hits', 'page_views', 'bot_page_views', 'asset_hits', 'api_hits', 'bytes'] as $column) {
+                    if ((int) ($counters[$column] ?? 0) !== (int) ($streamed[$day][$column] ?? -1)) {
+                        return $bad("{$column} differs on {$day}: parsed {$counters[$column]}, streamed " . ($streamed[$day][$column] ?? 'missing'));
+                    }
+                }
+            }
+            if ($totals['lines'] !== (int) $whole['lines'] || $totals['skipped'] !== (int) $whole['skipped']) {
+                return $bad('stream totals differ from parse totals');
+            }
+
+            return $ok($totals['days'] . ' days streamed with identical counts');
+        });
+        $add('smoke.analytics.base_path_boundary', 'Smoke · Web analytics', 'Base path is only stripped on a segment boundary', static function () use ($ok, $bad): array {
+            $cases = [
+                ['/gallery/photos/12', '/photos/12'],
+                ['/gallery', '/'],
+                ['/galleries/list', '/galleries/list'],
+                ['/gallery-studio', '/gallery-studio'],
+            ];
+            foreach ($cases as [$target, $expected]) {
+                $actual = AccessLogParser::normalizeUrl($target, '/gallery');
+                if ($actual !== $expected) {
+                    return $bad("normalizeUrl({$target}) is {$actual}, expected {$expected}");
+                }
+            }
+
+            return $ok('"/galleries" and "/gallery-studio" keep their prefix');
+        });
+        $add('smoke.analytics.self_referral', 'Smoke · Web analytics', 'Self-referrals count as direct traffic', static function () use ($ok, $bad): array {
+            $self = 'amethyst2213.com';
+            $internal = [
+                'https://amethyst2213.com/gallery/photos/1',
+                'https://www.amethyst2213.com/',
+                'https://amethyst2213.com./x',
+            ];
+            foreach ($internal as $referrer) {
+                if (AccessLogParser::referrerHost($referrer, $self) !== '') {
+                    return $bad("self-referrer {$referrer} was credited as an external source");
+                }
+            }
+            // The host is kept exactly as sent (lower-cased) so "google.com" and
+            // "news.google.com" stay distinguishable; only self-referrals fold.
+            if (AccessLogParser::referrerHost('https://www.google.com/search?q=gallery', $self) !== 'www.google.com') {
+                return $bad('a real external referrer must be kept as its own host');
+            }
+            if (AccessLogParser::referrerHost('-', $self) !== '') {
+                return $bad('"-" is direct traffic');
+            }
+
+            return $ok('internal referrals fold into the direct bucket');
+        });
+        $add('smoke.analytics.rotated_discovery', 'Smoke · Web analytics', 'Rotated logs are discovered oldest-first', static function () use ($ok, $bad): array {
+            $dir = sys_get_temp_dir() . '/gallery-analytics-rot';
+            if (!is_dir($dir) && !@mkdir($dir, 0777, true) && !is_dir($dir)) {
+                return $bad('could not create a scratch directory for the discovery test');
+            }
+            foreach (glob($dir . '/*') ?: [] as $stale) {
+                @unlink($stale);
+            }
+
+            $names = ['access.log.2.gz', 'access.log.1', 'access.log', 'access.log.3.gz.old', 'other_vhosts_access.log'];
+            $now   = time();
+            foreach ($names as $index => $name) {
+                file_put_contents($dir . '/' . $name, '');
+            }
+            // Oldest first: the ".2.gz" is two rotations back.
+            touch($dir . '/access.log.2.gz', $now - 7200);
+            touch($dir . '/access.log.1', $now - 3600);
+            touch($dir . '/access.log', $now);
+
+            $found = array_map('basename', AccessLogAggregator::discover([$dir . '/access.log*']));
+            foreach ($names as $name) {
+                @unlink($dir . '/' . $name);
+            }
+
+            $expected = ['access.log.2.gz', 'access.log.1', 'access.log'];
+            if ($found !== $expected) {
+                return $bad('discovery returned [' . implode(', ', $found) . '], expected [' . implode(', ', $expected) . ']');
+            }
+
+            return $ok('gzip, numbered and live logs in order; .gz.old and other vhosts excluded');
+        });
+        $add('smoke.analytics.default_patterns', 'Smoke · Web analytics', 'Default patterns include rotated files', static function () use ($root, $ok, $bad): array {
+            $src = (string) file_get_contents("$root/app/Core/AccessLogAggregator.php");
+            $hasGlob = false;
+            foreach (AccessLogAggregator::DEFAULT_PATTERNS as $pattern) {
+                if (strpbrk($pattern, '*?[') !== false) {
+                    $hasGlob = true;
+                }
+            }
+
+            return $hasGlob
+                ? $ok('defaults glob the live and rotated Apache logs')
+                : $bad('AccessLogAggregator::DEFAULT_PATTERNS must glob rotations (access.log*, access_ssl.log*), or a backfill stops at the last logrotate');
+        });
+        $add('smoke.analytics.cron', 'Smoke · Web analytics', 'Hourly aggregation cron is installed', static function () use ($root, $ok, $bad): array {
+            $apply = (string) file_get_contents("$root/bin/apply_cron.php");
+            $cli   = (string) file_get_contents("$root/bin/aggregate_access_log.php");
+
+            return strpos($apply, 'gallery-web-analytics') !== false
+                && strpos($apply, 'bin/aggregate_access_log.php --days=2') !== false
+                && strpos($apply, 'web_analytics') !== false
+                && strpos($cli, 'flock') !== false
+                ? $ok('apply_cron writes the hourly entry; the CLI holds an flock so a manual run cannot overlap it')
+                : $bad('bin/apply_cron.php must install gallery-web-analytics (hourly, --days=2) and bin/aggregate_access_log.php must hold a file lock');
+        });
+        $add('smoke.analytics.cron_cadence', 'Smoke · Web analytics', 'An hourly-or-slower cadence never renders an invalid cron step', static function () use ($root, $ok, $bad): array {
+            $src = (string) file_get_contents("$root/bin/apply_cron.php");
+
+// Cron only accepts a step in the minute field, so "*/60" would make
+            // cron drop the job silently. Only the rendered entries matter; the
+            // helper itself legitimately builds a "*/N" step for sub-hour jobs.
+            $steps = [];
+            if (preg_match_all('/^\$crond\[\x27[^\x27]+\x27\]\s*=\s*\n?\s*"[^"]*\*\/\{/m', $src, $m)) {
+                $steps = $m[0];
+            }
+
+            $shared = str_contains($src, '$cronFields = static function')
+                && str_contains($src, '$waFields    = $cronFields($waMin);')
+                && str_contains($src, '$waFields[0]} {$waFields[1]}');
+
+            if ($steps !== [] || !$shared) {
+                return $bad('every cadence-based cron entry must use the shared $cronFields() renderer, not a literal */N step (offenders: ' . implode(' | ', $steps) . ')');
+            }
+
+            return $ok('hourly and slower cadences render as minute 0 plus an hour list');
+        });
+        $add('smoke.analytics.rotated_order', 'Smoke · Web analytics', 'Rotated logs are replayed oldest first even when mtime ties', static function () use ($root, $ok, $bad): array {
+            $dir = sys_get_temp_dir() . '/vs-rotated-order-' . getmypid();
+            @mkdir($dir, 0777, true);
+
+            $stamp = static function (string $name, int $when) use ($dir): void {
+                $line = sprintf(
+                    '204.0.2.1 - - [%s] "GET /%s HTTP/1.1" 200 1 "-" "-"',
+                    gmdate('d/M/Y:H:i:s O', $when),
+                    pathinfo($name, PATHINFO_FILENAME)
+                );
+                file_put_contents("{$dir}/{$name}", $line);
+                touch("{$dir}/{$name}", $when);
+            };
+
+            // One logrotate pass gives every file the same mtime; the names alone
+            // would then read .1 before .2.gz and replay the days out of order.
+            $stamp('access.log.1', 1_800_000_000);
+            $stamp('access.log.2.gz', 1_800_000_000);
+            $stamp('access.log.3', 1_800_000_000);
+
+            $order = array_map(
+                static fn (string $p): string => basename($p),
+                \App\Core\AccessLogAggregator::discover(["{$dir}/*"])
+            );
+
+            foreach (glob("{$dir}/*") ?: [] as $file) {
+                @unlink($file);
+            }
+            @rmdir($dir);
+
+            $want  = ['access.log.3', 'access.log.2.gz', 'access.log.1'];
+            $got   = implode(' ', $order);
+            $wantS = implode(' ', $want);
+
+            return $got === $wantS
+                ? $ok('rotated files replayed oldest first on a mtime tie')
+                : $bad("expected \"{$wantS}\" from discovery, got \"{$got}\"");
+        });
+        $add('smoke.analytics.case_merge', 'Smoke · Web analytics', 'Case variants of a path merge into one row instead of a duplicate-key abort', static function () use ($root, $ok, $bad): array {
+            $line = static fn (string $path): string => sprintf(
+                '%s - - [04/Oct/2026:12:00:%02d +0000] "GET %s HTTP/1.1" 200 10 "-" "Mozilla/5.0 (X11; Linux) Firefox/128.0"',
+                '198.51.100.7',
+                0,
+                $path
+            );
+
+            // Scanners hammer /.env, /.Env, /.ENV. They are separate PHP array
+            // keys but one key in the table (utf8mb4_0900_ai_ci), which killed a
+            // production backfill on a duplicate-key error.
+            $parsed = \App\Core\AccessLogParser::parse(
+                [$line('/.env'), $line('/.Env'), $line('/.ENV')],
+                ['timezone' => 'UTC']
+            );
+
+            $urls = $parsed['urls']['2026-10-04'] ?? [];
+            if (count($urls) !== 1) {
+                return $bad('the three case variants must merge into one bucket, got ' . count($urls) . ': ' . implode(', ', array_keys($urls)));
+            }
+
+            $row = reset($urls);
+            if ((int) $row['hits'] !== 3) {
+                return $bad('the merged bucket must keep counting every request, got ' . (int) $row['hits']);
+            }
+
+            $agg = (string) file_get_contents("$root/app/Core/AccessLogAggregator.php");
+            if (!str_contains($agg, 'ON DUPLICATE KEY UPDATE')) {
+                return $bad('the dimension inserts must merge on a key collision so one odd row cannot abort a day');
+            }
+
+            return $ok('case variants merge, and a residual collision merges instead of failing');
+        });
+        $add('smoke.analytics.bad_utf8', 'Smoke · Web analytics', 'Invalid UTF-8 in a request target is repaired, not dropped', static function () use ($root, $ok, $bad): array {
+            // Scanners send overlong encodings (C0 AF ...) straight at the log;
+            // MySQL rejects those with 1366 and would lose the whole day.
+            $target = "/\xC0\xAF..\xC0\xAF.env";
+            $line   = sprintf(
+                '198.51.100.9 - - [04/Oct/2026:12:00:00 +0000] "GET %s HTTP/1.1" 404 12 "http://x/" "Mozilla/5.0 (X11; Linux) Firefox/128.0"',
+                $target
+            );
+
+            $parsed = \App\Core\AccessLogParser::parse([$line], ['timezone' => 'UTC']);
+
+            if ((int) ($parsed['skipped'] ?? 1) !== 0) {
+                return $bad('a request with odd bytes must still count, not be dropped as unparseable');
+            }
+
+            $urls = $parsed['urls']['2026-10-04'] ?? [];
+            if (count($urls) !== 1) {
+                return $bad('expected the request to be stored, got ' . count($urls) . ' path(s)');
+            }
+
+            $path = (string) (reset($urls)['path'] ?? '');
+            if ($path === '' || !mb_check_encoding($path, 'UTF-8')) {
+                return $bad('the stored path must be valid UTF-8, got ' . bin2hex($path));
+            }
+            if (str_contains($path, '\xC0') || str_contains($path, "\\xAF")) {
+                return $bad('the invalid bytes survived into the stored path');
+            }
+
+            return $ok('odd bytes replaced with U+FFFD, request still counted');
+        });
+        $add('smoke.analytics.visit_day_grouping', 'Smoke · Web analytics', 'A session is written once, to the day it started on', static function () use ($root, $ok, $bad): array {
+            // A session that runs over midnight closes while the later day is
+            // being streamed, so its own day is already written by then. The
+            // aggregator used to insert the whole session buffer on every day
+            // flush, which duplicated rows and inflated days that never had
+            // that traffic (hits=1 next to 204 visits).
+            $lines = [
+                sprintf('198.51.100.20 - - [04/Oct/2026:23:58:00 +0000] "GET /a HTTP/1.1" 200 10 "http://x/" "Mozilla/5.0 (X11; Linux) Firefox/128.0"'),
+                sprintf('198.51.100.20 - - [05/Oct/2026:00:02:00 +0000] "GET /b HTTP/1.1" 200 10 "http://x/" "Mozilla/5.0 (X11; Linux) Firefox/128.0"'),
+                sprintf('198.51.100.21 - - [05/Oct/2026:00:05:00 +0000] "GET /c HTTP/1.1" 200 10 "http://x/" "Mozilla/5.0 (X11; Linux) Firefox/128.0"'),
+            ];
+
+            $visits = [];
+            $days   = [];
+
+            \App\Core\AccessLogParser::streamByDay($lines, ['timezone' => 'UTC'], static function (array $day, string $dayKey) use (&$visits, &$days): void {
+                $days[] = $dayKey;
+                foreach ($day['visits'] ?? [] as $visit) {
+                    $visits[] = $visit;
+                }
+            });
+
+            if (count($visits) !== 2) {
+                return $bad('expected 2 sessions, got ' . count($visits));
+            }
+
+            $byDay = [];
+            foreach ($visits as $visit) {
+                $byDay[(string) $visit['day']][] = $visit;
+            }
+            ksort($byDay);
+
+            if (count($byDay) !== 2 || count($byDay['2026-10-04']) !== 1 || count($byDay['2026-10-05']) !== 1) {
+                return $bad('each session must be attributed to the day it started on, got ' . json_encode(array_map('count', $byDay)));
+            }
+
+            $straddling = $byDay['2026-10-04'][0];
+            if ((int) $straddling['pages'] !== 2 || strpos((string) $straddling['last_seen'], '2026-10-05') !== 0) {
+                return $bad('the midnight session must keep both pages and its later last_seen');
+            }
+
+            // The write path has to stay a two-phase one: dimensions streamed
+            // per day, sessions written once at the end.
+            $aggregator = (string) file_get_contents("$root/app/Core/AccessLogAggregator.php");
+            if (preg_match('/private static function store\(.*?\n    \}/s', $aggregator, $m) === 1 && str_contains($m[0], 'insertVisits')) {
+                return $bad('store() must not insert sessions, they are written by finalizeVisits() once per run');
+            }
+            if (!str_contains($aggregator, 'self::finalizeVisits(')) {
+                return $bad('run() must finalize sessions after the stream');
+            }
+
+            return $ok('sessions are grouped by their own day and written once');
+        });
+        $add('smoke.analytics.export_window', 'Smoke · Web analytics', 'A range-only CSV export covers the range, not just today', static function () use ($root, $ok, $bad): array {
+            $src = (string) file_get_contents("$root/app/Controllers/AnalyticsController.php");
+
+            // Request::query() returns null for an absent key, so the old
+            // "query('from') === ''" guard was never true and every export
+            // collapsed to the single stored day regardless of the range.
+            $rereread = preg_match('/\\$this->request->query\\(\s*\'(?:from|to)\'\s*\\)\\s*===/', $src) === 1;
+
+            if ($rereread) {
+                return $bad('the export must resolve from/to once into local values and test those, not compare query() against an empty string');
+            }
+            if (!str_contains($src, "\$fromQ === '' && \$toQ === ''")) {
+                return $bad('the export range guard must compare the resolved from/to strings');
+            }
+
+            return $ok('a range-only export spans the whole range');
+        });
+        $add('smoke.analytics.private_filter', 'Smoke · Web analytics', 'Own traffic is filtered out, with an opt-in for LAN installs', static function () use ($root, $ok, $bad): array {
+            $line = static fn (string $ip): string => sprintf(
+                '%s - - [04/Oct/2026:12:00:00 +0000] "GET / HTTP/1.1" 200 10 "-" "Mozilla/5.0 (X11; Linux) Firefox/128.0"',
+                $ip
+            );
+
+            $count = static function (array $options) use ($line): int {
+                $days = \App\Core\AccessLogParser::parse([$line('192.168.1.55')], $options)['days'];
+
+                return (int) ($days['2026-10-04']['hits'] ?? 0);
+            };
+
+            $skipped = $count(['timezone' => 'UTC']);
+            $kept    = $count(['timezone' => 'UTC', 'include_private' => true]);
+            $src     = (string) file_get_contents("$root/app/Core/AccessLogAggregator.php");
+            $cli     = (string) file_get_contents("$root/bin/aggregate_access_log.php");
+
+            if ($skipped !== 0 || $kept !== 1) {
+                return $bad("a 192.168.x request must be dropped by default (got {$skipped}) and kept with include_private (got {$kept})");
+            }
+            if (strpos($src, 'ANALYTICS_INCLUDE_PRIVATE') === false || strpos($cli, '--include-private') === false) {
+                return $bad('the include_private option must be reachable from ANALYTICS_INCLUDE_PRIVATE and --include-private, or a staging box on 192.168.x shows an empty page');
+            }
+
+            return $ok('loopback/LAN traffic excluded by default, opt-in available');
+        });
+        $add('smoke.analytics.view', 'Smoke · Web analytics', 'Analytics view renders every panel', static function () use ($root, $ok, $bad): array {
+            $view = (string) file_get_contents("$root/views/admin/web-stats.php");
+            $panels = [
+                'Traffic by day', 'Hourly profile', 'Top pages', 'Where visitors came from',
+                'Entry pages', 'Visit quality', 'Browsers', 'Operating systems', 'Devices',
+                'Request types', 'HTTP status codes', 'Static file types', 'Robots',
+                'Log aggregation', 'Re-parse logs', 'Download CSV',
+            ];
+            $missing = array_values(array_filter($panels, static fn (string $needle): bool => strpos($view, $needle) === false));
+
+            return $missing === []
+                ? $ok(count($panels) . ' panels present')
+                : $bad('analytics view is missing: ' . implode(', ', $missing));
+        });
+
         $cache = $tests;
 
         return $cache;

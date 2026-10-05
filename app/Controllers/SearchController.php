@@ -88,6 +88,7 @@ class SearchController extends Controller
             ['Abandoned Uploads', '/admin/abandoned-uploads'],
             ['Search', '/admin/search'],
             ['Trends', '/admin/trends'],
+            ['Web Analytics', '/admin/analytics'],
             ['Gallery Management', '/admin/galleries'],
             ['New Gallery', '/admin/galleries/create'],
             ['Video Projects', '/admin/video-projects'],

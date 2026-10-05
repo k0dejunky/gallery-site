@@ -87,6 +87,30 @@ class HealthController extends Controller
             $stuckPhotoEdits = 0;
         }
 
+        // Analytics rollup freshness: how old the newest stored day is and
+        // whether the last run had to skip log lines. Surfaced as data only.
+        $analyticsLastRunAge = null;
+        $analyticsLastDay   = null;
+        $analyticsSkipped   = 0;
+
+        try {
+            $lastRun = Database::run(
+                'SELECT MAX(updated_at) AS updated_at, COALESCE(SUM(skipped_lines), 0) AS skipped
+                 FROM web_stats_daily'
+            )->fetch() ?: [];
+
+            $updatedAt = trim((string) ($lastRun['updated_at'] ?? ''));
+            if ($updatedAt !== '') {
+                $analyticsLastRunAge = max(0, time() - (int) strtotime($updatedAt));
+            }
+
+            $analyticsLastDay = \App\Models\WebStats::lastDayWithData();
+            $analyticsSkipped = (int) ($lastRun['skipped'] ?? 0);
+        } catch (\Throwable $error) {
+            $analyticsLastRunAge = null;
+            $analyticsLastDay   = null;
+        }
+
         try {
             $stuckVideoExports = (int) Database::run(
                 "SELECT COUNT(*) FROM video_export_jobs
@@ -115,6 +139,11 @@ class HealthController extends Controller
                 'autopost_backlog' => $autopostBacklog,
                 'stuck_photo_edits' => $stuckPhotoEdits,
                 'stuck_video_exports' => $stuckVideoExports,
+            ],
+            'analytics' => [
+                'last_run_age_sec' => $analyticsLastRunAge,
+                'last_day'         => $analyticsLastDay,
+                'skipped_lines'    => $analyticsSkipped,
             ],
             'time' => gmdate('c'),
         ], $ok ? 200 : 503);

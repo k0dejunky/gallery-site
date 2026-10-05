@@ -263,7 +263,36 @@ Recreate all three files in `/etc/cron.d/` (owner `root:root`, mode `644`):
 * * * * * www-data /usr/bin/php /var/www/gallery/bin/autopost_worker.php --once >> /var/www/gallery/storage/logs/autopost.log 2>&1
 ```
 
-These four entries are managed by the admin System page once configured: the
+`gallery-web-analytics` (hourly — folds the Apache access logs into the
+`web_stats_*` tables behind the admin "Web Analytics" page):
+```
+0 * * * * www-data /usr/bin/php /var/www/gallery/bin/aggregate_access_log.php --days=2 >> /var/www/gallery/storage/logs/web-analytics.log 2>&1
+```
+Two days, not one: the current day is still being appended to and yesterday is
+only final once logrotate retires its file, so both are re-parsed until they stop
+changing. Apache must rotate by RENAME, never `copytruncate`, or every re-parse
+would silently double-count the overlap. Debian/Ubuntu's stock
+`/etc/logrotate.d/apache2` already renames.
+
+The web user must be able to read the logs: Apache writes them
+`root:adm` mode 640, so add `www-data` to group `adm` and reload the PHP-FPM
+pools so the workers pick it up:
+```
+usermod -aG adm www-data
+systemctl reload php8.3-fpm     # or php-fpm
+```
+Then prime the history once (it keeps only what the rotated files still hold —
+15 days by default):
+```
+sudo -u www-data php /var/www/gallery/bin/aggregate_access_log.php --days=15
+```
+On a LAN/staging box every visitor arrives from 192.168.x, which the parser
+skips by default (that range is also where the site's own cron and health checks
+come from); set `ANALYTICS_INCLUDE_PRIVATE=1` in `.env` there or the page stays
+empty. Verify with `--dry-run` and the "Log aggregation" panel at the bottom of
+the analytics page (stored days, requests, unparsed lines, last update).
+
+These entries are managed by the admin System page once configured: the
 **super admin** edits schedules in "Scheduled tasks (cron) → Configure
 schedules". Saving writes `storage/cron/schedules.json`, then invokes the
 root helper `bin/apply_cron.php` to regenerate the `/etc/cron.d/` files and
@@ -353,7 +382,7 @@ on the new server are served as normal.
 | `/etc/apache2/conf-available/gallery-php-fpm.conf` | PHP-FPM handler |
 | `/etc/apache2/ssl/gallery.{crt,key}` | self-signed TLS cert |
 | `/etc/php/8.3/fpm/pool.d/www.conf` (edits) + `90-gallery-opcache.ini` | FPM tuning |
-| `/etc/cron.d/gallery-{backup,housekeeping,restore-drill}` | cron jobs |
+| `/etc/cron.d/gallery-{backup,housekeeping,restore-drill,web-analytics}` | cron jobs |
 | `/etc/postfix/vmailbox` + `/etc/dovecot/users` | virtual mailboxes (backed up before any admin Email change) |
 | `/etc/sudoers.d/gallery-mail-admin` | lets www-data run `bin/mail_admin.php` for the Email page |
 | `/var/mail/vhosts/` | mailbox Maildirs (mail data, owned vmail:mail) |

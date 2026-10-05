@@ -382,6 +382,9 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             <?php if (\App\Core\Auth::can('traffic')): ?>
                 <a class="nav-item <?= $navActive('/admin/traffic') ?>" href="<?= url('/admin/traffic') ?>" data-se-move-key="nav-traffic">Traffic</a>
             <?php endif; ?>
+            <?php if (\App\Core\Auth::can('analytics')): ?>
+                <a class="nav-item <?= $navActive('/admin/analytics') ?>" href="<?= url('/admin/analytics') ?>" data-se-move-key="nav-analytics">Web Analytics</a>
+            <?php endif; ?>
             <a class="nav-item <?= $navActive('/admin/galleries') ?>" href="<?= url('/admin/galleries') ?>" data-se-move-key="nav-galleries">Gallery Management</a>
             <a class="nav-item <?= $navActive('/admin/video-projects') ?>" href="<?= url('/admin/video-projects') ?>" data-se-move-key="nav-video-projects">Video Projects</a>
             <a class="nav-item <?= $navActive('/admin/auto-poster') ?>" href="<?= url('/admin/auto-poster') ?>" data-se-move-key="nav-auto-poster">Auto Poster</a>

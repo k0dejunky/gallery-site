@@ -56,10 +56,36 @@ $clamp = static function (int $v, int $min, int $max): int {
 $intOr = static function ($v, int $default): int {
     return \ctype_digit((string) ($v ?? '')) ? (int) $v : $default;
 };
+/**
+ * Cron minute/hour fields for an "every N minutes" cadence.
+ *
+ * A step value is only legal in the minute field, so a cadence of 60 or more is
+ * written as minute 0 plus an explicit hour list counted from midnight. Without
+ * this, an hourly job would be rendered as the invalid star-slash-60 step and
+ * cron would silently never fire it.
+ *
+ * @return array{0: string, 1: string}
+ */
+$cronFields = static function (int $minutes): array {
+    if ($minutes < 60) {
+        return ["*/{$minutes}", '*'];
+    }
+    if ($minutes >= 1440) {
+        return ['0', '0'];
+    }
+
+    $hours = [];
+    for ($h = 0; $h < 24; $h += intdiv($minutes, 60)) {
+        $hours[] = (string) $h;
+    }
+
+    return ['0', implode(',', $hours)];
+};
 $everyMin = $clamp($intOr($json['housekeeping']['every_minutes'] ?? null, 15), 1, 1440);
 $postMin  = $clamp($intOr($json['autopost'      ]['every_minutes'] ?? null, 1), 1, 1440);
 $ppMin    = $clamp($intOr($json['paypal-reconcile']['every_minutes'] ?? null, 5), 1, 1440);
 $dcMin    = $clamp($intOr($json['daily_chat'      ]['every_minutes'] ?? null, 5), 1, 1440);
+$waMin    = $clamp($intOr($json['web_analytics'   ]['every_minutes'] ?? null, 60), 5, 1440);
 $backupH  = $clamp($intOr($json['backup']['hour']   ?? null, 3), 0, 23);
 $backupM  = $clamp($intOr($json['backup']['minute'] ?? null, 0), 0, 59);
 $backupD  = $clamp($intOr($json['backup']['day_of_month'] ?? null, 1), 1, 28);
@@ -69,19 +95,24 @@ $drillD   = $clamp($intOr($json['restore-drill']['dow']      ?? null, 0), 0, 6);
 $drillH   = $clamp($intOr($json['restore-drill']['hour']     ?? null, 4), 0, 23);
 $drillM   = $clamp($intOr($json['restore-drill']['minute']   ?? null, 0), 0, 59);
 
-// --- Render the five cron.d entries --------------------------------------------
-$php      = 'www-data /usr/bin/php ' . SITE_ROOT;
-$crond    = [];
+// --- Render the cron.d entries -------------------------------------------------
+$php        = 'www-data /usr/bin/php ' . SITE_ROOT;
+$everyFields = $cronFields($everyMin);
+$ppFields    = $cronFields($ppMin);
+$postFields  = $cronFields($postMin);
+$dcFields    = $cronFields($dcMin);
+$waFields    = $cronFields($waMin);
+$crond       = [];
 $crond['gallery-housekeeping'] =
-    "*/{$everyMin} * * * * www-data curl -fsS \"http://127.0.0.1/gallery/cron/housekeeping?key={$key}\" > /dev/null 2>&1\n";
+    "{$everyFields[0]} {$everyFields[1]} * * * www-data curl -fsS \"http://127.0.0.1/gallery/cron/housekeeping?key={$key}\" > /dev/null 2>&1\n";
 $crond['gallery-paypal-reconcile'] =
-    "*/{$ppMin} * * * * {$php}/bin/paypal_reconcile.php >> " . SITE_ROOT . "/storage/logs/paypal-reconcile.log 2>&1\n";
+    "{$ppFields[0]} {$ppFields[1]} * * * {$php}/bin/paypal_reconcile.php >> " . SITE_ROOT . "/storage/logs/paypal-reconcile.log 2>&1\n";
 $crond['gallery-autopost'] =
-    "*/{$postMin} * * * * {$php}/bin/autopost_worker.php --once >> " . SITE_ROOT . "/storage/logs/autopost.log 2>&1\n";
+    "{$postFields[0]} {$postFields[1]} * * * {$php}/bin/autopost_worker.php --once >> " . SITE_ROOT . "/storage/logs/autopost.log 2>&1\n";
 $crond['gallery-emailer'] =
     "*/5 * * * * {$php}/bin/email_worker.php --once >> " . SITE_ROOT . "/storage/logs/emailer.log 2>&1\n";
 $crond['gallery-daily-chat'] =
-    "*/{$dcMin} * * * * {$php}/bin/daily_chat_worker.php --once >> " . SITE_ROOT . "/storage/logs/daily-chat.log 2>&1\n";
+    "{$dcFields[0]} {$dcFields[1]} * * * {$php}/bin/daily_chat_worker.php --once >> " . SITE_ROOT . "/storage/logs/daily-chat.log 2>&1\n";
 $crond['gallery-backup'] =
     "{$backupM} {$backupH} {$backupD} * * {$php}/bin/gallery_backup.php >> " . SITE_ROOT . "/storage/logs/backup.log 2>&1\n";
 // Daily small DB-only dump (cheap safety net on top of the monthly full
@@ -90,6 +121,12 @@ $crond['gallery-db-dump'] =
     "{$dbDumpM} {$dbDumpH} * * * {$php}/bin/gallery_backup.php --db-only >> " . SITE_ROOT . "/storage/logs/backup.log 2>&1\n";
 $crond['gallery-restore-drill'] =
     "{$drillM} {$drillH} * * {$drillD} root /usr/local/bin/restore-drill >> " . SITE_ROOT . "/storage/logs/drill.log 2>&1\n";
+// Web analytics: re-read the last two days of Apache logs and rewrite those
+// day buckets. Hourly is deliberate - a day is never final while its log file
+// is still being appended to, so yesterday is re-parsed until rotation retires
+// it. Needs www-data in group adm to read /var/log/apache2.
+$crond['gallery-web-analytics'] =
+    "{$waFields[0]} {$waFields[1]} * * * {$php}/bin/aggregate_access_log.php --days=2 >> " . SITE_ROOT . "/storage/logs/web-analytics.log 2>&1\n";
 $crond['gallery-ai-watchdog'] =
     "* * * * * root /usr/bin/php " . SITE_ROOT . "/bin/keep_ai_alive.php >> " . SITE_ROOT . "/storage/logs/ai-watchdog.log 2>&1\n";
 
@@ -107,5 +144,5 @@ foreach ($crond as $name => $content) {
 $ok($svcRc === 0, 'systemctl restart of worker services failed');
 
 // Cron daemon picks up /etc/cron.d changes automatically; nothing else to do.
-echo "apply_cron: wrote 8 /etc/cron.d entries and restarted worker services\n";
+echo "apply_cron: wrote " . count($crond) . " /etc/cron.d entries and restarted worker services\n";
 exit(0);

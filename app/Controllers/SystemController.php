@@ -720,7 +720,23 @@ class SystemController extends Controller
         $dcNote = $this->lastLineSummary($logs . '/daily-chat.log');
         $dcFresh = $dcTs !== null && ($now - $dcTs) <= 90 * 60;
 
+        [$waTs, $waAt] = $lastRun($logs . '/web-analytics.log');
+        $waNote = $this->lastLineSummary($logs . '/web-analytics.log');
+        $waEvery = (int) ($this->cronSchedule()['web_analytics']['every_minutes'] ?? 60);
+        $waOk    = $waTs !== null && ($now - $waTs) <= max(2, $waEvery * 2) * 60;
+
         $jobs = [
+            [
+                'id'       => 'web-analytics',
+                'schedule' => $waEvery >= 60
+                    ? 'every ' . intdiv($waEvery, 60) . ' hour' . ($waEvery > 60 ? 's' : '')
+                    : 'every ' . $waEvery . ' minutes',
+                'desc'     => 'Fold the Apache access logs into the web_stats_* tables and rewrite the last days',
+                'lastRun'  => $waAt,
+                'lastAgo'  => $this->relativeAge($waTs),
+                'ok'       => $waOk,
+                'note'     => $waNote,
+            ],
             [
                 'id'       => 'housekeeping',
                 'schedule' => 'every 15 minutes',
@@ -853,6 +869,7 @@ class SystemController extends Controller
             'backup'         => ['hour' => 3, 'minute' => 0, 'day_of_month' => 1],
             'db_dump'        => ['hour' => 4, 'minute' => 0],
             'restore-drill'  => ['dow' => 0, 'hour' => 4, 'minute' => 0],
+            'web_analytics'  => ['every_minutes' => 60],
         ];
         $file = $this->cronSchedulesFile();
         if (is_file($file)) {
@@ -887,7 +904,7 @@ class SystemController extends Controller
             $this->redirect('/admin/system');
         }
 
-        $valid = ['housekeeping', 'autopost', 'paypal-reconcile', 'daily-chat', 'backup', 'db-dump', 'restore-drill'];
+        $valid = ['housekeeping', 'autopost', 'paypal-reconcile', 'daily-chat', 'backup', 'db-dump', 'restore-drill', 'web-analytics'];
         if (!in_array($job, $valid, true)) {
             $this->flash('error', 'Unknown cron job.');
             $this->redirect('/admin/system');
@@ -909,6 +926,11 @@ class SystemController extends Controller
                 break;
             case 'daily-chat':
                 $sched['daily_chat'] = ['every_minutes' => $clamp((int) $req->post('cron_daily_chat_min', 5), 1, 1440)];
+                break;
+            case 'web-analytics':
+                // Hourly is the floor: a day is never final while its log file is
+                // still open, so the last days must be re-read repeatedly.
+                $sched['web_analytics'] = ['every_minutes' => $clamp((int) $req->post('cron_web_analytics_min', 60), 5, 1440)];
                 break;
             case 'backup':
                 $sched['backup'] = [
@@ -961,6 +983,7 @@ class SystemController extends Controller
             'daily-chat'      => 'Daily chat',
             'backup'          => 'Backup',
             'restore-drill'   => 'Restore drill',
+            'web-analytics'   => 'Web analytics aggregation',
         ];
         $label = $labels[$job] ?? $job;
         $schedKey = $job === 'daily-chat' ? 'daily_chat' : $job;

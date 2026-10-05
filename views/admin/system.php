@@ -368,6 +368,7 @@
         <?php else: ?>
             <?php
                 $cronCardJobs = [
+                    'web-analytics'  => ['Web analytics', 'Fold the Apache access logs into the web_stats_* tables (yesterday is re-read until logrotate retires it)'],
                     'housekeeping'   => ['Housekeeping', 'Expire overdue subscriptions, purge stale staging dirs, prune old backups, snapshot storage'],
                     'autopost'       => ['Auto-poster', 'Publish queued auto-posts to X/Reddit once their scheduled time passes'],
                     'paypal-reconcile' => ['PayPal reconciliation', 'Auto-approve paid PayPal memberships by confirming their status with PayPal'],
@@ -381,6 +382,7 @@
                     $cronCardStates[$cronJob['id']] = $cronJob;
                 }
                 $cronMinFields = [
+                    'web-analytics'  => 'cron_web_analytics_min',
                     'housekeeping'   => 'cron_housekeeping_min',
                     'autopost'       => 'cron_autopost_min',
                     'paypal-reconcile' => 'cron_paypal_reconcile_min',
@@ -414,12 +416,14 @@
                             <form method="post" action="<?= url('/admin/system/cron-schedule/' . e($cronCardId)) ?>">
                                 <?= csrf_field() ?>
                                 <div class="cron-fields">
-                                    <?php if ($cronCardId === 'housekeeping' || $cronCardId === 'autopost' || $cronCardId === 'paypal-reconcile' || $cronCardId === 'daily-chat'): ?>
+                                    <?php if (isset($cronMinFields[$cronCardId])): ?>
                                         every
-                                        <input type="number" name="<?= e($cronMinFields[$cronCardId]) ?>" min="1" max="1440"
+                                        <input type="number" name="<?= e($cronMinFields[$cronCardId]) ?>"
+                                               min="<?= $cronCardId === 'web-analytics' ? 5 : 1 ?>" max="1440"
                                                value="<?php
-                                                    $cronSchedKey = $cronCardId === 'daily-chat' ? 'daily_chat' : $cronCardId;
-                                                    $cronDefaultMin = ['housekeeping' => 15, 'autopost' => 1, 'paypal-reconcile' => 5, 'daily-chat' => 5];
+                                                    // JSON keys and card ids differ only for the two hyphenated jobs.
+                                                    $cronSchedKey = ['daily-chat' => 'daily_chat', 'web-analytics' => 'web_analytics'][$cronCardId] ?? $cronCardId;
+                                                    $cronDefaultMin = ['web-analytics' => 60, 'housekeeping' => 15, 'autopost' => 1, 'paypal-reconcile' => 5, 'daily-chat' => 5];
                                                     echo (int) ($cronSchedule[$cronSchedKey]['every_minutes'] ?? $cronDefaultMin[$cronCardId]);
                                                ?>"
                                                aria-label="<?= e($cronCard[0]) ?> interval in minutes">

@@ -128,6 +128,12 @@ need the behaviour, call these — never copy the logic into a controller/view.
 - `SupportMessage` — support tickets + `unreadCountForUser`/`markReadForUser`.
 - `Theme` — site theme presets.
 - `User` — user CRUD/roles.
+- `WebStats` — reads the nine `web_stats_*` / `web_visits` rollup tables for the
+  analytics page: range resolution, headline cards with previous-period change,
+  daily/hourly series, request mix, top/entry/exit pages, referrers, agent
+  breakdown, statuses, file types, top IPs, visit quality, robots, health and
+  CSV rows. Robots are stored separately and hidden unless `$includeBots`; the
+  bandwidth and status/file-type counters are all-traffic by design.
 
 ---
 
@@ -155,6 +161,9 @@ need the behaviour, call these — never copy the logic into a controller/view.
 - `SiteEditorController` — theme/site editor.
 - `SystemController` — system page: cron schedule, backups, DB ops, cleanup,
   variants, housekeeping "run now", PayPal reconcile.
+- `AnalyticsController` — `/admin/analytics` (AWStats-style page from the
+  access-log rollups), `/admin/analytics/reparse` (POST, re-reads the log files),
+  `/admin/analytics/export` (CSV). Requires the `analytics` permission.
 - `EmailerController`, `SupportController` (admin views), `ExportController`.
 
 **Webhooks / APIs (Bearer-authenticated, `/webhooks/*`)**
@@ -186,6 +195,18 @@ need the behaviour, call these — never copy the logic into a controller/view.
   `Totp`, `Charts`, `ImageEditor`, `AutoPostText`, `ChatAi` (Ollama client),
   `ChatModel` (adapter path + rebuild), `ChatSettings` (chat_settings DB table),
   `ChatContentSearch`, `BraintreeGateway`, `PayPalGateway`.
+- `AccessLogParser` — pure, DB-free Apache combined-log parser. `parse()` returns
+  every accumulator at once (tests/small windows); `streamByDay()` walks a
+  chronological stream and hands one day at a time to a callback (backfills, so
+  memory stays flat). Options: `base_path`, `site_host`, `include_private`,
+  `timezone`. Private/loopback addresses are dropped by default (own cron/health
+  traffic); robots are counted alongside humans in `bot_hits`/`bot_page_views`.
+- `AccessLogAggregator` — turns the parser output into the nine `web_stats_*` /
+  `web_visits` tables: discovers rotated logs (glob, mtime-ordered oldest first,
+  gzip-aware), deletes+reinserts one day per transaction, then recomputes the
+  session rollups in SQL so a visit that crosses midnight lands on its start day.
+  `bin/aggregate_access_log.php` is the CLI (flock'd); the admin page and the
+  hourly `gallery-web-analytics` cron entry both call the same class.
 - `helpers.php` — global `url()`, `e()`, `tzdate()`, `config()`, `env_value()`,
   `site_timezone()`, thumbnail helpers, etc.
 
@@ -207,7 +228,11 @@ need the behaviour, call these — never copy the logic into a controller/view.
 
 ## 8. CLI workers (`bin/`)
 
-- `apply_cron.php` — writes `/etc/cron.d/gallery-*` entries from settings.
+- `apply_cron.php` — writes `/etc/cron.d/gallery-*` entries from settings
+  (including `gallery-web-analytics`, hourly, `--days=2`).
+- `aggregate_access_log.php` — fold Apache access logs into the analytics
+  tables. `--days=N`, `--from/--to`, `--files=`, `--include-private`,
+  `--dry-run`, `--quiet`. Needs www-data to read /var/log/apache2 (group `adm`).
 - `live_recording_import.php` — orphan live-recording importer (housekeeping).
 - `daily_chat_worker.php`, `chat_training_import.php`,
   `chat_training_export.php`, `autopost_worker.php`, `email_worker.php`,

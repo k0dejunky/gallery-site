@@ -1,0 +1,40 @@
+# Apache combined-format fixture for AccessLogParser. Lines starting with # are
+# ignored by the parser (they are not valid log lines) and exist so this file
+# can be annotated.
+#
+# Coverage:
+#   - a human visitor with two page views and one asset (Chrome / Windows)
+#   - a 31-minute gap for the same IP, which must split into a second visit
+#   - a mobile visitor (Safari / iOS) arriving from an external referrer
+#   - named robots: Googlebot, bingbot, Amazonbot and an unnamed crawler
+#   - a "-" user agent and an empty user agent (both must count as robots)
+#   - asset, api, page and 404 classification
+#   - loopback (127.0.0.1) and RFC1918 (192.168.x) traffic, which must be dropped
+#   - two malformed lines that must be counted as skipped, not thrown on
+#
+# Timestamps are written in UTC (+0000) on 2026-10-04; the parser converts
+# them into whatever timezone the caller passes.
+52.10.20.30 - - [04/Oct/2026:10:00:00 +0000] "GET /galleries/42 HTTP/1.1" 200 15360 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+52.10.20.30 - - [04/Oct/2026:10:00:30 +0000] "GET /files/6a919001a36374.31299926.jpg?size=blur&t=8193e7c523566bb20399d82f83219ba652b40d89a6e60e42609eaccaecb0b7b5&v=1790925570 HTTP/1.1" 200 15340 "https://amethyst2213.com/galleries/42" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+52.10.20.30 - - [04/Oct/2026:10:02:05 +0000] "GET /assets/css/user.css HTTP/1.1" 200 20480 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+52.10.20.30 - - [04/Oct/2026:10:05:00 +0000] "GET /support HTTP/1.1" 200 8192 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+52.10.20.30 - - [04/Oct/2026:10:36:00 +0000] "GET /galleries/43 HTTP/1.1" 200 12288 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+77.44.55.66 - - [04/Oct/2026:11:15:00 +0000] "GET / HTTP/1.1" 200 40960 "https://www.google.com/search?q=galleries" "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
+77.44.55.66 - - [04/Oct/2026:11:16:40 +0000] "GET /files/photo_6aada46103ae34.98802579.jpg?size=thumb HTTP/1.1" 200 4096 "https://amethyst2213.com/" "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
+18.7.9.9 - - [04/Oct/2026:03:00:00 +0000] "GET /galleries/42 HTTP/1.1" 200 15360 "-" "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+18.7.9.10 - - [04/Oct/2026:03:00:10 +0000] "GET /webhooks/import/settings HTTP/1.1" 200 512 "-" "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)"
+52.22.64.232 - - [04/Oct/2026:03:00:20 +0000] "GET /files/6aa2dfb7d7fd61.07643973.jpg?size=blur HTTP/1.1" 200 15077 "-" "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amazonbot/0.1; +https://developer.amazon.com/support/amazonbot) Chrome/119.0.6045.214 Safari/537.36"
+99.9.9.9 - - [04/Oct/2026:03:00:30 +0000] "GET /galleries HTTP/1.1" 200 30720 "-" "SomeUnknownCrawler/1.0"
+99.9.9.10 - - [04/Oct/2026:03:00:40 +0000] "GET /galleries HTTP/1.1" 200 30720 "-" "-"
+99.9.9.11 - - [04/Oct/2026:03:00:50 +0000] "GET /galleries HTTP/1.1" 404 1024 "-" ""
+127.0.0.1 - - [04/Oct/2026:04:00:00 +0000] "GET /cron/housekeeping?key=abc HTTP/1.1" 200 1557 "-" "curl/8.5.0"
+192.168.1.50 - - [04/Oct/2026:04:00:10 +0000] "GET /galleries HTTP/1.1" 200 30720 "-" "Mozilla/5.0 (X11; Linux x86_64) Firefox/121.0"
+99.9.9.12 - - [04/Oct/2026:05:00:00 +0000] "POST /chat/send HTTP/1.1" 200 512 "-" "Mozilla/5.0 (X11; Linux x86_64) Firefox/121.0"
+99.9.9.13 - - [04/Oct/2026:05:01:00 +0000] "GET /does-not-exist HTTP/1.1" 404 1024 "-" "Mozilla/5.0 (X11; Linux x86_64) Firefox/121.0"
+this line is not a log line at all
+1.2.3.4 - - [garbage] "GET / HTTP/1.1" 200 100 "-" "Mozilla/5.0"# Day-boundary pair: 23:30 UTC on the 4th and 00:20 UTC on the 5th are the SAME
+# day in UTC but different days in Europe/Berlin, which is what makes the
+# timezone assertion in the smoke check meaningful. They are also 50 minutes
+# apart, so they must split into two visits.
+52.10.20.30 - - [04/Oct/2026:23:30:00 +0000] "GET /galleries/99 HTTP/1.1" 200 9216 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+52.10.20.30 - - [05/Oct/2026:00:20:00 +0000] "GET /galleries/100 HTTP/1.1" 200 9216 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
