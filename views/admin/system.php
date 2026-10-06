@@ -199,6 +199,20 @@
             </form>
         <?php endif; ?>
 
+        <h2 style="margin-top:1rem;">18+ age gate</h2>
+        <p class="muted" style="font-size:.85rem;">
+            Guests must confirm they are 18 or older once per session before
+            browsing; logged-in members are never gated.
+            <?= $ageGateEnabled ? '<b>Currently ON.</b>' : '<b>Currently OFF.</b>' ?>
+        </p>
+        <form class="sys-actions" method="post" action="<?= url('/admin/system/age-gate') ?>">
+            <?= csrf_field() ?>
+            <input type="hidden" name="enabled" value="<?= $ageGateEnabled ? '0' : '1' ?>">
+            <button class="btn<?= $ageGateEnabled ? '' : ' btn-outline' ?>" type="submit">
+                <?= $ageGateEnabled ? 'Turn off age gate' : 'Turn on age gate' ?>
+            </button>
+        </form>
+
         <h2 style="margin-top:1rem;">Scheduled housekeeping</h2>
         <?php $cronState = ($cronAgeMin === null) ? 'never run'
             : (($cronAgeMin > 45) ? '<b style="color:#b45309;">last run ' . (int) $cronAgeMin . ' min ago</b>'

@@ -25,8 +25,9 @@ class SiteConfig
     private static function defaults(): array
     {
         return [
-            'timezone'   => 'UTC',
-            'trial_days' => 3,
+            'timezone'          => 'UTC',
+            'trial_days'        => 3,
+            'age_gate_enabled'  => true,
         ];
     }
 
@@ -96,6 +97,22 @@ class SiteConfig
     public static function setTrialDays(int $days): void
     {
         self::save(['trial_days' => max(1, min(90, $days))]);
+    }
+
+    /**
+     * Whether the 18+ entry gate is shown to guests (default on).
+     */
+    public static function ageGateEnabled(): bool
+    {
+        return (bool) (self::all()['age_gate_enabled'] ?? true);
+    }
+
+    /**
+     * Turn the guest 18+ entry gate on or off (members are never gated).
+     */
+    public static function setAgeGateEnabled(bool $enabled): void
+    {
+        self::save(['age_gate_enabled' => $enabled]);
     }
 
     /**

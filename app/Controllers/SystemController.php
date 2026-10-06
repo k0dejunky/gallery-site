@@ -62,6 +62,7 @@ class SystemController extends Controller
             'variants'    => $this->variantStats(),
             'dbTables'    => $this->tableSizes(),
             'maintenance' => is_file($this->storage . '/maintenance.flag'),
+            'ageGateEnabled' => \App\Models\SiteConfig::ageGateEnabled(),
             'cronKeySet'  => self::cronKey() !== '',
             'cronAgeMin'  => $this->cronLastRunMinutes(),
             'cronJobs'    => $this->cronJobs(),
@@ -1168,6 +1169,20 @@ PHP;
             AuditLog::record(Auth::user()['id'] ?? null, 'update', 'system_maintenance', null, 'Maintenance mode disabled');
             $this->flash('success', 'Site back to normal.');
         }
+
+        $this->redirect('/admin/system');
+    }
+
+    /**
+     * Toggle the 18+ entry gate shown to guests (members are never gated).
+     */
+    public function saveAgeGate(): void
+    {
+        $enabled = (string) $this->request->post('enabled', '') === '1';
+
+        \App\Models\SiteConfig::setAgeGateEnabled($enabled);
+        AuditLog::record(Auth::user()['id'] ?? null, 'update', 'site_config', null, $enabled ? 'Age gate ENABLED' : 'Age gate disabled');
+        $this->flash('success', $enabled ? 'Age gate is ON — guests must confirm they are 18+.' : 'Age gate is off — guests enter without confirmation.');
 
         $this->redirect('/admin/system');
     }

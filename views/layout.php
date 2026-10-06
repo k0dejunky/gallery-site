@@ -31,6 +31,13 @@ $isLoginPage = $currentPath === url('/login');
 $isAuthPage = $isLoginPage
     || $currentPath === url('/signup')
     || ($currentPath === url('/membership') && $user === null);
+
+// 18+ entry gate: shown once per session to guests while it is enabled in
+// the admin System page. Members, the login/signup pages and every non-HTML
+// endpoint stay reachable without confirmation.
+$ageGateEnabled  = \App\Models\SiteConfig::ageGateEnabled();
+$ageGateRequired = $user === null && $ageGateEnabled && empty($_SESSION['age_verified']);
+$ageReturnTo     = (string) ($_SERVER['REQUEST_URI'] ?? '/');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -224,6 +231,30 @@ $isAuthPage = $isLoginPage
     <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=31">
 </head>
 <body<?= $isAuthPage ? '' : ' class="site-compact"' ?> data-base="<?= e(config('app.base_path')) ?>" data-user="<?= $user !== null ? '1' : '0' ?>">
+<?php if ($ageGateRequired): ?>
+<style>
+    .age-gate{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;background:linear-gradient(160deg,#2a1240,#4a1d5f 55%,#7e1d4f);color:#fff;}
+    .age-gate-panel{max-width:480px;width:100%;text-align:center;background:#fff;color:#1e1b2e;border-radius:var(--border-radius-lg);padding:2rem;box-shadow:0 24px 60px rgba(0,0,0,.45);}
+    .age-gate-panel h1{margin:0 0 .35rem;font-size:1.5rem;}
+    .age-gate-logos{font-variant:small-caps;letter-spacing:.12em;color:#8b5ab5;font-size:.8rem;margin:0 0 .5rem;}
+    .age-gate-panel p{margin:.5rem 0 1.25rem;color:#5a4d6b;}
+    .age-gate-panel .thin-link{color:#8b5ab5;text-decoration:underline;}
+    .age-gate-panel .btn{margin:.2rem .25rem;}
+</style>
+<div class="age-gate" role="dialog" aria-modal="true" aria-labelledby="age-gate-title">
+    <div class="age-gate-panel">
+        <p class="age-gate-logos">Adults only &middot; 18+</p>
+        <h1 id="age-gate-title">Are you over 18?</h1>
+        <p>This site contains sexually explicit material intended for adults. By entering you confirm you are at least 18 (or 21 where applicable) and you agree to the <a class="thin-link" href="<?= url('/terms') ?>">Terms of Service</a>.</p>
+        <form method="post" action="<?= url('/age-verify') ?>">
+            <?= csrf_field() ?>
+            <input type="hidden" name="return_to" value="<?= e($ageReturnTo) ?>">
+            <button class="btn" type="submit">I am 18 or older &mdash; enter</button>
+        </form>
+        <a class="btn btn-outline" href="https://www.google.com" rel="noopener noreferrer">I am not 18 &mdash; exit</a>
+    </div>
+</div>
+<?php endif; ?>
 <a class="skip-link" href="#main-content">Skip to content</a>
 <?php if (!empty($_SESSION['impersonator_id'])): ?>
     <div style="background:#7f1d1d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;justify-content:center;border-radius:var(--border-radius);margin-bottom:1rem;">

@@ -6,7 +6,8 @@
 return [
     // Public (guests can reach these)
     ['GET', '/health', 'HealthController@show'],
-    ['GET', '/', 'AuthController@loginForm'],
+    ['GET', '/', 'HomeController@index'],
+    ['POST', '/age-verify', 'AgeGateController@verify'],
     ['GET', '/terms', 'StaticPageController@terms'],
     ['GET', '/privacy', 'StaticPageController@privacy'],
     ['GET', '/about', 'StaticPageController@about'],
@@ -222,6 +223,7 @@ return [
     ['POST', '/admin/system/db/optimize', 'SystemController@dbOptimize', 'dashboard'],
     ['POST', '/admin/system/ai-rebuild', 'SystemController@aiRebuild', 'dashboard'],
     ['POST', '/admin/system/maintenance', 'SystemController@maintenanceToggle', 'dashboard'],
+    ['POST', '/admin/system/age-gate', 'SystemController@saveAgeGate', 'dashboard'],
     ['POST', '/admin/system/housekeeping', 'SystemController@housekeepingRun', 'dashboard'],
     ['POST', '/admin/system/paypal-reconcile', 'SystemController@paypalReconcile', 'dashboard'],
     ['POST', '/admin/system/duplicates/scan', 'SystemController@duplicateScan', 'dashboard'],
