@@ -407,6 +407,7 @@ class TestSuite
                 $reddit = \App\Models\AutoPostQueue::templateSettings('reddit');
                 $reddit['pattern'] = 'From {title}: {description} — posted at amethyst2213.com [oc] {hashtags}';
                 $reddit['max_tags'] = 3;
+                $reddit['hashtag_style'] = 'hash';
                 $outReddit = \App\Models\AutoPostQueue::buildText($gallery, $tags, $reddit);
                 $redditOk  = strpos($outReddit, '[oc]') !== false && preg_match_all('/#\w+/', $outReddit) === 3;
 
