@@ -91,6 +91,7 @@ class SmokeChecks
             'app/Controllers/TrafficController.php',
             'views/admin/traffic.php',
             'views/admin/traffic_show.php',
+            'views/partials/share-bar.php',
             'app/Models/PageVisit.php',
             'database/migrations/015_page_ip_visits.sql',
             'app/Models/ChatBroadcast.php',
@@ -310,6 +311,128 @@ class SmokeChecks
                 && strpos($trafficCtrl, 'function clearSignup') !== false
                 ? $ok('mark-direct wired')
                 : $bad('traffic must expose a mark-as-direct action backed by a controller route');
+        });
+
+        // ------------------------------------------------------------ Campaign
+        $shareBar      = $read("$root/views/partials/share-bar.php");
+        $galleryShowV  = $read("$root/views/gallery/show.php");
+        $videoPlayerV  = $read("$root/views/video/player.php");
+        $imageFullV    = $read("$root/views/gallery/image_full.php");
+        $authCtrlOg    = $read("$root/app/Controllers/AuthController.php");
+        $staticCtrlOg  = $read("$root/app/Controllers/StaticPageController.php");
+        $newGalleryMail = $read("$root/views/emails/new_gallery.php");
+        $newsletterMail = $read("$root/views/emails/newsletter.php");
+        $newsletterText = $read("$root/views/emails/newsletter.text.php");
+        $add('smoke.campaign.share_partial', 'Smoke · Campaign', 'Share bar signs every network link with Traffic::buildUrl', static function () use ($shareBar, $ok, $bad): array {
+            foreach (['twitter.com/intent/tweet', 'facebook.com/sharer', 'wa.me', 'www.reddit.com/submit', 'data-share-copy'] as $needle) {
+                if (strpos($shareBar, $needle) === false) {
+                    return $bad('share-bar missing: ' . $needle);
+                }
+            }
+            return substr_count($shareBar, 'Traffic::buildUrl(') >= 4
+                ? $ok('4 networks + copy link, all attributed')
+                : $bad('share-bar must build its network links via Traffic::buildUrl()');
+        });
+        $add('smoke.campaign.share_pages', 'Smoke · Campaign', 'Gallery and video pages render the share bar', static function () use ($galleryShowV, $videoPlayerV, $ok, $bad): array {
+            foreach (['gallery/show' => $galleryShowV, 'video/player' => $videoPlayerV] as $name => $src) {
+                if (strpos($src, "partials/share-bar.php") === false) {
+                    return $bad("$name does not include views/partials/share-bar.php");
+                }
+                if (strpos($src, '$sharePath') === false) {
+                    return $bad("$name does not set \$sharePath before including the share bar");
+                }
+            }
+            return $ok('both pages share');
+        });
+        $add('smoke.campaign.og_absolute_thumb', 'Smoke · Campaign', 'og:image sources are absolute, token-free thumbs', static function () use ($galleryShowV, $imageFullV, $videoPlayerV, $authCtrlOg, $staticCtrlOg, $ok, $bad): array {
+            foreach (['gallery/show' => $galleryShowV, 'gallery/image_full' => $imageFullV, 'video/player' => $videoPlayerV] as $name => $src) {
+                $found = false;
+                foreach (explode("\n", $src) as $line) {
+                    if (strpos($line, '$ogImage') === false) {
+                        continue;
+                    }
+                    $found = true;
+                    if (strpos($line, 'absolute_url(file_url(') === false || strpos($line, "'thumb'") === false || strpos($line, "'web'") !== false) {
+                        return $bad("$name og:image must be absolute_url(file_url(..., 'thumb')), not a token'd web variant");
+                    }
+                }
+                if (!$found) {
+                    return $bad("$name no longer assigns \$ogImage");
+                }
+            }
+            foreach (['AuthController' => $authCtrlOg, 'StaticPageController' => $staticCtrlOg] as $name => $src) {
+                if (strpos($src, "'web'") !== false || strpos($src, "absolute_url(file_url(") === false || strpos($src, "'thumb'") === false) {
+                    return $bad("$name og image must use the absolute token-free thumb variant");
+                }
+            }
+            return $ok('all 6 sources thumb + absolute');
+        });
+        $add('smoke.campaign.email_attribution', 'Smoke · Campaign', 'Email CTAs carry tracked ?c= links', static function () use ($newsletterMail, $newsletterText, $newGalleryMail, $ok, $bad): array {
+            foreach (['newsletter.html' => $newsletterMail, 'newsletter.text' => $newsletterText] as $name => $src) {
+                if (strpos($src, 'Traffic::buildUrl(') === false || strpos($src, "'email-digest'") === false) {
+                    return $bad("$name CTA must go through Traffic::buildUrl(..., 'email-digest')");
+                }
+            }
+            if (strpos($newGalleryMail, 'Traffic::buildUrl(') === false || strpos($newGalleryMail, "'email-alert'") === false) {
+                return $bad("new_gallery CTA must go through Traffic::buildUrl(..., 'email-alert')");
+            }
+            return $ok('digest + alert attributed');
+        });
+        $layoutView  = $read("$root/views/layout.php");
+        $staticPages = $read("$root/app/Controllers/StaticPageController.php");
+        $add('smoke.campaign.rss_feed', 'Smoke · Campaign', 'RSS feed route + attributed items + autodiscovery', static function () use ($routes, $layoutView, $staticPages, $ok, $bad): array {
+            if (!in_array(['GET', '/feed.xml', 'StaticPageController@feed'], $routes, true)) {
+                return $bad('config/routes.php must expose GET /feed.xml');
+            }
+            if (strpos($staticPages, 'function feed') === false || strpos($staticPages, "'rss'") === false) {
+                return $bad('StaticPageController::feed must exist and tag item links with the rss code');
+            }
+            if (strpos($layoutView, 'application/rss+xml') === false) {
+                return $bad('views/layout.php must autodiscover /feed.xml');
+            }
+            return $ok('route + feed + autodiscovery');
+        });
+        $add('smoke.campaign.sitemap_lastmod', 'Smoke · Campaign', 'Sitemap carries <lastmod> dates', static function () use ($staticPages, $ok, $bad): array {
+            return strpos($staticPages, '<lastmod>') !== false && strpos($staticPages, 'COALESCE(published_at, created_at)') !== false
+                ? $ok('lastmod emitted from publish/create dates')
+                : $bad('sitemap() must emit <lastmod> for dated entries');
+        });
+        $autoText   = $read("$root/app/Core/AutoPostText.php");
+        $platforms  = $read("$root/app/Core/Platforms.php");
+        $redditCli  = $read("$root/app/Models/RedditClient.php");
+        $queueSrc   = $read("$root/app/Models/AutoPostQueue.php");
+        $add('smoke.campaign.url_placeholder', 'Smoke · Campaign', 'Post templates expand {url} with channel attribution', static function () use ($autoText, $platforms, $ok, $bad): array {
+            if (strpos($autoText, '{url}') === false || strpos($autoText, 'Traffic::buildUrl(') === false) {
+                return $bad('AutoPostText::composePattern must expand {url} through Traffic::buildUrl');
+            }
+            if (strpos($platforms, '{url}') === false) {
+                return $bad('the X and Reddit default patterns must carry {url}');
+            }
+            return $ok('{url} wired end to end');
+        });
+        $add('smoke.campaign.reddit_enabled', 'Smoke · Campaign', 'Reddit channel enabled with credential fields', static function () use ($platforms, $redditCli, $queueSrc, $ok, $bad): array {
+            if (strpos($redditCli, 'function post(') === false) {
+                return $bad('RedditClient must expose post() for the generic queue dispatch (e2c9aa1 regression)');
+            }
+            if (strpos($queueSrc, 'private static function postReddit(') !== false) {
+                return $bad('dead AutoPostQueue::postReddit must stay removed');
+            }
+            preg_match("/'reddit' => \[(.*?)\n        \]/s", $platforms, $m);
+            $entry = $m[1] ?? '';
+            foreach (["'enabled'      => true", "'subreddit'", "'client_id'", '{url}'] as $needle) {
+                if (strpos($entry, $needle) === false) {
+                    return $bad('reddit platform entry missing: ' . $needle);
+                }
+            }
+            return $ok('reddit on, configured, tracked');
+        });
+        $housekeep = $read("$root/app/Core/Housekeeping.php");
+        $add('smoke.campaign.daily_broadcast', 'Smoke · Campaign', 'Housekeeping auto-schedules the daily chat broadcast', static function () use ($housekeep, $ok, $bad): array {
+            return strpos($housekeep, 'scheduleDailyChatBroadcast') !== false
+                && strpos($housekeep, 'chat_daily_broadcasts WHERE created_at >= CURDATE()') !== false
+                && strpos($housekeep, "'chat'") !== false
+                ? $ok('once-per-day generated broadcast with chat attribution')
+                : $bad('Housekeeping must create one chat_daily_broadcasts row per day, deduped on created_at');
         });
 
         // ----------------------------------------------------- Daily chat

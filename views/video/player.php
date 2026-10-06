@@ -10,7 +10,7 @@ $metaDescription = $photo['caption'] !== ''
     ? $photo['caption'] . ($galleryTitle !== '' ? ' — a video from "' . $galleryTitle . '" on ' . config('app.site_name') . '.' : '')
     : 'A video from ' . ($galleryTitle !== '' ? '"' . $galleryTitle . '"' : 'the gallery') . ' on ' . config('app.site_name') . '.';
 $canonicalUrl = absolute_url('/videos/' . (int) $photo['id']);
-$ogImage = file_url($photo['filename'], 'web');
+$ogImage = absolute_url(file_url($photo['filename'], 'thumb'));
 $videoObject = [
     '@context' => 'https://schema.org',
     '@type'    => 'VideoObject',
@@ -149,3 +149,7 @@ $breadcrumbItems = [
     </div>
     <?php endif; ?>
 </div>
+<?php
+$sharePath  = '/videos/' . (int) $photo['id'];
+$shareTitle = $title;
+require __DIR__ . '/../partials/share-bar.php';

@@ -5,7 +5,7 @@ $metaDescription = $photo['caption'] !== ''
     ? $photo['caption'] . ($galleryTitle !== '' ? ' — from "' . $galleryTitle . '" on ' . config('app.site_name') . '.' : '')
     : 'An image from ' . ($galleryTitle !== '' ? '"' . $galleryTitle . '"' : 'the gallery') . ' on ' . config('app.site_name') . '.';
 $canonicalUrl = absolute_url('/images/' . (int) $photo['id']);
-$ogImage = file_url($photo['filename'], 'web');
+$ogImage = absolute_url(file_url($photo['filename'], 'thumb'));
 $ldJson = [
     '@context' => 'https://schema.org',
     '@type'    => 'ImageObject',

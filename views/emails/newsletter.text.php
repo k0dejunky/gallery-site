@@ -16,8 +16,8 @@ foreach ($samples as $photo) {
     }
 }
 $ctaHref    = $subscriber
-    ? absolute_url('/galleries/' . $targetGalleryId)
-    : absolute_url('/membership');
+    ? \App\Models\Traffic::buildUrl('/galleries/' . $targetGalleryId, 'email-digest')
+    : \App\Models\Traffic::buildUrl('/membership', 'email-digest');
 $ctaLabel   = $subscriber ? 'Open the gallery' : 'Become a member';
 ?>
 <?= e($siteName) ?> — New uploads<?= $count > 0 ? ' (' . $count . ' photo' . ($count === 1 ? '' : 's') . ')' : '' ?>

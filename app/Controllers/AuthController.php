@@ -38,7 +38,7 @@ class AuthController extends Controller
             'canonicalUrl' => absolute_url('/login'),
             'metaDescription' => 'Log in to ' . config('app.site_name') . ' — original member galleries of photos and videos.',
             'ogImage'      => ($recent = Photo::recentImages(1)) !== [] && !empty($recent[0]['filename'])
-                ? absolute_url(file_url((string) $recent[0]['filename'], 'web'))
+                ? absolute_url(file_url((string) $recent[0]['filename'], 'thumb'))
                 : '',
         ]);
     }
@@ -179,7 +179,7 @@ class AuthController extends Controller
             'canonicalUrl' => absolute_url('/signup'),
             'metaDescription' => 'Join ' . config('app.site_name') . ' for original member galleries of photos and videos.',
             'ogImage'      => ($recent = Photo::recentImages(1)) !== [] && !empty($recent[0]['filename'])
-                ? absolute_url(file_url((string) $recent[0]['filename'], 'web'))
+                ? absolute_url(file_url((string) $recent[0]['filename'], 'thumb'))
                 : '',
         ]);
     }

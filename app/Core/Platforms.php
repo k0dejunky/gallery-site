@@ -77,7 +77,7 @@ final class Platforms
             'dbKey'       => 'twitter',
             'client'      => TwitterClient::class,
             'structure'   => 'single',
-            'pattern'     => '{title}{sep}{description} {hashtags} come visit my site to see what else I get myself into!! amethyst2213.com',
+            'pattern'     => '{title}{sep}{description} {hashtags} come visit my site to see what else I get myself into!! {url}',
             'max_length'  => 280,
             'max_length_min' => 50,
             'max_length_max' => 280,
@@ -110,14 +110,15 @@ final class Platforms
         ],
 
         // Reddit is kept as an inert entry: the OAuth client still exists but
-        // the channel is disabled and never shown / posted.
+        // Reddit posts as the authenticated user; credentials + target
+        // subreddit come from the channel form, OAuth from the authorize flow.
         'reddit' => [
             'key'          => 'reddit',
             'label'        => 'Reddit',
             'dbKey'        => 'reddit',
             'client'       => RedditClient::class,
             'structure'    => 'title_body',
-            'pattern'     => "{title}\n\n{description}",
+            'pattern'     => "{title}\n\n{description}\n\n{url}",
             'max_length'   => 40000,
             'max_length_min' => 50,
             'max_length_max' => 40000,
@@ -130,12 +131,17 @@ final class Platforms
             'video'        => 'none',
             'blur'         => 0,
             'sensitive'    => 'none',
-            'fields'       => [],
+            'fields'       => [
+                ['client_id', 'Client ID', 'text', 'Reddit app client ID (script app)', true],
+                ['client_secret', 'Client Secret', 'password', 'Reddit app client secret', true],
+                ['username', 'Reddit username', 'text', 'u/yourname', false],
+                ['subreddit', 'Target subreddit', 'text', 'Amethyst2213NSFW', false],
+            ],
             'oauth'        => null,
             'instances'    => false,
-            'enabled'      => false,
+            'enabled'      => true,
             'content_gate' => 'none',
-            'requires'     => 'Disabled channel.',
+            'requires'     => 'Create a script app at reddit.com/prefs/apps (redirect uri: this site\'s /admin/auto-poster/reddit/callback), save the credentials, set the target subreddit, then click Authorize.',
         ],
 
         'telegram' => [

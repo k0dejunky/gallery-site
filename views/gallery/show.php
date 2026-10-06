@@ -5,7 +5,7 @@ $metaDescription = $galleryDescription !== ''
     ? $galleryDescription
     : 'Browse "' . $title . '" — ' . number_format((int) ($total ?? 0)) . ' items on ' . config('app.site_name') . '.';
 $canonicalUrl = absolute_url('/galleries/' . (int) $gallery['id']);
-$ogImage = isset($photos[0]['filename']) && $photos[0]['filename'] !== '' ? file_url($photos[0]['filename'], 'web') : '';
+$ogImage = isset($photos[0]['filename']) && $photos[0]['filename'] !== '' ? absolute_url(file_url($photos[0]['filename'], 'thumb')) : '';
 $ldJson = [
     '@context' => 'https://schema.org',
     '@type'    => 'CollectionPage',
@@ -96,8 +96,12 @@ $breadcrumbItems = [
     <?php if ($total > count($photos)): ?>
         <div class="load-more-wrap" id="load-more-wrap">
             <span id="gallery-progress" class="muted" role="status"></span>
-            <button type="button" class="btn" id="load-more-btn">Load more</button>
+            <button class="btn" id="load-more-btn">Load more</button>
             <span id="load-more-state" class="muted" role="status" aria-live="polite"></span>
         </div>
     <?php endif; ?>
 <?php endif; ?>
+<?php
+$sharePath  = '/galleries/' . (int) $gallery['id'];
+$shareTitle = $gallery['title'];
+require __DIR__ . '/../partials/share-bar.php';

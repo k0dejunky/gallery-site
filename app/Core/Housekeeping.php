@@ -31,6 +31,7 @@ class Housekeeping
             'disk_free_gb'  => null,
             'temp_files_removed' => 0,
             'disk_growth_alerted' => false,
+            'chat_broadcast' => 0,
         ];
 
         self::watchBackupSync($root);
@@ -148,6 +149,10 @@ class Housekeeping
         // (covers galleries published on schedule, not just "publish now").
         $out['new_gallery_notified'] = self::notifyNewGalleries();
 
+        // Automatic daily chat broadcast (once per day) so members get a
+        // fresh attributed link even when no admin scheduled one.
+        $out['chat_broadcast'] = self::scheduleDailyChatBroadcast();
+
         // Refer-a-friend: +7 free days to referrers whose referred members
         // have become paying.
         $out['referral_rewards'] = self::rewardReferrals();
@@ -186,6 +191,49 @@ class Housekeeping
         }
 
         return $count;
+    }
+
+    /**
+     * Auto-compose the daily chat broadcast (once per day, deduped by the
+     * row's created_at date) so members always receive a fresh link even
+     * when no admin scheduled a broadcast. The link carries the `chat`
+     * attribution code; delivery is the daily_chat_worker's job. Returns
+     * 1 when a row was created, 0 when one already exists today.
+     */
+    private static function scheduleDailyChatBroadcast(): int
+    {
+        $already = Database::run(
+            'SELECT 1 FROM chat_daily_broadcasts WHERE created_at >= CURDATE() LIMIT 1'
+        )->fetch();
+
+        if ($already !== false) {
+            return 0;
+        }
+
+        $gallery = Database::run(
+            'SELECT id, title FROM galleries
+             WHERE deleted_at IS NULL
+               AND (published_at IS NULL OR published_at <= CURRENT_TIMESTAMP)
+               AND created_at >= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 14 DAY)
+             ORDER BY created_at DESC, id DESC
+             LIMIT 1'
+        )->fetch();
+
+        if ($gallery !== false) {
+            $url = \App\Models\Traffic::buildUrl('/galleries/' . (int) $gallery['id'], 'chat');
+            $msg = 'New in the gallery: ' . trim((string) $gallery['title']) . ' — ' . $url;
+        } else {
+            $url = \App\Models\Traffic::buildUrl('/', 'chat');
+            $msg = 'Fresh uploads are waiting for you — ' . $url;
+        }
+
+        $admin = Database::run(
+            'SELECT id FROM users WHERE role = ? ORDER BY id ASC LIMIT 1',
+            ['super_admin']
+        )->fetch();
+        $createdBy = $admin !== false ? (int) $admin['id'] : 1;
+
+        return \App\Models\ChatBroadcast::create($msg, null, $createdBy);
     }
 
     /**

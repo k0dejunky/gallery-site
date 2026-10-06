@@ -11,6 +11,7 @@ return [
     ['GET', '/privacy', 'StaticPageController@privacy'],
     ['GET', '/about', 'StaticPageController@about'],
     ['GET', '/sitemap.xml', 'StaticPageController@sitemap'],
+    ['GET', '/feed.xml', 'StaticPageController@feed'],
     ['GET', '/galleries', 'GalleryController@index'],
     ['GET', '/images', 'GalleryController@indexType'],
     ['GET', '/videos', 'GalleryController@indexType'],

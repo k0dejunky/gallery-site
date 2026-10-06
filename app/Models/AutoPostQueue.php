@@ -182,9 +182,10 @@ class AutoPostQueue
                 $row['media']     = $media;
                 $row['media_count'] = count($media);
                 $row['suggested_text'] = self::buildText([
+                    'gallery_id'     => $gid,
                     'gallery_title' => (string) $row['gallery_title'],
                     'caption'       => (string) $row['gallery_description'],
-                ], self::hashtagsFromCategories($catsByGid[$gid] ?? [], $maxTags), $tpl);
+                ], self::hashtagsFromCategories($catsByGid[$gid] ?? [], $maxTags), $tpl, $key);
                 $row['default_scheduled_at'] = self::galleryPublishSchedule((string) ($row['published_at'] ?? ''), $key);
             }
             unset($row);
@@ -399,9 +400,9 @@ class AutoPostQueue
      * template's max_length (default 280): the content substitutions are
      * truncated so the pattern (and any trailing link) is always kept.
      */
-    public static function buildText(array $gallery, array $tags = [], ?array $settings = null): string
+    public static function buildText(array $gallery, array $tags = [], ?array $settings = null, string $platform = 'x'): string
     {
-        return AutoPostText::buildText($gallery, $tags, $settings);
+        return AutoPostText::buildText($gallery, $tags, $settings, $platform);
     }
 
     /**
@@ -552,9 +553,10 @@ class AutoPostQueue
 
         if ($text === null || trim($text) === '') {
             $text = self::buildText([
+                'gallery_id'    => $galleryId,
                 'gallery_title' => (string) $gallery['title'],
                 'caption'       => (string) $gallery['description'],
-            ], self::categoryHashtags($galleryId, null, $key), $tpl);
+            ], self::categoryHashtags($galleryId, null, $key), $tpl, $key);
         } else {
             $text = mb_substr(trim($text), 0, $maxLen);
         }
@@ -1479,9 +1481,10 @@ class AutoPostQueue
         $key      = AutoPostText::normalizePlatform($platform);
         $dbKey    = $key === 'reddit' ? 'reddit' : 'twitter';
         $text     = self::buildText([
+            'gallery_id'    => $galleryId,
             'gallery_title' => (string) $gallery['title'],
             'caption'       => (string) $gallery['description'],
-        ], self::categoryHashtags($galleryId, null, $key), self::templateSettings($key));
+        ], self::categoryHashtags($galleryId, null, $key), self::templateSettings($key), $key);
 
         Database::run(
             'INSERT INTO auto_poster_queue
@@ -1649,40 +1652,6 @@ class AutoPostQueue
         }
 
         return $result;
-    }
-
-    /**
-     * Publish a queue item to Reddit via the OAuth2 client. Reddit media
-     * posts allow a single image, so only the first usable media file is
-     * sent (as an image post); without media the post is a self/text post.
-     * Returns the same shape as TwitterClient::post().
-     *
-     * @param array<int, array{tmp_name: string, name: string, type: string}> $media
-     * @return array{ok: bool, url?: string, error?: string}
-     */
-    private static function postReddit(array $config, string $text, array $media): array
-    {
-        $sub  = RedditClient::cleanSubreddit((string) ($config['subreddit'] ?? ''));
-        if ($sub === '') {
-            return ['ok' => false, 'error' => 'Reddit has no target subreddit configured.'];
-        }
-
-        [$title, $body] = RedditClient::splitForReddit($text);
-
-        $client = new RedditClient($config);
-        $file   = null;
-        foreach ($media as $m) {
-            if (!empty($m['tmp_name']) && is_file($m['tmp_name'])) {
-                $file = $m;
-                break;
-            }
-        }
-
-        if ($file !== null) {
-            return $client->submit($sub, $title, '', 'image', null, $file);
-        }
-
-        return $client->submit($sub, $title, $body, 'self');
     }
 
     /**

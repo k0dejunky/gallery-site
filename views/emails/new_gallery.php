@@ -8,7 +8,7 @@ $gallery = isset($gallery) ? (array) $gallery : [];
 $title   = (string) ($gallery['title'] ?? 'a new gallery');
 $desc    = trim((string) ($gallery['description'] ?? ''));
 $siteName = (string) config('app.site_name');
-$href    = absolute_url('/galleries/' . (int) ($gallery['id'] ?? 0));
+$href    = \App\Models\Traffic::buildUrl('/galleries/' . (int) ($gallery['id'] ?? 0), 'email-alert');
 ?>
 <!DOCTYPE html>
 <html lang="en">

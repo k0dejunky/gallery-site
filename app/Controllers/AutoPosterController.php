@@ -139,7 +139,7 @@ class AutoPosterController extends Controller
             'templatePreview' => AutoPostQueue::buildText([
                 'gallery_title' => 'Example gallery',
                 'caption'       => 'Fresh uploads',
-            ], ['amateur', 'redhead', 'new'], $template),
+            ], ['amateur', 'redhead', 'new'], $template, $platform),
             'recommended'     => $recs['items'],
             'recTotal'        => $recs['total'],
             'recPage'         => $recs['page'],

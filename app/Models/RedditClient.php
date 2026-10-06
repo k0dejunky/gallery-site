@@ -135,6 +135,43 @@ class RedditClient
     }
 
     /**
+     * Publish through the generic platform dispatch (AutoPostQueue::post).
+     * Title/body channels arrive pre-split: the title rides in $meta['title']
+     * and $text is the body (falling back to splitForReddit() when it does
+     * not). Reddit allows one image per image post, so only the first usable
+     * file is attached; without media the post is a self/text post.
+     *
+     * @param array<int, array{tmp_name: string, name: string, type: string}> $media
+     * @return array{ok:bool, url?:string, error?:string}
+     */
+    public function post(string $text, array $media = [], array $meta = []): array
+    {
+        $sub = self::cleanSubreddit((string) ($this->config['subreddit'] ?? ''));
+        if ($sub === '') {
+            return ['ok' => false, 'error' => 'Reddit has no target subreddit configured.'];
+        }
+
+        $title = trim((string) ($meta['title'] ?? ''));
+        if ($title === '') {
+            [$title, $text] = self::splitForReddit($text);
+        }
+
+        $file = null;
+        foreach ($media as $m) {
+            if (!empty($m['tmp_name']) && is_file((string) $m['tmp_name'])) {
+                $file = $m;
+                break;
+            }
+        }
+
+        if ($file !== null) {
+            return $this->submit($sub, $title, '', 'image', null, $file);
+        }
+
+        return $this->submit($sub, $title, trim($text), 'self');
+    }
+
+    /**
      * Submit a link, text or image post to a subreddit. $media is an optional
      * uploaded file array (keys: tmp_name, name, type) used for image posts.
      * Reddit supports one image per image post.

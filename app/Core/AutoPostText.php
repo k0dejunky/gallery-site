@@ -94,13 +94,16 @@ final class AutoPostText
     /**
      * Compose the final post body from a gallery + cleaned hashtags using the
      * platform template settings. Applies the banned-word filter last.
+     *
+     * $platform tags the {url} placeholder with that channel's attribution
+     * code (?c=<platform>&s=...), so click-throughs credit the channel.
      */
-    public static function buildText(array $gallery, array $tags = [], ?array $settings = null): string
+    public static function buildText(array $gallery, array $tags = [], ?array $settings = null, string $platform = 'x'): string
     {
         $settings = $settings ?? self::templateSettings('x');
         $keepBreaks = (string) ($settings['structure'] ?? 'single') === 'title_body';
 
-        $pattern = self::composePattern($settings['pattern'], $gallery);
+        $pattern = self::composePattern($settings['pattern'], $gallery, $platform);
 
         // The compact title/description body (pre-hashtags), used to drop a
         // redundant tits/titties hashtag that already appears in the text.
@@ -253,10 +256,12 @@ final class AutoPostText
     }
 
     /**
-     * Substitute the {title}, {sep} and {description} tokens of the pattern
-     * with the gallery's content, leaving {hashtags} in place for the caller.
+     * Substitute the {title}, {sep}, {description} and {url} tokens of the
+     * pattern with the gallery's content, leaving {hashtags} in place for the
+     * caller. {url} expands to the gallery's absolute link carrying the
+     * platform's signed attribution code, so every social post is trackable.
      */
-    private static function composePattern(string $pattern, array $gallery): string
+    private static function composePattern(string $pattern, array $gallery, string $platform = 'x'): string
     {
         $title       = self::singleSpace((string) ($gallery['gallery_title'] ?? ''));
         $description = self::singleSpace((string) ($gallery['caption'] ?? ''));
@@ -264,6 +269,14 @@ final class AutoPostText
         $pattern = str_replace('{title}', $title !== '' ? $title : 'New upload', $pattern);
         $pattern = str_replace('{sep}', $description !== '' ? ' — ' : '', $pattern);
         $pattern = str_replace('{description}', $description, $pattern);
+
+        if (strpos($pattern, '{url}') !== false) {
+            $gid = (int) ($gallery['gallery_id'] ?? 0);
+            $url = $gid > 0
+                ? \App\Models\Traffic::buildUrl('/galleries/' . $gid, self::normalizePlatform($platform))
+                : absolute_url('');
+            $pattern = str_replace('{url}', $url, $pattern);
+        }
 
         return $pattern;
     }

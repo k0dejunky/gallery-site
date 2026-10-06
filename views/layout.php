@@ -60,6 +60,7 @@ $isAuthPage = $isLoginPage
     <?php if (isset($canonicalUrl) && $canonicalUrl !== ''): ?>
         <link rel="canonical" href="<?= e($canonicalUrl) ?>">
     <?php endif; ?>
+    <link rel="alternate" type="application/rss+xml" title="<?= e(config('app.site_name')) ?> — latest galleries" href="<?= e(absolute_url('/feed.xml')) ?>">
     <?php if (isset($ogImage) && $ogImage !== ''): ?>
         <meta property="og:image" content="<?= e($ogImage) ?>">
         <meta property="og:image:alt" content="<?= e(isset($title) ? $title . ' — ' . config('app.site_name') : config('app.site_name')) ?>">
