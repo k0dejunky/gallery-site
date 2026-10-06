@@ -608,12 +608,8 @@ class AdminController extends Controller
 
         $db = 0;
         if ($dbName !== '') {
-            $db = (float) Database::run(
-                'SELECT COALESCE(SUM(data_length + index_length), 0)
-                 FROM information_schema.tables
-                 WHERE table_schema = ?',
-                [$dbName]
-            )->fetchColumn();
+            // Same cached reader as the System page (see Database::tableSizes).
+            $db = (float) Database::tableSizeBytes($dbName);
         }
 
         // AI storage: the self-hosted Ollama model library (base + fine-tuned

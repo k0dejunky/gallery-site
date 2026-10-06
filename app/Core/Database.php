@@ -159,7 +159,117 @@ class Database
             $persisted = $decoded;
         }
 
-        return array_merge(self::$slowQueries, $persisted);
+        return self::mergeSlowEntries(self::$slowQueries, $persisted);
+    }
+
+    /**
+     * Combine the in-memory slow entries of this request with the persisted
+     * ring from earlier requests.
+     *
+     * A query that went slow during THIS request is in both halves, so a
+     * straight merge lists it twice - which is what happens whenever the
+     * System page's own read trips the threshold while the page renders.
+     * The signature is sql + time + duration: identical for one event no
+     * matter which half collected it.
+     *
+     * Public so the smoke suite can exercise the dedupe without a database.
+     *
+     * @param array<int, array<string, mixed>> $memory
+     * @param array<int, array<string, mixed>> $persisted
+     * @return array<int, array<string, mixed>>
+     */
+    public static function mergeSlowEntries(array $memory, array $persisted): array
+    {
+        $seen = [];
+        $out  = [];
+
+        foreach (array_merge($memory, $persisted) as $entry) {
+            $key = ($entry['sql'] ?? '') . '|' . ($entry['at'] ?? '') . '|' . ($entry['seconds'] ?? '');
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $out[]      = $entry;
+        }
+
+        return $out;
+    }
+
+    /**
+     * How long information_schema sizes may be reused before they are re-read.
+     */
+    private const TABLE_STATS_TTL = 300;
+
+    /** Directory for small runtime files shared by every request. */
+    private static function cacheDir(): string
+    {
+        $dir = dirname(__DIR__, 2) . '/storage/cache';
+
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+
+        // storage/cache is not writable on a fresh install created by an older
+        // unpack; storage/logs always is (the slow-query ring lives there).
+        return is_dir($dir) && is_writable($dir)
+            ? $dir
+            : dirname(__DIR__, 2) . '/storage/logs';
+    }
+
+    /**
+     * Per-table sizes for one schema, read from information_schema at most
+     * once every TABLE_STATS_TTL seconds.
+     *
+     * information_schema.tables is normally served from the InnoDB data
+     * dictionary, but a dictionary miss costs 2-7s on the dev box - on the
+     * System page, which exists to report slow queries, and on the admin
+     * dashboard's storage pie, which loads on every visit. The cache is a
+     * file rather than Cache: Redis is optional in this app and the
+     * per-process fallback would miss most requests.
+     *
+     * @return array<int, array{name:string,rows:int,bytes:int,size_mb:float}>
+     */
+    public static function tableSizes(string $schema): array
+    {
+        $path = self::cacheDir() . '/table-sizes-' . md5($schema) . '.json';
+        $age  = @filemtime($path);
+
+        if ($age !== false && (time() - $age) < self::TABLE_STATS_TTL) {
+            $decoded = json_decode((string) @file_get_contents($path), true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        $rows = self::run(
+            'SELECT table_name AS name, table_rows AS `rows`,
+                    data_length + index_length AS bytes,
+                    ROUND((data_length + index_length) / 1048576, 1) AS size_mb
+             FROM information_schema.tables
+             WHERE table_schema = ?
+             ORDER BY (data_length + index_length) DESC',
+            [$schema]
+        )->fetchAll();
+
+        // Write through a temp file so a reader never sees a half-written JSON.
+        $tmp = $path . '.' . getmypid() . '.tmp';
+        if (@file_put_contents($tmp, (string) json_encode($rows)) !== false) {
+            @rename($tmp, $path);
+        }
+
+        return $rows;
+    }
+
+    /** Total data+index bytes for a schema, read from the same cache. */
+    public static function tableSizeBytes(string $schema): int
+    {
+        $total = 0;
+
+        foreach (self::tableSizes($schema) as $row) {
+            $total += (int) ($row['bytes'] ?? 0);
+        }
+
+        return $total;
     }
 
     /**

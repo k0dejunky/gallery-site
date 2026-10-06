@@ -726,26 +726,6 @@ class AccessLogAggregator
     }
 
     /**
-     * Recompute the session-derived columns from the visit table.
-     *
-     * The parser cannot finalise a session that is still open when the log runs
-     * out (the last visitor of the day), and a visit straddling midnight is
-     * closed while a later day is being written. Deriving these columns from
-     * web_visits after the fact makes them exact, keeps every day consistent
-     * with the session table, and means a session is always counted on the day
-     * it started on no matter where the stream split it.
-     *
-     * Applies to the daily rollup (visits / visit_pages / visit_duration) and to
-     * the per-visitor session count in web_stats_ips.
-     */
-    public static function refreshVisitRollups(array $days): void
-    {
-        foreach ($days as $day) {
-            self::refreshVisitRollupsFor($day);
-        }
-    }
-
-    /**
      * Write the sessions collected during the run and refresh their rollups.
      *
      * Each written day is rebuilt from scratch inside one transaction, so a
@@ -774,28 +754,52 @@ class AccessLogAggregator
         }
     }
 
+    /**
+     * Recompute the session-derived columns for one day from web_visits.
+     *
+     * The parser cannot finalise a session that is still open when the log runs
+     * out (the last visitor of the day), and a visit straddling midnight is
+     * closed while a later day is being written. Deriving these columns from
+     * web_visits after the fact makes them exact, keeps every day consistent
+     * with the session table, and means a session is always counted on the day
+     * it started on no matter where the stream split it.
+     *
+     * Both statements are set-based on purpose. The per-address one used to be
+     * a correlated subquery per driver row, and web_stats_ips holds hundreds of
+     * addresses per day, so each of them re-probed that whole day's sessions
+     * through the (day, is_bot) index: 0.9s warm and 6.9s cold on production,
+     * hourly, and it was 39 of the 40 entries in the slow-query list. One
+     * grouped pass measures 0.008s for the same values.
+     *
+     * @internal runs inside finalizeVisits()'s transaction
+     */
     private static function refreshVisitRollupsFor(string $day): void
     {
         Database::run(
-                'UPDATE web_stats_daily d SET
-                    d.visits = COALESCE((SELECT COUNT(*) FROM web_visits v
-                                         WHERE v.day = d.day AND v.is_bot = 0), 0),
-                    d.visit_pages = COALESCE((SELECT SUM(v.pages) FROM web_visits v
-                                               WHERE v.day = d.day AND v.is_bot = 0), 0),
-                    d.visit_duration = COALESCE((SELECT SUM(v.duration_sec) FROM web_visits v
-                                                 WHERE v.day = d.day AND v.is_bot = 0), 0)
-                 WHERE d.day = ?',
-            [$day]
+            'UPDATE web_stats_daily d
+             LEFT JOIN (SELECT COUNT(*) AS c,
+                               COALESCE(SUM(pages), 0) AS p,
+                               COALESCE(SUM(duration_sec), 0) AS s
+                        FROM web_visits
+                        WHERE day = ? AND is_bot = 0) x ON 1 = 1
+                SET d.visits         = COALESCE(x.c, 0),
+                    d.visit_pages    = COALESCE(x.p, 0),
+                    d.visit_duration = COALESCE(x.s, 0)
+              WHERE d.day = ?',
+            [$day, $day]
         );
 
-        // Bots have no sessions, so only the human row of an address carries
-        // a session count.
+        // Bots have no sessions, so only the human row of an address carries a
+        // session count.
         Database::run(
-            'UPDATE web_stats_ips i SET
-                i.visits = COALESCE((SELECT COUNT(*) FROM web_visits v
-                                      WHERE v.day = i.day AND v.ip = i.ip AND v.is_bot = 0), 0)
-             WHERE i.day = ? AND i.is_bot = 0',
-            [$day]
+            'UPDATE web_stats_ips i
+             LEFT JOIN (SELECT ip, COUNT(*) AS c
+                        FROM web_visits
+                        WHERE day = ? AND is_bot = 0
+                        GROUP BY ip) x ON x.ip = i.ip
+                SET i.visits = COALESCE(x.c, 0)
+              WHERE i.day = ? AND i.is_bot = 0',
+            [$day, $day]
         );
     }
 

@@ -1702,6 +1702,76 @@ class SmokeChecks
                 : $bad('analytics view is missing: ' . implode(', ', $missing));
         });
 
+        $add('smoke.analytics.rollup_set_based', 'Smoke · Web analytics', 'Session rollups rebuild with one grouped pass per day', static function () use ($root, $ok, $bad): array {
+            $src = (string) file_get_contents("$root/app/Core/AccessLogAggregator.php");
+
+            // The rollup used to be a correlated subquery per driver row, so
+            // every one of the day's web_stats_ips rows re-probed that whole
+            // day's sessions through the (day, is_bot) index: 0.9s warm and
+            // 6.9s cold on production, hourly, and 39 of the 40 entries that
+            // were sitting in the slow-query list. Both rollups must now be a
+            // single grouped pass over web_visits.
+            $correlated = array_values(array_filter(
+                ['v.day = d.day', 'v.day = i.day', 'v.ip = i.ip'],
+                static fn (string $needle): bool => str_contains($src, $needle)
+            ));
+
+            $setBased = substr_count($src, 'LEFT JOIN (SELECT') >= 2
+                && str_contains($src, 'GROUP BY ip')
+                && str_contains($src, 'FROM web_visits');
+
+            return ($correlated === [] && $setBased)
+                ? $ok('daily and per-address rollups are single grouped passes')
+                : $bad('correlated subquery back in refreshVisitRollupsFor: ' . implode(', ', $correlated)
+                    . ($setBased ? '' : ' (and the set-based form is missing)'));
+        });
+
+        $add('smoke.system.size_query_cached', 'Smoke · System page', 'information_schema reads go through one cached reader', static function () use ($root, $ok, $bad): array {
+            $db = (string) file_get_contents("$root/app/Core/Database.php");
+
+            $needsCache = str_contains($db, 'function tableSizes(')
+                && str_contains($db, 'function tableSizeBytes(')
+                && str_contains($db, 'TABLE_STATS_TTL')
+                && str_contains($db, 'storage/cache');
+
+            // A dictionary miss on these reads has been recorded at 2-7s, on
+            // the System page (which reports slow queries) and on the admin
+            // dashboard pie (every visit) - so neither may query it directly.
+            $direct = [];
+            foreach (['app/Controllers/SystemController.php', 'app/Controllers/AdminController.php'] as $file) {
+                if (str_contains((string) file_get_contents("$root/$file"), 'information_schema.tables')) {
+                    $direct[] = $file;
+                }
+            }
+
+            return ($needsCache && $direct === [])
+                ? $ok('both size queries are served by Database::tableSizes()')
+                : $bad('size-query cache incomplete' . ($direct !== [] ? ': direct read in ' . implode(', ', $direct) : ''));
+        });
+
+        $add('smoke.system.slow_query_ring_unique', 'Smoke · System page', 'A slow query is listed once even when it slowed the page itself', static function () use ($ok, $bad): array {
+            if (!class_exists(\App\Core\Database::class, false)) {
+                require_once dirname(__DIR__, 2) . '/app/Core/Database.php';
+            }
+
+            $entry = ['sql' => 'SELECT 1', 'params' => [], 'seconds' => 1.25, 'at' => '2026-10-06 10:00:00'];
+            $other = ['sql' => 'SELECT 2', 'params' => [], 'seconds' => 2.5, 'at' => '2026-10-06 11:00:00'];
+
+            // The same event lands in the in-memory list and in the on-disk
+            // ring: a query that goes slow WHILE the System page renders its
+            // slow-query table would otherwise appear twice in that table.
+            $merged = \App\Core\Database::mergeSlowEntries([$entry], [$entry, $other]);
+
+            $unique = count(array_filter(
+                $merged,
+                static fn (array $row): bool => ($row['sql'] ?? '') === 'SELECT 1'
+            ));
+
+            return ($unique === 1 && count($merged) === 2)
+                ? $ok('duplicate event collapsed, distinct events kept')
+                : $bad("dedupe returned {$unique} copies of one event across " . count($merged) . ' rows');
+        });
+
         $cache = $tests;
 
         return $cache;

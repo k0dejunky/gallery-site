@@ -52,3 +52,6 @@ __pycache__/
 # Backup archives (never commit)
 /storage/backups/
 /storage/cron/
+
+# Runtime cache files (DB size snapshot etc., written by the web process)
+/storage/cache/

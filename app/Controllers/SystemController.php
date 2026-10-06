@@ -1118,14 +1118,10 @@ PHP;
     {
         $db = config('database');
 
-        return Database::run(
-            'SELECT table_name AS name, table_rows AS `rows`,
-                    ROUND((data_length + index_length) / 1048576, 1) AS size_mb
-             FROM information_schema.tables
-             WHERE table_schema = ?
-             ORDER BY (data_length + index_length) DESC',
-            [$db['database'] ?? '']
-        )->fetchAll();
+        // Cached by Database::tableSizes(); a dictionary miss on this read used
+        // to stall this very page for seconds, which is the last thing the page
+        // that reports slow queries should do.
+        return Database::tableSizes((string) ($db['database'] ?? ''));
     }
 
     public function dbOptimize(): void
