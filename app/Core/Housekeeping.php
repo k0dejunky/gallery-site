@@ -223,8 +223,8 @@ class Housekeeping
             $url = \App\Models\Traffic::buildUrl('/galleries/' . (int) $gallery['id'], 'chat');
             $msg = 'New in the gallery: ' . trim((string) $gallery['title']) . ' — ' . $url;
         } else {
-            $url = \App\Models\Traffic::buildUrl('/', 'chat');
-            $msg = 'Fresh uploads are waiting for you — ' . $url;
+            $url = \App\Models\Traffic::buildUrl('/signup', 'chat');
+            $msg = 'Join the site for fresh uploads — ' . $url;
         }
 
         $admin = Database::run(

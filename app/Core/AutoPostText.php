@@ -274,7 +274,7 @@ final class AutoPostText
             $gid = (int) ($gallery['gallery_id'] ?? 0);
             $url = $gid > 0
                 ? \App\Models\Traffic::buildUrl('/galleries/' . $gid, self::normalizePlatform($platform))
-                : absolute_url('');
+                : absolute_url('/signup');
             $pattern = str_replace('{url}', $url, $pattern);
         }
 
