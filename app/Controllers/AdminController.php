@@ -248,6 +248,9 @@ class AdminController extends Controller
             return;
         }
 
+        $tags     = \App\Models\Tag::forGallery($id);
+        $tagValue = implode(', ', array_map(static fn (array $t): string => (string) $t['name'], $tags));
+
         $this->viewAdmin('manage', [
             'gallery'   => $gallery,
             'photos'    => Gallery::photos($id),
@@ -256,6 +259,7 @@ class AdminController extends Controller
                 static fn (array $category): int => (int) $category['id'],
                 Gallery::categories($id)
             ),
+            'tagValue'  => $tagValue,
             'activeEditJob' => \App\Models\PhotoJob::latestForGallery($id),
             'queuedGalleries' => Gallery::queuedForPublishing(Auth::isSuperAdmin()),
             'allowedUsers' => !empty($gallery['is_secret']) ? Gallery::allowedUsers($id) : [],

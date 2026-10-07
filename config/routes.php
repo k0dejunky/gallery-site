@@ -17,6 +17,9 @@ return [
     ['GET', '/images', 'GalleryController@indexType'],
     ['GET', '/videos', 'GalleryController@indexType'],
     ['GET', '/galleries/category/{slug}', 'GalleryController@category'],
+    ['GET', '/creator', 'CreatorProfileController@show'],
+    // Tag filter must precede the /galleries/{id} wildcard or "tag" is read as an id.
+    ['GET', '/galleries/tag/{slug}', 'TagController@index'],
     ['GET', '/galleries/{id}/photos', 'GalleryController@photosPage'],
     ['GET', '/galleries/{id}', 'GalleryController@show'],
     ['GET', '/browse/videos', 'GalleryController@browseVideos'],
@@ -89,6 +92,16 @@ return [
     ['GET', '/saved-searches', 'SavedSearchController@index'],
     ['POST', '/saved-searches', 'SavedSearchController@store'],
     ['POST', '/saved-searches/{id}/delete', 'SavedSearchController@destroy'],
+
+    // Wall, comments, ratings, notifications (logged in)
+    ['GET', '/wall', 'WallController@index'],
+    ['POST', '/comments', 'CommentController@store'],
+    ['POST', '/galleries/{id}/rate', 'GalleryRatingController@store'],
+    ['POST', '/galleries/{id}/unlock', 'PurchaseController@unlock'],
+    ['POST', '/tip', 'PurchaseController@tip'],
+    ['GET', '/notifications', 'NotificationController@index'],
+    ['GET', '/notifications/{id}', 'NotificationController@show'],
+    ['POST', '/notifications/read-all', 'NotificationController@readAll'],
 
     // Support (logged in)
     ['GET', '/support', 'SupportController@form'],
@@ -307,6 +320,25 @@ return [
     ['POST', '/admin/traffic/{id}/toggle', 'TrafficController@toggle', 'traffic'],
     ['GET', '/admin/traffic/{id}', 'TrafficController@show', 'traffic'],
     ['POST', '/admin/traffic/{id}/delete', 'TrafficController@delete', 'traffic'],
+
+    // Creator profile (admin only)
+    ['GET', '/admin/profile', 'CreatorProfileController@edit', 'dashboard'],
+    ['POST', '/admin/profile', 'CreatorProfileController@save', 'dashboard'],
+
+    // Engagement: wall + comments + codes + gifts + purchases + tags (admin only)
+    ['GET', '/admin/engagement', 'ModerationController@index', 'dashboard'],
+    ['POST', '/admin/engagement/wall', 'ModerationController@wallStore', 'dashboard'],
+    ['POST', '/admin/engagement/wall/{id}/delete', 'ModerationController@wallDelete', 'dashboard'],
+    ['POST', '/admin/engagement/comments/{id}/delete', 'ModerationController@commentDelete', 'dashboard'],
+    ['POST', '/admin/engagement/codes', 'ModerationController@codeStore', 'dashboard'],
+    ['POST', '/admin/engagement/codes/{id}/toggle', 'ModerationController@codeToggle', 'dashboard'],
+    ['POST', '/admin/engagement/codes/{id}/delete', 'ModerationController@codeDelete', 'dashboard'],
+    ['POST', '/admin/engagement/gift', 'ModerationController@giftStore', 'dashboard'],
+    ['GET', '/admin/engagement/purchases', 'ModerationController@purchases', 'dashboard'],
+    ['POST', '/admin/engagement/purchases/{id}', 'ModerationController@purchaseStatus', 'dashboard'],
+    ['GET', '/admin/engagement/tags', 'ModerationController@tags', 'dashboard'],
+    ['POST', '/admin/engagement/tags', 'ModerationController@tagStore', 'dashboard'],
+    ['POST', '/admin/engagement/tags/{id}/delete', 'ModerationController@tagDelete', 'dashboard'],
 
     // Settings (logged in)
     ['GET', '/settings', 'SettingsController@show'],

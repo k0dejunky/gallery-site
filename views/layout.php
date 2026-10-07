@@ -332,6 +332,10 @@ $ageReturnTo     = (string) ($_SERVER['REQUEST_URI'] ?? '/');
             <a class="nav-item<?= strpos($currentPath, url('/collections')) === 0 ? ' active' : '' ?>" href="<?= url('/collections') ?>" data-se-move-key="pub-collections">Collections</a>
             <a class="nav-item<?= strpos($currentPath, url('/membership')) === 0 ? ' active' : '' ?>" href="<?= url('/membership') ?>" data-se-move-key="pub-membership">Membership</a>
             <a class="nav-item<?= strpos($currentPath, url('/support')) === 0 ? ' active' : '' ?>" href="<?= url('/support') ?>" data-se-move-key="pub-support">Support<?php if (!empty($supportUnreadCount)): ?> <span class="nav-unread" aria-label="<?= (int) $supportUnreadCount ?> unread replies"><?= (int) $supportUnreadCount ?></span><?php endif; ?></a>
+            <a class="nav-item<?= strpos($currentPath, url('/wall')) === 0 ? ' active' : '' ?>" href="<?= url('/wall') ?>" data-se-move-key="pub-wall">Wall</a>
+            <?php if ($user !== null): $notifUnread = \App\Models\Notification::unreadCount((int) $user['id']); ?>
+                <a class="nav-item<?= strpos($currentPath, url('/notifications')) === 0 ? ' active' : '' ?>" href="<?= url('/notifications') ?>" data-se-move-key="pub-notifications">Notifications<?php if ($notifUnread > 0): ?> <span class="nav-unread" aria-label="<?= $notifUnread ?> unread notifications"><?= $notifUnread ?></span><?php endif; ?></a>
+            <?php endif; ?>
             <?php if ($user !== null): ?>
                 <a class="nav-item<?= strpos($currentPath, url('/chat')) === 0 ? ' active' : '' ?>" href="<?= url('/chat') ?>" data-se-move-key="pub-chat">Chat<?php if (\App\Models\ChatMessage::canChat((int) $user['id']) && !empty($chatUnreadCount)): ?> <span class="nav-unread" aria-label="<?= (int) $chatUnreadCount ?> unread replies"><?= (int) $chatUnreadCount ?></span><?php endif; ?></a>
             <?php endif; ?>
@@ -377,6 +381,10 @@ $ageReturnTo     = (string) ($_SERVER['REQUEST_URI'] ?? '/');
         <a href="<?= url('/collections') ?>">Collections</a>
         <a href="<?= url('/membership') ?>">Membership</a>
          <a href="<?= url('/support') ?>">Support<?php if (!empty($supportUnreadCount)): ?> <span class="nav-unread"><?= (int) $supportUnreadCount ?></span><?php endif; ?></a>
+        <a href="<?= url('/wall') ?>">Wall</a>
+        <?php if ($user !== null): $notifUnread2 = \App\Models\Notification::unreadCount((int) $user['id']); ?>
+            <a href="<?= url('/notifications') ?>">Notifications<?php if ($notifUnread2 > 0): ?> <span class="nav-unread"><?= $notifUnread2 ?></span><?php endif; ?></a>
+        <?php endif; ?>
         <?php if ($user !== null && \App\Core\Auth::hasActiveSubscription()): ?>
         <a href="<?= url('/live') ?>">Live</a>
         <?php endif; ?>

@@ -9,10 +9,14 @@ use App\Core\ImageEditor;
 use App\Models\AuditLog;
 use App\Models\AutoPostQueue;
 use App\Models\Category;
+use App\Models\Comment;
 use App\Models\FavoriteCategory;
 use App\Models\Gallery;
+use App\Models\GalleryRating;
 use App\Models\Photo;
+use App\Models\Purchase;
 use App\Models\Stats;
+use App\Models\Tag;
 
 class GalleryController extends Controller
 {
@@ -497,6 +501,18 @@ class GalleryController extends Controller
             $canViewFull = Auth::effectiveLevel() >= $minLevel;
         }
 
+        // One-off PPV: a purchased unlock grants full view regardless of level.
+        $ppvPrice  = (float) ($gallery['ppv_price'] ?? 0);
+        $galleryUnlocked = false;
+        $userRating = null;
+        if ($user !== null) {
+            $galleryUnlocked = Purchase::userUnlocked((int) $user['id'], $id);
+            $userRating = GalleryRating::userRating((int) $user['id'], $id);
+        }
+        if ($galleryUnlocked) {
+            $canViewFull = true;
+        }
+
         if ($user !== null && $canViewFull) {
             Gallery::recordView($id, (int) $user['id']);
 
@@ -530,6 +546,15 @@ class GalleryController extends Controller
             'photoCount' => $total,
             'returnTo'   => safe_return_to($this->request->query('return_to', '')) ?? url('/galleries/' . $id),
             'collections' => $user !== null ? \App\Models\Collection::forUser((int) $user['id']) : [],
+            'tags'        => Tag::forGallery($id),
+            'comments'    => Comment::forEntity(Comment::TYPE_GALLERY, $id),
+            'commentCount' => Comment::countFor(Comment::TYPE_GALLERY, $id),
+            'ratingAverage' => GalleryRating::averageFor($id),
+            'ratingCount'   => GalleryRating::countFor($id),
+            'userRating'    => $userRating,
+            'related'       => Gallery::related($id, 6),
+            'ppvPrice'      => $ppvPrice,
+            'galleryUnlocked' => $galleryUnlocked,
         ]);
     }
 
@@ -1587,6 +1612,28 @@ if ($publishAtRaw !== '') {
         Gallery::update($id, $title, $description, $type, $minLevel, $publishedAt, $isSecret);
         Gallery::setCategories($id, $categoryIds);
         Gallery::setAllowedUsers($id, $isSecret ? $allowedUsers : []);
+
+        // Optional community/monetization fields, only touched when the form
+        // actually submitted them (the owner edit form omits them).
+        $featuredRaw = $this->request->post('featured', null);
+        $ppvRaw      = $this->request->post('ppv_price', null);
+        if ($featuredRaw !== null || $ppvRaw !== null) {
+            $featured = $featuredRaw === null
+                ? (bool) ($gallery['featured'] ?? false)
+                : ($featuredRaw === '1');
+            if ($ppvRaw === null) {
+                $ppvPrice = $gallery['ppv_price'] !== null ? (float) $gallery['ppv_price'] : null;
+            } else {
+                $ppvPrice = trim((string) $ppvRaw) === '' ? null : max(0, (float) $ppvRaw);
+            }
+            Gallery::setFlags($id, $featured, $ppvPrice);
+        }
+
+        $tagsRaw = $this->request->post('tags', null);
+        if ($tagsRaw !== null) {
+            $tagNames = array_values(array_filter(array_map('trim', explode(',', (string) $tagsRaw))));
+            Tag::setForGallery($id, $tagNames);
+        }
 
         // Resync pending X/Reddit auto-post rows to the new publish moment so
         // the posts go out when the gallery goes live (or immediately when the

@@ -35,6 +35,20 @@
         </select>
         <span class="muted">Members below this level cannot view the gallery.</span>
     </p>
+    <p>
+        <label><input type="hidden" name="featured" value="0"><input type="checkbox" name="featured" value="1" <?= !empty($gallery['featured']) ? 'checked' : '' ?>> Featured on the homepage</label>
+    </p>
+    <p>
+        <label for="manage-ppv-price">Pay-per-view price (USD)</label>
+        <input type="number" step="0.01" min="0" name="ppv_price" id="manage-ppv-price"
+               value="<?= $gallery['ppv_price'] !== null && (float) $gallery['ppv_price'] > 0 ? e(number_format((float) $gallery['ppv_price'], 2, '.', '')) : '' ?>"
+               placeholder="Leave empty for membership-only">
+        <span class="muted">Non-members can unlock the full gallery with a code; leave empty to hide this option.</span>
+    </p>
+    <p>
+        <label for="manage-tags">Tags</label>
+        <input type="text" name="tags" id="manage-tags" value="<?= e($tagValue ?? '') ?>" placeholder="comma, separated, tags" style="min-width:280px;">
+    </p>
     <?php if (\App\Core\Auth::isSuperAdmin()): ?>
     <?php $allowedIds = array_map('intval', array_column($allowedUsers ?? [], 'id')); ?>
     <p>

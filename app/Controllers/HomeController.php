@@ -70,15 +70,29 @@ class HomeController extends Controller
             }
         }
 
+$featured  = Gallery::featured(6);
+        $trending  = Gallery::trending(7, 6);
+
+        // Trending shares the layout with featured; drop any gallery already
+        // shown as featured so the two strips don't repeat cards.
+        $featuredIds = array_map('intval', array_column($featured, 'id'));
+        $trending = array_values(array_filter(
+            $trending,
+            static fn (array $g): bool => !in_array((int) $g['id'], $featuredIds, true)
+        ));
+
         $this->view('home', [
             'galleries'      => $galleries,
+            'featured'       => $featured,
+            'trending'       => $trending,
+            'tags'           => \App\Models\Tag::withCounts(),
             'covers'         => $covers,
             'categories'     => $categories,
             'categoryCounts' => $countsById,
             'mediaCounts'    => Photo::siteCounts(),
             'title'          => 'Home',
             'canonicalUrl'   => absolute_url('/'),
-            'metaDescription' => 'The private collection of ' . config('app.site_name') . '. Join for full access to original photos, videos and live streams.',
+            'metaDescription' => 'The private collection of ' . config('app.site_name') . '. Join now for full access to exclusive photo and video galleries, live streams and more.',
             'ogImage'        => $ogImage,
         ]);
     }

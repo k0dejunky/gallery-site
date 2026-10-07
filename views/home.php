@@ -8,6 +8,9 @@ $covers          = (array) ($covers ?? []);
 $categories      = (array) ($categories ?? []);
 $categoryCounts  = (array) ($categoryCounts ?? []);
 $mediaCounts     = (array) ($mediaCounts ?? []);
+$featured        = (array) ($featured ?? []);
+$trending        = (array) ($trending ?? []);
+$tags            = (array) ($tags ?? []);
 ?>
 
 <div class="hero home-hero">
@@ -46,6 +49,45 @@ $mediaCounts     = (array) ($mediaCounts ?? []);
                     <?= e($cat['name']) ?>
                     <span class="muted">(<?= (int) ($categoryCounts[(int) $cat['id']] ?? 0) ?>)</span>
                 </a>
+            <?php endforeach; ?>
+        </div>
+    </section>
+<?php endif; ?>
+
+<?php if ($featured !== []): ?>
+    <section class="home-section" style="margin-top:1.75rem;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+            <h2 style="margin:0;">Featured</h2>
+            <a class="btn btn-sm btn-link" href="<?= url('/galleries') ?>">View all &rarr;</a>
+        </div>
+        <div class="grid" style="margin-top:.75rem;">
+            <?php foreach ($featured as $g): ?>
+                <?php $gallery = $g; $cover = null; require __DIR__ . '/partials/gallery_card.php'; ?>
+            <?php endforeach; ?>
+        </div>
+    </section>
+<?php endif; ?>
+
+<?php if ($trending !== []): ?>
+    <section class="home-section" style="margin-top:1.75rem;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+            <h2 style="margin:0;">Trending this week</h2>
+            <a class="btn btn-sm btn-link" href="<?= url('/galleries') ?>">View all &rarr;</a>
+        </div>
+        <div class="grid" style="margin-top:.75rem;">
+            <?php foreach ($trending as $g): ?>
+                <?php $gallery = $g; $cover = null; require __DIR__ . '/partials/gallery_card.php'; ?>
+            <?php endforeach; ?>
+        </div>
+    </section>
+<?php endif; ?>
+
+<?php if ($tags !== []): ?>
+    <section class="home-section" style="margin-top:1.5rem;">
+        <h2 style="margin:0 0 .6rem;">Popular tags</h2>
+        <div style="display:flex;flex-wrap:wrap;gap:.5rem;">
+            <?php foreach (array_slice($tags, 0, 16) as $tag): ?>
+                <a class="chip" href="<?= url('/galleries/tag/' . e($tag['slug'])) ?>">#<?= e($tag['name']) ?></a>
             <?php endforeach; ?>
         </div>
     </section>

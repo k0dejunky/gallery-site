@@ -141,7 +141,7 @@ class Gallery
         }
 
         $gallery = Database::run(
-            'SELECT id, title, description FROM galleries WHERE id = ?',
+            'SELECT id, title, description, is_secret FROM galleries WHERE id = ?',
             [$galleryId]
         )->fetch();
 
@@ -154,6 +154,17 @@ class Gallery
         $text    = render_email('new_gallery.text', ['gallery' => $gallery]);
 
         \App\Models\EmailQueue::enqueueNotification('notify_new_gallery', $subject, $html, $text);
+
+        // In-app fan-out for public galleries so the bell icon is meaningful.
+        // Secret galleries are never broadcast (the title would leak).
+        if (empty($gallery['is_secret'])) {
+            \App\Models\Notification::broadcastToMembers(
+                'gallery',
+                'New gallery: ' . mb_substr((string) $gallery['title'], 0, 80),
+                mb_substr((string) ($gallery['description'] ?: 'A new set is live.'), 0, 120),
+                '/galleries/' . (int) $gallery['id']
+            );
+        }
     }
 
     /**
@@ -1222,5 +1233,108 @@ class Gallery
         unset($gallery);
 
         return $out;
+    }
+
+    /**
+     * Featured galleries: creator-chosen showcase picks (admin flag on the
+     * manage form). Public, non-secret, published; newest first.
+     */
+    public static function featured(int $limit = 6, ?int $userId = null): array
+    {
+        $accessCondition = ' AND g.is_secret = 0';
+        $accessParams = [];
+        if ($userId !== null) {
+            [$condition, $accessParams] = self::userVisibleSql($userId, 'g');
+            $accessCondition = ' AND ' . $condition;
+        }
+
+        return Database::run(
+            'SELECT g.*,
+                    (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count,
+                    ' . self::videoCountSql() . '
+             FROM galleries g
+             WHERE g.featured = 1 AND ' . self::publishedVisibleSql('g') . $accessCondition . '
+             ORDER BY g.created_at DESC
+             LIMIT ' . max(1, (int) $limit),
+            $accessParams
+        )->fetchAll();
+    }
+
+    /**
+     * Trending galleries: most-viewed (by content_views) over the trailing
+     * window. Excludes secret galleries so the strip is guest-safe.
+     */
+    public static function trending(int $days = 7, int $limit = 6): array
+    {
+        return Database::run(
+            'SELECT g.*,
+                    (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count,
+                    ' . self::videoCountSql() . ',
+                    IFNULL(ts.n, 0) AS trend_n
+             FROM galleries g
+             LEFT JOIN (
+                 SELECT entity_id AS gid, SUM(count) AS n
+                 FROM content_views
+                 WHERE entity_type = \'gallery\' AND view_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+                 GROUP BY entity_id
+             ) ts ON ts.gid = g.id
+             WHERE g.is_secret = 0 AND ' . self::publishedVisibleSql('g') . '
+             ORDER BY trend_n DESC, g.views DESC
+             LIMIT ' . max(1, (int) $limit),
+            [max(1, (int) $days)]
+        )->fetchAll();
+    }
+
+    /**
+     * Related galleries sharing at least one category, newest/views first.
+     */
+    public static function related(int $galleryId, int $limit = 6): array
+    {
+        return Database::run(
+            'SELECT DISTINCT g.*,
+                    (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count,
+                    ' . self::videoCountSql() . '
+             FROM galleries g
+             INNER JOIN gallery_category gc ON gc.gallery_id = g.id
+             INNER JOIN gallery_category gc2
+                     ON gc2.category_id = gc.category_id
+                    AND gc2.gallery_id = ?
+             WHERE g.id <> ? AND g.is_secret = 0 AND ' . self::publishedVisibleSql('g') . '
+             ORDER BY g.views DESC, g.created_at DESC
+             LIMIT ' . max(1, (int) $limit),
+            [$galleryId, $galleryId]
+        )->fetchAll();
+    }
+
+    /**
+     * Persist the featured flag and PPV price (called after update() so the
+     * existing hot path is untouched).
+     */
+    public static function setFlags(int $galleryId, bool $featured, ?float $ppvPrice): void
+    {
+        Database::run(
+            'UPDATE galleries SET featured = ?, ppv_price = ? WHERE id = ?',
+            [$featured ? 1 : 0, $ppvPrice, $galleryId]
+        );
+        \App\Core\Cache::bump('gallery');
+    }
+
+    /**
+     * Galleries carrying a tag (public visibility only), newest first.
+     */
+    public static function byTag(string $slug, int $limit = 24, int $offset = 0): array
+    {
+        return Database::run(
+            'SELECT g.*,
+                    (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count,
+                    ' . self::videoCountSql() . '
+             FROM galleries g
+             INNER JOIN tag_gallery tg ON tg.gallery_id = g.id
+             INNER JOIN tags t ON t.id = tg.tag_id
+             WHERE t.slug = ? AND g.is_secret = 0 AND ' . self::publishedVisibleSql('g') . '
+             ORDER BY g.created_at DESC, g.id DESC
+             LIMIT ' . max(1, (int) $limit) . ' OFFSET ' . max(0, (int) $offset),
+            [$slug]
+        )->fetchAll();
     }
 }

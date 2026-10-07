@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\Controller;
 use App\Models\Photo;
+use App\Models\Purchase;
 
 class StorageController extends Controller
 {
@@ -62,6 +63,9 @@ class StorageController extends Controller
                 if (!Photo::hasPublicGallery((int) $photo['id'])) {
                     // A secret-only photo is authorized by its allow-list;
                     // membership level never grants access to it.
+                } elseif ($user !== null && \App\Models\Purchase::unlocksPhoto((int) $user['id'], (int) $photo['id'])) {
+                    // Paid PPV unlock for the gallery holding this photo:
+                    // membership level does not apply.
                 } else {
                     Auth::requireGalleryLevel(
                         Photo::minimumGalleryLevel((int) $photo['id']),
