@@ -69,6 +69,10 @@ do {
 
             $result = CategoryAdvisor::suggest($galleryId);
 
+            if (!empty($result['warnings'])) {
+                $log('gallery ' . $galleryId . ': ' . $result['warnings']);
+            }
+
             if (empty($result['ok'])) {
                 CategorySuggestion::fail($galleryId, (string) $result['error']);
                 $failed++;

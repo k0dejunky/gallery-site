@@ -1121,6 +1121,20 @@ class SmokeChecks
                 ? $ok('manage chips, review view and nav link present')
                 : $bad('manage.php must show AI suggestion chips, category_suggestions.php the review list, and admin layout.php the nav link');
         });
+        $add('smoke.categorizer.chunked_prompt', 'Smoke · Categorizer', 'batches of candidates, exhaustive selection, no per-run cap', static function () use ($czSvc, $ok, $bad): array {
+            $chunked = strpos($czSvc, 'CHUNK_SIZE') !== false
+                && strpos($czSvc, 'array_chunk($names, self::CHUNK_SIZE)') !== false;
+            // The model must be asked for EVERY fit, never a short shortlist.
+            $exhaustive = strpos($czSvc, 'select EVERY one that fits') !== false
+                && strpos($czSvc, 'do not stop at one') !== false;
+            $noCap = strpos($czSvc, 'Prefer 1-3') === false
+                && strpos($czSvc, 'Select at most') === false
+                && strpos($czSvc, 'MAX_SUGGESTIONS') === false
+                && strpos($czSvc, 'array_slice($decoded') === false;
+            return $chunked && $exhaustive && $noCap
+                ? $ok('chunked batches + exhaustive prompt + no cap')
+                : $bad('CategoryAdvisor must batch categories via CHUNK_SIZE, ask for every fit ("select EVERY one that fits"), and keep no MAX_SUGGESTIONS/array_slice cap');
+        });
 
         // ------------------------------------------------ Site timezone
         $siteConfigC = $read("$root/app/Models/SiteConfig.php");

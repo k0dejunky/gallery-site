@@ -28,59 +28,110 @@ use App\Models\Tag;
  */
 class CategoryAdvisor
 {
-    private const MAX_SUGGESTIONS = 5;
-    private const MAX_IMAGES      = 3;
-    private const FRAME_WIDTH     = 512;
-    private const FRAME_HEIGHT    = 512;
+    // The site's category list (~100 names) is evaluated in batches: one
+    // vision call per CHUNK_SIZE candidates. A single call with the whole
+    // list made the model return exactly one category for almost every
+    // gallery; smaller batches make it judge every candidate properly.
+    private const CHUNK_SIZE     = 25;
+    private const MAX_IMAGES     = 3;
+    private const FRAME_WIDTH    = 512;
+    private const FRAME_HEIGHT   = 512;
     // CPU vision on a small box can take minutes for the first (cold) call;
     // the worker holds the lock the whole time, so a long wait is fine.
-    private const HTTP_TIMEOUT    = 420;
+    private const HTTP_TIMEOUT   = 420;
 
     /**
      * Analyze one gallery. Returns ['ok' => bool, 'engine' => string,
      * 'suggestions' => [['category_id'=>, 'confidence'=>], ...],
-     * 'error' => string] - suggestions are resolved against the live
-     * category table, unknown names silently dropped.
+     * 'warnings' => string, 'error' => string] - suggestions are resolved
+     * against the live category table, unknown names silently dropped.
+     *
+     * There is NO cap on how many categories fit: every candidate the model
+     * matches across every batch is returned (deduped, strongest confidence
+     * per category). A batch that fails is skipped as long as at least one
+     * batch answered; only a run where every batch failed is an error.
      */
     public static function suggest(int $galleryId): array
     {
         $driver = CategorySuggestion::driver();
         if ($driver === 'off') {
-            return ['ok' => false, 'engine' => 'off', 'suggestions' => [], 'error' => 'CATEGORIZER_DRIVER=off'];
+            return ['ok' => false, 'engine' => 'off', 'suggestions' => [], 'warnings' => '', 'error' => 'CATEGORIZER_DRIVER=off'];
         }
 
         $gallery = Gallery::find($galleryId);
         if ($gallery === null) {
-            return ['ok' => false, 'engine' => $driver, 'suggestions' => [], 'error' => 'gallery not found'];
+            return ['ok' => false, 'engine' => $driver, 'suggestions' => [], 'warnings' => '', 'error' => 'gallery not found'];
         }
 
         $names = array_map(static fn (array $c): string => (string) $c['name'], Category::all());
         if ($names === []) {
-            return ['ok' => false, 'engine' => $driver, 'suggestions' => [], 'error' => 'no categories defined'];
+            return ['ok' => false, 'engine' => $driver, 'suggestions' => [], 'warnings' => '', 'error' => 'no categories defined'];
         }
 
         $images = self::sampleImages($gallery);
-        $prompt = self::prompt($gallery, $names, $images !== []);
+        $chunks = array_chunk($names, self::CHUNK_SIZE);
+        $total  = count($chunks);
 
-        try {
-            $text = $driver === 'api'
-                ? self::callApi($prompt, $images)
-                : self::callOllama($prompt, $images);
-        } catch (\Throwable $e) {
-            return ['ok' => false, 'engine' => $driver, 'suggestions' => [], 'error' => $e->getMessage()];
+        $merged   = [];
+        $warnings = [];
+        $lastErr  = '';
+        $answered = 0;
+
+        foreach ($chunks as $i => $batch) {
+            $prompt = self::prompt($gallery, $batch, $i, $total, $images !== []);
+
+            try {
+                $text = $driver === 'api'
+                    ? self::callApi($prompt, $images)
+                    : self::callOllama($prompt, $images);
+            } catch (\Throwable $e) {
+                $lastErr = $e->getMessage();
+                $warnings[] = sprintf('batch %d/%d failed: %s', $i + 1, $total, $lastErr);
+                continue;
+            }
+
+            $answered++;
+
+            foreach (self::resolve($text, $batch) as $row) {
+                $cid = $row['category_id'];
+                if (!isset($merged[$cid]) || (float) $row['confidence'] > (float) $merged[$cid]['confidence']) {
+                    $merged[$cid] = $row;
+                }
+            }
         }
+
+        if ($answered === 0) {
+            return [
+                'ok'          => false,
+                'engine'      => $driver,
+                'suggestions' => [],
+                'warnings'    => implode('; ', $warnings),
+                'error'       => $lastErr !== '' ? $lastErr : 'every category batch failed',
+            ];
+        }
+
+        $suggestions = array_values($merged);
+        usort(
+            $suggestions,
+            static fn (array $a, array $b): int => (float) $b['confidence'] <=> (float) $a['confidence']
+        );
 
         return [
             'ok'          => true,
             'engine'      => $driver,
-            'suggestions' => self::resolve($text, $names, self::MAX_SUGGESTIONS),
+            'suggestions' => $suggestions,
+            'warnings'    => implode('; ', $warnings),
             'error'       => '',
         ];
     }
 
     /* ---------------- prompt + response parsing ---------------- */
 
-    private static function prompt(array $gallery, array $categoryNames, bool $hasImages): string
+    /**
+     * One batch's prompt: the same gallery context, but only this chunk of
+     * candidate categories, asked for exhaustively (every match, not a few).
+     */
+    private static function prompt(array $gallery, array $categoryNames, int $batchIndex, int $batchTotal, bool $hasImages): string
     {
         $tags = array_map(static fn (array $t): string => (string) $t['name'], Tag::forGallery((int) $gallery['id']));
 
@@ -102,23 +153,31 @@ class CategoryAdvisor
             : 'No preview image could be extracted; judge from the text alone.';
 
         $list = implode(', ', $categoryNames);
+        $batch = $batchTotal > 1
+            ? 'This is candidate batch ' . ($batchIndex + 1) . ' of ' . $batchTotal . '.\n'
+            : '';
 
-        return "You are categorizing content for an adult gallery site. Pick the categories that fit this gallery.\n\n"
+        return "You are categorizing content for an adult gallery site. Judge EACH candidate category below\n"
+            . "against this gallery and select EVERY one that fits. Selecting many is expected and correct -\n"
+            . "do not stop at one, and do not limit yourself to a few.\n\n"
             . $context . $media . "\n\n"
-            . "Allowed categories (choose ONLY from this list): $list\n\n"
-            . 'Select at most ' . self::MAX_SUGGESTIONS . '. Prefer 1-3 strong matches over listing many weak ones. '
+            . $batch
+            . "Candidate categories (choose ONLY from this list): $list\n\n"
             . "Reply with ONLY JSON, no prose, in the form:\n"
             . '{"categories":[{"name":"exact category name","confidence":0.0}]}\n'
-            . "where confidence is 0.0-1.0. Omit the array entirely if nothing fits.\n";
+            . "containing every candidate that fits (confidence 0.0-1.0 is required for each). "
+            . "Return an empty array (\"categories\": []) if none of them fit.\n";
     }
 
     /**
      * Parse the model's reply into resolved category rows. Tolerates code
      * fences and stray prose around the JSON (small models often wrap it).
+     * Names are validated against the batch the model was given; there is no
+     * limit on how many rows may come back.
      *
      * @return array<int, array{category_id:int, confidence:float}>
      */
-    public static function resolve(string $text, array $categoryNames, int $max = self::MAX_SUGGESTIONS): array
+    public static function resolve(string $text, array $categoryNames): array
     {
         $decoded = json_decode($text, true);
 
@@ -141,7 +200,7 @@ class CategoryAdvisor
         }
 
         $out = [];
-        foreach (array_slice($decoded['categories'], 0, $max) as $item) {
+        foreach ($decoded['categories'] as $item) {
             if (!is_array($item)) {
                 continue;
             }
@@ -197,7 +256,8 @@ class CategoryAdvisor
             'images'  => $images,
             'options' => [
                 'temperature' => 0.1,
-                'num_predict' => 400,
+                // Multi-entry JSON: every fitting candidate, not one line.
+                'num_predict' => 800,
             ],
         ];
 

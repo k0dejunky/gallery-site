@@ -310,6 +310,65 @@ class TestSuite
             }
         });
 
+        $add('db.categorizer_advisor_resolve', 'Database', 'resolve() keeps every batch match, drops unknown names, merges deduped', function () {
+            $made = [];
+            try {
+                $cats = Database::run('SELECT name FROM categories ORDER BY id ASC LIMIT 3')->fetchAll(\PDO::FETCH_COLUMN);
+                // A box with a single category still needs two real names to
+                // prove "every fit is kept"; seed temp ones and remove them.
+                while (count($cats) < 2) {
+                    $tmp = 'TmpAdvisorCat' . count($cats) . substr((string) microtime(true), -4);
+                    Database::run('INSERT INTO categories (name, slug) VALUES (?, ?)', [$tmp, strtolower($tmp)]);
+                    $made[] = $tmp;
+                    $cats = Database::run('SELECT name FROM categories ORDER BY id ASC LIMIT 3')->fetchAll(\PDO::FETCH_COLUMN);
+                }
+                $known1 = (string) $cats[0];
+                $known2 = (string) $cats[1];
+                $cid1 = (int) Database::run('SELECT id FROM categories WHERE name = ?', [$known1])->fetchColumn();
+
+                // Two entries for the SAME category: strongest confidence wins
+                // across batches, and there is no cap on how many fit.
+                $json = json_encode(['categories' => [
+                    ['name' => $known1, 'confidence' => 0.55],
+                    ['name' => $known2, 'confidence' => 0.90],
+                    ['name' => 'Not A Real Category', 'confidence' => 0.99],
+                    ['name' => $known1, 'confidence' => 0.80],
+                ]]);
+
+                $rows = \App\Core\CategoryAdvisor::resolve($json, [$known1, $known2]);
+
+                $ids = array_map(static fn (array $r): int => (int) $r['category_id'], $rows);
+                $byId = [];
+                foreach ($rows as $r) {
+                    $byId[(int) $r['category_id']] = (float) $r['confidence'];
+                }
+
+                $unknownDropped = count($rows) === 2 && !in_array(0, $ids, true);
+                $deduped        = count($rows) === 2;
+                $strongest      = count($rows) === 2
+                    && isset($byId[$cid1])
+                    && abs($byId[$cid1] - 0.80) < 0.001;
+
+                // A code-fenced reply (small models wrap JSON) still parses.
+                $fenced = \App\Core\CategoryAdvisor::resolve("```json\n$json\n```", [$known1, $known2]);
+
+                $pass = $unknownDropped && $deduped && $strongest && count($fenced) === 2;
+                return ['pass' => $pass, 'detail' => sprintf(
+                    'rows=%d unknown-dropped=%d deduped-strongest=%d fenced=%d',
+                    count($rows), (int) $unknownDropped, (int) $strongest, count($fenced)
+                )];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            } finally {
+                foreach ($made as $tmp) {
+                    try {
+                        Database::run('DELETE FROM categories WHERE name = ?', [$tmp]);
+                    } catch (\Throwable $ignored) {
+                    }
+                }
+            }
+        });
+
         $add('db.idle_reconnect', 'Database', 'A connection closed by wait_timeout is transparently reopened', function () {
             try {
                 // Boxes run wait_timeout=60s while a worker blocks for minutes
