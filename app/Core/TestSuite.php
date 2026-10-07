@@ -188,6 +188,150 @@ class TestSuite
             }
         });
 
+        $add('db.categorizer_schema', 'Database', 'AI category suggestion tables + indexes exist', function () {
+            try {
+                $tables = Database::run('SHOW TABLES')->fetchAll(\PDO::FETCH_COLUMN);
+                foreach (['gallery_category_jobs', 'gallery_category_suggestions'] as $t) {
+                    if (!in_array($t, $tables, true)) {
+                        return ['pass' => false, 'detail' => 'missing table: ' . $t];
+                    }
+                }
+                $idx = Database::run('SHOW INDEX FROM gallery_category_suggestions')->fetchAll();
+                $names = array_unique(array_column($idx, 'Key_name'));
+                if (!in_array('uq_suggestion_gallery_category', $names, true)) {
+                    return ['pass' => false, 'detail' => 'unique (gallery,category) key missing'];
+                }
+                return ['pass' => true, 'detail' => 'both tables + unique key present'];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
+        $add('db.categorizer_suggest_cycle', 'Database', 'enqueue -> claim -> stage -> accept merges (never replaces) categories', function () {
+            $gid = null;
+            try {
+                $cat = Database::run('SELECT id FROM categories ORDER BY id ASC LIMIT 1')->fetch();
+                if ($cat === false) {
+                    return ['pass' => false, 'detail' => 'no categories defined'];
+                }
+                // decided_by must be a real user (FK); not every box has id 1.
+                $actor = (int) Database::run('SELECT id FROM users ORDER BY id ASC LIMIT 1')->fetchColumn();
+                $g = Database::run(
+                    "INSERT INTO galleries (title, type) VALUES ('TmpCategorizerCycle', 'images')"
+                );
+                $gid = (int) Database::connection()->lastInsertId();
+                $catId = (int) $cat['id'];
+
+                // Pre-existing category the accept must PRESERVE.
+                $other = Database::run('SELECT id FROM categories WHERE id <> ? ORDER BY id ASC LIMIT 1', [$catId])->fetch();
+                $preexisting = $other !== false ? (int) $other['id'] : null;
+                if ($preexisting !== null) {
+                    Database::run('INSERT INTO gallery_category (gallery_id, category_id) VALUES (?, ?)', [$gid, $preexisting]);
+                }
+
+                $queued = \App\Models\CategorySuggestion::enqueue($gid);
+
+                // Make our job the oldest so a box with a real backlog still
+                // claims it first (claimNext orders by updated_at ASC).
+                \App\Core\Database::run(
+                    "UPDATE gallery_category_jobs SET updated_at = '2001-01-01 00:00:00' WHERE gallery_id = ?",
+                    [$gid]
+                );
+
+                // Claim until we get our gallery (other jobs may be queued
+                // for real); park the ones that were not ours back as queued.
+                $claimedOk = false;
+                $parked    = [];
+                for ($i = 0; $i < 25; $i++) {
+                    $claimed = \App\Models\CategorySuggestion::claimNext();
+                    if ($claimed === null) {
+                        break;
+                    }
+                    if ($claimed === $gid) {
+                        $claimedOk = true;
+                        break;
+                    }
+                    $parked[] = $claimed;
+                }
+                foreach ($parked as $parkId) {
+                    Database::run("UPDATE gallery_category_jobs SET status = 'queued', attempts = attempts - 1 WHERE gallery_id = ?", [$parkId]);
+                }
+
+                Database::run(
+                    "INSERT INTO gallery_category_suggestions (gallery_id, category_id, confidence, status, engine) VALUES (?, ?, 0.9, 'pending', 'ollama')",
+                    [$gid, $catId]
+                );
+                \App\Models\CategorySuggestion::complete($gid, 'ollama');
+
+                $pending = \App\Models\CategorySuggestion::pendingFor($gid);
+                $sid = $pending !== [] ? (int) $pending[0]['id'] : 0;
+                $accepted = $sid > 0 && \App\Models\CategorySuggestion::accept($sid, $actor);
+
+                $cats = array_map('intval', array_column(\App\Models\Gallery::categories($gid), 'id'));
+                $merged = in_array($catId, $cats, true)
+                    && ($preexisting === null || in_array($preexisting, $cats, true));
+                $retired = \App\Models\CategorySuggestion::pendingFor($gid) === [];
+                $reaccept = $sid > 0 && !\App\Models\CategorySuggestion::accept($sid, $actor);
+
+                // A retryable failure must come back to the queue on its own
+                // (recoverStale), while an exhausted one stays parked in error.
+                \App\Models\CategorySuggestion::fail($gid, 'transient');
+                \App\Models\CategorySuggestion::recoverStale();
+                $retryJob = \App\Models\CategorySuggestion::jobFor($gid);
+                $requeued = $retryJob !== null && $retryJob['status'] === 'queued';
+                Database::run(
+                    "UPDATE gallery_category_jobs SET status = 'error', attempts = 99 WHERE gallery_id = ?",
+                    [$gid]
+                );
+                \App\Models\CategorySuggestion::recoverStale();
+                $deadJob = \App\Models\CategorySuggestion::jobFor($gid);
+                $staysParked = $deadJob !== null && $deadJob['status'] === 'error';
+
+                $pass = $queued && $claimedOk && $accepted && $merged && $retired && $reaccept
+                    && $requeued && $staysParked;
+
+                return ['pass' => $pass, 'detail' => sprintf(
+                    'queued=%d claimed=%d accepted=%d merged=%d retired=%d reaccept-refused=%d requeued=%d stays-parked=%d cats=%d',
+                    (int) $queued, (int) $claimedOk, (int) $accepted, (int) $merged, (int) $retired,
+                    (int) $reaccept, (int) $requeued, (int) $staysParked, count($cats)
+                )];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            } finally {
+                if ($gid !== null) {
+                    try {
+                        Database::run('DELETE FROM gallery_category_suggestions WHERE gallery_id = ?', [$gid]);
+                        Database::run('DELETE FROM gallery_category_jobs WHERE gallery_id = ?', [$gid]);
+                        Database::run('DELETE FROM gallery_category WHERE gallery_id = ?', [$gid]);
+                        Database::run('DELETE FROM galleries WHERE id = ?', [$gid]);
+                    } catch (\Throwable $ignored) {
+                    }
+                }
+            }
+        });
+
+        $add('db.idle_reconnect', 'Database', 'A connection closed by wait_timeout is transparently reopened', function () {
+            try {
+                // Boxes run wait_timeout=60s while a worker blocks for minutes
+                // on a vision/FFmpeg call. Prove Database::run() survives a
+                // connection MySQL has already dropped (2006).
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+                Database::run('SET SESSION wait_timeout = 1');
+                usleep(1_500_000);
+                $n = (int) Database::run('SELECT 42')->fetchColumn();
+                return ['pass' => $n === 42, 'detail' => 'reconnected, got ' . $n];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            } finally {
+                try {
+                    Database::reset();
+                } catch (\Throwable $ignored) {
+                }
+            }
+        });
+
         $add('db.content_counts', 'Database', 'Site has content (users/galleries/photos)', function () {
             try {
                 $u = (int) Database::run('SELECT COUNT(*) FROM users')->fetchColumn();

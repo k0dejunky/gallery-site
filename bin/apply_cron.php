@@ -113,6 +113,10 @@ $crond['gallery-emailer'] =
     "*/5 * * * * {$php}/bin/email_worker.php --once >> " . SITE_ROOT . "/storage/logs/emailer.log 2>&1\n";
 $crond['gallery-daily-chat'] =
     "{$dcFields[0]} {$dcFields[1]} * * * {$php}/bin/daily_chat_worker.php --once >> " . SITE_ROOT . "/storage/logs/daily-chat.log 2>&1\n";
+// AI category suggestions: drain up to 5 queued galleries per tick (each
+// analysis can take a while on CPU); flock inside the worker prevents overlap.
+$crond['gallery-categorizer'] =
+    "* * * * * {$php}/bin/categorize_worker.php --once >> " . SITE_ROOT . "/storage/logs/categorizer.log 2>&1\n";
 $crond['gallery-backup'] =
     "{$backupM} {$backupH} {$backupD} * * {$php}/bin/gallery_backup.php >> " . SITE_ROOT . "/storage/logs/backup.log 2>&1\n";
 // Daily small DB-only dump (cheap safety net on top of the monthly full

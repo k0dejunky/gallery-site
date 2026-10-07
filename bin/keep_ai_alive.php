@@ -98,6 +98,26 @@ if (!$basePresent) {
 }
 
 // --- 3. Is the runner wedged? A tiny real generation must complete. ----------
+// The category worker holds a vision request on the single runner slot for
+// minutes per gallery; while it works, both probes below just queue behind it
+// and time out. That is BUSY, not wedged - restarting (or warning) here would
+// be noise at best and would kill every analysis mid-flight. Skip the probes
+// entirely while the worker owns the lock.
+$catLock = dirname(__DIR__) . '/storage/logs/categorizer.lock';
+$fh      = is_file($catLock) ? @fopen($catLock, 'c') : false;
+$busy    = false;
+if ($fh !== false) {
+    $busy = !flock($fh, LOCK_EX | LOCK_NB);
+    if (!$busy) {
+        flock($fh, LOCK_UN);
+    }
+    fclose($fh);
+}
+if ($busy) {
+    $log('categorizer worker busy; skipping runner probes this tick');
+    exit(0);
+}
+
 [$gStatus, , $gBody] = Http::request($baseUrl . '/api/generate', [
     'method'  => 'POST',
     'timeout' => 15,

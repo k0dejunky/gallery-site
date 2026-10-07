@@ -259,6 +259,8 @@ class AdminController extends Controller
                 static fn (array $category): int => (int) $category['id'],
                 Gallery::categories($id)
             ),
+            'suggestions' => \App\Models\CategorySuggestion::pendingFor($id),
+            'suggestionJob' => \App\Models\CategorySuggestion::jobFor($id),
             'tagValue'  => $tagValue,
             'activeEditJob' => \App\Models\PhotoJob::latestForGallery($id),
             'queuedGalleries' => Gallery::queuedForPublishing(Auth::isSuperAdmin()),

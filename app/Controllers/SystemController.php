@@ -721,6 +721,19 @@ class SystemController extends Controller
         $dcNote = $this->lastLineSummary($logs . '/daily-chat.log');
         $dcFresh = $dcTs !== null && ($now - $dcTs) <= 90 * 60;
 
+        [$czTs, $czAt] = $lastRun($logs . '/categorizer.log');
+        $czNote   = $this->lastLineSummary($logs . '/categorizer.log');
+        $czDriver = \App\Models\CategorySuggestion::driver();
+        // The worker only logs when it had work, so "no recent line" is fine
+        // while the queue is empty - it means there is nothing to analyze.
+        $czQueue  = (int) ($czDriver === 'off'
+            ? 0
+            : \App\Models\CategorySuggestion::stats()['queued']);
+        $czFresh  = $czQueue === 0 || ($czTs !== null && ($now - $czTs) <= 10 * 60);
+        if ($czNote === '') {
+            $czNote = $czDriver === 'off' ? '' : ($czQueue > 0 ? $czQueue . ' queued' : 'idle');
+        }
+
         [$waTs, $waAt] = $lastRun($logs . '/web-analytics.log');
         $waNote = $this->lastLineSummary($logs . '/web-analytics.log');
         $waEvery = (int) ($this->cronSchedule()['web_analytics']['every_minutes'] ?? 60);
@@ -773,6 +786,15 @@ class SystemController extends Controller
                 'lastAgo'  => $this->relativeAge($dcTs),
                 'ok'       => $dcFresh,
                 'note'     => $dcNote,
+            ],
+            [
+                'id'       => 'categorizer',
+                'schedule' => 'every minute',
+                'desc'     => 'AI category suggestions: analyze queued galleries and stage proposals for admin review',
+                'lastRun'  => $czAt,
+                'lastAgo'  => $this->relativeAge($czTs),
+                'ok'       => $czDriver === 'off' || $czFresh,
+                'note'     => $czDriver === 'off' ? 'driver=off in .env' : $czNote,
             ],
             [
                 'id'       => 'backup',

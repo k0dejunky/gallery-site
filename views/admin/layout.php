@@ -394,6 +394,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
                 <a class="nav-item <?= $navActive('/admin/emailer') ?>" href="<?= url('/admin/emailer') ?>" data-se-move-key="nav-emailer">Emailer</a>
             <?php endif; ?>
             <a class="nav-item <?= $navActive('/admin/categories') ?>" href="<?= url('/admin/categories') ?>" data-se-move-key="nav-categories">Categories</a>
+            <a class="nav-item <?= $navActive('/admin/category-suggestions') ?>" href="<?= url('/admin/category-suggestions') ?>" data-se-move-key="nav-category-suggestions">AI Suggestions</a>
             <a class="nav-item <?= $navActive('/admin/users') ?>" href="<?= url('/admin/users') ?>" data-se-move-key="nav-users">Users</a>
             <a class="nav-item <?= $navActive('/admin/plans') ?>" href="<?= url('/admin/plans') ?>" data-se-move-key="nav-plans">Membership</a>
             <?php if (\App\Core\Auth::can('membership')): ?>

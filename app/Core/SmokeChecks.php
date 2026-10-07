@@ -1054,6 +1054,74 @@ class SmokeChecks
                 : $bad('views/admin/emailer.php must expose settings, sample count, test/send-now actions and queue retry, display times via tzdate(), and have no own timezone selector');
         });
 
+        // ------------------------------------------------ AI category suggestions
+        $czModel  = $read("$root/app/Models/CategorySuggestion.php");
+        $czSvc    = $read("$root/app/Core/CategoryAdvisor.php");
+        $czCtrl   = $read("$root/app/Controllers/CategorySuggestionController.php");
+        $czWorker = $read("$root/bin/categorize_worker.php");
+        $czView   = $read("$root/views/admin/category_suggestions.php");
+        $czManage = $read("$root/views/admin/manage.php");
+        $czSchema = $read("$root/schema.sql");
+        $czMigr   = $read("$root/database/migrations/055_category_suggestions.sql");
+        $czUpload = $read("$root/app/Core/MediaUploader.php");
+        $add('smoke.categorizer.schema', 'Smoke · Categorizer', 'suggestion + job tables in schema.sql and migration 055', static function () use ($czSchema, $czMigr, $ok, $bad): array {
+            $okSchema = strpos($czSchema, 'gallery_category_suggestions') !== false
+                && strpos($czSchema, 'gallery_category_jobs') !== false;
+            $okMigr = strpos($czMigr, 'gallery_category_suggestions') !== false
+                && strpos($czMigr, 'gallery_category_jobs') !== false;
+            return $okSchema && $okMigr
+                ? $ok('schema + migration present')
+                : $bad('schema.sql and database/migrations/055_category_suggestions.sql must both define gallery_category_jobs + gallery_category_suggestions');
+        });
+        $add('smoke.categorizer.merge_not_replace', 'Smoke · Categorizer', 'accept() merges into existing categories (setCategories replaces)', static function () use ($czModel, $ok, $bad): array {
+            return strpos($czModel, 'Gallery::categories(') !== false
+                && strpos($czModel, 'Gallery::setCategories(') !== false
+                && strpos($czModel, 'in_array($categoryId, $current, true)') !== false
+                ? $ok('read-then-merge present')
+                : $bad('CategorySuggestion::accept must read Gallery::categories() first and merge - Gallery::setCategories REPLACES all categories');
+        });
+        $add('smoke.categorizer.manual_accept', 'Smoke · Categorizer', 'proposals are staged pending; only accept/dismiss touch gallery_category', static function () use ($czModel, $czWorker, $czCtrl, $ok, $bad): array {
+            // "gallery_category " with a trailing space: matches the PIVOT
+            // table, not the gallery_category_suggestions/jobs tables the
+            // worker legitimately writes.
+            $writesPivot = preg_match('/gallery_category\s+(WHERE|VALUES)/', $czWorker) === 1
+                || strpos($czWorker, 'INSERT INTO gallery_category ') !== false;
+            return strpos($czModel, "'pending'") !== false
+                && strpos($czCtrl, 'CategorySuggestion::accept') !== false
+                && !$writesPivot
+                ? $ok('worker stages proposals only; accept/dismiss is the sole write path')
+                : $bad('bin/categorize_worker.php must never write gallery_category - proposals go to gallery_category_suggestions for admin accept');
+        });
+        $add('smoke.categorizer.driver_switch', 'Smoke · Categorizer', 'ollama|api|off driver switch with dormant API config', static function () use ($czModel, $czSvc, $ok, $bad): array {
+            return strpos($czModel, "[\x27ollama\x27, \x27api\x27, \x27off\x27]") !== false
+                && strpos($czSvc, 'callOllama') !== false && strpos($czSvc, 'callApi') !== false
+                && strpos($czSvc, 'CATEGORIZER_API_URL') !== false
+                ? $ok('both drivers + off switch present')
+                : $bad('CategorySuggestion::driver must switch ollama|api|off and CategoryAdvisor must implement both drivers');
+        });
+        $add('smoke.categorizer.worker', 'Smoke · Categorizer', 'worker flock + --once + cron entry + enqueue hook', static function () use ($czWorker, $acrn, $czUpload, $ok, $bad): array {
+            return strpos($czWorker, 'flock') !== false && strpos($czWorker, '--once') !== false
+                && strpos($acrn, 'gallery-categorizer') !== false && strpos($acrn, 'categorize_worker.php --once') !== false
+                && strpos($czUpload, 'CategorySuggestion::enqueue') !== false
+                ? $ok('worker + cron + upload hook wired')
+                : $bad('bin/categorize_worker.php must flock with --once, apply_cron.php must install gallery-categorizer, and MediaUploader::commit must enqueue');
+        });
+        $add('smoke.categorizer.routes', 'Smoke · Categorizer', 'review page + accept/dismiss/backfill routes behind categories permission', static function () use ($routesSrc, $czCtrl, $ok, $bad): array {
+            $routesOk = strpos($routesSrc, "'/admin/category-suggestions'") !== false
+                && strpos($routesSrc, '/admin/category-suggestions/accept') !== false
+                && strpos($routesSrc, '/admin/category-suggestions/backfill') !== false;
+            return $routesOk && strpos($czCtrl, "Auth::requirePermission('categories')") !== false
+                ? $ok('routes + permission gate present')
+                : $bad('routes.php must register /admin/category-suggestions[+/accept|/dismiss|/backfill] gated by the categories permission');
+        });
+        $add('smoke.categorizer.ui', 'Smoke · Categorizer', 'manage-page chips + review page + sidebar link', static function () use ($czView, $czManage, $adminLayout2, $ok, $bad): array {
+            return strpos($czManage, 'AI Suggestions') !== false
+                && strpos($czView, 'accept-all') !== false
+                && strpos($adminLayout2, '/admin/category-suggestions') !== false
+                ? $ok('manage chips, review view and nav link present')
+                : $bad('manage.php must show AI suggestion chips, category_suggestions.php the review list, and admin layout.php the nav link');
+        });
+
         // ------------------------------------------------ Site timezone
         $siteConfigC = $read("$root/app/Models/SiteConfig.php");
         $helpers     = $read("$root/app/Core/helpers.php");

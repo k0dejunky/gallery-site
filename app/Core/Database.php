@@ -66,6 +66,31 @@ class Database
         return self::$pdo;
     }
 
+    /** Drop the shared handle so the next call opens a fresh connection. */
+    public static function reset(): void
+    {
+        self::$pdo = null;
+    }
+
+    /**
+     * True when the error means MySQL closed an idle connection
+     * (wait_timeout expired while a worker was busy, e.g. a multi-minute
+     * vision/FFmpeg call). Such a connection is dead and must be reopened.
+     */
+    public static function isLostConnection(\Throwable $e): bool
+    {
+        if (!$e instanceof \PDOException) {
+            return false;
+        }
+        $sqlState = (string) ($e->errorInfo[0] ?? '');
+        $driverCode = (int) ($e->errorInfo[1] ?? 0);
+
+        // 2006 server has gone away, 2013 lost connection during query.
+        return ($sqlState === 'HY000' && ($driverCode === 2006 || $driverCode === 2013))
+            || $sqlState === '40001'
+            || stripos($e->getMessage(), 'server has gone away') !== false;
+    }
+
     /**
      * Prepare and execute a parameterised query. Always pass values as
      * parameters (never interpolated) so input cannot change the query.
@@ -76,8 +101,37 @@ class Database
     public static function run(string $sql, array $params = []): \PDOStatement
     {
         $start = microtime(true);
-        $stmt  = self::connection()->prepare($sql);
-        $stmt->execute($params);
+
+        // mysqlnd prints a "Packets out of order" warning while probing a
+        // connection the server already dropped; the exception below is what
+        // matters. Other warnings are forwarded to the normal handler.
+        set_error_handler(static function (int $no, string $msg): bool {
+            $known = ['Packets out of order', 'Lost connection', 'MySQL server has gone away'];
+            foreach ($known as $needle) {
+                if (stripos($msg, $needle) !== false) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+        try {
+            $stmt = self::connection()->prepare($sql);
+            $stmt->execute($params);
+        } catch (\PDOException $e) {
+            // A worker that blocks for minutes (vision, FFmpeg) lets the
+            // server's wait_timeout close the idle connection; transparently
+            // reconnect and run the statement once so the work is not lost.
+            if (!self::isLostConnection($e)) {
+                throw $e;
+            }
+            self::reset();
+            $stmt = self::connection()->prepare($sql);
+            $stmt->execute($params);
+        } finally {
+            restore_error_handler();
+        }
+
         $elapsed = microtime(true) - $start;
 
         if ($elapsed >= self::SLOW_THRESHOLD) {

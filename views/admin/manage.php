@@ -78,6 +78,54 @@
     <?php endif; ?>
     <button type="submit" class="btn">Save Gallery Settings</button>
 </form>
+
+<?php // AI category suggestions: proposals staged by bin/categorize_worker.php.
+// Accept merges into the checkboxes above (the gallery's categories); dismiss
+// only retires the proposal. Nothing here is ever applied automatically. ?>
+<?php if (!empty($suggestions) || (($suggestionJob['status'] ?? '') === 'error') || (($suggestionJob['status'] ?? '') === 'queued') || (($suggestionJob['status'] ?? '') === 'running')): ?>
+<h2 style="margin-top:1.5rem;">AI Suggestions</h2>
+<?php if (($suggestionJob['status'] ?? '') === 'error'): ?>
+    <p class="muted" style="color:var(--red-600, #b91c1c);">
+        Last analysis failed: <?= e($suggestionJob['error'] ?? 'unknown error') ?>
+        <form class="inline" method="post" action="<?= url('/admin/category-suggestions/reanalyze') ?>" style="display:inline;margin-left:.5rem;">
+            <?= csrf_field() ?>
+            <input type="hidden" name="gallery_id" value="<?= (int) $gallery['id'] ?>">
+            <button type="submit" class="btn btn-sm">Retry</button>
+        </form>
+    </p>
+<?php elseif (($suggestionJob['status'] ?? '') === 'queued' || ($suggestionJob['status'] ?? '') === 'running'): ?>
+    <p class="muted">Analysis <?= e($suggestionJob['status']) ?> — refresh shortly to see suggestions.</p>
+<?php endif; ?>
+
+<?php if (!empty($suggestions)): ?>
+    <p class="muted">The AI reviewed this gallery's media and proposes these categories. Accept to add them (your current categories are kept), dismiss to ignore.</p>
+    <div class="chips">
+        <?php foreach ($suggestions as $suggestion): ?>
+            <span class="chip" style="display:inline-flex;align-items:center;gap:.4rem;">
+                <?= e($suggestion['category_name']) ?>
+                <?php if ($suggestion['confidence'] !== null): ?>
+                    <span class="muted" style="font-size:.8em;"><?= (int) round((float) $suggestion['confidence'] * 100) ?>%</span>
+                <?php endif; ?>
+                <form class="inline" method="post" action="<?= url('/admin/category-suggestions/accept') ?>" style="display:inline;">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="id" value="<?= (int) $suggestion['id'] ?>">
+                    <button type="submit" class="btn btn-sm" title="Accept suggestion" aria-label="Accept <?= e($suggestion['category_name']) ?>">✓</button>
+                </form>
+                <form class="inline" method="post" action="<?= url('/admin/category-suggestions/dismiss') ?>" style="display:inline;">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="id" value="<?= (int) $suggestion['id'] ?>">
+                    <button type="submit" class="btn btn-sm" title="Dismiss suggestion" aria-label="Dismiss <?= e($suggestion['category_name']) ?>">✕</button>
+                </form>
+            </span>
+        <?php endforeach; ?>
+    </div>
+    <form class="inline" method="post" action="<?= url('/admin/category-suggestions/accept-all') ?>" style="margin-top:.6rem;">
+        <?= csrf_field() ?>
+        <input type="hidden" name="gallery_id" value="<?= (int) $gallery['id'] ?>">
+        <button type="submit" class="btn btn-sm">Accept all</button>
+    </form>
+<?php endif; ?>
+<?php endif; ?>
 <script>
 (function () {
     var labels = document.querySelectorAll('[data-category-name]');

@@ -158,6 +158,14 @@ return [
     ['GET', '/admin/categories/{id}/edit', 'CategoryController@edit', 'categories'],
     ['POST', '/admin/categories/{id}', 'CategoryController@update', 'categories'],
     ['POST', '/admin/categories/{id}/delete', 'CategoryController@destroy', 'categories'],
+    // AI category suggestions: review page + accept/dismiss/backfill actions.
+    // Literals only (no {id} wildcards), so ordering vs. other blocks is safe.
+    ['GET',  '/admin/category-suggestions', 'CategorySuggestionController@index', 'categories'],
+    ['POST', '/admin/category-suggestions/accept', 'CategorySuggestionController@accept', 'categories'],
+    ['POST', '/admin/category-suggestions/dismiss', 'CategorySuggestionController@dismiss', 'categories'],
+    ['POST', '/admin/category-suggestions/accept-all', 'CategorySuggestionController@acceptAll', 'categories'],
+    ['POST', '/admin/category-suggestions/backfill', 'CategorySuggestionController@backfill', 'categories'],
+    ['POST', '/admin/category-suggestions/reanalyze', 'CategorySuggestionController@reanalyze', 'categories'],
     ['GET', '/admin/galleries', 'AdminController@galleries', 'galleries'],
     ['POST', '/admin/galleries/import-settings', 'AdminController@saveImportSettings', 'galleries'],
     ['GET', '/admin/galleries/export', 'ExportController@galleries', 'galleries'],

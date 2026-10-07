@@ -231,6 +231,11 @@ class MediaUploader
             \App\Models\Photo::setDuration($photoId, video_duration_seconds($config['dir'] . '/' . $filename));
         }
 
+        // Newly committed media: queue the gallery for AI category analysis
+        // (driven by bin/categorize_worker.php; a no-op when the driver is
+        // off or a job is already queued/running).
+        \App\Models\CategorySuggestion::enqueue($galleryId);
+
         return $photoId;
     }
 }
