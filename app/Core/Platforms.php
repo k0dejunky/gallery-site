@@ -109,9 +109,9 @@ final class Platforms
             'requires'    => 'App in the X developer portal (Read & Write). Authorize once to store the refresh token.',
         ],
 
-        // Reddit is kept as an inert entry: the OAuth client still exists but
-        // Reddit posts as the authenticated user; credentials + target
-        // subreddit come from the channel form, OAuth from the authorize flow.
+        // Reddit is an active channel: it posts as the authenticated user.
+        // Credentials + target subreddit come from the channel form; the OAuth
+        // code flow (submit + identity scopes) is owned by RedditClient.
         'reddit' => [
             'key'          => 'reddit',
             'label'        => 'Reddit',

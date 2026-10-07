@@ -5,8 +5,9 @@ namespace App\Models;
 /**
  * Reddit API client for the Auto Poster. Supports both an OAuth2
  * user-authorization code flow (which obtains a refresh token with the
- * "submit" scope needed to post to subreddits as a user) and a fallback
- * client-credentials token. Submits link, text or image posts to any
+ * "submit" scope needed to post to subreddits as a user, plus "identity" so
+ * the /api/v1/me health check can confirm the authorizing account) and a
+ * fallback client-credentials token. Submits link, text or image posts to any
  * subreddit the authenticated account can post to.
  */
 class RedditClient
@@ -14,7 +15,7 @@ class RedditClient
     private const OAUTH_URL      = 'https://www.reddit.com/api/v1/access_token';
     private const AUTHORIZE_URL  = 'https://www.reddit.com/api/v1/authorize';
     private const API_URL        = 'https://oauth.reddit.com';
-    private const REQUIRED_SCOPE = 'submit';
+    private const REQUIRED_SCOPE = 'submit identity';
 
     private array $config;
 
