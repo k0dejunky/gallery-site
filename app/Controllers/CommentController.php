@@ -7,6 +7,7 @@ use App\Core\Controller;
 use App\Models\Comment;
 use App\Models\Gallery;
 use App\Models\Notification;
+use App\Models\Photo;
 use App\Models\WallPost;
 
 /**
@@ -26,7 +27,7 @@ class CommentController extends Controller
 
         $back = $this->request->header('HTTP_REFERER') ?: '/';
 
-        if (!in_array($type, [Comment::TYPE_GALLERY, Comment::TYPE_WALL], true)) {
+        if (!in_array($type, [Comment::TYPE_GALLERY, Comment::TYPE_WALL, Comment::TYPE_PHOTO], true)) {
             $this->flash('error', 'Invalid comment target.');
             $this->redirect($back);
             return;
@@ -40,6 +41,12 @@ class CommentController extends Controller
 
         if ($type === Comment::TYPE_GALLERY) {
             if (Gallery::find($target) === null) {
+                $this->notFound();
+                return;
+            }
+        } elseif ($type === Comment::TYPE_PHOTO) {
+            $photo = Photo::find($target);
+            if ($photo === null) {
                 $this->notFound();
                 return;
             }
@@ -67,11 +74,17 @@ class CommentController extends Controller
 
         // Notify the previous author on this thread (only when they are a
         // different person) so replies surface as an in-app notification.
-        $prior = Comment::previousAuthor($type, $target, (int) $user['id']);
+        // A gallery's thread also includes the comments on wall posts that
+        // promote it, so a reply there reaches either author.
+        $prior = $type === Comment::TYPE_GALLERY
+            ? Comment::previousAuthorForGallery($target, (int) $user['id'])
+            : Comment::previousAuthor($type, $target, (int) $user['id']);
         if ($prior !== null && (int) $prior['user_id'] !== (int) $user['id']) {
-            $url = $type === Comment::TYPE_GALLERY
-                ? '/galleries/' . $target
-                : '/wall#comment-' . $id;
+            $url = match ($type) {
+                Comment::TYPE_GALLERY => '/galleries/' . $target,
+                Comment::TYPE_PHOTO   => (is_video((string) $photo['filename']) ? '/videos/' : '/images/') . $target,
+                default               => '/wall#comment-' . $id,
+            };
 
             Notification::add(
                 (int) $prior['user_id'],

@@ -923,7 +923,7 @@ CREATE TABLE IF NOT EXISTS gallery_ratings (
 CREATE TABLE IF NOT EXISTS comments (
     id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id          INT UNSIGNED NOT NULL,
-    commentable_type ENUM('gallery','wall_post') NOT NULL,
+    commentable_type ENUM('gallery','wall_post','photo') NOT NULL,
     commentable_id   INT UNSIGNED NOT NULL,
     body             TEXT NOT NULL,
     created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -158,6 +158,8 @@
                         <td style="padding:.4rem .5rem;">
                             <?php if ($comment['commentable_type'] === \App\Models\Comment::TYPE_GALLERY): ?>
                                 <a href="<?= url('/galleries/' . (int) $comment['commentable_id']) ?>" target="_blank" rel="noopener"><?= e(mb_substr((string) ($comment['entity_label'] ?? 'Gallery'), 0, 60)) ?></a>
+                            <?php elseif ($comment['commentable_type'] === \App\Models\Comment::TYPE_PHOTO): ?>
+                                <a href="<?= url((is_video((string) ($comment['photo_filename'] ?? '')) ? '/videos/' : '/images/') . (int) $comment['commentable_id']) ?>" target="_blank" rel="noopener"><?= e(mb_substr((string) ($comment['entity_label'] ?? '') !== '' ? (string) $comment['entity_label'] : 'Media #' . (int) $comment['commentable_id'], 0, 60)) ?></a>
                             <?php else: ?>
                                 <span class="muted">Wall post · <?= e(mb_substr((string) ($comment['entity_label'] ?? ''), 0, 40)) ?></span>
                             <?php endif; ?>

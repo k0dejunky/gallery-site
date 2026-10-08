@@ -67,6 +67,11 @@ $breadcrumbItems = [
     <?php endif; ?>
 </figure>
 <p style="text-align:center"><a href="<?= e($reportUrl) ?>">Report broken media</a></p>
+<?php
+$commentableType = 'photo';
+$commentableId   = (int) $photo['id'];
+require __DIR__ . '/../partials/comments.php';
+?>
 <script>
     (function () {
         var img = document.getElementById('fullsize-img');

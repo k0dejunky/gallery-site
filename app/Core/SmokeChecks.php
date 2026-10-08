@@ -101,6 +101,8 @@ class SmokeChecks
             'bin/apply_server_optimizations.php',
             'app/Models/OperatorToken.php',
             'database/migrations/031_operator_tokens.sql',
+            'database/migrations/057_comments_photo.sql',
+            'views/partials/comments.php',
         ];
         foreach ($files as $rel) {
             $slug = str_replace(['/', '.'], '_', $rel);
@@ -888,10 +890,47 @@ class SmokeChecks
                 ? $ok('per-row try/catch present')
                 : $bad('bin/autopost_worker.php must wrap each AutoPostQueue::post() call so a single throwing row is marked failed and the rest of the batch still publishes');
         });
-        $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendations are promoted to a gallery-linked Wall post', static function () use ($apq, $ok, $bad): array {
+$add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendations are promoted to a gallery-linked Wall post', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'WallPost::createForGallery(0, $galleryId, trim((string) $item[\'text\']))') !== false
                 ? $ok('wall promotion present on the post() success path')
-                : $bad('AutoPostQueue::post must create a gallery-linked wall post when a recommendation publishes successfully');
+                : $bad('AutoPostQueue::post must create a gallery-linked wall post when a recommendation submits');
+        });
+        $commentModel = $read("$root/app/Models/Comment.php");
+        $galleryCtrl  = $read("$root/app/Controllers/GalleryController.php");
+        $imageCtrl    = $read("$root/app/Controllers/ImageController.php");
+        $add('smoke.comments.photo_type', 'Smoke · Comments', "comments can target individual media (type 'photo')", static function () use ($schema, $commentModel, $ok, $bad): array {
+            return strpos($schema, "commentable_type ENUM('gallery','wall_post','photo')") !== false
+                && strpos($commentModel, "const TYPE_PHOTO   = 'photo';") !== false
+                && strpos($commentModel, 'self::TYPE_PHOTO') !== false
+                ? $ok('photo commentable type present in schema + model')
+                : $bad("comments.commentable_type must include 'photo' in schema.sql and Comment::TYPE_PHOTO must be registered in TYPES");
+        });
+        $add('smoke.comments.gallery_thread', 'Smoke · Comments', 'A gallery thread includes comments on its promoting wall posts', static function () use ($commentModel, $galleryCtrl, $ok, $bad): array {
+            return strpos($commentModel, 'function forGallery(') !== false
+                && strpos($commentModel, 'public static function countForGallery(') !== false
+                && strpos($galleryCtrl, 'Comment::forGallery(') !== false
+                && strpos($galleryCtrl, 'Comment::countForGallery(') !== false
+                ? $ok('gallery page aggregates wall-post comments')
+                : $bad('Comment::forGallery/countForGallery must union gallery comments with the comments on wall posts whose gallery_id is the gallery, and GalleryController::show must use them');
+        });
+        $add('smoke.comments.photo_thread', 'Smoke · Comments', 'Image/video pages host a per-media comment thread', static function () use ($root, $read, $imageCtrl, $ok, $bad): array {
+            $img = $read("$root/views/gallery/image_full.php");
+            $pl  = $read("$root/views/video/player.php");
+            $pt  = $read("$root/views/partials/comments.php");
+            return strpos($imageCtrl, 'Comment::TYPE_PHOTO') !== false
+                && strpos($img, 'partials/comments.php') !== false
+                && strpos($pl, 'partials/comments.php') !== false
+                && strpos($pt, 'commentable_type') !== false
+                && strpos($pt, 'Comment::isStaff') !== false
+                ? $ok('photo comment thread wired into both media views')
+                : $bad('ImageController::showMedia must load TYPE_PHOTO comments and both image_full.php and player.php must render the shared comments partial');
+        });
+        $commentCtrl = $read("$root/app/Controllers/CommentController.php");
+        $add('smoke.comments.photo_validation', 'Smoke · Comments', 'CommentController validates the photo target and links back to the media', static function () use ($commentCtrl, $ok, $bad): array {
+            return strpos($commentCtrl, 'Comment::TYPE_PHOTO') !== false && strpos($commentCtrl, 'Photo::find($target)') !== false
+                && strpos($commentCtrl, "is_video((string) \$photo['filename'])") !== false
+                ? $ok('photo target validated + reply URL')
+                : $bad('CommentController::store must accept TYPE_PHOTO, reject a missing Photo, and link the reply notification to /images/ or /videos/');
         });
         $wp = $read("$root/app/Models/WallPost.php");
         $add('smoke.wall.gallery_post', 'Smoke · Wall', 'WallPost supports gallery-linked posts (deduped per gallery)', static function () use ($wp, $ok, $bad): array {

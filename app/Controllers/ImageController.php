@@ -133,6 +133,8 @@ class ImageController extends Controller
             'playlistQuery' => $playlistQuery,
             'playlistId'    => $playlistId,
             'canViewFull'   => $canViewFull,
+            'comments'      => \App\Models\Comment::forEntity(\App\Models\Comment::TYPE_PHOTO, $id),
+            'commentCount'  => \App\Models\Comment::countFor(\App\Models\Comment::TYPE_PHOTO, $id),
         ]);
     }
 

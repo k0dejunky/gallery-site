@@ -153,3 +153,7 @@ $breadcrumbItems = [
 $sharePath  = '/videos/' . (int) $photo['id'];
 $shareTitle = $title;
 require __DIR__ . '/../partials/share-bar.php';
+
+$commentableType = 'photo';
+$commentableId   = (int) $photo['id'];
+require __DIR__ . '/../partials/comments.php';
