@@ -43,6 +43,34 @@ class WallPost
         return $id;
     }
 
+    /**
+     * Publish a wall post that references a gallery, so the wall can render
+     * a membership-gated preview grid from the linked gallery's photos. The
+     * body is the accompanying note (the auto poster uses the recommendation
+     * text). A gallery is only ever linked once — re-publishing the same
+     * gallery returns the existing post's id.
+     */
+    public static function createForGallery(int $userId, int $galleryId, string $body = ''): int
+    {
+        $existing = Database::run(
+            'SELECT id FROM wall_posts
+             WHERE gallery_id = ? AND deleted_at IS NULL
+             ORDER BY created_at DESC LIMIT 1',
+            [$galleryId]
+        )->fetch();
+
+        if ($existing) {
+            return (int) $existing['id'];
+        }
+
+        Database::run(
+            'INSERT INTO wall_posts (body, gallery_id, pinned) VALUES (?, ?, 0)',
+            [$body, $galleryId]
+        );
+
+        return (int) Database::connection()->lastInsertId();
+    }
+
     public static function delete(int $id): void
     {
         Database::run('UPDATE wall_posts SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL', [$id]);

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Core\Database;
 use App\Core\AutoPostText;
 use App\Core\Platforms;
+use App\Models\WallPost;
 use DateTime;
 use DateTimeZone;
 
@@ -1266,10 +1267,27 @@ class AutoPostQueue
             'UPDATE auto_poster_queue SET status = ?, error = ?, posted_at = NULL,
                     claimed_at = NULL, claimed_by = NULL
              WHERE id = ?',
-            ['skipped', $note, $id]
+            ['skipped', self::clampError($note), $id]
         );
 
         return $row->rowCount() > 0;
+    }
+
+    /**
+     * The error column is a fixed VARCHAR(500). Some platform clients return
+     * the upstream API's whole response body as the error text (Weasyl pastes
+     * the submit endpoint's HTTP error payload), which can run much longer and
+     * would otherwise throw SQLSTATE 22001 inside markFailed() — killing the
+     * entire worker run before any other row is marked. Clamp before write so
+     * a single noisy platform can never wedge the queue.
+     */
+    private static function clampError(string $error): string
+    {
+        if (mb_strlen($error) <= 500) {
+            return $error;
+        }
+
+        return mb_substr($error, 0, 497) . '...';
     }
 
     /**
@@ -1422,7 +1440,7 @@ class AutoPostQueue
              SET status = ?, error = ?, posted_at = NULL,
                  claimed_at = NULL, claimed_by = NULL
              WHERE id = ?',
-            ['failed', $error, $id]
+            ['failed', self::clampError($error), $id]
         );
 
         return $row->rowCount() > 0;
@@ -1633,6 +1651,15 @@ class AutoPostQueue
         if ($result['ok']) {
             $url = (string) ($result['url'] ?? '');
             self::markPosted((int) $item['id'], $url);
+
+            // A successfully submitted gallery recommendation is also promoted
+            // to the Wall, so members get a gated preview feed entry for it.
+            // The wall post links the gallery so the wall can gate its previews
+            // by membership level (re-posting the same gallery is a no-op).
+            $galleryId = (int) ($item['gallery_id'] ?? 0);
+            if ($galleryId > 0) {
+                WallPost::createForGallery(0, $galleryId, trim((string) $item['text']));
+            }
         } else {
             self::markFailed((int) $item['id'], (string) ($result['error'] ?? 'Unknown error'));
             $result['error'] = ($result['error'] ?? 'Unknown error') . ' (logged as failed)';

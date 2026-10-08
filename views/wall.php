@@ -111,12 +111,64 @@
     </div>
 <?php else: ?>
     <?php foreach ($posts as $post): ?>
+        <?php $postPreview = $post['preview'] ?? null; ?>
         <section class="favorites-section">
             <div class="favorites-heading">
                 <h2><?php $postDate = new DateTimeImmutable($post['created_at']); echo e($postDate->format('F j, Y')); ?></h2>
                 <?php if (!empty($post['pinned'])): ?><span class="chip">Pinned</span><?php endif; ?>
             </div>
-            <p style="white-space:pre-line;margin-bottom:.5rem;"><?= e($post['body']) ?></p>
+
+            <?php if ($postPreview !== null): ?>
+                <?php
+                $postShowLock = empty($postPreview['can_view']);
+                $postOpenUrl  = url('/galleries/' . (int) $postPreview['gallery_id']);
+                ?>
+                <article class="wall-post">
+                    <header class="wall-post-head">
+                        <span class="wall-post-avatar" style="background:#99618a">N</span>
+                        <div class="wall-post-meta">
+                            <strong>New set</strong>
+                            <span class="wall-post-time"><?= e(tzdate('M j, g:ia', (string) $post['created_at'])) ?></span>
+                        </div>
+                        <a class="btn btn-sm btn-outline wall-post-open" href="<?= e($postOpenUrl) ?>">View set</a>
+                    </header>
+
+                    <a class="wall-post-title" href="<?= e($postOpenUrl) ?>"><?= e($postPreview['title']) ?></a>
+                    <?php if ($postPreview['description'] !== ''): ?>
+                        <a class="wall-post-desc" href="<?= e($postOpenUrl) ?>"><?= e($postPreview['description']) ?></a>
+                    <?php endif; ?>
+
+                    <?php if (!empty($postPreview['photos'])): ?>
+                        <?php $postPhotoCountVisible = count($postPreview['photos']); ?>
+                        <a class="wall-photos wall-photos-<?= min($postPhotoCountVisible, 3) ?>" href="<?= e($postOpenUrl) ?>">
+                            <?php foreach ($postPreview['photos'] as $idx => $photo): ?>
+                                <?php
+                                $size = $postShowLock ? 'blur' : 'thumb';
+                                $src  = file_url($photo['filename'], $size);
+                                ?>
+                                <span class="wall-photo">
+                                    <img src="<?= e($src) ?>" alt="<?= e($photo['caption'] !== '' ? $photo['caption'] : $postPreview['title']) ?>" loading="lazy" decoding="async">
+                                    <?php if ($photo['is_video']): ?><span class="video-badge">&#9654;</span><?php endif; ?>
+                                    <?php if ($postShowLock && $idx === 0): ?>
+                                        <span class="wall-photo-lock"><span class="chip">Members only</span></span>
+                                    <?php endif; ?>
+                                </span>
+                            <?php endforeach; ?>
+                        </a>
+                    <?php endif; ?>
+
+                    <footer class="wall-post-foot">
+                        <?php if ((int) $postPreview['count'] > 0): ?>
+                            <span class="muted"><?= number_format((int) $postPreview['count']) ?> photo<?= (int) $postPreview['count'] === 1 ? '' : 's' ?></span>
+                        <?php endif; ?>
+                        <?php if ($postShowLock): ?>
+                            <a class="btn btn-sm" href="<?= e(url('/membership')) ?>">Upgrade to view</a>
+                        <?php endif; ?>
+                    </footer>
+                </article>
+            <?php else: ?>
+                <p style="white-space:pre-line;margin-bottom:.5rem;"><?= e($post['body']) ?></p>
+            <?php endif; ?>
 
             <?php $postComments = \App\Models\Comment::forEntity(\App\Models\Comment::TYPE_WALL, (int) $post['id']); ?>
             <details style="margin-top:.75rem;">

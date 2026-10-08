@@ -161,7 +161,7 @@ class SmokeChecks
             });
         }
 
-        foreach (['last_seen_at' => 'users', 'email_verified_at' => 'users', 'email_verification_token' => 'users', 'video_count' => 'storage_snapshots', 'min_level' => 'galleries', 'membership_number' => 'subscriptions', 'marketing_opt_out' => 'users', 'sent_at' => 'email_queue', 'audience' => 'email_queue', 'attempts' => 'email_queue', 'signup_source_link_id' => 'users', 'utm_source' => 'users', 'visitor_id' => 'traffic_visits'] as $col => $table) {
+        foreach (['last_seen_at' => 'users', 'email_verified_at' => 'users', 'email_verification_token' => 'users', 'video_count' => 'storage_snapshots', 'min_level' => 'galleries', 'membership_number' => 'subscriptions', 'marketing_opt_out' => 'users', 'sent_at' => 'email_queue', 'audience' => 'email_queue', 'attempts' => 'email_queue', 'signup_source_link_id' => 'users', 'utm_source' => 'users', 'visitor_id' => 'traffic_visits', 'gallery_id' => 'wall_posts'] as $col => $table) {
             $add("smoke.schema.col.$table.$col", 'Smoke · Schema', "schema.sql has column: $table.$col", static function () use ($col, $table, $schema, $ok, $bad): array {
                 return preg_match('/CREATE TABLE(\s+IF\s+NOT\s+EXISTS)?\s+' . $table . '\b(?:(?!CREATE TABLE).)*' . $col . '/is', $schema) === 1
                     ? $ok('present')
@@ -868,6 +868,48 @@ class SmokeChecks
             return strpos($apq, 'catch (\Throwable $e)') !== false && strpos($apq, 'thrown by the platform client') !== false
                 ? $ok('guard present')
                 : $bad('AutoPostQueue::post must catch platform-client exceptions and markFailed() them instead of leaving the row queued');
+        });
+        $add('smoke.ap.error_clamped', 'Smoke · Auto Poster', 'markFailed/markSkipped clamp overlong errors to VARCHAR(500)', static function () use ($apq, $ok, $bad): array {
+            return strpos($apq, 'private static function clampError(string $error)') !== false
+                && strpos($apq, "mb_substr(\$error, 0, 497)") !== false
+                && strpos($apq, "self::clampError(\$error)") !== false
+                ? $ok('clamp helper wired into both mark methods')
+                : $bad('markFailed/markSkipped must run error strings through a clamp so a >500-char platform body cannot throw SQLSTATE 22001 and kill the worker run');
+        });
+        $add('smoke.ap.weasyl_body_capped', 'Smoke · Auto Poster', 'Weasyl client caps the echoed upstream error body', static function () use ($root, $read, $ok, $bad): array {
+            $wc = $read("$root/app/Models/WeasylClient.php");
+            return strpos($wc, "mb_substr(\$body, 0, 397)") !== false && strpos($wc, 'Weasyl submit failed (HTTP') !== false
+                ? $ok('body capped')
+                : $bad('WeasylClient must cap the upstream API error body it embeds in the error string, or markFailed will exceed VARCHAR(500)');
+        });
+        $add('smoke.ap.worker_isolates_rows', 'Smoke · Auto Poster', 'Worker isolates per-row failures so one bad row cannot abort the batch', static function () use ($root, $read, $ok, $bad): array {
+            $w = $read("$root/bin/autopost_worker.php");
+            return strpos($w, 'failed (isolated)') !== false && strpos($w, "markFailed((int) \$item['id'], \$itemError->getMessage())") !== false
+                ? $ok('per-row try/catch present')
+                : $bad('bin/autopost_worker.php must wrap each AutoPostQueue::post() call so a single throwing row is marked failed and the rest of the batch still publishes');
+        });
+        $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendations are promoted to a gallery-linked Wall post', static function () use ($apq, $ok, $bad): array {
+            return strpos($apq, 'WallPost::createForGallery(0, $galleryId, trim((string) $item[\'text\']))') !== false
+                ? $ok('wall promotion present on the post() success path')
+                : $bad('AutoPostQueue::post must create a gallery-linked wall post when a recommendation publishes successfully');
+        });
+        $wp = $read("$root/app/Models/WallPost.php");
+        $add('smoke.wall.gallery_post', 'Smoke · Wall', 'WallPost supports gallery-linked posts (deduped per gallery)', static function () use ($wp, $ok, $bad): array {
+            return strpos($wp, 'public static function createForGallery(int $userId, int $galleryId, string $body') !== false
+                && strpos($wp, "SELECT id FROM wall_posts") !== false && strpos($wp, "WHERE gallery_id = ?") !== false
+                ? $ok('createForGallery present and deduped')
+                : $bad('WallPost::createForGallery must insert a gallery-linked wall post and return the existing post when that gallery is already on the wall');
+        });
+        $add('smoke.wall.gate_previews', 'Smoke · Wall', 'Wall renders membership-gated previews for gallery-linked posts', static function () use ($root, $read, $ok, $bad): array {
+            $wc = $read("$root/app/Controllers/WallController.php");
+            $wv = $read("$root/views/wall.php");
+            return strpos($wc, 'private function buildGalleryPreviews(') !== false
+                && strpos($wc, 'Purchase::userUnlocked(') !== false
+                && strpos($wc, "'gallery_id'  => \$galleryId") !== false
+                && strpos($wv, "\$post['preview']") !== false
+                && strpos($wv, "\$postShowLock ? 'blur' : 'thumb'") !== false
+                ? $ok('gallery-linked wall posts carry the membership-aware preview grid')
+                : $bad('WallController must decorate gallery-linked wall posts and the wall view must render thumb-vs-blur by membership level, exactly like notifications');
         });
         $add('smoke.ap.queue_all', 'Smoke · Auto Poster', 'Queue lists every queued row by default', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'public static function queued(int $limit = 0, ?string $platform = null)') !== false

@@ -75,6 +75,14 @@ class WeasylClient
             ]);
 
             if ($status !== 200 && $status !== 201) {
+                // Cap the echoed upstream body: it is the whole API error
+                // payload and can run to thousands of chars — far wider than
+                // auto_poster_queue.error (VARCHAR 500), where this lands.
+                $body = is_string($body) ? $body : (string) $body;
+                if (mb_strlen($body) > 400) {
+                    $body = mb_substr($body, 0, 397) . '...';
+                }
+
                 return ['ok' => false, 'error' => 'Weasyl submit failed (HTTP ' . $status . '): ' . $body];
             }
 

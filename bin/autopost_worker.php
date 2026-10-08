@@ -43,7 +43,23 @@ do {
         $due = AutoPostQueue::due(20);
 
         foreach ($due as $item) {
-            $result = AutoPostQueue::post((int) $item['id']);
+            // Isolate each row: a throwing post() (an unforeseen DB error, an
+            // oversized platform response, a filesystem hiccup) must not kill
+            // the rest of the batch — drop the item, mark it, keep going. The
+            // claimed row is released by markFailed via the catch inside post()
+            // or by the next run's stale reclaim, so it can never wedge the
+            // queue behind one unprocessable recommendation.
+            try {
+                $result = AutoPostQueue::post((int) $item['id']);
+            } catch (Throwable $itemError) {
+                try {
+                    AutoPostQueue::markFailed((int) $item['id'], $itemError->getMessage());
+                } catch (Throwable $markError) {
+                    error_log('[autopost] queue #' . (int) $item['id'] . ': both post and markFailed threw: ' . $markError->getMessage());
+                }
+                error_log('[autopost] queue #' . (int) $item['id'] . ': failed (isolated): ' . $itemError->getMessage());
+                continue;
+            }
 
             error_log(sprintf(
                 '[autopost] queue #%d: %s',

@@ -892,14 +892,19 @@ CREATE TABLE IF NOT EXISTS web_visits (
 -- Community, discovery & monetisation (Phases 1-3 of the adult-site plan).
 -- --------------------------------------------------------------------------
 
--- Wall feed: creator posts that members read + comment on.
+-- Wall feed: creator posts that members read + comment on. A post may
+-- reference a gallery so the wall shows a membership-gated preview grid
+-- (real thumbnails above the viewer's level, blurred teasers below); the
+-- auto poster publishes one of these per recommended gallery it submits.
 CREATE TABLE IF NOT EXISTS wall_posts (
     id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     body       TEXT NOT NULL,
+    gallery_id INT UNSIGNED NULL,
     pinned     TINYINT(1) NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at DATETIME NULL,
-    INDEX idx_wall_posts_pin_created (pinned, created_at)
+    INDEX idx_wall_posts_pin_created (pinned, created_at),
+    INDEX idx_wall_posts_gallery (gallery_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Gallery star ratings (1-5). One per user per gallery.
