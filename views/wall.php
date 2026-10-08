@@ -3,10 +3,61 @@
 <div class="favorites-hero">
     <p class="eyebrow">From the creator</p>
     <h1>The Wall</h1>
-    <p class="muted">News, behind-the-scenes and updates from the studio.</p>
+    <p class="muted">Your notifications, then news and updates from the studio.</p>
 </div>
 
-<?php if (empty($posts)): ?>
+<?php if (!empty($notifications)): ?>
+    <section class="favorites-section">
+        <div class="favorites-heading">
+            <h2>Your notifications</h2>
+            <?php if (!empty($unreadIds)): ?>
+                <form method="post" action="<?= url('/notifications/read-all') ?>">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="btn btn-sm btn-outline">Mark all as read</button>
+                </form>
+            <?php endif; ?>
+        </div>
+
+        <?php foreach ($notifications as $notification): ?>
+            <?php
+            $isUnread   = $notification['read_at'] === null;
+            $notifType  = (string) $notification['type'];
+            $notifTag   = match ($notifType) {
+                'gallery'  => 'New set',
+                'wall'     => 'Wall post',
+                'reply'    => 'Reply',
+                'purchase' => 'Membership',
+                default    => 'Update',
+            };
+            $notifColor = match ($notifType) {
+                'gallery'  => '#b42318',
+                'purchase' => '#0f766e',
+                'reply'    => '#7c3aed',
+                default    => '#99618a',
+            };
+            ?>
+            <article class="comment-block" style="display:flex;gap:.75rem;align-items:flex-start;padding:.75rem 0;border-bottom:1px solid var(--card-border,#efe7ec);">
+                <span title="<?= e($notifTag) ?>" aria-hidden="true" style="flex:0 0 auto;margin-top:.1rem;width:2rem;height:2rem;border-radius:999px;display:flex;align-items:center;justify-content:center;background:<?= $notifColor ?>;color:#fff;font-size:.7rem;font-weight:700;letter-spacing:.03em;"><?= e(str_split($notifTag)[0]) ?></span>
+                <div style="flex:1;min-width:0;">
+                    <p style="margin:0;">
+                        <?php if ($notification['url'] !== ''): ?>
+                            <a href="<?= url('/notifications/' . (int) $notification['id']) ?>" style="text-decoration:underline;text-underline-offset:2px;"><?= e($notification['title']) ?></a>
+                        <?php else: ?>
+                            <?= e($notification['title']) ?>
+                        <?php endif; ?>
+                        <?php if ($isUnread): ?><span class="chip" style="background:#b42318;color:#fff;font-size:.7rem;">New</span><?php endif; ?>
+                    </p>
+                    <?php if ($notification['body'] !== null && $notification['body'] !== ''): ?>
+                        <p class="muted" style="margin:.15rem 0 0;"><?= e($notification['body']) ?></p>
+                    <?php endif; ?>
+                    <p class="muted" style="margin:.15rem 0 0;font-size:.78rem;"><?= e($notifTag) ?> · <?= e(tzdate('M j, g:ia', (string) $notification['created_at'])) ?></p>
+                </div>
+            </article>
+        <?php endforeach; ?>
+    </section>
+<?php endif; ?>
+
+<?php if (empty($posts) && empty($notifications)): ?>
     <div class="favorites-section">
         <div class="empty-state">
             <p>No wall posts yet — check back soon.</p>

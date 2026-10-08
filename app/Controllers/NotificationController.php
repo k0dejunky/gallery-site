@@ -54,6 +54,6 @@ class NotificationController extends Controller
         Notification::markAllRead((int) Auth::user()['id']);
 
         $this->flash('success', 'All notifications marked as read.');
-        $this->redirect('/notifications');
+        $this->redirect('/wall');
     }
 }
