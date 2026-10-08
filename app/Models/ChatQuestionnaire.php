@@ -185,26 +185,60 @@ class ChatQuestionnaire
 
     public static function activeForUser(int $userId): array
     {
-        // Return all sent/questionnaires that allow replies and haven't been fully answered by this user.
+        // All emitted (replies-allowed) questionnaires, answered or not. Each
+        // row carries an 'answered' flag and the user's own answers so the
+        // view can prefill a disabled version once submitted.
         $rows = Database::run(
             "SELECT q.* FROM chat_questionnaires q
              WHERE q.status IN ('sent','partial') AND q.allow_replies = 1
              ORDER BY q.sent_at DESC, q.id DESC"
         )->fetchAll();
+        if ($rows === []) {
+            return [];
+        }
+
+        $ids = array_map('intval', array_column($rows, 'id'));
+        $in  = implode(',', $ids);
+        $answers = [];
+        foreach (Database::run(
+            "SELECT questionnaire_id, question_id, answer FROM chat_questionnaire_answers
+             WHERE user_id = ? AND questionnaire_id IN ($in)",
+            [$userId]
+        )->fetchAll() as $a) {
+            $qid = (int) $a['questionnaire_id'];
+            if (!isset($answers[$qid])) {
+                $answers[$qid] = [];
+            }
+            $answers[$qid][(int) $a['question_id']] = (string) $a['answer'];
+        }
+
+        $reqByQ = [];
+        $ansCount = [];
+        foreach ($rows as $q) {
+            $qid = (int) $q['id'];
+            $reqByQ[$qid] = (int) Database::run(
+                'SELECT COUNT(*) FROM chat_questionnaire_questions WHERE questionnaire_id = ? AND required = 1',
+                [$qid]
+            )->fetchColumn();
+            $asked = array_keys($answers[$qid] ?? []);
+            $ansCount[$qid] = count($asked);
+        }
+
         $out = [];
         foreach ($rows as $q) {
             $qid = (int) $q['id'];
-            $answered = (int) Database::run(
+            $answeredReq = (int) Database::run(
                 'SELECT COUNT(DISTINCT qq.id)
                  FROM chat_questionnaire_questions qq
-                 LEFT JOIN chat_questionnaire_answers aa ON aa.question_id = qq.id AND aa.user_id = ?
-                 WHERE qq.questionnaire_id = ? AND qq.required = 1 AND aa.id IS NOT NULL',
-                [$userId, $qid]
+                 JOIN chat_questionnaire_answers aa ON aa.question_id = qq.id
+                 WHERE qq.questionnaire_id = ? AND aa.user_id = ? AND qq.required = 1',
+                [$qid, $userId]
             )->fetchColumn();
-            $req = (int) Database::run('SELECT COUNT(*) FROM chat_questionnaire_questions WHERE questionnaire_id = ? AND required = 1', [$qid])->fetchColumn();
-            if ($req > 0 && $answered >= $req) {
-                continue;
-            }
+            $answered = $reqByQ[$qid] === 0
+                ? $ansCount[$qid] > 0
+                : $answeredReq >= $reqByQ[$qid];
+            $q['answered'] = $answered;
+            $q['my_answers'] = $answers[$qid] ?? [];
             $q['questions'] = self::questions($qid);
             $out[] = $q;
         }
@@ -239,6 +273,9 @@ class ChatQuestionnaire
         }
         if ((int) $q['allow_replies'] !== 1) {
             return ['ok' => false, 'error' => 'Replies are disabled for this questionnaire.'];
+        }
+        if (self::hasAnswered($questionnaireId, $userId)) {
+            return ['ok' => false, 'error' => 'You have already answered this questionnaire.'];
         }
         $questions = self::questions($questionnaireId);
         $updates = 0;

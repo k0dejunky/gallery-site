@@ -20,12 +20,40 @@
 <div class="chat-page">
             <?php if (!empty($questionnaires)): ?>
                 <div class="card" style="margin-bottom:1rem;">
-                    <h2 class="section-title" style="margin-bottom:.5rem;">Open questionnaires</h2>
+                    <h2 class="section-title" style="margin-bottom:.5rem;">Questionnaires</h2>
                     <?php foreach ($questionnaires as $q): ?>
-                        <div id="questionnaire-<?= (int)$q['id'] ?>" style="border:1px solid var(--pink-300,#f9a8d4);border-radius:var(--card-radius,8px);background:var(--pink-100,#fdf2f8);padding:1rem;margin-bottom:.75rem;">
+                        <?php $qAnswered = !empty($q['answered']); ?>
+                        <div id="questionnaire-<?= (int)$q['id'] ?>" style="border:1px solid var(--pink-300,#f9a8d4);border-radius:var(--card-radius,8px);background:var(--pink-100,#fdf2f8);padding:1rem;margin-bottom:.75rem;<?= $qAnswered ? 'opacity:.85;' : '' ?>">
                             <strong><?= e((string)$q['title']) ?></strong>
+                            <?php if ($qAnswered): ?>
+                                <span style="float:right;font-size:.72rem;font-weight:600;color:#15803d;border:1px solid #86efac;background:#dcfce7;border-radius:999px;padding:2px 10px;">✓ Submitted</span>
+                            <?php endif; ?>
                             <?php if (!empty($q['intro'])): ?><p style="margin:.35rem 0 .6rem;white-space:pre-wrap;"><?= e((string)$q['intro']) ?></p><?php endif; ?>
-                            <?php if ((int)$q['allow_replies'] === 1): ?>
+
+                            <?php if ($qAnswered): ?>
+                                <?php foreach ($q['questions'] as $qq): ?>
+                                    <?php $qqid=(int)$qq['id']; $my = $q['my_answers'][$qqid] ?? ''; ?>
+                                    <div style="margin-bottom:.5rem;">
+                                        <label style="display:block;font-weight:600;margin-bottom:.25rem;"><?= e((string)$qq['prompt']) ?></label>
+                                        <?php if ($qq['qtype']==='text'): ?>
+                                            <textarea rows="2" disabled style="background:#fff;"><?= e((string)$my) ?></textarea>
+                                        <?php elseif ($qq['qtype']==='choice' || $qq['qtype']==='rating'): ?>
+                                            <?php if ($qq['qtype']==='choice'): $opts=$qq['options_decoded']??[]; else: $opts=$qq['options_decoded']??['min'=>1,'max'=>5]; $tmp=[]; for($r=(int)$opts['min'];$r<=(int)$opts['max'];$r++){ $tmp[]=$r; } $opts=$tmp; endif; ?>
+                                            <?php foreach ($opts as $opt): ?>
+                                                <label style="display:inline-flex;align-items:center;gap:.3rem;margin-right:.75rem;"><input type="radio" disabled <?= (string)$my === (string)$opt ? 'checked' : '' ?>> <?= e((string)$opt) ?></label>
+                                            <?php endforeach; ?>
+                                        <?php elseif ($qq['qtype']==='multichoice'): ?>
+                                            <?php $vals=json_decode((string)$my,true); if(!is_array($vals)){$vals=array_filter([(string)$my]);} ?>
+                                            <?php foreach (($qq['options_decoded']??[]) as $opt): ?>
+                                                <label style="display:inline-flex;align-items:center;gap:.3rem;margin-right:.75rem;"><input type="checkbox" disabled <?= in_array((string)$opt, array_map('strval',$vals), true) ? 'checked' : '' ?>> <?= e((string)$opt) ?></label>
+                                            <?php endforeach; ?>
+                                        <?php elseif ($qq['qtype']==='number'): ?>
+                                            <input type="text" disabled value="<?= e((string)$my) ?>" style="background:#fff;">
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                                <p class="muted" style="margin:0;"><strong>Submitted.</strong> You can view your answers above; they can't be changed.</p>
+                            <?php elseif ((int)$q['allow_replies'] === 1): ?>
                                 <form method="post" action="<?= url('/chat/questionnaire/' . (int)$q['id'] . '/answer') ?>" style="display:flex;flex-direction:column;gap:.5rem;">
                                     <?= csrf_field() ?>
                                     <?php foreach ($q['questions'] as $qq): ?>

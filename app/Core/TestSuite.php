@@ -230,7 +230,7 @@ class TestSuite
             }
         });
 
-        $add('db.questionnaire_cycle', 'Database', 'Create -> answer (validated) -> upsert -> results tally -> replies off', function () {
+        $add('db.questionnaire_cycle', 'Database', 'Create -> answer (validated) -> locked after submit -> results tally -> replies off', function () {
             $qid = null;
             try {
                 $uid = (int) Database::run('SELECT id FROM users ORDER BY id ASC LIMIT 1')->fetchColumn();
@@ -274,7 +274,8 @@ class TestSuite
                 ]);
                 $count1 = (int) Database::run('SELECT COUNT(*) FROM chat_questionnaire_answers WHERE questionnaire_id = ? AND user_id = ?', [$qid, $uid])->fetchColumn();
 
-                // Upsert (same unique key) must not create duplicates.
+                // Once fully answered the questionnaire is LOCKED for this user:
+                // a repeat submit is rejected and no rows are created/duplicated.
                 $again = \App\Models\ChatQuestionnaire::answer($qid, $uid, [
                     'q' . $textId => 'Bobby',
                     'q' . $choiceId => 'B',
@@ -282,6 +283,16 @@ class TestSuite
                     'q' . $multiId => ['X'],
                 ]);
                 $count2 = (int) Database::run('SELECT COUNT(*) FROM chat_questionnaire_answers WHERE questionnaire_id = ? AND user_id = ?', [$qid, $uid])->fetchColumn();
+
+                // activeForUser still RETURNS the answered questionnaire but
+                // flags it so the view can render a disabled copy.
+                $listed = \App\Models\ChatQuestionnaire::activeForUser($uid);
+                $stillShownAndFlagged = false;
+                foreach ($listed as $q) {
+                    if ((int) $q['id'] === $qid) {
+                        $stillShownAndFlagged = !empty($q['answered']) && !empty($q['my_answers']);
+                    }
+                }
 
                 $results = \App\Models\ChatQuestionnaire::results($qid);
                 $tallyOk = false;
@@ -298,13 +309,13 @@ class TestSuite
                 ]);
 
                 $pass = !$missing['ok'] && !$invalid['ok'] && $good['ok']
-                    && $count1 === 4 && $again['ok'] && $count2 === 4
-                    && $tallyOk && !$off['ok'];
+                    && $count1 === 4 && !$again['ok'] && $count2 === 4
+                    && $tallyOk && $stillShownAndFlagged && !$off['ok'];
 
                 return ['pass' => $pass, 'detail' => sprintf(
-                    'missing-rejected=%d invalid-rejected=%d valid=%d rows=%d upsert=%d rows2=%d tally=%d replies-off-rejected=%d',
+                    'missing-rejected=%d invalid-rejected=%d valid=%d rows=%d repeat-rejected=%d rows2=%d tally=%d still-shown-flagged=%d replies-off-rejected=%d',
                     (int) !$missing['ok'], (int) !$invalid['ok'], (int) $good['ok'], $count1,
-                    (int) $again['ok'], $count2, (int) $tallyOk, (int) !$off['ok']
+                    (int) !$again['ok'], $count2, (int) $tallyOk, (int) $stillShownAndFlagged, (int) !$off['ok']
                 )];
             } catch (\Throwable $ex) {
                 return ['pass' => false, 'detail' => $ex->getMessage()];

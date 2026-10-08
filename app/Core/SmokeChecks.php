@@ -519,12 +519,14 @@ class SmokeChecks
                 ? $ok('form + allow-replies + log present')
                 : $bad('admin chat view must render the questionnaire form and list');
         });
-        $add('smoke.questionnaire.member_view', 'Smoke · Questionnaires', 'Member chat page renders open questionnaires for all users', static function () use ($chatIndex, $ok, $bad): array {
-            return strpos($chatIndex, 'Open questionnaires') !== false
+        $add('smoke.questionnaire.member_view', 'Smoke · Questionnaires', 'Member chat page renders questionnaires and a disabled answered state', static function () use ($chatIndex, $ok, $bad): array {
+            return strpos($chatIndex, 'Questionnaires') !== false
                 && strpos($chatIndex, '/chat/questionnaire/') !== false
                 && strpos($chatIndex, 'allow_replies') !== false
-                ? $ok('member answer form present')
-                : $bad('member chat view must render questionnaire answer forms');
+                && strpos($chatIndex, 'Submitted') !== false
+                && strpos($chatIndex, 'disabled') !== false
+                ? $ok('answer form + answered/disabled state present')
+                : $bad('member chat view must render questionnaire forms and the answered (disabled) state');
         });
         $add('smoke.questionnaire.results_view', 'Smoke · Questionnaires', 'Results view shows aggregates + per-user answers', static function () use ($qView, $ok, $bad): array {
             return strpos($qView, "['tally']") !== false
