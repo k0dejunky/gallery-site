@@ -198,6 +198,112 @@
     </div>
 </form>
 
+<?php // Questionnaire: a structured multi-question form sent to EVERY registered user ?>
+<section class="card" style="border-left:4px solid var(--purple-500);padding:1rem;margin-bottom:1.25rem;">
+    <h2 class="section-title">Send a questionnaire to all users</h2>
+    <p class="muted" style="font-size:.85rem;margin-top:0;">Delivered to every registered user (not just chat-plan members). When replies are ON, users can answer on their Chat page; replies are scoped to this questionnaire only.</p>
+    <form method="post" action="<?= url('/admin/chat/questionnaire') ?>" id="questionnaire-form" style="display:flex;flex-direction:column;gap:.5rem;max-width:720px;">
+        <?= csrf_field() ?>
+        <input type="text" name="title" placeholder="Questionnaire title" maxlength="200" required>
+        <textarea name="intro" rows="2" maxlength="5000" placeholder="Intro / context shown above the questions (optional)"></textarea>
+
+        <div id="question-rows" style="display:flex;flex-direction:column;gap:.6rem;"></div>
+        <div><button type="button" class="btn btn-sm btn-outline" id="add-question">+ Add question</button></div>
+
+        <label style="display:inline-flex;align-items:center;gap:.4rem;font-size:.9rem;">
+            <input type="checkbox" name="allow_replies" value="1" checked> Allow replies (users can answer this questionnaire)
+        </label>
+
+        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+            <input type="datetime-local" name="scheduled_at">
+            <button type="submit" name="action" value="now" class="btn btn-sm">Send now</button>
+            <button type="submit" name="action" value="schedule" class="btn btn-sm btn-outline">Schedule</button>
+        </div>
+    </form>
+</section>
+
+<?php if (!empty($questionnaires)): ?>
+    <h3>Questionnaires</h3>
+    <table>
+        <thead>
+            <tr><th>#</th><th>Title</th><th>Status</th><th>Replies</th><th>Notified</th><th>Scheduled</th><th>Sent</th><th style="text-align:right;">Actions</th></tr>
+        </thead>
+        <tbody>
+            <?php foreach ($questionnaires as $q): ?>
+                <tr>
+                    <td>#<?= (int) $q['id'] ?></td>
+                    <td style="max-width:280px;"><?= e(mb_strimwidth((string) $q['title'], 0, 70, '…')) ?></td>
+                    <td><span class="pill <?= $q['status'] === 'sent' ? '' : ($q['status'] === 'partial' ? 'pill-warn' : ($q['status'] === 'cancelled' ? 'pill-muted' : 'pill-info')) ?>"><?= e((string) $q['status']) ?></span></td>
+                    <td><?= (int) $q['allow_replies'] === 1 ? 'ON' : 'OFF' ?></td>
+                    <td><?= (int) $q['notified_count'] ?> / <?= (int) $q['recipients'] ?></td>
+                    <td class="muted"><?= !empty($q['scheduled_at']) ? e(tzdate('M j, Y H:i', (string) $q['scheduled_at'])) : '&mdash;' ?></td>
+                    <td class="muted"><?= !empty($q['sent_at']) ? e(tzdate('M j, Y H:i', (string) $q['sent_at'])) : '&mdash;' ?></td>
+                    <td style="text-align:right;white-space:nowrap;">
+                        <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat/questionnaire/' . (int) $q['id']) ?>">Results</a>
+                        <?php if (in_array($q['status'], ['draft', 'scheduled', 'failed'], true)): ?>
+                            <form class="inline" method="post" action="<?= url('/admin/chat/questionnaire/' . (int) $q['id'] . '/send') ?>" onsubmit="return confirm('Send this questionnaire now?');">
+                                <?= csrf_field() ?>
+                                <button type="submit" class="btn btn-sm">Send now</button>
+                            </form>
+                        <?php endif; ?>
+                        <?php if (in_array($q['status'], ['draft', 'scheduled', 'sending'], true)): ?>
+                            <form class="inline" method="post" action="<?= url('/admin/chat/questionnaire/' . (int) $q['id'] . '/cancel') ?>" onsubmit="return confirm('Cancel this questionnaire?');">
+                                <?= csrf_field() ?>
+                                <button type="submit" class="btn btn-sm btn-danger">Cancel</button>
+                            </form>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+<?php endif; ?>
+
+<script>
+(function () {
+    var rows = document.getElementById('question-rows');
+    var add = document.getElementById('add-question');
+    if (!rows || !add) return;
+    var idx = 0;
+    function addRow() {
+        var n = idx++;
+        var wrap = document.createElement('div');
+        wrap.style.cssText = 'border:1px solid var(--border,#ddd);border-radius:8px;padding:.5rem;display:flex;flex-direction:column;gap:.35rem;';
+        wrap.innerHTML =
+            '<div style="display:flex;gap:.4rem;align-items:center;">' +
+                '<input type="text" name="q[' + n + '][prompt]" placeholder="Question prompt" required style="flex:1;">' +
+                '<select name="q[' + n + '][qtype]">' +
+                    '<option value="text">Text</option>' +
+                    '<option value="choice">Single choice</option>' +
+                    '<option value="multichoice">Multi-select</option>' +
+                    '<option value="rating">Rating</option>' +
+                    '<option value="number">Number</option>' +
+                '</select>' +
+                '<label style="font-size:.8rem;display:inline-flex;align-items:center;gap:.2rem;"><input type="checkbox" name="q[' + n + '][required]" value="1" checked> req</label>' +
+                '<button type="button" class="btn btn-sm btn-danger" data-remove>×</button>' +
+            '</div>' +
+            '<input type="text" name="q[' + n + '][options]" placeholder="Options for choice/multi-select, comma-separated (rating defaults 1-5)" style="display:none;">' +
+            '<input type="number" name="q[' + n + '][min]" value="1" min="1" style="display:none;width:5rem;" title="Rating min">' +
+            '<input type="number" name="q[' + n + '][max]" value="5" min="1" style="display:none;width:5rem;" title="Rating max">';
+        var sel = wrap.querySelector('select');
+        var opts = wrap.querySelector('input[name$="[options]"]');
+        var mn = wrap.querySelector('input[name$="[min]"]');
+        var mx = wrap.querySelector('input[name$="[max]"]');
+        function sync() {
+            var v = sel.value;
+            opts.style.display = (v === 'choice' || v === 'multichoice') ? '' : 'none';
+            mn.style.display = mx.style.display = (v === 'rating') ? '' : 'none';
+        }
+        sel.addEventListener('change', sync);
+        sync();
+        wrap.querySelector('[data-remove]').addEventListener('click', function () { wrap.remove(); });
+        rows.appendChild(wrap);
+    }
+    add.addEventListener('click', addRow);
+    addRow();
+})();
+</script>
+
 <h3>Daily Chat Send Log</h3>
 <?php if (empty($broadcasts)): ?>
     <p class="muted" style="margin-top:0;">No daily chat broadcasts yet.</p>

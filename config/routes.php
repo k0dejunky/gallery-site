@@ -116,6 +116,7 @@ return [
     ['GET', '/chat/history', 'ChatController@history'],
     ['GET', '/chat/stream', 'ChatController@stream'],
     ['GET', '/chat/attachment', 'ChatController@attachment'],
+    ['POST', '/chat/questionnaire/{id}/answer', 'QuestionnaireController@answer'],
 
     // Chat bridge webhooks (Android app + training PC; Bearer GALLERY_CHAT_KEY)
     ['GET', '/webhooks/chat/config', 'ChatBridgeController@config'],
@@ -304,6 +305,10 @@ return [
     ['POST', '/admin/chat/daily-broadcast', 'AdminChatController@createDailyBroadcast', 'chat'],
     ['POST', '/admin/chat/daily-broadcast/{id}/send', 'AdminChatController@runDailyBroadcast', 'chat'],
     ['POST', '/admin/chat/daily-broadcast/{id}/cancel', 'AdminChatController@cancelDailyBroadcast', 'chat'],
+    ['POST', '/admin/chat/questionnaire', 'AdminChatController@createQuestionnaire', 'chat'],
+    ['GET', '/admin/chat/questionnaire/{id}', 'AdminChatController@questionnaireResults', 'chat'],
+    ['POST', '/admin/chat/questionnaire/{id}/send', 'AdminChatController@runQuestionnaire', 'chat'],
+    ['POST', '/admin/chat/questionnaire/{id}/cancel', 'AdminChatController@cancelQuestionnaire', 'chat'],
     ['POST', '/admin/chat/mute', 'AdminChatController@muteUser', 'chat'],
     ['POST', '/admin/chat/unmute', 'AdminChatController@unmuteUser', 'chat'],
     ['POST', '/admin/chat/export-training', 'AdminChatController@exportTraining', 'chat'],

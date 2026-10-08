@@ -7,6 +7,7 @@ use App\Core\Controller;
 use App\Core\ChatAi;
 use App\Core\RateLimiter;
 use App\Models\ChatMessage;
+use App\Models\ChatQuestionnaire;
 
 /**
  * Member-facing chat: the conversation page, sending messages, and the
@@ -47,8 +48,10 @@ class ChatController extends Controller
             ChatMessage::markRead((int) $conv['id'], ChatMessage::latestId((int) $conv['id']));
         }
 
+        $questionnaires = ChatQuestionnaire::activeForUser($userId);
         $this->view('chat/index', [
             'title'        => 'Chat',
+            'questionnaires' => $questionnaires,
             'eligible'     => $eligible,
             'replyEnabled' => $conv['id'] > 0 ? ChatMessage::memberReplyEnabled((int) $conv['id']) : $eligible,
             'dailyMessage' => \App\Core\ChatSettings::dailyMessage(),

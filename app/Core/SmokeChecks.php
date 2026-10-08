@@ -476,6 +476,71 @@ class SmokeChecks
                 : $bad('apply_cron.php must schedule the daily chat worker');
         });
 
+        // ----------------------------------------------------- Questionnaires
+        $qModel = $read("$root/app/Models/ChatQuestionnaire.php");
+        $qCtrl  = $read("$root/app/Controllers/QuestionnaireController.php");
+        $qView  = $read("$root/views/admin/questionnaire_results.php");
+        $chatViewQ = $chatView;
+        $chatIndex = $read("$root/views/chat/index.php");
+        $qWorker = $read("$root/bin/questionnaire_worker.php");
+        $add('smoke.questionnaire.model', 'Smoke · Questionnaires', 'Questionnaire model supports create/send/answer/results', static function () use ($qModel, $ok, $bad): array {
+            return strpos($qModel, 'function create') !== false
+                && strpos($qModel, 'function send') !== false
+                && strpos($qModel, 'function answer') !== false
+                && strpos($qModel, 'function results') !== false
+                && strpos($qModel, 'broadcastToMembers') !== false
+                ? $ok('create + send + answer + results present')
+                : $bad('ChatQuestionnaire must provide create()/send()/answer()/results() and notify all users');
+        });
+        $add('smoke.questionnaire.types', 'Smoke · Questionnaires', 'All answer types supported', static function () use ($qModel, $ok, $bad): array {
+            $types = ['text', 'choice', 'multichoice', 'rating', 'number'];
+            $missing = [];
+            foreach ($types as $t) {
+                if (strpos($qModel, "QTYPE_" . strtoupper($t)) === false) {
+                    $missing[] = $t;
+                }
+            }
+            return $missing === [] ? $ok('text/choice/multichoice/rating/number') : $bad('missing question types: ' . implode(', ', $missing));
+        });
+        $add('smoke.questionnaire.routes', 'Smoke · Questionnaires', 'Admin + member questionnaire routes registered', static function () use ($routes, $ok, $bad): array {
+            return in_array(['POST', '/admin/chat/questionnaire', 'AdminChatController@createQuestionnaire', 'chat'], $routes, true)
+                && in_array(['GET', '/admin/chat/questionnaire/{id}', 'AdminChatController@questionnaireResults', 'chat'], $routes, true)
+                && in_array(['POST', '/admin/chat/questionnaire/{id}/send', 'AdminChatController@runQuestionnaire', 'chat'], $routes, true)
+                && in_array(['POST', '/admin/chat/questionnaire/{id}/cancel', 'AdminChatController@cancelQuestionnaire', 'chat'], $routes, true)
+                && in_array(['POST', '/chat/questionnaire/{id}/answer', 'QuestionnaireController@answer'], $routes, true)
+                ? $ok('admin + member routes wired')
+                : $bad('questionnaire admin/member routes must be registered');
+        });
+        $add('smoke.questionnaire.admin_view', 'Smoke · Questionnaires', 'Admin chat page has the send-questionnaire form + log', static function () use ($chatViewQ, $ok, $bad): array {
+            return strpos($chatViewQ, 'Send a questionnaire to all users') !== false
+                && strpos($chatViewQ, 'allow_replies') !== false
+                && strpos($chatViewQ, 'questionnaire-form') !== false
+                && strpos($chatViewQ, 'Questionnaires') !== false
+                ? $ok('form + allow-replies + log present')
+                : $bad('admin chat view must render the questionnaire form and list');
+        });
+        $add('smoke.questionnaire.member_view', 'Smoke · Questionnaires', 'Member chat page renders open questionnaires for all users', static function () use ($chatIndex, $ok, $bad): array {
+            return strpos($chatIndex, 'Open questionnaires') !== false
+                && strpos($chatIndex, '/chat/questionnaire/') !== false
+                && strpos($chatIndex, 'allow_replies') !== false
+                ? $ok('member answer form present')
+                : $bad('member chat view must render questionnaire answer forms');
+        });
+        $add('smoke.questionnaire.results_view', 'Smoke · Questionnaires', 'Results view shows aggregates + per-user answers', static function () use ($qView, $ok, $bad): array {
+            return strpos($qView, "['tally']") !== false
+                && strpos($qView, "'email'") !== false
+                && strpos($qView, 'response(s)') !== false
+                ? $ok('tally + per-user rows present')
+                : $bad('questionnaire results view must show tallies and per-user answers');
+        });
+        $add('smoke.questionnaire.worker', 'Smoke · Questionnaires', 'Scheduled questionnaires delivered by cron worker', static function () use ($qWorker, $applyCron, $ok, $bad): array {
+            return strpos($qWorker, 'ChatQuestionnaire::due') !== false
+                && strpos($applyCron, 'gallery-questionnaires') !== false
+                && strpos($applyCron, 'questionnaire_worker.php') !== false
+                ? $ok('worker + cron entry wired')
+                : $bad('questionnaire_worker.php must deliver due questionnaires and be scheduled in apply_cron.php');
+        });
+
         // ----------------------------------------------------- Operator messaging
         $chatMessage = $read("$root/app/Models/ChatMessage.php");
         $chatCtrl    = $read("$root/app/Controllers/ChatController.php");

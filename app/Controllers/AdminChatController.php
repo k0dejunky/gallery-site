@@ -9,6 +9,7 @@ use App\Core\Database;
 use App\Models\AuditLog;
 use App\Models\ChatBroadcast;
 use App\Models\ChatMessage;
+use App\Models\ChatQuestionnaire;
 use App\Models\OperatorToken;
 
 /**
@@ -87,6 +88,7 @@ class AdminChatController extends Controller
             'broadcasts'   => ChatBroadcast::log(50),
             'tokens'       => OperatorToken::all(),
             'latestApk'    => $this->latestApkVersion(),
+            'questionnaires' => ChatQuestionnaire::recent(20),
             'liveChatMutes' => Database::run(
                 'SELECT id, email, chat_muted_until FROM users
                  WHERE chat_muted_until IS NOT NULL
@@ -860,5 +862,114 @@ class AdminChatController extends Controller
 
         // The admin panel's own fetches never consume member views.
         \App\Models\ChatMessage::serveAttachment($msg, $thumb, false);
+    }
+
+    public function createQuestionnaire(): void
+    {
+        $title = trim((string) $this->request->input('title'));
+        if ($title === '') {
+            $this->flash('error', 'Title is required.');
+            $this->redirect('/admin/chat');
+            return;
+        }
+        $intro = trim((string) $this->request->input('intro'));
+        $allowReplies = (int) $this->request->post('allow_replies', 1) === 1;
+        $action = (string) $this->request->post('action', 'now');
+        $scheduledAt = null;
+        $raw = trim((string) $this->request->post('scheduled_at', ''));
+        $questions = [];
+        $qrows = (array) $this->request->post('q', []);
+        foreach ($qrows as $i => $qr) {
+            $prompt = trim((string) ($qr['prompt'] ?? ''));
+            if ($prompt === '') {
+                continue;
+            }
+            $qtype = (string) ($qr['qtype'] ?? 'text');
+            $required = !empty($qr['required']) ? 1 : 0;
+            $q = ['prompt' => $prompt, 'qtype' => $qtype, 'required' => $required];
+            if ($qtype === 'choice' || $qtype === 'multichoice') {
+                $opts = preg_split('/[\r\n,]+/', (string) ($qr['options'] ?? ''));
+                $q['options'] = $opts;
+            } elseif ($qtype === 'rating') {
+                $q['min'] = max(1, (int) ($qr['min'] ?? 1));
+                $q['max'] = max($q['min'], (int) ($qr['max'] ?? 5));
+            }
+            $questions[] = $q;
+        }
+        if ($questions === []) {
+            $this->flash('error', 'Add at least one question.');
+            $this->redirect('/admin/chat');
+            return;
+        }
+        if ($action === 'schedule') {
+            if ($raw === '') {
+                $this->flash('error', 'Pick a schedule time, or use "Send now".');
+                $this->redirect('/admin/chat');
+                return;
+            }
+            $scheduledAt = self::normalizeSchedule($raw);
+            if ($scheduledAt === null || $scheduledAt <= gmdate('Y-m-d H:i:s')) {
+                $this->flash('error', 'The schedule must be a valid time in the future.');
+                $this->redirect('/admin/chat');
+                return;
+            }
+        }
+        try {
+            $qid = ChatQuestionnaire::create((int) Auth::user()['id'], $title, $intro, $allowReplies, $scheduledAt, $questions);
+        } catch (\Throwable $e) {
+            $this->flash('error', $e->getMessage());
+            $this->redirect('/admin/chat');
+            return;
+        }
+        if ($scheduledAt === null) {
+            $res = ChatQuestionnaire::send($qid);
+            if ($res['ok']) {
+                $this->flash('success', 'Questionnaire sent: ' . ($res['notified'] ?? 0) . ' notified.');
+            } else {
+                $this->flash('error', $res['error'] ?? 'Could not send questionnaire.');
+            }
+        } else {
+            $this->flash('success', 'Questionnaire scheduled for ' . tzdate('M j, Y H:i', $scheduledAt) . '.');
+        }
+        $this->redirect('/admin/chat');
+    }
+
+    public function runQuestionnaire(int $id): void
+    {
+        $res = ChatQuestionnaire::send($id);
+        if ($res['ok']) {
+            $this->flash('success', 'Questionnaire sent: ' . ($res['notified'] ?? 0) . ' notified.');
+        } else {
+            $this->flash('error', $res['error'] ?? 'Could not send questionnaire.');
+        }
+        $this->redirect('/admin/chat');
+    }
+
+    public function cancelQuestionnaire(int $id): void
+    {
+        if (ChatQuestionnaire::cancel($id)) {
+            $this->flash('success', 'Questionnaire cancelled.');
+        } else {
+            $this->flash('error', 'Questionnaire cannot be cancelled.');
+        }
+        $this->redirect('/admin/chat');
+    }
+
+    public function questionnaireResults(int $id): void
+    {
+        $q = ChatQuestionnaire::find($id);
+        if ($q === null) {
+            $this->flash('error', 'Questionnaire not found.');
+            $this->redirect('/admin/chat');
+            return;
+        }
+        $results = ChatQuestionnaire::results($id);
+        $questions = ChatQuestionnaire::questions($id);
+        $this->viewAdmin('questionnaire_results', [
+            'title' => 'Questionnaire Results: ' . $q['title'],
+            'questionnaire' => $q,
+            'questions' => $questions,
+            'results' => $results,
+        ]);
     }
 }

@@ -18,6 +18,50 @@
 </style>
 
 <div class="chat-page">
+            <?php if (!empty($questionnaires)): ?>
+                <div class="card" style="margin-bottom:1rem;">
+                    <h2 class="section-title" style="margin-bottom:.5rem;">Open questionnaires</h2>
+                    <?php foreach ($questionnaires as $q): ?>
+                        <div id="questionnaire-<?= (int)$q['id'] ?>" style="border:1px solid var(--pink-300,#f9a8d4);border-radius:var(--card-radius,8px);background:var(--pink-100,#fdf2f8);padding:1rem;margin-bottom:.75rem;">
+                            <strong><?= e((string)$q['title']) ?></strong>
+                            <?php if (!empty($q['intro'])): ?><p style="margin:.35rem 0 .6rem;white-space:pre-wrap;"><?= e((string)$q['intro']) ?></p><?php endif; ?>
+                            <?php if ((int)$q['allow_replies'] === 1): ?>
+                                <form method="post" action="<?= url('/chat/questionnaire/' . (int)$q['id'] . '/answer') ?>" style="display:flex;flex-direction:column;gap:.5rem;">
+                                    <?= csrf_field() ?>
+                                    <?php foreach ($q['questions'] as $qq): ?>
+                                        <?php $qqid=(int)$qq['id']; $key='q'.$qqid; ?>
+                                        <div>
+                                            <label style="display:block;font-weight:600;margin-bottom:.25rem;"><?= e((string)$qq['prompt']) ?><?= (int)$qq['required']===1?'*':'' ?></label>
+                                            <?php if ($qq['qtype']==='text'): ?>
+                                                <textarea name="answers[<?= $key ?>]" rows="2" <?= (int)$qq['required']===1?'required':'' ?>></textarea>
+                                            <?php elseif ($qq['qtype']==='choice'): ?>
+                                                <?php foreach (($qq['options_decoded']??[]) as $opt): ?>
+                                                    <label style="display:inline-flex;align-items:center;gap:.3rem;margin-right:.75rem;"><input type="radio" name="answers[<?= $key ?>]" value="<?= e((string)$opt) ?>" <?= (int)$qq['required']===1?'required':'' ?>> <?= e((string)$opt) ?></label>
+                                                <?php endforeach; ?>
+                                            <?php elseif ($qq['qtype']==='multichoice'): ?>
+                                                <?php foreach (($qq['options_decoded']??[]) as $opt): ?>
+                                                    <label style="display:inline-flex;align-items:center;gap:.3rem;margin-right:.75rem;"><input type="checkbox" name="answers[<?= $key ?>][]" value="<?= e((string)$opt) ?>"> <?= e((string)$opt) ?></label>
+                                                <?php endforeach; ?>
+                                            <?php elseif ($qq['qtype']==='rating'): ?>
+                                                <?php $opts=$qq['options_decoded']??['min'=>1,'max'=>5]; $min=(int)$opts['min']; $max=(int)$opts['max']; ?>
+                                                <?php for ($r=$min;$r<=$max;$r++): ?>
+                                                    <label style="display:inline-flex;align-items:center;gap:.2rem;margin-right:.5rem;"><input type="radio" name="answers[<?= $key ?>]" value="<?= $r ?>" <?= (int)$qq['required']===1?'required':'' ?>> <?= $r ?></label>
+                                                <?php endfor; ?>
+                                            <?php elseif ($qq['qtype']==='number'): ?>
+                                                <input type="number" name="answers[<?= $key ?>]" <?= (int)$qq['required']===1?'required':'' ?>>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endforeach; ?>
+                                    <div><button type="submit" class="btn btn-sm">Submit answers</button></div>
+                                </form>
+                            <?php else: ?>
+                                <p class="muted">This questionnaire is closed for new replies.</p>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
     <?php if (empty($eligible)): ?>
         <h1>Chat</h1>
         <?php if (trim((string) $dailyMessage) !== ''): ?>
@@ -29,6 +73,50 @@
         <p class="muted">Chat is available to members on the <strong>Platinum</strong>, <strong>Yearly</strong>, <strong>Lifetime</strong>, or <strong>Chat add-on</strong> plans. Upgrade in <a href="<?= url('/membership') ?>">Membership</a> to start chatting.</p>
     <?php else: ?>
         <h1>Chat</h1>
+        <?php if (!empty($questionnaires)): ?>
+            <div class="card" style="margin-bottom:1rem;">
+                <h2 class="section-title" style="margin-bottom:.5rem;">Open questionnaires</h2>
+                <?php foreach ($questionnaires as $q): ?>
+                    <div id="questionnaire-<?= (int)$q['id'] ?>" style="border:1px solid var(--pink-300,#f9a8d4);border-radius:var(--card-radius,8px);background:var(--pink-100,#fdf2f8);padding:1rem;margin-bottom:.75rem;">
+                        <strong><?= e((string)$q['title']) ?></strong>
+                        <?php if (!empty($q['intro'])): ?><p style="margin:.35rem 0 .6rem;white-space:pre-wrap;"><?= e((string)$q['intro']) ?></p><?php endif; ?>
+                        <?php if ((int)$q['allow_replies'] === 1): ?>
+                            <form method="post" action="<?= url('/chat/questionnaire/' . (int)$q['id'] . '/answer') ?>" style="display:flex;flex-direction:column;gap:.5rem;">
+                                <?= csrf_field() ?>
+                                <?php foreach ($q['questions'] as $qq): ?>
+                                    <?php $qqid=(int)$qq['id']; $key='q'.$qqid; ?>
+                                    <div>
+                                        <label style="display:block;font-weight:600;margin-bottom:.25rem;"><?= e((string)$qq['prompt']) ?><?= (int)$qq['required']===1?'*':'' ?></label>
+                                        <?php if ($qq['qtype']==='text'): ?>
+                                            <textarea name="answers[<?= $key ?>]" rows="2" <?= (int)$qq['required']===1?'required':'' ?>></textarea>
+                                        <?php elseif ($qq['qtype']==='choice'): ?>
+                                            <?php foreach (($qq['options_decoded']??[]) as $opt): ?>
+                                                <label style="display:inline-flex;align-items:center;gap:.3rem;margin-right:.75rem;"><input type="radio" name="answers[<?= $key ?>]" value="<?= e((string)$opt) ?>" <?= (int)$qq['required']===1?'required':'' ?>> <?= e((string)$opt) ?></label>
+                                            <?php endforeach; ?>
+                                        <?php elseif ($qq['qtype']==='multichoice'): ?>
+                                            <?php foreach (($qq['options_decoded']??[]) as $opt): ?>
+                                                <label style="display:inline-flex;align-items:center;gap:.3rem;margin-right:.75rem;"><input type="checkbox" name="answers[<?= $key ?>][]" value="<?= e((string)$opt) ?>"> <?= e((string)$opt) ?></label>
+                                            <?php endforeach; ?>
+                                        <?php elseif ($qq['qtype']==='rating'): ?>
+                                            <?php $opts=$qq['options_decoded']??['min'=>1,'max'=>5]; $min=(int)$opts['min']; $max=(int)$opts['max']; ?>
+                                            <?php for ($r=$min;$r<=$max;$r++): ?>
+                                                <label style="display:inline-flex;align-items:center;gap:.2rem;margin-right:.5rem;"><input type="radio" name="answers[<?= $key ?>]" value="<?= $r ?>" <?= (int)$qq['required']===1?'required':'' ?>> <?= $r ?></label>
+                                            <?php endfor; ?>
+                                        <?php elseif ($qq['qtype']==='number'): ?>
+                                            <input type="number" name="answers[<?= $key ?>]" <?= (int)$qq['required']===1?'required':'' ?>>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                                <div><button type="submit" class="btn btn-sm">Submit answers</button></div>
+                            </form>
+                        <?php else: ?>
+                            <p class="muted">This questionnaire is closed for new replies.</p>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
         <p class="chat-status">
             <?php if (!empty($operatorOnline)): ?>
                 <span style="color:#15803d;">&#9679; Amethyst is online — you'll get a reply shortly.</span>

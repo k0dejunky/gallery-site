@@ -207,6 +207,117 @@ class TestSuite
             }
         });
 
+        $add('db.questionnaire_schema', 'Database', 'Chat questionnaire tables + unique answer key exist', function () {
+            try {
+                $tables = Database::run('SHOW TABLES')->fetchAll(\PDO::FETCH_COLUMN);
+                foreach (['chat_questionnaires', 'chat_questionnaire_questions', 'chat_questionnaire_answers'] as $t) {
+                    if (!in_array($t, $tables, true)) {
+                        return ['pass' => false, 'detail' => 'missing table: ' . $t];
+                    }
+                }
+                $idx = Database::run('SHOW INDEX FROM chat_questionnaire_answers')->fetchAll();
+                $names = array_unique(array_column($idx, 'Key_name'));
+                if (!in_array('uq_chat_q_answer_qq_user', $names, true)) {
+                    return ['pass' => false, 'detail' => 'unique (question,user) key missing'];
+                }
+                $cols = Database::run('SHOW COLUMNS FROM chat_questionnaires')->fetchAll(\PDO::FETCH_COLUMN);
+                if (!in_array('allow_replies', array_map('strtolower', $cols), true)) {
+                    return ['pass' => false, 'detail' => 'allow_replies column missing'];
+                }
+                return ['pass' => true, 'detail' => '3 tables + unique key + allow_replies'];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
+        $add('db.questionnaire_cycle', 'Database', 'Create -> answer (validated) -> upsert -> results tally -> replies off', function () {
+            $qid = null;
+            try {
+                $uid = (int) Database::run('SELECT id FROM users ORDER BY id ASC LIMIT 1')->fetchColumn();
+                if ($uid <= 0) {
+                    return ['pass' => false, 'detail' => 'no users'];
+                }
+
+                $qid = \App\Models\ChatQuestionnaire::create($uid, 'TmpQuestionnaireCycle', 'intro', true, null, [
+                    ['prompt' => 'Your name?', 'qtype' => 'text', 'required' => 1],
+                    ['prompt' => 'Pick one', 'qtype' => 'choice', 'required' => 1, 'options' => ['A', 'B']],
+                    ['prompt' => 'Rate us', 'qtype' => 'rating', 'required' => 1, 'min' => 1, 'max' => 5],
+                    ['prompt' => 'Pick many', 'qtype' => 'multichoice', 'required' => 0, 'options' => ['X', 'Y']],
+                ]);
+
+                // Delivery is a separate concern (fans out notifications to every
+                // user); mark it sent so answer() accepts submissions.
+                Database::run("UPDATE chat_questionnaires SET status = 'sent', sent_at = NOW() WHERE id = ?", [$qid]);
+
+                $qs = \App\Models\ChatQuestionnaire::questions($qid);
+                $byType = [];
+                foreach ($qs as $q) {
+                    $byType[$q['qtype']] = (int) $q['id'];
+                }
+                $textId  = $byType['text'];
+                $choiceId = $byType['choice'];
+                $ratingId = $byType['rating'];
+                $multiId  = $byType['multichoice'];
+
+                // Missing required -> rejected
+                $missing = \App\Models\ChatQuestionnaire::answer($qid, $uid, ['q' . $choiceId => 'A']);
+                // Invalid option -> rejected
+                $invalid = \App\Models\ChatQuestionnaire::answer($qid, $uid, [
+                    'q' . $textId => 'Bob', 'q' . $choiceId => 'Z', 'q' . $ratingId => '3',
+                ]);
+
+                $good = \App\Models\ChatQuestionnaire::answer($qid, $uid, [
+                    'q' . $textId => 'Bob',
+                    'q' . $choiceId => 'B',
+                    'q' . $ratingId => '4',
+                    'q' . $multiId => ['X', 'Y'],
+                ]);
+                $count1 = (int) Database::run('SELECT COUNT(*) FROM chat_questionnaire_answers WHERE questionnaire_id = ? AND user_id = ?', [$qid, $uid])->fetchColumn();
+
+                // Upsert (same unique key) must not create duplicates.
+                $again = \App\Models\ChatQuestionnaire::answer($qid, $uid, [
+                    'q' . $textId => 'Bobby',
+                    'q' . $choiceId => 'B',
+                    'q' . $ratingId => '5',
+                    'q' . $multiId => ['X'],
+                ]);
+                $count2 = (int) Database::run('SELECT COUNT(*) FROM chat_questionnaire_answers WHERE questionnaire_id = ? AND user_id = ?', [$qid, $uid])->fetchColumn();
+
+                $results = \App\Models\ChatQuestionnaire::results($qid);
+                $tallyOk = false;
+                foreach ($results as $r) {
+                    if ((int) $r['question']['id'] === $choiceId) {
+                        $tallyOk = ($r['tally']['B'] ?? 0) === 1;
+                    }
+                }
+
+                // Replies off -> rejected
+                Database::run('UPDATE chat_questionnaires SET allow_replies = 0 WHERE id = ?', [$qid]);
+                $off = \App\Models\ChatQuestionnaire::answer($qid, $uid, [
+                    'q' . $textId => 'X', 'q' . $choiceId => 'A', 'q' . $ratingId => '1',
+                ]);
+
+                $pass = !$missing['ok'] && !$invalid['ok'] && $good['ok']
+                    && $count1 === 4 && $again['ok'] && $count2 === 4
+                    && $tallyOk && !$off['ok'];
+
+                return ['pass' => $pass, 'detail' => sprintf(
+                    'missing-rejected=%d invalid-rejected=%d valid=%d rows=%d upsert=%d rows2=%d tally=%d replies-off-rejected=%d',
+                    (int) !$missing['ok'], (int) !$invalid['ok'], (int) $good['ok'], $count1,
+                    (int) $again['ok'], $count2, (int) $tallyOk, (int) !$off['ok']
+                )];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            } finally {
+                if ($qid !== null) {
+                    try {
+                        Database::run('DELETE FROM chat_questionnaires WHERE id = ?', [$qid]);
+                    } catch (\Throwable $ignore) {
+                    }
+                }
+            }
+        });
+
         $add('db.categorizer_suggest_cycle', 'Database', 'enqueue -> claim -> stage -> accept merges (never replaces) categories', function () {
             $gid = null;
             try {
