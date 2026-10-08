@@ -19,7 +19,7 @@ require __DIR__ . '/../partials/breadcrumbs.php';
 <?php else: ?>
     <div class="grid">
         <?php foreach ($galleries as $gallery): ?>
-            <?php require __DIR__ . '/../partials/gallery_card.php'; ?>
+            <?php $cover = null; $galleryCategories = null; require __DIR__ . '/../partials/gallery_card.php'; ?>
         <?php endforeach; ?>
     </div>
 

@@ -139,7 +139,7 @@ require __DIR__ . '/../partials/share-bar.php';
         <h2>Related galleries</h2>
         <div class="grid">
             <?php foreach ($related as $gallery): ?>
-                <?php require __DIR__ . '/../partials/gallery_card.php'; ?>
+                <?php $cover = null; $galleryCategories = null; require __DIR__ . '/../partials/gallery_card.php'; ?>
             <?php endforeach; ?>
         </div>
     </section>
