@@ -7,29 +7,16 @@ use App\Core\Controller;
 use App\Models\Notification;
 
 /**
- * Member notification hub: unread badge in the nav, an inbox page, per-item
- * "read and go" and a mark-all-read action.
+ * Member notification hub: the unread badge in the nav and per-item "read
+ * and go". The inbox itself now lives on the member Wall, so the standalone
+ * index redirects there.
  */
 class NotificationController extends Controller
 {
     public function index(): void
     {
         Auth::requireLogin();
-        $user = Auth::user();
-
-        $notifications = Notification::forUser((int) $user['id'], 50);
-        $unreadIds = [];
-        foreach ($notifications as $n) {
-            if ($n['read_at'] === null) {
-                $unreadIds[] = (int) $n['id'];
-            }
-        }
-
-        $this->view('notifications', [
-            'notifications' => $notifications,
-            'unreadIds'     => $unreadIds,
-            'sidebarNav'    => true,
-        ]);
+        $this->redirect('/wall');
     }
 
     /** Mark one notification read and jump to its target. */

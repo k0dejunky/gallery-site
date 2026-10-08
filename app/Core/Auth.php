@@ -458,7 +458,7 @@ class Auth
 
     /**
      * Where a logged-in user should land after login: admins go to the admin
-     * panel, everyone else to their gallery home page.
+     * panel, everyone else to their member Wall (the site landing page).
      */
     public static function homePath(): string
     {
@@ -466,7 +466,7 @@ class Auth
             return '/admin';
         }
 
-        return self::hasActiveSubscription() ? '/galleries' : '/membership';
+        return '/wall';
     }
 
     /**

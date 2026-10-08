@@ -967,6 +967,109 @@ class Gallery
     }
 
     /**
+     * Bulk-load galleries by id (soft-deleted ones excluded), preserving the
+     * requested order. Used to enrich wall notifications with a gallery post
+     * preview without a per-notification query.
+     */
+    public static function findMany(array $galleryIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $galleryIds))));
+        if (empty($ids)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        $rows = Database::run(
+            "SELECT * FROM galleries
+             WHERE id IN ($placeholders) AND deleted_at IS NULL",
+            $ids
+        )->fetchAll();
+
+        $byId = [];
+        foreach ($rows as $row) {
+            $byId[(int) $row['id']] = $row;
+        }
+
+        // Reorder to match the input id order for predictable preview layout.
+        $result = [];
+        foreach ($ids as $id) {
+            if (isset($byId[$id])) {
+                $result[$id] = $byId[$id];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Bulk-load the first N photos of several galleries in one query.
+     * Returns [gallery_id => [photo, ...]] preserving their in-gallery order.
+     * Used by the wall's per-notification gallery previews.
+     */
+    public static function previewsBulk(array $galleryIds, int $limit = 3): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $galleryIds))));
+        if (empty($ids)) {
+            return [];
+        }
+
+        $limit  = max(1, min(8, (int) $limit));
+        $ph     = implode(',', array_fill(0, count($ids), '?'));
+
+        $rows = Database::run(
+            "SELECT gp.gallery_id, p.*, gp.position
+             FROM photos p
+             INNER JOIN gallery_photo gp ON gp.photo_id = p.id
+             INNER JOIN (
+                 SELECT gallery_id, photo_id,
+                        ROW_NUMBER() OVER (PARTITION BY gallery_id ORDER BY position ASC, photo_id ASC) AS rn
+                 FROM gallery_photo
+                 WHERE gallery_id IN ($ph)
+             ) ranked ON ranked.gallery_id = gp.gallery_id AND ranked.photo_id = gp.photo_id
+             WHERE ranked.rn <= $limit
+             ORDER BY gp.gallery_id ASC, gp.position ASC, p.id ASC",
+            $ids
+        )->fetchAll();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $gid = (int) $row['gallery_id'];
+            $result[$gid][] = $row;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Bulk photo counts for a set of galleries: [gallery_id => count].
+     */
+    public static function photoCountsBulk(array $galleryIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $galleryIds))));
+        if (empty($ids)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        $rows = Database::run(
+            "SELECT gallery_id, COUNT(*) AS n
+             FROM gallery_photo
+             WHERE gallery_id IN ($placeholders)
+             GROUP BY gallery_id",
+            $ids
+        )->fetchAll();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $result[(int) $row['gallery_id']] = (int) $row['n'];
+        }
+
+        return $result;
+    }
+
+    /**
      * Add a photo to a gallery at the end, skipping duplicates. The position
      * column preserves a manual display order.
      */

@@ -3,13 +3,13 @@
 <div class="favorites-hero">
     <p class="eyebrow">From the creator</p>
     <h1>The Wall</h1>
-    <p class="muted">Your notifications, then news and updates from the studio.</p>
+    <p class="muted">New sets and studio updates, right as they land.</p>
 </div>
 
 <?php if (!empty($notifications)): ?>
     <section class="favorites-section">
         <div class="favorites-heading">
-            <h2>Your notifications</h2>
+            <h2>New for you</h2>
             <?php if (!empty($unreadIds)): ?>
                 <form method="post" action="<?= url('/notifications/read-all') ?>">
                     <?= csrf_field() ?>
@@ -18,49 +18,94 @@
             <?php endif; ?>
         </div>
 
-        <?php foreach ($notifications as $notification): ?>
-            <?php
-            $isUnread   = $notification['read_at'] === null;
-            $notifType  = (string) $notification['type'];
-            $notifTag   = match ($notifType) {
-                'gallery'  => 'New set',
-                'wall'     => 'Wall post',
-                'reply'    => 'Reply',
-                'purchase' => 'Membership',
-                default    => 'Update',
-            };
-            $notifColor = match ($notifType) {
-                'gallery'  => '#b42318',
-                'purchase' => '#0f766e',
-                'reply'    => '#7c3aed',
-                default    => '#99618a',
-            };
-            ?>
-            <article class="comment-block" style="display:flex;gap:.75rem;align-items:flex-start;padding:.75rem 0;border-bottom:1px solid var(--card-border,#efe7ec);">
-                <span title="<?= e($notifTag) ?>" aria-hidden="true" style="flex:0 0 auto;margin-top:.1rem;width:2rem;height:2rem;border-radius:999px;display:flex;align-items:center;justify-content:center;background:<?= $notifColor ?>;color:#fff;font-size:.7rem;font-weight:700;letter-spacing:.03em;"><?= e(str_split($notifTag)[0]) ?></span>
-                <div style="flex:1;min-width:0;">
-                    <p style="margin:0;">
-                        <?php if ($notification['url'] !== ''): ?>
-                            <a href="<?= url('/notifications/' . (int) $notification['id']) ?>" style="text-decoration:underline;text-underline-offset:2px;"><?= e($notification['title']) ?></a>
-                        <?php else: ?>
-                            <?= e($notification['title']) ?>
+        <div class="wall-feed">
+            <?php foreach ($notifications as $notification): ?>
+                <?php
+                $isUnread  = $notification['read_at'] === null;
+                $notifType = (string) $notification['type'];
+                $notifTag  = match ($notifType) {
+                    'gallery'  => 'New set',
+                    'wall'     => 'Wall post',
+                    'reply'    => 'Reply',
+                    'purchase' => 'Membership',
+                    default    => 'Update',
+                };
+                $notifColor = match ($notifType) {
+                    'gallery'  => '#b42318',
+                    'purchase' => '#0f766e',
+                    'reply'    => '#7c3aed',
+                    default    => '#99618a',
+                };
+                $hasPreview = !empty($notification['preview']);
+                $openUrl    = url('/notifications/' . (int) $notification['id']);
+                ?>
+                <article class="wall-post<?= $isUnread ? ' wall-post-unread' : '' ?>">
+                    <header class="wall-post-head">
+                        <span class="wall-post-avatar" style="background:<?= $notifColor ?>"><?= e(str_split($notifTag)[0]) ?></span>
+                        <div class="wall-post-meta">
+                            <strong><?= e($notifTag) ?></strong>
+                            <span class="wall-post-time"><?= e(tzdate('M j, g:ia', (string) $notification['created_at'])) ?></span>
+                        </div>
+                        <?php if ($isUnread): ?><span class="chip wall-post-new">New</span><?php endif; ?>
+                        <a class="btn btn-sm btn-outline wall-post-open" href="<?= e($openUrl) ?>">View set</a>
+                    </header>
+
+                    <?php if ($hasPreview): ?>
+                        <?php
+                        $preview = $notification['preview'];
+                        $photoCount = (int) $preview['count'];
+                        $showLock   = empty($preview['can_view']);
+                        ?>
+                        <a class="wall-post-title" href="<?= e($openUrl) ?>">
+                            <?= e($preview['title']) ?>
+                        </a>
+                        <?php if ($preview['description'] !== ''): ?>
+                            <a class="wall-post-desc" href="<?= e($openUrl) ?>"><?= e($preview['description']) ?></a>
                         <?php endif; ?>
-                        <?php if ($isUnread): ?><span class="chip" style="background:#b42318;color:#fff;font-size:.7rem;">New</span><?php endif; ?>
-                    </p>
-                    <?php if ($notification['body'] !== null && $notification['body'] !== ''): ?>
-                        <p class="muted" style="margin:.15rem 0 0;"><?= e($notification['body']) ?></p>
+
+                        <?php if (!empty($preview['photos'])): ?>
+                            <?php $photoCountVisible = count($preview['photos']); ?>
+                            <a class="wall-photos wall-photos-<?= min($photoCountVisible, 3) ?>" href="<?= e($openUrl) ?>">
+                                <?php foreach ($preview['photos'] as $idx => $photo): ?>
+                                    <?php
+                                    $size = $showLock ? 'blur' : 'thumb';
+                                    $src  = file_url($photo['filename'], $size);
+                                    ?>
+                                    <span class="wall-photo">
+                                        <img src="<?= e($src) ?>" alt="<?= e($photo['caption'] !== '' ? $photo['caption'] : $preview['title']) ?>" loading="lazy" decoding="async">
+                                        <?php if ($photo['is_video']): ?><span class="video-badge">&#9654;</span><?php endif; ?>
+                                        <?php if ($showLock && $idx === 0): ?>
+                                            <span class="wall-photo-lock"><span class="chip">Members only</span></span>
+                                        <?php endif; ?>
+                                    </span>
+                                <?php endforeach; ?>
+                            </a>
+                        <?php endif; ?>
+
+                        <footer class="wall-post-foot">
+                            <span class="muted">
+                                <?php if ($photoCount > 0): ?><?= number_format($photoCount) ?> photo<?= $photoCount === 1 ? '' : 's' ?><?php endif; ?>
+                            </span>
+                            <?php if ($showLock): ?>
+                                <a class="btn btn-sm" href="<?= e(url('/membership')) ?>">Upgrade to view</a>
+                            <?php endif; ?>
+                        </footer>
+                    <?php else: ?>
+                        <a class="wall-post-title" href="<?= e($openUrl) ?>"><?= e($notification['title'] ?? '') ?></a>
+                        <?php if (!empty($notification['body'])): ?>
+                            <a class="wall-post-desc" href="<?= e($openUrl) ?>"><?= e($notification['body']) ?></a>
+                        <?php endif; ?>
                     <?php endif; ?>
-                    <p class="muted" style="margin:.15rem 0 0;font-size:.78rem;"><?= e($notifTag) ?> · <?= e(tzdate('M j, g:ia', (string) $notification['created_at'])) ?></p>
-                </div>
-            </article>
-        <?php endforeach; ?>
+                </article>
+            <?php endforeach; ?>
+        </div>
     </section>
 <?php endif; ?>
 
 <?php if (empty($posts) && empty($notifications)): ?>
     <div class="favorites-section">
         <div class="empty-state">
-            <p>No wall posts yet — check back soon.</p>
+            <p>Nothing new yet — the wall fills up as soon as the studio posts.</p>
             <a class="btn btn-sm" href="<?= e(url('/galleries')) ?>">Browse galleries</a>
         </div>
     </div>
