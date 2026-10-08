@@ -45,18 +45,15 @@ $breadcrumbItems = [
         ?>
     <?php else: ?>
     <p class="media-progress" role="status">Item <?= (int) ($currentIndex + 1) ?> of <?= (int) ($mediaCount ?? 1) ?></p>
-    <picture>
-        <source type="image/webp" srcset="<?= e(file_url($photo['filename'], 'web', 'webp')) ?>">
-        <img id="fullsize-img"
-             src="<?= e(file_url($photo['filename'], 'web')) ?>"
-             data-web="<?= e(file_url($photo['filename'], 'web')) ?>"
-             data-web-webp="<?= e(file_url($photo['filename'], 'web', 'webp')) ?>"
-             data-full="<?= e(file_url($photo['filename'])) ?>"
-             decoding="async"
-             fetchpriority="high"
-             alt="<?= e($photo['caption']) ?>"
-             style="max-width: 100%; height: auto; border-radius: 10px; box-shadow: 0 2px 12px rgba(59, 7, 100, 0.35);">
-    </picture>
+    <img id="fullsize-img"
+         src="<?= e(file_url($photo['filename'], 'web')) ?>"
+         data-web="<?= e(file_url($photo['filename'], 'web')) ?>"
+         data-web-webp="<?= e(file_url($photo['filename'], 'web', 'webp')) ?>"
+         data-full="<?= e(file_url($photo['filename'])) ?>"
+         decoding="async"
+         fetchpriority="high"
+         alt="<?= e($photo['caption']) ?>"
+         style="max-width: 100%; height: auto; border-radius: 10px; box-shadow: 0 2px 12px rgba(59, 7, 100, 0.35);">
     <figcaption class="muted" style="margin-top: 0.75rem">
         <?php if ($photo['caption'] !== ''): ?>
             <span><?= e($photo['caption']) ?></span><br>
@@ -92,7 +89,6 @@ require __DIR__ . '/../partials/comments.php';
         toggle.addEventListener('click', function () {
             full = !full;
             if (full) {
-                img.removeAttribute('srcset');
                 img.src = img.dataset.full;
             } else {
                 img.src = img.dataset.web;

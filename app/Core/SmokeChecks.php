@@ -2058,6 +2058,61 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad("dedupe returned {$unique} copies of one event across " . count($merged) . ' rows');
         });
 
+        // ------------------------------------------------------ Media variants
+        $add('smoke.media.bmp_variants', 'Smoke · Media', 'BMP uploads produce web + thumb renditions (never the full original)', static function () use ($ok, $bad): array {
+            foreach (['imagecreatetruecolor', 'imagebmp', 'imagecreatefrombmp', 'getimagesize'] as $fn) {
+                if (!function_exists($fn)) {
+                    return $ok("GD function $fn unavailable; skipped");
+                }
+            }
+
+            $dir = sys_get_temp_dir() . '/gallery-variant-smoke-' . getmypid();
+            @mkdir($dir, 0777, true);
+
+            $bmp = $dir . '/probe.bmp';
+            $im  = imagecreatetruecolor(64, 48);
+            imagefilledrectangle($im, 0, 0, 63, 47, imagecolorallocate($im, 200, 30, 120));
+            imagebmp($im, $bmp);
+            imagedestroy($im);
+
+            $web   = $dir . '/web_probe.bmp';
+            $thumb = $dir . '/thumb_probe.bmp';
+            $made  = create_image_variants($bmp, $web, $thumb, 1600, 400, 300);
+
+            $checks = [
+                'create_image_variants returned true' => $made === true,
+                'web rendition written'               => is_file($web),
+                'thumb rendition written'             => is_file($thumb),
+                'web rendition decodable'             => is_file($web) && @getimagesize($web) !== false,
+            ];
+            if (function_exists('imagewebp')) {
+                $checks['webp rendition written'] = is_file($dir . '/web_probe.webp');
+            }
+
+            foreach (glob($dir . '/*') ?: [] as $f) {
+                @unlink($f);
+            }
+            @rmdir($dir);
+
+            $missing = array_keys(array_filter($checks, static fn (bool $v): bool => !$v));
+
+            return $missing === []
+                ? $ok('BMP -> web + thumb' . (isset($checks['webp rendition written']) ? ' + webp' : ''))
+                : $bad('BMP variant generation failed: ' . implode(', ', $missing));
+        });
+
+        $add('smoke.media.viewer_defaults_to_web', 'Smoke · Media', 'Image viewer loads the web rendition, full size only on demand', static function () use ($root, $ok, $bad): array {
+            $view = (string) file_get_contents("$root/views/gallery/image_full.php");
+
+            $defaultIsWeb = (bool) preg_match('/<img id="fullsize-img"\s+src="<\?= e\(file_url\(\$photo\[\'filename\'\], \'web\'\)\)/', $view);
+            $fullIsSeparate = str_contains($view, "data-full=\"<?= e(file_url(\$photo['filename'])) ?>\"");
+            $toggleOnly = str_contains($view, 'img.src = img.dataset.full');
+
+            return ($defaultIsWeb && $fullIsSeparate && $toggleOnly)
+                ? $ok('default src is size=web; data-full only via the toggle')
+                : $bad('image_full.php no longer defaults to the web rendition (defaultIsWeb=' . var_export($defaultIsWeb, true) . ')');
+        });
+
         $cache = $tests;
 
         return $cache;

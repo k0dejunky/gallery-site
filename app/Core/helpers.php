@@ -1100,6 +1100,11 @@ function create_thumbnail(string $src, string $dest, int $width, int $height): b
         $saved = imagegif($thumb, $dest);
     } elseif ($type === IMAGETYPE_WEBP && function_exists('imagewebp')) {
         $saved = imagewebp($thumb, $dest, 85);
+    } else {
+        // Same coverage gap as save_image(): BMP (and anything else GD can
+        // decode but not re-encode) has no branch, so the thumbnail write
+        // failed and the grid tile 404'd. JPEG bytes keep it serving.
+        $saved = imagejpeg($thumb, $dest, 85);
     }
 
     imagedestroy($source);
@@ -1217,6 +1222,14 @@ function save_image($image, string $dest, int $type, int $quality = 85): bool
         $saved = imagegif($image, $dest);
     } elseif ($type === IMAGETYPE_WEBP && function_exists('imagewebp')) {
         $saved = imagewebp($image, $dest, $quality);
+    } else {
+        // Formats GD can decode but not re-encode (BMP, ...) land here.
+        // Returning false made variant generation fail silently, so the
+        // photo was stored with no web_/thumb_ rendition and the site then
+        // served the FULL original through ?size=web (and 404'd the grid
+        // tile). Write JPEG bytes instead: the file keeps its original
+        // name, and StorageController sniffs the actual content type.
+        $saved = imagejpeg($image, $dest, $quality);
     }
 
     return $saved;

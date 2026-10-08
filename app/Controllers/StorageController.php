@@ -86,6 +86,46 @@ class StorageController extends Controller
             }
         }
 
+        // A photo stored without its web_/thumb_ rendition (legacy import,
+        // failed generation, cleaned storage) would otherwise serve the FULL
+        // original through ?size=web - the "full size instead of the web
+        // image" bug - or 404 the grid tile. Build the renditions on the first
+        // request that needs them. image_can_decode() keeps videos on the
+        // existing fallback (their renditions are made at upload time).
+        if (in_array($size, ['web', 'thumb', 'blur'], true)) {
+            $uploadsDir = config('app.uploads.dir');
+            $srcPath    = $uploadsDir . '/' . $name;
+            $webPath    = $uploadsDir . '/web_' . $name;
+            $thumbPath  = $uploadsDir . '/thumb_' . $name;
+
+            if (is_file($srcPath) && (!is_file($webPath) || !is_file($thumbPath)) && image_can_decode($srcPath)) {
+                // Per-file lock (kept out of the uploads root so it never
+                // shows up as an orphan file): requests for the SAME photo
+                // wait for one generation instead of racing, while different
+                // photos generate in parallel. Re-check under the lock so a
+                // waiter skips work the previous holder already did.
+                $lockDir = dirname(__DIR__, 2) . '/storage/cache/variants';
+                @mkdir($lockDir, 0775, true);
+                $lock = @fopen($lockDir . '/' . md5($name) . '.lock', 'c');
+                if ($lock !== false) {
+                    @flock($lock, LOCK_EX);
+                    if (!is_file($webPath) || !is_file($thumbPath)) {
+                        $cfg = config('app.uploads');
+                        create_image_variants(
+                            $srcPath,
+                            $webPath,
+                            $thumbPath,
+                            (int) $cfg['web_max_width'],
+                            (int) $cfg['thumb_width'],
+                            (int) $cfg['thumb_height']
+                        );
+                    }
+                    @flock($lock, LOCK_UN);
+                    @fclose($lock);
+                }
+            }
+        }
+
         if ($size === 'thumb') {
             $name = 'thumb_' . $name;
         } elseif ($size === 'blur') {
