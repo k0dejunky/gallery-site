@@ -127,6 +127,7 @@ class SmokeChecks
             'views/admin/earnings.php',
             'views/checkout_complete.php',
             'views/partials/card_checkout.php',
+            'database/migrations/062_plan_checkout_processor.sql',
         ];
         foreach ($files as $rel) {
             $slug = str_replace(['/', '.'], '_', $rel);
@@ -368,6 +369,40 @@ class SmokeChecks
                 && strpos($ppShow, '/tip/live') !== false
                 ? $ok('PPV + tip card checkout wired')
                 : $bad('views/gallery/show.php must include partials/card_checkout.php for both PPV and tips');
+        });
+
+        // ------------------------------------------- Plan checkout processor
+        $pcSchema = $read("$root/schema.sql");
+        $pcModel  = $read("$root/app/Models/Plan.php");
+        $pcView   = $read("$root/views/membership/index.php");
+        $pcCtl    = $read("$root/app/Controllers/PlanController.php");
+        $pcFc     = $read("$root/views/admin/plan_create.php");
+        $pcFe     = $read("$root/views/admin/plan_edit.php");
+        $add('smoke.plan.processor_schema', 'Smoke · Plan Processor', 'plans carries checkout_processor', static function () use ($pcSchema, $ok, $bad): array {
+            return stripos($pcSchema, 'checkout_processor') !== false && stripos($pcSchema, "'auto','paypal','braintree','offline'") !== false
+                ? $ok('schema column + enum present')
+                : $bad('schema.sql plans must carry checkout_processor enum auto/paypal/braintree/offline');
+        });
+        $add('smoke.plan.processor_model', 'Smoke · Plan Processor', 'Plan model exposes the choices', static function () use ($pcModel, $ok, $bad): array {
+            return strpos($pcModel, 'CHECKOUT_CHOICES') !== false && strpos($pcModel, 'function checkoutLabel') !== false
+                ? $ok('choices + label helper present')
+                : $bad('Plan model must define CHECKOUT_CHOICES and checkoutLabel');
+        });
+        $add('smoke.plan.processor_controller', 'Smoke · Plan Processor', 'PlanController persists the choice', static function () use ($pcCtl, $ok, $bad): array {
+            return substr_count($pcCtl, 'checkout_processor') >= 2 ? $ok('create + update read checkout_processor') : $bad('PlanController must persist checkout_processor in store and update');
+        });
+        $add('smoke.plan.processor_forms', 'Smoke · Plan Processor', 'Plan create/edit forms offer the choice', static function () use ($pcFc, $pcFe, $ok, $bad): array {
+            return strpos($pcFc, 'checkout_processor') !== false && strpos($pcFe, 'checkout_processor') !== false
+                ? $ok('dropdown on both forms')
+                : $bad('plan_create.php and plan_edit.php must offer the checkout_processor dropdown');
+        });
+        $add('smoke.plan.processor_membership', 'Smoke · Plan Processor', 'Membership page honours checkout_processor + classic PayPal buttons restored', static function () use ($pcView, $ok, $bad): array {
+            return strpos($pcView, '$ppChoice') !== false
+                && strpos($pcView, 'data-pp-button') !== false
+                && strpos($pcView, '[data-pp-button]') !== false
+                && strpos($pcView, "'P-2EE95782UN3086035NKHSZ4A'") !== false
+                ? $ok('processor-aware cards + generic PayPal renderer + original plan-id fallbacks')
+                : $bad('views/membership/index.php must honour checkout_processor, render data-pp-button blocks and keep the original PayPal plan-id fallbacks');
         });
 
         // --------------------------------------------------- Braintree

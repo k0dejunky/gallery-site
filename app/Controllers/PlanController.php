@@ -58,6 +58,7 @@ class PlanController extends MembershipAdminController
         $level    = (int) $this->request->input('level', Plan::SILVER_LEVEL);
         $active   = $this->request->input('active') === '1';
         $btPlanId = trim((string) $this->request->input('braintree_plan_id', ''));
+        $checkoutProcessor = strtolower((string) $this->request->input('checkout_processor', 'auto'));
 
         $error = $this->validate($name, $cycle, $price, $level);
 
@@ -66,7 +67,7 @@ class PlanController extends MembershipAdminController
             $this->redirect('/admin/plans');
         }
 
-        $id = Plan::create($name, $cycle, (float) $price, $desc, $sort, $level, $active, $btPlanId);
+        $id = Plan::create($name, $cycle, (float) $price, $desc, $sort, $level, $active, $btPlanId, $checkoutProcessor);
         AuditLog::record((int) Auth::user()['id'], 'create', 'plan', $id, 'Created plan "' . $name . '"', null, ['name' => $name, 'cycle' => $cycle, 'price' => $price, 'level' => $level]);
 
         $this->flash('success', 'Plan "' . $name . '" created.');
@@ -110,6 +111,7 @@ class PlanController extends MembershipAdminController
         $level    = (int) $this->request->input('level', $plan['level'] ?? Plan::SILVER_LEVEL);
         $active   = $this->request->input('active') === '1';
         $btPlanId = trim((string) $this->request->input('braintree_plan_id', ''));
+        $checkoutProcessor = strtolower((string) $this->request->input('checkout_processor', 'auto'));
 
         $error = $this->validate($name, $cycle, $price, $level);
 
@@ -118,7 +120,7 @@ class PlanController extends MembershipAdminController
             $this->redirect('/admin/plans/' . $id . '/edit');
         }
 
-        Plan::update($id, $name, $cycle, (float) $price, $desc, $sort, $level, $active, $btPlanId);
+        Plan::update($id, $name, $cycle, (float) $price, $desc, $sort, $level, $active, $btPlanId, $checkoutProcessor);
         AuditLog::record((int) Auth::user()['id'], 'update', 'plan', $id, 'Updated plan "' . $name . '"', ['name' => $plan['name'], 'cycle' => $plan['billing_cycle'], 'price' => $plan['price'], 'description' => $plan['description'], 'sort_order' => $plan['sort_order'], 'level' => $plan['level'] ?? Plan::SILVER_LEVEL, 'active' => $plan['active']], ['name' => $name, 'cycle' => $cycle, 'price' => $price, 'level' => $level, 'active' => $active]);
 
         $this->flash('success', 'Plan "' . $name . '" updated.');

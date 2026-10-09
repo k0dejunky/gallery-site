@@ -12,6 +12,28 @@ use App\Core\Database;
 class Plan
 {
     /**
+     * How the membership page offers this plan: auto (legacy behaviour),
+     * paypal (PayPal quick-subscribe), braintree (card checkout), offline
+     * (manual request only).
+     */
+    public const CHECKOUT_CHOICES = ['auto', 'paypal', 'braintree', 'offline'];
+
+    /**
+     * Human-readable label for a checkout processor choice.
+     */
+    public static function checkoutLabel(string $choice): string
+    {
+        $labels = [
+            'auto'      => 'Auto (PayPal buttons on the classic plans, methods dropdown otherwise)',
+            'paypal'    => 'PayPal only (quick-subscribe button)',
+            'braintree' => 'Braintree card checkout only',
+            'offline'   => 'Manual request only (no online payment)',
+        ];
+
+        return $labels[$choice] ?? ucfirst($choice);
+    }
+
+    /**
      * The lowest membership level. Favourites (e.g. selecting favourite
      * categories) require a membership of at least this tier.
      */
@@ -57,12 +79,12 @@ class Plan
     /**
      * Create a plan. Returns the new plan's id.
      */
-    public static function create(string $name, string $billingCycle, float $price, string $description, int $sortOrder, int $level, bool $active, ?string $braintreePlanId = null): int
+    public static function create(string $name, string $billingCycle, float $price, string $description, int $sortOrder, int $level, bool $active, ?string $braintreePlanId = null, string $checkoutProcessor = 'auto'): int
     {
         Database::run(
-            'INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, level, braintree_plan_id, active, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-            [$name, slugify($name), $price, $billingCycle, $description, $sortOrder, $level, $braintreePlanId !== '' ? $braintreePlanId : null, $active ? 1 : 0]
+            'INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, level, braintree_plan_id, checkout_processor, active, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+            [$name, slugify($name), $price, $billingCycle, $description, $sortOrder, $level, $braintreePlanId !== '' ? $braintreePlanId : null, in_array($checkoutProcessor, self::CHECKOUT_CHOICES, true) ? $checkoutProcessor : 'auto', $active ? 1 : 0]
         );
 
         return (int) Database::connection()->lastInsertId();
@@ -71,13 +93,13 @@ class Plan
     /**
      * Update a plan's details, regenerating its slug from the new name.
      */
-    public static function update(int $id, string $name, string $billingCycle, float $price, string $description, int $sortOrder, int $level, bool $active, ?string $braintreePlanId = null): void
+    public static function update(int $id, string $name, string $billingCycle, float $price, string $description, int $sortOrder, int $level, bool $active, ?string $braintreePlanId = null, string $checkoutProcessor = 'auto'): void
     {
         Database::run(
             'UPDATE plans
-             SET name = ?, slug = ?, price = ?, billing_cycle = ?, description = ?, sort_order = ?, level = ?, braintree_plan_id = ?, active = ?
+             SET name = ?, slug = ?, price = ?, billing_cycle = ?, description = ?, sort_order = ?, level = ?, braintree_plan_id = ?, checkout_processor = ?, active = ?
              WHERE id = ?',
-            [$name, slugify($name), $price, $billingCycle, $description, $sortOrder, $level, $braintreePlanId !== '' ? $braintreePlanId : null, $active ? 1 : 0, $id]
+            [$name, slugify($name), $price, $billingCycle, $description, $sortOrder, $level, $braintreePlanId !== '' ? $braintreePlanId : null, in_array($checkoutProcessor, self::CHECKOUT_CHOICES, true) ? $checkoutProcessor : 'auto', $active ? 1 : 0, $id]
         );
     }
 
