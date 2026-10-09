@@ -57,12 +57,12 @@ class Plan
     /**
      * Create a plan. Returns the new plan's id.
      */
-    public static function create(string $name, string $billingCycle, float $price, string $description, int $sortOrder, int $level, bool $active): int
+    public static function create(string $name, string $billingCycle, float $price, string $description, int $sortOrder, int $level, bool $active, ?string $braintreePlanId = null): int
     {
         Database::run(
-            'INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, level, active, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-            [$name, slugify($name), $price, $billingCycle, $description, $sortOrder, $level, $active ? 1 : 0]
+            'INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, level, braintree_plan_id, active, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+            [$name, slugify($name), $price, $billingCycle, $description, $sortOrder, $level, $braintreePlanId !== '' ? $braintreePlanId : null, $active ? 1 : 0]
         );
 
         return (int) Database::connection()->lastInsertId();
@@ -71,13 +71,24 @@ class Plan
     /**
      * Update a plan's details, regenerating its slug from the new name.
      */
-    public static function update(int $id, string $name, string $billingCycle, float $price, string $description, int $sortOrder, int $level, bool $active): void
+    public static function update(int $id, string $name, string $billingCycle, float $price, string $description, int $sortOrder, int $level, bool $active, ?string $braintreePlanId = null): void
     {
         Database::run(
             'UPDATE plans
-             SET name = ?, slug = ?, price = ?, billing_cycle = ?, description = ?, sort_order = ?, level = ?, active = ?
+             SET name = ?, slug = ?, price = ?, billing_cycle = ?, description = ?, sort_order = ?, level = ?, braintree_plan_id = ?, active = ?
              WHERE id = ?',
-            [$name, slugify($name), $price, $billingCycle, $description, $sortOrder, $level, $active ? 1 : 0, $id]
+            [$name, slugify($name), $price, $billingCycle, $description, $sortOrder, $level, $braintreePlanId !== '' ? $braintreePlanId : null, $active ? 1 : 0, $id]
+        );
+    }
+
+    /**
+     * Store the Braintree plan id that backs a site plan (null clears it).
+     */
+    public static function setBraintreePlanId(int $id, ?string $braintreePlanId): void
+    {
+        Database::run(
+            'UPDATE plans SET braintree_plan_id = ? WHERE id = ?',
+            [$braintreePlanId !== null && $braintreePlanId !== '' ? $braintreePlanId : null, $id]
         );
     }
 

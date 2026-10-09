@@ -1,5 +1,8 @@
 <?php $title = 'Membership'; ?>
 <?php
+// The fragment renders before layout.php, so $user must come from the
+// controller's view data (MembershipController@index passes it).
+$user = $user ?? \App\Core\Auth::user();
 $metaDescription = 'Membership plans on ' . config('app.site_name') . ' — unlock every photo and video gallery on the site.';
 $canonicalUrl = absolute_url('/membership');
 $ogImage = (function (): string {
@@ -119,6 +122,13 @@ $ldJson = [
                 break;
             }
         }
+        $braintreeAvailable = false;
+        foreach (($paymentProcessors ?? []) as $__pp) {
+            if (strtolower((string) ($__pp['provider'] ?? '')) === 'braintree' && (int) ($__pp['enabled'] ?? 0) === 1) {
+                $braintreeAvailable = true;
+                break;
+            }
+        }
         $paypalClientId = $paypalTest
             ? 'AWjv6zqSB5Ix5xpb9D8PWn2RFO3ELiglsL_JQqOM9BCYDluL1I_uN0oRCickXa7-BPgIrXZ2p8ltnS7-'
             : 'BAAulxhXtOW_C1MbdQ9ieSDNNQYJhjbXAknX4UujE8n02reztiOBMnqH8cw0r-ZyKT9aIU0zZslsm3hyZc';
@@ -207,6 +217,11 @@ $ldJson = [
                             <?php endif; ?>
                             <button type="submit" class="btn" style="width:100%;">Subscribe</button>
                         </form>
+                    <?php endif; ?>
+                    <?php if ($braintreeAvailable && !$hasActive && $pendingSub === null && strtolower((string) ($plan['billing_cycle'] ?? '')) !== 'lifetime'): ?>
+                        <p style="order:3; margin-bottom:0;">
+                            <a class="btn btn-outline" style="width:100%; box-sizing:border-box; margin-top:.5rem;" href="<?= url('/membership/checkout') ?>?plan_id=<?= (int) $plan['id'] ?>">Or pay by card (Braintree)</a>
+                        </p>
                     <?php endif; ?>
                 </div>
             <?php endforeach; ?>

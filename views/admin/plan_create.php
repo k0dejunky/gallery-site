@@ -34,6 +34,11 @@
         <small>Minimum level required to unlock level-gated features (e.g. Silver = 1).</small>
     </p>
     <p>
+        <label for="braintree_plan_id">Braintree plan ID</label><br>
+        <input type="text" name="braintree_plan_id" id="braintree_plan_id" maxlength="64" placeholder="silver-monthly (or leave blank)">
+        <small>The Braintree subscription plan that bills this tier. Left blank, it is assigned automatically by "Provision Braintree plans" on the Plans page.</small>
+    </p>
+    <p>
         <label><input type="checkbox" name="active" value="1" checked> Active</label>
     </p>
     <p>

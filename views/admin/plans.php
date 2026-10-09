@@ -43,6 +43,7 @@
                 <th>Price</th>
                 <th>Sort</th>
                 <th>Level</th>
+                <th>Braintree</th>
                 <th>Status</th>
                 <th>Subscribers</th>
                 <th>Actions</th>
@@ -56,6 +57,7 @@
                     <td>$<?= number_format((float) $plan['price'], 2) ?></td>
                     <td><?= (int) $plan['sort_order'] ?></td>
                     <td><?= (int) ($plan['level'] ?? \App\Models\Plan::SILVER_LEVEL) ?></td>
+                    <td><?= e((string) ($plan['braintree_plan_id'] ?? '')) ?: '<span class="muted">—</span>' ?></td>
                     <td><?= (int) $plan['active'] === 1 ? 'Active' : 'Inactive' ?></td>
                     <td><?= (int) $plan['subscriber_count'] ?></td>
                     <td>
@@ -74,6 +76,10 @@
 
 <p style="margin: var(--spacing-md) 0 var(--spacing-lg);">
     <a class="btn" href="<?= url('/admin/plans/create') ?>">Add New Membership Plan</a>
+    <form class="inline" method="post" action="<?= url('/admin/plans/provision-braintree') ?>" style="display:inline;">
+        <?= csrf_field() ?>
+        <button type="submit" class="btn btn-outline" title="Create a Braintree subscription plan for every active recurring tier and save its id">Provision Braintree plans</button>
+    </form>
 </p>
 
 <section class="sales-panel">

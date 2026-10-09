@@ -206,6 +206,47 @@ class SmokeChecks
             return strpos($schema, 'uq_page_ip_visits_page_ip_date') !== false ? $ok('daily per-IP dedupe key') : $bad('schema.sql: page_ip_visits must carry the (page, ip, visit_date) unique key');
         });
 
+        // --------------------------------------------------- Braintree
+        $btSchema = $schema;
+        $planCtrl = $read("$root/app/Controllers/PlanController.php");
+        $btGw = $read("$root/app/Core/BraintreeGateway.php");
+        $membershipView = $read("$root/views/membership/index.php");
+        $planFormCreate = $read("$root/views/admin/plan_create.php");
+        $planFormEdit = $read("$root/views/admin/plan_edit.php");
+        $memberCtrl = $read("$root/app/Controllers/MembershipController.php");
+        $add('smoke.schema.plans_braintree_plan_id', 'Smoke · Braintree', 'schema.sql plans has braintree_plan_id', static function () use ($btSchema, $ok, $bad): array {
+            return stripos($btSchema, 'braintree_plan_id') !== false ? $ok('column in schema.sql') : $bad('schema.sql: plans table must carry braintree_plan_id');
+        });
+        $add('smoke.file.migration_braintree_plans', 'Smoke · Braintree', 'Migration 059 provisioned Braintree plan mapping', static function () use ($root, $ok, $bad): array {
+            $mig = "$root/database/migrations/059_braintree_plans.sql";
+            return is_file($mig) && strpos((string) file_get_contents($mig), 'braintree_plan_id') !== false ? $ok('present') : $bad('missing migration 059_braintree_plans.sql with braintree_plan_id');
+        });
+        $add('smoke.braintree.provision_action', 'Smoke · Braintree', 'PlanController provisions Braintree plans per tier', static function () use ($planCtrl, $ok, $bad): array {
+            return strpos($planCtrl, 'function provisionBraintree') !== false && preg_match('/use App\\\\Core\\\\BraintreeGateway;/', $planCtrl) === 1
+                ? $ok('provisionBraintree wired to BraintreeGateway')
+                : $bad('PlanController must define provisionBraintree and import App\Core\BraintreeGateway');
+        });
+        $add('smoke.braintree.gateway_plan_crud', 'Smoke · Braintree', 'BraintreeGateway can create and find plans', static function () use ($btGw, $ok, $bad): array {
+            return strpos($btGw, 'function createPlan') !== false && strpos($btGw, 'function findPlan') !== false
+                ? $ok('createPlan + findPlan present')
+                : $bad('BraintreeGateway must implement createPlan and findPlan');
+        });
+        $add('smoke.braintree.membership_view_button', 'Smoke · Braintree', 'Membership page offers a Braintree card checkout button', static function () use ($membershipView, $ok, $bad): array {
+            return strpos($membershipView, '/membership/checkout') !== false && strpos($membershipView, '$braintreeAvailable') !== false && stripos($membershipView, 'Or pay by card (Braintree)') !== false
+                ? $ok('card checkout button gated by braintree availability')
+                : $bad('views/membership/index.php must render a Braintree checkout link gate by $braintreeAvailable');
+        });
+        $add('smoke.braintree.plan_forms_field', 'Smoke · Braintree', 'Plan admin forms persist a Braintree plan id', static function () use ($planFormCreate, $planFormEdit, $ok, $bad): array {
+            return strpos($planFormCreate, 'braintree_plan_id') !== false && strpos($planFormEdit, 'braintree_plan_id') !== false
+                ? $ok('field on create + edit forms')
+                : $bad('plan_create.php and plan_edit.php must carry a braintree_plan_id input');
+        });
+        $add('smoke.braintree.subscribe_resolves_plan', 'Smoke · Braintree', 'subscribeBraintree prefers the plan-level Braintree plan id', static function () use ($memberCtrl, $ok, $bad): array {
+            return strpos($memberCtrl, '$btPlanId = trim((string) ($plan[\'braintree_plan_id\'] ?? \'\'));') !== false
+                ? $ok('per-plan id resolved before the processor-level fallback')
+                : $bad('MembershipController::subscribeBraintree must resolve plans.braintree_plan_id first');
+        });
+
         // --------------------------------------------------------------- Traffic
         $traf = $read("$root/app/Models/Traffic.php");
         $indexPhp = $read("$root/public/index.php");

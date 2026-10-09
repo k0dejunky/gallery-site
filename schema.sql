@@ -306,6 +306,7 @@ CREATE TABLE IF NOT EXISTS plans (
     description   VARCHAR(500) NOT NULL DEFAULT '',
     sort_order    INT NOT NULL DEFAULT 0,
     level         INT NOT NULL DEFAULT 1,
+    braintree_plan_id VARCHAR(64) NULL DEFAULT NULL,
     active        TINYINT(1) NOT NULL DEFAULT 1,
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     can_view_galleries TINYINT(1) NOT NULL DEFAULT 1,

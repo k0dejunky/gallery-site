@@ -84,8 +84,12 @@ class BraintreeGateway
 
         $response = $this->post('/merchants/' . $this->merchantId . '/client_token', $payload);
 
-        if (isset($response['client_token'])) {
-            return $response['client_token'];
+        // The v1 API returns {"clientToken": {"value": "<token>"}} (the class
+        // historically also expected a flat "client_token"). Accept both.
+        $token = $response['clientToken']['value'] ?? $response['client_token'] ?? null;
+
+        if (is_string($token) && $token !== '') {
+            return $token;
         }
 
         throw new \RuntimeException('Braintree client token failed: ' . json_encode($response));
@@ -102,21 +106,17 @@ class BraintreeGateway
     {
         $payload = [
             'customer' => array_filter([
-                'email'      => $email,
-                'first_name' => $firstName,
-                'last_name'  => $lastName,
-                'phone'      => $phone,
-                'custom_fields' => $customFields,
+                'email'          => $email,
+                'first_name'     => $firstName,
+                'last_name'      => $lastName,
+                'phone'          => $phone,
+                'custom_fields'  => $customFields,
             ], fn($v) => $v !== null && $v !== ''),
         ];
 
-        $response = $this->post('/merchants/' . $this->merchantId . '/customers', $payload);
+        $xml = $this->request('POST', '/merchants/' . $this->merchantId . '/customers', ['xml' => true, 'payload' => $payload]);
 
-        if (isset($response['customer'])) {
-            return $response['customer'];
-        }
-
-        throw new \RuntimeException('Braintree create customer failed: ' . json_encode($response));
+        return ['id' => (string) ($xml->id ?? '')];
     }
 
     /**
@@ -125,11 +125,12 @@ class BraintreeGateway
     public function findCustomer(string $customerId): ?array
     {
         try {
-            $response = $this->get('/merchants/' . $this->merchantId . '/customers/' . $customerId);
-            return $response['customer'] ?? null;
+            $result = $this->request('GET', '/merchants/' . $this->merchantId . '/customers/' . rawurlencode($customerId), ['xml' => true]);
         } catch (\Throwable) {
             return null;
         }
+
+        return ['id' => (string) ($result->id ?? $customerId)];
     }
 
     // ------------------------------------------------------------------
@@ -144,23 +145,22 @@ class BraintreeGateway
     {
         $payload = [
             'payment_method' => [
-                'customer_id'    => $customerId,
+                'customer_id'         => $customerId,
                 'payment_method_nonce' => $nonce,
-                'options'        => [
-                    'verify_card'                => true,
-                    'make_default'               => $makeDefault,
-                    'verification_merchant_account_id' => $this->merchantId,
+                'options'             => [
+                    'verify_card'                          => true,
+                    'make_default'                         => $makeDefault,
+                    'verification_merchant_account_id'     => $this->merchantId,
                 ],
             ],
         ];
 
-        $response = $this->post('/merchants/' . $this->merchantId . '/payment_methods', $payload);
+        $xml = $this->request('POST', '/merchants/' . $this->merchantId . '/payment_methods', ['xml' => true, 'payload' => $payload]);
 
-        if (isset($response['payment_method'])) {
-            return $response['payment_method'];
-        }
-
-        throw new \RuntimeException('Braintree vault payment method failed: ' . json_encode($response));
+        return [
+            'token'  => (string) ($xml->token ?? ''),
+            'id'     => (string) ($xml->id ?? ''),
+        ];
     }
 
     // ------------------------------------------------------------------
@@ -185,13 +185,58 @@ class BraintreeGateway
             ], fn($v) => $v !== null && $v !== ''),
         ];
 
-        $response = $this->post('/merchants/' . $this->merchantId . '/subscriptions', $payload);
+        $xml = $this->request('POST', '/merchants/' . $this->merchantId . '/subscriptions', ['xml' => true, 'payload' => $payload]);
 
-        if (isset($response['subscription'])) {
-            return $response['subscription'];
+        return [
+            'id'     => (string) ($xml->id ?? ''),
+            'status' => (string) ($xml->status ?? ''),
+        ];
+    }
+
+    // ------------------------------------------------------------------
+    // Plans
+    // ------------------------------------------------------------------
+
+    /**
+     * Create a Braintree subscription plan. The site uses one Braintree
+     * plan per membership tier (id e.g. "silver_monthly"), provisioned by
+     * Admin -> Plans -> "Provision Braintree plans". $options may set
+     * price and billing_frequency; defaults come from the merchant account.
+     */
+    public function createPlan(string $name, string $id, ?string $price = null, ?int $billingFrequency = null, string $currency = 'USD', ?int $billingDayOfMonth = null, ?int $billingMonth = null): array
+    {
+        $payload = [
+            'plan' => array_filter([
+                'name'                 => $name,
+                'id'                   => $id,
+                'price'                => $price !== null ? number_format((float) $price, 2, '.', '') : null,
+                'billing_frequency'    => $billingFrequency !== null ? max(1, min(12, $billingFrequency)) : null,
+                'billing_day_of_month' => $billingDayOfMonth !== null ? max(1, min(31, $billingDayOfMonth)) : null,
+                'billing_month'        => $billingMonth !== null ? max(1, min(12, $billingMonth)) : null,
+                'currency_iso_code'    => $currency,
+            ], fn($v) => $v !== null && $v !== ''),
+        ];
+
+        $response = $this->post('/merchants/' . $this->merchantId . '/plans', $payload);
+
+        if (isset($response['plan'])) {
+            return $response['plan'];
         }
 
-        throw new \RuntimeException('Braintree create subscription failed: ' . json_encode($response));
+        throw new \RuntimeException('Braintree create plan failed: ' . json_encode($response));
+    }
+
+    /**
+     * Find a Braintree plan by id, or null when it does not exist.
+     */
+    public function findPlan(string $planId): ?array
+    {
+        try {
+            $response = $this->get('/merchants/' . $this->merchantId . '/plans/' . rawurlencode($planId));
+            return $response['plan'] ?? null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     // ------------------------------------------------------------------
@@ -256,48 +301,65 @@ class BraintreeGateway
     // HTTP helpers
     // ------------------------------------------------------------------
 
+    /**
+     * JSON POST (client token, plans). Returns the decoded response array.
+     */
     private function post(string $path, array $data): array
     {
-        return $this->request('POST', $path, $data);
+        return $this->request('POST', $path, ['payload' => $data]);
     }
 
+    /**
+     * JSON GET (plan lookup). Returns the decoded response array.
+     */
     private function get(string $path): array
     {
         return $this->request('GET', $path);
     }
 
-    private function request(string $method, string $path, ?array $data = null): array
+    /**
+     * Perform an API call. JSON is the default; pass ['xml' => true] for the
+     * customers / payment-methods / subscriptions endpoints, which are served
+     * as XML and 406 on an "Accept: application/json" header. Every call
+     * sends X-ApiVersion: 6, which the sandbox/live gateways require for
+     * anything beyond the client token endpoint.
+     *
+     * Returns the decoded JSON array, or a SimpleXMLElement for XML calls.
+     *
+     * @throws \RuntimeException on network failure, HTTP >= 400, or a
+     *         Braintree api error response.
+     */
+    private function request(string $method, string $path, array $opts = [])
     {
-        $url = $this->baseUrl . $path;
-
-        $ch = curl_init($url);
+        $xml       = !empty($opts['xml']);
+        $payload   = $opts['payload'] ?? null;
+        $url       = $this->baseUrl . $path;
 
         $headers = [
             'Content-Type: application/json',
-            'Accept: application/json',
+            'X-ApiVersion: 6',
         ];
+        if (!$xml) {
+            $headers[] = 'Accept: application/json';
+        }
 
-        curl_setopt_array($ch, [
+        $curlOpts = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER     => $headers,
             CURLOPT_USERPWD        => $this->publicKey . ':' . $this->privateKey,
             CURLOPT_TIMEOUT        => 30,
-        ]);
+        ];
 
-        switch ($method) {
-            case 'POST':
-                curl_setopt($ch, CURLOPT_POST, true);
-                if ($data !== null) {
-                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-                }
-                break;
-            case 'PUT':
-                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
-                if ($data !== null) {
-                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-                }
-                break;
+        $ch = curl_init($url);
+
+        if ($method === 'POST') {
+            $curlOpts[CURLOPT_POST] = true;
+            if ($payload !== null) {
+                $curlOpts[CURLOPT_POSTFIELDS] = json_encode($payload);
+            }
         }
+
+        curl_setopt_array($ch, $curlOpts);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -308,44 +370,76 @@ class BraintreeGateway
             throw new \RuntimeException('Braintree cURL error: ' . $error);
         }
 
+        if ($httpCode >= 400) {
+            throw new \RuntimeException($this->describeError((string) $response, $httpCode, $xml));
+        }
+
+        if ($xml) {
+            $parsed = @simplexml_load_string((string) $response);
+            if ($parsed === false) {
+                throw new \RuntimeException('Braintree non-XML response (HTTP ' . $httpCode . '): ' . substr((string) $response, 0, 500));
+            }
+            return $parsed;
+        }
+
         $decoded = json_decode((string) $response, true);
 
         if (!is_array($decoded)) {
             throw new \RuntimeException('Braintree non-JSON response (HTTP ' . $httpCode . '): ' . substr((string) $response, 0, 500));
         }
 
-        // Braintree API errors live in 'apiErrorResponse'
+        // Managed-plan/JSON API errors live in apiErrorResponse (plans).
         if (isset($decoded['apiErrorResponse'])) {
             $err = $decoded['apiErrorResponse'];
             $messages = [];
-            if (isset($err['errors']['transaction']['errors'])) {
-                foreach ($err['errors']['transaction']['errors'] as $e) {
-                    $messages[] = (string) ($e['message'] ?? '');
-                }
-            }
-            if (isset($err['errors']['subscription']['errors'])) {
-                foreach ($err['errors']['subscription']['errors'] as $e) {
-                    $messages[] = (string) ($e['message'] ?? '');
-                }
-            }
-            if (isset($err['errors']['customer']['errors'])) {
-                foreach ($err['errors']['customer']['errors'] as $e) {
-                    $messages[] = (string) ($e['message'] ?? '');
-                }
-            }
-            if (isset($err['errors']['paymentMethod']['errors'])) {
-                foreach ($err['errors']['paymentMethod']['errors'] as $e) {
-                    $messages[] = (string) ($e['message'] ?? '');
+            foreach (['transaction', 'subscription', 'customer', 'paymentMethod', 'plan'] as $section) {
+                if (isset($err['errors'][$section]['errors'])) {
+                    foreach ($err['errors'][$section]['errors'] as $e) {
+                        $messages[] = (string) ($e['message'] ?? '');
+                    }
                 }
             }
             $msg = implode('; ', array_filter($messages)) ?: (string) ($err['message'] ?? 'Unknown Braintree error');
             throw new \RuntimeException('Braintree API error: ' . $msg);
         }
 
-        if ($httpCode >= 400) {
-            throw new \RuntimeException('Braintree HTTP ' . $httpCode . ': ' . substr((string) $response, 0, 500));
+        return $decoded;
+    }
+
+    /**
+     * Turn an HTTP >= 400 body into a useful exception message regardless of
+     * whether Braintree replied with XML (customers/subscriptions) or JSON
+     * (plans/client token).
+     */
+    private function describeError(string $body, int $httpCode, bool $xml): string
+    {
+        if ($body === '') {
+            return 'Braintree HTTP ' . $httpCode;
         }
 
-        return $decoded;
+        if ($xml) {
+            $parsed = @simplexml_load_string($body);
+            if ($parsed !== false) {
+                $messages = [];
+                foreach (($parsed->xpath('//error/message') ?? []) as $m) {
+                    $messages[] = trim((string) $m);
+                }
+                $root = trim((string) ($parsed->message ?? ''));
+                if ($root !== '') {
+                    $messages[] = $root;
+                }
+                if ($messages !== []) {
+                    return 'Braintree API error: ' . implode('; ', array_unique($messages));
+                }
+            }
+            return 'Braintree HTTP ' . $httpCode . ': ' . substr($body, 0, 500);
+        }
+
+        $decoded = json_decode($body, true);
+        if (is_array($decoded) && isset($decoded['apiErrorResponse']['message'])) {
+            return 'Braintree API error: ' . $decoded['apiErrorResponse']['message'];
+        }
+
+        return 'Braintree HTTP ' . $httpCode . ': ' . substr($body, 0, 500);
     }
 }

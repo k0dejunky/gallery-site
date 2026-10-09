@@ -72,6 +72,7 @@ class MembershipController extends Controller
         $data = [
             'plans' => $plans,
             'paymentProcessors' => PaymentProcessor::enabled(),
+            'user' => $user,
         ];
 
         if ($user === null) {
@@ -401,7 +402,12 @@ class MembershipController extends Controller
         }
 
         $cfg = PaymentProcessor::decodeConfig($processorRow);
-        $btPlanId = trim((string) ($cfg['plan_id'] ?? ''));
+        // Prefer the per-plan Braintree plan id provisioned on the plan
+        // itself; fall back to the processor-level plan_id.
+        $btPlanId = trim((string) ($plan['braintree_plan_id'] ?? ''));
+        if ($btPlanId === '') {
+            $btPlanId = trim((string) ($cfg['plan_id'] ?? ''));
+        }
 
         if ($btPlanId === '') {
             $this->flash('error', 'Braintree plan ID is not configured. Please contact support.');
@@ -539,17 +545,17 @@ class MembershipController extends Controller
      *
      * Braintree transaction_refs are stored as "BT-<subscriptionId>".
      * We find the most recent one and extract the BT customer id from
-     * audit_log details.
+     * admin_logs.after_json.
      */
     private function btCustomerIdForUser(int $userId): ?string
     {
         $row = Database::run(
-            "SELECT details
-             FROM audit_log
+            "SELECT after_json
+             FROM admin_logs
              WHERE user_id = ?
                AND entity_type = 'subscription'
                AND action = 'create'
-               AND details LIKE '%bt_customer_id%'
+               AND after_json LIKE '%bt_customer_id%'
              ORDER BY id DESC
              LIMIT 1",
             [$userId]
@@ -559,7 +565,7 @@ class MembershipController extends Controller
             return null;
         }
 
-        $details = json_decode((string) $row['details'], true);
+        $details = json_decode((string) $row['after_json'], true);
 
         if (!is_array($details)) {
             return null;

@@ -383,6 +383,8 @@ return [
     ['GET', '/admin/plans', 'PlanController@index', 'membership'],
     ['GET', '/admin/plans/create', 'PlanController@create', 'membership'],
     ['POST', '/admin/plans', 'PlanController@store', 'membership'],
+    // Literal routes must precede /admin/plans/{id} or "provision-braintree" is read as an id.
+    ['POST', '/admin/plans/provision-braintree', 'PlanController@provisionBraintree', 'membership'],
     ['GET', '/admin/plans/{id}/edit', 'PlanController@edit', 'membership'],
     ['POST', '/admin/plans/{id}', 'PlanController@update', 'membership'],
     ['POST', '/admin/plans/{id}/delete', 'PlanController@destroy', 'membership'],

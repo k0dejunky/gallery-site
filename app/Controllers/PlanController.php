@@ -3,9 +3,11 @@
 namespace App\Controllers;
 
 use App\Core\Auth;
+use App\Core\BraintreeGateway;
 use App\Core\Controller;
 use App\Core\Request;
 use App\Models\AuditLog;
+use App\Models\PaymentProcessor;
 use App\Models\Plan;
 use App\Models\Sale;
 use App\Models\SaleCode;
@@ -55,6 +57,7 @@ class PlanController extends MembershipAdminController
         $sort     = (int) $this->request->input('sort_order', 0);
         $level    = (int) $this->request->input('level', Plan::SILVER_LEVEL);
         $active   = $this->request->input('active') === '1';
+        $btPlanId = trim((string) $this->request->input('braintree_plan_id', ''));
 
         $error = $this->validate($name, $cycle, $price, $level);
 
@@ -63,7 +66,7 @@ class PlanController extends MembershipAdminController
             $this->redirect('/admin/plans');
         }
 
-        $id = Plan::create($name, $cycle, (float) $price, $desc, $sort, $level, $active);
+        $id = Plan::create($name, $cycle, (float) $price, $desc, $sort, $level, $active, $btPlanId);
         AuditLog::record((int) Auth::user()['id'], 'create', 'plan', $id, 'Created plan "' . $name . '"', null, ['name' => $name, 'cycle' => $cycle, 'price' => $price, 'level' => $level]);
 
         $this->flash('success', 'Plan "' . $name . '" created.');
@@ -106,6 +109,7 @@ class PlanController extends MembershipAdminController
         $sort     = (int) $this->request->input('sort_order', 0);
         $level    = (int) $this->request->input('level', $plan['level'] ?? Plan::SILVER_LEVEL);
         $active   = $this->request->input('active') === '1';
+        $btPlanId = trim((string) $this->request->input('braintree_plan_id', ''));
 
         $error = $this->validate($name, $cycle, $price, $level);
 
@@ -114,7 +118,7 @@ class PlanController extends MembershipAdminController
             $this->redirect('/admin/plans/' . $id . '/edit');
         }
 
-        Plan::update($id, $name, $cycle, (float) $price, $desc, $sort, $level, $active);
+        Plan::update($id, $name, $cycle, (float) $price, $desc, $sort, $level, $active, $btPlanId);
         AuditLog::record((int) Auth::user()['id'], 'update', 'plan', $id, 'Updated plan "' . $name . '"', ['name' => $plan['name'], 'cycle' => $plan['billing_cycle'], 'price' => $plan['price'], 'description' => $plan['description'], 'sort_order' => $plan['sort_order'], 'level' => $plan['level'] ?? Plan::SILVER_LEVEL, 'active' => $plan['active']], ['name' => $name, 'cycle' => $cycle, 'price' => $price, 'level' => $level, 'active' => $active]);
 
         $this->flash('success', 'Plan "' . $name . '" updated.');
@@ -159,6 +163,114 @@ class PlanController extends MembershipAdminController
 
         $this->flash('success', 'Plan "' . $plan['name'] . '" ' . $newStatus . '.');
         $this->redirect('/admin/plans');
+    }
+
+    /**
+     * Provision one Braintree subscription plan per active recurring
+     * (non-lifetime) membership plan. Creates the Braintree plan when it is
+     * missing and stores its id on the plans row. Requires an enabled
+     * Braintree payment processor with credentials configured.
+     */
+    public function provisionBraintree(): void
+    {
+        $processor = null;
+        foreach (PaymentProcessor::enabled() as $candidate) {
+            if (strtolower((string) $candidate['provider']) === 'braintree') {
+                $processor = $candidate;
+                break;
+            }
+        }
+
+        if ($processor === null) {
+            $this->flash('error', 'No enabled Braintree processor is configured. Add one on the Payment Processors page first.');
+            $this->redirect('/admin/plans');
+            return;
+        }
+
+        $gateway = BraintreeGateway::fromConfig($processor);
+
+        if ($gateway === null) {
+            $this->flash('error', 'Braintree credentials are incomplete. Check the Payment Processors page.');
+            $this->redirect('/admin/plans');
+            return;
+        }
+
+        $plans    = Plan::all();
+        $created  = [];
+        $existing = [];
+        $skipped  = [];
+
+        foreach ($plans as $plan) {
+            if (strtolower((string) $plan['billing_cycle']) === 'lifetime') {
+                $skipped[] = (string) $plan['name'] . ' (lifetime has no Braintree subscription)';
+                continue;
+            }
+
+            $yearly    = strtolower((string) $plan['billing_cycle']) === 'yearly';
+            $frequency = $yearly ? 12 : 1;
+            $desiredId = $this->braintreePlanIdFor($plan);
+
+            // Already mapped: the Braintree side exists (GET /plans is not
+            // exposed to this API, so we trust the stored id).
+            if ((string) ($plan['braintree_plan_id'] ?? '') !== '') {
+                $existing[] = (string) $plan['name'] . ' (' . $desiredId . ')';
+                continue;
+            }
+
+            try {
+                $gateway->createPlan(
+                    (string) $plan['name'],
+                    $desiredId,
+                    (string) $plan['price'],
+                    $frequency,
+                    'USD',
+                    1
+                );
+                $created[] = (string) $plan['name'] . ' (' . $desiredId . ')';
+            } catch (\Throwable $e) {
+                // A duplicate id means the Braintree plan already exists, which
+                // is exactly the mapping we want to record.
+                if (stripos($e->getMessage(), 'already in use') !== false || stripos($e->getMessage(), 'already been taken') !== false) {
+                    $existing[] = (string) $plan['name'] . ' (' . $desiredId . ')';
+                } else {
+                    $skipped[] = (string) $plan['name'] . ': ' . $e->getMessage();
+                    continue;
+                }
+            }
+
+            Plan::setBraintreePlanId((int) $plan['id'], $desiredId);
+        }
+
+        AuditLog::record((int) Auth::user()['id'], 'update', 'plan', 0, 'Provisioned Braintree subscription plans', null, [
+            'created'  => $created,
+            'existing' => $existing,
+            'skipped'  => $skipped,
+        ]);
+
+        $summary = [];
+        if ($created !== [])  { $summary[] = 'created ' . count($created); }
+        if ($existing !== []) { $summary[] = 'reused ' . count($existing); }
+        if ($skipped !== [])  { $summary[] = 'skipped ' . count($skipped); }
+
+        $this->flash('success', 'Braintree plans: ' . ($summary === [] ? 'nothing to do.' : implode(', ', $summary) . '.'));
+        $this->redirect('/admin/plans');
+    }
+
+    /**
+     * Build the Braintree plan id for a site plan, preferring a stored
+     * mapping and defaulting to "<slug>_<cycle>".
+     */
+    private function braintreePlanIdFor(array $plan): string
+    {
+        $stored = trim((string) ($plan['braintree_plan_id'] ?? ''));
+        if ($stored !== '') {
+            return (string) preg_replace('/[^A-Za-z0-9_-]/', '_', $stored);
+        }
+
+        $slug  = (string) preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($plan['slug'] ?? ''));
+        $cycle = strtolower((string) ($plan['billing_cycle'] ?? 'monthly')) === 'yearly' ? 'yearly' : 'monthly';
+
+        return $slug . '_' . $cycle;
     }
 
     /**
