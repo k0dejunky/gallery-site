@@ -1317,6 +1317,89 @@ class AutoPostQueue
     }
 
     /**
+     * Whether this queued reddit post should be left for the home-browser
+     * worker (the "share-button method") instead of the local worker: reddit
+     * rows, browser post enabled on the channel, and no OAuth refresh token
+     * (an API-authorized channel posts from the server as usual).
+     */
+    public static function shouldDeferToBrowser(array $item): bool
+    {
+        if (strtolower((string) ($item['platform'] ?? '')) !== 'reddit') {
+            return false;
+        }
+
+        $channel = AutoPosterConfig::channel('reddit');
+
+        return ($channel['browser_enabled'] ?? '') === '1' && empty($channel['refresh_token']);
+    }
+
+    /**
+     * Clear a row's claim so it becomes available again (used when the local
+     * worker defers a reddit row to the home-browser worker).
+     */
+    public static function releaseClaim(int $id, string $claim): bool
+    {
+        $stmt = Database::run(
+            'UPDATE auto_poster_queue SET claimed_at = NULL, claimed_by = NULL
+             WHERE id = ? AND claimed_by = ? AND status = ?',
+            [$id, $claim, 'queued']
+        );
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Atomically claim the next due reddit browser job for the home worker.
+     * A crashed worker's claims are reclaimed after 15 minutes, exactly like
+     * the local worker's stale-claim expiry. Returns the row, or null when the
+     * queue (or browser mode) has nothing due.
+     */
+    public static function takeBrowserJob(string $claim): ?array
+    {
+        $channel = AutoPosterConfig::channel('reddit');
+        if (($channel['browser_enabled'] ?? '') !== '1' || !empty($channel['refresh_token'])) {
+            return null;
+        }
+
+        $staleCutoff = date('Y-m-d H:i:s', time() - 900);
+        $conn = Database::connection();
+
+        $conn->beginTransaction();
+        try {
+            $chosen = $conn
+                ->prepare(
+                    "SELECT id FROM auto_poster_queue
+                     WHERE platform = 'reddit' AND status = 'queued'
+                       AND (scheduled_at IS NULL OR scheduled_at <= CURRENT_TIMESTAMP)
+                       AND (claimed_at IS NULL OR claimed_at < ?)
+                     ORDER BY COALESCE(scheduled_at, created_at) ASC, id ASC
+                     LIMIT 1 FOR UPDATE"
+                );
+            $chosen->execute([$staleCutoff]);
+            $row = $chosen->fetch();
+
+            if ($row === false) {
+                $conn->commit();
+                return null;
+            }
+
+            $conn
+                ->prepare('UPDATE auto_poster_queue SET claimed_at = CURRENT_TIMESTAMP, claimed_by = ? WHERE id = ?')
+                ->execute([$claim, (int) $row['id']]);
+            $conn->commit();
+
+            $full = Database::run('SELECT * FROM auto_poster_queue WHERE id = ?', [(int) $row['id']])->fetch();
+            return $full ?: null;
+        } catch (\Throwable $e) {
+            if ($conn->inTransaction()) {
+                $conn->rollBack();
+            }
+            error_log('[autopost/browser] claim failed: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Status breakdown for the queue summary cards.
      *
      * @return array{queued: int, posted: int, failed: int, dismissed: int, skipped: int}

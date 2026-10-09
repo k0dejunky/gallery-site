@@ -29,8 +29,10 @@ const root = resolve(__dirname, '..', '..');
 const sessionFile = resolve(root, 'storage', 'reddit-browser', 'session.json');
 const sessionDir = resolve(root, 'storage', 'reddit-browser');
 const logFile = resolve(sessionDir, 'posts.log');
-// Playwright is installed under storage/reddit-browser (gitignored); anchor
-// module resolution there so imports resolve regardless of script location.
+// Playwright is installed under storage/reddit-browser (gitignored), with the
+// downloaded browsers in ms-playwright/, so imports and the browser binary
+// resolve regardless of which user / HOME runs the script.
+process.env.PLAYWRIGHT_BROWSERS_PATH = resolve(sessionDir, 'ms-playwright');
 const require = createRequire(resolve(sessionDir, '.noop.js'));
 const { chromium } = require('playwright');
 

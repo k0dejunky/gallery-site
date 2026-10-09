@@ -43,6 +43,14 @@ do {
         $due = AutoPostQueue::due(20);
 
         foreach ($due as $item) {
+            // Reddit rows in browser mode are owned by the operator's
+            // home-browser worker (the share-button method) — leave them for
+            // it instead of trying a browser on this (blocked) cloud IP.
+            if (\App\Models\AutoPostQueue::shouldDeferToBrowser($item)) {
+                \App\Models\AutoPostQueue::releaseClaim((int) $item['id'], (string) ($item['claimed_by'] ?? ''));
+                continue;
+            }
+
             // Isolate each row: a throwing post() (an unforeseen DB error, an
             // oversized platform response, a filesystem hiccup) must not kill
             // the rest of the batch — drop the item, mark it, keep going. The

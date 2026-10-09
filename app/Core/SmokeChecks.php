@@ -133,6 +133,8 @@ class SmokeChecks
             'bin/browser/reddit-login.mjs',
             'bin/browser/setup_reddit_browser.sh',
             'app/Models/RedditClient.php',
+            'app/Controllers/RedditBrowserJobsController.php',
+            'bin/browser/reddit-homeworker.mjs',
         ];
         foreach ($files as $rel) {
             $slug = str_replace(['/', '.'], '_', $rel);
@@ -463,6 +465,38 @@ class SmokeChecks
                 && strpos($rbAdmin, 'Browser worker (share-button method)') !== false
                 ? $ok('registry fields + admin status block present')
                 : $bad('Platforms reddit must add browser_enabled/username/password fields and auto_poster.php must render the Browser worker status');
+        });
+
+        // ------------------------- Home-browser worker (share method) -----
+        $rbQueue2  = $read("$root/app/Models/AutoPostQueue.php");
+        $rbCtrl2   = $read("$root/app/Controllers/RedditBrowserJobsController.php");
+        $rbWorker  = $read("$root/app/Models/AutoPostQueue.php");
+        $rbWorkerPhp = $read("$root/bin/autopost_worker.php");
+        $rbHome    = $read("$root/bin/browser/reddit-homeworker.mjs");
+        $rbEnv     = $read("$root/.env.example");
+        $add('smoke.reddit.webhook_endpoints', 'Smoke · Reddit Browser', 'Site hands jobs to the home worker over an authenticated webhook', static function () use ($rbCtrl2, $ok, $bad): array {
+            return strpos($rbCtrl2, "function take") !== false
+                && strpos($rbCtrl2, "function report") !== false
+                && strpos($rbCtrl2, 'REDDIT_BROWSER_KEY') !== false
+                && strpos($rbCtrl2, 'takeBrowserJob') !== false
+                ? $ok('take/report endpoints with Bearer auth present')
+                : $bad('RedditBrowserJobsController must implement take/report guarded by REDDIT_BROWSER_KEY');
+        });
+        $add('smoke.reddit.worker_defer', 'Smoke · Reddit Browser', 'Local worker defers reddit browser rows to the home worker', static function () use ($rbQueue2, $rbWorkerPhp, $ok, $bad): array {
+            return strpos($rbQueue2, 'function shouldDeferToBrowser') !== false
+                && strpos($rbQueue2, 'function takeBrowserJob') !== false
+                && strpos($rbQueue2, 'function releaseClaim') !== false
+                && strpos($rbWorkerPhp, 'shouldDeferToBrowser') !== false
+                ? $ok('defer + atomic claim helpers wired into the worker')
+                : $bad('AutoPostQueue/browser worker must defer reddit rows and claim jobs atomically');
+        });
+        $add('smoke.reddit.home_worker', 'Smoke · Reddit Browser', 'A home-machine worker polls and reports jobs', static function () use ($rbHome, $rbEnv, $ok, $bad): array {
+            return strpos($rbHome, 'browser-jobs') !== false
+                && strpos($rbHome, 'reddit-post.mjs') !== false
+                && strpos($rbHome, 'report') !== false
+                && strpos($rbEnv, 'REDDIT_BROWSER_KEY') !== false
+                ? $ok('homeworker polls take + runs the post script + reports')
+                : $bad('bin/browser/reddit-homeworker.mjs must poll browser-jobs, run reddit-post.mjs and POST the report');
         });
 
         // --------------------------------------------------- Braintree

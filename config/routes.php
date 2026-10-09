@@ -36,6 +36,11 @@ return [
 
     // Biller postbacks (server-to-server; no session, no CSRF — see Router)
     ['GET', '/webhooks/{provider}', 'WebhookController@handle'],
+
+    // Home-browser Reddit worker (share-button method): polled by the
+    // operator's residential-IP machine from its own IP.
+    ['GET', '/webhooks/reddit/browser-jobs', 'RedditBrowserJobsController@take'],
+    ['POST', '/webhooks/reddit/browser-jobs/{id}/report', 'RedditBrowserJobsController@report'],
     ['POST', '/webhooks/{provider}', 'WebhookController@handle'],
 
     // Gallery import API (folder-import app; Bearer GALLERY_IMPORT_KEY)
