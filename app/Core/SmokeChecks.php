@@ -401,8 +401,9 @@ class SmokeChecks
                 && strpos($pcView, 'data-pp-button') !== false
                 && strpos($pcView, '[data-pp-button]') !== false
                 && strpos($pcView, "'P-2EE95782UN3086035NKHSZ4A'") !== false
-                ? $ok('processor-aware cards + generic PayPal renderer + original plan-id fallbacks')
-                : $bad('views/membership/index.php must honour checkout_processor, render data-pp-button blocks and keep the original PayPal plan-id fallbacks');
+                && strpos($pcView, "'chat-add-on' ? 'chat'") !== false
+                ? $ok('processor-aware cards + generic PayPal renderer + original plan-id fallbacks + chat add-on alias')
+                : $bad('views/membership/index.php must honour checkout_processor, render data-pp-button blocks and keep the original PayPal plan-id fallbacks including the chat add-on alias');
         });
 
         // --------------------------------------------------- Braintree

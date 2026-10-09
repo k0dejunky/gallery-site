@@ -205,7 +205,9 @@ $ldJson = [
                         || ($ppChoice === 'auto' && in_array($planSlug, ['silver', 'gold', 'platinum', 'chat-add-on'], true));
                     $useBraintreeOnly = $ppChoice === 'braintree';
                     $useOffline       = $ppChoice === 'offline';
-                    $planPpId    = $ppId($planSlug);
+                    // The chat add-on plan's slug is 'chat-add-on' but its
+                    // PayPal plan id lives under the 'chat' key.
+                    $planPpId    = $ppId($planSlug === 'chat-add-on' ? 'chat' : $planSlug);
                     $planCsrfId  = 'ppcsrf-' . (int) $plan['id'];
                     ?>
                     <?php if ($hasActive || $pendingSub !== null): ?>
