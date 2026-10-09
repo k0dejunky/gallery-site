@@ -373,6 +373,11 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
                     <label for="apf-<?= e($fName) ?>"><?= e($fLabel) ?></label><br>
                     <?php if ($fType === 'textarea'): ?>
                         <textarea name="<?= e($fName) ?>" id="apf-<?= e($fName) ?>" rows="3" placeholder="<?= e((string) $fPlaceholder) ?>" style="width:100%;box-sizing:border-box;"><?= e($fValue) ?></textarea>
+                    <?php elseif ($fType === 'checkbox'): ?>
+                        <label style="font-weight:normal;display:flex;align-items:center;gap:.5rem;">
+                            <input type="checkbox" name="<?= e($fName) ?>" id="apf-<?= e($fName) ?>" value="1" <?= $fValue === '1' ? 'checked' : '' ?>>
+                            <span style="display:block;margin-top:.35rem;"><?= e((string) $fPlaceholder) ?></span>
+                        </label>
                     <?php else: ?>
                         <input type="<?= e($fType) ?>" name="<?= e($fName) ?>" id="apf-<?= e($fName) ?>" value="<?= $fType === 'password' ? '' : e($fValue) ?>" placeholder="<?= $fSecret && $fValue !== '' ? 'Leave blank to keep the saved value' : e((string) $fPlaceholder) ?>" style="width:100%;box-sizing:border-box;">
                     <?php endif; ?>
@@ -441,6 +446,31 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
         <p class="muted" style="font-size:.8rem;margin-top:.5rem;">
             <strong>Setup:</strong> <?= e((string) ($platformMeta['requires'] ?? '')) ?>
         </p>
+        <?php if (strtolower((string) $platform) === 'reddit'): ?>
+            <?php
+            $browserDir  = dirname(__DIR__, 2) . '/storage/reddit-browser';
+            $nodeVer     = '';
+            try { $nodeVer = (string) @shell_exec('node --version 2>/dev/null'); } catch (\Throwable $e) {}
+            $nodeOk      = trim($nodeVer) !== '';
+            $playwrightOk = is_dir($browserDir . '/node_modules/playwright');
+            $sessionFile = $browserDir . '/session.json';
+            $sessionOk   = is_file($sessionFile);
+            $sessionAge  = $sessionOk ? (int) ((time() - (int) filemtime($sessionFile)) / 86400) : null;
+            $btOn        = ($channel['browser_enabled'] ?? '') === '1';
+            ?>
+            <p style="margin-top:.75rem;border-top:1px solid #eee;padding-top:.75rem;font-size:.82rem;">
+                <strong>Browser worker (share-button method):</strong><br>
+                node: <?= $nodeOk ? e(trim($nodeVer)) : '<span style="color:#c62828;">missing</span>' ?> &middot;
+                playwright: <?= $playwrightOk ? 'installed' : '<span style="color:#c62828;">not installed</span>' ?> &middot;
+                session: <?= $sessionOk ? ('saved ' . (int) $sessionAge . ' day(s) ago') : '<span style="color:#c62828;">none yet</span>' ?> &middot;
+                enabled: <?= $btOn ? 'yes' : 'no' ?>
+                <?php if (!$btOn || !$sessionOk || !$playwrightOk): ?>
+                    <br><span class="muted">On the server run <code>sudo bash bin/browser/setup_reddit_browser.sh</code>, log in once with
+                    <code>node bin/browser/reddit-login.mjs</code>, then tick &ldquo;Browser post&rdquo; above. Queued posts will then share to
+                    Reddit exactly like the site&rsquo;s share button.</span>
+                <?php endif; ?>
+            </p>
+        <?php endif; ?>
     </div>
 
     <?php // ----- Compose a post on this platform (auto-formatted) ----- ?>

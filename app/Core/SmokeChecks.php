@@ -128,6 +128,11 @@ class SmokeChecks
             'views/checkout_complete.php',
             'views/partials/card_checkout.php',
             'database/migrations/062_plan_checkout_processor.sql',
+            'bin/reddit_post.php',
+            'bin/browser/reddit-post.mjs',
+            'bin/browser/reddit-login.mjs',
+            'bin/browser/setup_reddit_browser.sh',
+            'app/Models/RedditClient.php',
         ];
         foreach ($files as $rel) {
             $slug = str_replace(['/', '.'], '_', $rel);
@@ -415,6 +420,51 @@ class SmokeChecks
                 : $bad('views/membership/index.php must honour checkout_processor, render data-pp-button blocks and keep the original PayPal plan-id fallbacks including the chat add-on alias');
         });
 
+        // ------------------------------------ Reddit browser auto poster
+        $rbClient  = $read("$root/app/Models/RedditClient.php");
+        $rbQueue   = $read("$root/app/Models/AutoPostQueue.php");
+        $rbScript  = $read("$root/bin/browser/reddit-post.mjs");
+        $rbLogin   = $read("$root/bin/browser/reddit-login.mjs");
+        $rbBridge  = $read("$root/bin/reddit_post.php");
+        $rbSetup   = $read("$root/bin/browser/setup_reddit_browser.sh");
+        $rbPlatforms = $read("$root/app/Core/Platforms.php");
+        $rbAdmin   = $read("$root/views/admin/auto_poster.php");
+        $rbGitignore = $read("$root/.gitignore");
+        $add('smoke.reddit.browser_dispatch', 'Smoke · Reddit Browser', 'RedditClient falls back to the browser share method', static function () use ($rbClient, $ok, $bad): array {
+            return strpos($rbClient, 'function postViaBrowser') !== false
+                && strpos($rbClient, "'browser_enabled'") !== false
+                && strpos($rbClient, "bin/reddit_post.php") !== false
+                ? $ok('browser dispatch wired into the API client')
+                : $bad('RedditClient must implement postViaBrowser and dispatch on browser_enabled');
+        });
+        $add('smoke.reddit.browser_queue', 'Smoke · Reddit Browser', 'Queue feeds the attributed gallery share URL to the browser client', static function () use ($rbQueue, $ok, $bad): array {
+            return strpos($rbQueue, "\$canonical === 'reddit'") !== false && strpos($rbQueue, '$meta[\'url\']') !== false
+                ? $ok('gallery share url passed for reddit')
+                : $bad('AutoPostQueue::post must set meta[url] for reddit using Traffic::buildUrl');
+        });
+        $add('smoke.reddit.browser_scripts', 'Smoke · Reddit Browser', 'Browser worker + login scripts target the Reddit submit page and save a session', static function () use ($rbScript, $rbLogin, $rbBridge, $ok, $bad): array {
+            return strpos($rbScript, 'reddit.com/r/') !== false
+                && strpos($rbScript, 'session.json') !== false
+                && strpos($rbScript, '/submit') !== false
+                && strpos($rbLogin, 'storageState') !== false
+                && strpos($rbBridge, 'reddit-post.mjs') !== false
+                ? $ok('post + login + bridge present and consistent')
+                : $bad('bin/browser/reddit-{post,login}.mjs and bin/reddit_post.php must drive the reddit.com submit page with a storageState session');
+        });
+        $add('smoke.reddit.browser_setup', 'Smoke · Reddit Browser', 'One-time browser setup script + gitignore', static function () use ($rbSetup, $rbGitignore, $ok, $bad): array {
+            return strpos($rbSetup, "playwright install chromium") !== false
+                && strpos($rbGitignore, 'storage/reddit-browser/*') !== false
+                ? $ok('setup script + gitignored runtime')
+                : $bad('bin/browser/setup_reddit_browser.sh must install chromium and .gitignore must exclude storage/reddit-browser');
+        });
+        $add('smoke.reddit.browser_config', 'Smoke · Reddit Browser', 'Admin exposes the browser-mode fields and worker status', static function () use ($rbPlatforms, $rbAdmin, $ok, $bad): array {
+            return substr_count($rbPlatforms, 'browser_enabled') >= 1
+                && substr_count($rbPlatforms, "'password'") >= 2
+                && strpos($rbAdmin, 'Browser worker (share-button method)') !== false
+                ? $ok('registry fields + admin status block present')
+                : $bad('Platforms reddit must add browser_enabled/username/password fields and auto_poster.php must render the Browser worker status');
+        });
+
         // --------------------------------------------------- Braintree
         $btSchema = $schema;
         $planCtrl = $read("$root/app/Controllers/PlanController.php");
@@ -576,14 +626,17 @@ class SmokeChecks
         $newsletterMail = $read("$root/views/emails/newsletter.php");
         $newsletterText = $read("$root/views/emails/newsletter.text.php");
         $add('smoke.campaign.share_partial', 'Smoke · Campaign', 'Share bar signs every network link with Traffic::buildUrl', static function () use ($shareBar, $ok, $bad): array {
-            foreach (['twitter.com/intent/tweet', 'facebook.com/sharer', 'wa.me', 'www.reddit.com/submit', 'data-share-copy'] as $needle) {
+            // Facebook is deliberately NOT offered (the platform bans adult
+            // content); X, WhatsApp, Reddit and the copy-link button remain.
+            foreach (['twitter.com/intent/tweet', 'wa.me', 'www.reddit.com/submit', 'data-share-copy'] as $needle) {
                 if (strpos($shareBar, $needle) === false) {
                     return $bad('share-bar missing: ' . $needle);
                 }
             }
-            return substr_count($shareBar, 'Traffic::buildUrl(') >= 4
-                ? $ok('4 networks + copy link, all attributed')
-                : $bad('share-bar must build its network links via Traffic::buildUrl()');
+            return substr_count($shareBar, 'Traffic::buildUrl(') >= 3
+                && stripos($shareBar, 'facebook') === false
+                ? $ok('3 networks + copy link, all attributed, no Facebook')
+                : $bad('share-bar must build its network links via Traffic::buildUrl() and must not include Facebook');
         });
         $add('smoke.campaign.share_pages', 'Smoke · Campaign', 'Gallery and video pages render the share bar', static function () use ($galleryShowV, $videoPlayerV, $ok, $bad): array {
             foreach (['gallery/show' => $galleryShowV, 'video/player' => $videoPlayerV] as $name => $src) {

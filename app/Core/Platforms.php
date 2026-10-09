@@ -134,14 +134,16 @@ final class Platforms
             'fields'       => [
                 ['client_id', 'Client ID', 'text', 'Reddit app client ID (script app)', true],
                 ['client_secret', 'Client Secret', 'password', 'Reddit app client secret', true],
-                ['username', 'Reddit username', 'text', 'u/yourname', false],
+                ['username', 'Reddit username', 'text', 'u/yourname (used for the browser method + UA)', false],
                 ['subreddit', 'Target subreddit', 'text', 'Amethyst2213NSFW', false],
+                ['browser_enabled', 'Browser post (share-button method)', 'checkbox', 'Use the headless-browser submit flow when the API is not user-authorized', false],
+                ['password', 'Reddit password (browser auto re-login)', 'password', 'Only used by the browser worker when the saved session expires', true],
             ],
             'oauth'        => null,
             'instances'    => false,
             'enabled'      => true,
             'content_gate' => 'none',
-            'requires'     => 'Create a script app at reddit.com/prefs/apps (redirect uri: this site\'s /admin/auto-poster/reddit/callback), save the credentials, set the target subreddit, then click Authorize.',
+            'requires'     => 'Preferred: create a script app at reddit.com/prefs/apps (redirect uri: this site\'s /admin/auto-poster/reddit/callback), save the credentials, set the target subreddit, then click Authorize. Alternative: tick "Browser post" and run node bin/browser/reddit-login.mjs once on this server to save a session — the worker then posts exactly like the on-site "share on Reddit" button.',
         ],
 
         'telegram' => [

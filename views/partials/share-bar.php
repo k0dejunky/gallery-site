@@ -6,7 +6,6 @@ $sharePath     = (string) ($sharePath ?? '');
 $shareTitle    = trim((string) ($shareTitle ?? ''));
 $shareCanonical = absolute_url($sharePath);
 $shareX        = \App\Models\Traffic::buildUrl($sharePath, 'share-x');
-$shareFb       = \App\Models\Traffic::buildUrl($sharePath, 'share-fb');
 $shareWa       = \App\Models\Traffic::buildUrl($sharePath, 'share-wa');
 $shareReddit   = \App\Models\Traffic::buildUrl($sharePath, 'share-reddit');
 $shareWaText   = ($shareTitle !== '' ? $shareTitle . ' — ' : '') . $shareWa;
@@ -15,8 +14,6 @@ $shareWaText   = ($shareTitle !== '' ? $shareTitle . ' — ' : '') . $shareWa;
     <span class="muted" style="font-size:.85rem;">Share:</span>
     <a class="btn btn-sm btn-outline" target="_blank" rel="noopener"
        href="https://twitter.com/intent/tweet?url=<?= e(rawurlencode($shareX)) ?><?= $shareTitle !== '' ? '&text=' . e(rawurlencode($shareTitle)) : '' ?>">X</a>
-    <a class="btn btn-sm btn-outline" target="_blank" rel="noopener"
-       href="https://www.facebook.com/sharer/sharer.php?u=<?= e(rawurlencode($shareFb)) ?>">Facebook</a>
     <a class="btn btn-sm btn-outline" target="_blank" rel="noopener"
        href="https://wa.me/?text=<?= e(rawurlencode($shareWaText)) ?>">WhatsApp</a>
     <a class="btn btn-sm btn-outline" target="_blank" rel="noopener"

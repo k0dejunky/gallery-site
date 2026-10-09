@@ -165,11 +165,83 @@ class RedditClient
             }
         }
 
+        // Share-button method: when the API is not user-authorized but the
+        // admin enabled the browser fallback, post exactly like the on-site
+        // "Share on Reddit" button (headless-browser submit of the gallery
+        // link or image to the target subreddit).
+        if (!$this->isUserAuthorized() && ($this->config['browser_enabled'] ?? '') === '1') {
+            return $this->postViaBrowser($sub, $title, (string) ($meta['url'] ?? ''), $file);
+        }
+
         if ($file !== null) {
             return $this->submit($sub, $title, '', 'image', null, $file);
         }
 
         return $this->submit($sub, $title, trim($text), 'self');
+    }
+
+    /**
+     * Post through the headless-browser worker (bin/reddit_post.php ->
+     * bin/browser/reddit-post.mjs). Shares the gallery link or uploads the
+     * image to /r/<sub>/submit and clicks Post, reusing the saved session.
+     *
+     * @param array|null $file an uploaded file array (tmp_name/name/type) or null
+     * @return array{ok:bool, url?:string, error?:string}
+     */
+    private function postViaBrowser(string $sub, string $title, string $shareUrl, ?array $file): array
+    {
+        $bridge = dirname(__DIR__, 2) . '/bin/reddit_post.php';
+        if (!is_file($bridge)) {
+            return ['ok' => false, 'error' => 'Reddit browser worker is not installed on this server.'];
+        }
+
+        $payload = [
+            'mode'      => $file !== null ? 'image' : 'link',
+            'subreddit' => $sub,
+            'title'     => $title,
+        ];
+
+        if ($file !== null) {
+            $payload['imagePath'] = (string) $file['tmp_name'];
+        } else {
+            $payload['url'] = $shareUrl !== '' ? $shareUrl : ('https://' . AutoPostQueue::POST_DOMAIN);
+        }
+
+        if (!empty($this->config['username'])) {
+            $payload['username'] = (string) $this->config['username'];
+        }
+        if (!empty($this->config['password'])) {
+            $payload['password'] = (string) $this->config['password'];
+        }
+
+        $tmp = @tempnam(sys_get_temp_dir(), 'reddit');
+        if ($tmp === false || @file_put_contents($tmp, json_encode($payload)) === false) {
+            return ['ok' => false, 'error' => 'Could not stage the Reddit browser payload.'];
+        }
+
+        $cmd   = 'php ' . escapeshellarg($bridge) . ' ' . escapeshellarg($tmp);
+        $bytes = @exec($cmd . ' 2>&1', $outLines, $rc);
+        @unlink($tmp);
+
+        if ($bytes === false) {
+            $outLines = [];
+        }
+
+        $raw = implode("\n", (array) $outLines);
+        $res = json_decode(trim($raw), true);
+
+        if (!is_array($res)) {
+            return [
+                'ok'    => false,
+                'error' => 'Reddit browser worker returned no result (rc ' . $rc . '): ' . mb_substr($raw, 0, 220),
+            ];
+        }
+
+        return [
+            'ok'    => (bool) ($res['ok'] ?? false),
+            'url'   => isset($res['url']) ? (string) $res['url'] : null,
+            'error' => isset($res['error']) ? (string) $res['error'] : null,
+        ];
     }
 
     /**

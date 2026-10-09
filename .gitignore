@@ -57,3 +57,6 @@ __pycache__/
 /storage/cache/
 vendor/
 .phpunit.cache/
+# Reddit browser auto-poster (Playwright install + saved login session + logs).
+/storage/reddit-browser/*
+!/storage/reddit-browser/.gitkeep

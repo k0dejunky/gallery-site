@@ -1643,6 +1643,14 @@ class AutoPostQueue
             }
             $meta['title'] = $title;
 
+            // The Reddit browser share-method posts the gallery as a LINK to
+            // the site (like the on-page "Share on Reddit" button), so carry
+            // the attributed gallery URL for it.
+            if ($canonical === 'reddit') {
+                $gid = (int) ($item['gallery_id'] ?? 0);
+                $meta['url'] = $gid > 0 ? \App\Models\Traffic::buildUrl('/galleries/' . $gid, 'reddit') : '';
+            }
+
             $result = $client->post($text, $media, $meta);
         } catch (\Throwable $e) {
             $result = ['ok' => false, 'error' => $e->getMessage() . ' (thrown by the platform client)'];
