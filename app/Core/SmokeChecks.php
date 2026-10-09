@@ -370,6 +370,15 @@ class SmokeChecks
                 ? $ok('PPV + tip card checkout wired')
                 : $bad('views/gallery/show.php must include partials/card_checkout.php for both PPV and tips');
         });
+        $ccPartial = $read("$root/views/partials/card_checkout.php");
+        $add('smoke.ppv.card_disabled_until_live', 'Smoke · PPV', 'Card checkout renders disabled until a live Braintree processor', static function () use ($ccPartial, $ok, $bad): array {
+            return strpos($ccPartial, '$btLive') !== false
+                && strpos($ccPartial, "data-cc-live") !== false
+                && strpos($ccPartial, "'live'") !== false
+                && strpos($ccPartial, 'Card payments are coming soon') !== false
+                ? $ok('card form gated behind a live Braintree processor; PayPal remains available')
+                : $bad('views/partials/card_checkout.php must gate the card fields + Pay button behind $btLive and keep PayPal enabled');
+        });
 
         // ------------------------------------------- Plan checkout processor
         $pcSchema = $read("$root/schema.sql");
@@ -432,9 +441,9 @@ class SmokeChecks
                 : $bad('BraintreeGateway must implement createPlan and findPlan');
         });
         $add('smoke.braintree.membership_view_button', 'Smoke · Braintree', 'Membership page offers a Braintree card checkout button', static function () use ($membershipView, $ok, $bad): array {
-            return strpos($membershipView, '/membership/checkout') !== false && strpos($membershipView, '$braintreeAvailable') !== false && stripos($membershipView, 'Or pay by card (Braintree)') !== false
-                ? $ok('card checkout button gated by braintree availability')
-                : $bad('views/membership/index.php must render a Braintree checkout link gate by $braintreeAvailable');
+            return strpos($membershipView, '/membership/checkout') !== false && strpos($membershipView, '$braintreeAvailable') !== false && strpos($membershipView, '$braintreeLive') !== false && stripos($membershipView, 'Or pay by card (Braintree)') !== false
+                ? $ok('card checkout button gated by braintree availability + live flag')
+                : $bad('views/membership/index.php must render a Braintree checkout button gated by $braintreeAvailable/$braintreeLive');
         });
         $add('smoke.braintree.plan_forms_field', 'Smoke · Braintree', 'Plan admin forms persist a Braintree plan id', static function () use ($planFormCreate, $planFormEdit, $ok, $bad): array {
             return strpos($planFormCreate, 'braintree_plan_id') !== false && strpos($planFormEdit, 'braintree_plan_id') !== false

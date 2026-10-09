@@ -125,9 +125,16 @@ $ldJson = [
             }
         }
         $braintreeAvailable = false;
+        // Card checkout is considered "working" only while a live Braintree
+        // processor is enabled; until then the card buttons stay visible but
+        // disabled (they re-enable automatically once the box goes live).
+        $braintreeLive = false;
         foreach (($paymentProcessors ?? []) as $__pp) {
             if (strtolower((string) ($__pp['provider'] ?? '')) === 'braintree' && (int) ($__pp['enabled'] ?? 0) === 1) {
                 $braintreeAvailable = true;
+                if (strtolower((string) ($__pp['mode'] ?? 'test')) === 'live') {
+                    $braintreeLive = true;
+                }
                 break;
             }
         }
@@ -219,7 +226,11 @@ $ldJson = [
                         </div>
                     <?php elseif ($useBraintreeOnly && !$isLifetime && $braintreeAvailable): ?>
                         <div style="order:2;">
-                            <a class="btn" style="width:100%; box-sizing:border-box;" href="<?= url('/membership/checkout') ?>?plan_id=<?= (int) $plan['id'] ?>">Pay by card</a>
+                            <?php if ($braintreeLive): ?>
+                                <a class="btn" style="width:100%; box-sizing:border-box;" href="<?= url('/membership/checkout') ?>?plan_id=<?= (int) $plan['id'] ?>">Pay by card</a>
+                            <?php else: ?>
+                                <button type="button" class="btn" style="width:100%; box-sizing:border-box; opacity:.55; cursor:not-allowed;" disabled aria-label="Pay by card (coming soon)" title="Braintree card checkout is not available yet.">Pay by card</button>
+                            <?php endif; ?>
                         </div>
                     <?php else: ?>
                         <form method="post" action="<?= url('/membership/subscribe') ?>" style="order:2;" id="subForm_<?= (int) $plan['id'] ?>">
@@ -230,8 +241,8 @@ $ldJson = [
                                     <label for="pay_<?= (int) $plan['id'] ?>" class="muted" style="display:block;margin-bottom:.25rem;font-size:var(--font-size-sm);">Payment method</label>
                                     <select name="payment_processor" id="pay_<?= (int) $plan['id'] ?>" style="width:100%;box-sizing:border-box;" data-plan-id="<?= (int) $plan['id'] ?>" class="pp-select">
                                         <?php foreach ($paymentProcessors as $pp): ?>
-                                            <option value="<?= (int) $pp['id'] ?>" data-provider="<?= e((string) $pp['provider']) ?>">
-                                                <?= e(\App\Models\PaymentProcessor::providerLabel((string) $pp['provider'])) ?> — <?= e((string) $pp['name']) ?>
+                                            <option value="<?= (int) $pp['id'] ?>" data-provider="<?= e((string) $pp['provider']) ?>"<?= strtolower((string) $pp['provider']) === 'braintree' && !$braintreeLive ? ' disabled' : '' ?>>
+                                                <?= e(\App\Models\PaymentProcessor::providerLabel((string) $pp['provider'])) ?> — <?= e((string) $pp['name']) ?><?= strtolower((string) $pp['provider']) === 'braintree' && !$braintreeLive ? ' (coming soon)' : '' ?>
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
@@ -242,7 +253,11 @@ $ldJson = [
                     <?php endif; ?>
                     <?php if ($braintreeAvailable && !$hasActive && $pendingSub === null && !$isLifetime && !$useBraintreeOnly && !$useOffline): ?>
                         <p style="order:3; margin-bottom:0;">
-                            <a class="btn btn-outline" style="width:100%; box-sizing:border-box; margin-top:.5rem;" href="<?= url('/membership/checkout') ?>?plan_id=<?= (int) $plan['id'] ?>">Or pay by card (Braintree)</a>
+                            <?php if ($braintreeLive): ?>
+                                <a class="btn btn-outline" style="width:100%; box-sizing:border-box; margin-top:.5rem;" href="<?= url('/membership/checkout') ?>?plan_id=<?= (int) $plan['id'] ?>">Or pay by card (Braintree)</a>
+                            <?php else: ?>
+                                <button type="button" class="btn btn-outline" style="width:100%; box-sizing:border-box; margin-top:.5rem; opacity:.55; cursor:not-allowed;" disabled aria-label="Pay by card (coming soon)" title="Braintree card checkout is not available yet.">Or pay by card (Braintree)</button>
+                            <?php endif; ?>
                         </p>
                     <?php endif; ?>
                 </div>

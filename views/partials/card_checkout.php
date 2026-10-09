@@ -17,8 +17,20 @@ $ccAmountInput = !empty($ccAmountInput);
 $ccTokenUrl = url('/checkout/token');
 $ccCsrf   = \App\Core\Csrf::token();
 $ccUser   = \App\Core\Auth::check();
+// Card checkout is only considered "working" while a LIVE Braintree
+// processor is enabled. Until then the card fields + Pay button stay visible
+// but disabled ("coming soon"); the PayPal button keeps working.
+$btLive = false;
+foreach (\App\Models\PaymentProcessor::enabled() as $__pp) {
+    if (strtolower((string) ($__pp['provider'] ?? '')) === 'braintree'
+        && (int) ($__pp['enabled'] ?? 0) === 1
+        && strtolower((string) ($__pp['mode'] ?? 'test')) === 'live') {
+        $btLive = true;
+        break;
+    }
+}
 ?>
-<div class="cc-block" id="cc-<?= e($ccId) ?>" style="margin:.6rem 0;">
+<div class="cc-block" id="cc-<?= e($ccId) ?>" data-cc-live="<?= $btLive ? '1' : '0' ?>" style="margin:.6rem 0;">
     <?php if (!$ccUser): ?>
         <p class="muted" style="font-size:.85rem;"><a href="<?= url('/login') ?>">Log in</a> to pay by card.</p>
     <?php else: ?>
@@ -32,14 +44,22 @@ $ccUser   = \App\Core\Auth::check();
                     <input type="text" name="note" placeholder="Add a note" maxlength="500" required style="flex:1;min-width:180px;">
                 </div>
             <?php endif; ?>
-            <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:stretch;">
-                <div style="flex:2;min-width:220px;border:1px solid var(--pink-300);border-radius:var(--border-radius-sm);padding:.4rem .5rem;background:#fff;" data-cc-number aria-label="Card number"></div>
-                <div style="flex:1;min-width:90px;border:1px solid var(--pink-300);border-radius:var(--border-radius-sm);padding:.4rem .5rem;background:#fff;" data-cc-exp aria-label="Expiry"></div>
-                <div style="flex:1;min-width:80px;border:1px solid var(--pink-300);border-radius:var(--border-radius-sm);padding:.4rem .5rem;background:#fff;" data-cc-cvv aria-label="CVV"></div>
-            </div>
+            <?php if ($btLive): ?>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:stretch;">
+                    <div style="flex:2;min-width:220px;border:1px solid var(--pink-300);border-radius:var(--border-radius-sm);padding:.4rem .5rem;background:#fff;" data-cc-number aria-label="Card number"></div>
+                    <div style="flex:1;min-width:90px;border:1px solid var(--pink-300);border-radius:var(--border-radius-sm);padding:.4rem .5rem;background:#fff;" data-cc-exp aria-label="Expiry"></div>
+                    <div style="flex:1;min-width:80px;border:1px solid var(--pink-300);border-radius:var(--border-radius-sm);padding:.4rem .5rem;background:#fff;" data-cc-cvv aria-label="CVV"></div>
+                </div>
+            <?php else: ?>
+                <p class="muted" style="font-size:.85rem;border:1px dashed var(--pink-300);border-radius:var(--border-radius-sm);padding:.5rem .6rem;">Card payments are coming soon.</p>
+            <?php endif; ?>
+            <?php if (!$ccAmountInput): ?>
+                <input type="hidden" name="amount" value="<?= e($ccAmount) ?>">
+                <input type="hidden" name="note" value="Card payment">
+            <?php endif; ?>
             <p class="cc-status muted" style="display:none;font-size:.8rem;color:#b91c1c;"></p>
             <p style="margin:.55rem 0 0;display:flex;gap:.5rem;flex-wrap:wrap;">
-                <button type="submit" class="btn btn-sm" data-cc-pay>Pay $<?= e($ccAmount) ?></button>
+                <button type="submit" class="btn btn-sm" data-cc-pay<?= $btLive ? '' : ' disabled' ?> style="<?= $btLive ? '' : 'opacity:.55;cursor:not-allowed;' ?>"<?= $btLive ? '' : ' aria-label="Pay by card (coming soon)" title="Braintree card checkout is not available yet."' ?>>Pay $<?= e($ccAmount) ?></button>
                 <button type="button" class="btn btn-sm btn-outline" data-cc-paypal>Pay with PayPal</button>
             </p>
         </form>
@@ -52,7 +72,8 @@ $ccUser   = \App\Core\Auth::check();
     var root = document.getElementById('cc-<?= e($ccId) ?>');
     if (!root || root.dataset.ccDone) return;
     root.dataset.ccDone = '1';
-    if (!window.galleryBtLoaded) {
+    var live = root.dataset.ccLive === '1';
+    if (live && !window.galleryBtLoaded) {
         var n = document.createElement('script'); n.src = 'https://js.braintreegateway.com/web/3.103.0/js/client.min.js';
         var h = document.createElement('script'); h.src = 'https://js.braintreegateway.com/web/3.103.0/js/hosted-fields.min.js';
         (document.head || document.documentElement).appendChild(n); (document.head || document.documentElement).appendChild(h);
@@ -83,13 +104,15 @@ $ccUser   = \App\Core\Auth::check();
             });
         }
     }
-    fetch('<?= e($ccTokenUrl) ?>', { credentials: 'same-origin' })
-        .then(function (r) { return r.json(); })
-        .then(function (d) { if (d.client_token) init(d.client_token); else status(d.error || 'Card payments unavailable.'); })
-        .catch(function () { status('Could not load the payment form.'); });
+    if (live) {
+        fetch('<?= e($ccTokenUrl) ?>', { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) { if (d.client_token) init(d.client_token); else status(d.error || 'Card payments unavailable.'); })
+            .catch(function () { status('Could not load the payment form.'); });
+    }
     form.addEventListener('submit', function (ev) {
         ev.preventDefault();
-        if (busy) return;
+        if (busy || !live) return;
         if (!hosted) { status('Payment form not ready yet — please wait a moment.'); return; }
         busy = true; status('Processing…');
         hosted.tokenize({ vault: true }, function (err, payload) {
