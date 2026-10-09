@@ -46,7 +46,9 @@ let browser = null;
 try {
   const existing = existsSync(sessionFile) ? JSON.parse(readFileSync(sessionFile, 'utf8')) : null;
 
-  browser = await chromium.launch({ headless: autoMode });
+  const launchOpts = { headless: autoMode && process.env.REDDIT_HEADFUL !== '1' };
+  if (process.env.REDDIT_BROWSER_CHANNEL) launchOpts.channel = process.env.REDDIT_BROWSER_CHANNEL;
+  browser = await chromium.launch(launchOpts);
   const context = await browser.newContext({ storageState: existing, viewport: { width: 1280, height: 900 } });
   const page = await context.newPage();
 
@@ -55,8 +57,13 @@ try {
     const password = (process.env.REDDIT_PASS || '').trim();
     if (!username || !password) fail('REDDIT_USER and REDDIT_PASS env vars are required for --auto-login.');
 
+    // Warm up on the homepage first: Reddit's js_challenge keeps the login
+    // button disabled until its challenge resolves, and headful home content
+    // proves we are past the network-security gate.
+    await page.goto('https://www.reddit.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await sleepy(5000);
     await page.goto('https://www.reddit.com/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await sleepy(1200);
+    await sleepy(2000);
 
     const userField = await firstVisible(page, ['input#loginUsername', 'input[name="username"]', 'input[autocomplete="username"]', 'input[type="text"]']);
     if (!userField) fail('Could not find the Reddit username/email field (possibly a captcha on this server IP).');
@@ -75,21 +82,21 @@ try {
     await passField.fill(password);
     await sleepy(400);
 
-    const loginBtn = await firstVisible(page, ['button[type="submit"]', 'button:has-text("Log in")'], 3000);
-    if (!loginBtn) fail('Could not find the Reddit Log in button.');
+    // The Log In button stays disabled until js_challenge fully resolves.
+    const loginBtn = page.locator('button').filter({ hasText: 'Log In' }).first();
+    let ready = false;
+    for (let i = 0; i < 20; i++) {
+      if (await loginBtn.isEnabled().catch(() => false)) { ready = true; break; }
+      await sleepy(1000);
+    }
+    if (!ready) fail('The Reddit Log In button never became enabled (js_challenge failed).');
     await loginBtn.click().catch(() => {});
-    await sleepy(4500);
+    await sleepy(6000);
 
-    // Verify we are actually signed in (a session could be invalidated, or a
-    // captcha could have blocked the attempt).
-    let loggedIn = false;
-    try {
-      const resp = await page.goto('https://www.reddit.com/api/v1/me', { timeout: 30000 });
-      const body = resp.ok() ? await resp.text() : '';
-      if (body.includes('"name"')) loggedIn = true;
-    } catch (_) { /* fall through */ }
-
-    if (!loggedIn) {
+    // Verify we are actually signed in: the reddit_session auth cookie only
+    // exists for a logged-in session (the JSON endpoints stay anonymous).
+    const cookieNames = (await context.cookies('https://www.reddit.com')).map((c) => c.name);
+    if (!cookieNames.includes('reddit_session')) {
       const text = await page.evaluate(() => document.body.innerText).catch(() => '');
       const look = text.replace(/\s+/g, ' ').slice(0, 200);
       fail('Reddit login did not complete (captcha or credentials rejected). ' + look);
@@ -105,17 +112,13 @@ try {
   await page.goto('https://www.reddit.com/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
   if (existing) {
-    try {
-      await page.goto('https://www.reddit.com/api/v1/me', { timeout: 30000 });
-      const body = await page.evaluate(() => document.body.innerText);
-      if (body.includes('"name"')) {
-        await context.storageState({ path: sessionFile });
-        await browser.close().catch(() => {});
-        console.log('Existing session is still valid; refreshed ' + sessionFile);
-        process.exit(0);
-      }
-    } catch (_) { /* stale — fresh login below */ }
-    await page.goto('https://www.reddit.com/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    const names = (await context.cookies('https://www.reddit.com')).map((c) => c.name);
+    if (names.includes('reddit_session')) {
+      await context.storageState({ path: sessionFile });
+      await browser.close().catch(() => {});
+      console.log('Existing session is still valid; refreshed ' + sessionFile);
+      process.exit(0);
+    }
   }
 
   console.log('');

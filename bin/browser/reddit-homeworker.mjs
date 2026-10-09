@@ -38,6 +38,10 @@ const user   = process.env.REDDIT_USER || '';
 const pass   = process.env.REDDIT_PASS || '';
 const pollMs = Math.max(10, parseInt(process.env.REDDIT_POLL_SECONDS || '30', 10)) * 1000;
 const postScript = resolve(__dirname, 'reddit-post.mjs');
+// The child reddit-post.mjs uses system Chrome (channel) when configured, and
+// runs headful on the desktop display (Reddit blocks headless signatures).
+if (!process.env.REDDIT_BROWSER_CHANNEL) process.env.REDDIT_BROWSER_CHANNEL = 'chrome';
+if (process.env.REDDIT_HEADFUL === undefined) process.env.REDDIT_HEADFUL = '1';
 
 mkdirSync(jobDir, { recursive: true });
 

@@ -79,10 +79,17 @@ const sleepy = (ms) => new Promise((r) => setTimeout(r, ms));
 let browser = null;
 try {
   const session = JSON.parse(readFileSync(sessionFile, 'utf8'));
-  browser = await chromium.launch({ headless: true });
+  const launchOpts = { headless: process.env.REDDIT_HEADFUL !== '1' };
+  if (process.env.REDDIT_BROWSER_CHANNEL) launchOpts.channel = process.env.REDDIT_BROWSER_CHANNEL;
+  browser = await chromium.launch(launchOpts);
   const context = await browser.newContext({ storageState: session, viewport: { width: 1280, height: 900 } });
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
+
+  // Warm up on the homepage so the js_challenge resolves before we submit
+  // (the Post button stays disabled until then).
+  await page.goto('https://www.reddit.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await sleepy(4000);
 
   const submitUrl = mode === 'link'
     ? 'https://www.reddit.com/r/' + sub + '/submit?url=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(title)
@@ -152,13 +159,19 @@ try {
     }
   }
 
-  // Click the main "Post" button.
+  // Click the main "Post" button (waits for it to become enabled).
   const postBtn = await firstVisible(page, [
     'button:has-text("Post")',
     'button[type="submit"]:has-text("Post")',
     '#createPostButton',
   ], 10000);
   if (!postBtn) out({ ok: false, error: 'MANUAL_VERIFICATION: could not find the Post button on the submit page.' });
+  let postReady = false;
+  for (let i = 0; i < 15; i++) {
+    if (await postBtn.isEnabled().catch(() => false)) { postReady = true; break; }
+    await sleepy(1000);
+  }
+  if (!postReady) out({ ok: false, error: 'MANUAL_VERIFICATION: the Post button never became enabled.' });
   await postBtn.click({ timeout: 10000 }).catch(() => {});
   await sleepy(1200);
 
@@ -177,7 +190,26 @@ try {
   }
 
   if (finalUrl) {
-    out({ ok: true, url: finalUrl.split('?')[0], mode });
+    let permalink = finalUrl.split('?')[0];
+    // The new UI often lands on the subreddit page, not the permalink; find
+    // the just-created post's /comments/<id>/ link (matching the title).
+    if (!/\/comments\//.test(permalink)) {
+      try {
+        const found = await page.evaluate((t) => {
+          const titleText = t.toLowerCase().slice(0, 120);
+          const links = Array.from(document.querySelectorAll('a[href*="/comments/"]'));
+          for (const a of links) {
+            const box = (a.closest('article') || a.parentElement || a).innerText || '';
+            if (box.toLowerCase().includes(titleText)) return a.href;
+          }
+          return links[0] ? links[0].href : null;
+        }, title);
+        if (found && /\/comments\//.test(found)) {
+          permalink = found.split('?')[0];
+        }
+      } catch (_) { /* keep the subreddit fallback */ }
+    }
+    out({ ok: true, url: permalink, mode });
   }
 
   // No navigation: surface a verification / error message instead of guessing.
