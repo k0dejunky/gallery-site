@@ -499,6 +499,70 @@ class SmokeChecks
                 : $bad('bin/browser/reddit-homeworker.mjs must poll browser-jobs, run reddit-post.mjs and POST the report');
         });
 
+        // ---------------------------------------------------------- Security
+        $secRouterP = $read("$root/app/Core/Router.php");
+        $secUploadP = $read("$root/app/Core/MediaUploader.php");
+        $secChatP   = $read("$root/app/Models/ChatMessage.php");
+        $secHouse   = $read("$root/app/Core/Housekeeping.php");
+        $secPurch   = $read("$root/app/Controllers/PurchaseController.php");
+        $secHeadersP= $read("$root/config/gallery-headers.conf");
+        $secViews   = '';
+        foreach ((array) glob("$root/views/*.php") + (array) glob("$root/views/**/*.php") as $v) {
+            if (is_file($v)) $secViews .= "\n" . (string) file_get_contents($v);
+        }
+        $secAppPhp = '';
+        foreach ((array) glob("$root/app/**/*.php") as $p) {
+            if (is_file($p)) $secAppPhp .= "\n" . (string) file_get_contents($p);
+        }
+        $add('smoke.sec.headers_framing', 'Smoke · Security', 'COOP + CORP headers configured', static function () use ($secHeadersP, $ok, $bad): array {
+            return stripos($secHeadersP, 'Cross-Origin-Opener-Policy') !== false && stripos($secHeadersP, 'Cross-Origin-Resource-Policy') !== false
+                ? $ok('COOP/CORP present')
+                : $bad('config/gallery-headers.conf must set Cross-Origin-Opener-Policy and Cross-Origin-Resource-Policy');
+        });
+        $add('smoke.sec.csrf_webhooks_only', 'Smoke · Security', 'CSRF exemptions are limited to /webhooks', static function () use ($secRouterP, $ok, $bad): array {
+            return strpos($secRouterP, "'/webhooks/'") !== false && strpos($secRouterP, '$csrfExempt') !== false
+                ? $ok('POST CSRF enforced; only webhook prefix exempt')
+                : $bad('Router must keep CSRF exemptions scoped to the /webhooks/ prefix');
+        });
+        $add('smoke.sec.no_superglobals_in_views', 'Smoke · Security', 'Views never echo request superglobals (XSS surface)', static function () use ($secViews, $ok, $bad): array {
+            $cpu = preg_match('#<\?=\s*[^?]*\$_(GET|POST|REQUEST)\b#', $secViews)
+                || preg_match('#<\?php[^?]*\becho\b[^?]*\$_(GET|POST|REQUEST)\b#', $secViews)
+                || preg_match('#\becho\s+\$_(GET|POST|REQUEST)\b#', $secViews);
+            return $cpu ? $bad('views must not echo $_(GET|POST|REQUEST)') : $ok('clean');
+        });
+        $add('smoke.sec.no_direct_shell_with_request', 'Smoke · Security', 'No shell command interpolates request data', static function () use ($secAppPhp, $ok, $bad): array {
+            $hits = [];
+            foreach (preg_split('/\R/', $secAppPhp) as $i => $line) {
+                if (!preg_match('/\b(exec|shell_exec|proc_open|system|passthru|popen)\s*\(/', $line)) continue;
+                $stmt = $line;
+                $j = $i + 1;
+                while (substr_count($stmt, ';') === 0 && isset(explode("\n", $secAppPhp)[$j])) {
+                    $stmt .= explode("\n", $secAppPhp)[$j];
+                    $j++;
+                }
+                if (preg_match('/\$_(GET|POST|REQUEST|COOKIE|SERVER)\b/', $stmt)) {
+                    $hits[] = 'line ' . ($i + 1);
+                }
+            }
+            return $hits === [] ? $ok('no shell call feeds request data in') : $bad('shell calls interpolate request data at: ' . implode(',', $hits));
+        });
+        $add('smoke.sec.money_rate_limits', 'Smoke · Security', 'Money/checkout endpoints are rate limited', static function () use ($secPurch, $ok, $bad): array {
+            return strpos($secPurch, 'unlock-live') !== false && substr_count($secPurch, 'RateLimiter::allow') >= 4
+                ? $ok('unlock/tip/live/checkout throttled')
+                : $bad('PurchaseController must RateLimiter-allow unlock, tip, unlock-live, tip-live and checkoutToken');
+        });
+        $add('smoke.sec.ffmpeg_guard', 'Smoke · Security', 'Housekeeping guards an ffmpeg burst', static function () use ($secHouse, $ok, $bad): array {
+            return strpos($secHouse, "pgrep -fc ffmpeg") !== false && strpos($secHouse, '$out[\'ffmpeg_count\']') !== false
+                ? $ok('ffmpeg count captured + alert once >= 6')
+                : $bad('Housekeeping must record ffmpeg_count and alert on a burst');
+        });
+        $add('smoke.sec.upload_no_active_content', 'Smoke · Security', 'Upload allowlists exclude active content (svg/html)', static function () use ($secUploadP, $secChatP, $ok, $bad): array {
+            $lower = strtolower($secUploadP . "\n" . $secChatP);
+            return preg_match('/image\/svg[\+; ]/', $lower) === 0 && strpos($lower, "'html'") === false && strpos($lower, "'svg'") === false
+                ? $ok('no svg/html in MediaUploader/ChatMessage upload maps')
+                : $bad('upload MIME/extension allowlists must not include svg or html');
+        });
+
         // --------------------------------------------------- Braintree
         $btSchema = $schema;
         $planCtrl = $read("$root/app/Controllers/PlanController.php");

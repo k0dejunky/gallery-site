@@ -5,8 +5,8 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\BraintreeGateway;
 use App\Core\Controller;
-use App\Core\Database;
 use App\Core\PayPalGateway;
+use App\Core\RateLimiter;
 use App\Models\Gallery;
 use App\Models\Notification;
 use App\Models\PaymentProcessor;
@@ -25,6 +25,11 @@ class PurchaseController extends Controller
     {
         Auth::requireLogin();
         $user = Auth::user();
+
+        if (!RateLimiter::allow(['unlock-code:' . $this->request->ip()], 10, 900)) {
+            $this->json(['error' => 'Too many attempts. Please wait a few minutes.'], 429);
+            return;
+        }
 
         $gallery = Gallery::find($id);
         if ($gallery === null) {
@@ -90,6 +95,12 @@ class PurchaseController extends Controller
     {
         Auth::requireLogin();
         $user = Auth::user();
+
+        if (!RateLimiter::allow(['tip-offline:' . $this->request->ip()], 5, 600)) {
+            $this->flash('error', 'Too many tips from your connection right now. Please try again shortly.');
+            $this->redirect($this->request->header('HTTP_REFERER') ?: '/account');
+            return;
+        }
 
         $amount = (float) str_replace(',', '.', trim((string) $this->request->post('amount', '0')));
         $note   = trim((string) $this->request->post('note', ''));
@@ -159,6 +170,11 @@ class PurchaseController extends Controller
             return;
         }
 
+        if (!RateLimiter::allow(['checkout-token:' . $this->request->ip()], 30, 300)) {
+            $this->json(['error' => 'Too many payment form requests.'], 429);
+            return;
+        }
+
         $gateway = $this->braintreeGateway();
 
         if ($gateway === null) {
@@ -187,6 +203,11 @@ class PurchaseController extends Controller
     {
         Auth::requireLogin();
         $user = Auth::user();
+
+        if (!RateLimiter::allow(['unlock-live:' . $this->request->ip(), 'unlock-live:u' . (int) $user['id']], 5, 900)) {
+            $this->json(['error' => 'Too many attempts. Please wait before trying again.'], 429);
+            return;
+        }
 
         $gallery = Gallery::find($id);
         if ($gallery === null) {
@@ -255,6 +276,11 @@ class PurchaseController extends Controller
     {
         Auth::requireLogin();
         $user = Auth::user();
+
+        if (!RateLimiter::allow(['tip-live:' . $this->request->ip(), 'tip-live:u' . (int) $user['id']], 5, 900)) {
+            $this->json(['error' => 'Too many tips from your connection right now.'], 429);
+            return;
+        }
 
         $amount = round((float) str_replace(',', '.', trim((string) $this->request->post('amount', '0'))), 2);
         $note   = trim((string) $this->request->post('note', ''));

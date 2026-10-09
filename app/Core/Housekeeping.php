@@ -34,7 +34,25 @@ class Housekeeping
             'temp_files_removed' => 0,
             'disk_growth_alerted' => false,
             'chat_broadcast' => 0,
+            'ffmpeg_count'  => 0,
         ];
+
+        // ffmpeg runaway guard: if concurrent ffmpeg processes ever spike
+        // (variant/video bursts), alert the admin immediately so a CPU storm
+        // like the one that took the site down is caught before it does.
+        try {
+            $ffmpegCount = (int) trim((string) shell_exec('pgrep -fc ffmpeg 2>/dev/null'));
+            $out['ffmpeg_count'] = $ffmpegCount;
+            if ($ffmpegCount >= 6) {
+                Mailer::adminAlert(
+                    'ffmpeg-burst',
+                    'ffmpeg burst detected',
+                    'Concurrent process count: ' . $ffmpegCount . '. Check ps aux | grep ffmpeg.'
+                );
+            }
+        } catch (\Throwable $e) {
+            $out['ffmpeg_count'] = -1;
+        }
 
         self::watchBackupSync($root);
         self::watchRestoreDrill($root);

@@ -199,6 +199,15 @@ class StorageController extends Controller
         $mime = in_array($size, ['thumb', 'blur'], true)
             ? $this->imageMimeOf($path)
             : (sniff_mime($path) ?: mime_for_extension($name));
+
+        // Defense in depth: only ever serve media content-types. If a stored
+        // file sniffs as anything else (e.g. html/svg/text), force it to a
+        // generic binary so it can never render as active content (with the
+        // nosniff header this also kills XSS via upload).
+        if (!preg_match('#^(image/|video/|audio/|application/pdf|text/plain)#', (string) $mime)) {
+            $mime = 'application/octet-stream';
+        }
+
         $len  = (int) filesize($path);
 
         header('Content-Type: ' . $mime);

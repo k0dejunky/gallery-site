@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Controller;
+use App\Core\RateLimiter;
 use App\Models\AutoPosterConfig;
 use App\Models\AutoPostQueue;
 use App\Models\Traffic;
@@ -32,6 +33,11 @@ class RedditBrowserJobsController extends Controller
     {
         if (!$this->authenticated()) {
             $this->json(['error' => 'Not authorized'], 401);
+            return;
+        }
+
+        if (!RateLimiter::allow(['reddit-browser-take:' . $this->request->ip()], 60, 300)) {
+            $this->json(['error' => 'Too many requests'], 429);
             return;
         }
 
@@ -66,6 +72,11 @@ class RedditBrowserJobsController extends Controller
     {
         if (!$this->authenticated()) {
             $this->json(['error' => 'Not authorized'], 401);
+            return;
+        }
+
+        if (!RateLimiter::allow(['reddit-browser-report:' . $this->request->ip()], 120, 300)) {
+            $this->json(['error' => 'Too many requests'], 429);
             return;
         }
 
