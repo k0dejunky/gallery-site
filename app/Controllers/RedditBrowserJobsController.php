@@ -99,9 +99,11 @@ class RedditBrowserJobsController extends Controller
     }
 
     /**
-     * Build the consumable job payload for the home worker: subreddit, title/
-     * body, and either a link (attributed gallery URL) or the first usable
-     * image as base64 (the home box has no access to this server's storage).
+     * Build the consumable job payload for the home worker: subreddit, split
+     * title/body, and the attributed gallery link. Rows with media post as a
+     * LINK — Reddit's web image editor rejects synthesised uploads, so the
+     * gallery link (with its og:image thumbnail card) is the reliable way to
+     * surface the content. True native image uploads use the OAuth API path.
      */
     private function payloadFor(array $item): array
     {
@@ -112,36 +114,16 @@ class RedditBrowserJobsController extends Controller
             return ['error' => 'Reddit has no target subreddit configured.'];
         }
 
-        $split      = \App\Core\AutoPostText::splitForPlatform((string) $item['text'], 'reddit');
-        $title      = (string) ($split['title'] ?? '');
-        $body       = trim((string) ($split['body'] ?? ''));
-        $base       = ['subreddit' => \App\Models\RedditClient::cleanSubreddit($sub), 'title' => $title, 'body' => $body];
+        $split = \App\Core\AutoPostText::splitForPlatform((string) $item['text'], 'reddit');
+        $base  = [
+            'subreddit' => \App\Models\RedditClient::cleanSubreddit($sub),
+            'title'     => (string) ($split['title'] ?? ''),
+            'body'      => trim((string) ($split['body'] ?? '')),
+        ];
 
-        // Image jobs: attach the first image file as base64.
-        foreach (AutoPostQueue::mediaFiles($item) as $photo) {
-            if ((int) ($photo['is_video'] ?? 0) === 1) {
-                continue;
-            }
-            $path = AutoPostQueue::preferredMediaPath((string) $photo['filename']);
-            if ($path === null) {
-                continue;
-            }
-            $bytes = @file_get_contents($path);
-            if ($bytes === false || $bytes === '') {
-                continue;
-            }
-            $mime = (string) (mime_content_type($path) ?: 'image/jpeg');
-            $base['mode']       = 'image';
-            $base['image_base64'] = base64_encode($bytes);
-            $base['image_type']   = $mime;
-            return $base;
-        }
-
-        // Otherwise a link post: the attributed gallery URL (share-button style).
-        $gid  = (int) ($item['gallery_id'] ?? 0);
-        $url  = $gid > 0 ? Traffic::buildUrl('/galleries/' . $gid, 'reddit') : 'https://' . AutoPostQueue::POST_DOMAIN;
+        $gid = (int) ($item['gallery_id'] ?? 0);
         $base['mode'] = 'link';
-        $base['url']  = $url;
+        $base['url']  = $gid > 0 ? Traffic::buildUrl('/galleries/' . $gid, 'reddit') : absolute_url('/');
         return $base;
     }
 

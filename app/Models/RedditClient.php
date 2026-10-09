@@ -204,7 +204,7 @@ class RedditClient
         if ($file !== null) {
             $payload['imagePath'] = (string) $file['tmp_name'];
         } else {
-            $payload['url'] = $shareUrl !== '' ? $shareUrl : ('https://' . AutoPostQueue::POST_DOMAIN);
+            $payload['url'] = $shareUrl !== '' ? $shareUrl : absolute_url('/');
         }
 
         if (!empty($this->config['username'])) {

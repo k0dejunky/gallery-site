@@ -2,22 +2,21 @@
 /**
  * Headless-browser Reddit auto poster ("share-button method").
  *
- * Reuses a saved session (storage/reddit-browser/session.json) to open the
- * real `reddit.com/r/<sub>/submit` page — exactly what the on-site "Share on
- * Reddit" button does — fill the title (+ URL or image file), click "Post",
- * and return the new post URL.
+ * Uses a saved session (storage/reddit-browser/session.json) to open the real
+ * `reddit.com/r/<sub>/submit` page — exactly what the on-site "Share on
+ * Reddit" button does — fill the title + URL (a gallery link, so Reddit shows
+ * the gallery's og:image thumbnail), click "Post", and return the new
+ * permalink.
  *
- * Usage:
- *   node bin/browser/reddit-post.mjs <payload.json>
- * Payload: {
- *   mode: "link" | "image",
- *   subreddit: "Amethyst2213NSFW",
- *   title: "...",
- *   url?: "https://...",          // link posts
- *   imagePath?: "/abs/path.jpg",  // image posts
- *   username?, password?          // optional auto re-login when session expired
- * }
- * Output (stdout, JSON): {ok:bool, url?:string, error?:string}
+ * NOTE on images: Reddit's web image editor does not accept synthesised file
+ * uploads and /api/* is WAF-blocked for browser sessions, so native image
+ * uploads are not reliable without the OAuth API (RedditClient::uploadImage,
+ * already built). Gallery rows post as a LINK, which Reddit renders with the
+ * gallery's thumbnail media card.
+ *
+ * Usage: node bin/browser/reddit-post.mjs <payload.json>
+ *   payload { mode, subreddit, title, url?, username?, password? }
+ * Output (stdout, JSON): {ok, url?, error?}
  */
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync, appendFileSync } from 'node:fs';
@@ -29,21 +28,16 @@ const root = resolve(__dirname, '..', '..');
 const sessionFile = resolve(root, 'storage', 'reddit-browser', 'session.json');
 const sessionDir = resolve(root, 'storage', 'reddit-browser');
 const logFile = resolve(sessionDir, 'posts.log');
-// Playwright is installed under storage/reddit-browser (gitignored), with the
-// downloaded browsers in ms-playwright/, so imports and the browser binary
-// resolve regardless of which user / HOME runs the script.
 process.env.PLAYWRIGHT_BROWSERS_PATH = resolve(sessionDir, 'ms-playwright');
 const require = createRequire(resolve(sessionDir, '.noop.js'));
 const { chromium } = require('playwright');
 
+const sleepy = (ms) => new Promise((r) => setTimeout(r, ms));
+
 const arg = process.argv[2];
 let payload = {};
-if (arg && existsSync(arg)) {
-  payload = JSON.parse(readFileSync(arg, 'utf8'));
-} else if (arg) {
-  payload = JSON.parse(arg);
-}
-// Also accept the payload on stdin (a line of JSON).
+if (arg && existsSync(arg)) payload = JSON.parse(readFileSync(arg, 'utf8'));
+else if (arg) payload = JSON.parse(arg);
 if (!Object.keys(payload).length && !process.stdin.isTTY) {
   const raw = await new Promise((ok) => {
     let buf = '';
@@ -58,7 +52,6 @@ const mode      = payload.mode === 'image' ? 'image' : 'link';
 const sub       = String(payload.subreddit || '').replace(/^r\//i, '').replace(/[^A-Za-z0-9_]/g, '');
 const title     = String(payload.title || '').trim();
 const url       = String(payload.url || '').trim();
-const imagePath = String(payload.imagePath || '');
 const username  = String(payload.username || '');
 const password  = String(payload.password || '');
 
@@ -68,13 +61,10 @@ const out = (obj) => {
   process.exit(obj.ok ? 0 : 1);
 };
 
+if (!existsSync(sessionFile)) out({ ok: false, error: 'SESSION_MISSING: no reddit-browser session yet — run node bin/browser/reddit-login.mjs once.' });
 if (!sub) out({ ok: false, error: 'No subreddit given.' });
 if (!title) out({ ok: false, error: 'No title given.' });
-if (mode === 'link' && !url) out({ ok: false, error: 'No url given for a link post.' });
-if (mode === 'image' && !existsSync(imagePath)) out({ ok: false, error: 'Image file not found: ' + imagePath });
-if (!existsSync(sessionFile)) out({ ok: false, error: 'SESSION_MISSING: no reddit-browser session yet — run node bin/browser/reddit-login.mjs once.' });
-
-const sleepy = (ms) => new Promise((r) => setTimeout(r, ms));
+if (!url) out({ ok: false, error: 'No url given for a link post.' });
 
 let browser = null;
 try {
@@ -84,104 +74,62 @@ try {
   browser = await chromium.launch(launchOpts);
   const context = await browser.newContext({ storageState: session, viewport: { width: 1280, height: 900 } });
   const page = await context.newPage();
-  page.setDefaultTimeout(15000);
+  page.setDefaultTimeout(20000);
 
-  // Warm up on the homepage so the js_challenge resolves before we submit
-  // (the Post button stays disabled until then).
+  // Warm up on the homepage so Reddit's js_challenge resolves.
   await page.goto('https://www.reddit.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
   await sleepy(4000);
 
-  const submitUrl = mode === 'link'
-    ? 'https://www.reddit.com/r/' + sub + '/submit?url=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(title)
-    : 'https://www.reddit.com/r/' + sub + '/submit?title=' + encodeURIComponent(title);
-
+  // Image rows post as links (Reddit shows the gallery og:image thumbnail).
+  const submitUrl = 'https://www.reddit.com/r/' + sub + '/submit?url=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(title);
   await page.goto(submitUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await sleepy(1500);
+  await sleepy(2000);
 
-  // Redirected to login → session expired (optionally auto re-login).
   if (/\/login/.test(page.url())) {
     if (username && password) {
       const relog = await autoLogin(page, username, password);
       if (!relog.ok) out(relog);
       await page.goto(submitUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await sleepy(1500);
+      await sleepy(2000);
     } else {
       out({ ok: false, error: 'SESSION_EXPIRED: reddit login expired — re-run node bin/browser/reddit-login.mjs.' });
     }
+    if (/\/login/.test(page.url())) out({ ok: false, error: 'SESSION_EXPIRED: still on /login after re-login.' });
   }
 
-  // Fill the title (may already be prefilled from ?title=).
-  const titleField = await firstVisible(page, [
-    'textarea[name="title"]',
-    'div[role="textbox"][aria-label*="Title"]',
-    'textarea[placeholder*="title" i]',
-    '[data-testid="post-title"] textarea',
-  ]);
-  if (titleField) {
-    const current = (await titleField.inputValue().catch(() => '')) || (await titleField.innerText().catch(() => ''));
-    if (!String(current).trim()) {
-      await titleField.fill(title);
-    }
+  // Title (prefilled from ?title= — verify it landed).
+  const tf = await firstVisible(page, ['textarea[name="title"]', '[data-testid="post-title"] textarea', 'div[role="textbox"][aria-label*="Title"]']);
+  if (tf) {
+    const val = (await tf.inputValue().catch(() => '')) || (await tf.innerText().catch(() => ''));
+    if (!String(val).trim()) await tf.fill(title).catch(() => {});
   }
 
-  if (mode === 'image') {
-    // Switch to the Image tab (reveals the file input).
-    const imgTab = await firstVisible(page, [
-      'button[role="tab"]:has-text("Image")',
-      '[role="tab"]:has-text("Image")',
-      'div[role="button"]:has-text("Image")',
-    ]);
-    if (imgTab) await imgTab.click().catch(() => {});
-    await sleepy(800);
-
-    const fileInput = await firstVisible(page, ['input[type="file"]']);
-    if (!fileInput) out({ ok: false, error: 'Could not show the image uploader on the submit page.' });
-    await fileInput.setInputFiles(imagePath);
-    await sleepy(2500); // wait for the thumbnail to render
-  } else {
-    // If the ?url= did not prefill the URL field, look for the Link URL input.
-    const urlField = await firstVisible(page, [
-      'input[name="url"]',
-      'input[placeholder*="Url" i]',
-      'textarea[placeholder*="Url" i]',
-    ]);
-    if (urlField) {
-      const currentVal = await urlField.inputValue().catch(() => '');
-      if (!String(currentVal).trim()) await urlField.fill(url);
-    }
-    // If there is a Link tab and the URL field is missing, switch to it first.
-    if (!urlField) {
-      const linkTab = await firstVisible(page, ['button[role="tab"]:has-text("Link")']);
-      if (linkTab) await linkTab.click().catch(() => {});
-      await sleepy(800);
-      const urlField2 = await firstVisible(page, ['input[placeholder*="Url" i]', 'input[name="url"]']);
-      if (urlField2) await urlField2.fill(url);
-    }
+  // URL field (prefilled from ?url= — fill if empty).
+  const uf = await firstVisible(page, ['input[placeholder*="Url" i]', 'input[name="url"]', 'textarea[placeholder*="Url" i]']);
+  if (uf) {
+    const val = await uf.inputValue().catch(() => '');
+    if (!String(val).trim()) await uf.fill(url).catch(() => {});
   }
 
-  // Click the main "Post" button (waits for it to become enabled).
-  const postBtn = await firstVisible(page, [
-    'button:has-text("Post")',
-    'button[type="submit"]:has-text("Post")',
-    '#createPostButton',
-  ], 10000);
-  if (!postBtn) out({ ok: false, error: 'MANUAL_VERIFICATION: could not find the Post button on the submit page.' });
-  let postReady = false;
-  for (let i = 0; i < 15; i++) {
-    if (await postBtn.isEnabled().catch(() => false)) { postReady = true; break; }
+  // Post button (waits to become enabled once the challenge resolves).
+  const postBtn = page.locator('button').filter({ hasText: 'Post' }).last();
+  let ready = false;
+  for (let i = 0; i < 20; i++) {
+    if ((await postBtn.count()) && await postBtn.isEnabled().catch(() => false)) { ready = true; break; }
     await sleepy(1000);
   }
-  if (!postReady) out({ ok: false, error: 'MANUAL_VERIFICATION: the Post button never became enabled.' });
-  await postBtn.click({ timeout: 10000 }).catch(() => {});
+  if (!ready) {
+    const body = (await page.evaluate(() => document.body.innerText).catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+    out({ ok: false, error: (/blocked by network security/i.test(body) ? 'MANUAL_VERIFICATION: ' : 'Reddit rejected the post: ') + body });
+  }
+  await postBtn.click({ timeout: 15000 }).catch(() => {});
   await sleepy(1200);
 
-  // Any confirm/paste dialogs (e.g. duplicate-link repost warning) → accept.
-  const confirmBtn = await firstVisible(page, ['button:has-text("Post")', 'button:has-text("OK")'], 3000);
-  if (confirmBtn && !/submit/.test(page.url())) {
-    await confirmBtn.click().catch(() => {});
-  }
+  // Accept any duplicate/repost confirm dialog.
+  const confirmB = await firstVisible(page, ['button:has-text("OK")', 'button:has-text("Post now")'], 2500);
+  if (confirmB) await confirmB.click().catch(() => {});
 
-  // Wait for navigation away from /submit (success) or a verification trap.
+  // Wait for navigation away from /submit.
   let finalUrl = '';
   for (let i = 0; i < 30; i++) {
     await sleepy(1000);
@@ -191,68 +139,74 @@ try {
 
   if (finalUrl) {
     let permalink = finalUrl.split('?')[0];
-    // The new UI often lands on the subreddit page, not the permalink; find
-    // the just-created post's /comments/<id>/ link (matching the title).
     if (!/\/comments\//.test(permalink)) {
       try {
         const found = await page.evaluate((t) => {
-          const titleText = t.toLowerCase().slice(0, 120);
+          const tt = t.toLowerCase().slice(0, 120);
           const links = Array.from(document.querySelectorAll('a[href*="/comments/"]'));
           for (const a of links) {
             const box = (a.closest('article') || a.parentElement || a).innerText || '';
-            if (box.toLowerCase().includes(titleText)) return a.href;
+            if (box.toLowerCase().includes(tt)) return a.href;
           }
           return links[0] ? links[0].href : null;
         }, title);
-        if (found && /\/comments\//.test(found)) {
-          permalink = found.split('?')[0];
-        }
-      } catch (_) { /* keep the subreddit fallback */ }
+        if (found && /\/comments\//.test(found)) permalink = found.split('?')[0];
+      } catch (_) {}
     }
-    out({ ok: true, url: permalink, mode });
+    out({ ok: true, url: permalink });
   }
 
-  // No navigation: surface a verification / error message instead of guessing.
-  const body = await page.evaluate(() => document.body.innerText).catch(() => '');
-  const excerpt = body.replace(/\s+/g, ' ').slice(0, 240);
-  const trap = /verify|you'?re human|captcha|something went wrong|try again later|rate limit/i.test(excerpt);
-  out({ ok: false, error: (trap ? 'MANUAL_VERIFICATION: ' : 'Reddit rejected the post: ') + excerpt });
+  const body = (await page.evaluate(() => document.body.innerText).catch(() => '')).replace(/\s+/g, ' ').slice(0, 240);
+  out({ ok: false, error: /blocked|verify|captcha|something went wrong/i.test(body) ? 'MANUAL_VERIFICATION: ' + body : 'Reddit rejected the post: ' + body });
 } catch (e) {
   out({ ok: false, error: 'BROWSER_ERROR: ' + (e && e.message ? e.message : String(e)).slice(0, 300) });
 } finally {
   if (browser) await browser.close().catch(() => {});
 }
 
-async function firstVisible(page, selectors, timeout = 6000) {
+async function firstVisible(page, selectors, timeout = 8000) {
   for (const sel of selectors) {
     try {
       const locator = page.locator(sel).first();
       await locator.waitFor({ state: 'visible', timeout });
       return locator;
-    } catch (_) { /* try next */ }
+    } catch (_) {}
   }
   return null;
 }
 
 async function autoLogin(page, username, password) {
   try {
+    await page.goto('https://www.reddit.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await sleepy(4000);
     await page.goto('https://www.reddit.com/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    // New reddit: username/email first, then continue; then password.
-    const userField = await firstVisible(page, ['input#loginUsername', 'input[name="username"]', 'input[autocomplete="username"]']);
+    await sleepy(2000);
+    const userField = await firstVisible(page, ['input#loginUsername', 'input[name="username"]', 'input[autocomplete="username"]', 'input[type="text"]']);
     if (!userField) return { ok: false, error: 'SESSION_EXPIRED: could not reach the reddit login form to re-login.' };
     await userField.fill(username);
-    const passField = await firstVisible(page, ['input#loginPassword', 'input[type="password"]', 'input[name="password"]']);
-    if (!passField) return { ok: false, error: 'SESSION_EXPIRED: reddit login needs a password to re-login.' };
-    await passField.fill(password);
-    const loginBtn = await firstVisible(page, ['button[type="submit"]:has-text("Log in")', 'button:has-text("Log in")']);
-    if (!loginBtn) return { ok: false, error: 'SESSION_EXPIRED: could not click the reddit login button.' };
-    await loginBtn.click();
-    await sleepy(3000);
-    if (/\/login/.test(page.url())) {
-      return { ok: false, error: 'SESSION_EXPIRED: automatic re-login failed (likely a captcha or 2FA) — re-run node bin/browser/reddit-login.mjs.' };
+    await sleepy(400);
+    let passField = await firstVisible(page, ['input[type="password"]', 'input#loginPassword', 'input[name="password"]'], 3000);
+    if (!passField) {
+      const cont = await firstVisible(page, ['button[type="submit"]', 'button:has-text("Continue")'], 2500);
+      if (cont) await cont.click().catch(() => {});
+      await sleepy(900);
+      passField = await firstVisible(page, ['input[type="password"]', 'input#loginPassword'], 5000);
     }
-    const ctx = page.context();
-    await ctx.storageState({ path: sessionFile });
+    if (!passField) return { ok: false, error: 'SESSION_EXPIRED: no password field to re-login.' };
+    await passField.fill(password);
+    await sleepy(400);
+    const loginBtn = page.locator('button').filter({ hasText: 'Log In' }).first();
+    let readyEl = false;
+    for (let i = 0; i < 20; i++) {
+      if (await loginBtn.isEnabled().catch(() => false)) { readyEl = true; break; }
+      await sleepy(1000);
+    }
+    if (!readyEl) return { ok: false, error: 'SESSION_EXPIRED: Log In button never enabled.' };
+    await loginBtn.click().catch(() => {});
+    await sleepy(6000);
+    const names = (await page.context().cookies('https://www.reddit.com')).map((c) => c.name);
+    if (!names.includes('reddit_session')) return { ok: false, error: 'SESSION_EXPIRED: re-login did not produce a session.' };
+    await page.context().storageState({ path: sessionFile });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: 'SESSION_EXPIRED: auto re-login error: ' + (e && e.message ? e.message : String(e)).slice(0, 200) };
