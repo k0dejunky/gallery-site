@@ -1247,12 +1247,22 @@ class AutoPostQueue
             return false;
         }
 
+        $channel = AutoPosterConfig::channel($canonical);
+
+        // Reddit in browser mode is authorized by the operator's home worker
+        // (the share-button method), even before the OAuth API refresh token
+        // exists — otherwise the queue stops scheduling reddit posts and the
+        // cron marks them skipped.
+        if ($canonical === 'reddit' && ($channel['browser_enabled'] ?? '') === '1') {
+            return true;
+        }
+
         $clientClass = Platforms::clientClass($canonical);
         if ($clientClass === null) {
             return false;
         }
 
-        $client = new $clientClass(AutoPosterConfig::channel($canonical));
+        $client = new $clientClass($channel);
 
         return $client->isConfigured() && $client->isUserAuthorized();
     }
