@@ -19,9 +19,25 @@ jobs:
           php-version: ${{ matrix.php }}
           coverage: none
 
+      - name: Cache composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install dev tooling (phpstan/phpunit)
+        run: composer install --no-interaction --prefer-dist --no-progress
+
       - name: Lint every PHP file
         run: |
           find app config views bin tests -name '*.php' -print0 | xargs -0 -n1 php -l
 
       - name: Static smoke checks
         run: php tests/smoke.php
+
+      - name: PHPStan (static analysis, level 1 + baseline)
+        run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+
+      - name: PHPUnit (pure unit tests, no DB)
+        run: vendor/bin/phpunit --no-progress

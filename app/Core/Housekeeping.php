@@ -2,6 +2,8 @@
 
 namespace App\Core;
 
+use App\Models\EmailerConfig;
+
 /**
  * Scheduled housekeeping shared by the admin "Run now" button and the
  * unattended cron endpoint: expire stale subscriptions, remove long-abandoned
@@ -58,11 +60,28 @@ class Housekeeping
         $out['paypal_reconciled'] = $reconciled['activated']; // activations are the headline number
 
         // Subscriptions whose expiry passed while nobody was watching.
-        $stmt = Database::run(
-            "UPDATE subscriptions SET status = 'expired'
+        $expiredRows = Database::run(
+            "SELECT id FROM subscriptions
              WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP"
-        );
-        $out['expired_subs'] = $stmt ? $stmt->rowCount() : 0;
+        )->fetchAll();
+        $out['expired_subs'] = count($expiredRows);
+        if ($expiredRows !== []) {
+            $ids = array_column($expiredRows, 'id');
+            $marks = implode(',', array_fill(0, count($ids), '?'));
+            Database::run(
+                "UPDATE subscriptions SET status = 'expired' WHERE id IN ($marks)",
+                $ids
+            );
+            foreach ($ids as $expiredId) {
+                Lifecycle::onExpired((int) $expiredId);
+            }
+        }
+
+        // Renewal reminders (7 days out) and win-backs (7 days lapsed),
+        // gated by the emailer's lifecycle toggles.
+        $emailerCfg              = EmailerConfig::all();
+        $out['renewal_reminders'] = !empty($emailerCfg['lifecycle_renewal_reminders']) ? Lifecycle::runRenewalReminders(7) : 0;
+        $out['winbacks']          = !empty($emailerCfg['lifecycle_winbacks']) ? Lifecycle::runWinbacks(7) : 0;
 
         // Staging directories abandoned mid-upload for more than 72 hours.
         $base = $root . '/storage/uploads/pending';

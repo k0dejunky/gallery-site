@@ -381,6 +381,90 @@ class EmailQueue
     }
 
     /**
+     * Queue a single transactional email to one active user, bypassing the
+     * marketing opt-out (billing / account-critical mail). Optionally held
+     * until scheduled_at. Returns the email_queue id, or null when the user
+     * is missing/inactive.
+     */
+    public static function enqueueTx(int $userId, string $subject, string $html, string $text, ?string $scheduledAt = null): ?int
+    {
+        $userId = max(0, (int) $userId);
+        if ($userId <= 0) {
+            return null;
+        }
+
+        $email = (string) Database::run(
+            "SELECT email FROM users WHERE id = ? AND status = 'active' LIMIT 1",
+            [$userId]
+        )->fetchColumn();
+
+        if ($email === '') {
+            return null;
+        }
+
+        if ($scheduledAt !== null && $scheduledAt !== '') {
+            Database::run(
+                'INSERT INTO email_queue (audience, user_id, email, subject, html_body, text_body, scheduled_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)',
+                ['notification', $userId, $email, $subject, $html, $text, $scheduledAt]
+            );
+        } else {
+            Database::run(
+                'INSERT INTO email_queue (audience, user_id, email, subject, html_body, text_body)
+                 VALUES (?, ?, ?, ?, ?, ?)',
+                ['notification', $userId, $email, $subject, $html, $text]
+            );
+        }
+
+        return (int) Database::connection()->lastInsertId();
+    }
+
+    /**
+     * Exactly-once guard for lifecycle (dunning/win-back) email. Returns true
+     * when this (subscription_id, event_key) pair has NOT been sent before.
+     */
+    public static function lifecycleAlreadySent(int $subscriptionId, string $eventKey): bool
+    {
+        $row = Database::run(
+            'SELECT id FROM subscription_email_log WHERE subscription_id = ? AND event_key = ? LIMIT 1',
+            [$subscriptionId, $eventKey]
+        )->fetch();
+
+        return $row !== false;
+    }
+
+    /**
+     * Record that a lifecycle email was queued for a subscription.
+     */
+    public static function lifecycleRecord(int $subscriptionId, string $eventKey, int $emailQueueId): bool
+    {
+        $stmt = Database::run(
+            'INSERT INTO subscription_email_log (subscription_id, event_key, email_queue_id)
+             VALUES (?, ?, ?)',
+            [$subscriptionId, $eventKey, $emailQueueId]
+        );
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Per-event counts of lifecycle emails sent, for the admin emailer page.
+     *
+     * @return array<string,int>
+     */
+    public static function lifecycleStats(): array
+    {
+        $stats = [];
+        foreach (Database::run(
+            'SELECT event_key, COUNT(*) AS c FROM subscription_email_log GROUP BY event_key'
+        )->fetchAll() as $row) {
+            $stats[(string) $row['event_key']] = (int) $row['c'];
+        }
+
+        return $stats;
+    }
+
+    /**
      * Batch-insert queued rows 200 at a time so even a large mailing stays
      * inside a single prepared statement.
      *
@@ -409,6 +493,8 @@ class EmailQueue
 
     /**
      * Rows waiting to be emailed, oldest first, up to $limit per worker tick.
+     * Lifecycle rows can carry a scheduled_at (send no earlier than) and a
+     * next_attempt_at (retry backoff), both honoured here.
      */
     public static function queued(int $limit = 25): array
     {
@@ -417,6 +503,8 @@ class EmailQueue
         return Database::run(
             'SELECT * FROM email_queue
              WHERE status = ?
+               AND (scheduled_at IS NULL OR scheduled_at <= CURRENT_TIMESTAMP)
+               AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP)
              ORDER BY id ASC
              LIMIT ' . (int) $limit,
             ['queued']
@@ -488,9 +576,11 @@ class EmailQueue
     }
 
     /**
-     * Record a delivery failure for a row, keeping it fair until
-     * MAX_ATTEMPTS, then giving up. The snapshot body is preserved either way
-     * so the admin can inspect and retry it.
+     * Record a delivery failure for a row, keeping it queued until
+     * MAX_ATTEMPTS, with retry backoff (30 min then 2 h) so a transient SMTP
+     * outage drains slowly instead of hammering the mail server every tick.
+     * The snapshot body is preserved either way so the admin can inspect and
+     * retry it.
      */
     public static function markFailed(int $id, string $error): bool
     {
@@ -504,12 +594,19 @@ class EmailQueue
         }
 
         $attempts = (int) $row['attempts'] + 1;
-        $status   = $attempts >= self::MAX_ATTEMPTS ? 'failed' : 'queued';
+
+        if ($attempts >= self::MAX_ATTEMPTS) {
+            $status = 'failed';
+            $next   = null;
+        } else {
+            $status = 'queued';
+            $next   = date('Y-m-d H:i:s', time() + ($attempts === 1 ? 1800 : 7200));
+        }
 
         $stmt = Database::run(
-            'UPDATE email_queue SET attempts = ?, status = ?, error = ?
+            'UPDATE email_queue SET attempts = ?, status = ?, next_attempt_at = ?, error = ?
              WHERE id = ?',
-            [$attempts, $status, mb_substr($error, 0, 500) ?: 'Unknown delivery error', $id]
+            [$attempts, $status, $next, mb_substr($error, 0, 500) ?: 'Unknown delivery error', $id]
         );
 
         return $stmt->rowCount() > 0;

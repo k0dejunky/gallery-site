@@ -38,6 +38,16 @@ $isAuthPage = $isLoginPage
 $ageGateEnabled  = \App\Models\SiteConfig::ageGateEnabled();
 $ageGateRequired = $user === null && $ageGateEnabled && empty($_SESSION['age_verified']);
 $ageReturnTo     = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+
+// Google Analytics loads only after the visitor has given consent (a
+// first-party cookie set by the consent banner) AND has passed the 18+
+// gate (members are adults by definition). It never loads on the login,
+// signup or legal pages.
+$gaId         = trim((string) env_value('GA_ID', ''));
+$gaConsent    = ($_COOKIE['ga_consent'] ?? '') === '1';
+$gaPageOk     = !in_array($currentPath, [url('/login'), url('/signup'), url('/terms'), url('/privacy')], true);
+$gaAllowed    = $gaId !== '' && $gaConsent && $gaPageOk && ($user !== null || !empty($_SESSION['age_verified']));
+$gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -46,15 +56,9 @@ $ageReturnTo     = (string) ($_SERVER['REQUEST_URI'] ?? '/');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="rating" content="RTA-5042-1996-1400-1577-RTA">
     <meta name="icra" content="nudity, sexual content, adult content">
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-H9LH86H11C"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag() { dataLayer.push(arguments); }
-        gtag('js', new Date());
-
-        gtag('config', 'G-H9LH86H11C');
-    </script>
+    <?php if ($gaAllowed ?? false): ?>
+    <?php require __DIR__ . '/partials/ga.php'; ?>
+    <?php endif; ?>
     <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') : e(config('app.site_name')) ?></title>
     <?php if (isset($metaDescription) && $metaDescription !== ''): ?>
         <meta name="description" content="<?= e($metaDescription) ?>">
@@ -245,7 +249,7 @@ $ageReturnTo     = (string) ($_SERVER['REQUEST_URI'] ?? '/');
     <div class="age-gate-panel">
         <p class="age-gate-logos">Adults only &middot; 18+</p>
         <h1 id="age-gate-title">Are you over 18?</h1>
-        <p>This site contains sexually explicit material intended for adults. By entering you confirm you are at least 18 (or 21 where applicable) and you agree to the <a class="thin-link" href="<?= url('/terms') ?>">Terms of Service</a>.</p>
+        <p>This site contains sexually explicit material intended for adults. By entering you confirm you are at least 18 (or 21 where applicable) and you agree to the <a class="thin-link" href="<?= url('/terms') ?>">Terms of Service</a>. <a class="thin-link" href="<?= url('/2257') ?>">2257</a> &middot; <a class="thin-link" href="<?= url('/dmca') ?>">DMCA</a></p>
         <form method="post" action="<?= url('/age-verify') ?>">
             <?= csrf_field() ?>
             <input type="hidden" name="return_to" value="<?= e($ageReturnTo) ?>">
@@ -554,6 +558,8 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
     })();
     </script>
 <?php endif; ?>
+    <?php require __DIR__ . '/partials/footer.php'; ?>
+    <?php require __DIR__ . '/partials/consent_banner.php'; ?>
     <script>try{var p=JSON.parse(localStorage.getItem('galleryDisplayPrefs')||'{}');var v=p.view||'grid';var s=p.size||'md';document.documentElement.classList.add('g-view-'+v);document.documentElement.classList.add('g-size-'+s);if(p.masonry)document.documentElement.classList.add('g-masonry');}catch(e){document.documentElement.classList.add('g-view-grid');document.documentElement.classList.add('g-size-md');}</script>
     <?php require __DIR__ . '/partials/tour_targets.php'; ?>
     <script src="<?= url('/assets/js/user.js') ?>?v=16" defer></script>

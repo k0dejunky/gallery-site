@@ -349,14 +349,18 @@ class User
 
     /**
      * Lifetime revenue from all active, completed, or cancelled subscriptions.
+     * Uses the actual charged price (price_paid, which reflects sales/codes)
+     * rather than the plan list price; 'completed' was never a valid status in
+     * the subscriptions ENUM (pending/active/cancelled/expired/past_due), so
+     * it has been dropped.
      */
     public static function lifetimeRevenue(int $userId): float
     {
         return (float) Database::run(
-            'SELECT COALESCE(SUM(p.price), 0)
+            'SELECT COALESCE(SUM(COALESCE(NULLIF(s.price_paid, 0), p.price)), 0)
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
-             WHERE s.user_id = ? AND s.status IN (\'active\',\'completed\',\'cancelled\')',
+             WHERE s.user_id = ? AND s.status IN (\'active\', \'cancelled\')',
             [$userId]
         )->fetchColumn();
     }

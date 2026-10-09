@@ -55,3 +55,5 @@ __pycache__/
 
 # Runtime cache files (DB size snapshot etc., written by the web process)
 /storage/cache/
+vendor/
+.phpunit.cache/

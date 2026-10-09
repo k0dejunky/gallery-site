@@ -116,9 +116,11 @@ $ldJson = [
         // sandbox client id and a single sandbox subscription plan, so real
         // checkout does not create production subscriptions by accident.
         $paypalTest = false;
+        $paypalCfg  = [];
         foreach (($paymentProcessors ?? []) as $__pp) {
             if (strtolower((string) ($__pp['provider'] ?? '')) === 'paypal') {
                 $paypalTest = strtolower((string) ($__pp['mode'] ?? 'live')) !== 'live';
+                $paypalCfg  = \App\Models\PaymentProcessor::decodeConfig($__pp);
                 break;
             }
         }
@@ -129,14 +131,29 @@ $ldJson = [
                 break;
             }
         }
+        // PayPal client id + per-tier plan ids come from the paypal processor's
+        // config_json (single source of truth on each box); nothing
+        // environment-specific is hardcoded here.
+        $paypalMode  = $paypalTest ? 'test' : 'live';
         $paypalClientId = $paypalTest
-            ? 'AWjv6zqSB5Ix5xpb9D8PWn2RFO3ELiglsL_JQqOM9BCYDluL1I_uN0oRCickXa7-BPgIrXZ2p8ltnS7-'
-            : 'BAAulxhXtOW_C1MbdQ9ieSDNNQYJhjbXAknX4UujE8n02reztiOBMnqH8cw0r-ZyKT9aIU0zZslsm3hyZc';
-        $paypalSilverPlan    = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-2EE95782UN3086035NKHSZ4A';
-        $paypalGoldPlan      = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-61A81431CY9628522NKINSBY';
-        $paypalPlatinumPlan  = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-61D79162UG274461KNKIY55I';
-        $paypalChatPlan      = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-8W950200CP3643916NK2AXBI';
-        $paypalContainerBase = $paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : '';
+            ? trim((string) ($paypalCfg['sandbox_client_id'] ?? ''))
+            : trim((string) ($paypalCfg['client_id'] ?? ''));
+        $paypalPlanIds = is_array($paypalCfg['plan_ids'] ?? null) ? $paypalCfg['plan_ids'] : [];
+        $ppId = static function (string $slug) use ($paypalPlanIds, $paypalTest): string {
+            $entry = $paypalPlanIds[$slug] ?? null;
+            if (is_array($entry)) {
+                return trim((string) ($entry[$paypalTest ? 'test' : 'live'] ?? ''));
+            }
+            return trim((string) ($entry ?? ''));
+        };
+        $paypalSilverPlan   = $ppId('silver');
+        $paypalGoldPlan     = $ppId('gold');
+        $paypalPlatinumPlan = $ppId('platinum');
+        $paypalChatPlan     = $ppId('chat');
+        $silverContainer    = 'paypal-silver-' . $paypalMode;
+        $goldContainer      = 'paypal-gold-' . $paypalMode;
+        $platinumContainer  = 'paypal-platinum-' . $paypalMode;
+        $chatContainer      = 'paypal-chat-' . $paypalMode;
         // Plan display names sent to PayPal as the subscription's custom_id,
         // so the buyer and the PayPal webhook can identify which plan a
         // subscription was for.
@@ -181,22 +198,22 @@ $ldJson = [
                         <button type="button" class="btn btn-disabled" disabled style="order:2;">Unavailable</button>
                     <?php elseif (strtolower((string) ($plan['slug'] ?? $plan['name'])) === 'silver'): ?>
                         <div style="order:2;">
-                            <div id="paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-2EE95782UN3086035NKHSZ4A') ?>"></div>
+                            <div id="<?= e($silverContainer) ?>"></div>
                             <input type="hidden" name="_token" value="<?= e(\App\Core\Csrf::token()) ?>" data-paypal-csrf>
                         </div>
                     <?php elseif (strtolower((string) ($plan['slug'] ?? $plan['name'])) === 'gold'): ?>
                         <div style="order:2;">
-                            <div id="paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-gold' : 'P-61A81431CY9628522NKINSBY') ?>"></div>
+                            <div id="<?= e($goldContainer) ?>"></div>
                             <input type="hidden" name="_token" value="<?= e(\App\Core\Csrf::token()) ?>" data-paypal-csrf-gold>
                         </div>
                     <?php elseif (strtolower((string) ($plan['slug'] ?? $plan['name'])) === 'platinum'): ?>
                         <div style="order:2;">
-                            <div id="paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-platinum' : 'P-61D79162UG274461KNKIY55I') ?>"></div>
+                            <div id="<?= e($platinumContainer) ?>"></div>
                             <input type="hidden" name="_token" value="<?= e(\App\Core\Csrf::token()) ?>" data-paypal-csrf-platinum>
                         </div>
                     <?php elseif (strtolower((string) ($plan['slug'] ?? $plan['name'])) === 'chat-add-on'): ?>
                         <div style="order:2;">
-                            <div id="paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-chat' : 'P-8W950200CP3643916NK2AXBI') ?>"></div>
+                            <div id="<?= e($chatContainer) ?>"></div>
                             <input type="hidden" name="_token" value="<?= e(\App\Core\Csrf::token()) ?>" data-paypal-csrf-chat>
                         </div>
                     <?php else: ?>
@@ -258,7 +275,7 @@ $ldJson = [
                 })
                 .catch(function () { alert('We could not record your subscription. Please contact support.'); });
         }
-    }).render('#paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA' : 'P-2EE95782UN3086035NKHSZ4A') ?>');
+    }).render('<?= e($silverContainer) ?>');
 }());
 </script>
 <?php endif; ?>
@@ -266,7 +283,7 @@ $ldJson = [
 <?php if (!$hasActive && $pendingSub === null): ?>
     <script>
     (function () {
-        var goldBtn = document.getElementById('paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-gold' : 'P-61A81431CY9628522NKINSBY') ?>');
+        var goldBtn = document.getElementById('<?= e($goldContainer) ?>');
         if (!goldBtn || !window.paypal) return;
         paypal.Buttons({
             style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe' },
@@ -288,13 +305,13 @@ $ldJson = [
                     })
                     .catch(function () { alert('We could not record your subscription. Please contact support.'); });
             }
-        }).render('#paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-gold' : 'P-61A81431CY9628522NKINSBY') ?>');
+        }).render('<?= e($goldContainer) ?>');
     }());
     </script>
 <?php endif; ?>
     <script>
     (function () {
-        var platinumBtn = document.getElementById('paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-platinum' : 'P-61D79162UG274461KNKIY55I') ?>');
+        var platinumBtn = document.getElementById('<?= e($platinumContainer) ?>');
         if (!platinumBtn || !window.paypal) return;
         paypal.Buttons({
             style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe' },
@@ -316,13 +333,13 @@ $ldJson = [
                     })
                     .catch(function () { alert('We could not record your subscription. Please contact support.'); });
             }
-        }).render('#paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-platinum' : 'P-61D79162UG274461KNKIY55I') ?>');
+        }).render('<?= e($platinumContainer) ?>');
     }());
     </script>
 
     <script>
     (function () {
-        var chatBtn = document.getElementById('paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-chat' : 'P-8W950200CP3643916NK2AXBI') ?>');
+        var chatBtn = document.getElementById('<?= e($chatContainer) ?>');
         if (!chatBtn || !window.paypal) return;
         paypal.Buttons({
             style: { shape: 'rect', color: 'gold', layout: 'vertical', label: 'subscribe' },
@@ -344,7 +361,7 @@ $ldJson = [
                     })
                     .catch(function () { alert('We could not record your subscription. Please contact support.'); });
             }
-        }).render('#paypal-button-container-<?= e($paypalTest ? 'P-0UT83287UA4835826NKNTWMA-chat' : 'P-8W950200CP3643916NK2AXBI') ?>');
+        }).render('<?= e($chatContainer) ?>');
     }());
     </script>
 

@@ -77,6 +77,64 @@ class StaticPageController extends Controller
     }
 
     /**
+     * Render the 18 U.S.C. § 2257 record-keeping statement.
+     */
+    public function notice2257(): void
+    {
+        $this->view('2257', [
+            'title'            => '18 U.S.C. § 2257 Record-Keeping Statement',
+            'siteName'         => (string) config('app.site_name'),
+            'supportEmail'     => $this->supportContact(),
+            'lastUpdated'      => 'October 8, 2026',
+            'metaDescription'  => 'The 18 U.S.C. § 2257 record-keeping statement for ' . config('app.site_name') . '.',
+            'canonicalUrl'     => absolute_url('/2257'),
+            'ogImage'          => $this->staticOgImage(),
+        ]);
+    }
+
+    /**
+     * Render the DMCA / copyright takedown policy.
+     */
+    public function dmca(): void
+    {
+        $this->view('dmca', [
+            'title'            => 'DMCA Takedown Policy',
+            'siteName'         => (string) config('app.site_name'),
+            'supportEmail'     => $this->supportContact(),
+            'lastUpdated'      => 'October 8, 2026',
+            'metaDescription'  => 'How to request removal of infringing content from ' . config('app.site_name') . ' under the DMCA.',
+            'canonicalUrl'     => absolute_url('/dmca'),
+            'ogImage'          => $this->staticOgImage(),
+        ]);
+    }
+
+    /**
+     * Render the report-abuse / safety page.
+     */
+    public function reportAbuse(): void
+    {
+        $this->view('report-abuse', [
+            'title'            => 'Report Abuse',
+            'siteName'         => (string) config('app.site_name'),
+            'supportEmail'     => $this->supportContact(),
+            'lastUpdated'      => 'October 8, 2026',
+            'metaDescription'  => 'How to report content on ' . config('app.site_name') . ' that you believe is abusive or violates our policies.',
+            'canonicalUrl'     => absolute_url('/report-abuse'),
+            'ogImage'          => $this->staticOgImage(),
+        ]);
+    }
+
+    /**
+     * The compliance contact used as the interim 2257 records custodian and
+     * DMCA designated agent. Overridable per box via env.
+     */
+    private function supportContact(): string
+    {
+        $fromEnv = trim((string) env_value('COMPLIANCE_EMAIL', ''));
+        return $fromEnv !== '' ? $fromEnv : ('support@' . (string) config('app.site_name') . '.com');
+    }
+
+    /**
      * The absolute site base (APP_URL anchored, request fallback) used by the
      * sitemap and feed builders.
      */
@@ -105,7 +163,7 @@ class StaticPageController extends Controller
         // Static pages render 200 for guests; content pages now serve a
         // public, indexable blurred preview too, so they belong in the map.
         $entries = [];
-        foreach (['/', '/about', '/terms', '/privacy', '/membership'] as $staticPath) {
+        foreach (['/', '/about', '/terms', '/privacy', '/2257', '/dmca', '/report-abuse', '/membership'] as $staticPath) {
             $entries[] = [$staticPath, null];
         }
 

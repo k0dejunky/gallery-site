@@ -55,6 +55,8 @@ class EmailerConfig
             'include_non_subscribers'=> true,
             'subject_subscriber'     => 'New in the {site} gallery — {count} fresh uploads',
             'subject_non_subscriber' => 'A blurred peek at what\'s new on {site}',
+            'lifecycle_renewal_reminders' => true,
+            'lifecycle_winbacks'          => true,
             'last_sent_at'           => null,
             'last_sent_photo_id'     => 0,
         ];
@@ -91,6 +93,8 @@ class EmailerConfig
         $d['include_non_subscribers'] = !empty($data['include_non_subscribers']);
         $d['subject_subscriber']      = trim((string) ($data['subject_subscriber'] ?? $d['subject_subscriber']));
         $d['subject_non_subscriber']  = trim((string) ($data['subject_non_subscriber'] ?? $d['subject_non_subscriber']));
+        $d['lifecycle_renewal_reminders'] = !array_key_exists('lifecycle_renewal_reminders', $data) ? true : !empty($data['lifecycle_renewal_reminders']);
+        $d['lifecycle_winbacks']          = !array_key_exists('lifecycle_winbacks', $data) ? true : !empty($data['lifecycle_winbacks']);
 
         $lastSent = (string) ($data['last_sent_at'] ?? '');
         $d['last_sent_at'] = self::validatedUtcDatetime($lastSent);
@@ -130,6 +134,8 @@ class EmailerConfig
         $d['include_non_subscribers'] = !empty($in['include_non_subscribers']);
         $d['subject_subscriber']      = trim((string) ($in['subject_subscriber'] ?? ''));
         $d['subject_non_subscriber']  = trim((string) ($in['subject_non_subscriber'] ?? ''));
+        $d['lifecycle_renewal_reminders'] = !empty($in['lifecycle_renewal_reminders']);
+        $d['lifecycle_winbacks']          = !empty($in['lifecycle_winbacks']);
         $d['last_sent_at']            = $current['last_sent_at'];
         $d['last_sent_photo_id']      = $current['last_sent_photo_id'];
 

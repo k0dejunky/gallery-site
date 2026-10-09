@@ -4,9 +4,11 @@ namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Core\Database;
+use App\Core\Lifecycle;
 use App\Core\Mailer;
 use App\Core\Request;
 use App\Models\PaymentProcessor;
+use App\Models\Purchase;
 use App\Models\Subscription;
 use App\Models\AuditLog;
 
@@ -413,8 +415,25 @@ class WebhookController extends Controller
         $kind     = (string) $notification['kind'];
         $btId     = (string) $notification['subscription_id'];
         $btStatus = (string) $notification['status'];
+        $txId     = (string) ($notification['transaction_id'] ?? '');
 
         error_log('[webhooks/braintree] kind=' . $kind . ' subscription=' . $btId . ' status=' . $btStatus);
+
+        // One-off transaction events (PPV unlocks / tips): reconcile by the
+        // transaction id stored on the pending purchase.
+        if (str_starts_with($kind, 'transaction_')) {
+            if ($txId !== ''
+                && ($kind === 'transaction_settled' || $kind === 'transaction_settlement_declined'
+                    || $kind === 'transaction_failed' || $kind === 'transaction_refunded')) {
+                if ($kind === 'transaction_settled') {
+                    Purchase::settleByReference('braintree', $txId);
+                } else {
+                    Purchase::refundByReference('braintree', $txId);
+                }
+            }
+            echo 'ok';
+            return;
+        }
 
         if ($btId === '') {
             echo 'no subscription id in notification';
@@ -484,6 +503,7 @@ class WebhookController extends Controller
                     null,
                     ['bt_subscription_id' => $btId, 'kind' => $kind]
                 );
+                Lifecycle::onPastDue($subId);
                 echo 'flagged';
                 return;
 
@@ -501,6 +521,7 @@ class WebhookController extends Controller
                     null,
                     ['bt_subscription_id' => $btId, 'kind' => $kind]
                 );
+                Lifecycle::onExpired($subId);
                 echo 'expired';
                 return;
 
@@ -515,6 +536,7 @@ class WebhookController extends Controller
                     null,
                     ['bt_subscription_id' => $btId, 'kind' => $kind]
                 );
+                Lifecycle::onPaymentFailed($subId);
                 error_log('[webhooks/braintree] payment failed for subscription ' . $subId . ' (BT-' . $btId . ')');
                 echo 'noted';
                 return;
@@ -625,6 +647,28 @@ class WebhookController extends Controller
         $resourceId = (string) ($event['resource']['id'] ?? '');
         $ref        = 'PAYPAL-' . $resourceId;
 
+        // One-off order captures (PPV unlocks / tips): no subscription row is
+        // involved. The order id was stored on the pending purchase as
+        // gateway_ref, so settlement/refund events reconcile it idempotently.
+        if (in_array($eventType, [
+            'PAYMENT.CAPTURE.COMPLETED',
+            'PAYMENT.CAPTURE.REFUNDED',
+            'PAYMENT.CAPTURE.REVERSED',
+            'PAYMENT.CAPTURE.DENIED',
+            'PAYMENT.CAPTURE.PENDING',
+        ], true)) {
+            $orderId = (string) ($event['resource']['supplementary_data']['related_ids']['order_id'] ?? '');
+            if ($orderId !== '') {
+                if ($eventType === 'PAYMENT.CAPTURE.COMPLETED') {
+                    Purchase::settleByReference('paypal', $orderId);
+                } else {
+                    Purchase::refundByReference('paypal', $orderId);
+                }
+            }
+            echo 'ok';
+            return;
+        }
+
         $subscription = $this->findByPayPalRef($ref);
         if ($subscription === null) {
             error_log('[webhooks/paypal] no matching subscription for ' . $ref . ' (' . $eventType . ')');
@@ -673,6 +717,7 @@ class WebhookController extends Controller
                     null,
                     ['paypal_subscription_id' => $resourceId, 'event' => $eventType]
                 );
+                Lifecycle::onPastDue($subId);
                 echo 'flagged';
                 return;
 
@@ -690,10 +735,16 @@ class WebhookController extends Controller
                     null,
                     ['paypal_subscription_id' => $resourceId, 'event' => $eventType]
                 );
+                Lifecycle::onExpired($subId);
                 echo 'expired';
                 return;
 
             case 'PAYMENT.SALE.DENIED':
+                Lifecycle::onPaymentFailed($subId);
+                error_log('[webhooks/paypal] ' . $eventType . ' for subscription ' . $subId);
+                echo 'noted';
+                return;
+
             case 'PAYMENT.SALE.REFUNDED':
             case 'PAYMENT.SALE.REVERSED':
                 error_log('[webhooks/paypal] ' . $eventType . ' for subscription ' . $subId);

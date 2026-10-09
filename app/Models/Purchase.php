@@ -27,15 +27,90 @@ class Purchase
         string $gateway = 'offline',
         ?string $gatewayRef = null,
         ?string $note = null,
-        string $status = self::STATUS_PAID
+        string $status = self::STATUS_PAID,
+        ?int $paymentProcessorId = null,
+        ?string $currency = null
     ): int {
         Database::run(
-            'INSERT INTO purchases (user_id, item_type, item_id, amount, currency, gateway, gateway_ref, note, status, created_at)
-             VALUES (?, ?, ?, ?, \'USD\', ?, ?, ?, ?, NOW())',
-            [$userId, $itemType, $itemId, $amount, $gateway, $gatewayRef, $note, $status]
+            'INSERT INTO purchases (user_id, item_type, item_id, amount, currency, gateway, gateway_ref, payment_processor_id, note, status, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
+            [$userId, $itemType, $itemId, $amount, $currency ?? 'USD', $gateway, $gatewayRef, $paymentProcessorId, $note, $status]
         );
 
         return (int) Database::connection()->lastInsertId();
+    }
+
+    /**
+     * Settle an in-flight card charge: flips a pending purchase to paid (or
+     * granted) when the (gateway, gateway_ref) pair matches an existing
+     * pending row. Idempotent — a duplicate settlement event is a no-op.
+     * Returns the settled purchase id, or null when nothing matched.
+     */
+    public static function settleByReference(string $gateway, string $gatewayRef): ?int
+    {
+        $row = Database::run(
+            "SELECT id FROM purchases
+             WHERE gateway = ? AND gateway_ref = ? AND status = 'pending'
+             ORDER BY id ASC LIMIT 1",
+            [$gateway, $gatewayRef]
+        )->fetch();
+
+        if ($row === false) {
+            return null;
+        }
+
+        $id = (int) $row['id'];
+        Database::run("UPDATE purchases SET status = 'paid', updated_at = NOW() WHERE id = ?", [$id]);
+
+        return $id;
+    }
+
+    /**
+     * Settle a purchase we already identified by id (synchronous card charge).
+     */
+    public static function settleById(int $id): void
+    {
+        Database::run("UPDATE purchases SET status = 'paid', updated_at = NOW() WHERE id = ? AND status = 'pending'", [$id]);
+    }
+
+    /**
+     * Revoke an unlock after a refund/chargeback (paid/granted -> refunded).
+     * Idempotent via the by-reference lookup.
+     */
+    public static function refundByReference(string $gateway, string $gatewayRef): bool
+    {
+        $stmt = Database::run(
+            "UPDATE purchases SET status = 'refunded', updated_at = NOW()
+             WHERE gateway = ? AND gateway_ref = ? AND status IN ('paid', 'granted')",
+            [$gateway, $gatewayRef]
+        );
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * One-off revenue in a date window, split per item type (gallery/tip),
+     * for the earnings dashboard.
+     *
+     * @return array{gallery: float, tip: float, total: float}
+     */
+    public static function totalsBetween(string $from, string $to): array
+    {
+        $rows = Database::run(
+            "SELECT item_type, COALESCE(SUM(amount), 0) AS total FROM purchases
+             WHERE status IN ('paid', 'granted') AND created_at >= ? AND created_at < ?
+             GROUP BY item_type",
+            [$from, $to]
+        )->fetchAll();
+
+        $result = ['gallery' => 0.0, 'tip' => 0.0, 'total' => 0.0];
+        foreach ($rows as $row) {
+            $v = (float) ($row['total'] ?? 0);
+            $result[(string) ($row['item_type'] ?? '') === 'tip' ? 'tip' : 'gallery'] = $v;
+            $result['total'] += $v;
+        }
+
+        return $result;
     }
 
     /**
@@ -117,5 +192,35 @@ public static function setStatus(int $id, string $status): void
         )->fetch();
 
         return (float) ($row['total'] ?? 0);
+    }
+
+    /**
+     * Per-month one-off revenue (paid/granted) for the earnings dashboard.
+     *
+     * @return array<string,array{gallery: float, tip: float, total: float}>
+     */
+    public static function seriesBetween(string $from, string $to): array
+    {
+        $rows = Database::run(
+            "SELECT DATE_FORMAT(created_at, '%Y-%m') AS ym, item_type, COALESCE(SUM(amount), 0) AS total
+             FROM purchases
+             WHERE status IN ('paid', 'granted') AND created_at >= ? AND created_at < ?
+             GROUP BY ym, item_type ORDER BY ym ASC",
+            [$from, $to]
+        )->fetchAll();
+
+        $series = [];
+        foreach ($rows as $row) {
+            $ym   = (string) $row['ym'];
+            $v    = (float) ($row['total'] ?? 0);
+            if (!isset($series[$ym])) {
+                $series[$ym] = ['gallery' => 0.0, 'tip' => 0.0, 'total' => 0.0];
+            }
+            $key = (string) ($row['item_type'] ?? '') === 'tip' ? 'tip' : 'gallery';
+            $series[$ym][$key] = $v;
+            $series[$ym]['total'] += $v;
+        }
+
+        return $series;
     }
 }

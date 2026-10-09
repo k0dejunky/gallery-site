@@ -542,12 +542,27 @@ CREATE TABLE IF NOT EXISTS email_queue (
     text_body  TEXT NULL,
     status     ENUM('queued','sent','failed') NOT NULL DEFAULT 'queued',
     attempts   TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    next_attempt_at DATETIME NULL DEFAULT NULL,
     error      VARCHAR(500) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    scheduled_at DATETIME NULL DEFAULT NULL,
     sent_at    DATETIME NULL,
     INDEX idx_email_queue_status (status),
+    INDEX idx_email_queue_due (status, scheduled_at, next_attempt_at),
     INDEX idx_email_queue_audience (audience),
     CONSTRAINT fk_email_queue_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS subscription_email_log (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    subscription_id INT NOT NULL,
+    event_key VARCHAR(40) NOT NULL,
+    email_queue_id BIGINT UNSIGNED NULL,
+    sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_sub_email_event (subscription_id, event_key),
+    KEY idx_sel_event (event_key),
+    KEY idx_sel_subscription (subscription_id),
+    CONSTRAINT fk_sel_queue FOREIGN KEY (email_queue_id) REFERENCES email_queue(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, level, active) VALUES
@@ -972,12 +987,15 @@ CREATE TABLE IF NOT EXISTS purchases (
     currency    CHAR(3) NOT NULL DEFAULT 'USD',
     gateway     VARCHAR(40) NOT NULL DEFAULT 'offline',
     gateway_ref VARCHAR(255) NULL,
+    payment_processor_id INT UNSIGNED NULL DEFAULT NULL,
     note        TEXT NULL,
     status      ENUM('pending','paid','granted','refunded') NOT NULL DEFAULT 'paid',
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NULL DEFAULT NULL,
     INDEX idx_purchases_user (user_id, created_at),
     INDEX idx_purchases_item (item_type, item_id),
     INDEX idx_purchases_status (status),
+    UNIQUE KEY uq_purchases_gateway_ref (gateway, gateway_ref),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

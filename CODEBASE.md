@@ -282,6 +282,11 @@ edit `versionName`/`versionCode` in `app/build.gradle.kts`, publish the signed
 APK as `public/assets/apk/OperatorChat-v{version}.apk`, and update
 `public/assets/apk/operator-chat-version.json`.
 
+Repo hygiene: only the latest and the immediately-previous APK are kept in git
+(older builds were pruned to shrink the repo). When publishing a new build,
+`git rm` the oldest tracked APK so exactly two binaries + the manifest remain.
+
+
 ---
 
 ## 11. Chat / AI / trainer

@@ -1,0 +1,136 @@
+parameters:
+	ignoreErrors:
+		-
+			message: "#^Cannot unset offset 'rebuild_error' on array\\{adapter_checksum\\: string, base_model\\: string, pair_count\\: int, trained_at\\: non\\-falsy\\-string\\}\\.$#"
+			count: 1
+			path: app/Controllers/ChatBridgeController.php
+
+		-
+			message: "#^Variable \\$photo might not be defined\\.$#"
+			count: 1
+			path: app/Controllers/CommentController.php
+
+		-
+			message: "#^Call to private static method connection\\(\\) of class App\\\\Core\\\\Cache\\.$#"
+			count: 1
+			path: app/Controllers/HealthController.php
+
+		-
+			message: "#^Variable \\$subscriptionId might not be defined\\.$#"
+			count: 1
+			path: app/Controllers/MembershipController.php
+
+		-
+			message: "#^Variable \\$saleId might not be defined\\.$#"
+			count: 1
+			path: app/Controllers/SalesController.php
+
+		-
+			message: "#^Anonymous function has an unused use \\$now\\.$#"
+			count: 1
+			path: app/Controllers/SystemController.php
+
+		-
+			message: "#^Call to an undefined method App\\\\Controllers\\\\WebhookController\\:\\:adminAlert\\(\\)\\.$#"
+			count: 1
+			path: app/Controllers/WebhookController.php
+
+		-
+			message: "#^Constant SECP256K1_CONTEXT_SIGN not found\\.$#"
+			count: 1
+			path: app/Core/CryptoSigner.php
+
+		-
+			message: "#^Constant SECP256K1_CONTEXT_VERIFY not found\\.$#"
+			count: 1
+			path: app/Core/CryptoSigner.php
+
+		-
+			message: "#^Function secp256k1_context_create not found\\.$#"
+			count: 1
+			path: app/Core/CryptoSigner.php
+
+		-
+			message: "#^Function secp256k1_ec_pubkey_create not found\\.$#"
+			count: 1
+			path: app/Core/CryptoSigner.php
+
+		-
+			message: "#^Function secp256k1_ec_pubkey_serialize not found\\.$#"
+			count: 1
+			path: app/Core/CryptoSigner.php
+
+		-
+			message: "#^Function secp256k1_ecdsa_recoverable_signature_serialize_compact not found\\.$#"
+			count: 1
+			path: app/Core/CryptoSigner.php
+
+		-
+			message: "#^Function secp256k1_ecdsa_sign_recoverable not found\\.$#"
+			count: 1
+			path: app/Core/CryptoSigner.php
+
+		-
+			message: "#^Function secp256k1_schnorrsig_serialize not found\\.$#"
+			count: 1
+			path: app/Core/CryptoSigner.php
+
+		-
+			message: "#^Function secp256k1_schnorrsig_sign32 not found\\.$#"
+			count: 1
+			path: app/Core/CryptoSigner.php
+
+		-
+			message: "#^Anonymous function has an unused use \\$root\\.$#"
+			count: 3
+			path: app/Core/SmokeChecks.php
+
+		-
+			message: "#^Variable \\$mediaIds in empty\\(\\) always exists and is not falsy\\.$#"
+			count: 1
+			path: app/Models/AutoPostQueue.php
+
+		-
+			message: "#^Call to function compact\\(\\) contains undefined variable \\$items\\.$#"
+			count: 1
+			path: app/Models/Gallery.php
+
+		-
+			message: "#^Call to function compact\\(\\) contains undefined variable \\$pages\\.$#"
+			count: 1
+			path: app/Models/Gallery.php
+
+		-
+			message: "#^Call to function compact\\(\\) contains undefined variable \\$total\\.$#"
+			count: 1
+			path: app/Models/Gallery.php
+
+		-
+			message: "#^Anonymous function has an unused use \\$kind\\.$#"
+			count: 1
+			path: app/Models/Photo.php
+
+		-
+			message: "#^Anonymous function has an unused use \\$limit\\.$#"
+			count: 1
+			path: app/Models/Photo.php
+
+		-
+			message: "#^Call to static method deleteIfOrphan\\(\\) on an unknown class Photo\\.$#"
+			count: 1
+			path: bin/photo_edit_worker.php
+
+		-
+			message: "#^Call to static method find\\(\\) on an unknown class Photo\\.$#"
+			count: 1
+			path: bin/photo_edit_worker.php
+
+		-
+			message: "#^Call to static method updateCaption\\(\\) on an unknown class Photo\\.$#"
+			count: 1
+			path: bin/photo_edit_worker.php
+
+		-
+			message: "#^Anonymous function has an unused use \\$runId\\.$#"
+			count: 1
+			path: bin/test_runner.php

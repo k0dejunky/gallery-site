@@ -44,7 +44,7 @@
 
         <p class="auth-links"><?= $authLinksHtml ?></p>
         <p class="muted" style="text-align:center;font-size:0.8rem;margin-bottom:0;">
-            <a href="<?= url('/terms') ?>">Terms of Service</a> &middot; <a href="<?= url('/privacy') ?>">Privacy Policy</a> &middot; <a href="<?= url('/about') ?>">About Us</a>
+            <a href="<?= url('/terms') ?>">Terms of Service</a> &middot; <a href="<?= url('/privacy') ?>">Privacy Policy</a> &middot; <a href="<?= url('/2257') ?>">2257</a> &middot; <a href="<?= url('/dmca') ?>">DMCA</a> &middot; <a href="<?= url('/about') ?>">About Us</a>
         </p>
     </div>
 

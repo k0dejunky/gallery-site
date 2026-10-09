@@ -115,6 +115,7 @@ class MembershipController extends Controller
             'hasActive'     => $activeSub !== null,
             'activeSub'     => $activeSub,
             'pendingSub'    => Subscription::pendingFor($userId),
+            'user'          => $user,
         ]);
     }
 
@@ -197,7 +198,7 @@ class MembershipController extends Controller
 
         // Override the Apache-set CSP so Braintree's external JS/CDN can
         // load on this page. This header replaces the one Apache sends.
-        header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://js.braintreegateway.com https://www.googletagmanager.com; font-src 'self' data: https://assets.braintreegateway.com; media-src 'self' blob:; connect-src 'self' https://api.braintreegateway.com https://www.google-analytics.com https://analytics.google.com; frame-src https://client-analytics.braintreegateway.com https://www.sandbox.paypal.com https://www.paypal.com; frame-ancestors 'self'");
+        header("Content-Security-Policy: default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://js.braintreegateway.com; font-src 'self' data: https://assets.braintreegateway.com; media-src 'self' blob:; connect-src 'self' https://api.braintreegateway.com; frame-src https://client-analytics.braintreegateway.com https://www.sandbox.paypal.com https://www.paypal.com; frame-ancestors 'self'");
 
         $this->viewStandalone('membership/braintree_checkout', [
             'plan'      => $plan,

@@ -43,6 +43,7 @@ class EmailerController extends MembershipAdminController
             'samples'             => $samples,
             'queueCounts'         => EmailQueue::statusCounts(),
             'recent'              => EmailQueue::recent(50),
+            'lifecycleStats'      => EmailQueue::lifecycleStats(),
         ]);
     }
 
@@ -63,6 +64,8 @@ class EmailerController extends MembershipAdminController
             'include_non_subscribers' => $this->request->post('include_non_subscribers') !== null,
             'subject_subscriber'      => (string) $this->request->post('subject_subscriber', ''),
             'subject_non_subscriber'  => (string) $this->request->post('subject_non_subscriber', ''),
+            'lifecycle_renewal_reminders' => $this->request->post('lifecycle_renewal_reminders') !== null,
+            'lifecycle_winbacks'          => $this->request->post('lifecycle_winbacks') !== null,
         ]);
 
         $this->flash('success', 'Emailer settings saved.');
@@ -140,6 +143,59 @@ class EmailerController extends MembershipAdminController
 
         $this->flash($sent ? 'success' : 'error', $sent
             ? 'Test ' . ($isSub ? 'subscriber' : 'non-subscriber') . ' email sent to ' . $recipient . '.'
+            : 'Could not send the test — check the SMTP settings and error logs.');
+        $this->redirect('/admin/emailer');
+    }
+
+    /**
+     * Send a single test of one lifecycle (dunning/win-back) email straight to
+     * the admin's inbox with sample data, so each template + the SMTP path can
+     * be reviewed without touching the queue or any real subscription.
+     */
+    public function testLifecycle(string $kind): void
+    {
+        $kinds = [
+            'payment_failed'    => "Your payment didn't go through",
+            'past_due'          => 'Your subscription is past due',
+            'expired'           => 'Your membership has ended',
+            'renewal_reminder'  => 'Your renewal is coming up',
+            'winback'           => 'We miss you',
+        ];
+
+        if (!isset($kinds[$kind])) {
+            $this->notFound();
+            return;
+        }
+
+        $recipient = trim((string) env_value('ADMIN_EMAIL', ''));
+
+        if ($recipient === '') {
+            $this->flash('error', 'Set ADMIN_EMAIL in .env, then try again.');
+            $this->redirect('/admin/emailer');
+            return;
+        }
+
+        $data = [
+            'planName'      => 'Gold',
+            'amount'        => 10.00,
+            'dueAmount'     => 10.00,
+            'attemptedAt'   => date('F j, Y'),
+            'renewsOn'      => date('F j, Y', strtotime('+7 days')),
+            'manageUrl'     => absolute_url('/membership/my'),
+            'rejoinUrl'     => absolute_url('/membership'),
+            'galleryUrl'    => absolute_url('/galleries'),
+            'membershipUrl' => absolute_url('/membership'),
+        ];
+
+        $sent = Mailer::sendHtml(
+            $recipient,
+            '[TEST] ' . $kinds[$kind],
+            render_email($kind, $data),
+            render_email($kind . '.text', $data)
+        );
+
+        $this->flash($sent ? 'success' : 'error', $sent
+            ? 'Test "' . $kinds[$kind] . '" email sent to ' . $recipient . '.'
             : 'Could not send the test — check the SMTP settings and error logs.');
         $this->redirect('/admin/emailer');
     }

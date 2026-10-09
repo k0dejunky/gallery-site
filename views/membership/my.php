@@ -1,4 +1,9 @@
-<?php $title = 'My Membership'; ?>
+<?php
+$title = 'My Membership';
+// The fragment renders before layout.php, so $user must come from the
+// controller's view data (MembershipController@my passes it).
+$user = $user ?? \App\Core\Auth::user();
+?>
 <?php $pendingSub = $pendingSub ?? null; ?>
 <style>.membership-history th,.membership-history td{text-align:center}</style>
 

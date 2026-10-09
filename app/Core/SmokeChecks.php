@@ -103,6 +103,30 @@ class SmokeChecks
             'database/migrations/031_operator_tokens.sql',
             'database/migrations/057_comments_photo.sql',
             'views/partials/comments.php',
+            'views/2257.php',
+            'views/dmca.php',
+            'views/report-abuse.php',
+            'views/partials/footer.php',
+            'views/partials/ga.php',
+            'views/partials/consent_banner.php',
+            'app/Core/Lifecycle.php',
+            'database/migrations/060_lifecycle_emails.sql',
+            'views/emails/payment_failed.php',
+            'views/emails/payment_failed.text.php',
+            'views/emails/past_due.php',
+            'views/emails/past_due.text.php',
+            'views/emails/expired.php',
+            'views/emails/expired.text.php',
+            'views/emails/renewal_reminder.php',
+            'views/emails/renewal_reminder.text.php',
+            'views/emails/winback.php',
+            'views/emails/winback.text.php',
+            'app/Controllers/EarningsController.php',
+            'app/Models/Purchase.php',
+            'database/migrations/061_ppv_live_payments.sql',
+            'views/admin/earnings.php',
+            'views/checkout_complete.php',
+            'views/partials/card_checkout.php',
         ];
         foreach ($files as $rel) {
             $slug = str_replace(['/', '.'], '_', $rel);
@@ -204,6 +228,146 @@ class SmokeChecks
         });
         $add('smoke.schema.page_ip_visits_uq', 'Smoke · Schema', 'page_ip_visits unique (page, ip, visit_date)', static function () use ($schema, $ok, $bad): array {
             return strpos($schema, 'uq_page_ip_visits_page_ip_date') !== false ? $ok('daily per-IP dedupe key') : $bad('schema.sql: page_ip_visits must carry the (page, ip, visit_date) unique key');
+        });
+
+        // -------------------------------------------------------- Legal/consent
+        $layoutSrc = $read("$root/views/layout.php");
+        $footerSrc = $read("$root/views/partials/footer.php");
+        $gaSrc     = $read("$root/views/partials/ga.php");
+        $staticCtrl = $read("$root/app/Controllers/StaticPageController.php");
+        $headersConf = $read("$root/config/gallery-headers.conf");
+        $adminLayout = $read("$root/views/admin/layout.php");
+        $checkoutView = $read("$root/views/membership/braintree_checkout.php");
+        $add('smoke.legal.static_actions', 'Smoke · Legal', 'StaticPageController provides 2257/DMCA/report actions', static function () use ($staticCtrl, $ok, $bad): array {
+            return strpos($staticCtrl, 'function notice2257') !== false
+                && strpos($staticCtrl, 'function dmca') !== false
+                && strpos($staticCtrl, 'function reportAbuse') !== false
+                && stripos($staticCtrl, '/2257') !== false && stripos($staticCtrl, '/dmca') !== false && stripos($staticCtrl, '/report-abuse') !== false
+                ? $ok('actions + sitemap entries present')
+                : $bad('StaticPageController must define notice2257/dmca/reportAbuse and list /2257 /dmca /report-abuse in the sitemap');
+        });
+        $add('smoke.legal.footer_links', 'Smoke · Legal', 'Layout renders a footer linking the compliance pages', static function () use ($layoutSrc, $footerSrc, $ok, $bad): array {
+            return strpos($layoutSrc, "require __DIR__ . '/partials/footer.php'") !== false
+                && stripos($footerSrc, '/2257') !== false && stripos($footerSrc, '/dmca') !== false && stripos($footerSrc, '/report-abuse') !== false
+                ? $ok('footer included with legal links')
+                : $bad('views/layout.php must include partials/footer.php which links /2257 /dmca /report-abuse');
+        });
+        $add('smoke.legal.ga_consent_gate', 'Smoke · Legal', 'Google Analytics only loads behind consent + age gate', static function () use ($layoutSrc, $gaSrc, $adminLayout, $checkoutView, $ok, $bad): array {
+            return strpos($layoutSrc, '$gaAllowed') !== false && strpos($layoutSrc, "require __DIR__ . '/partials/ga.php'") !== false
+                && strpos($gaSrc, 'ga_consent') !== false
+                && stripos($adminLayout, 'googletagmanager') === false
+                && stripos($checkoutView, 'googletagmanager') === false
+                ? $ok('gtag gated; admin and checkout pages untracked')
+                : $bad('layout must gate GA behind $gaAllowed via partials/ga.php, and admin layout / braintree checkout must not embed gtag');
+        });
+        $add('smoke.legal.consent_banner', 'Smoke · Legal', 'Consent banner wired into the layout', static function () use ($layoutSrc, $ok, $bad): array {
+            return strpos($layoutSrc, "require __DIR__ . '/partials/consent_banner.php'") !== false && strpos($layoutSrc, '$gaShowBanner') !== false
+                ? $ok('banner partial included behind $gaShowBanner')
+                : $bad('layout must include partials/consent_banner.php behind $gaShowBanner');
+        });
+        $add('smoke.legal.csp_hardened', 'Smoke · Legal', 'CSP includes object-src/base-uri/form-action hardening', static function () use ($headersConf, $ok, $bad): array {
+            return stripos($headersConf, "object-src 'none'") !== false && stripos($headersConf, "base-uri 'self'") !== false && stripos($headersConf, "form-action 'self'") !== false
+                ? $ok('hardening directives present')
+                : $bad('config/gallery-headers.conf must set object-src none, base-uri self, form-action self');
+        });
+
+        // ----------------------------------------------------- Lifecycle
+        $lcSchema = $read("$root/schema.sql");
+        $lcService = $read("$root/app/Core/Lifecycle.php");
+        $lcQueue   = $read("$root/app/Models/EmailQueue.php");
+        $lcWebhook = $read("$root/app/Controllers/WebhookController.php");
+        $lcHouse   = $read("$root/app/Core/Housekeeping.php");
+        $lcEmailer = $read("$root/app/Controllers/EmailerController.php");
+        $lcView    = $read("$root/views/admin/emailer.php");
+        $add('smoke.lifecycle.schema', 'Smoke · Lifecycle', 'schema.sql has subscription_email_log + email_queue due columns', static function () use ($lcSchema, $ok, $bad): array {
+            return stripos($lcSchema, 'subscription_email_log') !== false
+                && strpos($lcSchema, 'scheduled_at') !== false
+                && strpos($lcSchema, 'next_attempt_at') !== false
+                && strpos($lcSchema, 'idx_email_queue_due') !== false
+                ? $ok('exactly-once log + scheduling/backoff present')
+                : $bad('schema.sql must carry subscription_email_log and email_queue scheduled_at/next_attempt_at/idx_email_queue_due');
+        });
+        $add('smoke.lifecycle.service', 'Smoke · Lifecycle', 'Lifecycle service provides dunning + win-back entry points', static function () use ($lcService, $ok, $bad): array {
+            foreach (['function send', 'function onPaymentFailed', 'function onPastDue', 'function onExpired', 'function onWinback', 'function runRenewalReminders', 'function runWinbacks'] as $needle) {
+                if (strpos($lcService, $needle) === false) {
+                    return $bad("Lifecycle.php missing $needle");
+                }
+            }
+            return $ok('service entry points present');
+        });
+        $add('smoke.lifecycle.emailqueue', 'Smoke · Lifecycle', 'EmailQueue supports transactional enqueue + exactly-once log', static function () use ($lcQueue, $ok, $bad): array {
+            return strpos($lcQueue, 'function enqueueTx') !== false
+                && strpos($lcQueue, 'function lifecycleRecord') !== false
+                && strpos($lcQueue, 'function lifecycleAlreadySent') !== false
+                && strpos($lcQueue, 'scheduled_at') !== false && strpos($lcQueue, 'next_attempt_at') !== false
+                ? $ok('enqueueTx + lifecycle log + due filter present')
+                : $bad('EmailQueue must implement enqueueTx/lifecycleRecord/lifecycleAlreadySent and honour scheduled_at/next_attempt_at');
+        });
+        $add('smoke.lifecycle.hooks', 'Smoke · Lifecycle', 'Webhooks and housekeeping fire lifecycle emails on state changes', static function () use ($lcWebhook, $lcHouse, $ok, $bad): array {
+            return strpos($lcWebhook, 'Lifecycle::onPastDue') !== false
+                && strpos($lcWebhook, 'Lifecycle::onExpired') !== false
+                && strpos($lcWebhook, 'Lifecycle::onPaymentFailed') !== false
+                && strpos($lcHouse, 'Lifecycle::onExpired') !== false
+                && strpos($lcHouse, 'Lifecycle::runRenewalReminders') !== false
+                && strpos($lcHouse, 'Lifecycle::runWinbacks') !== false
+                ? $ok('hooks wired into Braintree/PayPal webhooks + housekeeping')
+                : $bad('WebhookController/Housekeeping must call the Lifecycle transition methods');
+        });
+        $add('smoke.lifecycle.admin', 'Smoke · Lifecycle', 'Admin emailer exposes lifecycle toggles + test sends', static function () use ($lcEmailer, $lcView, $ok, $bad): array {
+            return strpos($lcEmailer, 'function testLifecycle') !== false
+                && strpos($lcView, 'lifecycleStats') !== false
+                && strpos($lcView, 'lifecycle_renewal_reminders') !== false
+                && strpos($lcView, 'lifecycle_winbacks') !== false
+                ? $ok('admin test-send + toggles + counts present')
+                : $bad('EmailerController/emailer view must expose lifecycle test-send, toggles and stats');
+        });
+
+        // ------------------------------------------------- PPV / one-off charges
+        $ppSchema = $read("$root/schema.sql");
+        $ppGw     = $read("$root/app/Core/BraintreeGateway.php");
+        $ppGwPP   = $read("$root/app/Core/PayPalGateway.php");
+        $ppModel  = $read("$root/app/Models/Purchase.php");
+        $ppPurch  = $read("$root/app/Controllers/PurchaseController.php");
+        $ppWh     = $read("$root/app/Controllers/WebhookController.php");
+        $ppShow   = $read("$root/views/gallery/show.php");
+        $add('smoke.ppv.schema', 'Smoke · PPV', 'purchases carries processor id + gateway-ref unique key', static function () use ($ppSchema, $ok, $bad): array {
+            return strpos($ppSchema, 'payment_processor_id') !== false
+                && strpos($ppSchema, 'uq_purchases_gateway_ref') !== false
+                && strpos($ppSchema, 'updated_at') !== false
+                ? $ok('schema updated for live purchases')
+                : $bad('schema.sql purchases must gain payment_processor_id, updated_at and uq_purchases_gateway_ref');
+        });
+        $add('smoke.ppv.gateways', 'Smoke · PPV', 'Gateways expose one-off charge + refund', static function () use ($ppGw, $ppGwPP, $ok, $bad): array {
+            return strpos($ppGw, 'function sale') !== false && strpos($ppGw, 'function refund') !== false
+                && strpos($ppGwPP, 'function createOrder') !== false && strpos($ppGwPP, 'function captureOrder') !== false && strpos($ppGwPP, 'function refundCapture') !== false
+                ? $ok('Braintree sale/refund + PayPal Orders methods present')
+                : $bad('BraintreeGateway must implement sale/refund; PayPalGateway must implement createOrder/captureOrder/refundCapture');
+        });
+        $add('smoke.ppv.purchase_model', 'Smoke · PPV', 'Purchase settles/refunds by gateway ref and totals by window', static function () use ($ppModel, $ok, $bad): array {
+            foreach (['function settleByReference', 'function settleById', 'function refundByReference', 'function totalsBetween', 'function seriesBetween'] as $n) {
+                if (strpos($ppModel, $n) === false) { return $bad("Purchase model missing $n"); }
+            }
+            return $ok('settlement + totals helpers present');
+        });
+        $add('smoke.ppv.endpoints', 'Smoke · PPV', 'Live checkout endpoints implemented', static function () use ($ppPurch, $ok, $bad): array {
+            foreach (['function checkoutToken', 'function unlockLive', 'function tipLive', 'function completed', 'function chargeCard', 'function chargePayPal'] as $n) {
+                if (strpos($ppPurch, $n) === false) { return $bad("PurchaseController missing $n"); }
+            }
+            return $ok('token + unlock-live + tip-live + completion present');
+        });
+        $add('smoke.ppv.webhook_reconcile', 'Smoke · PPV', 'Webhooks reconcile one-off captures/transactions', static function () use ($ppWh, $ok, $bad): array {
+            return strpos($ppWh, "PAYMENT.CAPTURE.COMPLETED") !== false
+                && strpos($ppWh, 'Purchase::settleByReference') !== false
+                && strpos($ppWh, "transaction_settled')") !== false
+                ? $ok('capture/transaction reconciliation wired')
+                : $bad('WebhookController must reconcile PayPal capture events and Braintree transaction_* events to purchases');
+        });
+        $add('smoke.ppv.view', 'Smoke · PPV', 'Gallery show renders the card-checkout block', static function () use ($ppShow, $ok, $bad): array {
+            return strpos($ppShow, "require __DIR__ . '/../partials/card_checkout.php'") !== false
+                && strpos($ppShow, '/unlock-live') !== false
+                && strpos($ppShow, '/tip/live') !== false
+                ? $ok('PPV + tip card checkout wired')
+                : $bad('views/gallery/show.php must include partials/card_checkout.php for both PPV and tips');
         });
 
         // --------------------------------------------------- Braintree

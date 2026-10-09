@@ -240,6 +240,64 @@ class BraintreeGateway
     }
 
     // ------------------------------------------------------------------
+    // One-off transactions (PPV unlocks / tips)
+    // ------------------------------------------------------------------
+
+    /**
+     * Charge a vaulted payment method (its token) in a one-off "sale"
+     * transaction. Returns the transaction id/status, or throws on failure.
+     */
+    public function sale(string $paymentMethodToken, float $amount, bool $submitForSettlement = true, bool $storeInVault = true): array
+    {
+        $payload = [
+            'transaction' => [
+                'type'                   => 'sale',
+                'amount'                 => number_format($amount, 2, '.', ''),
+                'payment_method_token'   => $paymentMethodToken,
+                'options'                => [
+                    'submit_for_settlement'      => $submitForSettlement,
+                    'store_in_vault_on_success'  => $storeInVault,
+                ],
+            ],
+        ];
+
+        $xml = $this->request('POST', '/merchants/' . $this->merchantId . '/transactions', ['xml' => true, 'payload' => $payload]);
+
+        return [
+            'id'     => (string) ($xml->id ?? ''),
+            'status' => (string) ($xml->status ?? ''),
+            'amount' => (string) ($xml->amount ?? ''),
+        ];
+    }
+
+    /**
+     * Refund a sale transaction (full refund when $amount is null). Returns
+     * true when Braintree accepted the refund.
+     */
+    public function refund(string $transactionId, ?float $amount = null): bool
+    {
+        $transactionId = trim($transactionId);
+
+        if ($transactionId === '') {
+            return false;
+        }
+
+        $payload = ['transaction' => []];
+
+        if ($amount !== null) {
+            $payload['transaction']['amount'] = number_format($amount, 2, '.', '');
+        }
+
+        try {
+            $this->request('POST', '/merchants/' . $this->merchantId . '/transactions/' . rawurlencode($transactionId) . '/refund', ['xml' => true, 'payload' => $payload]);
+            return true;
+        } catch (\Throwable $e) {
+            error_log('[braintree-refund] failed for ' . $transactionId . ': ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Webhooks
     // ------------------------------------------------------------------
 
@@ -283,6 +341,11 @@ class BraintreeGateway
             $subscriptionId = (string) $xml->subscription->id;
         }
 
+        $transactionId = '';
+        if (isset($xml->transaction->id)) {
+            $transactionId = (string) $xml->transaction->id;
+        }
+
         // Extract status if present
         $status = '';
         if (isset($xml->subscription->status)) {
@@ -292,6 +355,7 @@ class BraintreeGateway
         return [
             'kind'            => $kind,
             'subscription_id' => $subscriptionId,
+            'transaction_id'  => $transactionId,
             'status'          => $status,
             'xml'             => $xml,
         ];

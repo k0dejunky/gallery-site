@@ -11,6 +11,9 @@ return [
     ['GET', '/terms', 'StaticPageController@terms'],
     ['GET', '/privacy', 'StaticPageController@privacy'],
     ['GET', '/about', 'StaticPageController@about'],
+    ['GET', '/2257', 'StaticPageController@notice2257'],
+    ['GET', '/dmca', 'StaticPageController@dmca'],
+    ['GET', '/report-abuse', 'StaticPageController@reportAbuse'],
     ['GET', '/sitemap.xml', 'StaticPageController@sitemap'],
     ['GET', '/feed.xml', 'StaticPageController@feed'],
     ['GET', '/galleries', 'GalleryController@index'],
@@ -98,7 +101,11 @@ return [
     ['POST', '/comments', 'CommentController@store'],
     ['POST', '/galleries/{id}/rate', 'GalleryRatingController@store'],
     ['POST', '/galleries/{id}/unlock', 'PurchaseController@unlock'],
+    ['POST', '/galleries/{id}/unlock-live', 'PurchaseController@unlockLive'],
     ['POST', '/tip', 'PurchaseController@tip'],
+    ['POST', '/tip/live', 'PurchaseController@tipLive'],
+    ['GET', '/checkout/token', 'PurchaseController@checkoutToken'],
+    ['GET', '/checkout/complete', 'PurchaseController@completed'],
     ['GET', '/notifications', 'NotificationController@index'],
     ['GET', '/notifications/{id}', 'NotificationController@show'],
     ['POST', '/notifications/read-all', 'NotificationController@readAll'],
@@ -340,6 +347,7 @@ return [
 
     // Engagement: wall + comments + codes + gifts + purchases + tags (admin only)
     ['GET', '/admin/engagement', 'ModerationController@index', 'dashboard'],
+    ['GET', '/admin/earnings', 'EarningsController@index', 'membership'],
     ['POST', '/admin/engagement/wall', 'ModerationController@wallStore', 'dashboard'],
     ['POST', '/admin/engagement/wall/{id}/delete', 'ModerationController@wallDelete', 'dashboard'],
     ['POST', '/admin/engagement/comments/{id}/delete', 'ModerationController@commentDelete', 'dashboard'],
@@ -453,5 +461,6 @@ return [
     ['POST', '/admin/emailer/save', 'EmailerController@save', 'membership'],
     ['POST', '/admin/emailer/send-now', 'EmailerController@sendNow', 'membership'],
     ['POST', '/admin/emailer/test', 'EmailerController@test', 'membership'],
+    ['POST', '/admin/emailer/test-lifecycle/{kind}', 'EmailerController@testLifecycle', 'membership'],
     ['POST', '/admin/emailer/retry', 'EmailerController@retry', 'membership'],
 ];

@@ -39,7 +39,8 @@ $breadcrumbItems = [
                 <input type="text" name="unlock_code" placeholder="Enter your unlock code" style="min-width:220px;">
                 <button type="submit" class="btn btn-sm">Unlock</button>
             </form>
-            <p class="muted" style="margin:.5rem 0 0;font-size:.85rem;">You&rsquo;ll receive a code after purchase.</p>
+            <p class="muted" style="margin:.5rem 0 0;font-size:.85rem;">Have a code? Use it above — or pay by card / PayPal now.</p>
+            <?php $ccAction = url('/galleries/' . (int) $gallery['id'] . '/unlock-live'); $ccId = 'ppv-g' . (int) $gallery['id']; $ccAmount = number_format((float) $ppvPrice, 2); $ccLabel = 'Unlock this gallery'; require __DIR__ . '/../partials/card_checkout.php'; ?>
         <?php else: ?>
             <p style="margin:.5rem 0 0;"><a class="btn btn-sm" href="<?= url('/signup') ?>">Create an account</a> to purchase and unlock.</p>
         <?php endif; ?>
@@ -155,11 +156,13 @@ require __DIR__ . '/../partials/comments.php';
     <section style="margin-top:2rem;border-top:1px solid var(--card-border,#eee);padding-top:1.25rem;">
         <h2>Leave a tip</h2>
         <p class="muted">Show your appreciation — your note goes straight to the studio.</p>
-        <form method="post" action="<?= url('/tip') ?>" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+        <form method="post" action="<?= url('/tip') ?>" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem;">
             <?= csrf_field() ?>
             <input type="number" step="0.01" min="0.01" name="amount" placeholder="Amount" style="width:120px;">
             <input type="text" name="note" placeholder="Add a note" style="flex:1;min-width:200px;" maxlength="500">
-            <button type="submit" class="btn btn-outline">Send tip</button>
+            <button type="submit" class="btn btn-outline">Send tip (offline)</button>
         </form>
+        <p class="muted" style="font-size:.85rem;margin-bottom:.35rem;">Or send it now by card / PayPal:</p>
+        <?php $ccAction = url('/tip/live'); $ccId = 'tip' . (int) ($gallery['id'] ?? 0); $ccAmount = ''; $ccLabel = 'Send a tip'; $ccAmountInput = true; require __DIR__ . '/../partials/card_checkout.php'; ?>
     </section>
 <?php endif; ?>

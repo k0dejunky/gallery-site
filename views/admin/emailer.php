@@ -137,6 +137,17 @@ switch ($config['mode'] ?? 'daily') {
         </p>
 
         <p>
+            <label class="chip"><input type="checkbox" name="lifecycle_renewal_reminders" value="1"<?= !empty($config['lifecycle_renewal_reminders']) ? ' checked' : '' ?>> Send a renewal reminder 7 days before a paid membership renews</label>
+        </p>
+        <p>
+            <label class="chip"><input type="checkbox" name="lifecycle_winbacks" value="1"<?= !empty($config['lifecycle_winbacks']) ? ' checked' : '' ?>> Send a win-back email to lapsed members who haven't opted out (7 days after expiry/cancel)</label>
+        </p>
+        <p class="muted" style="font-size:.8rem;">
+            Payment-failed, past-due and expired notices are always sent — they are account-critical billing mail. Renewal reminders and
+            win-backs are the two toggles above and respect member preferences. Each lifecycle email is sent at most once per subscription.
+        </p>
+
+        <p>
             <label for="subject_subscriber">Subscriber subject <span class="muted">(<code>{site}</code>, <code>{count}</code>)</span></label><br>
             <input type="text" name="subject_subscriber" id="subject_subscriber" value="<?= e((string) ($config['subject_subscriber'] ?? '')) ?>" maxlength="200" style="width:100%;box-sizing:border-box;">
         </p>
@@ -148,6 +159,41 @@ switch ($config['mode'] ?? 'daily') {
 
         <button type="submit" class="btn">Save settings</button>
     </form>
+</div>
+
+<?php // ----- Lifecycle ----- ?>
+<div class="stats-panel" style="margin-bottom:1rem;">
+    <h2>Lifecycle emails (dunning &amp; win-back)</h2>
+    <p class="muted" style="font-size:.85rem;">
+        Sent once per subscription when Braintree/PayPal report a failure, suspension or expiry, or when a renewal or lapsed member is
+        detected by housekeeping. Sent counts below come from <code>subscription_email_log</code>.
+    </p>
+    <table>
+        <thead>
+            <tr><th>Event</th><th>Sent</th><th style="text-align:right;">Test to admin</th></tr>
+        </thead>
+        <tbody>
+            <?php $lifecycleNames = [
+                'payment_failed' => 'Payment failed',
+                'past_due' => 'Past due',
+                'expired' => 'Expired',
+                'renewal_reminder' => 'Renewal reminder',
+                'winback' => 'Win-back',
+            ]; ?>
+            <?php foreach ($lifecycleNames as $kind => $label): ?>
+                <tr>
+                    <td><?= e($label) ?></td>
+                    <td><?= number_format((int) ($lifecycleStats[$kind] ?? 0)) ?></td>
+                    <td style="text-align:right;">
+                        <form class="inline" method="post" action="<?= url('/admin/emailer/test-lifecycle/' . e($kind)) ?>">
+                            <?= csrf_field() ?>
+                            <button type="submit" class="btn btn-sm btn-outline">Send test</button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
 </div>
 
 <?php // ----- Recent queue ----- ?>

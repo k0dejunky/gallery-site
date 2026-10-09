@@ -1,0 +1,16 @@
+parameters:
+    level: 1
+    paths:
+        - app
+        - bin
+        - config
+    excludePaths:
+        # Templates are deliberately freeform PHP fragments rendered by the
+        # layout; static analysis targets the PHP logic in app/bin/config.
+        - views
+    tmpDir: /tmp/phpstan
+    treatPhpDocTypesAsCertain: false
+    reportUnmatchedIgnoredErrors: true
+
+includes:
+    - phpstan-baseline.neon

@@ -25,15 +25,6 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-H9LH86H11C"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag() { dataLayer.push(arguments); }
-        gtag('js', new Date());
-
-        gtag('config', 'G-H9LH86H11C');
-    </script>
     <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') . ' Admin' : e(config('app.site_name')) . ' Admin' ?></title>
     <link rel="stylesheet" href="<?= e(url('/assets/admin-shared.css')) ?>">
     <link rel="stylesheet" href="<?= e(url('/assets/css/user.css')) ?>?v=31">
@@ -387,6 +378,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             <?php endif; ?>
             <a class="nav-item <?= $navActive('/admin/galleries') ?>" href="<?= url('/admin/galleries') ?>" data-se-move-key="nav-galleries">Gallery Management</a>
             <a class="nav-item <?= $navActive('/admin/engagement') ?>" href="<?= url('/admin/engagement') ?>" data-se-move-key="nav-engagement">Engagement</a>
+            <a class="nav-item <?= $navActive('/admin/earnings') ?>" href="<?= url('/admin/earnings') ?>" data-se-move-key="nav-earnings">Earnings</a>
             <a class="nav-item <?= $navActive('/admin/profile') ?>" href="<?= url('/admin/profile') ?>" data-se-move-key="nav-profile">Creator Profile</a>
             <a class="nav-item <?= $navActive('/admin/video-projects') ?>" href="<?= url('/admin/video-projects') ?>" data-se-move-key="nav-video-projects">Video Projects</a>
             <a class="nav-item <?= $navActive('/admin/auto-poster') ?>" href="<?= url('/admin/auto-poster') ?>" data-se-move-key="nav-auto-poster">Auto Poster</a>

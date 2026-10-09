@@ -208,4 +208,120 @@ class PayPalGateway
     {
         return strpos($this->baseUrl, 'sandbox') === false;
     }
+
+    // ------------------------------------------------------------------
+    // One-off Orders v2 (PPV unlocks / tips)
+    // ------------------------------------------------------------------
+
+    /**
+     * Create a PayPal Orders v2 order for a one-off amount. Returns the order
+     * array (id, status, approve link) or throws.
+     */
+    public function createOrder(float $amount, string $returnUrl, string $cancelUrl, string $customId = '', string $description = ''): array
+    {
+        $token = $this->accessToken();
+
+        $payload = [
+            'intent' => 'CAPTURE',
+            'purchase_units' => [[
+                'custom_id' => $customId,
+                'description' => mb_substr($description, 0, 127),
+                'amount' => [
+                    'currency_code' => 'USD',
+                    'value'         => number_format($amount, 2, '.', ''),
+                ],
+            ]],
+            'application_context' => [
+                'return_url'          => $returnUrl,
+                'cancel_url'          => $cancelUrl,
+                'brand_name'          => 'Amethyst',
+                'user_action'         => 'PAY_NOW',
+            ],
+        ];
+
+        [$status, , $body] = Http::request($this->baseUrl . '/v2/checkout/orders', [
+            'method'  => 'POST',
+            'headers' => ['Authorization' => 'Bearer ' . $token],
+            'json'    => $payload,
+            'timeout' => 30,
+        ]);
+
+        $data = json_decode((string) $body, true);
+
+        if ($status !== 201 || empty($data['id'])) {
+            throw new \RuntimeException('PayPal create order failed (HTTP ' . $status . '): ' . substr((string) $body, 0, 400));
+        }
+
+        return $data;
+    }
+
+    /**
+     * Capture an approved PayPal order. Returns the array with the capture id
+     * and COMPLETED status, or throws on failure.
+     */
+    public function captureOrder(string $orderId): array
+    {
+        $token = $this->accessToken();
+
+        [$status, , $body] = Http::request($this->baseUrl . '/v2/checkout/orders/' . rawurlencode($orderId) . '/capture', [
+            'method'  => 'POST',
+            'headers' => [
+                'Authorization' => 'Bearer ' . $token,
+                'Content-Type'  => 'application/json',
+            ],
+            'json'    => new \stdClass(),
+            'timeout' => 30,
+        ]);
+
+        $data = json_decode((string) $body, true);
+
+        if ($status !== 201 || empty($data['id'])) {
+            throw new \RuntimeException('PayPal capture failed (HTTP ' . $status . '): ' . substr((string) $body, 0, 400));
+        }
+
+        $captureId = '';
+        if (isset($data['purchase_units'][0]['payments']['captures'][0]['id'])) {
+            $captureId = (string) $data['purchase_units'][0]['payments']['captures'][0]['id'];
+        }
+
+        return [
+            'id'        => (string) $data['id'],
+            'status'    => (string) ($data['status'] ?? ''),
+            'capture_id' => $captureId,
+        ];
+    }
+
+    /**
+     * Refund a captured payment. $amount is optional (full refund when null).
+     * Returns true when PayPal accepted the refund.
+     */
+    public function refundCapture(string $captureId, ?float $amount = null): bool
+    {
+        $token = $this->accessToken();
+
+        $payload = [];
+        if ($amount !== null) {
+            $payload['amount'] = [
+                'currency_code' => 'USD',
+                'value'         => number_format($amount, 2, '.', ''),
+            ];
+        }
+
+        [$status, , $body] = Http::request($this->baseUrl . '/v2/payments/captures/' . rawurlencode($captureId) . '/refund', [
+            'method'  => 'POST',
+            'headers' => [
+                'Authorization' => 'Bearer ' . $token,
+                'Content-Type'  => 'application/json',
+            ],
+            'json'    => $payload === [] ? new \stdClass() : $payload,
+            'timeout' => 30,
+        ]);
+
+        if ($status >= 300) {
+            error_log('[paypal-refund] failed (HTTP ' . $status . ') for ' . $captureId . ': ' . substr((string) $body, 0, 300));
+            return false;
+        }
+
+        return true;
+    }
 }
