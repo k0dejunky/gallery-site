@@ -839,6 +839,13 @@ function _load_image_imagick(string $src): ?array
         return null;
     }
 
+    // ImageMagick is only ever correct for images. A video path would trigger
+    // the ffmpeg delegate + /tmp/magick-* + webp write storm - bail out before
+    // opening the file.
+    if (is_video($src)) {
+        return null;
+    }
+
     try {
         $im = new Imagick($src);
 
@@ -933,6 +940,15 @@ function _load_image_imagick(string $src): ?array
  */
 function image_can_decode(string $src): bool
 {
+    // Videos must never be handed to ImageMagick: its ffmpeg delegate would
+    // spawn a guarded ffmpeg, churn /tmp/magick-* temps and write enormous
+    // webp files on every request that reaches the on-demand variant path
+    // (e.g. ?size=web on a video whose rendition is missing). Video renditions
+    // are made by ffmpeg at upload/import time - never ImageMagick.
+    if (is_video($src)) {
+        return false;
+    }
+
     if (@getimagesize($src) !== false) {
         return true;
     }
@@ -948,6 +964,12 @@ function image_can_decode(string $src): bool
 function _imagick_dimensions(string $src): ?array
 {
     if (!class_exists('Imagick')) {
+        return null;
+    }
+
+    // Same video guard as _load_image_imagick: never let ImageMagick open a
+    // video (ffmpeg-delegate / /tmp/magick-* / webp storm).
+    if (is_video($src)) {
         return null;
     }
 

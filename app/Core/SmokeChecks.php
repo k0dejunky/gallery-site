@@ -590,6 +590,12 @@ class SmokeChecks
                 ? $ok('75 MP cap in _load_image / imagick paths')
                 : $bad('helpers.php must reject images over 75MP in _load_image, _load_image_imagick and _imagick_dimensions');
         });
+        $add('smoke.sec.videos_never_imagick', 'Smoke · Security', 'ImageMagick is never handed videos', static function () use ($secHelpers, $ok, $bad): array {
+            $guards = substr_count($secHelpers, 'if (is_video($src))') >= 3;
+            return $guards && strpos($secHelpers, 'image_can_decode') !== false
+                ? $ok('image_can_decode + both Imagick helpers short-circuit videos (kills the magick-*/webp storm)')
+                : $bad('image_can_decode, _load_image_imagick and _imagick_dimensions must bail out on is_video($src)');
+        });
         $secIndex = $read("$root/public/index.php");
         $secCsp   = $read("$root/app/Controllers/CspController.php");
         $secBackup = $read("$root/bin/backup_offsite_package.php");
