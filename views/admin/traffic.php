@@ -1,6 +1,6 @@
 <?php $title = 'Traffic Links'; ?>
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
 function trafficCopy(el) {
     navigator.clipboard.writeText(el.dataset.link).then(() => {
         const old = el.textContent;

@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-H9LH86H11C"></script>
-<script>
+<script nonce="<?= csp_nonce() ?>" async src="https://www.googletagmanager.com/gtag/js?id=G-H9LH86H11C"></script>
+<script nonce="<?= csp_nonce() ?>">
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());

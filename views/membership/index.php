@@ -271,8 +271,8 @@ $ldJson = [
 </div>
 
 <?php if (!$hasActive && $pendingSub === null && $paypalConfigured): ?>
-<script src="https://www.paypal.com/sdk/js?client-id=<?= e($paypalClientId) ?>&vault=true&intent=subscription" data-sdk-integration-source="button-factory"></script>
-<script>
+<script nonce="<?= csp_nonce() ?>" src="https://www.paypal.com/sdk/js?client-id=<?= e($paypalClientId) ?>&vault=true&intent=subscription" data-sdk-integration-source="button-factory"></script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     if (!window.paypal) return;
     document.querySelectorAll('[data-pp-button]').forEach(function (el) {
@@ -308,7 +308,7 @@ $ldJson = [
     </script>
 
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     document.querySelectorAll('.pp-select').forEach(function (sel) {
         sel.closest('form').addEventListener('submit', function (e) {

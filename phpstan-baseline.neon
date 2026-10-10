@@ -11,11 +11,6 @@ parameters:
 			path: app/Controllers/CommentController.php
 
 		-
-			message: "#^Call to private static method connection\\(\\) of class App\\\\Core\\\\Cache\\.$#"
-			count: 1
-			path: app/Controllers/HealthController.php
-
-		-
 			message: "#^Variable \\$subscriptionId might not be defined\\.$#"
 			count: 1
 			path: app/Controllers/MembershipController.php

@@ -99,7 +99,7 @@
     <button type="submit" class="btn" style="margin-top:.5rem;">Send operator reply</button>
 </form>
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var emojiToggle = document.getElementById('emoji-toggle');
     var emojiBar = document.getElementById('emoji-bar');

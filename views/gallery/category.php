@@ -67,6 +67,8 @@ if ($type !== '') $paginationQuery['type'] = $type;
 if (($sort ?? '') !== '') $paginationQuery['sort'] = $sort;
 $searchSuffix = $q !== '' ? ' match your search' : '';
 $sectionBaseUrl = $base . ($paginationQuery ? '?' . http_build_query($paginationQuery) : '');
+// Shared fragment-cache namespace for this category (used by both sections).
+$catBase = 'cat.' . md5(json_encode([$category['id'] ?? 0, $category['slug'] ?? '']));
 ?>
 
 <?php if ($type === '' || $type === 'images'): ?>
@@ -84,7 +86,6 @@ $sectionBaseUrl = $base . ($paginationQuery ? '?' . http_build_query($pagination
     <?php else: ?>
         <div class="grid">
             <?php
-            $catBase = 'cat.' . md5(json_encode([$category['id'] ?? 0, $category['slug'] ?? '']));
             echo \App\Core\PageCache::fragment($catBase . '.images.' . md5(json_encode([(string) $q, (int) ($imagePaginator['page'] ?? 1), array_column($imagePaginator['items'], 'id')])), 120, static function () use ($imagePaginator, $cardCovers): void {
                 foreach ($imagePaginator['items'] as $gallery) {
                     $gid = (int) $gallery['id'];
@@ -131,7 +132,7 @@ $sectionBaseUrl = $base . ($paginationQuery ? '?' . http_build_query($pagination
             ?>
         </div>
         <?php
-        $baseUrl = $videoSectionBaseUrl;
+        $baseUrl = $sectionBaseUrl;
         $paginator = $videoPaginator;
         require __DIR__ . '/../partials/pagination.php';
         ?>

@@ -87,7 +87,7 @@
         </tbody>
     </table>
     <?php if ($hasResumable): ?>
-    <script>
+    <script nonce="<?= csp_nonce() ?>">
     (function () {
         var all = document.getElementById('check-all');
         var checks = Array.prototype.slice.call(document.querySelectorAll('.abandoned-check'));

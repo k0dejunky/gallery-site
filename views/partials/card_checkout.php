@@ -67,7 +67,7 @@ foreach (\App\Models\PaymentProcessor::enabled() as $__pp) {
 </div>
 <?php if ($ccUser && !empty($ccAction)): ?>
 <style>[data-cc-number].bt-field, [data-cc-exp].bt-field, [data-cc-cvv].bt-field { min-height:38px; }</style>
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var root = document.getElementById('cc-<?= e($ccId) ?>');
     if (!root || root.dataset.ccDone) return;

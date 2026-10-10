@@ -97,7 +97,7 @@ $formatBytes = static fn (?int $bytes): string => ($bytes === null || $bytes < 0
     </div>
 </div>
 <dialog class="ve-preview-dialog" id="ve-thumb-dialog"><button class="ve-preview-close" type="button" aria-label="Close">&times;</button><img alt="Thumbnail preview"></dialog>
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var dialog = document.getElementById('ve-thumb-dialog');
     var image = dialog && dialog.querySelector('img');

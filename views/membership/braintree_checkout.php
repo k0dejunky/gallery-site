@@ -124,10 +124,10 @@ label{display:block;font-size:.82rem;font-weight:600;margin-bottom:.3rem;color:v
     <a class="back-link" href="<?= url('/membership') ?>">&larr; Back to plans</a>
 </div>
 
-<script src="https://js.braintreegateway.com/web/3.103.0/js/client.min.js"></script>
-<script src="https://js.braintreegateway.com/web/3.103.0/js/hosted-fields.min.js"></script>
-<script src="https://js.braintreegateway.com/web/3.103.0/js/paypal-checkout.min.js"></script>
-<script>
+<script nonce="<?= csp_nonce() ?>" src="https://js.braintreegateway.com/web/3.103.0/js/client.min.js"></script>
+<script nonce="<?= csp_nonce() ?>" src="https://js.braintreegateway.com/web/3.103.0/js/hosted-fields.min.js"></script>
+<script nonce="<?= csp_nonce() ?>" src="https://js.braintreegateway.com/web/3.103.0/js/paypal-checkout.min.js"></script>
+<script nonce="<?= csp_nonce() ?>">
 (function(){
     var form = document.getElementById('btForm');
     var nonceInput = document.getElementById('nonce');

@@ -258,7 +258,7 @@ switch ($config['mode'] ?? 'daily') {
     <?php endif; ?>
 </div>
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var mode = document.getElementById('mode');
     var rowHourly = document.getElementById('row-hourly');

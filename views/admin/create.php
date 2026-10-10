@@ -232,7 +232,7 @@
     </details>
 </div>
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var csrf = document.querySelector('#gallery-form input[name="_token"]').value;
     var typeInputs = Array.prototype.slice.call(document.querySelectorAll('input[name="type"]'));

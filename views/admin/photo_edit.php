@@ -58,7 +58,7 @@ $form = static function (string $operation) use ($editUrl, $back): string {
         <span class="muted canvas-hint">Adjustments preview instantly. Cancel discards unsaved changes.</span>
     </form>
 </section>
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (() => {
     const editor = document.querySelector('[data-editor]');
     const canvas = document.querySelector('#live-canvas');

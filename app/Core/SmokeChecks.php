@@ -276,10 +276,14 @@ class SmokeChecks
                 ? $ok('banner partial included behind $gaShowBanner')
                 : $bad('layout must include partials/consent_banner.php behind $gaShowBanner');
         });
-        $add('smoke.legal.csp_hardened', 'Smoke · Legal', 'CSP includes object-src/base-uri/form-action hardening', static function () use ($headersConf, $ok, $bad): array {
-            return stripos($headersConf, "object-src 'none'") !== false && stripos($headersConf, "base-uri 'self'") !== false && stripos($headersConf, "form-action 'self'") !== false
-                ? $ok('hardening directives present')
-                : $bad('config/gallery-headers.conf must set object-src none, base-uri self, form-action self');
+        $add('smoke.legal.csp_hardened', 'Smoke · Legal', 'CSP includes object-src/base-uri/form-action hardening', static function () use ($root, $ok, $bad): array {
+            $csp = (string) @file_get_contents($root . '/public/index.php');
+            return strpos($csp, 'Content-Security-Policy: default-src') !== false
+                && strpos($csp, "object-src 'none'") !== false
+                && strpos($csp, "base-uri 'self'") !== false
+                && strpos($csp, "form-action 'self'") !== false
+                ? $ok('hardening directives present in the enforced PHP CSP')
+                : $bad('public/index.php must emit an enforced CSP with object-src none, base-uri self, form-action self');
         });
 
         // ----------------------------------------------------- Lifecycle
@@ -590,12 +594,14 @@ class SmokeChecks
         $secCsp   = $read("$root/app/Controllers/CspController.php");
         $secBackup = $read("$root/bin/backup_offsite_package.php");
         $secPullC  = $read("$root/app/Controllers/BackupPullController.php");
-        $add('smoke.sec.csp_report_only', 'Smoke · Security', 'Needs nonce-based report-only CSP + a report collector', static function () use ($secIndex, $secCsp, $ok, $bad): array {
-            return strpos($secIndex, 'Content-Security-Policy-Report-Only') !== false
+        $add('smoke.sec.csp_enforced', 'Smoke · Security', 'Needs enforced nonce-based CSP + a report collector', static function () use ($secIndex, $secCsp, $ok, $bad): array {
+            return strpos($secIndex, 'Content-Security-Policy: default-src') !== false
                 && strpos($secIndex, "'nonce-") !== false
+                && strpos($secIndex, "'strict-dynamic'") !== false
+                && strpos($secIndex, 'script-src-attr') !== false
                 && strpos($secCsp, 'function report') !== false && strpos($secCsp, "csp.log") !== false
-                ? $ok('report-only CSP + /webhooks/csp-report collector present')
-                : $bad('index.php must emit a report-only nonce CSP and CspController must log reports');
+                ? $ok('enforced nonce CSP (script-src strict, script-src-attr unsafe-inline) + collector')
+                : $bad('index.php must emit an enforced nonce CSP and CspController must log reports');
         });
         $add('smoke.sec.offsite_backup', 'Smoke · Security', 'Encrypted off-site backup packaging + pull endpoint', static function () use ($secBackup, $secPullC, $ok, $bad): array {
             return strpos($secBackup, 'openssl enc -aes-256-cbc') !== false

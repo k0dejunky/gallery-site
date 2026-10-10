@@ -20,7 +20,7 @@ $shareWaText   = ($shareTitle !== '' ? $shareTitle . ' — ' : '') . $shareWa;
        href="https://www.reddit.com/submit?url=<?= e(rawurlencode($shareReddit)) ?><?= $shareTitle !== '' ? '&title=' . e(rawurlencode($shareTitle)) : '' ?>">Reddit</a>
     <button type="button" class="btn btn-sm btn-outline" data-share-copy="<?= e($shareCanonical) ?>">Copy link</button>
 </div>
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     document.querySelectorAll('[data-share-copy]').forEach(function (b) {
         if (b._shareBound) { return; }

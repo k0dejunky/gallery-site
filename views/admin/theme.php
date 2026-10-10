@@ -508,7 +508,7 @@ $paletteGrid = [
                     }
                 }
                 ?>
-                <script>var presetData = <?= json_encode($presetColors) ?>;</script>
+                <script nonce="<?= csp_nonce() ?>">var presetData = <?= json_encode($presetColors) ?>;</script>
                 <?php if (empty($presets)): ?>
                     <div class="preset-empty">No saved themes yet. Save a preset above or use Save Theme to save directly.</div>
                 <?php else: ?>
@@ -544,7 +544,7 @@ $paletteGrid = [
 </div>
 
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var preview    = document.getElementById('theme-preview');
     var scopeInput = document.getElementById('theme-scope');

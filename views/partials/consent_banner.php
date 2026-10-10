@@ -10,7 +10,7 @@ if (!empty($gaShowBanner)):
     <span>We use cookies to keep you signed in and — only with your consent — to measure site traffic. See our <a class="thin-link" href="<?= url('/privacy') ?>">Privacy Policy</a>.</span>
     <button type="button" id="consent-accept" class="btn btn-sm">OK, continue</button>
 </div>
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var banner = document.getElementById('consent-banner');
     if (!banner) return;

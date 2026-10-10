@@ -547,7 +547,7 @@
         <?php endif; ?>
     </div>
 
-    <script>
+    <script nonce="<?= csp_nonce() ?>">
         (function () {
             var results = document.getElementById('orphan-results');
             if (!results) return;

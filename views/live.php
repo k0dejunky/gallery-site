@@ -93,8 +93,8 @@
     </div>
 </div>
 
-<script src="<?= url('/assets/js/hls.min.js?v=1') ?>"></script>
-<script>
+<script nonce="<?= csp_nonce() ?>" src="<?= url('/assets/js/hls.min.js?v=1') ?>"></script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var video = document.getElementById('live-video');
     var offline = document.getElementById('live-offline');

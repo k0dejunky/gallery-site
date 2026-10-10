@@ -107,7 +107,7 @@
 
 </div>
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var token = <?= json_encode(\App\Core\Csrf::token()) ?>;
     var statusUrl = <?= json_encode(url('/admin/test-suite/status')) ?>;

@@ -83,7 +83,7 @@
                                 </form>
 <?php endif; ?>
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var badge = document.getElementById('waiting-badge');
     if (!badge) return;
@@ -259,7 +259,7 @@
     </table>
 <?php endif; ?>
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var rows = document.getElementById('question-rows');
     var add = document.getElementById('add-question');
@@ -410,7 +410,7 @@
     <?php endif; ?>
 <?php endif; ?>
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
 // Presence heartbeat: while this admin chat page is open, the operator is
 // marked online so members don't get the away auto-response.
 (function () {

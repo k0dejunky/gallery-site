@@ -75,7 +75,7 @@
         <p class="muted">Current time in this timezone: <strong id="site-tz-now"><?= e(tzdate('Y-m-d H:i', null)) ?></strong></p>
         <button type="submit" class="btn">Save timezone</button>
     </form>
-    <script>
+    <script nonce="<?= csp_nonce() ?>">
     (function () {
         var select = document.getElementById('site-timezone');
         var now = document.getElementById('site-tz-now');
@@ -250,7 +250,7 @@
     </div>
     <p><button type="submit" class="btn">Use Selected Theme</button></p>
 </form>
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var presets = <?= json_encode(array_merge([['slug' => '', 'theme' => $themeDefault]], $themePresets), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var preview = document.getElementById('user-theme-preview');
@@ -298,7 +298,7 @@
     </p>
 </form>
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
     document.querySelectorAll('.favorite-option input[type="checkbox"]').forEach(function (checkbox) {
         checkbox.addEventListener('change', function () {
             checkbox.closest('.favorite-option').classList.toggle('selected', checkbox.checked);

@@ -641,7 +641,7 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
     </details>
 </div>
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     // Real-time character counters for every post-text field.
     (function () {

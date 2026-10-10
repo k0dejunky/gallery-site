@@ -69,7 +69,7 @@ $commentableType = 'photo';
 $commentableId   = (int) $photo['id'];
 require __DIR__ . '/../partials/comments.php';
 ?>
-<script>
+<script nonce="<?= csp_nonce() ?>">
     (function () {
         var img = document.getElementById('fullsize-img');
         var toggle = document.getElementById('fullsize-toggle');

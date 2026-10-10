@@ -156,7 +156,7 @@
         </tbody>
     </table></div>
 </form>
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var all = document.getElementById('check-all');
     if (!all) return;

@@ -174,7 +174,7 @@ $backGallery = \App\Models\Photo::firstGalleryId((int) $photo['id']);
         <p><button type="button" class="btn" onclick="saveFilterColors()">Save filter colors</button></p>
     </form>
 </div>
-<script>
+<script nonce="<?= csp_nonce() ?>">
 window.__VIDEO_EDITOR__ = <?= json_encode([
     'projectId' => (int) $project['id'],
     'sourceId' => (int) $photo['id'],
@@ -190,7 +190,7 @@ window.__VIDEO_EDITOR__ = <?= json_encode([
     'editUrl' => url('/admin/photos/' . (int) $photo['id'] . '/edit'),
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 </script>
-<script>
+<script nonce="<?= csp_nonce() ?>">
 function toggleMaximize() {
     var root = document.getElementById('root');
     var on = root.classList.toggle('ve-max');
@@ -605,6 +605,6 @@ window.addEventListener('pointerup', function (e) {
     veBlurCommit = false;
 }, true);
 </script>
-<script type="module" src="<?= url('/assets/video-editor/video-editor.js') ?>?v=<?= $jsVer ?>"></script>
+<script nonce="<?= csp_nonce() ?>" type="module" src="<?= url('/assets/video-editor/video-editor.js') ?>?v=<?= $jsVer ?>"></script>
 </body>
 </html>

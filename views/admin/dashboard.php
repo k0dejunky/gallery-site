@@ -304,7 +304,7 @@
 <?php endif; ?>
 </div>
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
     // Optional live dashboard: auto-reload once a minute while the toggle is on.
     (function () {
         var toggle = document.getElementById('qa-live-refresh');

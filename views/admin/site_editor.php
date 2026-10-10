@@ -119,7 +119,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function(){
 var CSRF='<?= \App\Core\Csrf::token() ?>';
 var currentScope='<?= e($scope) ?>';

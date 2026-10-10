@@ -126,7 +126,7 @@
     </form>
 <?php endif; ?>
 <?php endif; ?>
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var labels = document.querySelectorAll('[data-category-name]');
     function updateCategories() {
@@ -242,7 +242,7 @@
         <span class="muted">Staged files stay in your session until committed, so a reload won't lose them.</span>
     </p>
 </form>
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var csrf = document.querySelector('#pending-commit-form input[name="_token"]').value;
     var galleryType = <?= json_encode(($gallery['type'] ?? 'images') === 'videos' ? 'videos' : 'images', JSON_UNESCAPED_SLASHES) ?>;
@@ -685,7 +685,7 @@
         </tbody>
     </table>
     </form>
-    <script>
+    <script nonce="<?= csp_nonce() ?>">
     (function () {
         // Per-photo rotate is handled in place via AJAX so the admin keeps
         // their scroll position. Without JS the form still posts normally.
@@ -732,7 +732,7 @@
         });
     }());
     </script>
-    <script>
+    <script nonce="<?= csp_nonce() ?>">
     (function () {
         var all = document.getElementById('select-all-images');
         var boxes = Array.prototype.slice.call(document.querySelectorAll('[data-image-select]'));

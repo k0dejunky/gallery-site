@@ -47,7 +47,7 @@ foreach ($source as $photo) {
         <?php endforeach; ?>
     </div>
 </section>
-<script>
+<script nonce="<?= csp_nonce() ?>">
 // Fit each teaser grid to whole rows so the "extra" thumbnails are dropped
 // cleanly at the page bottom instead of showing a clipped partial row. The
 // inline cap is reset first so a re-fit never shrinks from a previous fit.

@@ -179,7 +179,7 @@ $webhookBase = $scheme . '://' . $host . rtrim((string) config('app.base_path'),
     </form>
 </div>
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var sel = document.querySelector('.pay-form select[name="provider"]');
 

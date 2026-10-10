@@ -51,5 +51,5 @@ if ($tourMedia['video'] !== null && $tourUser !== null) {
     }
 }
 ?>
-<script>window.TOUR_TARGETS = <?= json_encode($tourTargets, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
+<script nonce="<?= csp_nonce() ?>">window.TOUR_TARGETS = <?= json_encode($tourTargets, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
 <?php endif; ?>

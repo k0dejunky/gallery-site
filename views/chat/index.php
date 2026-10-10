@@ -194,7 +194,7 @@
     <?php endif; ?>
 </div>
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
 (function () {
     var thread = document.getElementById('chat-thread');
     var form = document.getElementById('chat-form');

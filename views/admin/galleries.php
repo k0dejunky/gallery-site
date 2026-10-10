@@ -388,7 +388,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
     </div>
     <?php endif; ?>
 <?php endif; ?>
-<script>
+<script nonce="<?= csp_nonce() ?>">
 // Remove a duplicate gallery without reloading the page: the collapsible
 // section stays open and the scroll position is preserved. On success the
 // gallery row disappears from the duplicate list (and the main table) and,

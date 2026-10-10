@@ -33,7 +33,7 @@ class HealthController extends Controller
 
         $redis = false;
         try {
-            $redis = \App\Core\Cache::connection() !== null;
+            $redis = \App\Core\Cache::available();
         } catch (\Throwable $error) {
             $redis = false;
         }

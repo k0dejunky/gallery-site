@@ -65,7 +65,7 @@
     </div>
 </form>
 
-<script>
+<script nonce="<?= csp_nonce() ?>">
     document.querySelectorAll('.favorite-option input[type="checkbox"]').forEach(function (checkbox) {
         checkbox.addEventListener('change', function () {
             checkbox.closest('.favorite-option').classList.toggle('selected', checkbox.checked);
