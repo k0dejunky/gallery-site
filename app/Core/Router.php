@@ -117,12 +117,21 @@ class Router
             ARRAY_FILTER_USE_KEY
         );
 
-        // PHP 8.1+ enforces strict types on scalar parameters.
-        // Route captures arrive as strings; cast numeric ones to
-        // int so controller signatures (int $id) don't throw.
+        // PHP 8.1+ enforces strict types on scalar parameters. Route captures
+        // arrive as strings. Parameters that clearly carry an integer id
+        // ({id}, {photoId}, ...) are always cast to int - junk becomes 0 and
+        // the controller answers 404 - while numeric strings also become int.
+        // slug/token/name captures stay strings.
         $params = array_map(
-            fn ($v) => (ctype_digit($v) && $v !== '' && (int) $v >= 0) ? (int) $v : $v,
-            $params
+            static function ($value, $name) {
+                if (preg_match('/^(id|.*Id)$/', (string) $name)) {
+                    return (ctype_digit((string) $value) && $value !== '') ? (int) $value : 0;
+                }
+
+                return (ctype_digit((string) $value) && $value !== '' && (int) $value >= 0) ? (int) $value : $value;
+            },
+            $params,
+            array_keys($params)
         );
 
         $instance = new $controller($this->request);

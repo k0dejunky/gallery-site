@@ -693,7 +693,7 @@ class AdminController extends Controller
     {
         $home = (string) env_value('OLLAMA_HOME', '');
         if ($home === '') {
-            $home = is_dir('/usr/share/ollama/.ollama') ? '/usr/share/ollama/.ollama' : '/root/.ollama';
+            $home = @is_dir('/usr/share/ollama/.ollama') ? '/usr/share/ollama/.ollama' : '/root/.ollama';
         }
 
         return $home . '/models';
@@ -702,7 +702,7 @@ class AdminController extends Controller
     /** Total bytes of a directory tree, or 0 when it does not exist/unreadable. */
     private static function dirSize(string $dir): float
     {
-        if (!is_dir($dir)) {
+        if (!@is_dir($dir)) {
             return 0.0;
         }
 

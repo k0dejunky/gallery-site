@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\BraintreeGateway;
 use App\Core\Controller;
+use App\Core\Database;
 use App\Core\PayPalGateway;
 use App\Core\RateLimiter;
 use App\Models\Gallery;

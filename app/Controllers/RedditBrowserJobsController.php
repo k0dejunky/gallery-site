@@ -27,7 +27,7 @@ class RedditBrowserJobsController extends Controller
      * Hand the next due reddit browser job to the home worker.
      * GET /webhooks/reddit/browser-jobs
      *
-     * @return never
+     *  void
      */
     public function take(): void
     {
@@ -66,7 +66,7 @@ class RedditBrowserJobsController extends Controller
      * POST /webhooks/reddit/browser-jobs/{id}/report
      * body: { "ok": bool, "url"?: string, "error"?: string }
      *
-     * @return never
+     *  void
      */
     public function report(int $id): void
     {
