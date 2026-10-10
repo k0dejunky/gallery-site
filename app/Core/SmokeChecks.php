@@ -135,6 +135,9 @@ class SmokeChecks
             'app/Models/RedditClient.php',
             'app/Controllers/RedditBrowserJobsController.php',
             'bin/browser/reddit-homeworker.mjs',
+            'app/Controllers/CspController.php',
+            'app/Controllers/BackupPullController.php',
+            'bin/backup_offsite_package.php',
         ];
         foreach ($files as $rel) {
             $slug = str_replace(['/', '.'], '_', $rel);
@@ -561,6 +564,36 @@ class SmokeChecks
             return preg_match('/image\/svg[\+; ]/', $lower) === 0 && strpos($lower, "'html'") === false && strpos($lower, "'svg'") === false
                 ? $ok('no svg/html in MediaUploader/ChatMessage upload maps')
                 : $bad('upload MIME/extension allowlists must not include svg or html');
+        });
+        $secAuth = $read("$root/app/Controllers/AuthController.php");
+        $secHelpers = $read("$root/app/Core/helpers.php");
+        $add('smoke.sec.signup_rate_limited', 'Smoke · Security', 'Signup and verify-email are rate limited', static function () use ($secAuth, $ok, $bad): array {
+            return strpos($secAuth, "'signup-ip:'") !== false && strpos($secAuth, "'verify-email:'") !== false
+                ? $ok('signup + verifyEmail throttled')
+                : $bad('AuthController must RateLimiter-allow signup and verifyEmail');
+        });
+        $add('smoke.sec.image_pixel_cap', 'Smoke · Security', 'Image decode rejects decompression bombs', static function () use ($secHelpers, $ok, $bad): array {
+            return substr_count($secHelpers, '50000000') >= 3
+                ? $ok('50 MP cap in _load_image / imagick paths')
+                : $bad('helpers.php must reject images over 50MP in _load_image, _load_image_imagick and _imagick_dimensions');
+        });
+        $secIndex = $read("$root/public/index.php");
+        $secCsp   = $read("$root/app/Controllers/CspController.php");
+        $secBackup = $read("$root/bin/backup_offsite_package.php");
+        $secPullC  = $read("$root/app/Controllers/BackupPullController.php");
+        $add('smoke.sec.csp_report_only', 'Smoke · Security', 'Needs nonce-based report-only CSP + a report collector', static function () use ($secIndex, $secCsp, $ok, $bad): array {
+            return strpos($secIndex, 'Content-Security-Policy-Report-Only') !== false
+                && strpos($secIndex, "'nonce-") !== false
+                && strpos($secCsp, 'function report') !== false && strpos($secCsp, "csp.log") !== false
+                ? $ok('report-only CSP + /webhooks/csp-report collector present')
+                : $bad('index.php must emit a report-only nonce CSP and CspController must log reports');
+        });
+        $add('smoke.sec.offsite_backup', 'Smoke · Security', 'Encrypted off-site backup packaging + pull endpoint', static function () use ($secBackup, $secPullC, $ok, $bad): array {
+            return strpos($secBackup, 'openssl enc -aes-256-cbc') !== false
+                && strpos($secBackup, 'gallery-backup.pass') !== false
+                && strpos($secPullC, 'BACKUP_PULL_KEY') !== false
+                ? $ok('package + pull endpoint hardened')
+                : $bad('backup_offsite_package.php must openssl-encrypt and BackupPullController must require BACKUP_PULL_KEY');
         });
 
         // --------------------------------------------------- Braintree

@@ -459,7 +459,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
         </div>
     </div>
 
-    <script>
+    <script nonce="<?= csp_nonce() ?>">
     (function () {
         var overlay = document.getElementById('admin-progress');
         var label = document.getElementById('ap-label');
@@ -597,7 +597,7 @@ if ($_activeAdminTpl !== null && empty($_GET['se'])):
 $_tplChanges = json_decode((string) $_activeAdminTpl['config_json'], true) ?: [];
 $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
 ?>
-    <script>
+    <script nonce="<?= csp_nonce() ?>">
     (function () {
         var changes = <?= $_tplJson ?>;
         if (!Array.isArray(changes)) changes = [];
@@ -693,7 +693,7 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
     </script>
 <?php endif; ?>
 
-    <script>
+    <script nonce="<?= csp_nonce() ?>">
         // Admin shell behaviours: mobile nav drawer, auto-dismissing flash
         // toasts, the Ctrl+K command palette, and remembered collapsible
         // dashboard sections.
@@ -894,7 +894,7 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
         })();
     </script>
 
-    <script>
+    <script nonce="<?= csp_nonce() ?>">
         (function () {
             'use strict';
             var wakeLock = null;
@@ -949,6 +949,6 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
         })();
     </script>
     <?php require __DIR__ . '/../partials/tour_targets.php'; ?>
-    <script src="<?= e(url('/assets/js/tour.js')) ?>?v=8" defer></script>
+    <script nonce="<?= csp_nonce() ?>" src="<?= e(url('/assets/js/tour.js')) ?>?v=8" defer></script>
 </body>
 </html>

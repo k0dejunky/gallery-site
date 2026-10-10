@@ -41,6 +41,12 @@ return [
     // operator's residential-IP machine from its own IP.
     ['GET', '/webhooks/reddit/browser-jobs', 'RedditBrowserJobsController@take'],
     ['POST', '/webhooks/reddit/browser-jobs/{id}/report', 'RedditBrowserJobsController@report'],
+
+    // CSP violation reports (report-uri target; no session/CSRF).
+    ['POST', '/webhooks/csp-report', 'CspController@report'],
+
+    // Off-site backup pickup (Bearer BACKUP_PULL_KEY) for the LAN box.
+    ['GET', '/internal/backup/latest', 'BackupPullController@latest'],
     ['POST', '/webhooks/{provider}', 'WebhookController@handle'],
 
     // Gallery import API (folder-import app; Bearer GALLERY_IMPORT_KEY)

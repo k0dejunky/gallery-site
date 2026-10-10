@@ -121,5 +121,23 @@ if (is_file($maintenanceFlag)) {
 
 $routes = require __DIR__ . '/../config/routes.php';
 $request = new Request();
+
+// Report-only CSP with a per-request script nonce: collects violations so the
+// site can move off 'unsafe-inline' for scripts without breaking anything yet.
+// The Apache-enforced CSP (gallery-headers.conf) still applies on top.
+if (!headers_sent() && defined('CSP_NONCE')) {
+    header(
+        "Content-Security-Policy-Report-Only: default-src 'self'; "
+        . "script-src 'self' 'nonce-" . CSP_NONCE . "' 'strict-dynamic' "
+        . 'https://www.googletagmanager.com https://js.braintreegateway.com https://www.paypal.com; '
+        . "object-src 'none'; base-uri 'self'; form-action 'self'; "
+        . "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; "
+        . "media-src 'self' blob:; connect-src 'self' "
+        . 'https://api.braintreegateway.com https://api.paypal.com https://www.googletagmanager.com https://www.google-analytics.com; '
+        . "frame-src 'self' https://client-analytics.braintreegateway.com https://www.sandbox.paypal.com https://www.paypal.com; "
+        . 'report-uri ' . url('/webhooks/csp-report')
+    );
+}
+
 Traffic::capture($request);
 (new Router($routes))->dispatch($request);

@@ -85,7 +85,7 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="<?= e(isset($title) ? $title . ' — ' . config('app.site_name') : config('app.site_name')) ?>">
     <meta name="twitter:description" content="<?= e($metaDescription ?? (config('app.site_name') . ' — curated galleries of original photos and videos.')) ?>">
-    <script type="application/ld+json">
+    <script type="application/ld+json" nonce="<?= csp_nonce() ?>">
     {
         "@context": "https://schema.org",
         "@type": "WebSite",
@@ -94,7 +94,7 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     }
     </script>
     <?php if (isset($ldJson) && is_array($ldJson)): ?>
-    <script type="application/ld+json"><?= json_encode($ldJson, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
+    <script type="application/ld+json" nonce="<?= csp_nonce() ?>"><?= json_encode($ldJson, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
     <?php endif; ?>
     <style>
 <?= \App\Models\Theme::cssUser($userThemePreset) ?>
@@ -405,7 +405,7 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
         </div>
     </aside>
     <?php endif; ?>
-    <script>
+    <script nonce="<?= csp_nonce() ?>">
         // Gallery cards: if a card's category chips don't all fit on one row,
         // collapse them to that row and show an expand/collapse toggle.
         (function () {
@@ -462,7 +462,7 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
 
         })();
     </script>
-    <script>
+    <script nonce="<?= csp_nonce() ?>">
         // Accessible mobile nav: track the expanded state on the toggle button
         // and close the dropdown on outside clicks, Escape, or following a link.
         window.GalleryNav = {
@@ -492,7 +492,7 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
         });
     </script>
 <?php if (!empty($_GET['se']) && in_array($_GET['se'], ['1', 'user'], true)): ?>
-    <script>
+    <script nonce="<?= csp_nonce() ?>">
     (function(){
         function keepPreview(url){
             try{var u=new URL(url,window.location.href),mode=new URLSearchParams(window.location.search).get('se')||'user';if(u.origin===window.location.origin)u.searchParams.set('se',mode);return u.href;}catch(e){return url;}
@@ -508,7 +508,7 @@ if ($_activeSiteTpl !== null && empty($_GET['se'])):
 $_tplChanges = json_decode((string) $_activeSiteTpl['config_json'], true) ?: [];
 $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
 ?>
-    <script>
+    <script nonce="<?= csp_nonce() ?>">
     (function(){
         var changes=<?= $_tplJson ?>;
         function applyOrder(c){
@@ -560,9 +560,9 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
 <?php endif; ?>
     <?php require __DIR__ . '/partials/footer.php'; ?>
     <?php require __DIR__ . '/partials/consent_banner.php'; ?>
-    <script>try{var p=JSON.parse(localStorage.getItem('galleryDisplayPrefs')||'{}');var v=p.view||'grid';var s=p.size||'md';document.documentElement.classList.add('g-view-'+v);document.documentElement.classList.add('g-size-'+s);if(p.masonry)document.documentElement.classList.add('g-masonry');}catch(e){document.documentElement.classList.add('g-view-grid');document.documentElement.classList.add('g-size-md');}</script>
+    <script nonce="<?= csp_nonce() ?>">try{var p=JSON.parse(localStorage.getItem('galleryDisplayPrefs')||'{}');var v=p.view||'grid';var s=p.size||'md';document.documentElement.classList.add('g-view-'+v);document.documentElement.classList.add('g-size-'+s);if(p.masonry)document.documentElement.classList.add('g-masonry');}catch(e){document.documentElement.classList.add('g-view-grid');document.documentElement.classList.add('g-size-md');}</script>
     <?php require __DIR__ . '/partials/tour_targets.php'; ?>
-    <script src="<?= url('/assets/js/user.js') ?>?v=16" defer></script>
-    <script src="<?= url('/assets/js/tour.js') ?>?v=8" defer></script>
+    <script nonce="<?= csp_nonce() ?>" src="<?= url('/assets/js/user.js') ?>?v=16" defer></script>
+    <script nonce="<?= csp_nonce() ?>" src="<?= url('/assets/js/tour.js') ?>?v=8" defer></script>
 </body>
 </html>

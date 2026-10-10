@@ -205,6 +205,16 @@ class AuthController extends Controller
             $this->redirect('/signup');
         }
 
+        // Throttle sign-up attempts per IP + email (spam / account enumeration).
+        if (!RateLimiter::allow([
+            'signup-ip:' . $this->request->ip(),
+            'signup-em:' . strtolower($email),
+        ], 10, 900)) {
+            $this->flash('error', 'Too many sign-up attempts. Please try again later.');
+            $this->redirect($signupBack());
+            return;
+        }
+
         $errors = \App\Core\Validator::validate([
             'email'           => $email,
             'password'        => $password,
@@ -312,6 +322,13 @@ class AuthController extends Controller
      */
     public function verifyEmail(): void
     {
+        // Throttle token brute-forcing attempts.
+        if (!RateLimiter::allow(['verify-email:' . $this->request->ip()], 30, 600)) {
+            $this->flash('error', 'Too many verification attempts. Please try again later.');
+            $this->redirect(Auth::check() ? Auth::homePath() : '/login');
+            return;
+        }
+
         $token = trim((string) $this->request->query('token', ''));
         $user = User::findByVerificationToken($token);
 

@@ -524,6 +524,15 @@ function video_has_stream(string $path): bool
 }
 
 /**
+ * The per-request CSP nonce for script tags ('' on CLI). Used by the layouts
+ * and the report-only CSP emitted by the front controller.
+ */
+function csp_nonce(): string
+{
+    return defined('CSP_NONCE') ? (string) CSP_NONCE : '';
+}
+
+/**
  * Render a hidden CSRF token input. Every POST form must include this so the
  * framework can verify the request came from the same browser session.
  */
@@ -839,6 +848,12 @@ function _load_image_imagick(string $src): ?array
             return null;
         }
 
+        if ($im->getImageWidth() * $im->getImageHeight() > 50000000) {
+            $im->destroy();
+
+            return null;
+        }
+
         $im->setIteratorIndex(0);
 
         // Auto-orient by rotating from the EXIF orientation tag. manual
@@ -949,6 +964,10 @@ function _imagick_dimensions(string $src): ?array
 
         $im->destroy();
 
+        if ($dims[0] * $dims[1] > 50000000) {
+            return null;
+        }
+
         return $dims;
     } catch (Throwable $e) {
         return null;
@@ -973,6 +992,13 @@ function _load_image(string $src)
     }
 
     $type = $info[2];
+
+    // Decompression-bomb guard: reject absurd pixel counts before decoding
+    // (50 MP is well above any real upload and far below the memory blow-up
+    // point of GD/Imagick).
+    if ((int) $info[0] * (int) $info[1] > 50000000) {
+        return [false, 0];
+    }
 
     // Huge photos (e.g. 60+ megapixel camera captures) are extremely slow and
     // memory-heavy to decode and resample with GD alone. When the source is

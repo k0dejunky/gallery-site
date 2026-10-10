@@ -13,6 +13,13 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/Core/helpers.php';
 
+// Per-request CSP nonce (base64, 16 random bytes). Emitted by the layouts on
+// script tags so the site can eventually move away from 'unsafe-inline'; the
+// front controller uses it for the report-only CSP. CLI runs never need it.
+if (!defined('CSP_NONCE')) {
+    define('CSP_NONCE', base64_encode(random_bytes(16)));
+}
+
 spl_autoload_register(function (string $class): void {
     $prefix = 'App\\';
     if (strncmp($class, $prefix, strlen($prefix)) !== 0) {
