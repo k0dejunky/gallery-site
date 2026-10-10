@@ -418,6 +418,22 @@ class Theme
         return $selector . " {\n" . implode("\n", $lines) . "\n}";
     }
 
+    /**
+     * Cache-busting version of the external site theme stylesheet
+     * (/theme.css). It hashes the rendered palette + layout variables PLUS the
+     * static base rules served by that route, so any preset change or base CSS
+     * edit automatically mints a fresh URL. Kept in Redis like the rest of the
+     * rendered CSS so the hash computation never re-runs per request.
+     */
+    public static function themeCssVersion(?string $slug = null, string $selector = ':root'): string
+    {
+        return \App\Core\Cache::remember('theme.file.version.' . md5($selector . '|' . (string) $slug), 300, function () use ($slug, $selector) {
+            $base = is_file(__DIR__ . '/theme_base.css') ? (string) file_get_contents(__DIR__ . '/theme_base.css') : '';
+
+            return md5(self::cssUser($slug, $selector) . "\n" . self::cssLayoutUser($slug, $selector) . "\n" . $base);
+        });
+    }
+
     // ── Theme presets ──────────────────────────────────────────────────
 
     /**

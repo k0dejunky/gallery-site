@@ -135,11 +135,25 @@ private static function localGet(string $key): ?string
 }
 
 /**
- * A monotonically increasing generation counter for a data bucket
- * (e.g. 'gallery', 'category', 'media'). Cache keys built with
- * generation() are invalidated atomically by bump() — no wildcard
- * deletes needed, and the cache never serves stale data after a write.
- */
+     * Whether the Redis backing store is usable right now. Fast check - the
+     * connection is lazily established and pinned once per process, so the
+     * cost of the first real ping only ever happens once.
+     */
+    public static function available(): bool
+    {
+        try {
+            return self::connection() !== null;
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * A monotonically increasing generation counter for a data bucket
+     * (e.g. 'gallery', 'category', 'media'). Cache keys built with
+     * generation() are invalidated atomically by bump() — no wildcard
+     * deletes needed, and the cache never serves stale data after a write.
+     */
 public static function generation(string $bucket): int
 {
     $value = self::get('gen:' . $bucket);

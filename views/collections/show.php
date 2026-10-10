@@ -73,6 +73,7 @@
                     $gid = (int) $gallery['id'];
                     $cover = $gallery['first_photo'] ?? null;
                     $galleryCategories = \App\Models\Gallery::categoriesBulk([$gid])[$gid] ?? [];
+                    $coverFetchPriority = empty($coverFetchPriority) ? 'high' : '';
                     require __DIR__ . '/../partials/gallery_card.php';
                     ?>
                     <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/galleries/' . $gid . '/delete') ?>" style="padding:.6rem;">

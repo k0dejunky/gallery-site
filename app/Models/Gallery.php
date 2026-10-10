@@ -689,6 +689,7 @@ class Gallery
 
         \App\Core\Cache::bump('gallery');
         \App\Core\DuplicateGalleries::invalidate();
+        \App\Core\PageCache::invalidate();
 
         return (int) Database::connection()->lastInsertId();
     }
@@ -706,6 +707,7 @@ class Gallery
                 [$title, $description, $type, $minLevel, $publishedAt, $id]
             );
             \App\Core\Cache::bump('gallery');
+            \App\Core\PageCache::invalidate();
             return;
         }
 
@@ -714,6 +716,7 @@ class Gallery
             [$title, $description, $type, $minLevel, $isSecret ? 1 : 0, $publishedAt, $id]
         );
         \App\Core\Cache::bump('gallery');
+        \App\Core\PageCache::invalidate();
     }
 
     public static function allowedUsers(int $galleryId): array
@@ -738,6 +741,7 @@ class Gallery
         }
 
         \App\Core\Cache::bump('gallery');
+        \App\Core\PageCache::invalidate();
     }
 
     /**
@@ -763,6 +767,7 @@ class Gallery
         \App\Core\Cache::bump('gallery');
         \App\Core\Cache::bump('media');
         \App\Core\DuplicateGalleries::invalidate();
+        \App\Core\PageCache::invalidate();
     }
 
     /**

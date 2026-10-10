@@ -1,7 +1,7 @@
 <?php if (is_video($photo['filename'])): ?>
     <figure class="gallery-item">
         <a class="video-open" data-gallery-index="<?= $idx ?>" href="<?= e(url('/videos/' . (int) $photo['id']) . '?' . http_build_query(['return_to' => $returnTo])) ?>" title="Play item <?= $idx + 1 ?> of <?= $total ?>">
-            <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>" alt="Video thumbnail for item <?= $idx + 1 ?>" loading="lazy" decoding="async">
+            <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>" alt="Video thumbnail for item <?= $idx + 1 ?>" width="400" height="300" loading="lazy" decoding="async">
             <span class="play-badge">&#9654;</span>
         </a>
         <figcaption>
@@ -20,7 +20,7 @@
                 <source type="image/jpeg" srcset="<?= e(file_url($photo['filename'], 'thumb')) ?>">
                 <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>"
                      alt="<?= e($photo['caption']) ?>"
-                     loading="lazy" decoding="async" sizes="(max-width: 640px) 100vw, (max-width: 1000px) 50vw, 220px">
+                     width="400" height="300" loading="lazy" decoding="async" sizes="(max-width: 640px) 100vw, (max-width: 1000px) 50vw, 220px">
             </picture>
         </a>
         <figcaption>

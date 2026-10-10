@@ -34,10 +34,10 @@ foreach ($source as $photo) {
                         <?php if (!$isVideo): ?>
                             <picture>
                                 <source type="image/webp" srcset="<?= e(file_url($item['filename'], 'blur', 'webp')) ?>">
-                                <img src="<?= e($item['thumb']) ?>" alt="" loading="lazy" onerror="this.onerror=null;this.src='<?= e($pictureBlank) ?>'">
+                                <img src="<?= e($item['thumb']) ?>" alt="" width="400" height="300" loading="lazy" onerror="this.onerror=null;this.src='<?= e($pictureBlank) ?>'">
                             </picture>
                         <?php else: ?>
-                            <img src="<?= e($item['thumb']) ?>" alt="" loading="lazy" onerror="this.onerror=null;this.src='<?= e($pictureBlank) ?>'">
+                            <img src="<?= e($item['thumb']) ?>" alt="" width="400" height="300" loading="lazy" onerror="this.onerror=null;this.src='<?= e($pictureBlank) ?>'">
                             <span class="play-badge">&#9654;</span>
                         <?php endif; ?>
                         <span class="card-blur-note">Members-only</span>

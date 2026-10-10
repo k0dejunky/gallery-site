@@ -225,6 +225,7 @@ class MediaUploader
 
         $photoId = \App\Models\Photo::create($filename, $hash);
         \App\Models\Gallery::attachPhoto($galleryId, $photoId);
+        \App\Core\PageCache::invalidate();
 
         // Cache the video duration (playlist rows show it without probing).
         if (is_video($filename)) {

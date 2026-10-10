@@ -83,14 +83,17 @@ $sectionBaseUrl = $base . ($paginationQuery ? '?' . http_build_query($pagination
         </div>
     <?php else: ?>
         <div class="grid">
-            <?php foreach ($imagePaginator['items'] as $gallery): ?>
-                <?php
-                $gid = (int) $gallery['id'];
-                $cover = $cardCovers['covers'][$gid] ?? null;
-                $galleryCategories = $cardCovers['categories'][$gid] ?? [];
-                require __DIR__ . '/../partials/gallery_card.php';
-                ?>
-            <?php endforeach; ?>
+            <?php
+            $catBase = 'cat.' . md5(json_encode([$category['id'] ?? 0, $category['slug'] ?? '']));
+            echo \App\Core\PageCache::fragment($catBase . '.images.' . md5(json_encode([(string) $q, (int) ($imagePaginator['page'] ?? 1), array_column($imagePaginator['items'], 'id')])), 120, static function () use ($imagePaginator, $cardCovers): void {
+                foreach ($imagePaginator['items'] as $gallery) {
+                    $gid = (int) $gallery['id'];
+                    $cover = $cardCovers['covers'][$gid] ?? null;
+                    $galleryCategories = $cardCovers['categories'][$gid] ?? [];
+                    require __DIR__ . '/../partials/gallery_card.php';
+                }
+            });
+            ?>
         </div>
         <?php
         // Reuse the pagination partial for this section's own pages.
@@ -116,18 +119,19 @@ $sectionBaseUrl = $base . ($paginationQuery ? '?' . http_build_query($pagination
         </div>
     <?php else: ?>
         <div class="grid">
-            <?php foreach ($videoPaginator['items'] as $gallery): ?>
-                <?php
-                $gid = (int) $gallery['id'];
-                $cover = $cardCovers['covers'][$gid] ?? null;
-                $galleryCategories = $cardCovers['categories'][$gid] ?? [];
-                require __DIR__ . '/../partials/gallery_card.php';
-                ?>
-            <?php endforeach; ?>
+            <?php
+            echo \App\Core\PageCache::fragment($catBase . '.videos.' . md5(json_encode([(string) $q, (int) ($videoPaginator['page'] ?? 1), array_column($videoPaginator['items'], 'id')])), 120, static function () use ($videoPaginator, $cardCovers): void {
+                foreach ($videoPaginator['items'] as $gallery) {
+                    $gid = (int) $gallery['id'];
+                    $cover = $cardCovers['covers'][$gid] ?? null;
+                    $galleryCategories = $cardCovers['categories'][$gid] ?? [];
+                    require __DIR__ . '/../partials/gallery_card.php';
+                }
+            });
+            ?>
         </div>
         <?php
-        // Reuse the pagination partial for this section's own pages.
-        $baseUrl = $sectionBaseUrl;
+        $baseUrl = $videoSectionBaseUrl;
         $paginator = $videoPaginator;
         require __DIR__ . '/../partials/pagination.php';
         ?>

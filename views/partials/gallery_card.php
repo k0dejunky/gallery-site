@@ -16,6 +16,13 @@ $placeholder = 'data:image/svg+xml;utf8,' . rawurlencode(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" fill="#ffd9e8"/><rect x="130" y="102" width="140" height="96" rx="12" fill="none" stroke="#f472b6" stroke-width="8"/><circle cx="185" cy="145" r="14" fill="#ec4899"/><path d="M130 196l42-42 32 30 44-52 52 64" fill="none" stroke="#9333ea" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 );
 $cardId = 'card-' . (int) $gallery['id'];
+// First card on a page gets high fetch priority and eager loading (it is the
+// LCP element); all others lazy-load. Reserve the 400x300 cover ratio so the
+// browser can lay out the grid without the "jump" caused by late image sizes.
+$heroCard = (($coverFetchPriority ?? '') === 'high') || \App\Core\PageCache::claimHero();
+$fetchPriorityAttr  = $heroCard ? ' fetchpriority="high"' : '';
+$lazyLoadAttr       = $heroCard ? '' : ' loading="lazy"';
+$asyncDecodeAttr    = $heroCard ? '' : ' decoding="async"';
 ?>
 <div class="card card-compact" id="<?= e($cardId) ?>">
     <a class="card-link" href="<?= e($galleryUrl) ?>">
@@ -32,16 +39,16 @@ $cardId = 'card-' . (int) $gallery['id'];
         <?php else: ?>
             <div class="card-cover">
                 <?php if ($isVideoCard): ?>
-                    <img src="<?= e(file_url($cover['filename'], $coverSize)) ?>" alt="" loading="lazy" onerror="this.onerror=null;this.src='<?= e($placeholder) ?>'">
+                    <img src="<?= e(file_url($cover['filename'], $coverSize)) ?>" alt="" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?> onerror="this.onerror=null;this.src='<?= e($placeholder) ?>'">
                 <?php elseif ($coverSize === 'blur'): ?>
                     <?php // Guests (and search engines) only ever see the blurred
                         // preview cover; the real thumbnail is for members. ?>
-                    <img src="<?= e(file_url($cover['filename'], 'blur')) ?>" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='<?= e($placeholder) ?>'">
+                    <img src="<?= e(file_url($cover['filename'], 'blur')) ?>" alt="" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> onerror="this.onerror=null;this.src='<?= e($placeholder) ?>'">
                 <?php else: ?>
                     <picture>
                         <source type="image/webp" srcset="<?= e(file_url($cover['filename'], 'thumb', 'webp')) ?>">
                         <source type="image/jpeg" srcset="<?= e(file_url($cover['filename'], 'thumb')) ?>">
-                        <img src="<?= e(file_url($cover['filename'], 'thumb')) ?>" srcset="<?= e(file_srcset($cover['filename'])) ?>" sizes="(min-width: 800px) 400px, 100vw" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='<?= e($placeholder) ?>'">
+                        <img src="<?= e(file_url($cover['filename'], 'thumb')) ?>" srcset="<?= e(file_srcset($cover['filename'])) ?>" sizes="(min-width: 800px) 400px, 100vw" alt="" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> onerror="this.onerror=null;this.src='<?= e($placeholder) ?>'">
                     </picture>
                 <?php endif; ?>
                 <?php if ($isVideoCard): ?><span class="video-badge">&#9654;</span><?php endif; ?>

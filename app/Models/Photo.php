@@ -412,5 +412,6 @@ class Photo
 
         \App\Core\Cache::bump('media');
         \App\Core\Cache::bump('gallery');
+        \App\Core\PageCache::invalidate();
     }
 }

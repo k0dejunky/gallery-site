@@ -11,6 +11,10 @@ return [
     // payload of very large galleries small.
     'gallery_page_size' => 48,
 
+    // Guest-facing gallery-listing fragment cache (Redis, TTL 120s). Setting
+    // this to false renders every listing live with zero caching.
+    'page_cache' => true,
+
     'uploads' => [
         // Where uploaded originals, web variants and thumbnails are stored.
         'dir'          => __DIR__ . '/../storage/uploads',

@@ -92,6 +92,10 @@ if (session_status() === PHP_SESSION_NONE) {
 
 Auth::start();
 
+// PageCache keeps request-scoped hero/claim state in statics; PHP-FPM reuses
+// worker processes across requests so it must be reset here every time.
+\App\Core\PageCache::reset();
+
 // Maintenance mode: when storage/maintenance.flag exists, everyone except
 // staff gets a downtime page. Admin area, login, cron and file serving stay
 // reachable so staff can still work and the login page keeps its art.

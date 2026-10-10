@@ -91,14 +91,20 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
                 <?php endif; ?>
             </h2>
             <div class="grid">
-                <?php foreach ($section['galleries'] as $gallery): ?>
-                    <?php
-                    $gid = (int) $gallery['id'];
-                    $cover = $cardCovers['covers'][$gid] ?? null;
-                    $galleryCategories = $cardCovers['categories'][$gid] ?? [];
-                    require __DIR__ . '/../partials/gallery_card.php';
-                    ?>
-                <?php endforeach; ?>
+                <?php
+                $sectionKey = 'sections.' . md5(json_encode([
+                    $section['category']['id'] ?? 0,
+                    array_column($section['galleries'], 'id'),
+                ]));
+                echo \App\Core\PageCache::fragment($sectionKey, 120, static function () use ($section, $cardCovers): void {
+                    foreach ($section['galleries'] as $gallery) {
+                        $gid = (int) $gallery['id'];
+                        $cover = $cardCovers['covers'][$gid] ?? null;
+                        $galleryCategories = $cardCovers['categories'][$gid] ?? [];
+                        require __DIR__ . '/../partials/gallery_card.php';
+                    }
+                });
+                ?>
             </div>
         </section>
     <?php endforeach; ?>
@@ -110,13 +116,16 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
     <p class="muted">Galleries similar to your favourites and recent views.</p>
     <div class="grid">
         <?php
-        $recCats = \App\Models\Gallery::categoriesBulk(array_map('intval', array_column($recommended, 'id')));
-        foreach ($recommended as $gallery):
-            $gid = (int) $gallery['id'];
-            $cover = $gallery['first_photo'] ?? null;
-            $galleryCategories = $recCats[$gid] ?? [];
-            require __DIR__ . '/../partials/gallery_card.php';
-        endforeach;
+        $recKey = 'recommended.' . md5(json_encode(array_column($recommended, 'id')));
+        echo \App\Core\PageCache::fragment($recKey, 120, static function () use ($recommended): void {
+            $recCats = \App\Models\Gallery::categoriesBulk(array_map('intval', array_column($recommended, 'id')));
+            foreach ($recommended as $gallery) {
+                $gid = (int) $gallery['id'];
+                $cover = $gallery['first_photo'] ?? null;
+                $galleryCategories = $recCats[$gid] ?? [];
+                require __DIR__ . '/../partials/gallery_card.php';
+            }
+        });
         ?>
     </div>
 </section>
@@ -153,14 +162,24 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
         </div>
     <?php else: ?>
         <div class="grid">
-            <?php foreach ($paginator['items'] as $gallery): ?>
-                <?php
-                $gid = (int) $gallery['id'];
-                $cover = $cardCovers['covers'][$gid] ?? null;
-                $galleryCategories = $cardCovers['categories'][$gid] ?? [];
-                require __DIR__ . '/../partials/gallery_card.php';
-                ?>
-            <?php endforeach; ?>
+            <?php
+            $searchKey = 'search.' . md5(json_encode([
+                (string) $q,
+                (int) $categoryId,
+                (string) $type,
+                (string) $sort,
+                (int) ($paginator['page'] ?? 1),
+                array_column($paginator['items'], 'id'),
+            ]));
+            echo \App\Core\PageCache::fragment($searchKey, 120, static function () use ($paginator, $cardCovers): void {
+                foreach ($paginator['items'] as $gallery) {
+                    $gid = (int) $gallery['id'];
+                    $cover = $cardCovers['covers'][$gid] ?? null;
+                    $galleryCategories = $cardCovers['categories'][$gid] ?? [];
+                    require __DIR__ . '/../partials/gallery_card.php';
+                }
+            });
+            ?>
         </div>
         <?php
         $baseUrl = url('/galleries');

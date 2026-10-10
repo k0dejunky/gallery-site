@@ -18,9 +18,13 @@ require __DIR__ . '/../partials/breadcrumbs.php';
     </div>
 <?php else: ?>
     <div class="grid">
-        <?php foreach ($galleries as $gallery): ?>
-            <?php $cover = null; $galleryCategories = null; require __DIR__ . '/../partials/gallery_card.php'; ?>
-        <?php endforeach; ?>
+        <?php echo \App\Core\PageCache::fragment('tag.' . md5(json_encode([$tag['id'] ?? 0, array_column($galleries, 'id')])), 120, static function () use ($galleries): void {
+            foreach ($galleries as $gallery) {
+                $cover = null;
+                $galleryCategories = null;
+                require __DIR__ . '/../partials/gallery_card.php';
+            }
+        }); ?>
     </div>
 
     <?php if ($page > 1 || count($galleries) === 24): ?>

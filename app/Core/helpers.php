@@ -848,7 +848,7 @@ function _load_image_imagick(string $src): ?array
             return null;
         }
 
-        if ($im->getImageWidth() * $im->getImageHeight() > 50000000) {
+        if ($im->getImageWidth() * $im->getImageHeight() > 75000000) {
             $im->destroy();
 
             return null;
@@ -964,7 +964,7 @@ function _imagick_dimensions(string $src): ?array
 
         $im->destroy();
 
-        if ($dims[0] * $dims[1] > 50000000) {
+        if ($dims[0] * $dims[1] > 75000000) {
             return null;
         }
 
@@ -994,9 +994,10 @@ function _load_image(string $src)
     $type = $info[2];
 
     // Decompression-bomb guard: reject absurd pixel counts before decoding
-    // (50 MP is well above any real upload and far below the memory blow-up
-    // point of GD/Imagick).
-    if ((int) $info[0] * (int) $info[1] > 50000000) {
+    // (75 MP covers today's high-resolution phone/DSLR captures - e.g. 64 MP
+    // sensors - while staying far below the memory blow-up point of
+    // GD/Imagick).
+    if ((int) $info[0] * (int) $info[1] > 75000000) {
         return [false, 0];
     }
 

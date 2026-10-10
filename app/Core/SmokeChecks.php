@@ -565,6 +565,15 @@ class SmokeChecks
                 ? $ok('no svg/html in MediaUploader/ChatMessage upload maps')
                 : $bad('upload MIME/extension allowlists must not include svg or html');
         });
+        $secAppCfg = $read("$root/config/app.php");
+        $add('smoke.sec.large_video_uploads', 'Smoke · Security', 'Uploads accept multi-GB videos', static function () use ($secUploadP, $secAppCfg, $ok, $bad): array {
+            $tooLarge = strpos($secUploadP, "'File is too large.'") !== false;
+            $exceedsCap = preg_match("/'max_size'\s*=>\s*(10|1024)\s*\*\s*1024\s*\*\s*1024\s*\*\s*1024/", $secAppCfg) === 1
+                || preg_match("/'max_size'\s*=>\s*(\d{11,})/", $secAppCfg, $m) === 1 && (int) $m[1] >= 10737418240;
+            return $tooLarge && $exceedsCap
+                ? $ok('MediaUploader enforces max_size >= 10 GiB for multi-GB videos')
+                : $bad('config/app.php max_size must be >= 10 GiB and MediaUploader must reject oversized files');
+        });
         $secAuth = $read("$root/app/Controllers/AuthController.php");
         $secHelpers = $read("$root/app/Core/helpers.php");
         $add('smoke.sec.signup_rate_limited', 'Smoke · Security', 'Signup and verify-email are rate limited', static function () use ($secAuth, $ok, $bad): array {
@@ -573,9 +582,9 @@ class SmokeChecks
                 : $bad('AuthController must RateLimiter-allow signup and verifyEmail');
         });
         $add('smoke.sec.image_pixel_cap', 'Smoke · Security', 'Image decode rejects decompression bombs', static function () use ($secHelpers, $ok, $bad): array {
-            return substr_count($secHelpers, '50000000') >= 3
-                ? $ok('50 MP cap in _load_image / imagick paths')
-                : $bad('helpers.php must reject images over 50MP in _load_image, _load_image_imagick and _imagick_dimensions');
+            return substr_count($secHelpers, '75000000') >= 3
+                ? $ok('75 MP cap in _load_image / imagick paths')
+                : $bad('helpers.php must reject images over 75MP in _load_image, _load_image_imagick and _imagick_dimensions');
         });
         $secIndex = $read("$root/public/index.php");
         $secCsp   = $read("$root/app/Controllers/CspController.php");

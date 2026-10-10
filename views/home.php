@@ -61,9 +61,13 @@ $tags            = (array) ($tags ?? []);
             <a class="btn btn-sm btn-link" href="<?= url('/galleries') ?>">View all &rarr;</a>
         </div>
         <div class="grid" style="margin-top:.75rem;">
-            <?php foreach ($featured as $g): ?>
-                <?php $gallery = $g; $cover = null; require __DIR__ . '/partials/gallery_card.php'; ?>
-            <?php endforeach; ?>
+            <?php echo \App\Core\PageCache::fragment('home.featured.' . md5(json_encode(array_column($featured, 'id'))), 120, static function () use ($featured): void {
+                foreach ($featured as $g) {
+                    $gallery = $g;
+                    $cover = null;
+                    require __DIR__ . '/partials/gallery_card.php';
+                }
+            }); ?>
         </div>
     </section>
 <?php endif; ?>
@@ -75,9 +79,13 @@ $tags            = (array) ($tags ?? []);
             <a class="btn btn-sm btn-link" href="<?= url('/galleries') ?>">View all &rarr;</a>
         </div>
         <div class="grid" style="margin-top:.75rem;">
-            <?php foreach ($trending as $g): ?>
-                <?php $gallery = $g; $cover = null; require __DIR__ . '/partials/gallery_card.php'; ?>
-            <?php endforeach; ?>
+            <?php echo \App\Core\PageCache::fragment('home.trending.' . md5(json_encode(array_column($trending, 'id'))), 120, static function () use ($trending): void {
+                foreach ($trending as $g) {
+                    $gallery = $g;
+                    $cover = null;
+                    require __DIR__ . '/partials/gallery_card.php';
+                }
+            }); ?>
         </div>
     </section>
 <?php endif; ?>
@@ -102,13 +110,13 @@ $tags            = (array) ($tags ?? []);
         <p class="muted" style="margin-top:1rem;">No galleries published yet — check back soon.</p>
     <?php else: ?>
         <div class="grid" style="margin-top:.75rem;">
-            <?php foreach ($galleries as $g): ?>
-                <?php
-                $gallery = $g;
-                $cover = $covers[(int) $g['id']] ?? null;
-                ?>
-                <?php require __DIR__ . '/partials/gallery_card.php'; ?>
-            <?php endforeach; ?>
+            <?php echo \App\Core\PageCache::fragment('home.latest.' . md5(json_encode(array_column($galleries, 'id'))), 120, static function () use ($galleries, $covers): void {
+                foreach ($galleries as $g) {
+                    $gallery = $g;
+                    $cover = $covers[(int) $g['id']] ?? null;
+                    require __DIR__ . '/partials/gallery_card.php';
+                }
+            }); ?>
         </div>
     <?php endif; ?>
 </section>

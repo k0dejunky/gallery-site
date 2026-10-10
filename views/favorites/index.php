@@ -13,7 +13,7 @@
     <?php else: ?>
         <div class="grid">
             <?php foreach ($favoriteGalleries as $gallery): ?>
-                <?php $cover = $gallery['first_photo'] ?? null; $galleryCategories = $cardCovers['categories'][(int) $gallery['id']] ?? []; require __DIR__ . '/../partials/gallery_card.php'; ?>
+<?php $cover = $gallery['first_photo'] ?? null; $galleryCategories = $cardCovers['categories'][(int) $gallery['id']] ?? []; $coverFetchPriority = empty($coverFetchPriority) ? 'high' : ''; require __DIR__ . '/../partials/gallery_card.php'; ?>
             <?php endforeach; ?>
         </div>
     <?php endif; ?>
@@ -24,7 +24,7 @@
     <div class="favorites-heading"><h2>Recently viewed</h2><a href="<?= e(url('/galleries')) ?>">Browse all</a></div>
     <div class="grid">
         <?php foreach ($recentlyViewed as $gallery): ?>
-            <?php $cover = $gallery['first_photo'] ?? null; $galleryCategories = $cardCovers['categories'][(int) $gallery['id']] ?? []; require __DIR__ . '/../partials/gallery_card.php'; ?>
+            <?php $cover = $gallery['first_photo'] ?? null; $galleryCategories = $cardCovers['categories'][(int) $gallery['id']] ?? []; $coverFetchPriority = empty($coverFetchPriority) ? 'high' : ''; require __DIR__ . '/../partials/gallery_card.php'; ?>
         <?php endforeach; ?>
     </div>
 </section>
