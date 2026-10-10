@@ -153,7 +153,7 @@ try {
         if (found && /\/comments\//.test(found)) permalink = found.split('?')[0];
       } catch (_) {}
     }
-    out({ ok: true, url: permalink });
+    out({ ok: true, url: permalink, approved: await approveInModQueue(page, sub, title) });
   }
 
   const body = (await page.evaluate(() => document.body.innerText).catch(() => '')).replace(/\s+/g, ' ').slice(0, 240);
@@ -173,6 +173,51 @@ async function firstVisible(page, selectors, timeout = 8000) {
     } catch (_) {}
   }
   return null;
+}
+
+/**
+ * Best-effort: approve the just-posted item in the subreddit's mod queue so it
+ * is visible immediately even if Reddit/AutoMod held it. Gated by
+ * REDDIT_APPROVE_OWN (default on). Never throws; returns true when clicked,
+ * false when there was nothing to approve (already visible / no rights / no
+ * matching queued row).
+ */
+async function approveInModQueue(page, sub, title) {
+  if (process.env.REDDIT_APPROVE_OWN === '0') return false;
+  try {
+    await page.goto('https://www.reddit.com/r/' + sub + '/about/modqueue/', { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await sleepy(2500);
+
+    const titleNeedle = title.toLowerCase().slice(0, 80);
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const res = await page.evaluate((needle) => {
+        const anchors = Array.from(document.querySelectorAll('a[href*="/comments/"]'));
+        for (const a of anchors) {
+          const box = a.closest('shreddit-post, article, li, [class*="post"]') || a.parentElement || a;
+          if (!((box.textContent || '').toLowerCase().includes(needle))) continue;
+          const approve = box.querySelector('[aria-label*="Approve" i], [aria-label*=" approve" i], button[title*="pprove" i], [role="button"][aria-label*="pprove" i], [data-testid*="pprove" i]');
+          if (approve) {
+            approve.click();
+            return { found: true };
+          }
+          return { found: true, noButton: true };
+        }
+        return { found: false };
+      }, titleNeedle);
+
+      if (res.found) {
+        await sleepy(1500);
+        if (res.noButton) return false;      // the post is queued but without an approve control (not ours / no rights)
+        return true;                          // clicked
+      }
+      // Give the queue a moment to reflect the new post before giving up.
+      await sleepy(3000);
+    }
+    return false;
+  } catch (_) {
+    return false;
+  }
 }
 
 async function autoLogin(page, username, password) {

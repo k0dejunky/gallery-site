@@ -103,6 +103,8 @@ async function poll() {
   let result = null;
   try { result = JSON.parse((run.stdout || '').trim()); } catch (_) {}
   const ok = !!(result && result.ok);
+  const approved = !!(result && result.approved);
+  log(`post result #${id}: ${ok ? 'posted' : 'failed'} ${ok ? result.url || '' : (result.error || (run.stderr ? run.stderr.slice(0, 300) : 'browser worker failed'))}${ok && approved ? ' | approved in modqueue' : ''}`);
   await report(id, ok, result?.url || '', result?.error || (run.stderr ? run.stderr.slice(0, 300) : 'browser worker failed'));
 }
 
