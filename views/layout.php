@@ -140,7 +140,7 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     </header>
     <?php if (!$sidebarNav && !$isAuthPage): ?>
     <nav class="nav">
-        <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav-links-id" id="nav-toggle-id" onclick="GalleryNav.toggle()">&#9776;</button>
+        <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav-links-id" id="nav-toggle-id" data-action="galleryNavToggle">&#9776;</button>
         <span class="spacer"></span>
         <div class="nav-links" id="nav-links-id">
         <?php if ($user !== null): ?>
@@ -427,6 +427,88 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
     <?php require __DIR__ . '/partials/consent_banner.php'; ?>
     <script nonce="<?= csp_nonce() ?>">try{var p=JSON.parse(localStorage.getItem('galleryDisplayPrefs')||'{}');var v=p.view||'grid';var s=p.size||'md';document.documentElement.classList.add('g-view-'+v);document.documentElement.classList.add('g-size-'+s);if(p.masonry)document.documentElement.classList.add('g-masonry');}catch(e){document.documentElement.classList.add('g-view-grid');document.documentElement.classList.add('g-size-md');}</script>
     <?php require __DIR__ . '/partials/tour_targets.php'; ?>
+    <script nonce="<?= csp_nonce() ?>">
+// Nonce'd inline-handler replacement (strict CSP, no script-src-attr).
+// Views express behaviour via data-* attributes; this module delegates:
+//   data-confirm   -> window.confirm() gate on submit OR click
+//   data-action    -> calls window[actionName](el, e) (or [(el)] with data-arg)
+//   data-autosubmit-> submits the host form on 'change'
+//   data-copy      -> copies the value of #<id> to the clipboard
+//   data-picker    -> fires input.showPicker() (date inputs)
+//   data-nocontext -> prevents the context menu on the element
+//   data-fallback  -> img error fallback src (applied once)
+//   data-stop-prop -> click does not bubble past the element
+window.galleryNavToggle=function(){ if(window.GalleryNav){window.GalleryNav.toggle();} };
+window.copyToClipboard=function(sel, el){
+  var node=sel&&sel.nodeName&&sel.nodeType?sel:document.getElementById(String(sel||''));
+  if(!node){return;}
+  if(typeof node.select==='function'){node.select();}
+  try{document.execCommand('copy');}catch(_e){}
+  if(el){el.textContent='Copied';}
+};
+window.showPickerOn=function(el){ if(el){try{el.showPicker&&el.showPicker();}catch(_e){}} };
+window.chatFocusInput=function(){ var i=document.getElementById('chat-input'); if(i){i.focus();} };
+window.startSiteTour=function(){ if(window.GalleryTour){GalleryTour.clearSeen();GalleryTour.start();} };
+window.addLinkRow=function(){ var r=document.getElementById('link-rows'); if(r&&r.children[0]){var d=r.children[0].cloneNode(true);d.querySelectorAll('input').forEach(function(i){i.value='';});r.appendChild(d);} };
+window.toggleBulkRole=function(sel){ var el=document.getElementById('bulk-role'); if(el){el.style.display=(sel&&sel.value==='role')?'':'none';} };
+window.bulkApply=function(btn){
+  var n=document.querySelectorAll('.user-check:checked').length;
+  if(!n){alert('No users selected.');return;}
+  if(!confirm('Apply bulk action to '+n+' checked user(s)?')){return;}
+  btn.form.submit();
+};
+window.collectionActionSelect=function(sel){
+  var base=sel.getAttribute('data-col-action')||'<?= url('/collections') ?>/';
+  var suffix=sel.getAttribute('data-col-suffix')||'photos';
+  if(sel.form&&sel.value&&sel.form.action.indexOf(base)>=0){sel.form.action=base+sel.value+'/'+suffix;}
+  if(sel.form){sel.form.submit();}
+};
+window.copyLinkValue=function(value,el){
+  var i=document.createElement('input');
+  i.value=String(value);
+  document.body.appendChild(i);
+  i.select();
+  try{document.execCommand('copy');}catch(_e){}
+  i.remove();
+  if(el){el.textContent='Copied';}
+};
+document.addEventListener('focusin',function(e){
+  var t=e.target;
+  if(t&&t.hasAttribute('data-picker-focus')){window.showPickerOn(t);}
+},true);
+document.addEventListener('submit',function(e){
+  var t=e.target,m;
+  if(t&&t.tagName==='FORM'&&(m=t.getAttribute('data-confirm'))&&!window.confirm(m)){e.preventDefault();e.stopPropagation();}
+},true);
+document.addEventListener('change',function(e){
+  var t=e.target;
+  if(t&&t.hasAttribute('data-autosubmit')&&t.form){t.form.submit();}
+  if(t&&t.hasAttribute('data-action')){var a=t.getAttribute('data-action');if(window[a]){window[a](t,e);}}
+},true);
+document.addEventListener('click',function(e){
+  var t=e.target&&e.target.closest?e.target.closest('[data-confirm],[data-action],[data-copy],[data-picker],[data-stop-prop]'):null;
+  if(!t){return;}
+  if(t.hasAttribute('data-stop-prop')){e.stopPropagation();return;}
+  var m=t.getAttribute('data-confirm');
+  if(m&&!window.confirm(m)){e.preventDefault();e.stopPropagation();return;}
+  var a=t.getAttribute('data-action');
+  if(a&&window[a]){ if(t.hasAttribute('data-arg')){window[a](t.getAttribute('data-arg'),t);} else {window[a](t,e);} e.preventDefault(); }
+  if(t.hasAttribute('data-copy')){window.copyToClipboard(t.getAttribute('data-copy'),t);e.preventDefault();}
+  if(t.hasAttribute('data-picker')){window.showPickerOn(t);e.preventDefault();}
+},true);
+document.addEventListener('contextmenu',function(e){
+  if(e.target&&e.target.closest&&e.target.closest('[data-nocontext]')){e.preventDefault();}
+},true);
+document.addEventListener('error',function(e){
+  var t=e.target;
+  if(!t){return;}
+  if(t.tagName==='IMG'&&t.hasAttribute('data-hide-on-error')){t.style.display='none';return;}
+  if(t.tagName==='IMG'&&t.hasAttribute('data-fallback')&&!t.getAttribute('data-fb')){
+    t.setAttribute('data-fb','1');
+    t.src=t.getAttribute('data-fallback');
+  }
+},true);
+    </script>
     <script nonce="<?= csp_nonce() ?>" src="<?= url('/assets/js/user.js') ?>?v=16" defer></script>
     <script nonce="<?= csp_nonce() ?>" src="<?= url('/assets/js/tour.js') ?>?v=8" defer></script>
 </body>

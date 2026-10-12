@@ -157,7 +157,7 @@
             <?php if (empty($messages)): ?>
                 <div class="chat-empty empty-state" style="margin:1rem auto;max-width:420px;text-align:center;">
                     <p class="muted" style="margin-top:0;">No messages yet. Say hello to start chatting.</p>
-                    <button type="button" class="btn btn-sm" onclick="var i=document.getElementById('chat-input');if(i){i.focus();}">Say hello</button>
+                    <button type="button" class="btn btn-sm" data-action="chatFocusInput">Say hello</button>
                 </div>
             <?php else: ?>
                 <?php foreach ($messages as $m): ?>
@@ -171,7 +171,7 @@
                                 <span class="chat-attachment chat-expired">🔒 Media expired</span>
                             <?php elseif (!empty($m['attachment_thumb_url']) && str_starts_with((string) $m['attachment_type'], 'image/')): ?>
                                 <a href="<?= e($m['attachment_url']) ?>" target="_blank" rel="noopener" style="display:inline-block;margin-top:.4rem;" title="Open full image">
-                                    <img class="chat-image" loading="lazy" src="<?= e($m['attachment_thumb_url']) ?>" alt="<?= e($m['attachment_name']) ?>" draggable="false" oncontextmenu="return false">
+                                    <img class="chat-image" loading="lazy" src="<?= e($m['attachment_thumb_url']) ?>" alt="<?= e($m['attachment_name']) ?>" draggable="false" data-nocontext>
                                 </a>
                             <?php else: ?>
                                 <span class="chat-attachment">📎 <?= e($m['attachment_name']) ?></span>

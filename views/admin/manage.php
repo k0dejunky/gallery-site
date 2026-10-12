@@ -602,7 +602,7 @@
             <button type="submit" name="direction" value="right" class="btn btn-sm" disabled data-bulk-rotate>Rotate right &rarr;</button>
             <input type="text" name="caption" placeholder="Caption for selected…" style="max-width:170px;" disabled data-bulk-caption-input>
             <button type="submit" class="btn btn-sm btn-outline" formaction="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/bulk-caption') ?>" disabled data-bulk-caption>Set caption</button>
-            <button type="submit" class="btn btn-sm btn-danger" formaction="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/bulk-delete') ?>" disabled data-bulk-delete onclick="return confirm('Remove the selected photos from this gallery? Files are deleted only if no other gallery uses them.');">Delete selected</button>
+            <button type="submit" class="btn btn-sm btn-danger" formaction="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/bulk-delete') ?>" disabled data-bulk-delete data-confirm="Remove the selected photos from this gallery? Files are deleted only if no other gallery uses them.">Delete selected</button>
             <?php if (!empty($activeEditJob) && in_array($activeEditJob['status'], ['queued', 'running'], true)): ?>
                 <span class="muted" title="Another rotation is already processing this gallery.">Buttons disabled while a job runs.</span>
             <?php endif; ?>
@@ -675,7 +675,7 @@
                             </form>
                         <?php endif; ?>
                         <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/' . (int) $photo['id'] . '/delete') ?>"
-                              onsubmit="return confirm('Remove this photo from this gallery? The shared file will be kept if another gallery uses it.');">
+                              data-confirm="Remove this photo from this gallery? The shared file will be kept if another gallery uses it.">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-sm btn-danger">Remove from gallery</button>
                         </form>

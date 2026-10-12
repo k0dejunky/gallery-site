@@ -84,7 +84,7 @@
                         <td style="padding:.4rem .5rem;"><?= e(mb_substr((string) $post['body'], 0, 160)) ?><?= mb_strlen((string) $post['body']) > 160 ? '…' : '' ?><?= (int) ($post['gallery_id'] ?? 0) > 0 ? ' <span class="chip">Gallery #' . (int) $post['gallery_id'] . '</span>' : '' ?></td>
                         <td style="padding:.4rem .5rem;"><?= (int) \App\Models\Comment::countFor(\App\Models\Comment::TYPE_WALL, (int) $post['id']) ?></td>
                         <td style="padding:.4rem .5rem;text-align:right;">
-                            <form class="inline" method="post" action="<?= url('/admin/engagement/wall/' . (int) $post['id'] . '/delete') ?>" onsubmit="return confirm('Remove this wall post?');">
+                            <form class="inline" method="post" action="<?= url('/admin/engagement/wall/' . (int) $post['id'] . '/delete') ?>" data-confirm="Remove this wall post?">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                             </form>
@@ -125,7 +125,7 @@
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm"><?= !empty($code['active']) ? 'Disable' : 'Enable' ?></button>
                             </form>
-                            <form class="inline" method="post" action="<?= url('/admin/engagement/codes/' . (int) $code['id'] . '/delete') ?>" onsubmit="return confirm('Delete this code?');">
+                            <form class="inline" method="post" action="<?= url('/admin/engagement/codes/' . (int) $code['id'] . '/delete') ?>" data-confirm="Delete this code?">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                             </form>
@@ -166,7 +166,7 @@
                         </td>
                         <td style="padding:.4rem .5rem;"><?= e(mb_substr((string) $comment['body'], 0, 140)) ?><?= mb_strlen((string) $comment['body']) > 140 ? '…' : '' ?></td>
                         <td style="padding:.4rem .5rem;text-align:right;">
-                            <form class="inline" method="post" action="<?= url('/admin/engagement/comments/' . (int) $comment['id'] . '/delete') ?>" onsubmit="return confirm('Remove this comment?');">
+                            <form class="inline" method="post" action="<?= url('/admin/engagement/comments/' . (int) $comment['id'] . '/delete') ?>" data-confirm="Remove this comment?">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                             </form>

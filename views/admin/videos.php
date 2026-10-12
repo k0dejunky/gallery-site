@@ -41,7 +41,7 @@
                 <?php else: ?>
                 <?php foreach ($videos as $video): ?>
                 <tr>
-                    <td><img class="video-thumb" src="<?= e(file_url($video['filename'], 'thumb')) ?>" alt="Video thumbnail" loading="lazy" onerror="this.style.display='none'"></td>
+                    <td><img class="video-thumb" src="<?= e(file_url($video['filename'], 'thumb')) ?>" alt="Video thumbnail" loading="lazy" data-hide-on-error></td>
                     <td><?= (int) $video['id'] ?></td>
                     <td class="video-filename"><?= e($video['filename']) ?></td>
                     <td>

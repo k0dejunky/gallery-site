@@ -98,7 +98,7 @@
                                 </form>
                             </details>
                             <form class="inline" method="post" action="<?= url('/admin/mail/delete') ?>"
-                                  onsubmit="return confirm('Delete mailbox <?= e($mb['email']) ?> and all of its mail? This cannot be undone.');">
+                                  data-confirm="Delete mailbox <?= e($mb['email']) ?> and all of its mail? This cannot be undone.">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="email" value="<?= e($mb['email']) ?>">
                                 <button type="submit" class="btn btn-sm btn-danger">Delete</button>

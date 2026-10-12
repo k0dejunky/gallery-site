@@ -49,7 +49,7 @@ $breadcrumbItems = [
         <?= csrf_field() ?>
         <input type="hidden" name="photo_id" value="<?= (int) $photo['id'] ?>">
         <label class="muted" style="font-size:.9rem;">Save video to collection</label>
-        <select name="collection_id" onchange="this.form.action='<?= url('/collections') ?>/'+this.value+'/photos'">
+        <select name="collection_id" data-col-action="<?= url('/collections') ?>/" data-col-suffix="photos" data-action="collectionActionSelect">
             <?php foreach ($collections as $c): ?>
                 <option value="<?= (int) $c['id'] ?>"><?= e((string) $c['name']) ?></option>
             <?php endforeach; ?>

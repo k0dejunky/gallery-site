@@ -127,18 +127,19 @@ $routes = require __DIR__ . '/../config/routes.php';
 $request = new Request();
 
 // Enforced CSP with a per-request script nonce. script-src is strict
-// (strict-dynamic + nonce; no unsafe-inline) so injected <script> blocks are
-// blocked, while script-src-attr stays 'unsafe-inline' so the site's inline
-// event handlers (onclick/onsubmit/onerror) keep working. Every server-rendered
-// <script> carries the nonce. PayPal/Braintree/GTM domains are listed for the
-// script-src fallback AND because strict-dynamic trusts nonce'd scripts.
+// (strict-dynamic + nonce; no unsafe-inline) and script-src-attr is now
+// omitted entirely - every behaviour is delegated through data-* attributes
+// consumed by the nonce'd inline-handler module in views/layout.php, so no
+// inline event handler (onclick/onsubmit/onerror) is allowed anywhere.
+// Every server-rendered <script> carries the nonce; PayPal/Braintree/GTM
+// domains remain listed for the strict-dynamic fallback.
 // Violations still post to the collector so tuning stays data-driven.
 if (!headers_sent() && defined('CSP_NONCE')) {
     header(
         "Content-Security-Policy: default-src 'self'; "
         . "script-src 'self' 'nonce-" . CSP_NONCE . "' 'strict-dynamic' "
         . 'https://www.googletagmanager.com https://js.braintreegateway.com https://www.paypal.com; '
-        . "script-src-attr 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'; "
+        . "object-src 'none'; base-uri 'self'; form-action 'self'; "
         . "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: "
         . 'https://www.paypalobjects.com https://www.paypal.com; '
         . "font-src 'self' data: https://assets.braintreegateway.com; "

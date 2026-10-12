@@ -375,7 +375,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                                     <button type="submit" class="btn btn-sm">Recommend</button>
                                 </form>
                                 <form class="inline" method="post" action="<?= url('/admin/galleries/' . $gid . '/delete') ?>"
-                                      onsubmit="return confirm('Delete gallery &quot;<?= e((string) $gallery['title']) ?>&quot;?');">
+                                      data-confirm="Delete gallery &quot;<?= e((string) $gallery['title']) ?>&quot;?">
                                     <?= csrf_field() ?>
                                     <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                                 </form>

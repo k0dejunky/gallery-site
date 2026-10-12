@@ -31,6 +31,7 @@ class Housekeeping
             'backups_pruned' => 0,
             'paypal_reconciled' => 0,
             'disk_free_gb'  => null,
+            'disk_used_percent' => null,
             'temp_files_removed' => 0,
             'disk_growth_alerted' => false,
             'chat_broadcast' => 0,
@@ -52,6 +53,29 @@ class Housekeeping
             }
         } catch (\Throwable $e) {
             $out['ffmpeg_count'] = -1;
+        }
+
+        // Disk-fill guard: a full disk sinks the whole box (uploads, backups,
+        // MySQL). Alert the admin before usage crosses 85% so it is caught
+        // with room to spare rather than after files start failing.
+        try {
+            $diskFree  = @disk_free_space($root);
+            $diskTotal = @disk_total_space($root);
+            if (is_float($diskFree) && is_float($diskTotal) && $diskTotal > 0) {
+                $usedPct                = (int) round((($diskTotal - $diskFree) / $diskTotal) * 100);
+                $out['disk_used_percent'] = $usedPct;
+                $out['disk_free_gb']     = (float) round($diskFree / 1073741824, 1);
+                if ($usedPct >= 85) {
+                    Mailer::adminAlert(
+                        'disk-fill',
+                        'Disk at ' . $usedPct . '%',
+                        'Filesystem used ' . $usedPct . '% of ' . round($diskTotal / 1073741824, 0)
+                        . ' GB (' . $out['disk_free_gb'] . ' GB free). df -h / to inspect.'
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            $out['disk_used_percent'] = -1;
         }
 
         self::watchBackupSync($root);

@@ -22,7 +22,7 @@ function trafficCopy(el) {
 <p style="text-align:center;">
     <code id="traffic-share" style="word-break:break-all;"><?= e($share) ?></code>
     <br><br>
-    <button type="button" class="btn" data-link="<?= e($share) ?>" onclick="trafficCopy(this)">Copy Link</button>
+    <button type="button" class="btn" data-link="<?= e($share) ?>" data-action="trafficCopy">Copy Link</button>
 </p>
 
 <h3>Edit Link</h3>
@@ -131,7 +131,7 @@ function trafficCopy(el) {
                     <td><?= !empty($s['utm_term']) ? e($s['utm_term']) : '<span class="muted">&mdash;</span>' ?></td>
                     <td>
                         <form class="inline" method="post" action="<?= url('/admin/traffic/signups/' . (int) $s['id'] . '/direct') ?>"
-                              onsubmit="return confirm('Mark <?= e($s['email']) ?> as a direct signup and remove this attribution?');">
+                              data-confirm="Mark <?= e($s['email']) ?> as a direct signup and remove this attribution?">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-sm btn-outline">Mark direct</button>
                         </form>

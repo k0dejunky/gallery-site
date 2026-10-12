@@ -38,7 +38,7 @@
                         <td style="padding:.4rem .5rem;"><?= (int) $tag['gallery_count'] ?></td>
                         <td style="padding:.4rem .5rem;text-align:right;white-space:nowrap;">
                             <a class="btn btn-sm btn-outline" href="<?= url('/galleries/tag/' . e((string) $tag['slug'])) ?>" target="_blank" rel="noopener">View</a>
-                            <form class="inline" method="post" action="<?= url('/admin/engagement/tags/' . (int) $tag['id'] . '/delete') ?>" onsubmit="return confirm('Delete this tag and unlink it from every gallery?');">
+                            <form class="inline" method="post" action="<?= url('/admin/engagement/tags/' . (int) $tag['id'] . '/delete') ?>" data-confirm="Delete this tag and unlink it from every gallery?">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                             </form>

@@ -36,7 +36,7 @@
             </p>
             <p>
                 <label for="date_of_birth">Date of Birth</label><br>
-                <input type="date" name="date_of_birth" id="date_of_birth" placeholder="MM/DD/YYYY" required onclick="if(window.HTMLInputElement&&HTMLInputElement.prototype.showPicker)this.showPicker()" onfocus="if(window.HTMLInputElement&&HTMLInputElement.prototype.showPicker)this.showPicker()">
+                <input type="date" name="date_of_birth" id="date_of_birth" placeholder="MM/DD/YYYY" required data-picker data-picker-focus>
             </p>
         </div>
 

@@ -82,6 +82,7 @@ return [
     ['GET', '/verify-email', 'AuthController@verifyEmail'],
     ['POST', '/verify-email/resend', 'AuthController@resendVerification'],
     ['POST', '/logout', 'AuthController@logout'],
+    ['POST', '/reauthenticate', 'AuthController@reauthenticate'],
     ['GET', '/forgot-password', 'AuthController@forgotForm'],
     ['POST', '/forgot-password', 'AuthController@forgot'],
     ['GET', '/reset-password', 'AuthController@resetForm'],

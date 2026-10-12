@@ -72,14 +72,14 @@ $humanShare    = $trafficRows > 0
 <?php // ---- Range selector + robots toggle ?>
 <form method="get" action="<?= url('/admin/analytics') ?>" class="stats-period">
     <label for="ws-range">Range</label>
-    <select name="range" id="ws-range" onchange="this.form.submit()">
+    <select name="range" id="ws-range" data-autosubmit>
         <?php foreach ($ranges as $key => $info): ?>
             <option value="<?= e($key) ?>"<?= $key === $currentRange ? ' selected' : '' ?>><?= e($info['label']) ?></option>
         <?php endforeach; ?>
     </select>
 
     <label style="display:flex;align-items:center;gap:.35rem;">
-        <input type="checkbox" name="bots" value="1"<?= $includeBots ? ' checked' : '' ?> onchange="this.form.submit()">
+        <input type="checkbox" name="bots" value="1"<?= $includeBots ? ' checked' : '' ?> data-autosubmit>
         Include robots
     </label>
 

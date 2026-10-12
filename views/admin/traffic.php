@@ -102,8 +102,8 @@ document.addEventListener('DOMContentLoaded', trafficWireForm);
                     <td style="text-align:right;"><?= number_format($signups) ?></td>
                     <td style="text-align:right;"><?= $rate ?>%</td>
                     <td>
-                        <button type="button" class="btn btn-sm btn-outline" data-link="<?= e($share) ?>" onclick="trafficCopy(this)">Copy</button>
-                        <button type="button" class="btn btn-sm btn-outline" onclick="trafficToggleSignups(<?= (int) $link['id'] ?>)">Signups</button>
+                        <button type="button" class="btn btn-sm btn-outline" data-link="<?= e($share) ?>" data-action="trafficCopy">Copy</button>
+                        <button type="button" class="btn btn-sm btn-outline" data-action="trafficToggleSignups" data-arg="<?= (int) $link['id'] ?>">Signups</button>
                         <a class="btn btn-sm" href="<?= url('/admin/traffic/' . (int) $link['id']) ?>">Detail</a>
                         <form class="inline" method="post" action="<?= url('/admin/traffic/' . (int) $link['id'] . '/toggle') ?>">
                             <?= csrf_field() ?>
@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', trafficWireForm);
                             </button>
                         </form>
                         <form class="inline" method="post" action="<?= url('/admin/traffic/' . (int) $link['id'] . '/delete') ?>"
-                              onsubmit="return confirm('Delete traffic link <?= e($link['code']) ?> and its visit history?');">
+                              data-confirm="Delete traffic link <?= e($link['code']) ?> and its visit history?">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                         </form>
@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded', trafficWireForm);
                                             <td><?= !empty($s['utm_term']) ? e($s['utm_term']) : '<span class="muted">&mdash;</span>' ?></td>
                                             <td>
                                                 <form class="inline" method="post" action="<?= url('/admin/traffic/signups/' . (int) $s['id'] . '/direct') ?>"
-                                                      onsubmit="return confirm('Mark <?= e($s['email']) ?> as a direct signup and remove this attribution?');">
+                                                      data-confirm="Mark <?= e($s['email']) ?> as a direct signup and remove this attribution?">
                                                     <?= csrf_field() ?>
                                                     <button type="submit" class="btn btn-sm btn-outline">Mark direct</button>
                                                 </form>
@@ -216,7 +216,7 @@ document.addEventListener('DOMContentLoaded', trafficWireForm);
                     <td><?= !empty($s['utm_term']) ? e($s['utm_term']) : '<span class="muted">&mdash;</span>' ?></td>
                     <td>
                         <form class="inline" method="post" action="<?= url('/admin/traffic/signups/' . (int) $s['id'] . '/direct') ?>"
-                              onsubmit="return confirm('Mark <?= e($s['email']) ?> as a direct signup and remove this attribution?');">
+                              data-confirm="Mark <?= e($s['email']) ?> as a direct signup and remove this attribution?">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-sm btn-outline">Mark direct</button>
                         </form>

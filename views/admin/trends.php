@@ -45,7 +45,7 @@ $sparkline = static function (array $values, int $width = 120, int $height = 28,
 <?php // Period + view mode selector ?>
 <form method="get" action="<?= url('/admin/trends') ?>" class="stats-period" style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
     <label for="stats-period-select">Trend period</label>
-    <select name="period" id="stats-period-select" onchange="this.form.submit()">
+    <select name="period" id="stats-period-select" data-autosubmit>
         <?php foreach ($periods as $key => $info): ?>
             <option value="<?= e($key) ?>"<?= $key === $currentPeriod ? ' selected' : '' ?>><?= e($info['label']) ?></option>
         <?php endforeach; ?>
@@ -171,13 +171,13 @@ $sparkline = static function (array $values, int $width = 120, int $height = 28,
                             <td><?= number_format($row['count']) ?></td>
                             <td style="text-align: center; white-space:nowrap;">
                                 <form class="inline" method="post" action="<?= url('/admin/trends/promote') ?>"
-                                      onsubmit="return confirm('Add &ldquo;<?= e($row['term']) ?>&rdquo; as a new category?');">
+                                      data-confirm="Add &ldquo;<?= e($row['term']) ?>&rdquo; as a new category?">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="term" value="<?= e($row['term']) ?>">
                                     <button type="submit" class="btn btn-sm">Add as Category</button>
                                 </form>
                                 <form class="inline" method="post" action="<?= url('/admin/trends/dismiss') ?>"
-                                      onsubmit="return confirm('Dismiss &ldquo;<?= e($row['term']) ?>&rdquo;? It will be removed from this list.');">
+                                      data-confirm="Dismiss &ldquo;<?= e($row['term']) ?>&rdquo;? It will be removed from this list.">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="term" value="<?= e($row['term']) ?>">
                                     <button type="submit" class="btn btn-sm btn-danger">Dismiss</button>

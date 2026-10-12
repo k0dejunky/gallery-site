@@ -520,7 +520,7 @@ $paletteGrid = [
                                 <div class="preset-card-date"><?= e(tzdate('Y-m-d H:i', $p['created_at'])) ?></div>
                                 <?php if (!empty($swatches)): ?><div class="preset-card-swatches"><?php foreach ($swatches as $hex): ?><span style="background: <?= e($hex) ?>;" title="<?= e($hex) ?>"></span><?php endforeach; ?></div><?php endif; ?>
                                 <div class="preset-card-actions">
-                                    <button type="button" class="btn btn-outline" onclick="loadPreset('<?= e($p['slug']) ?>')">Load</button>
+                                    <button type="button" class="btn btn-outline" data-action="loadPreset" data-arg="<?= e($p['slug']) ?>">Load</button>
                                     <button type="button" class="btn preset-action" data-preset-action="apply" data-preset-slug="<?= e($p['slug']) ?>">Apply</button>
                                     <button type="button" class="btn btn-danger btn-sm preset-action" data-preset-action="delete" data-preset-slug="<?= e($p['slug']) ?>">Delete</button>
                                 </div>

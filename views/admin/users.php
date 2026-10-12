@@ -6,7 +6,7 @@
 <form method="get" action="<?= url('/admin/users') ?>" style="display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem;flex-wrap:wrap;">
     <input type="text" name="q" value="<?= e($search ?? '') ?>" placeholder="Search by email…" style="flex:1;min-width:200px;padding:.4rem .6rem;border:1px solid var(--border,#e5e7eb);border-radius:var(--border-radius);">
     <label class="muted" for="flag-filter">Flag:</label>
-    <select id="flag-filter" name="flag" onchange="this.form.submit();">
+    <select id="flag-filter" name="flag" data-autosubmit>
         <option value="">All flags</option>
         <option value="flagged"<?= ($flag ?? '') === 'flagged' ? ' selected' : '' ?>>Flagged only</option>
         <?php foreach (['chargeback', 'vip', 'watch', 'abuser', 'comped'] as $preset): ?>
@@ -14,13 +14,13 @@
         <?php endforeach; ?>
     </select>
     <label class="muted" for="status-filter">Status:</label>
-    <select id="status-filter" name="status" onchange="this.form.submit();">
+    <select id="status-filter" name="status" data-autosubmit>
         <option value="">All statuses</option>
         <option value="active"<?= ($status ?? '') === 'active' ? ' selected' : '' ?>>Active</option>
         <option value="suspended"<?= ($status ?? '') === 'suspended' ? ' selected' : '' ?>>Suspended</option>
     </select>
     <label class="muted" for="role-filter">Role:</label>
-    <select id="role-filter" name="role" onchange="this.form.submit();">
+    <select id="role-filter" name="role" data-autosubmit>
         <option value="">All roles</option>
         <?php foreach ($roles as $r): ?>
             <option value="<?= e($r) ?>"<?= ($role ?? '') === $r ? ' selected' : '' ?>><?= e(str_replace('_', ' ', $r)) ?></option>
@@ -56,7 +56,7 @@
     <?= csrf_field() ?>
     <div style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.5rem;">
         <strong>With selected:</strong>
-        <select name="action" onchange="document.getElementById('bulk-role').style.display = (this.value === 'role') ? '' : 'none';">
+        <select name="action" data-action="toggleBulkRole">
             <option value="role">Set role</option>
             <option value="suspend">Suspend</option>
             <option value="activate">Reactivate</option>
@@ -71,7 +71,7 @@
             <?php endif; ?>
         </select>
         <button type="submit" class="btn btn-sm"
-                onclick="var c=document.querySelectorAll('.user-check:checked').length; if(!c){alert('No users selected.');return false;} if(!confirm('Apply bulk action to '+c+' checked user(s)?'))return false;">Apply</button>
+                data-action="bulkApply">Apply</button>
     </div>
     <div class="users-table-wrap"><table class="users-table">
         <thead>
@@ -94,7 +94,7 @@
                         <?php if (!empty($user['flag'])): ?>
                             <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/flag') ?>" class="inline" style="display:inline;">
                                 <?= csrf_field() ?>
-                                <select name="flag" onchange="this.form.submit();" style="font-size:.75rem;padding:1px 3px;border:1px solid var(--border,#e5e7eb);border-radius:4px;background:transparent;cursor:pointer;">
+                                <select name="flag" data-autosubmit style="font-size:.75rem;padding:1px 3px;border:1px solid var(--border,#e5e7eb);border-radius:4px;background:transparent;cursor:pointer;">
                                     <option value="">none</option>
                                     <?php foreach (['chargeback', 'vip', 'watch', 'abuser', 'comped'] as $fp): ?>
                                         <option value="<?= e($fp) ?>"<?= ($user['flag'] ?? '') === $fp ? ' selected' : '' ?>><?= e($fp) ?></option>
@@ -109,7 +109,7 @@
                     <td>
                         <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/role') ?>" class="inline" style="display:inline;">
                             <?= csrf_field() ?>
-                            <select name="role" onchange="this.form.submit();" style="font-size:.75rem;padding:1px 3px;border:1px solid var(--border,#e5e7eb);border-radius:4px;background:transparent;cursor:pointer;" class="role-badge <?= e($user['role']) ?>">
+                            <select name="role" data-autosubmit style="font-size:.75rem;padding:1px 3px;border:1px solid var(--border,#e5e7eb);border-radius:4px;background:transparent;cursor:pointer;" class="role-badge <?= e($user['role']) ?>">
                                 <?php foreach ($roles as $r): ?>
                                     <option value="<?= e($r) ?>"<?= $user['role'] === $r ? ' selected' : '' ?>><?= e(str_replace('_', ' ', $r)) ?></option>
                                 <?php endforeach; ?>
@@ -140,13 +140,13 @@
                         <a class="btn btn-sm" href="<?= url('/admin/users/' . (int) $user['id'] . '/edit') ?>">Edit</a>
                         <?php if ((int) $user['id'] !== (int) \App\Core\Auth::user()['id']): ?>
                             <form class="inline" method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/impersonate') ?>"
-                                  onsubmit="return confirm('Sign in as <?= e($user['email']) ?>?');">
+                                  data-confirm="Sign in as <?= e($user['email']) ?>?">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm">Login as</button>
                             </form>
                         <?php endif; ?>
                         <form class="inline" method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/delete') ?>"
-                              onsubmit="return confirm('Delete user <?= e($user['email']) ?>?');">
+                              data-confirm="Delete user <?= e($user['email']) ?>?">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                         </form>

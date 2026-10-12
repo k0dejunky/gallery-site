@@ -109,11 +109,31 @@ class Controller
     /**
      * Render a standalone view with no shared layout (e.g. the video player).
      */
-    protected function viewStandalone(string $template, array $data = []): void
+protected function viewStandalone(string $template, array $data = []): void
     {
         extract($data);
 
         require __DIR__ . '/../../views/' . $template . '.php';
+    }
+
+    /**
+     * Step-up gate: render the "confirm your password" page unless the session
+     * already holds a fresh confirmation. Returns true when the caller may
+     * proceed, false after the gate page has been rendered.
+     */
+    protected function requireStepUp(string $returnTo): bool
+    {
+        if (\App\Core\Auth::recentlyAuthenticated()) {
+            return true;
+        }
+
+        $this->viewStandalone('auth/step_up', [
+            'title'    => 'Confirm your password',
+            'returnTo' => $returnTo,
+            'error'    => '',
+        ]);
+
+        return false;
     }
 
     /**

@@ -30,7 +30,7 @@
             <?= csrf_field() ?><input type="hidden" name="status" value="<?= e($status) ?>"><button class="btn btn-sm btn-outline" type="submit"><?= e(ucfirst($status)) ?></button>
         </form>
     <?php endforeach; ?>
-    <form method="post" action="<?= url('/admin/support/' . (int) $ticket['id'] . '/delete') ?>" class="inline" onsubmit="return confirm('Delete this ticket and its replies permanently?');">
+    <form method="post" action="<?= url('/admin/support/' . (int) $ticket['id'] . '/delete') ?>" class="inline" data-confirm="Delete this ticket and its replies permanently?">
         <?= csrf_field() ?><button class="btn btn-sm btn-danger" type="submit">Delete</button>
     </form>
 </div>

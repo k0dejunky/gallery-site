@@ -40,7 +40,7 @@
                     <?php if (!empty($c['play_url'])): ?>
                         <a class="btn btn-sm" href="<?= e($c['play_url']) ?>">&#9654; Play</a>
                     <?php endif; ?>
-                    <form method="post" action="<?= url('/collections/' . (int) $c['id'] . '/delete') ?>" onsubmit="return confirm('Delete this collection?');" style="margin:0;">
+                    <form method="post" action="<?= url('/collections/' . (int) $c['id'] . '/delete') ?>" data-confirm="Delete this collection?" style="margin:0;">
                         <?= csrf_field() ?>
                         <button type="submit" class="btn btn-sm btn-outline">Delete</button>
                     </form>

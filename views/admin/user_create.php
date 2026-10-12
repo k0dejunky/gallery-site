@@ -46,7 +46,7 @@
     <h2>Age Verification</h2>
     <p>
         <label for="date_of_birth">Date of Birth</label><br>
-        <input type="date" name="date_of_birth" id="date_of_birth" placeholder="MM/DD/YYYY" onclick="this.showPicker()" onfocus="this.showPicker()">
+        <input type="date" name="date_of_birth" id="date_of_birth" placeholder="MM/DD/YYYY" data-picker data-picker-focus>
     </p>
     </div>
 

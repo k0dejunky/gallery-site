@@ -39,7 +39,7 @@
                         <td><?= number_format((int) $upload['size']) ?> B</td>
                         <td>
                             <form method="post" action="<?= url('/admin/abandoned-uploads/chunks-delete') ?>"
-                                  onsubmit="return confirm('Delete these <?= (int) ($upload['chunks'] ?? 0) ?> incomplete upload chunks?');">
+                                  data-confirm="Delete these <?= (int) ($upload['chunks'] ?? 0) ?> incomplete upload chunks?">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="session" value="<?= e((string) $upload['session']) ?>">
                                 <input type="hidden" name="file" value="<?= e((string) $upload['filename']) ?>">

@@ -78,7 +78,7 @@ $webhookBase = $scheme . '://' . $host . rtrim((string) config('app.base_path'),
                         <button type="submit" class="btn btn-sm"><?= (int) $p['enabled'] === 1 ? 'Disable' : 'Enable' ?></button>
                     </form>
                     <form class="inline" method="post" action="<?= url('/admin/payment-processors/' . (int) $p['id'] . '/delete') ?>"
-                          onsubmit="return confirm('Remove this payment processor?');">
+                          data-confirm="Remove this payment processor?">
                         <?= csrf_field() ?>
                         <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                     </form>

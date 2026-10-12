@@ -107,10 +107,10 @@ $backGallery = \App\Models\Photo::firstGalleryId((int) $photo['id']);
         <div class="ve-actions">
             <a class="ve-back-btn" href="<?= url('/admin/video-projects') ?>">&larr; Back to Video Projects</a>
             <a class="ve-media-btn" href="<?= url($backGallery ? '/admin/galleries/' . $backGallery : '/admin/video-projects') ?>">Back to Gallery</a>
-            <button id="ve-max-btn" class="ve-media-btn" type="button" onclick="toggleMaximize()">Maximize Preview</button>
-            <button id="ve-thumb-btn" class="ve-media-btn" type="button" onclick="toggleThumb()">Thumbnail</button>
-            <button id="ve-blur-btn" class="ve-media-btn" type="button" onclick="toggleBlur()">Blur brush</button>
-            <button id="ve-filter-btn" class="ve-media-btn" type="button" onclick="toggleFilter()">Filter colors</button>
+            <button id="ve-max-btn" class="ve-media-btn" type="button" data-action="toggleMaximize">Maximize Preview</button>
+            <button id="ve-thumb-btn" class="ve-media-btn" type="button" data-action="toggleThumb">Thumbnail</button>
+            <button id="ve-blur-btn" class="ve-media-btn" type="button" data-action="toggleBlur">Blur brush</button>
+            <button id="ve-filter-btn" class="ve-media-btn" type="button" data-action="toggleFilter">Filter colors</button>
         </div>
         <div class="ve-filename"><?= e($photo['filename']) ?></div>
     </div>
@@ -171,7 +171,7 @@ $backGallery = \App\Models\Photo::firstGalleryId((int) $photo['id']);
                 <input type="color" name="site-filter-inactive-hover" value="<?= e($project['project']['filter_inactive_hover'] ?? '#dddddd') ?>">
             </div>
         </div>
-        <p><button type="button" class="btn" onclick="saveFilterColors()">Save filter colors</button></p>
+        <p><button type="button" class="btn" data-action="saveFilterColors">Save filter colors</button></p>
     </form>
 </div>
 <script nonce="<?= csp_nonce() ?>">

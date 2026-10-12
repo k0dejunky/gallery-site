@@ -563,6 +563,25 @@ class SmokeChecks
                 ? $ok('ffmpeg count captured + alert once >= 6')
                 : $bad('Housekeeping must record ffmpeg_count and alert on a burst');
         });
+        $add('smoke.sec.disk_fill_alert', 'Smoke · Security', 'Housekeeping alerts when the disk fills', static function () use ($secHouse, $ok, $bad): array {
+            return strpos($secHouse, 'disk_used_percent') !== false
+                && strpos($secHouse, "disk_total_space") !== false
+                && strpos($secHouse, "'disk-fill'") !== false
+                && strpos($secHouse, '>= 85') !== false
+                ? $ok('disk usage percent + 85% admin alert present')
+                : $bad('Housekeeping must compute disk_used_percent and alert via Mailer::adminAlert at >= 85%');
+        });
+        $secAuth2 = $read("$root/app/Core/Auth.php");
+        $secRoutes = $read("$root/config/routes.php");
+        $secStepView = $read("$root/views/auth/step_up.php");
+        $add('smoke.sec.step_up_reauth', 'Smoke · Security', 'Sensitive actions need a recent password confirm', static function () use ($secAuth2, $secRoutes, $secStepView, $ok, $bad): array {
+            return strpos($secAuth2, 'recentlyAuthenticated') !== false
+                && strpos($secAuth2, 'verifyPassword') !== false
+                && strpos($secRoutes, "'/reauthenticate'") !== false
+                && strpos($secStepView, '/reauthenticate') !== false
+                ? $ok('recentAuthenticated()/verifyPassword() + /reauthenticate gate page present')
+                : $bad('Auth must expose recentlyAuthenticated/verifyPassword and a /reauthenticate step-up page must exist');
+        });
         $add('smoke.sec.upload_no_active_content', 'Smoke · Security', 'Upload allowlists exclude active content (svg/html)', static function () use ($secUploadP, $secChatP, $ok, $bad): array {
             $lower = strtolower($secUploadP . "\n" . $secChatP);
             return preg_match('/image\/svg[\+; ]/', $lower) === 0 && strpos($lower, "'html'") === false && strpos($lower, "'svg'") === false

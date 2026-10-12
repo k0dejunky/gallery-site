@@ -392,6 +392,35 @@ class AuthController extends Controller
         $this->redirect('/login' . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
     }
 
+    /**
+     * Step-up gate: re-confirm the account password for a sensitive action.
+     * Success records a short-lived session grant (Auth::recentlyAuthenticated)
+     * and redirects back to the intended page; failure re-shows the form.
+     */
+    public function reauthenticate(): void
+    {
+        $user = Auth::user();
+        if ($user === null) {
+            Auth::requireLogin();
+            return;
+        }
+
+        $returnTo = safe_return_to((string) ($_POST['return_to'] ?? '')) ?? url('/settings');
+
+        $password = (string) ($_POST['password'] ?? '');
+        if ($password === '' || !Auth::verifyPassword((int) $user['id'], $password)) {
+            $this->viewStandalone('auth/step_up', [
+                'title'    => 'Confirm your password',
+                'returnTo' => $returnTo,
+                'error'    => 'Incorrect password. Please try again.',
+            ]);
+            return;
+        }
+
+        Auth::markReauthenticated();
+        $this->redirect($returnTo);
+    }
+
     public function forgotForm(): void
     {
         $this->view('auth/forgot_password', ['title' => 'Forgot Password', 'noindex' => true]);

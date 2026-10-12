@@ -12,10 +12,10 @@
             <td><?= e($sub['plan_name']) ?></td>
             <td>$<?= number_format((float) $sub['price'], 2) ?> / <?= e(\App\Models\Plan::cycleLabel($sub['billing_cycle'])) ?></td>
             <td>
-                <form class="inline" method="post" action="<?= url('/admin/subscriptions/' . (int) $sub['id'] . '/approve') ?>" onsubmit="return confirm('Approve this membership?');">
+                <form class="inline" method="post" action="<?= url('/admin/subscriptions/' . (int) $sub['id'] . '/approve') ?>" data-confirm="Approve this membership?">
                     <?= csrf_field() ?><input type="hidden" name="return_to" value="logs"><button type="submit" class="btn btn-sm">Approve</button>
                 </form>
-                <form class="inline" method="post" action="<?= url('/admin/subscriptions/' . (int) $sub['id'] . '/delete') ?>" onsubmit="return confirm('Deny and delete this request?');">
+                <form class="inline" method="post" action="<?= url('/admin/subscriptions/' . (int) $sub['id'] . '/delete') ?>" data-confirm="Deny and delete this request?">
                     <?= csrf_field() ?><input type="hidden" name="return_to" value="logs"><button type="submit" class="btn btn-sm btn-danger">Deny</button>
                 </form>
             </td>
@@ -37,10 +37,10 @@
             <td><?= e($log['admin_email'] ?? 'Unknown') ?></td>
             <td><?= e($log['description']) ?></td>
             <td>
-                <form class="inline" method="post" action="<?= url('/admin/logs/' . (int) $log['id'] . '/rollback') ?>" onsubmit="return confirm('Restore this gallery?');">
+                <form class="inline" method="post" action="<?= url('/admin/logs/' . (int) $log['id'] . '/rollback') ?>" data-confirm="Restore this gallery?">
                     <?= csrf_field() ?><button type="submit" class="btn btn-sm">Restore</button>
                 </form>
-                <form class="inline" method="post" action="<?= url('/admin/logs/' . (int) $log['id'] . '/purge') ?>" onsubmit="return confirm('Permanently delete this? Cannot be undone.');">
+                <form class="inline" method="post" action="<?= url('/admin/logs/' . (int) $log['id'] . '/purge') ?>" data-confirm="Permanently delete this? Cannot be undone.">
                     <?= csrf_field() ?><button type="submit" class="btn btn-sm btn-danger">Purge</button>
                 </form>
             </td>
@@ -61,7 +61,7 @@
             <td><?= e($term['term']) ?></td>
             <td><?= number_format($term['count']) ?></td>
             <td>
-                <form class="inline" method="post" action="<?= url('/admin/trends/promote') ?>" onsubmit="return confirm('Create category "<?= e($term['term']) ?>" from this search term?');">
+                <form class="inline" method="post" action="<?= url('/admin/trends/promote') ?>" data-confirm="Create category "<?= e($term['term']) ?>" from this search term?">
                     <?= csrf_field() ?>
                     <input type="hidden" name="term" value="<?= e($term['term']) ?>">
                     <button type="submit" class="btn btn-sm">Approve</button>
@@ -147,14 +147,14 @@
                 </td>
                 <td>
                     <?php if ($canRollback && $entityType === 'gallery' && $action === 'delete'): ?>
-                        <form class="inline" method="post" action="<?= url('/admin/logs/' . (int) $log['id'] . '/rollback') ?>" onsubmit="return confirm('Restore this gallery?');">
+                        <form class="inline" method="post" action="<?= url('/admin/logs/' . (int) $log['id'] . '/rollback') ?>" data-confirm="Restore this gallery?">
                             <?= csrf_field() ?><button type="submit" class="btn btn-sm">Restore</button>
                         </form>
-                        <form class="inline" method="post" action="<?= url('/admin/logs/' . (int) $log['id'] . '/purge') ?>" onsubmit="return confirm('Permanently delete this gallery and its files? This cannot be undone.');">
+                        <form class="inline" method="post" action="<?= url('/admin/logs/' . (int) $log['id'] . '/purge') ?>" data-confirm="Permanently delete this gallery and its files? This cannot be undone.">
                             <?= csrf_field() ?><button type="submit" class="btn btn-sm btn-danger">Delete permanently</button>
                         </form>
                     <?php elseif ($canRollback): ?>
-                        <form class="inline" method="post" action="<?= url('/admin/logs/' . (int) $log['id'] . '/rollback') ?>" onsubmit="return confirm('Roll back this admin change?');">
+                        <form class="inline" method="post" action="<?= url('/admin/logs/' . (int) $log['id'] . '/rollback') ?>" data-confirm="Roll back this admin change?">
                             <?= csrf_field() ?><button type="submit" class="btn btn-sm btn-danger">Rollback</button>
                         </form>
                     <?php else: ?>

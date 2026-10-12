@@ -193,7 +193,11 @@ class UserController extends Controller
      * both directions are audit-logged.
      */
     public function impersonate(int $id): void
-    {        $target = User::find($id);
+    {
+        if (!$this->requireStepUp(url('/admin/users'))) {
+            return;
+        }
+        $target = User::find($id);
         $me = Auth::user();
 
         if ($target === null || $id === (int) $me['id']) {

@@ -752,6 +752,42 @@ class Auth
         return (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
     }
 
+    /**
+     * Step-up gates: sensitive actions (checkout, impersonation, payment
+     * entries) require a FRESH password confirmation recorded on the session.
+     * Returns true while the last confirmation is under the TTL.
+     */
+    public static function recentlyAuthenticated(int $ttl = 1800): bool
+    {
+        if (!self::check()) {
+            return false;
+        }
+
+        $at = (int) ($_SESSION['step_up_at'] ?? 0);
+
+        return $at > 0 && (time() - $at) <= $ttl;
+    }
+
+    /**
+     * Record that the current session just passed a password confirmation.
+     */
+    public static function markReauthenticated(): void
+    {
+        $_SESSION['step_up_at'] = time();
+    }
+
+    /**
+     * Re-check a user's password directly (used by the step-up gate, so it
+     * works even when the account also uses TOTP - the password must always
+     * be re-entered on its own).
+     */
+    public static function verifyPassword(int $userId, string $password): bool
+    {
+        $user = User::find($userId);
+
+        return $user !== null && password_verify($password, (string) ($user['password_hash'] ?? ''));
+    }
+
     /** Invalidate every session for one account, including the current one. */
     public static function logoutEverywhere(int $userId): void
     {

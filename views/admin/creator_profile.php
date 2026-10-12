@@ -37,7 +37,7 @@
             </div>
         <?php endforeach; ?>
     </div>
-    <button type="button" class="btn btn-sm btn-outline" onclick="var r=document.getElementById('link-rows');var d=r.children[0].cloneNode(true);d.querySelectorAll('input').forEach(function(i){i.value='';});r.appendChild(d);">Add another link</button>
+    <button type="button" class="btn btn-sm btn-outline" data-action="addLinkRow">Add another link</button>
 
     <p style="margin-top:1.5rem;">
         <button type="submit" class="btn">Save profile</button>

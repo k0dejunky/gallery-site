@@ -250,6 +250,15 @@ public static function rememberGen(string $bucket, string $key, int $ttl, callab
             try {
                 self::$redis = new \Redis();
                 self::$redis->pconnect('127.0.0.1', 6379, 0.5, 'gallery-cache');
+
+                // Loopback-only Redis with a server-side requirepass is the
+                // defense-in-depth posture; the password lives in .env
+                // (REDIS_PASSWORD, root-only) and never in the repo.
+                $password = (string) env_value('REDIS_PASSWORD', '');
+                if ($password !== '') {
+                    self::$redis->auth($password);
+                }
+
                 self::$redis->ping();
             } catch (\Throwable $e) {
                 self::$redis = null;

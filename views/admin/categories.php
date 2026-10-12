@@ -57,7 +57,7 @@
                     <td>
                         <a class="btn btn-sm btn-outline" href="<?= url('/admin/categories/' . (int) $category['id'] . '/edit' . ($q !== '' ? '?q=' . rawurlencode($q) : '')) ?>">Edit</a>
                         <form class="inline" method="post" action="<?= url('/admin/categories/' . (int) $category['id'] . '/delete') ?>"
-                              onsubmit="return confirm('Delete category <?= e($category['name']) ?>?');">
+                              data-confirm="Delete category <?= e($category['name']) ?>?">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                         </form>

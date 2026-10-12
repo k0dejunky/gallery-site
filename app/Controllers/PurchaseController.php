@@ -25,6 +25,12 @@ class PurchaseController extends Controller
     public function unlock(int $id): void
     {
         Auth::requireLogin();
+
+        if (!Auth::recentlyAuthenticated()) {
+            $this->json(['error' => 'Please confirm your password first.'], 428);
+            return;
+        }
+
         $user = Auth::user();
 
         if (!RateLimiter::allow(['unlock-code:' . $this->request->ip()], 10, 900)) {
@@ -95,6 +101,13 @@ class PurchaseController extends Controller
     public function tip(): void
     {
         Auth::requireLogin();
+
+        // Form flow: route the user through the password-confirm page instead
+        // of a bare JSON rejection.
+        if (!$this->requireStepUp($this->request->header('HTTP_REFERER') ?: url('/membership'))) {
+            return;
+        }
+
         $user = Auth::user();
 
         if (!RateLimiter::allow(['tip-offline:' . $this->request->ip()], 5, 600)) {
@@ -171,6 +184,11 @@ class PurchaseController extends Controller
             return;
         }
 
+        if (!Auth::recentlyAuthenticated()) {
+            $this->json(['error' => 'Please confirm your password first (it expires every 30 minutes).'], 428);
+            return;
+        }
+
         if (!RateLimiter::allow(['checkout-token:' . $this->request->ip()], 30, 300)) {
             $this->json(['error' => 'Too many payment form requests.'], 429);
             return;
@@ -203,6 +221,12 @@ class PurchaseController extends Controller
     public function unlockLive(int $id): void
     {
         Auth::requireLogin();
+
+        if (!Auth::recentlyAuthenticated()) {
+            $this->json(['error' => 'Please confirm your password first.'], 428);
+            return;
+        }
+
         $user = Auth::user();
 
         if (!RateLimiter::allow(['unlock-live:' . $this->request->ip(), 'unlock-live:u' . (int) $user['id']], 5, 900)) {
@@ -276,6 +300,12 @@ class PurchaseController extends Controller
     public function tipLive(): void
     {
         Auth::requireLogin();
+
+        if (!Auth::recentlyAuthenticated()) {
+            $this->json(['error' => 'Please confirm your password first.'], 428);
+            return;
+        }
+
         $user = Auth::user();
 
         if (!RateLimiter::allow(['tip-live:' . $this->request->ip(), 'tip-live:u' . (int) $user['id']], 5, 900)) {

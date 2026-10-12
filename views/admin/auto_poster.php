@@ -138,7 +138,7 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
             </span>
             <?php if (!empty($queue) && count($queue) > 0): ?>
                 <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/post-all') ?>"
-                      onsubmit="return confirm('Post all <?= number_format(count($queue)) ?> queued item(s) to <?= e($platformName) ?> now?');">
+                      data-confirm="Post all <?= number_format(count($queue)) ?> queued item(s) to <?= e($platformName) ?> now?">
                     <?= csrf_field() ?>
                     <input type="hidden" name="platform" value="<?= e($platform) ?>">
                     <button type="submit" class="btn btn-sm">Post all queued</button>
@@ -193,13 +193,13 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
                         </td>
                         <td style="text-align:right;white-space:nowrap;">
                             <button type="button" class="btn btn-sm btn-outline" data-edit-queue="<?= (int) $item['id'] ?>" aria-expanded="false">Edit</button>
-                            <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/post') ?>" onsubmit="return confirm('Post this now to <?= e($platformName) ?>?');">
+                            <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/post') ?>" data-confirm="Post this now to <?= e($platformName) ?>?">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
                                 <button type="submit" class="btn btn-sm">Post now</button>
                             </form>
                             <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/dismiss') ?>"
-                                  onsubmit="return confirm('Dismiss this queued post?');">
+                                  data-confirm="Dismiss this queued post?">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
                                 <button type="submit" class="btn btn-sm btn-danger">Dismiss</button>
@@ -306,7 +306,7 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
                                         class="btn btn-sm" title="Queue the edited text to publish at the chosen time">Reschedule</button>
                             <?php else: ?>
                                 <form class="inline" method="post" action="<?= url('/admin/auto-poster/history/repost') ?>"
-                                      onsubmit="return confirm('Repost #<?= (int) $rp['id'] ?> to <?= e($platformName) ?> now?');">
+                                      data-confirm="Repost #<?= (int) $rp['id'] ?> to <?= e($platformName) ?> now?">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
                                     <button type="submit" class="btn btn-sm" title="Post the same content again right away">Repost</button>
@@ -631,7 +631,7 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
             </div>
         <?php endif; ?>
             <div style="padding:.6rem 1.1rem;text-align:right;border-top:1px solid var(--pink-300);">
-                <form method="post" action="<?= url('/admin/auto-poster/clear-log') ?>" onsubmit="return confirm('Clear the <?= e($platformName) ?> posting log?');">
+                <form method="post" action="<?= url('/admin/auto-poster/clear-log') ?>" data-confirm="Clear the <?= e($platformName) ?> posting log?">
                     <?= csrf_field() ?>
                     <input type="hidden" name="platform" value="<?= e($platform) ?>">
                     <button type="submit" class="btn btn-sm btn-danger">Clear <?= e($platformName) ?> Log</button>

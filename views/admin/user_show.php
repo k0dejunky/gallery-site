@@ -66,7 +66,7 @@
                 </form>
             <?php else: ?>
                 <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/status') ?>"
-                      onsubmit="return confirm('Suspend this account? They will be signed out everywhere.');">
+                      data-confirm="Suspend this account? They will be signed out everywhere.">
                     <?= csrf_field() ?><input type="hidden" name="status" value="suspended">
                     <button class="btn btn-sm btn-danger" type="submit">Suspend account</button>
                 </form>
@@ -75,11 +75,11 @@
         </div>
         <div class="ud-actions" style="margin:.5rem 0 0;">
             <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/reset-password') ?>"
-                  onsubmit="return confirm('Generate a new temporary password?');">
+                  data-confirm="Generate a new temporary password?">
                 <?= csrf_field() ?><button class="btn btn-sm" type="submit">Reset password</button>
             </form>
             <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/logout-everywhere') ?>"
-                  onsubmit="return confirm('Sign this account out of every device?');">
+                  data-confirm="Sign this account out of every device?">
                 <?= csrf_field() ?><button class="btn btn-sm" type="submit">Log out everywhere</button>
             </form>
         </div>

@@ -56,7 +56,7 @@ $user = $user ?? \App\Core\Auth::user();
                 <?php endif; ?>
             </p>
             <form class="inline" method="post" action="<?= url('/membership/cancel') ?>"
-                  onsubmit="return confirm('<?= $hasExpiry ? 'Cancel your membership? Access will remain available through its expiry date.' : 'Cancel your membership? Lifetime access will end immediately.' ?>');">
+                  data-confirm="<?= $hasExpiry ? 'Cancel your membership? Access will remain available through its expiry date.' : 'Cancel your membership? Lifetime access will end immediately.' ?>">
                 <?= csrf_field() ?>
                 <button type="submit" class="btn btn-sm btn-danger">Cancel membership</button>
             </form>

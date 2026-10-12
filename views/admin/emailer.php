@@ -77,7 +77,7 @@ switch ($config['mode'] ?? 'daily') {
             </select>
             <button type="submit" class="btn btn-sm">Send test email</button>
         </form>
-        <form class="inline" method="post" action="<?= url('/admin/emailer/send-now') ?>" onsubmit="return confirm('Queue a digest to ALL eligible recipients right now?');">
+        <form class="inline" method="post" action="<?= url('/admin/emailer/send-now') ?>" data-confirm="Queue a digest to ALL eligible recipients right now?">
             <?= csrf_field() ?>
             <button type="submit" class="btn btn-sm" style="background:var(--success,#2e7d32);color:#fff;">Send now</button>
         </form>

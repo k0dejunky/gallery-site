@@ -30,7 +30,7 @@
     <a class="btn btn-sm" href="<?= url('/admin/galleries') ?>">Manage Galleries</a>
     <a class="btn btn-sm" href="<?= url('/admin/auto-poster') ?>">Auto-Poster<?php if ((int) ($autopostCounts['failed'] ?? 0) > 0): ?> <span class="pill pill-err"><?= (int) $autopostCounts['failed'] ?> failed</span><?php endif; ?></a>
     <a class="btn btn-sm" href="<?= url('/admin/test-suite') ?>">Run Test Suite</a>
-    <form class="inline" method="post" action="<?= url('/admin/system/backup') ?>" onsubmit="return confirm('Create a full site backup now?');">
+    <form class="inline" method="post" action="<?= url('/admin/system/backup') ?>" data-confirm="Create a full site backup now?">
         <?= csrf_field() ?>
         <button type="submit" class="btn btn-sm btn-outline" aria-label="Create a site backup now">Backup now</button>
     </form>
@@ -59,13 +59,13 @@
                     <span class="pill pill-err">failed</span> <?= e((string) $item['error']) ?>
                 </td>
                 <td style="text-align:right;white-space:nowrap;">
-                    <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/retry') ?>" onsubmit="return confirm('Retry post #<?= (int) $item['id'] ?> now?');">
+                    <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/retry') ?>" data-confirm="Retry post #<?= (int) $item['id'] ?> now?">
                         <?= csrf_field() ?>
                         <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
                         <input type="hidden" name="redirect_to" value="<?= url('/admin') ?>">
                         <button type="submit" class="btn btn-sm" aria-label="Retry failed post #<?= (int) $item['id'] ?>">Retry</button>
                     </form>
-                    <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/dismiss') ?>" onsubmit="return confirm('Dismiss this failed post?');">
+                    <form class="inline" method="post" action="<?= url('/admin/auto-poster/queue/dismiss') ?>" data-confirm="Dismiss this failed post?">
                         <?= csrf_field() ?>
                         <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
                         <input type="hidden" name="redirect_to" value="<?= url('/admin') ?>">

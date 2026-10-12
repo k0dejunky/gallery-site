@@ -30,10 +30,10 @@ if (empty($recommended)): ?>
                         <button type="submit" class="btn btn-sm">Queue</button>
                         <button type="submit" class="btn btn-sm ap-rec-post"
                                 formaction="<?= url('/admin/auto-poster/queue/post') ?>"
-                                onclick="return confirm('Post this now to <?= e($platformName) ?>?');">Post now</button>
+                                data-confirm="Post this now to <?= e($platformName) ?>?">Post now</button>
                         <button type="submit" class="btn btn-sm btn-danger"
                                 formaction="<?= url('/admin/auto-poster/queue/dismiss') ?>"
-                                onclick="return confirm('Dismiss this recommended post?');">Dismiss</button>
+                                data-confirm="Dismiss this recommended post?">Dismiss</button>
                     </div>
                 </form>
             </div>

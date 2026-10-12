@@ -52,7 +52,7 @@ $breadcrumbItems = [
         <?= csrf_field() ?>
         <input type="hidden" name="gallery_id" value="<?= (int) $gallery['id'] ?>">
         <label class="muted" style="font-size:.9rem;">Save to collection</label>
-        <select name="collection_id" onchange="this.form.action='<?= url('/collections') ?>/'+this.value+'/galleries'">
+        <select name="collection_id" data-col-action="<?= url('/collections') ?>/" data-col-suffix="galleries" data-action="collectionActionSelect">
             <?php foreach ($collections as $c): ?>
                 <option value="<?= (int) $c['id'] ?>"><?= e((string) $c['name']) ?></option>
             <?php endforeach; ?>

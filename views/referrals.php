@@ -9,7 +9,7 @@
     </p>
     <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
         <input type="text" id="ref-link" value="<?= e($link) ?>" readonly style="flex:1;min-width:260px;">
-        <button type="button" class="btn btn-sm" onclick="var i=document.getElementById('ref-link');i.select();try{document.execCommand('copy');}catch(e){}">Copy link</button>
+        <button type="button" class="btn btn-sm" data-copy="ref-link">Copy link</button>
     </div>
     <p class="muted" style="font-size:.85rem;margin:.6rem 0 0;">The link is created for you automatically — just share it.</p>
 </section>

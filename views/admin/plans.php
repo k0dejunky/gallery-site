@@ -63,7 +63,7 @@
                     <td>
                         <a class="btn btn-sm" href="<?= url('/admin/plans/' . (int) $plan['id'] . '/edit') ?>">Edit</a>
                         <form class="inline" method="post" action="<?= url('/admin/plans/' . (int) $plan['id'] . '/delete') ?>"
-                              onsubmit="return confirm('Delete this plan and its subscriptions?');">
+                              data-confirm="Delete this plan and its subscriptions?">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                         </form>
@@ -136,7 +136,7 @@
                     <form class="inline" method="post" action="<?= url('/admin/sales/' . (int) $sale['id'] . '/toggle') ?>">
                         <?= csrf_field() ?><button type="submit" class="btn btn-sm btn-outline"><?= (int) $sale['active'] === 1 ? 'Deactivate' : 'Activate' ?></button>
                     </form>
-                    <form class="inline" method="post" action="<?= url('/admin/sales/' . (int) $sale['id'] . '/delete') ?>" onsubmit="return confirm('Delete this sale?')">
+                    <form class="inline" method="post" action="<?= url('/admin/sales/' . (int) $sale['id'] . '/delete') ?>" data-confirm="Delete this sale?"
                         <?= csrf_field() ?><button type="submit" class="btn btn-sm btn-danger">Delete</button>
                     </form>
                 </article>

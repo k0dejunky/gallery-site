@@ -21,11 +21,11 @@
             <td><code><?= e((string) ($rec['transaction_ref'] ?? '')) ?></code></td>
             <td style="white-space:nowrap;">
                 <form class="inline" method="post" action="<?= url('/admin/subscriptions/' . (int) $rec['id'] . '/approve') ?>"
-                      onsubmit="return confirm('Mark this signup as paid and activate the membership?');">
+                      data-confirm="Mark this signup as paid and activate the membership?">
                     <?= csrf_field() ?><button type="submit" class="btn btn-sm">Approve</button>
                 </form>
                 <form class="inline" method="post" action="<?= url('/admin/subscriptions/' . (int) $rec['id'] . '/cancel') ?>"
-                      onsubmit="return confirm('Cancel this pending signup?');">
+                      data-confirm="Cancel this pending signup?">
                     <?= csrf_field() ?><button type="submit" class="btn btn-sm btn-danger">Cancel</button>
                 </form>
             </td>
@@ -88,7 +88,7 @@
     <?php foreach ($trialLinks as $tl): ?>
         <?php $linkUrl = absolute_url('/signup/' . rawurlencode($tl['code'])); ?>
         <tr>
-            <td style="white-space:nowrap;"><code><?= e($tl['code']) ?></code> <a class="btn btn-sm btn-outline" style="font-size:.75rem;" href="#" onclick="var i=document.createElement('input');i.value='<?= e($linkUrl) ?>';document.body.appendChild(i);i.select();document.execCommand('copy');i.remove();this.textContent='Copied';return false;">Copy link</a></td>
+            <td style="white-space:nowrap;"><code><?= e($tl['code']) ?></code> <a class="btn btn-sm btn-outline" style="font-size:.75rem;" href="#" data-action="copyLinkValue" data-arg="<?= e($linkUrl) ?>">Copy link</a></td>
             <td><?= e(\App\Models\TrialLink::levelLabel((int) $tl['level'])) ?></td>
             <td><?= (int) $tl['days'] ?></td>
             <td><?= (int) $tl['used_count'] ?> / <?= (int) $tl['max_uses'] ?></td>
@@ -98,7 +98,7 @@
                 <form class="inline" method="post" action="<?= url('/admin/trial-links/' . (int) $tl['id'] . '/toggle') ?>">
                     <?= csrf_field() ?><button type="submit" class="btn btn-sm btn-outline"><?= (int) $tl['enabled'] ? 'Disable' : 'Enable' ?></button>
                 </form>
-                <form class="inline" method="post" action="<?= url('/admin/trial-links/' . (int) $tl['id'] . '/delete') ?>" onsubmit="return confirm('Delete this trial link?');">
+                <form class="inline" method="post" action="<?= url('/admin/trial-links/' . (int) $tl['id'] . '/delete') ?>" data-confirm="Delete this trial link?">
                     <?= csrf_field() ?><button type="submit" class="btn btn-sm btn-danger">Delete</button>
                 </form>
             </td>
@@ -156,13 +156,13 @@
                         <?php endif; ?>
                         <?php if ($sub['status'] === 'active'): ?>
                             <form class="inline" method="post" action="<?= url('/admin/subscriptions/' . (int) $sub['id'] . '/cancel') ?>"
-                                  onsubmit="return confirm('Cancel this active subscription? This will end the member\u2019s access.');">
+                                  data-confirm="Cancel this active subscription? This will end the member’s access.">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm btn-outline">Cancel</button>
                             </form>
                         <?php endif; ?>
                         <form class="inline" method="post" action="<?= url('/admin/subscriptions/' . (int) $sub['id'] . '/delete') ?>"
-                              onsubmit="return confirm('Delete this subscription record?');">
+                              data-confirm="Delete this subscription record?">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                         </form>

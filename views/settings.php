@@ -8,7 +8,7 @@
 <section class="card settings-card" style="border-left:4px solid var(--purple-500);">
     <h2 class="section-title">Site tour</h2>
     <p class="muted">Replay the interactive tour that walks you through the site's features.</p>
-    <button type="button" class="btn btn-sm" onclick="if(window.GalleryTour){GalleryTour.clearSeen();GalleryTour.start();}">Start tour</button>
+    <button type="button" class="btn btn-sm" data-action="startSiteTour">Start tour</button>
 </section>
 
 <?php // Super admins see the operator chat bridge connection details. ?>
@@ -153,7 +153,7 @@
             <button type="submit" class="btn">Save settings</button>
         </div>
     </form>
-    <form method="post" action="<?= e(url('/settings/server-optimizations/apply')) ?>" style="margin-top:.5rem;" onsubmit="return confirm('Apply server optimizations now (writes config, reloads Apache/PHP-FPM/MySQL)?');">
+    <form method="post" action="<?= e(url('/settings/server-optimizations/apply')) ?>" style="margin-top:.5rem;" data-confirm="Apply server optimizations now (writes config, reloads Apache/PHP-FPM/MySQL)?">
         <?= csrf_field() ?>
         <button type="submit" class="btn btn-outline">Apply to server</button>
     </form>
@@ -313,7 +313,7 @@
     <p><strong>Last login:</strong> <?= !empty($user['last_login_at']) ? e(tzdate('Y-m-d H:i', $user['last_login_at'])) : 'Not available' ?></p>
     <p><strong>Last seen:</strong> <?= !empty($user['last_seen_at']) ? e(tzdate('Y-m-d H:i', $user['last_seen_at'])) : 'Not available' ?></p>
     <p class="muted">Use a unique password of at least 8 characters. Changing it does not automatically sign out other devices.</p>
-    <form method="post" action="<?= e(url('/settings/logout-everywhere')) ?>" onsubmit="return confirm('Sign out every device connected to your account?');">
+    <form method="post" action="<?= e(url('/settings/logout-everywhere')) ?>" data-confirm="Sign out every device connected to your account?">
         <?= csrf_field() ?><button type="submit" class="btn btn-danger">Log out everywhere</button>
     </form>
     <?php if (\App\Core\Auth::isAdmin()): ?>

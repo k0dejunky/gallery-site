@@ -39,16 +39,16 @@ $asyncDecodeAttr    = $heroCard ? '' : ' decoding="async"';
         <?php else: ?>
             <div class="card-cover">
                 <?php if ($isVideoCard): ?>
-                    <img src="<?= e(file_url($cover['filename'], $coverSize)) ?>" alt="" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?> onerror="this.onerror=null;this.src='<?= e($placeholder) ?>'">
+                    <img src="<?= e(file_url($cover['filename'], $coverSize)) ?>" alt="" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?> data-fallback="<?= e($placeholder) ?>">
                 <?php elseif ($coverSize === 'blur'): ?>
                     <?php // Guests (and search engines) only ever see the blurred
                         // preview cover; the real thumbnail is for members. ?>
-                    <img src="<?= e(file_url($cover['filename'], 'blur')) ?>" alt="" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> onerror="this.onerror=null;this.src='<?= e($placeholder) ?>'">
+                    <img src="<?= e(file_url($cover['filename'], 'blur')) ?>" alt="" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> data-fallback="<?= e($placeholder) ?>">
                 <?php else: ?>
                     <picture>
                         <source type="image/webp" srcset="<?= e(file_url($cover['filename'], 'thumb', 'webp')) ?>">
                         <source type="image/jpeg" srcset="<?= e(file_url($cover['filename'], 'thumb')) ?>">
-                        <img src="<?= e(file_url($cover['filename'], 'thumb')) ?>" srcset="<?= e(file_srcset($cover['filename'])) ?>" sizes="(min-width: 800px) 400px, 100vw" alt="" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> onerror="this.onerror=null;this.src='<?= e($placeholder) ?>'">
+                        <img src="<?= e(file_url($cover['filename'], 'thumb')) ?>" srcset="<?= e(file_srcset($cover['filename'])) ?>" sizes="(min-width: 800px) 400px, 100vw" alt="" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> data-fallback="<?= e($placeholder) ?>">
                     </picture>
                 <?php endif; ?>
                 <?php if ($isVideoCard): ?><span class="video-badge">&#9654;</span><?php endif; ?>

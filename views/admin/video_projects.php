@@ -36,11 +36,11 @@ $formatBytes = static fn (?int $bytes): string => ($bytes === null || $bytes < 0
                         <a class="btn small" href="<?= url('/admin/video-exports/' . (int) $ex['id'] . '/create-gallery') ?>">Create Gallery</a>
                         <?php elseif ($ex['status'] === 'failed' && !empty($ex['error'])): ?><span class="text-muted" title="<?= htmlspecialchars((string) $ex['error']) ?>">Error</span><?php endif; ?>
                         <?php if (!empty($ex['gallery_exists'])): ?>
-                        <form method="post" action="<?= url('/admin/video-exports/' . (int) $ex['id'] . '/purge') ?>" style="display:inline" onsubmit="return confirm('Purge this exported file? The file and thumbnail will be kept for the gallery and the export record removed.');">
+                        <form method="post" action="<?= url('/admin/video-exports/' . (int) $ex['id'] . '/purge') ?>" style="display:inline" data-confirm="Purge this exported file? The file and thumbnail will be kept for the gallery and the export record removed.">
                             <?= csrf_field() ?><button class="btn small" type="submit" style="background:#7c3aed;color:#fff" title="Purge export after gallery created">Purge</button>
                         </form>
                         <?php endif; ?>
-                        <form method="post" action="<?= url('/admin/video-exports/' . (int) $ex['id'] . '/delete') ?>" style="display:inline" onsubmit="return confirm('Delete this export<?= $ex['status'] === 'running' || $ex['status'] === 'queued' ? ' (and any partial output file)' : '' ?>?');">
+                        <form method="post" action="<?= url('/admin/video-exports/' . (int) $ex['id'] . '/delete') ?>" style="display:inline" data-confirm="Delete this export<?= $ex['status'] === 'running' || $ex['status'] === 'queued' ? ' (and any partial output file)' : '' ?>?">
                             <?= csrf_field() ?><button class="btn small" type="submit" style="background:#b42318;color:#fff">Delete</button>
                         </form>
                     </td>
@@ -85,7 +85,7 @@ $formatBytes = static fn (?int $bytes): string => ($bytes === null || $bytes < 0
                         <a class="btn small" href="<?= url('/admin/videos/' . (int) $row['source_photo_id'] . '/edit') ?>">Edit</a>
                         <?php endif; ?>
                         <form method="post" action="<?= url('/admin/video-projects/' . (int) $row['id'] . '/delete') ?>" style="display:inline"
-                              onsubmit="return confirm('Delete this video project<?= (int) ($row['export_count'] ?? 0) > 0 ? ' and its export record(s)' : '' ?>? This removes the saved editor state.');">
+                              data-confirm="Delete this video project<?= (int) ($row['export_count'] ?? 0) > 0 ? ' and its export record(s)' : '' ?>? This removes the saved editor state.">
                             <?= csrf_field() ?><button class="btn small" type="submit" style="background:#b42318;color:#fff">Delete</button>
                         </form>
                     </td>

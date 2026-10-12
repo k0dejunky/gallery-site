@@ -193,7 +193,7 @@
         <?php else: ?>
             <p class="muted">Site is live for everyone.</p>
             <form class="sys-actions" method="post" action="<?= url('/admin/system/maintenance') ?>"
-                  onsubmit="return confirm('Take the site down for everyone except staff?');">
+                  data-confirm="Take the site down for everyone except staff?">
                 <?= csrf_field() ?><input type="hidden" name="mode" value="on">
                 <button class="btn btn-danger" type="submit">Enable maintenance mode</button>
             </form>
@@ -509,14 +509,14 @@
                         <td><?= number_format($dir['size'] / 1048576, 1) ?> MB</td>
                         <td><?= (int) $dir['age_h'] ?>h</td>
                         <td><form class="inline" method="post" action="<?= url('/admin/system/cleanup/pending') ?>"
-                                  onsubmit="return confirm('Delete this staging folder?');">
+                                  data-confirm="Delete this staging folder?">
                                 <?= csrf_field() ?><input type="hidden" name="dir" value="<?= e($dir['name']) ?>">
                                 <button class="btn btn-sm btn-danger" type="submit">Delete</button></form></td>
                     </tr>
                 <?php endforeach; ?>
             </table>
             <form class="sys-actions" method="post" action="<?= url('/admin/system/cleanup/pending') ?>"
-                  onsubmit="return confirm('Delete ALL <?= count($pendingDirs) ?> staging folders?');">
+                  data-confirm="Delete ALL <?= count($pendingDirs) ?> staging folders?">
                 <?= csrf_field() ?><input type="hidden" name="dir" value="all">
                 <button class="btn btn-danger" type="submit">Delete all</button>
             </form>
@@ -540,7 +540,7 @@
             <p class="muted" style="margin:.5rem 0;">Click a card to view the full file in a new tab.</p>
             <?php require __DIR__ . '/partials/orphans_grid.php'; ?>
             <form class="sys-actions" method="post" action="<?= url('/admin/system/cleanup/orphans') ?>"
-                  onsubmit="return confirm('Delete all <?= (int) $orphanTotal ?> orphaned files permanently?');">
+                  data-confirm="Delete all <?= (int) $orphanTotal ?> orphaned files permanently?">
                 <?= csrf_field() ?>
                 <button class="btn btn-danger" type="submit">Delete orphans</button>
             </form>
@@ -639,7 +639,7 @@
                         <td style="white-space:nowrap;">
                             <a class="btn btn-sm" href="<?= url('/admin/system/backups/' . rawurlencode($backup['name'])) ?>">Download</a>
                             <form class="inline" method="post" action="<?= url('/admin/system/backups/' . rawurlencode($backup['name']) . '/delete') ?>"
-                                  onsubmit="return confirm('Delete this backup?');">
+                                  data-confirm="Delete this backup?">
                                 <?= csrf_field() ?><button class="btn btn-sm btn-danger" type="submit">Delete</button>
                             </form>
                         </td>
@@ -697,7 +697,7 @@
             <?php endforeach; ?>
         </table>
         <form class="sys-actions" method="post" action="<?= url('/admin/system/db/optimize') ?>"
-              onsubmit="return confirm('Optimize every table? May take a moment.');">
+              data-confirm="Optimize every table? May take a moment.">
             <?= csrf_field() ?><input type="hidden" name="table" value="__all">
             <button class="btn" type="submit">Optimize all</button>
         </form>

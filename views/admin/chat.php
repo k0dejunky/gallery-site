@@ -17,7 +17,7 @@
         <?php if (!empty($latestApk['file'])): ?>
             <a class="btn btn-sm" href="<?= url('/assets/apk/' . e($latestApk['file'])) ?>" download>Download operator app (Android APK v<?= e($latestApk['version']) ?>)</a>
         <?php endif; ?>
-        <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat/export-training') ?>" onclick="return confirm('Write the cleaned training export?');">Export training</a>
+        <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat/export-training') ?>" data-confirm="Write the cleaned training export?">Export training</a>
     <div style="margin-top:.5rem;">
         <span class="muted" style="font-size:.85rem;">
             Amethyst chat:
@@ -77,7 +77,7 @@
                         <td><span class="pill <?= $revoked ? 'pill-muted' : '' ?>"><?= $revoked ? 'revoked' : 'active' ?></span></td>
                         <td style="text-align:right;">
                             <?php if (!$revoked): ?>
-                                <form class="inline" method="post" action="<?= url('/admin/chat/tokens/' . (int) $t['id'] . '/revoke') ?>" onsubmit="return confirm('Revoke token &quot;<?= e((string) $t['label']) ?>&quot;?');">
+                                <form class="inline" method="post" action="<?= url('/admin/chat/tokens/' . (int) $t['id'] . '/revoke') ?>" data-confirm="Revoke token &quot;<?= e((string) $t['label']) ?>&quot;?">
                                     <?= csrf_field() ?>
                                     <button type="submit" class="btn btn-sm btn-danger">Revoke</button>
                                 </form>
@@ -241,13 +241,13 @@
                     <td style="text-align:right;white-space:nowrap;">
                         <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat/questionnaire/' . (int) $q['id']) ?>">Results</a>
                         <?php if (in_array($q['status'], ['draft', 'scheduled', 'failed'], true)): ?>
-                            <form class="inline" method="post" action="<?= url('/admin/chat/questionnaire/' . (int) $q['id'] . '/send') ?>" onsubmit="return confirm('Send this questionnaire now?');">
+                            <form class="inline" method="post" action="<?= url('/admin/chat/questionnaire/' . (int) $q['id'] . '/send') ?>" data-confirm="Send this questionnaire now?">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm">Send now</button>
                             </form>
                         <?php endif; ?>
                         <?php if (in_array($q['status'], ['draft', 'scheduled', 'sending'], true)): ?>
-                            <form class="inline" method="post" action="<?= url('/admin/chat/questionnaire/' . (int) $q['id'] . '/cancel') ?>" onsubmit="return confirm('Cancel this questionnaire?');">
+                            <form class="inline" method="post" action="<?= url('/admin/chat/questionnaire/' . (int) $q['id'] . '/cancel') ?>" data-confirm="Cancel this questionnaire?">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm btn-danger">Cancel</button>
                             </form>
@@ -324,13 +324,13 @@
                     <td class="muted"><?= e((string) ($b['created_by_email'] ?? '—')) ?></td>
                     <td style="text-align:right;">
                         <?php if (in_array($b['status'], ['scheduled', 'failed'], true)): ?>
-                            <form class="inline" method="post" action="<?= url('/admin/chat/daily-broadcast/' . (int) $b['id'] . '/send') ?>" onsubmit="return confirm('Send this daily chat now?');">
+                            <form class="inline" method="post" action="<?= url('/admin/chat/daily-broadcast/' . (int) $b['id'] . '/send') ?>" data-confirm="Send this daily chat now?">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm">Send now</button>
                             </form>
                         <?php endif; ?>
                         <?php if (in_array($b['status'], ['scheduled', 'sending'], true)): ?>
-                            <form class="inline" method="post" action="<?= url('/admin/chat/daily-broadcast/' . (int) $b['id'] . '/cancel') ?>" onsubmit="return confirm('Cancel this scheduled daily chat?');">
+                            <form class="inline" method="post" action="<?= url('/admin/chat/daily-broadcast/' . (int) $b['id'] . '/cancel') ?>" data-confirm="Cancel this scheduled daily chat?">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm btn-danger">Cancel</button>
                             </form>

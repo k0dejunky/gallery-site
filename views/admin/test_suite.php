@@ -76,7 +76,7 @@
 <?php foreach ($groups as $group => $tests): $total = count($tests); ?>
     <details class="sys-card ts-group" data-group="<?= e($group) ?>" open>
         <summary>
-            <input type="checkbox" class="ts-grp-cbx" data-group="<?= e($group) ?>" title="toggle group" onclick="event.stopPropagation()">
+            <input type="checkbox" class="ts-grp-cbx" data-group="<?= e($group) ?>" title="toggle group" data-stop-prop>
             <strong><?= e($group) ?></strong>
             <span class="g-count"><span class="ts-grp-pass" data-group="<?= e($group) ?>">0</span>/<?= $total ?> passed</span>
         </summary>
@@ -84,7 +84,7 @@
             <table class="users-table ts-table" data-group="<?= e($group) ?>">
                 <thead>
                     <tr>
-                        <th class="check-col"><input type="checkbox" class="ts-grp-cbx" data-group="<?= e($group) ?>" onclick="event.stopPropagation()"></th>
+                        <th class="check-col"><input type="checkbox" class="ts-grp-cbx" data-group="<?= e($group) ?>" data-stop-prop></th>
                         <th>Test</th>
                         <th>Status</th>
                         <th>Result</th>
