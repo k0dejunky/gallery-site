@@ -1742,6 +1742,11 @@ class AutoPostQueue
             if ($canonical === 'reddit') {
                 $gid = (int) ($item['gallery_id'] ?? 0);
                 $meta['url'] = $gid > 0 ? \App\Models\Traffic::buildUrl('/galleries/' . $gid, 'reddit') : '';
+
+                // Fan out to every configured subreddit + the user profile.
+                $redditChannel = AutoPosterConfig::channel('reddit');
+                $meta['subreddits'] = (array) ($redditChannel['subreddits'] ?? []);
+                $meta['post_to_profile'] = ((string) ($redditChannel['post_to_profile'] ?? '')) === '1';
             }
 
             $result = $client->post($text, $media, $meta);

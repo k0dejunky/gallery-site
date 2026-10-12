@@ -473,6 +473,19 @@ class SmokeChecks
                 ? $ok('registry fields + admin status block present')
                 : $bad('Platforms reddit must add browser_enabled/username/password fields and auto_poster.php must render the Browser worker status');
         });
+        $add('smoke.reddit.multi_sub', 'Smoke · Reddit Browser', 'Posts fan out to multiple subreddits + the profile page', static function () use ($root, $ok, $bad): array {
+            $p = (string) @file_get_contents($root . '/app/Core/Platforms.php');
+            $c = (string) @file_get_contents($root . '/app/Controllers/RedditBrowserJobsController.php');
+            $r = (string) @file_get_contents($root . '/app/Models/RedditClient.php');
+            $h = (string) @file_get_contents($root . '/bin/browser/reddit-homeworker.mjs');
+            return strpos($p, "'subreddits'") !== false
+                && strpos($p, "'post_to_profile'") !== false
+                && strpos($c, "'subreddits'") !== false && strpos($c, "'profile'") !== false
+                && strpos($r, '$subs = array_values(array_unique($subs));') !== false
+                && strpos($h, 'subreddits: targets') !== false
+                ? $ok('registry list + profile flag; payload carries subreddits/profile; client + home worker fan out')
+                : $bad('reddit channel must support a subreddit list + profile posting end-to-end (registry, payloadFor, RedditClient, home worker)');
+        });
 
         // ------------------------- Home-browser worker (share method) -----
         $rbQueue2  = $read("$root/app/Models/AutoPostQueue.php");

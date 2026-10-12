@@ -119,17 +119,28 @@ class RedditBrowserJobsController extends Controller
     private function payloadFor(array $item): array
     {
         $channel = AutoPosterConfig::channel('reddit');
-        $sub     = (string) ($channel['subreddit'] ?? '');
+        $subs    = (array) ($channel['subreddits'] ?? []);
+        $main    = (string) ($channel['subreddit'] ?? '');
 
-        if ($sub === '') {
+        $subs = array_values(array_unique(array_map(
+            static fn ($s) => \App\Models\RedditClient::cleanSubreddit((string) $s),
+            array_filter($subs, static fn ($s) => trim((string) $s) !== '')
+        )));
+        if ($subs === [] && $main !== '') {
+            $subs = [\App\Models\RedditClient::cleanSubreddit($main)];
+        }
+
+        if ($subs === []) {
             return ['error' => 'Reddit has no target subreddit configured.'];
         }
 
         $split = \App\Core\AutoPostText::splitForPlatform((string) $item['text'], 'reddit');
         $base  = [
-            'subreddit' => \App\Models\RedditClient::cleanSubreddit($sub),
-            'title'     => (string) ($split['title'] ?? ''),
-            'body'      => trim((string) ($split['body'] ?? '')),
+            'subreddit'  => $subs[0],
+            'subreddits' => $subs,
+            'profile'    => ((string) ($channel['post_to_profile'] ?? '')) === '1',
+            'title'      => (string) ($split['title'] ?? ''),
+            'body'       => trim((string) ($split['body'] ?? '')),
         ];
 
         $gid = (int) ($item['gallery_id'] ?? 0);

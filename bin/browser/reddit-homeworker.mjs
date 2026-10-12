@@ -72,11 +72,14 @@ async function poll() {
   if (!job) return; // empty queue
 
   const id = job.job_id;
-  log(`job #${id}: ${job.mode} "${(job.title || '').slice(0, 60)}" -> r/${job.subreddit}`);
+  const targets = Array.isArray(job.subreddits) && job.subreddits.length ? job.subreddits : (job.subreddit ? [job.subreddit] : []);
+  log(`job #${id}: ${job.mode} "${(job.title || '').slice(0, 60)}" -> ${targets.join(', ')}${job.profile ? ' + profile' : ''}`);
 
   const payload = {
     mode: job.mode,
     subreddit: job.subreddit,
+    subreddits: targets,
+    profile: !!job.profile,
     title: job.title,
     body: job.body || '',
     username: user,

@@ -136,6 +136,8 @@ final class Platforms
                 ['client_secret', 'Client Secret', 'password', 'Reddit app client secret', true],
                 ['username', 'Reddit username', 'text', 'u/yourname (used for the browser method + UA)', false],
                 ['subreddit', 'Target subreddit', 'text', 'Amethyst2213NSFW', false],
+                ['subreddits', 'Subreddits list (one per line)', 'textarea', 'Post to every subreddit listed here, one per line. Leave blank to use only the Target subreddit above.', false],
+                ['post_to_profile', 'Post to my profile', 'checkbox', 'Also publish each post to your Reddit user profile', false],
                 ['browser_enabled', 'Browser post (share-button method)', 'checkbox', 'Use the headless-browser submit flow when the API is not user-authorized', false],
                 ['password', 'Reddit password (browser auto re-login)', 'password', 'Only used by the browser worker when the saved session expires', true],
             ],

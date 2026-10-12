@@ -202,6 +202,26 @@ class AutoPosterController extends Controller
                 $value = (string) $current[$name];
             }
 
+            // The reddit subreddit list is stored as an array (one per line).
+            if ($name === 'subreddits') {
+                $subs = [];
+                foreach (preg_split('/\r?\n/', $value) ?: [] as $line) {
+                    $sub = \App\Models\RedditClient::cleanSubreddit(trim($line));
+                    if ($sub !== '') {
+                        $subs[] = $sub;
+                    }
+                }
+                $subs = array_values(array_unique($subs));
+                $values['subreddits'] = $subs;
+
+                // Keep the single Target subreddit field in sync with the list
+                // so single-sub consumers (logs, manual posts, fallback) work.
+                if ($subs !== []) {
+                    $values['subreddit'] = $subs[0];
+                }
+                continue;
+            }
+
             if ($name !== '') {
                 $values[$name] = $value;
             }

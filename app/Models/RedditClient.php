@@ -147,8 +147,43 @@ class RedditClient
      */
     public function post(string $text, array $media = [], array $meta = []): array
     {
-        $sub = self::cleanSubreddit((string) ($this->config['subreddit'] ?? ''));
-        if ($sub === '') {
+        // Post to EVERY subreddit on the configured list (one queued item fans
+        // out), plus the operator's own profile page when enabled. Priority:
+        // explicit per-post list > explicit per-post single > configured list
+        // > configured single.
+        $subs = [];
+        foreach ((array) ($meta['subreddits'] ?? []) as $s) {
+            $s = self::cleanSubreddit((string) $s);
+            if ($s !== '') {
+                $subs[] = $s;
+            }
+        }
+        $metaMain = self::cleanSubreddit((string) ($meta['subreddit'] ?? ''));
+        $cfgSubs  = (array) ($this->config['subreddits'] ?? []);
+        $cfgMain  = self::cleanSubreddit((string) ($this->config['subreddit'] ?? ''));
+
+        if ($subs === [] && $metaMain !== '') {
+            $subs = [$metaMain];
+        } elseif ($subs === []) {
+            foreach ($cfgSubs as $s) {
+                $s = self::cleanSubreddit((string) $s);
+                if ($s !== '') {
+                    $subs[] = $s;
+                }
+            }
+            if ($subs === [] && $cfgMain !== '') {
+                $subs = [$cfgMain];
+            }
+        }
+        $subs = array_values(array_unique($subs));
+
+        $profile = ((string) ($this->config['post_to_profile'] ?? $meta['post_to_profile'] ?? '')) === '1';
+        if (!$profile && !empty($meta['post_to_profile'])) {
+            $profile = $meta['post_to_profile'] === true || $meta['post_to_profile'] === '1' || $meta['post_to_profile'] === 1;
+        }
+        $profileUser = trim((string) ($this->config['username'] ?? ''));
+
+        if ($subs === [] && (!$profile || $profileUser === '')) {
             return ['ok' => false, 'error' => 'Reddit has no target subreddit configured.'];
         }
 
@@ -165,19 +200,29 @@ class RedditClient
             }
         }
 
-        // Share-button method: when the API is not user-authorized but the
-        // admin enabled the browser fallback, post exactly like the on-site
-        // "Share on Reddit" button (headless-browser submit of the gallery
-        // link or image to the target subreddit).
-        if (!$this->isUserAuthorized() && ($this->config['browser_enabled'] ?? '') === '1') {
-            return $this->postViaBrowser($sub, $title, (string) ($meta['url'] ?? ''), $file);
+        $targets  = $subs;
+        if ($profile && $profileUser !== '') {
+            $targets[] = 'u_' . $profileUser;
         }
 
-        if ($file !== null) {
-            return $this->submit($sub, $title, '', 'image', null, $file);
+        $browserMethod = !$this->isUserAuthorized() && ((string) ($this->config['browser_enabled'] ?? '')) === '1';
+        $usable = null;
+
+        foreach ($targets as $target) {
+            if ($browserMethod) {
+                $result = $this->postViaBrowser($target, $title, (string) ($meta['url'] ?? ''), $file);
+            } elseif ($file !== null) {
+                $result = $this->submit($target, $title, '', 'image', null, $file);
+            } else {
+                $result = $this->submit($target, $title, trim($text), 'self');
+            }
+
+            if (($result['ok'] ?? false) && $usable === null) {
+                $usable = $result;
+            }
         }
 
-        return $this->submit($sub, $title, trim($text), 'self');
+        return $usable ?? ['ok' => false, 'error' => 'Reddit posts failed on every target.'];
     }
 
     /**

@@ -367,7 +367,11 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
                 <?php
                 [$fName, $fLabel, $fType, $fPlaceholder] = array_pad($field, 4, '');
                 $fSecret = count($field) >= 5 ? (bool) $field[4] : false;
-                $fValue  = (string) ($channel[$fName] ?? '');
+                $fValue  = $channel[$fName] ?? '';
+                if (is_array($fValue)) {
+                    $fValue = implode("\n", $fValue);
+                }
+                $fValue = (string) $fValue;
                 ?>
                 <p>
                     <label for="apf-<?= e($fName) ?>"><?= e($fLabel) ?></label><br>

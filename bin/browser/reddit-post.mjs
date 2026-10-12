@@ -6,7 +6,9 @@
  * `reddit.com/r/<sub>/submit` page — exactly what the on-site "Share on
  * Reddit" button does — fill the title + URL (a gallery link, so Reddit shows
  * the gallery's og:image thumbnail), click "Post", and return the new
- * permalink.
+ * permalink. One job fans out to EVERY subreddit on the site-configured list
+ * (`payload.subreddits`) and, when enabled, to the operator's own profile
+ * page (`u_<username>`, posted via the submit page's `?sr=u_<name>` target).
  *
  * NOTE on images: Reddit's web image editor does not accept synthesised file
  * uploads and /api/* is WAF-blocked for browser sessions, so native image
@@ -15,8 +17,8 @@
  * gallery's thumbnail media card.
  *
  * Usage: node bin/browser/reddit-post.mjs <payload.json>
- *   payload { mode, subreddit, title, url?, username?, password? }
- * Output (stdout, JSON): {ok, url?, error?}
+ *   payload { mode, subreddit, subreddits?, profile?, title, url?, username?, password? }
+ * Output (stdout, JSON): {ok, url?, urls?, approved?, error?}
  */
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync, appendFileSync } from 'node:fs';
@@ -48,12 +50,23 @@ if (!Object.keys(payload).length && !process.stdin.isTTY) {
   if (raw.trim()) payload = JSON.parse(raw.trim());
 }
 
-const mode      = payload.mode === 'image' ? 'image' : 'link';
-const sub       = String(payload.subreddit || '').replace(/^r\//i, '').replace(/[^A-Za-z0-9_]/g, '');
-const title     = String(payload.title || '').trim();
-const url       = String(payload.url || '').trim();
-const username  = String(payload.username || '');
-const password  = String(payload.password || '');
+const mode       = payload.mode === 'image' ? 'image' : 'link';
+const title      = String(payload.title || '').trim();
+const url        = String(payload.url || '').trim();
+const username   = String(payload.username || '');
+const password   = String(payload.password || '');
+
+const clean     = (s) => String(s || '').replace(/^r\//i, '').replace(/[^A-Za-z0-9_]/g, '');
+const subList   = Array.isArray(payload.subreddits)
+  ? payload.subreddits.map(clean).filter((s) => s)
+  : (payload.subreddit ? [clean(payload.subreddit)] : []);
+const profileOn = payload.profile === true || payload.profile === '1' || payload.profile === 1;
+const profileUser = clean(String(username || '').replace(/^u\//i, ''));
+
+const submitUrlForSub = (sub) =>
+  'https://www.reddit.com/r/' + sub + '/submit?url=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(title);
+const submitUrlForProfile = () =>
+  'https://www.reddit.com/submit?sr=u_' + profileUser + '&url=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(title);
 
 const out = (obj) => {
   try { appendFileSync(logFile, new Date().toISOString() + ' ' + JSON.stringify(obj).slice(0, 400) + '\n'); } catch (_) {}
@@ -62,39 +75,29 @@ const out = (obj) => {
 };
 
 if (!existsSync(sessionFile)) out({ ok: false, error: 'SESSION_MISSING: no reddit-browser session yet — run node bin/browser/reddit-login.mjs once.' });
-if (!sub) out({ ok: false, error: 'No subreddit given.' });
+if (subList.length === 0 && !(profileOn && profileUser)) out({ ok: false, error: 'No subreddit given.' });
 if (!title) out({ ok: false, error: 'No title given.' });
 if (!url) out({ ok: false, error: 'No url given for a link post.' });
 
-let browser = null;
-try {
-  const session = JSON.parse(readFileSync(sessionFile, 'utf8'));
-  const launchOpts = { headless: process.env.REDDIT_HEADFUL !== '1' };
-  if (process.env.REDDIT_BROWSER_CHANNEL) launchOpts.channel = process.env.REDDIT_BROWSER_CHANNEL;
-  browser = await chromium.launch(launchOpts);
-  const context = await browser.newContext({ storageState: session, viewport: { width: 1280, height: 900 } });
-  const page = await context.newPage();
-  page.setDefaultTimeout(20000);
-
-  // Warm up on the homepage so Reddit's js_challenge resolves.
-  await page.goto('https://www.reddit.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await sleepy(4000);
-
-  // Image rows post as links (Reddit shows the gallery og:image thumbnail).
-  const submitUrl = 'https://www.reddit.com/r/' + sub + '/submit?url=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(title);
+/**
+ * Submit one post on an already-warmed page: navigate to the submit URL,
+ * re-login if the session expired, fill title/URL, click Post, and return the
+ * new permalink (plus a best-effort mod-queue approval for subreddits).
+ */
+async function submitOne(page, targetLabel, submitUrl, subForApprove, username, password) {
   await page.goto(submitUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await sleepy(2000);
 
   if (/\/login/.test(page.url())) {
     if (username && password) {
       const relog = await autoLogin(page, username, password);
-      if (!relog.ok) out(relog);
+      if (!relog.ok) return { ok: false, label: targetLabel, error: relog.error };
       await page.goto(submitUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
       await sleepy(2000);
     } else {
-      out({ ok: false, error: 'SESSION_EXPIRED: reddit login expired — re-run node bin/browser/reddit-login.mjs.' });
+      return { ok: false, label: targetLabel, error: 'SESSION_EXPIRED: reddit login expired — re-run node bin/browser/reddit-login.mjs.' };
     }
-    if (/\/login/.test(page.url())) out({ ok: false, error: 'SESSION_EXPIRED: still on /login after re-login.' });
+    if (/\/login/.test(page.url())) return { ok: false, label: targetLabel, error: 'SESSION_EXPIRED: still on /login after re-login.' };
   }
 
   // Title (prefilled from ?title= — verify it landed).
@@ -120,7 +123,7 @@ try {
   }
   if (!ready) {
     const body = (await page.evaluate(() => document.body.innerText).catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
-    out({ ok: false, error: (/blocked by network security/i.test(body) ? 'MANUAL_VERIFICATION: ' : 'Reddit rejected the post: ') + body });
+    return { ok: false, label: targetLabel, error: (/blocked by network security/i.test(body) ? 'MANUAL_VERIFICATION: ' : 'Reddit rejected the post: ') + body };
   }
   await postBtn.click({ timeout: 15000 }).catch(() => {});
   await sleepy(1200);
@@ -153,11 +156,54 @@ try {
         if (found && /\/comments\//.test(found)) permalink = found.split('?')[0];
       } catch (_) {}
     }
-    out({ ok: true, url: permalink, approved: await approveInModQueue(page, sub, title) });
+    const approved = subForApprove ? await approveInModQueue(page, subForApprove, title) : false;
+    return { ok: true, label: targetLabel, url: permalink, approved };
   }
 
   const body = (await page.evaluate(() => document.body.innerText).catch(() => '')).replace(/\s+/g, ' ').slice(0, 240);
-  out({ ok: false, error: /blocked|verify|captcha|something went wrong/i.test(body) ? 'MANUAL_VERIFICATION: ' + body : 'Reddit rejected the post: ' + body });
+  return { ok: false, label: targetLabel, error: /blocked|verify|captcha|something went wrong/i.test(body) ? 'MANUAL_VERIFICATION: ' + body : 'Reddit rejected the post: ' + body };
+}
+
+let browser = null;
+try {
+  const session = JSON.parse(readFileSync(sessionFile, 'utf8'));
+  const launchOpts = { headless: process.env.REDDIT_HEADFUL !== '1' };
+  if (process.env.REDDIT_BROWSER_CHANNEL) launchOpts.channel = process.env.REDDIT_BROWSER_CHANNEL;
+  browser = await chromium.launch(launchOpts);
+  const context = await browser.newContext({ storageState: session, viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  page.setDefaultTimeout(20000);
+
+  // Warm up on the homepage so Reddit's js_challenge resolves.
+  await page.goto('https://www.reddit.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await sleepy(4000);
+
+  const targets = [];
+  for (const sub of subList) targets.push({ kind: 'sub', label: 'r/' + sub, url: submitUrlForSub(sub), approve: sub });
+  if (profileOn && profileUser) targets.push({ kind: 'profile', label: 'u/' + profileUser, url: submitUrlForProfile(), approve: null });
+
+  // Image rows post as links (Reddit shows the gallery og:image thumbnail).
+  const results = [];
+  for (const t of targets) {
+    const r = await submitOne(page, t.label, t.url, t.approve, username, password);
+    results.push(r);
+    if (r.ok) {
+      try { appendFileSync(logFile, new Date().toISOString() + ' posted ' + r.label + ' => ' + r.url + '\n'); } catch (_) {}
+    }
+  }
+
+  const okResults = results.filter((r) => r.ok);
+  if (okResults[0]) {
+    out({
+      ok: true,
+      url: okResults[0].url,
+      urls: okResults.map((r) => r.url),
+      targets: okResults.map((r) => r.label),
+      approved: okResults[0].approved,
+    });
+  }
+
+  out({ ok: false, error: 'Reddit posted to none of ' + targets.map((t) => t.label).join(', ') + ': ' + results.map((r) => r.label + ': ' + (r.error || 'failed')).join('; ') });
 } catch (e) {
   out({ ok: false, error: 'BROWSER_ERROR: ' + (e && e.message ? e.message : String(e)).slice(0, 300) });
 } finally {
@@ -183,7 +229,7 @@ async function firstVisible(page, selectors, timeout = 8000) {
  * matching queued row).
  */
 async function approveInModQueue(page, sub, title) {
-  if (process.env.REDDIT_APPROVE_OWN === '0') return false;
+  if (!sub || process.env.REDDIT_APPROVE_OWN === '0') return false;
   try {
     await page.goto('https://www.reddit.com/r/' + sub + '/about/modqueue/', { waitUntil: 'domcontentloaded', timeout: 45000 });
     await sleepy(2500);
