@@ -65,8 +65,13 @@ const profileUser = clean(String(username || '').replace(/^u\//i, ''));
 
 const submitUrlForSub = (sub) =>
   'https://www.reddit.com/r/' + sub + '/submit?url=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(title);
-const submitUrlForProfile = () =>
-  'https://www.reddit.com/submit?sr=u_' + profileUser + '&url=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(title);
+// Profile posts are NOT supported by Reddit's web composer: both ?sr=u_<name>
+// and the bare /submit route return "Page not found" (the web UI requires a
+// subreddit destination). Profile posting requires the OAuth API where the
+// destination is sr = u_<username> (RedditClient::submit) - blocked today by
+// the pending OAuth authorization, so the browser worker skips profile targets
+// cleanly instead of burning a minute on a 404.
+const PROFILE_BROWSER_UNAVAILABLE = 'Profile posts require the OAuth API (sr=u_<name>); Reddit\'s web composer has no profile destination.';
 
 const out = (obj) => {
   try { appendFileSync(logFile, new Date().toISOString() + ' ' + JSON.stringify(obj).slice(0, 400) + '\n'); } catch (_) {}
@@ -180,11 +185,17 @@ try {
 
   const targets = [];
   for (const sub of subList) targets.push({ kind: 'sub', label: 'r/' + sub, url: submitUrlForSub(sub), approve: sub });
-  if (profileOn && profileUser) targets.push({ kind: 'profile', label: 'u/' + profileUser, url: submitUrlForProfile(), approve: null });
+  if (profileOn && profileUser) targets.push({ kind: 'profile', label: 'u/' + profileUser, navigate: false });
 
   // Image rows post as links (Reddit shows the gallery og:image thumbnail).
   const results = [];
   for (const t of targets) {
+    // Profile posts can't be produced by Reddit's web composer (see
+    // PROFILE_BROWSER_UNAVAILABLE) - skip them without costing a page load.
+    if (t.kind === 'profile') {
+      results.push({ ok: false, label: t.label, error: PROFILE_BROWSER_UNAVAILABLE });
+      continue;
+    }
     try {
       const r = await submitOne(page, t.label, t.url, t.approve, username, password);
       results.push(r);
