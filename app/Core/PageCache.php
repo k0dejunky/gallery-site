@@ -158,6 +158,16 @@ class PageCache
             'name="_token" value="' . \App\Core\Csrf::token() . '"',
             $html
         );
+        // The age-gate overlay and any save-search back-links must return the
+        // REQUESTER to their own page, not the caching producer's.
+        $returnTo = isset($_SERVER['REQUEST_URI']) ? e((string) $_SERVER['REQUEST_URI']) : '';
+        if ($returnTo !== '') {
+            $html = (string) preg_replace(
+                '/name="return_to" value="[^"]*"/',
+                'name="return_to" value="' . $returnTo . '"',
+                $html
+            );
+        }
 
         return $html;
     }

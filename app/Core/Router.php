@@ -141,8 +141,14 @@ class Router
         // out (pageInject swaps the CSP nonce and CSRF tokens), so the strict
         // CSP stays intact and every form stays session-correct.
         if ($this->request->method() === 'GET' && \App\Core\PageCache::pageAllows($handler)) {
+            // Include whether the session passed the 18+ age gate in the key:
+            // the cached page for an unverified guest carries the overlay, and
+            // the verified variant does not - so confirming the gate switches
+            // the visitor to the overlay-free cached page instead of re-serving
+            // the gated page and looping them back.
+            $ageState = empty($_SESSION['age_verified']) ? '0' : '1';
             $pageKey = \App\Core\PageCache::pageKey(
-                $this->request->uri() . '|' . (string) ($_SERVER['QUERY_STRING'] ?? '')
+                $this->request->uri() . '|' . (string) ($_SERVER['QUERY_STRING'] ?? '') . '|age:' . $ageState
             );
             $cached = \App\Core\PageCache::pageGet($pageKey);
 
