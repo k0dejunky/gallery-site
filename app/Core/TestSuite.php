@@ -513,6 +513,33 @@ class TestSuite
             }
         });
 
+        $add('db.autopost_claim', 'Database', 'Auto-poster claim executes (single-table UPDATE, secret guard)', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) === 'mysql') {
+                    // A multi-table UPDATE ... JOIN ... ORDER BY is illegal in
+                    // MySQL (error 1221) and used to kill the whole autopost
+                    // worker; running the real claim here catches it.
+                    $pdo = Database::connection();
+                    $own = !$pdo->inTransaction();
+                    if ($own) {
+                        $pdo->beginTransaction();
+                    }
+                    try {
+                        $rows = \App\Models\AutoPostQueue::due(1);
+                        $ok   = is_array($rows);
+                    } finally {
+                        if ($own) {
+                            $pdo->rollBack();
+                        }
+                    }
+                    return ['pass' => $ok, 'detail' => 'claimed ' . count($rows) . ' row(s), rolled back'];
+                }
+                return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.content_counts', 'Database', 'Site has content (users/galleries/photos)', function () {
             try {
                 $u = (int) Database::run('SELECT COUNT(*) FROM users')->fetchColumn();

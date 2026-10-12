@@ -743,14 +743,15 @@ class AutoPostQueue
         $staleCutoff = date('Y-m-d H:i:s', time() - 900);
 
         Database::run(
-            "UPDATE auto_poster_queue q
-             LEFT JOIN galleries g ON g.id = q.gallery_id
-             SET q.claimed_at = CURRENT_TIMESTAMP, q.claimed_by = ?
-             WHERE q.status = 'queued'
-               AND (q.scheduled_at IS NULL OR q.scheduled_at <= CURRENT_TIMESTAMP)
-               AND (q.claimed_at IS NULL OR q.claimed_at < ?)
-               AND (q.gallery_id = 0 OR (g.id IS NOT NULL AND g.is_secret = 0 AND g.deleted_at IS NULL))
-             ORDER BY COALESCE(q.scheduled_at, q.created_at) ASC, q.id ASC
+            "UPDATE auto_poster_queue
+             SET claimed_at = CURRENT_TIMESTAMP, claimed_by = ?
+             WHERE status = 'queued'
+               AND (scheduled_at IS NULL OR scheduled_at <= CURRENT_TIMESTAMP)
+               AND (claimed_at IS NULL OR claimed_at < ?)
+               AND (gallery_id = 0 OR gallery_id IN (
+                     SELECT id FROM galleries WHERE is_secret = 0 AND deleted_at IS NULL
+                   ))
+             ORDER BY COALESCE(scheduled_at, created_at) ASC, id ASC
              LIMIT $limit",
             [$claim, $staleCutoff]
         );
