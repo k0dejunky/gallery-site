@@ -57,6 +57,7 @@ if (!site || !key) {
 }
 
 const headers = { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' };
+const processTimeoutMs = parseInt(process.env.REDDIT_PROCESS_TIMEOUT_MS || '300000', 10);
 
 async function poll() {
   let res;
@@ -99,16 +100,23 @@ async function poll() {
   const payloadFile = join(jobDir, `payload-${id}.json`);
   writeFileSync(payloadFile, JSON.stringify(payload));
 
-  const run = spawnSync(process.execPath, [postScript, payloadFile], { encoding: 'utf8', timeout: 150000 });
-  rmSync(payloadFile, { force: true });
-  if (payload.imagePath) rmSync(payload.imagePath, { force: true });
-
   let result = null;
-  try { result = JSON.parse((run.stdout || '').trim()); } catch (_) {}
+  try {
+    // Each job runs async-notify tolerance; a slow multi-target fan-out (several
+    // subreddits + profile) can take ~2-3 minutes, well past the old 150s cap.
+    const run = spawnSync(process.execPath, [postScript, payloadFile], { encoding: 'utf8', timeout: processTimeoutMs });
+    try { result = JSON.parse((run.stdout || '').trim()); } catch (_) {}
+    rmSync(payloadFile, { force: true });
+    if (payload.imagePath) rmSync(payload.imagePath, { force: true });
+  } catch (e) {
+    log(`job #${id}: processing threw: ${(e && e.message) || e}`);
+    result = null;
+  }
+
   const ok = !!(result && result.ok);
   const approved = !!(result && result.approved);
-  log(`post result #${id}: ${ok ? 'posted' : 'failed'} ${ok ? result.url || '' : (result.error || (run.stderr ? run.stderr.slice(0, 300) : 'browser worker failed'))}${ok && approved ? ' | approved in modqueue' : ''}`);
-  await report(id, ok, result?.url || '', result?.error || (run.stderr ? run.stderr.slice(0, 300) : 'browser worker failed'));
+  log(`post result #${id}: ${ok ? 'posted' : 'failed'} ${ok ? result.url || '' : (result.error || 'browser worker failed')}${ok && approved ? ' | approved in modqueue' : ''}`);
+  await report(id, ok, result?.url || '', result?.error || 'browser worker failed');
 }
 
 async function report(id, ok, url, error) {

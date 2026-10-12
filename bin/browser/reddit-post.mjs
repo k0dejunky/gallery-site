@@ -185,10 +185,16 @@ try {
   // Image rows post as links (Reddit shows the gallery og:image thumbnail).
   const results = [];
   for (const t of targets) {
-    const r = await submitOne(page, t.label, t.url, t.approve, username, password);
-    results.push(r);
-    if (r.ok) {
-      try { appendFileSync(logFile, new Date().toISOString() + ' posted ' + r.label + ' => ' + r.url + '\n'); } catch (_) {}
+    try {
+      const r = await submitOne(page, t.label, t.url, t.approve, username, password);
+      results.push(r);
+      if (r.ok) {
+        try { appendFileSync(logFile, new Date().toISOString() + ' posted ' + r.label + ' => ' + r.url + '\n'); } catch (_) {}
+      }
+    } catch (err) {
+      // A crashing target (e.g. an invalid profile / nonexistent community)
+      // must never abort the whole job - record it and report what succeeded.
+      results.push({ ok: false, label: t.label, error: 'BROWSER_ERROR: ' + (err && err.message ? err.message : String(err)).slice(0, 200) });
     }
   }
 
