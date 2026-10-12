@@ -496,6 +496,14 @@ class SmokeChecks
                 ? $ok('recommendations + enqueue + due()/takeBrowserJob + payloadFor all exclude secret galleries')
                 : $bad('secret galleries must be excluded from recommendations, enqueue, dispatch and the reddit payload');
         });
+        $add('smoke.autopost.video_processing', 'Smoke · Autopost', 'Video uploads wait for X processing before tweeting', static function () use ($root, $ok, $bad): array {
+            $t = (string) @file_get_contents($root . '/app/Models/TwitterClient.php');
+            return strpos($t, "'command' => 'STATUS'") !== false
+                && strpos($t, 'function awaitMedia') !== false
+                && strpos($t, 'if ($isVideo || (is_array($processing) && $processing !== []))') !== false
+                ? $ok('video uploads poll STATUS until processed before the tweet')
+                : $bad('TwitterClient::uploadMedia must poll the media STATUS command after FINALIZE for videos (a tweet referencing an unprocessed video fails with "invalid parameters")');
+        });
 
         // ------------------------- Home-browser worker (share method) -----
         $rbQueue2  = $read("$root/app/Models/AutoPostQueue.php");

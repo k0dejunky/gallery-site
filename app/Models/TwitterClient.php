@@ -515,6 +515,60 @@ class TwitterClient
             return ['ok' => false, 'error' => $finData['errors'][0]['message'] ?? 'X media FINALIZE failed (HTTP ' . $finStatus . ').'];
         }
 
+        // Video (and animated gif) uploads finish processing asynchronously;
+        // images are ready immediately. A tweet that references a video whose
+        // processing has not completed is rejected, so wait it out.
+        $processing = $finData['processing_info'] ?? null;
+        if ($isVideo || (is_array($processing) && $processing !== [])) {
+            $ready = $this->awaitMedia($mediaId, $token);
+            if (!$ready['ok']) {
+                return $ready;
+            }
+        }
+
         return ['ok' => true, 'media_id' => $mediaId];
     }
+
+    /**
+     * Wait for a video's asynchronous processing to finish. X's FINALIZE
+     * returns while a video is still "pending", and tweeting a media_id that
+     * is not yet processed is rejected with "One or more parameters to your
+     * request was invalid." — so poll the STATUS command until the video
+     * reports 'succeeded', or give up on 'failed'/timeout. Signed with the
+     * same auth as the upload (OAuth1 when configured).
+     *
+     * @return array{ok:bool, error?:string}
+     */
+    private function awaitMedia(string $mediaId, string $token, int $timeoutSeconds = 300): array
+    {
+        $deadline = time() + $timeoutSeconds;
+
+        while (time() < $deadline) {
+            $params = ['command' => 'STATUS', 'media_id' => $mediaId];
+            $url    = self::MEDIA_URL . '?command=STATUS&media_id=' . rawurlencode($mediaId);
+
+            [, , $body] = Http::request($url, [
+                'method'  => 'GET',
+                'headers' => $this->mediaAuth('GET', $params, $token),
+            ]);
+
+            $data  = json_decode($body, true);
+            $info  = is_array($data) ? ($data['processing_info'] ?? null) : null;
+            $state = is_array($info) ? (string) ($info['state'] ?? '') : '';
+
+            if ($state === 'succeeded') {
+                return ['ok' => true];
+            }
+            if ($state === 'failed') {
+                $reason = $info['error']['message'] ?? 'processing failed';
+                return ['ok' => false, 'error' => 'X media processing failed: ' . $reason];
+            }
+
+            $wait = is_array($info) ? (int) ($info['check_after_secs'] ?? 5) : 5;
+            sleep(max(1, min(30, $wait)));
+        }
+
+        return ['ok' => false, 'error' => 'X media processing timed out.'];
+    }
 }
+
