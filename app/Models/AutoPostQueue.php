@@ -1388,6 +1388,18 @@ class AutoPostQueue
     }
 
     /**
+     * The still-image "cover" for a video: thumb_<file>, a JPEG written next to
+     * the video when it was uploaded (and re-written if an admin picks a
+     * different frame). Returns null when the video has no cover on disk yet.
+     */
+    public static function videoCoverPath(string $filename): ?string
+    {
+        $path = rtrim((string) config('app.uploads.dir'), '/') . '/thumb_' . $filename;
+
+        return is_file($path) && (int) filesize($path) > 0 ? $path : null;
+    }
+
+    /**
      * Whether this queued reddit post should be left for the home-browser
      * worker (the "share-button method") instead of the local worker: reddit
      * rows, browser post enabled on the channel, and no OAuth refresh token
@@ -1727,23 +1739,42 @@ class AutoPostQueue
             // blurred screenshots ('screenshots', the X approach) or skipped
             // entirely ('none' — text-only channels).
             if ($isVideo && $videoRule === 'screenshots') {
-                $frames = self::videoScreenshots($path, (int) $tpl['screenshots'], $canonical);
+                // Post a still rather than the video itself. Prefer the cover
+                // the site already shows for it (thumb_<file>, a JPEG written
+                // at upload), falling back to one frame grabbed with ffmpeg.
+                // A still is a plain image, so the tweet never waits on X's
+                // slow asynchronous video processing.
+                $frame = self::videoCoverPath((string) $photo['filename']);
 
-                if ($frames !== []) {
-                    foreach ($frames as $frame) {
-                        $media[] = [
-                            'tmp_name' => $frame,
-                            'name'     => basename((string) $frame),
-                            'type'     => 'image/jpeg',
-                            'size'     => (int) filesize($frame),
-                        ];
+                if ($frame === null) {
+                    $frame = self::videoScreenshots($path, 1)[0] ?? null;
+
+                    if ($frame !== null) {
+                        // Extracted frame is a temp file — always clean it up.
                         $blurredTmp[] = $frame;
                     }
+                }
+
+                if ($frame !== null) {
+                    if ($blur > 0) {
+                        $copy = create_blurred_copy($frame, $blur);
+
+                        if ($copy !== null) {
+                            $frame        = $copy;
+                            $blurredTmp[] = $copy;
+                        }
+                    }
+
+                    $media[] = [
+                        'tmp_name' => $frame,
+                        'name'     => 'video-cover.jpg',
+                        'type'     => 'image/jpeg',
+                        'size'     => (int) filesize($frame),
+                    ];
                     continue;
                 }
 
-                // No screenshots could be extracted — fall back to attaching
-                // the original file (previous behaviour).
+                // Nothing could be produced — fall back to attaching the video.
             } elseif ($isVideo && $videoRule === 'none') {
                 continue;
             }
@@ -1851,15 +1882,15 @@ class AutoPostQueue
     }
 
     /**
-     * Capture a few random still frames from a video, blur each with the same
-     * preview blur used for images, and return the temp JPEG paths for posting.
-     * Frames are scaled so the longest side is at most 1280 px (X images must
-     * be under 5 MB). Returns an empty list when ffmpeg is unavailable or the
-     * video cannot be decoded.
+     * Capture up to $count still frames from across a video and return their
+     * temp JPEG paths (the caller blurs/attaches them). Frames are scaled so
+     * the longest side is at most 1280 px (X images must be under 5 MB).
+     * Returns an empty list when ffmpeg is unavailable or the video cannot be
+     * decoded.
      *
      * @return list<string>
      */
-    private static function videoScreenshots(string $path, int $count = 3, string $platform = 'x'): array
+    private static function videoScreenshots(string $path, int $count = 1): array
     {
         $ffmpeg  = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : null;
         $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : null;
@@ -1912,12 +1943,7 @@ class AutoPostQueue
             exec($cmd, $o, $rc);
 
             if ($rc === 0 && is_file($tmp) && (int) filesize($tmp) > 0) {
-                $blurred = create_blurred_copy($tmp, (int) self::templateSettings($platform)['blur_percent']);
-                @unlink($tmp);
-
-                if ($blurred !== null) {
-                    $frames[] = $blurred;
-                }
+                $frames[] = $tmp;
             } else {
                 @unlink($tmp);
             }

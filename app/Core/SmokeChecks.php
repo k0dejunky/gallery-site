@@ -504,6 +504,14 @@ class SmokeChecks
                 ? $ok('video uploads poll STATUS until processed before the tweet')
                 : $bad('TwitterClient::uploadMedia must poll the media STATUS command after FINALIZE for videos (a tweet referencing an unprocessed video fails with "invalid parameters")');
         });
+        $add('smoke.autopost.video_cover', 'Smoke · Autopost', 'Videos post their cover thumbnail, not the video file', static function () use ($root, $ok, $bad): array {
+            $q = (string) @file_get_contents($root . '/app/Models/AutoPostQueue.php');
+            return strpos($q, 'function videoCoverPath') !== false
+                && strpos($q, 'self::videoCoverPath((string) $photo[\'filename\'])') !== false
+                && strpos($q, "'name'     => 'video-cover.jpg'") !== false
+                ? $ok('cover thumbnail (thumb_<file>) preferred; video file only as a last resort')
+                : $bad('AutoPostQueue must attach the video cover thumbnail (thumb_<file>) instead of uploading the video');
+        });
 
         // ------------------------- Home-browser worker (share method) -----
         $rbQueue2  = $read("$root/app/Models/AutoPostQueue.php");

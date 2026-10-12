@@ -1,0 +1,8 @@
+# Install as /etc/tmpfiles.d/ffmpeg-limits.conf then run: systemd-tmpfiles --create
+# The guard wrapper (/usr/bin/ffmpeg, see config/ffmpeg-guard.sh) takes one lock
+# per concurrent ffmpeg here. It must be writable by the web user (www-data) AND
+# NOT have the sticky bit: www-data also has to delete the stale root-owned locks
+# a prior root run left behind. 0770 root:www-data gives root + www-data write
+# access while keeping other local users out. With 1777+sticky (or 0755) every
+# web ffmpeg call fails, which silently breaks video thumbnail generation.
+d /run/ffmpeg-limits 0770 root www-data -
