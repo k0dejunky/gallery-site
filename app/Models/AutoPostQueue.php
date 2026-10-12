@@ -130,6 +130,7 @@ class AutoPostQueue
         $defaultMin = max(1, (int) $tpl['schedule_minutes']);
 
         $where = "g.deleted_at IS NULL
+                  AND g.is_secret = 0
                   AND p.created_at >= DATE_SUB(NOW(), INTERVAL $recent DAY)
                   AND NOT EXISTS (SELECT 1 FROM auto_poster_queue q
                                   WHERE q.gallery_id = g.id
@@ -527,7 +528,7 @@ class AutoPostQueue
     {
         $gallery = Database::run(
             'SELECT id, title, description, published_at FROM galleries
-             WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+             WHERE id = ? AND deleted_at IS NULL AND is_secret = 0 LIMIT 1',
             [$galleryId]
         )->fetch();
 
@@ -742,12 +743,14 @@ class AutoPostQueue
         $staleCutoff = date('Y-m-d H:i:s', time() - 900);
 
         Database::run(
-            "UPDATE auto_poster_queue
-             SET claimed_at = CURRENT_TIMESTAMP, claimed_by = ?
-             WHERE status = 'queued'
-               AND (scheduled_at IS NULL OR scheduled_at <= CURRENT_TIMESTAMP)
-               AND (claimed_at IS NULL OR claimed_at < ?)
-             ORDER BY COALESCE(scheduled_at, created_at) ASC, id ASC
+            "UPDATE auto_poster_queue q
+             LEFT JOIN galleries g ON g.id = q.gallery_id
+             SET q.claimed_at = CURRENT_TIMESTAMP, q.claimed_by = ?
+             WHERE q.status = 'queued'
+               AND (q.scheduled_at IS NULL OR q.scheduled_at <= CURRENT_TIMESTAMP)
+               AND (q.claimed_at IS NULL OR q.claimed_at < ?)
+               AND (q.gallery_id = 0 OR (g.id IS NOT NULL AND g.is_secret = 0 AND g.deleted_at IS NULL))
+             ORDER BY COALESCE(q.scheduled_at, q.created_at) ASC, q.id ASC
              LIMIT $limit",
             [$claim, $staleCutoff]
         );
@@ -1378,11 +1381,13 @@ class AutoPostQueue
         try {
             $chosen = $conn
                 ->prepare(
-                    "SELECT id FROM auto_poster_queue
-                     WHERE platform = 'reddit' AND status = 'queued'
-                       AND (scheduled_at IS NULL OR scheduled_at <= CURRENT_TIMESTAMP)
-                       AND (claimed_at IS NULL OR claimed_at < ?)
-                     ORDER BY COALESCE(scheduled_at, created_at) ASC, id ASC
+                    "SELECT q.id FROM auto_poster_queue q
+                     LEFT JOIN galleries g ON g.id = q.gallery_id
+                     WHERE q.platform = 'reddit' AND q.status = 'queued'
+                       AND (q.scheduled_at IS NULL OR q.scheduled_at <= CURRENT_TIMESTAMP)
+                       AND (q.claimed_at IS NULL OR q.claimed_at < ?)
+                       AND (q.gallery_id = 0 OR (g.id IS NOT NULL AND g.is_secret = 0 AND g.deleted_at IS NULL))
+                     ORDER BY COALESCE(q.scheduled_at, q.created_at) ASC, q.id ASC
                      LIMIT 1 FOR UPDATE"
                 );
             $chosen->execute([$staleCutoff]);

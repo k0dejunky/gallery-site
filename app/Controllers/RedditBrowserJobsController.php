@@ -144,6 +144,19 @@ class RedditBrowserJobsController extends Controller
         ];
 
         $gid = (int) ($item['gallery_id'] ?? 0);
+        if ($gid > 0) {
+            // Defense in depth: never hand a secret or removed gallery to the
+            // poster, even if a stale/raced queue row slipped through. The
+            // caller releases such rows instead of posting.
+            $gal = \App\Core\Database::run(
+                'SELECT is_secret, deleted_at FROM galleries WHERE id = ?',
+                [$gid]
+            )->fetch();
+
+            if ($gal === false || (int) ($gal['is_secret'] ?? 0) === 1 || !empty($gal['deleted_at'])) {
+                return ['error' => 'Secret or removed gallery - nothing to post.'];
+            }
+        }
         $base['mode'] = 'link';
         $base['url']  = $gid > 0 ? Traffic::buildUrl('/galleries/' . $gid, 'reddit') : absolute_url('/');
         return $base;

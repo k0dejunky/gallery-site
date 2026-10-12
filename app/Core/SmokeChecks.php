@@ -486,6 +486,16 @@ class SmokeChecks
                 ? $ok('registry list + profile flag; payload carries subreddits/profile; client + home worker fan out')
                 : $bad('reddit channel must support a subreddit list + profile posting end-to-end (registry, payloadFor, RedditClient, home worker)');
         });
+        $add('smoke.autopost.no_secret', 'Smoke · Autopost', 'Secret galleries are never recommended or posted', static function () use ($root, $ok, $bad): array {
+            $q = (string) @file_get_contents($root . '/app/Models/AutoPostQueue.php');
+            $c = (string) @file_get_contents($root . '/app/Controllers/RedditBrowserJobsController.php');
+            return strpos($q, 'g.is_secret = 0') !== false
+                && strpos($q, 'AND is_secret = 0') !== false
+                && strpos($q, 'q.gallery_id = 0 OR (g.id IS NOT NULL AND g.is_secret = 0') !== false
+                && strpos($c, 'Secret or removed gallery') !== false
+                ? $ok('recommendations + enqueue + due()/takeBrowserJob + payloadFor all exclude secret galleries')
+                : $bad('secret galleries must be excluded from recommendations, enqueue, dispatch and the reddit payload');
+        });
 
         // ------------------------- Home-browser worker (share method) -----
         $rbQueue2  = $read("$root/app/Models/AutoPostQueue.php");
