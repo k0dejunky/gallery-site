@@ -96,6 +96,11 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     <?php if (isset($ldJson) && is_array($ldJson)): ?>
     <script nonce="<?= csp_nonce() ?>" type="application/ld+json" nonce="<?= csp_nonce() ?>"><?= json_encode($ldJson, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
     <?php endif; ?>
+    <?php if (!empty($lcpPreload)): ?>
+    <link rel="preload" as="image" href="<?= e($lcpPreload) ?>" fetchpriority="high">
+    <?php endif; ?>
+    <link rel="preload" as="style" href="<?= e(url('/theme.css') . '?v=' . \App\Models\Theme::themeCssVersion($userThemePreset)) ?>">
+    <link rel="preload" as="style" href="<?= url('/assets/css/user.css') ?>?v=32">
     <link rel="stylesheet" href="<?= e(url('/theme.css') . '?v=' . \App\Models\Theme::themeCssVersion($userThemePreset)) ?>">
     <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=32">
 </head>

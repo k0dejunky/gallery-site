@@ -372,6 +372,27 @@ class GalleryController extends Controller
             $favoriteGalleries = Gallery::favoriteGalleries((int) $user['id'], 8);
         }
 
+        $cardCovers = $this->preloadCardData($sections, $q !== '' ? $paginator : null);
+
+        // LCP preload for the hero card: first gallery in the first section,
+        // falling back to the search paginator's first item.
+        $lcpPreload = '';
+        foreach ($sections as $section) {
+            foreach (($section['galleries'] ?? []) as $g) {
+                $cover = $cardCovers['covers'][(int) $g['id']] ?? null;
+                if ($cover && !empty($cover['filename'])) {
+                    $lcpPreload = absolute_url(file_url((string) $cover['filename'], $user !== null ? 'thumb' : 'blur'));
+                    break 2;
+                }
+            }
+        }
+        if ($lcpPreload === '' && $q !== '' && !empty($paginator['items'])) {
+            $cover = $cardCovers['covers'][(int) $paginator['items'][0]['id']] ?? null;
+            if ($cover && !empty($cover['filename'])) {
+                $lcpPreload = absolute_url(file_url((string) $cover['filename'], $user !== null ? 'thumb' : 'blur'));
+            }
+        }
+
         $this->view('gallery/index', [
             'paginator'     => $q !== '' ? $paginator : null,
             'categories'    => $categories,
@@ -384,7 +405,8 @@ class GalleryController extends Controller
             'currentUser'   => $user,
             'hasActive'     => $isMember,
             'sidebarNav'    => true,
-            'cardCovers'    => $this->preloadCardData($sections, $q !== '' ? $paginator : null),
+            'cardCovers'    => $cardCovers,
+            'lcpPreload'    => $lcpPreload,
             'sort'          => $sort,
             'viewedIds'     => $viewedIds,
             'recentlyViewed' => $recentlyViewed,

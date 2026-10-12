@@ -73,6 +73,18 @@ class HomeController extends Controller
 $featured  = Gallery::featured(6);
         $trending  = Gallery::trending(7, 6);
 
+        // LCP preload: the first visible card (featured, then trending) is the
+        // hero image. Guests see the blurred cover; members the real thumb.
+        $lcpPreload = '';
+        foreach ([$featured, $trending] as $strip) {
+            if ($strip === []) continue;
+            $lcpCover = \App\Models\Gallery::firstPhoto((int) $strip[0]['id']);
+            if ($lcpCover && !empty($lcpCover['filename'])) {
+                $lcpPreload = absolute_url(file_url((string) $lcpCover['filename'], \App\Core\Auth::check() ? 'thumb' : 'blur'));
+                break;
+            }
+        }
+
         // Trending shares the layout with featured; drop any gallery already
         // shown as featured so the two strips don't repeat cards.
         $featuredIds = array_map('intval', array_column($featured, 'id'));
@@ -94,6 +106,7 @@ $featured  = Gallery::featured(6);
             'canonicalUrl'   => absolute_url('/'),
             'metaDescription' => 'The private collection of ' . config('app.site_name') . '. Join now for full access to exclusive photo and video galleries, live streams and more.',
             'ogImage'        => $ogImage,
+            'lcpPreload'     => $lcpPreload,
         ]);
     }
 }

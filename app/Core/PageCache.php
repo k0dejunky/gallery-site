@@ -106,6 +106,62 @@ class PageCache
         \App\Core\Cache::bump('listings');
     }
 
+    /**
+     * Whether this handler's whole rendered page may be served from the guest
+     * page cache. Only the hot PUBLIC listing pages qualify, and only for
+     * guests with Redis + the kill-switch available - members always render
+     * live so their personally-tailored data is never stale.
+     */
+    public static function pageAllows(string $handler): bool
+    {
+        $allowlist = [
+            'HomeController@index',
+            'GalleryController@index',
+            'GalleryController@indexType',
+            'GalleryController@category',
+            'GalleryController@tag',
+        ];
+
+        return in_array($handler, $allowlist, true)
+            && (bool) config('app.page_cache')
+            && !\App\Core\Auth::check()
+            && \App\Core\Cache::available();
+    }
+
+    public static function pageKey(string $identity): string
+    {
+        return 'page:' . md5((string) $identity);
+    }
+
+    public static function pageGet(string $key): ?string
+    {
+        return \App\Core\Cache::get(\App\Core\Cache::genKey('listings', $key));
+    }
+
+    public static function pagePut(string $key, string $html, int $ttl = 120): void
+    {
+        \App\Core\Cache::set(\App\Core\Cache::genKey('listings', $key), $html, $ttl);
+    }
+
+    /**
+     * Make a cached page correct for the CURRENT requester: the page was
+     * rendered under another guest session, so its CSP nonce and CSRF tokens
+     * are stale. Swap every script nonce for this request's CSP_NONCE and
+     * every form's _token for the requester's token before echoing.
+     */
+    public static function pageInject(string $html): string
+    {
+        $nonce = defined('CSP_NONCE') ? (string) CSP_NONCE : '';
+        $html  = (string) preg_replace('/nonce="[A-Za-z0-9+\/=]+"/', 'nonce="' . $nonce . '"', $html);
+        $html  = (string) preg_replace(
+            '/name="_token" value="[^"]*"/',
+            'name="_token" value="' . \App\Core\Csrf::token() . '"',
+            $html
+        );
+
+        return $html;
+    }
+
     public static function reset(): void
     {
         self::$claimed = false;

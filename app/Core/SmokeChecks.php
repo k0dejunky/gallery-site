@@ -615,6 +615,17 @@ class SmokeChecks
                 ? $ok('image_can_decode + both Imagick helpers short-circuit videos (kills the magick-*/webp storm)')
                 : $bad('image_can_decode, _load_image_imagick and _imagick_dimensions must bail out on is_video($src)');
         });
+        $secAvifStorage = $read("$root/app/Controllers/StorageController.php");
+        $secAvifCard    = $read("$root/views/partials/gallery_card.php");
+        $add('smoke.media.avif', 'Smoke · Media', 'AVIF renditions are generated and served', static function () use ($secHelpers, $secAvifStorage, $secAvifCard, $ok, $bad): array {
+            return strpos($secHelpers, "format === 'avif'") !== false
+                && strpos($secHelpers, 'function _make_avif') !== false
+                && strpos($secHelpers, 'libsvtav1') !== false
+                && strpos($secAvifStorage, "format === 'avif'") !== false
+                && strpos($secAvifCard, 'image/avif') !== false
+                ? $ok('avif variants generated via libsvtav1, served by StorageController, picked by cards')
+                : $bad('helpers/StorageController/cards must support AVIF renditions');
+        });
         $secIndex = $read("$root/public/index.php");
         $secCsp   = $read("$root/app/Controllers/CspController.php");
         $secBackup = $read("$root/bin/backup_offsite_package.php");

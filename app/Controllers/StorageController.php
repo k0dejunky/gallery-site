@@ -153,6 +153,16 @@ class StorageController extends Controller
             }
         }
 
+        // AVIF copy of the same variant (encoded at upload time).
+        if ($format === 'avif' && in_array($size, ['thumb', 'web'], true)) {
+            $avifName = preg_replace('/\.[^.]+$/', '.avif', $name);
+            $avifPath = config('app.uploads.dir') . '/' . $avifName;
+
+            if (is_file($avifPath)) {
+                $name = $avifName;
+            }
+        }
+
         $uploadsDir = config('app.uploads.dir');
         $path       = $uploadsDir . '/' . $name;
 

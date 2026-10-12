@@ -189,6 +189,16 @@ function file_url(string $filename, string $size = '', string $format = ''): str
                 $variant = $webp;
                 $query  .= '&format=webp';
             }
+        } elseif ($format === 'avif') {
+            // AVIF storage copy of the same variant, encoded at upload time
+            // (see _make_avif). ~25-30% smaller than WebP for the grids.
+            $avif = preg_replace('/\.[^.]+$/', '.avif', $variant);
+            $avifPath = config('app.uploads.dir') . '/' . $avif;
+
+            if (is_file($avifPath)) {
+                $variant = $avif;
+                $query  .= '&format=avif';
+            }
         }
 
         // Memoize the stat per request: a 48-card grid calls file_url 3-4x
@@ -277,7 +287,7 @@ function mime_for_extension(string $filename): string
 
     $map = [
         'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png',
-        'gif' => 'image/gif', 'webp' => 'image/webp',
+        'gif' => 'image/gif', 'webp' => 'image/webp', 'avif' => 'image/avif',
         'mp4' => 'video/mp4', 'm4v' => 'video/mp4', 'webm' => 'video/webm',
         'ogg' => 'video/ogg', 'mov' => 'video/quicktime', 'avi' => 'video/x-msvideo',
         'mkv' => 'video/x-matroska',
@@ -1398,6 +1408,9 @@ function create_image_variants(string $src, string $webDest, string $thumbDest, 
         exec($cmd, $out, $rc);
 
         if ($rc === 0 && is_file($webDest) && is_file($thumbDest)) {
+            _make_avif($webDest);
+            _make_avif($thumbDest);
+
             return true;
         }
 
@@ -1409,8 +1422,35 @@ function create_image_variants(string $src, string $webDest, string $thumbDest, 
 
     $ok = _variants_gd($src, $webDest, $thumbDest, $maxDim, $thumbWidth, $thumbHeight);
     _variants_gd_webp($src, $webpWebDest, $webpThumbDest, $maxDim, $thumbWidth, $thumbHeight);
+    _make_avif($webDest);
+    _make_avif($thumbDest);
 
     return $ok;
+}
+
+/**
+ * Encode an AVIF still copy of a finished variant (web_*.jpg / thumb_*.jpg)
+ * via the bundled ffmpeg's libsvtav1. ~25-30% smaller than the WebP copy for
+ * the image grids; skipped silently when the source is missing or ffmpeg is
+ * unavailable so a generation failure can never break an upload.
+ */
+function _make_avif(string $variant): void
+{
+    if (!is_file($variant) || !is_executable('/usr/bin/ffmpeg')) {
+        return;
+    }
+
+    $avif = preg_replace('/\.[^.]+$/', '.avif', $variant);
+    if (is_file($avif)) {
+        return;
+    }
+
+    exec(
+        escapeshellarg('/usr/bin/ffmpeg') . ' -y -hide_banner -loglevel error -i '
+        . escapeshellarg($variant)
+        . ' -frames:v 1 -c:v libsvtav1 -preset 5 -crf 34 -still-picture 1 '
+        . escapeshellarg($avif) . ' 2>/dev/null'
+    );
 }
 
 /**

@@ -33,6 +33,7 @@ foreach ($source as $photo) {
                     <div class="card-cover">
                         <?php if (!$isVideo): ?>
                             <picture>
+                                <source type="image/avif" srcset="<?= e(file_url($item['filename'], 'blur', 'avif')) ?>">
                                 <source type="image/webp" srcset="<?= e(file_url($item['filename'], 'blur', 'webp')) ?>">
                                 <img src="<?= e($item['thumb']) ?>" alt="" width="400" height="300" loading="lazy" data-fallback="<?= e($pictureBlank) ?>">
                             </picture>

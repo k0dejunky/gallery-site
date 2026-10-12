@@ -135,6 +135,34 @@ class Router
         );
 
         $instance = new $controller($this->request);
+
+        // Whole-page guest cache for the hot public listing pages. The cached
+        // bytes are stored once and re-personalised per requester on the way
+        // out (pageInject swaps the CSP nonce and CSRF tokens), so the strict
+        // CSP stays intact and every form stays session-correct.
+        if ($this->request->method() === 'GET' && \App\Core\PageCache::pageAllows($handler)) {
+            $pageKey = \App\Core\PageCache::pageKey(
+                $this->request->uri() . '|' . (string) ($_SERVER['QUERY_STRING'] ?? '')
+            );
+            $cached = \App\Core\PageCache::pageGet($pageKey);
+
+            if ($cached !== null) {
+                echo \App\Core\PageCache::pageInject($cached);
+                return;
+            }
+
+            ob_start();
+            $instance->$action(...array_values($params));
+            $html = (string) ob_get_clean();
+
+            if (http_response_code() < 400 && $html !== '') {
+                \App\Core\PageCache::pagePut($pageKey, $html, 120);
+            }
+
+            echo $html;
+            return;
+        }
+
         $instance->$action(...array_values($params));
     }
 

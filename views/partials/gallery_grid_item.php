@@ -16,6 +16,7 @@
     <figure class="gallery-item">
         <a class="grid-link" data-gallery-index="<?= $idx ?>" href="<?= e(url('/images/' . (int) $photo['id']) . '?' . http_build_query(['return_to' => $returnTo])) ?>" title="View item <?= $idx + 1 ?> of <?= $total ?>">
             <picture>
+                <source type="image/avif" srcset="<?= e(file_url($photo['filename'], 'thumb', 'avif')) ?>">
                 <source type="image/webp" srcset="<?= e(file_url($photo['filename'], 'thumb', 'webp')) ?>">
                 <source type="image/jpeg" srcset="<?= e(file_url($photo['filename'], 'thumb')) ?>">
                 <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>"

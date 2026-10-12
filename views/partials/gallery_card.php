@@ -46,6 +46,7 @@ $asyncDecodeAttr    = $heroCard ? '' : ' decoding="async"';
                     <img src="<?= e(file_url($cover['filename'], 'blur')) ?>" alt="" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> data-fallback="<?= e($placeholder) ?>">
                 <?php else: ?>
                     <picture>
+                        <source type="image/avif" srcset="<?= e(file_url($cover['filename'], 'thumb', 'avif')) ?>">
                         <source type="image/webp" srcset="<?= e(file_url($cover['filename'], 'thumb', 'webp')) ?>">
                         <source type="image/jpeg" srcset="<?= e(file_url($cover['filename'], 'thumb')) ?>">
                         <img src="<?= e(file_url($cover['filename'], 'thumb')) ?>" srcset="<?= e(file_srcset($cover['filename'])) ?>" sizes="(min-width: 800px) 400px, 100vw" alt="" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> data-fallback="<?= e($placeholder) ?>">
