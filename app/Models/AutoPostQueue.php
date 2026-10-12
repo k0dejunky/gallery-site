@@ -408,6 +408,42 @@ class AutoPostQueue
     }
 
     /**
+     * Make a repost's auto-built text unique so X (and any platform that
+     * rejects duplicated content) accepts it. Rotates the hashtag order by the
+     * attempt index and appends a rotating emoji when the length budget allows.
+     * Deterministic in $variant, so consecutive attempts never collide and the
+     * output stays within max_length.
+     */
+    public static function varyText(string $text, int $maxLen, int $variant): string
+    {
+        if ($variant <= 0 || $text === '') {
+            return $text;
+        }
+
+        if (preg_match_all('/#\S+/u', $text, $matches) !== false && count($matches[0]) > 1) {
+            $tags    = $matches[0];
+            $rotate  = $variant % count($tags);
+            $rotated = array_merge(array_slice($tags, $rotate), array_slice($tags, 0, $rotate));
+            $i       = 0;
+            $text    = (string) preg_replace_callback(
+                '/#\S+/u',
+                static function (array $match) use ($rotated, &$i): string {
+                    return $rotated[$i++] ?? $match[0];
+                },
+                $text
+            );
+        }
+
+        $emojis = ['✨', '🔥', '💋', '💦', '🌸', '💕', '😈', '🌹'];
+        $emoji  = $emojis[$variant % count($emojis)];
+        if (mb_strlen($text) + mb_strlen($emoji) + 1 <= $maxLen) {
+            $text .= ' ' . $emoji;
+        }
+
+        return $text;
+    }
+
+    /**
      * Default schedule (a datetime-local string) for the next queued post:
      * DEFAULT_SCHEDULE_MINUTES from now in the scheduler timezone. Used to
      * prefill the admin's schedule field so every post consistently starts
@@ -559,6 +595,20 @@ class AutoPostQueue
                 'gallery_title' => (string) $gallery['title'],
                 'caption'       => (string) $gallery['description'],
             ], self::categoryHashtags($galleryId, null, $key), $tpl, $key);
+
+            // A gallery that has already been queued for this platform is a
+            // repost: X rejects duplicated tweet text, so vary the auto-built
+            // text (rotate hashtag order + a rotating emoji) to keep each repost
+            // unique. Admin-written drafts are never altered.
+            $attempts = (int) Database::run(
+                'SELECT COUNT(*) FROM auto_poster_queue
+                 WHERE gallery_id = ? AND platform = ? AND status <> ?',
+                [$galleryId, $dbKey, 'dismissed']
+            )->fetchColumn();
+
+            if ($attempts > 0) {
+                $text = self::varyText($text, $maxLen, $attempts);
+            }
         } else {
             $text = mb_substr(trim($text), 0, $maxLen);
         }
@@ -984,8 +1034,14 @@ class AutoPostQueue
             $next->setTime((int) $next->format('H'), 0, 0);
             $next->modify('+1 hour');
 
+            // Prefer galleries that have never been posted to this platform
+            // (fresh content keeps the hourly queue flowing and avoids X's
+            // duplicate-content rejection); only fall back to repeats once the
+            // fresh pool is exhausted, and those get varied text at enqueue.
             $galleryIds = Database::run(
-                "SELECT g.id
+                "SELECT g.id,
+                        (SELECT COUNT(*) FROM auto_poster_queue qp
+                          WHERE qp.gallery_id = g.id AND qp.platform = ? AND qp.status = 'posted') AS prev_posts
                  FROM galleries g
                  JOIN gallery_photo gp ON gp.gallery_id = g.id
                  JOIN photos p ON p.id = gp.photo_id
@@ -997,8 +1053,9 @@ class AutoPostQueue
                        WHERE q.gallery_id = g.id AND q.status = 'queued'
                    )
                  GROUP BY g.id
-                 ORDER BY RAND()
+                 ORDER BY prev_posts ASC, RAND()
                  LIMIT " . $missing,
+                [$dbKey]
             )->fetchAll();
 
             if ($galleryIds === []) {

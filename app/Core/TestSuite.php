@@ -540,6 +540,49 @@ class TestSuite
             }
         });
 
+        $add('db.autopost_repost_varies', 'Database', 'Reposting a gallery yields varied text (X duplicate guard)', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+                $gid = (int) Database::run(
+                    "SELECT gallery_id FROM auto_poster_queue
+                     WHERE platform = 'twitter' AND status = 'posted'
+                     GROUP BY gallery_id ORDER BY COUNT(*) DESC LIMIT 1"
+                )->fetchColumn();
+                if ($gid <= 0) {
+                    $gid = (int) Database::run(
+                        'SELECT g.id FROM galleries g JOIN gallery_photo gp ON gp.gallery_id = g.id
+                         WHERE g.deleted_at IS NULL AND g.is_secret = 0
+                         GROUP BY g.id ORDER BY g.id ASC LIMIT 1'
+                    )->fetchColumn();
+                }
+                if ($gid <= 0) {
+                    return ['pass' => true, 'detail' => 'no eligible gallery'];
+                }
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+                try {
+                    $a = \App\Models\AutoPostQueue::enqueue($gid, null, null, 'twitter');
+                    $b = \App\Models\AutoPostQueue::enqueue($gid, null, null, 'twitter');
+                    $ta = (string) Database::run('SELECT text FROM auto_poster_queue WHERE id = ?', [$a])->fetchColumn();
+                    $tb = (string) Database::run('SELECT text FROM auto_poster_queue WHERE id = ?', [$b])->fetchColumn();
+                    $ok = $a > 0 && $b > 0 && $ta !== '' && $ta !== $tb;
+                    $detail = 'gallery ' . $gid . ' len(' . mb_strlen($ta) . ',' . mb_strlen($tb) . ') ' . ($ok ? 'differ' : 'IDENTICAL');
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+                return ['pass' => $ok, 'detail' => $detail];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.content_counts', 'Database', 'Site has content (users/galleries/photos)', function () {
             try {
                 $u = (int) Database::run('SELECT COUNT(*) FROM users')->fetchColumn();
