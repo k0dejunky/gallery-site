@@ -88,7 +88,12 @@
     <?php foreach ($trialLinks as $tl): ?>
         <?php $linkUrl = absolute_url('/signup/' . rawurlencode($tl['code'])); ?>
         <tr>
-            <td style="white-space:nowrap;"><code><?= e($tl['code']) ?></code> <a class="btn btn-sm btn-outline" style="font-size:.75rem;" href="#" data-action="copyLinkValue" data-arg="<?= e($linkUrl) ?>">Copy link</a></td>
+            <td>
+                <a href="<?= e($linkUrl) ?>" target="_blank" rel="noopener" style="word-break:break-all;"><code style="font-size:.8rem;"><?= e($linkUrl) ?></code></a>
+                <div style="margin-top:.3rem;">
+                    <button type="button" class="btn btn-sm btn-outline" style="font-size:.75rem;" data-action="copyLinkValue" data-arg="<?= e($linkUrl) ?>">Copy link</button>
+                </div>
+            </td>
             <td><?= e(\App\Models\TrialLink::levelLabel((int) $tl['level'])) ?></td>
             <td><?= (int) $tl['days'] ?></td>
             <td><?= (int) $tl['used_count'] ?> / <?= (int) $tl['max_uses'] ?></td>

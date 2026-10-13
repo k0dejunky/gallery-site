@@ -271,6 +271,20 @@ class SmokeChecks
                 ? $ok('gtag gated; admin and checkout pages untracked')
                 : $bad('layout must gate GA behind $gaAllowed via partials/ga.php, and admin layout / braintree checkout must not embed gtag');
         });
+        $add('smoke.ui.copy_link_full_url', 'Smoke · UI', 'Admin trial links show the full URL and copy via the Clipboard API', static function () use ($root, $layoutSrc, $ok, $bad): array {
+            $subs  = (string) @file_get_contents($root . '/views/admin/subscriptions.php');
+            $admin = (string) @file_get_contents($root . '/views/admin/layout.php');
+            return strpos($layoutSrc, 'navigator.clipboard') !== false
+                && strpos($layoutSrc, 'window.__copyText') !== false
+                && strpos($layoutSrc, 'window.copyLinkValue=function') !== false
+                && strpos($subs, '<?= e($linkUrl) ?>') !== false
+                && strpos($subs, 'data-arg="<?= e($linkUrl) ?>"') !== false
+                && strpos($admin, 'window.copyLinkValue') !== false
+                && strpos($admin, 'window.__copyText') !== false
+                && strpos($admin, "closest('[data-confirm],[data-action],[data-copy]") !== false
+                ? $ok('full trial URL rendered; Clipboard-API helpers + data-* delegation in both admin and public layouts')
+                : $bad('trial links must render the full absolute URL and the admin layout must delegate data-action/data-copy to a navigator.clipboard helper');
+        });
         $add('smoke.legal.consent_banner', 'Smoke · Legal', 'Consent banner wired into the layout', static function () use ($layoutSrc, $ok, $bad): array {
             return strpos($layoutSrc, "require __DIR__ . '/partials/consent_banner.php'") !== false && strpos($layoutSrc, '$gaShowBanner') !== false
                 ? $ok('banner partial included behind $gaShowBanner')

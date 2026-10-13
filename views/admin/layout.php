@@ -460,6 +460,73 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
     </div>
 
     <script nonce="<?= csp_nonce() ?>">
+    // Admin chrome: data-* driven behaviours (strict CSP, no inline handlers).
+    // Mirrors views/layout.php conventions so admin pages get the same
+    // delegation: data-confirm, data-action, data-copy, data-autosubmit,
+    // data-picker, data-stop-prop. Registered before the progress handler so a
+    // cancelled confirm stops the submit before the busy overlay is shown.
+    (function () {
+        'use strict';
+        window.__copyText = function (text) {
+            text = String(text);
+            if (navigator.clipboard && window.isSecureContext) {
+                return navigator.clipboard.writeText(text);
+            }
+            return new Promise(function (resolve, reject) {
+                var ta = document.createElement('textarea');
+                ta.value = text; ta.setAttribute('readonly', '');
+                ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                var ok = false;
+                try { ta.focus(); ta.select(); ta.setSelectionRange(0, text.length); ok = document.execCommand('copy'); } catch (e) {}
+                ta.remove();
+                ok ? resolve() : reject(new Error('copy failed'));
+            });
+        };
+        window.__copied = function (el, ok) {
+            if (!el) return;
+            if (el.getAttribute('data-copy-label') === null) el.setAttribute('data-copy-label', el.textContent);
+            el.textContent = ok ? 'Copied' : 'Copy failed';
+            clearTimeout(el.__copyTimer);
+            el.__copyTimer = setTimeout(function () { el.textContent = el.getAttribute('data-copy-label'); }, 1500);
+        };
+        window.copyToClipboard = function (sel, el) {
+            var node = (sel && sel.nodeName && sel.nodeType) ? sel : document.getElementById(String(sel));
+            if (!node) return;
+            var text = ('value' in node) ? node.value : node.textContent;
+            window.__copyText(text).then(function () { window.__copied(el, true); }, function () { window.__copied(el, false); });
+        };
+        window.copyLinkValue = function (value, el) {
+            window.__copyText(value).then(function () { window.__copied(el, true); }, function () { window.__copied(el, false); });
+        };
+        window.showPickerOn = function (el) { if (el) { try { el.showPicker && el.showPicker(); } catch (e) {} } };
+
+        document.addEventListener('submit', function (e) {
+            var t = e.target, m;
+            if (t && t.tagName === 'FORM' && (m = t.getAttribute('data-confirm')) && !window.confirm(m)) {
+                e.preventDefault(); e.stopImmediatePropagation();
+            }
+        }, true);
+        document.addEventListener('change', function (e) {
+            var t = e.target;
+            if (!t || !t.hasAttribute) return;
+            if (t.hasAttribute('data-autosubmit') && t.form) t.form.submit();
+            if (t.hasAttribute('data-action')) { var a = t.getAttribute('data-action'); if (window[a]) window[a](t, e); }
+        }, true);
+        document.addEventListener('click', function (e) {
+            var t = e.target && e.target.closest ? e.target.closest('[data-confirm],[data-action],[data-copy],[data-picker],[data-stop-prop]') : null;
+            if (!t) return;
+            if (t.hasAttribute('data-stop-prop')) { e.stopPropagation(); return; }
+            var m = t.getAttribute('data-confirm');
+            if (m && t.tagName !== 'FORM' && !window.confirm(m)) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+            var a = t.getAttribute('data-action');
+            if (a && window[a]) { if (t.hasAttribute('data-arg')) window[a](t.getAttribute('data-arg'), t); else window[a](t, e); e.preventDefault(); }
+            if (t.hasAttribute('data-copy')) { window.copyToClipboard(t.getAttribute('data-copy'), t); e.preventDefault(); }
+            if (t.hasAttribute('data-picker')) { window.showPickerOn(t); e.preventDefault(); }
+        }, true);
+    })();
+    </script>
+    <script nonce="<?= csp_nonce() ?>">
     (function () {
         var overlay = document.getElementById('admin-progress');
         var label = document.getElementById('ap-label');
