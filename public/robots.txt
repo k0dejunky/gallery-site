@@ -1,20 +1,38 @@
 User-agent: *
-Disallow: /admin
-Disallow: /account
-Disallow: /favorites
-Disallow: /saved-searches
-Disallow: /chat
-Disallow: /support
-Disallow: /settings
-Disallow: /membership/my
-Disallow: /membership/checkout
-Disallow: /*?se=
-Disallow: /files/
-Disallow: /video-editor
-Disallow: /verify-email
-Disallow: /reset-password
+Allow: /
+
+# Private / logged-in / utility areas (the app lives under /gallery/)
+Disallow: /gallery/admin
+Disallow: /gallery/account
+Disallow: /gallery/favorites
+Disallow: /gallery/collections
+Disallow: /gallery/saved-searches
+Disallow: /gallery/wall
+Disallow: /gallery/notifications
+Disallow: /gallery/chat
+Disallow: /gallery/support
+Disallow: /gallery/settings
+Disallow: /gallery/login
+Disallow: /gallery/logout
+Disallow: /gallery/signup
+Disallow: /gallery/forgot-password
+Disallow: /gallery/reset-password
+Disallow: /gallery/verify-email
+Disallow: /gallery/reauthenticate
+Disallow: /gallery/trial
+Disallow: /gallery/unsubscribe
+Disallow: /gallery/membership/my
+Disallow: /gallery/membership/checkout
+Disallow: /gallery/checkout
+Disallow: /gallery/tip
+Disallow: /gallery/go/
+Disallow: /gallery/webhooks
+Disallow: /gallery/cron
+Disallow: /gallery/internal
+Disallow: /gallery/files/
+Disallow: /gallery/*?se=
 
 # Short public video sample clips (Google Video indexing) are crawlable.
-Allow: /previews/
+Allow: /gallery/previews/
 
 Sitemap: https://amethyst2213.com/gallery/sitemap.xml
