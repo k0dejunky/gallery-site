@@ -41,12 +41,14 @@ class VideoProject
         return $changed ? self::find($id) : null;
     }
 
-    public static function createExport(int $projectId, bool $saveOverOriginal = false, float $exportStart = 0, float $exportEnd = 0): int
+    public static function createExport(int $projectId, bool $saveOverOriginal = false, float $exportStart = 0, float $exportEnd = 0, int $exportWidth = 0, int $exportHeight = 0): int
     {
         $metadata = json_encode([
             'save_over_original' => $saveOverOriginal,
             'export_start' => $exportStart,
             'export_end' => $exportEnd,
+            'export_width' => $exportWidth,
+            'export_height' => $exportHeight,
         ]);
         Database::run(
             'INSERT INTO video_export_jobs (project_id, status, progress, metadata_json) VALUES (?, \'queued\', 0, ?)',

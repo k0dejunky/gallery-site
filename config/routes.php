@@ -221,6 +221,7 @@ return [
     ['GET', '/admin/photos/{id}/edit', 'PhotoController@edit', 'galleries'],
     ['POST', '/admin/photos/{id}/edit', 'PhotoController@applyEdit', 'galleries'],
     ['GET', '/admin/videos/{id}/edit', 'VideoEditorController@edit', 'videos'],
+    ['POST', '/admin/videos/{id}/filter-colors', 'VideoEditorController@saveFilterColors', 'theme'],
     ['GET', '/admin/videos', 'VideoEditorController@videoList', 'videos'],
     ['GET', '/admin/video-projects', 'VideoEditorController@dashboard', 'videos'],
     ['POST', '/admin/video-projects/{id}', 'VideoEditorController@save', 'videos'],

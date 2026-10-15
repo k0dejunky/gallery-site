@@ -10,6 +10,7 @@ use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Gallery;
 use App\Models\Photo;
+use App\Models\Theme;
 use App\Models\VideoProject;
 
 class VideoEditorController extends Controller
@@ -175,8 +176,47 @@ LEFT JOIN photos ph ON ph.id = p.source_photo_id
         $saveOverOriginal = !empty($this->request->post('save_over_original'));
         $exportStart = max(0, (float) ($this->request->post('export_start', 0)));
         $exportEnd = max(0, (float) ($this->request->post('export_end', 0)));
-        $jobId = VideoProject::createExport($id, $saveOverOriginal, $exportStart, $exportEnd);
+        $exportWidth = max(0, (int) $this->request->post('export_width', 0));
+        $exportHeight = max(0, (int) $this->request->post('export_height', 0));
+        // Guard the encoder: an even size, capped, and only when both are given.
+        if ($exportWidth > 0 && $exportHeight > 0) {
+            $exportWidth = min(3840, max(2, $exportWidth - ($exportWidth % 2)));
+            $exportHeight = min(2160, max(2, $exportHeight - ($exportHeight % 2)));
+        } else {
+            $exportWidth = $exportHeight = 0;
+        }
+        $jobId = VideoProject::createExport($id, $saveOverOriginal, $exportStart, $exportEnd, $exportWidth, $exportHeight);
         $this->json(['ok' => true, 'job_id' => $jobId]);
+    }
+
+    /**
+     * Save the site's filter chip colours from the editor's Theme colours panel.
+     * The video editor used to write these into the project JSON, where nothing
+     * ever read them; they belong in the site theme next to every other colour.
+     */
+    public function saveFilterColors(int $id): void
+    {
+        if (!Auth::can('theme')) {
+            $this->json(['ok' => false, 'error' => 'You do not have permission to edit the site theme.'], 403);
+            return;
+        }
+
+        $keys = [
+            'filter-bg', 'filter-color', 'filter-border', 'filter-hover-bg',
+            'filter-inactive-bg', 'filter-inactive-color', 'filter-inactive-border', 'filter-inactive-hover',
+        ];
+        $colors = Theme::all(Theme::SCOPE_SITE);
+        foreach ($keys as $key) {
+            $value = trim((string) $this->request->post($key, ''));
+            if ($value !== '') $colors[$key] = $value;
+        }
+        Theme::save($colors, Theme::SCOPE_SITE);
+
+        AuditLog::record((int) Auth::user()['id'], 'update', 'theme', null, 'Updated filter colours from the video editor', null, [
+            'project_id' => $id,
+        ]);
+
+        $this->json(['ok' => true, 'message' => 'Filter colours saved.']);
     }
 
     public function status(int $id): void
