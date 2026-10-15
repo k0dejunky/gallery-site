@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Core\Database;
+use App\Models\Gallery;
 
 /**
  * Queue and dispatch engine for the auto-emailer.
@@ -30,6 +31,18 @@ class EmailQueue
 
     /** Roles that never receive marketing mail (admins always count as members). */
     private const EXCLUDED_ROLES = ['super_admin', 'admin', 'editor', 'moderator', 'viewer'];
+
+    /**
+     * SQL matching a gallery that may be advertised by email: not deleted, not
+     * scheduled for the future, and not secret. The digest links straight into
+     * the gallery it samples, so a secret (or not-yet-published) gallery must
+     * never appear in the sample — members without access would get a link
+     * that 404s for them, and a secret gallery's existence would leak.
+     */
+    private static function emailableGallerySql(string $alias = 'g'): string
+    {
+        return $alias . '.is_secret = 0 AND ' . Gallery::publishedVisibleSql($alias);
+    }
 
     /**
      * Members with a usable paid membership (level 1+): opted-in, non-admin
@@ -88,10 +101,12 @@ class EmailQueue
 
     /**
      * The newest image uploads the digest will show: images (never videos)
-     * still attached to non-deleted galleries, deduplicated per photo, each
-     * carrying the gallery it lives in so the email can link straight to it.
-     * The newest photo on the list anchors the "last sent" watermark, so the
-     * worker only re-mails after genuinely new uploads arrive.
+     * still attached to emailable (public, published, non-secret) galleries,
+     * deduplicated per photo, each carrying one such gallery so the email can
+     * link straight to it. Photos that only live in secret or scheduled
+     * galleries are not sampled at all. The newest photo on the list anchors
+     * the "last sent" watermark, so the worker only re-mails after genuinely
+     * new uploads arrive.
      *
      * @return array<int, array{id: int, filename: string, created_at: string, gallery_id: int}>
      */
@@ -104,11 +119,11 @@ class EmailQueue
                     (SELECT MIN(gp2.gallery_id)
                      FROM gallery_photo gp2
                      JOIN galleries g2 ON g2.id = gp2.gallery_id
-                     WHERE gp2.photo_id = p.id AND g2.deleted_at IS NULL) AS gallery_id
+                     WHERE gp2.photo_id = p.id AND " . self::emailableGallerySql('g2') . ") AS gallery_id
              FROM gallery_photo gp
              JOIN photos p ON p.id = gp.photo_id
              JOIN galleries g ON g.id = gp.gallery_id
-             WHERE g.deleted_at IS NULL AND p.is_video = 0
+             WHERE " . self::emailableGallerySql('g') . " AND p.is_video = 0
              GROUP BY p.id
              ORDER BY p.created_at DESC, p.id DESC
              LIMIT " . (int) $count,
@@ -117,10 +132,10 @@ class EmailQueue
     }
 
     /**
-     * A random gallery's image uploads, newest first, up to $count rows. Used
-     * as the fallback sample when there are no uploads newer than the last-sent
-     * watermark, so the daily digest still delivers on schedule instead of
-     * going silent whenever nothing new was uploaded.
+     * A random emailable gallery's image uploads, newest first, up to $count
+     * rows. Used as the fallback sample when there are no uploads newer than
+     * the last-sent watermark, so the daily digest still delivers on schedule
+     * instead of going silent whenever nothing new was uploaded.
      *
      * @return array<int, array{id:int, filename:string, created_at:string, gallery_id:int}>
      */
@@ -133,7 +148,7 @@ class EmailQueue
              FROM galleries g
              JOIN gallery_photo gp ON gp.gallery_id = g.id
              JOIN photos p ON p.id = gp.photo_id
-             WHERE g.deleted_at IS NULL AND p.is_video = 0
+             WHERE ' . self::emailableGallerySql('g') . ' AND p.is_video = 0
              GROUP BY g.id
              ORDER BY RAND()
              LIMIT 1',
@@ -149,7 +164,7 @@ class EmailQueue
                     (SELECT MIN(gp2.gallery_id)
                      FROM gallery_photo gp2
                      JOIN galleries g2 ON g2.id = gp2.gallery_id
-                     WHERE gp2.photo_id = p.id AND g2.deleted_at IS NULL) AS gallery_id
+                     WHERE gp2.photo_id = p.id AND " . self::emailableGallerySql('g2') . ") AS gallery_id
              FROM gallery_photo gp
              JOIN photos p ON p.id = gp.photo_id
              WHERE gp.gallery_id = ? AND p.is_video = 0

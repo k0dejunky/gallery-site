@@ -176,6 +176,83 @@ class Mailer
     }
 
     /**
+     * Candidate CA bundles, in the order they are tried. PHP hands
+     * stream_socket_client a compiled-in default that is frequently absent on
+     * hosts that ship their own OpenSSL build (the symptom: STARTTLS is
+     * accepted but the handshake immediately fails with no SMTP error at all),
+     * so the system bundle is resolved explicitly instead of relied upon.
+     *
+     * MAIL_CA_BUNDLE lets a host point at a bundle it can actually read — which
+     * matters when php.ini pins open_basedir to the application directories and
+     * the system trust store sits outside them.
+     */
+    private static function caBundleCandidates(): array
+    {
+        $paths = [
+            '/etc/ssl/certs/ca-certificates.crt',
+            '/etc/pki/tls/certs/ca-bundle.crt',
+            '/etc/ssl/cert.pem',
+            '/usr/local/etc/openssl/cert.pem',
+            '/etc/ssl/certs/ca-bundle.trust.crt',
+            '/usr/share/ssl/cert.pem',
+            '/opt/homebrew/etc/openssl@3/cert.pem',
+        ];
+
+        $configured = trim((string) env_value('MAIL_CA_BUNDLE', ''));
+        if ($configured !== '') {
+            array_unshift($paths, $configured);
+        }
+
+        $locations = openssl_get_cert_locations();
+        foreach (['ini_cafile', 'ini_capath', 'default_cert_file', 'default_cert_dir'] as $key) {
+            if (!empty($locations[$key])) {
+                $paths[] = (string) $locations[$key];
+            }
+        }
+
+        return array_values(array_unique($paths));
+    }
+
+    /**
+     * The first readable CA bundle, or null when the host has none (the
+     * handshake then falls back to PHP's own default).
+     */
+    private static function caBundle(): ?string
+    {
+        foreach (self::caBundleCandidates() as $path) {
+            if (@is_readable($path)) {
+                return $path;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * SSL context for the submission connection. peer_name is what makes PHP
+     * send SNI (and to verify the certificate against the host we dialled),
+     * which matters on a shared mail host serving several domains: without it
+     * the server hands back its default certificate and verification fails.
+     */
+    private static function smtpContext(string $host)
+    {
+        $ssl = [
+            'peer_name' => $host,
+            'SNI_enabled' => true,
+            'verify_peer' => true,
+            'verify_peer_name' => true,
+            'allow_self_signed' => false,
+        ];
+
+        $bundle = self::caBundle();
+        if ($bundle !== null) {
+            $ssl['cafile'] = $bundle;
+        }
+
+        return stream_context_create(['ssl' => $ssl]);
+    }
+
+    /**
      * Send one message through an SMTP server using STARTTLS and AUTH LOGIN.
      * Dovecot SASL on the site's own mail domain accepts mailbox credentials.
      */
@@ -191,7 +268,8 @@ class Mailer
             $errno,
             $error,
             15,
-            STREAM_CLIENT_CONNECT
+            STREAM_CLIENT_CONNECT,
+            self::smtpContext($host)
         );
 
         if (!is_resource($socket)) {
@@ -203,7 +281,7 @@ class Mailer
         $ok = self::smtpRead($socket, 220)
             && self::smtpCommand($socket, 'EHLO gallery.local', 250)
             && self::smtpCommand($socket, 'STARTTLS', 220)
-            && @stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT) === true
+            && self::smtpStartTls($socket)
             && self::smtpCommand($socket, 'EHLO gallery.local', 250)
             && self::smtpCommand($socket, 'AUTH LOGIN', 334)
             && self::smtpCommand($socket, base64_encode($user), 334)
@@ -226,6 +304,36 @@ class Mailer
         @fclose($socket);
 
         return $ok;
+    }
+
+    /**
+     * Negotiate TLS on an established SMTP connection. A false here with a
+     * perfectly reachable server almost always means the certificate could not
+     * be verified, so the OpenSSL reason is logged (it never surfaces through
+     * SMTP itself) before giving up.
+     */
+    private static function smtpStartTls($socket): bool
+    {
+        $crypto = STREAM_CRYPTO_METHOD_TLS_CLIENT;
+        if (defined('STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT')) {
+            $crypto |= STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT;
+        }
+
+        if (@stream_socket_enable_crypto($socket, true, $crypto) === true) {
+            return true;
+        }
+
+        $reason = '';
+        while (($error = openssl_error_string()) !== false) {
+            $reason .= ($reason === '' ? '' : '; ') . $error;
+        }
+        $meta = stream_get_meta_data($socket);
+        if (!empty($meta['timed_out'])) {
+            $reason .= ($reason === '' ? '' : '; ') . 'handshake timed out';
+        }
+
+        error_log('[MAIL] STARTTLS handshake failed: ' . ($reason === '' ? 'no OpenSSL error reported' : $reason));
+        return false;
     }
 
     private static function smtpCommand($socket, string $command, int $expected): bool

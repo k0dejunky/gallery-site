@@ -1693,6 +1693,14 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 ? $ok('both audiences rendered')
                 : $bad('EmailQueue::enqueueDigest must render separate subscriber/non-subscriber templates');
         });
+        $add('smoke.email.digest_public_galleries_only', 'Smoke · Emailer', 'Digest sample never advertises a secret or scheduled gallery', static function () use ($eq, $ok, $bad): array {
+            return strpos($eq, 'is_secret = 0') !== false
+                && strpos($eq, 'emailableGallerySql') !== false
+                && strpos($eq, 'Gallery::publishedVisibleSql') !== false
+                && substr_count($eq, 'self::emailableGallerySql(') >= 4
+                ? $ok('sample + fallback are public-only')
+                : $bad('EmailQueue sample()/sampleRandomGallery() must sample only public, published, non-secret galleries (the digest links straight into them)');
+        });
         $add('smoke.email.opt_out_filter', 'Smoke · Emailer', 'Recipients exclude opted-out accounts', static function () use ($eq, $ok, $bad): array {
             return strpos($eq, 'COALESCE(u.marketing_opt_out, 0) = 0') !== false
                 ? $ok('opt-outs filtered')
@@ -1719,6 +1727,14 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 && strpos($mail, 'boundary') !== false
                 ? $ok('multipart html+text')
                 : $bad('Mailer must provide sendHtml() building a multipart/alternative (html + text) message');
+        });
+        $add('smoke.email.smtp_tls_verifies', 'Smoke · Emailer', 'SMTP submission sends SNI and verifies against a real CA bundle', static function () use ($mail, $ok, $bad): array {
+            return strpos($mail, 'peer_name') !== false && strpos($mail, 'SNI_enabled') !== false
+                && strpos($mail, 'ca-certificates.crt') !== false
+                && strpos($mail, 'smtpContext') !== false
+                && strpos($mail, 'verify_peer_name') !== false
+                ? $ok('SNI + CA bundle + logged handshake errors')
+                : $bad('Mailer::sendSmtp must attach an SSL context with peer_name/SNI and an explicit CA bundle, and log the OpenSSL reason when the STARTTLS handshake fails');
         });
         $add('smoke.email.helpers', 'Smoke · Emailer', 'helpers provide absolute_url + render_email', static function () use ($helpers, $ok, $bad): array {
             return strpos($helpers, 'function absolute_url(') !== false && strpos($helpers, 'function render_email(') !== false

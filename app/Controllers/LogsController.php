@@ -112,15 +112,15 @@ class LogsController extends Controller
 
         $sources = [
             'Apache/PHP' => ['/var/log/apache2/error.log'],
-            'PHP' => glob('/var/log/php*.log') ?: [],
+            'PHP' => @glob('/var/log/php*.log') ?: [],
             'MySQL' => ['/var/log/mysql/error.log', '/var/log/mysql/mysql.log'],
             'Application' => glob(dirname(__DIR__, 2) . '/storage/logs/*.log') ?: [],
         ];
         foreach ($sources as $label => $files) {
             foreach (array_unique($files) as $file) {
-                if (!is_string($file) || !is_readable($file)) continue;
-                $lines = @file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-                if (!is_array($lines)) continue;
+                if (!is_string($file) || $file === '') continue;
+                $lines = self::readableLogLines($file);
+                if ($lines === null) continue;
                 foreach (array_reverse(array_slice($lines, -100)) as $line) {
                     $line = substr((string) $line, 0, 4000);
                     $errors[] = [
@@ -167,9 +167,28 @@ class LogsController extends Controller
         ]);
     }
 
-/**
-     * Pull a sortable timestamp out of a raw log line so the error log can
-     * be ordered newest-first even for files whose lines have no parsed time
+    /**
+     * Lines of a system log the web user may read, or null when it may not.
+     *
+     * A path outside PHP's open_basedir makes every stat call raise a warning
+     * even when the file is simply absent (the default open_basedir on this
+     * app covers only its own directories), so each probe is silenced and the
+     * file is quietly skipped rather than filling the error log.
+     */
+    private static function readableLogLines(string $file): ?array
+    {
+        if (!@is_readable($file)) {
+            return null;
+        }
+
+        $lines = @file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+
+        return is_array($lines) ? $lines : null;
+    }
+
+    /**
+     * Parse a leading timestamp out of a log line so entries from different
+     * files can be ordered newest-first even for files whose lines have no parsed time
      * field. Supports ISO-8601 (Apache/MySQL) and Apache's [day Mon d HH:MM:SS]
      * bracket format. Returns an empty string when no timestamp is found.
      */
