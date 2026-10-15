@@ -937,6 +937,46 @@ class SmokeChecks
                 ? $ok('lastmod emitted from publish/create dates')
                 : $bad('sitemap() must emit <lastmod> for dated entries');
         });
+        $add('smoke.seo.no_empty_media_urls', 'Smoke · SEO', 'Sitemap omits gated media pages', static function () use ($staticPages, $ok, $bad): array {
+            // /images/{id} and /videos/{id} are member-gated viewers that render
+            // an unlock wall with no media for a crawler. Submitting thousands
+            // of them made the site look like a wall of empty duplicate pages.
+            if (preg_match('#<loc>[^<]*/(images|videos)/\d+</loc>#', $staticPages) === 1) {
+                return $bad('sitemap() must NOT list /images/{id} or /videos/{id} - gated media viewers with no crawler-visible content');
+            }
+            return $ok('no gated media URLs in the sitemap');
+        });
+        $add('smoke.seo.paywall_markup', 'Smoke · SEO', 'Gated pages declare isAccessibleForFree', static function () use ($read, $root, $ok, $bad): array {
+            $missing = [];
+            foreach ([
+                'views/gallery/show.php' => 'gallery',
+                'views/gallery/image_full.php' => 'image',
+                'views/video/player.php' => 'video',
+            ] as $file => $label) {
+                $src = (string) $read("$root/$file");
+                if (strpos($src, 'isAccessibleForFree') === false) {
+                    $missing[] = $label;
+                }
+            }
+            return $missing === []
+                ? $ok('gallery + image + video all declare the paywall')
+                : $bad('missing isAccessibleForFree markup on: ' . implode(', ', $missing));
+        });
+        $add('smoke.seo.robots_at_root', 'Smoke · SEO', 'robots.txt scopes disallows to /gallery/', static function () use ($read, $root, $ok, $bad): array {
+            $robots = (string) $read("$root/public/robots.txt");
+            if ($robots === '') {
+                return $bad('public/robots.txt is missing or empty');
+            }
+            // robots.txt is only honored at the host root, so the disallow
+            // paths must be written the way they are actually served.
+            if (strpos($robots, 'Disallow: /gallery/admin') === false) {
+                return $bad('robots.txt must disallow /gallery/admin (the unprefixed /admin never matched)');
+            }
+            if (strpos($robots, 'Sitemap:') === false) {
+                return $bad('robots.txt must carry a Sitemap: line');
+            }
+            return $ok('disallows are /gallery/ scoped + sitemap declared');
+        });
         $autoText   = $read("$root/app/Core/AutoPostText.php");
         $platforms  = $read("$root/app/Core/Platforms.php");
         $redditCli  = $read("$root/app/Models/RedditClient.php");

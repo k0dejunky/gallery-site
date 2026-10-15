@@ -30,6 +30,15 @@ if ($sampleClipUrl !== '') {
 if (!empty($photo['duration_seconds'])) {
     $videoObject['duration'] = 'PT' . (int) $photo['duration_seconds'] . 'S';
 }
+// Paywall markup for gated videos (see the note in gallery/image_full.php).
+if (empty($canViewFull)) {
+    $videoObject['isAccessibleForFree'] = false;
+    $videoObject['hasPart'] = [
+        '@type' => 'WebPageElement',
+        'isAccessibleForFree' => false,
+        'cssSelector' => '.paywalled-content',
+    ];
+}
 $ldJson = $videoObject;
 $plUrl  = function (int $videoId) use ($playlistId): string {
     return url('/videos/' . $videoId) . ($playlistId > 0 ? '?playlist=' . $playlistId : '');
@@ -64,7 +73,7 @@ $breadcrumbItems = [
 
 <div class="player-layout"<?= !empty($playlist) ? ' data-has-playlist="1"' : '' ?>>
     <div class="player-main">
-        <figure id="video-player-wrap" style="margin: 1rem 0; text-align: center;">
+        <figure id="video-player-wrap" class="paywalled-content" style="margin: 1rem 0; text-align: center;">
             <?php if (empty($canViewFull)): ?>
                 <?php // Blurred, indexable preview for guests and below-level
                     // members: play the short blurred sample clip, or fall

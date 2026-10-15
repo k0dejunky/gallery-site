@@ -14,6 +14,17 @@ $ldJson = [
     'description' => $galleryDescription !== '' ? $galleryDescription : $metaDescription,
     'isPartOf' => ['@type' => 'WebSite', 'name' => config('app.site_name'), 'url' => absolute_url('')],
 ];
+// Galleries that need a membership are subscription content. Declaring the
+// paywall lets Google index the page as such instead of treating the locked
+// grid as an empty page hiding text behind a form.
+if (empty($canViewFull)) {
+    $ldJson['isAccessibleForFree'] = false;
+    $ldJson['hasPart'] = [
+        '@type' => 'WebPageElement',
+        'isAccessibleForFree' => false,
+        'cssSelector' => '.paywalled-content',
+    ];
+}
 ?>
 <?php
 $breadcrumbItems = [
@@ -90,7 +101,7 @@ $breadcrumbItems = [
 <?php elseif (!$canViewFull): ?>
     <?php // Blurred, indexable preview for guests and below-level members; the
         // full grid and its lightbox stay behind the membership gate. ?>
-    <div class="grid">
+    <div class="grid paywalled-content">
         <?php foreach ($photos as $idx => $photo): ?>
             <figure class="gallery-item">
                 <a class="grid-link" href="<?= e(url((is_video($photo['filename']) ? '/videos/' : '/images/') . (int) $photo['id'])) ?>">

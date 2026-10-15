@@ -16,6 +16,18 @@ $ldJson = [
     'description' => $metaDescription,
     'author'   => ['@type' => 'Organization', 'name' => config('app.site_name'), 'url' => absolute_url('')],
 ];
+// Google's paywalled-content markup: without it a gated page looks like an
+// empty page that is hiding its content behind a form (a "cloaking" pattern),
+// which is exactly how Google classifies it. Declaring the paywall up front
+// lets it index the page as subscription content instead.
+if (empty($canViewFull)) {
+    $ldJson['isAccessibleForFree'] = false;
+    $ldJson['hasPart'] = [
+        '@type' => 'WebPageElement',
+        'isAccessibleForFree' => false,
+        'cssSelector' => '.paywalled-content',
+    ];
+}
 ?>
 <?php
 $breadcrumbItems = [
@@ -30,7 +42,7 @@ $breadcrumbItems = [
 <?php endif; ?>
 <?php $reportUrl = url('/support') . '?' . http_build_query(['return_to' => $_SERVER['REQUEST_URI'] ?? url('/galleries')]); ?>
 
-<figure style="margin: 1rem 0; text-align: center;">
+<figure class="paywalled-content" style="margin: 1rem 0; text-align: center;">
     <?php if (empty($canViewFull)): ?>
         <?php // Blurred, indexable preview for guests and below-level members. ?>
         <img src="<?= e(file_url($photo['filename'], 'blur')) ?>"

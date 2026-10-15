@@ -155,6 +155,9 @@ class StaticPageController extends Controller
      * member-only areas are intentionally excluded, and gallery detail pages
      * require a membership so only the listing pages are published. Entries
      * carry a <lastmod> when the content has a known publish/create date.
+     *
+     * Individual media pages are intentionally excluded (see the note in the
+     * body): they are gated viewers with no crawler-visible content.
      */
     public function sitemap(): void
     {
@@ -182,20 +185,16 @@ class StaticPageController extends Controller
             $entries[] = ['/galleries/' . (int) $g['id'], (string) ($g['lastmod'] ?? '')];
         }
 
-        $media = \App\Core\Database::run(
-            'SELECT DISTINCT p.id, p.is_video, p.created_at
-             FROM photos p
-             INNER JOIN gallery_photo gp ON gp.photo_id = p.id
-             INNER JOIN galleries g ON g.id = gp.gallery_id
-             WHERE g.deleted_at IS NULL AND g.is_secret = 0 AND '
-            . Gallery::publishedVisibleSql('g')
-        )->fetchAll();
-        foreach ($media as $m) {
-            $entries[] = [
-                ((int) ($m['is_video'] ?? 0) === 1 ? '/videos/' : '/images/') . (int) $m['id'],
-                (string) ($m['created_at'] ?? ''),
-            ];
-        }
+        // NOTE: individual media pages (/images/{id}, /videos/{id}) are
+        // deliberately NOT listed. They are member-gated media viewers, not
+        // landing pages: for a crawler they render an "unlock with a
+        // membership" wall with no media, and most had no caption, so the
+        // whole set shared one boilerplate <title>. Submitting thousands of
+        // near-identical empty URLs only told Google the site was thin, and
+        // the crawler budget was spent on pages that can never rank. They
+        // stay crawlable and linked from their galleries, so anything that
+        // does earn impressions can still be found; the map now points at
+        // pages that actually have content.
 
         // Stay comfortably under Google's 50k URLs / 50MB sitemap limits.
         $entries = array_slice($entries, 0, 45000);
