@@ -478,6 +478,18 @@ function Editor() {
     v.volume = audio.muted ? 0 : clamp(Number(audio.volume ?? 1), 0, 2);
   }, [project.speed, audio.volume, audio.muted]);
 
+  /* The transport follows the element itself, so the glyph is right even when
+     playback starts or stops without the button (keyboard, end of clip, or a
+     browser that refuses play()). */
+  useEffect(() => {
+    const v = videoRef.current; if (!v) return;
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
+    v.addEventListener('play', onPlay);
+    v.addEventListener('pause', onPause);
+    return () => { v.removeEventListener('play', onPlay); v.removeEventListener('pause', onPause); };
+  }, []);
+
   const scrollToTime = useCallback((t) => {
     const el = scrollRef.current; if (!el) return;
     const x = t * PIXELS_PER_SEC;
@@ -498,11 +510,12 @@ function Editor() {
 
   const playPause = useCallback(() => {
     const v = videoRef.current; if (!v) return;
-    if (v.paused) {
-      if (v.currentTime < clipStart || v.currentTime >= clipEnd - 0.02) v.currentTime = clipStart;
-      v.play().catch(() => setPlaying(false));
-      setPlaying(true);
-    } else { v.pause(); setPlaying(false); }
+    if (!v.paused) { v.pause(); setPlaying(false); return; }
+    if (v.currentTime < clipStart || v.currentTime >= clipEnd - 0.02) v.currentTime = clipStart;
+    const started = v.play();
+    if (started && typeof started.catch === 'function') {
+      started.catch((e) => { setPlaying(false); setStatus('Playback could not start: ' + (e && e.message ? e.message : 'blocked by the browser')); });
+    }
   }, [clipStart, clipEnd]);
 
   const seekTo = useCallback((t) => {
@@ -1034,11 +1047,11 @@ function Editor() {
             </div>
 
             <div className="nle-transport">
-              <button className="nle-pbtn" onClick={() => seekTo(clipStart)} title="Go to in point (Home)">|&#9664;</button>
-              <button className="nle-pbtn" onClick={() => stepFrame(-1)} title="Previous frame (Left)">&#9664;&#9664;</button>
-              <button className="nle-pbtn is-play" onClick={playPause} title="Play or pause (Space)">{playing ? '&#10074;&#10074;' : '&#9654;'}</button>
-              <button className="nle-pbtn" onClick={() => stepFrame(1)} title="Next frame (Right)">&#9654;&#9654;</button>
-              <button className="nle-pbtn" onClick={() => seekTo(clipEnd)} title="Go to out point (End)">&#9654;|</button>
+              <button className="nle-pbtn" onClick={() => seekTo(clipStart)} title="Go to in point (Home)">|{'\u25c0'}</button>
+              <button className="nle-pbtn" onClick={() => stepFrame(-1)} title="Previous frame (Left)">{'\u25c0\u25c0'}</button>
+              <button className="nle-pbtn is-play" onClick={playPause} title="Play or pause (Space)">{playing ? '\u275a\u275a' : '\u25b6'}</button>
+              <button className="nle-pbtn" onClick={() => stepFrame(1)} title="Next frame (Right)">{'\u25b6\u25b6'}</button>
+              <button className="nle-pbtn" onClick={() => seekTo(clipEnd)} title="Go to out point (End)">{'\u25b6'}|</button>
               <span className="nle-tc is-dim">{fmt(currentTime)} <i>/</i> {fmt(total)}</span>
               <span className="nle-tc is-dim is-mono">in {fmtTC(clipStart)} &middot; out {fmtTC(clipEnd)}</span>
             </div>

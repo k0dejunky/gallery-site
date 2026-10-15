@@ -262,6 +262,7 @@ document.querySelectorAll('#ve-top [data-action]').forEach(function (btn) {
             veOnly(show ? (action === 'toggleThumb' ? 'thumb' : 'theme') : null);
             return;
         }
+    });
 });
 document.getElementById('ve-theme-save').addEventListener('click', function () { veSaveThemeColors(); });
 document.getElementById('ve-thumb-upload').addEventListener('submit', function (e) {
