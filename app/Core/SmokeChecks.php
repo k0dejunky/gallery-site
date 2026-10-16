@@ -1617,6 +1617,22 @@ class SmokeChecks
                 ? $ok('countdown present')
                 : $bad('auto-poster queue must show a live months/days/hours/minutes/seconds countdown');
         });
+        $add('smoke.emailer.utc_watermark', 'Smoke · Emailer', 'The digest watermark is stamped in UTC, not the box local time', static function () use ($root, $ok, $bad): array {
+            $src = (string) @file_get_contents("$root/app/Models/EmailQueue.php");
+            $cfg = (string) @file_get_contents("$root/app/Models/EmailerConfig.php");
+            // nextSendAt() parses last_sent_at as UTC; anything written with
+            // date() drifts the schedule by the host's offset on every send.
+            if (strpos($cfg, "new DateTimeZone('UTC')") === false) {
+                return $bad('EmailerConfig::nextSendAt must read last_sent_at as UTC');
+            }
+            if (preg_match('/EmailerConfig::markSent\(\s*date\(/', $src)) {
+                return $bad('markSent must be given gmdate(), not date(): last_sent_at is read back as UTC');
+            }
+            return strpos($src, 'EmailerConfig::markSent($sentAtUtc') !== false
+                ? $ok('watermark stamped with gmdate()')
+                : $bad('EmailQueue::enqueueDigest must stamp last_sent_at in UTC');
+        });
+
         $add('smoke.ap.template_view', 'Smoke · Auto Poster', 'One platform-editable template panel per page with live preview', static function () use ($apv, $ok, $bad): array {
             return strpos($apv, 'name="pattern"') !== false
                 && strpos($apv, 'ap-platform-switch') !== false

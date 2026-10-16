@@ -264,10 +264,15 @@ class EmailQueue
         // Only advance the watermark when real new uploads were sampled. A
         // fallback (random-gallery) digest keeps last_sent_photo_id untouched
         // so the next tick can still detect genuinely new media.
+        // last_sent_at is read back as UTC by EmailerConfig::nextSendAt(), so it
+        // has to be written as UTC too. date() is the box's local time, which
+        // silently shifted the schedule by the host's UTC offset on every send.
+        $sentAtUtc = gmdate('Y-m-d H:i:s');
+
         if ($fallback) {
-            EmailerConfig::markSent(date('Y-m-d H:i:s'), $lastId);
+            EmailerConfig::markSent($sentAtUtc, $lastId);
         } else {
-            EmailerConfig::markSent(date('Y-m-d H:i:s'), $newestId);
+            EmailerConfig::markSent($sentAtUtc, $newestId);
         }
 
         $perAudience = ['subscriber' => 0, 'non_subscriber' => 0];

@@ -297,7 +297,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                     <th>Level</th>
                     <th>Scheduled</th>
                     <th>Created</th>
-                    <th style="text-align:right;">Actions</th>
+                    <th class="act">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -359,13 +359,13 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                         </td>
                         <td class="mg-date mg-scheduled">
                             <?php if (!empty($gallery['published_at']) && $gallery['published_at'] > gmdate('Y-m-d H:i:s')): ?>
-                                <span style="color:#b91c1c;"><?= e(tzdate('Y-m-d H:i', $gallery['published_at'])) ?></span>
+                                <span style="color:#b91c1c;" title="<?= e(tzdate('Y-m-d H:i', $gallery['published_at'])) ?>"><?= e(tzdate('M j, H:i', $gallery['published_at'])) ?></span>
                             <?php else: ?>
-                                <span style="color:#15803d;"><?= e(tzdate('Y-m-d H:i', !empty($gallery['published_at']) ? $gallery['published_at'] : $gallery['created_at'])) ?></span>
+                                <span style="color:#15803d;" title="<?= e(tzdate('Y-m-d H:i', !empty($gallery['published_at']) ? $gallery['published_at'] : $gallery['created_at'])) ?>"><?= e(tzdate('M j, H:i', !empty($gallery['published_at']) ? $gallery['published_at'] : $gallery['created_at'])) ?></span>
                             <?php endif; ?>
                         </td>
-                        <td class="mg-date"><?= !empty($gallery['created_at']) ? e(tzdate('Y-m-d H:i', $gallery['created_at'])) : '' ?></td>
-                        <td>
+                        <td class="mg-date" title="<?= !empty($gallery['created_at']) ? e(tzdate('Y-m-d H:i', $gallery['created_at'])) : '' ?>"><?= !empty($gallery['created_at']) ? e(tzdate('M j, H:i', $gallery['created_at'])) : '' ?></td>
+                        <td class="act">
                             <div class="mg-actions">
                                 <a class="btn btn-sm" href="<?= url('/admin/galleries/' . $gid) ?>">Manage</a>
                                 <a class="btn btn-sm btn-outline" href="<?= url('/admin/galleries/' . $gid . '/edit') ?>">Edit</a>

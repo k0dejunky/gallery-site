@@ -62,6 +62,29 @@
 }
 
 .admin-theme {
+    /* The admin scope still emits the member theme's surface tokens, and a
+       couple of dozen admin views reference them directly (`background:
+       var(--pink-100)`, `var(--card-bg)`). The result was hot-pink panels
+       sitting inside an otherwise neutral dashboard - Engagement, Support,
+       Earnings, Email and Gallery Management all rendered that way. Remap the
+       surface tokens to the admin palette here, once, instead of rewriting
+       every view. Colour tokens (--purple-*, --pink-500 and up) are left
+       alone: they are used for text and accents where the member hues are
+       still legible. --sidebar-* and --btn-* are untouched so the theme
+       editor's controls keep working. */
+    --pink-100: var(--adm-surface-2);
+    --pink-200: var(--adm-surface-3);
+    --pink-300: var(--adm-border);
+    --pink-400: var(--adm-border-strong);
+    --card-bg: var(--adm-surface);
+    --card-border: var(--adm-border);
+    --card-title-color: var(--adm-text);
+    --card-text-color: var(--adm-text);
+    --card-placeholder-bg: var(--adm-surface-2);
+    --card-thumb-bg: var(--adm-surface-3);
+    --stat-bg: var(--adm-surface);
+    --stat-border: var(--adm-border);
+
     font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
     font-size: 14px;
     line-height: 1.5;
@@ -941,7 +964,7 @@ body.admin-theme {
 }
 
 .admin-theme .adm-field-grid label > small { font-size: 11.5px; color: var(--adm-text-faint); }
-.admin-theme .adm-field-grid input { width: 100%; }
+.admin-theme .adm-field-grid input, .admin-theme .adm-field-grid select { width: 100%; box-sizing: border-box; }
 
 .admin-theme .adm-create-foot {
     display: flex;
@@ -1124,6 +1147,82 @@ body.admin-theme {
 .admin-theme .ap-table td:first-child,
 .admin-theme .ap-table th:first-child { min-width: 6.5rem; }
 
+/* ---------- Gallery management ------------------------------------------- */
+
+/* Nine columns of content plus four action buttons overflowed the content
+   column, so the last action was clipped by the wrapper's scroller. Tighten
+   the columns, keep the category chips to a fixed two-line block, and pin the
+   actions to one nowrap line. */
+.admin-theme .mg-table-wrap { background: var(--adm-surface); border-color: var(--adm-border); }
+/* table-layout: fixed so the nine columns always add up to the wrapper. Left to
+   auto-layout the table measured 1273px inside a 1159px box and the last action
+   button was clipped. */
+.admin-theme .mg-table-wrap table { table-layout: fixed; width: 100%; min-width: 980px; }
+
+.admin-theme .mg-table-wrap th,
+.admin-theme .mg-table-wrap td { padding: .5rem .45rem; vertical-align: middle; overflow-wrap: normal; }
+
+/* Widths sum to ~970px, leaving the title column whatever is left over at
+   1440px. Each is sized to its widest real value, so nothing truncates. */
+.admin-theme .mg-table-wrap th:nth-child(1), .admin-theme .mg-table-wrap td:nth-child(1) { width: 56px; }
+.admin-theme .mg-table-wrap th:nth-child(3), .admin-theme .mg-table-wrap td:nth-child(3) { width: 76px; }
+.admin-theme .mg-table-wrap th:nth-child(4), .admin-theme .mg-table-wrap td:nth-child(4) { width: 132px; }
+.admin-theme .mg-table-wrap th:nth-child(5), .admin-theme .mg-table-wrap td:nth-child(5) { width: 158px; }
+.admin-theme .mg-table-wrap th:nth-child(6), .admin-theme .mg-table-wrap td:nth-child(6) { width: 64px; }
+.admin-theme .mg-table-wrap th:nth-child(7), .admin-theme .mg-table-wrap td:nth-child(7) { width: 118px; }
+.admin-theme .mg-table-wrap th:nth-child(8), .admin-theme .mg-table-wrap td:nth-child(8) { width: 118px; }
+.admin-theme .mg-table-wrap th:nth-child(9), .admin-theme .mg-table-wrap td:nth-child(9) { width: 250px; }
+
+.admin-theme .mg-table-wrap .mg-cover,
+.admin-theme .mg-table-wrap .mg-cover-empty { width: 50px; height: 38px; }
+.admin-theme .mg-table-wrap .mg-cover-empty { white-space: nowrap; font-size: 9px; }
+
+.admin-theme .mg-table-wrap .mg-categories {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .2rem;
+    align-content: flex-start;
+    min-width: 9.5rem;
+    max-width: 11rem;
+}
+
+.admin-theme .mg-table-wrap .mg-categories .pill {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-theme .mg-table-wrap .mg-media { white-space: nowrap; }
+.admin-theme .mg-table-wrap .mg-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Timestamps and long text cells in the ordinary card tables (Engagement,
+   Earnings) need the same treatment as the media table, plus a clip for
+   addresses that used to carry a max-width inline. */
+.admin-theme td.mg-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.admin-theme td.adm-clip {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.admin-theme th.num, .admin-theme td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.admin-theme .mg-table-wrap .mg-title { max-width: 100%; }
+
+.admin-theme .mg-table-wrap td.act,
+.admin-theme .mg-table-wrap th.act { text-align: right; white-space: nowrap; }
+
+.admin-theme .mg-table-wrap .mg-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    gap: .3rem;
+}
+
+.admin-theme .mg-table-wrap .mg-actions form { margin: 0; }
+.admin-theme .mg-table-wrap .mg-actions .btn { white-space: nowrap; }
+
 /* ---------- Traffic table ------------------------------------------------- */
 
 .admin-theme .traffic-table td:first-child { min-width: 12rem; }
@@ -1170,6 +1269,128 @@ body.admin-theme {
     font-size: 10.5px;
     background: var(--adm-surface-3);
 }
+
+/* ---------- Inline toolbars --------------------------------------------- */
+
+/* A form that lives beside a heading used to be a <p style="text-align:center">
+   with a bare input, which reads as an unfinished page. These give it a card,
+   a real label and a consistent action cluster. */
+.admin-theme .adm-toolbar { padding: 1rem 1.1rem; }
+
+.admin-theme .adm-inline-form {
+    display: flex;
+    align-items: flex-end;
+    gap: .6rem;
+    flex-wrap: wrap;
+}
+
+.admin-theme .adm-inline-form-search {
+    margin-top: .85rem;
+    padding-top: .85rem;
+    border-top: 1px solid var(--adm-border);
+}
+
+.admin-theme .adm-field { display: grid; gap: .25rem; flex: 1 1 240px; min-width: 0; }
+.admin-theme .adm-field > span { font-size: 12px; font-weight: 600; color: var(--adm-text-dim); }
+.admin-theme .adm-field input, .admin-theme .adm-field select,
+.admin-theme .adm-field textarea { width: 100%; box-sizing: border-box; }
+.admin-theme .adm-field + .adm-field { margin-top: .7rem; }
+
+.admin-theme .adm-field-actions { display: flex; gap: .4rem; flex: none; align-items: center; }
+
+/* Date-range filters should hug their content; the 240px flex basis made each
+   one stretch across half a 1440px toolbar. */
+.admin-theme .adm-inline-form-compact .adm-field { flex: 0 1 190px; }
+
+/* Authoring cards (Engagement). A <div style="display:grid;..."> inline in
+   the view gave the columns no min-width, so a wide form forced the whole row
+   to overflow the content area. These are the same idea as .sys-grid but with a
+   narrower floor and card-consistent gutters. */
+.admin-theme .adm-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+    align-items: start;
+}
+
+.admin-theme .adm-cols > * { min-width: 0; }
+.admin-theme .adm-cols form > * + * { margin-top: .7rem; }
+.admin-theme .adm-cols .adm-field-actions { margin-top: .85rem; }
+/* A composer in a 300px column kept its intrinsic 20-column textarea width,
+   and the submit label wrapped mid-phrase next to a hint. */
+.admin-theme .adm-cols textarea { width: 100%; box-sizing: border-box; min-height: 6.5rem; }
+.admin-theme .adm-cols .adm-field-actions { flex-wrap: wrap; }
+.admin-theme .adm-cols .adm-field-actions .btn { white-space: nowrap; flex: none; }
+
+/* Short explanatory line under a card heading. */
+.admin-theme .adm-card-note { margin: -.35rem 0 .8rem; font-size: 12.5px; }
+
+.admin-theme .check-row { margin: .6rem 0 0; }
+.admin-theme .check-row label { display: inline-flex; gap: .4rem; align-items: center; }
+
+@media (max-width: 560px) {
+    .admin-theme .adm-field { flex: 1 1 100%; }
+    .admin-theme .adm-field-actions { width: 100%; }
+    .admin-theme .adm-field-actions .btn { flex: 1; }
+}
+
+/* ---------- Inline disclosure inside a table row ----------------------- */
+
+/* Setting a mailbox password was a <details> whose <summary> was a .btn with
+   the form inline, so the controls had no width of their own and collided with
+   the Delete button. Same disclosure, real positioned panel. */
+.admin-theme .adm-pop { position: relative; display: inline-block; }
+.admin-theme .adm-pop > summary { list-style: none; cursor: pointer; }
+.admin-theme .adm-pop > summary::-webkit-details-marker { display: none; }
+
+.admin-theme .adm-pop-panel {
+    position: absolute;
+    z-index: 20;
+    right: 0;
+    top: calc(100% + 6px);
+    padding: .55rem .6rem;
+    background: var(--adm-surface);
+    border: 1px solid var(--adm-border-strong);
+    border-radius: var(--adm-radius-sm);
+    box-shadow: var(--adm-shadow-lg);
+}
+
+.admin-theme .adm-pop-panel form { display: flex; align-items: flex-end; gap: .4rem; }
+.admin-theme .adm-pop-panel input { width: 190px; }
+
+/* Key/value status list (Mail server, diagnostics rows). */
+.admin-theme .adm-kv { margin: 0; }
+.admin-theme .adm-kv > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .45rem 0;
+    border-bottom: 1px solid var(--adm-border);
+}
+.admin-theme .adm-kv > div:last-child { border-bottom: 0; }
+.admin-theme .adm-kv dt { color: var(--adm-text-dim); font-size: 12.5px; }
+.admin-theme .adm-kv dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+
+/* "running" / "stopped" pills. Three admin views were each defining their own
+   copy of these in an inline <style> block. */
+.admin-theme .sys-ok { color: #067647; font-weight: 700; }
+.admin-theme .sys-bad { color: #b42318; font-weight: 700; }
+
+/* Inline flash banner. mail.php painted it with member --pink-* tokens, which
+   the admin remap flattens to a grey box; these use the admin alert palette. */
+.admin-theme .adm-flash {
+    display: grid;
+    gap: .2rem;
+    padding: .7rem .9rem;
+    margin-bottom: 1rem;
+    border-radius: var(--adm-radius-sm);
+    border: 1px solid var(--adm-info-border);
+    background: var(--adm-info-bg);
+    color: var(--adm-info);
+    font-size: 13px;
+}
+.admin-theme .adm-flash.error { border-color: var(--adm-err-border); background: var(--adm-err-bg); color: var(--adm-err); }
 
 /* ---------- Empty states ------------------------------------------------- */
 
@@ -2105,3 +2326,24 @@ body.admin-theme {
     .admin-theme .stats-grid > [style*="span"] { grid-column: auto !important; }
 }
 
+
+
+/* ---------- Theme editor preview --------------------------------------- */
+
+/* #theme-preview is a mock of the member site, so the neutral remap above must
+   not apply to it - otherwise the operator cannot see the colours they are
+   editing. Restore the member surfaces inside the preview only. */
+.admin-theme #theme-preview {
+    --pink-100: #ffd9e8;
+    --pink-200: #f9a8d4;
+    --pink-300: #f472b6;
+    --pink-400: #f052a0;
+    --card-bg: #f472b6;
+    --card-border: #f052a0;
+    --card-title-color: #581c87;
+    --card-text-color: #4c1d95;
+    --card-placeholder-bg: #ffd9e8;
+    --card-thumb-bg: #3b0764;
+    --stat-bg: #ffd9e8;
+    --stat-border: #f472b6;
+}
