@@ -138,7 +138,7 @@ $conversion = $totalVisits > 0 ? round(($totalSignups / $totalVisits) * 100, 1) 
         <thead>
             <tr>
                 <th>Link</th>
-                <th>Target</th>
+                <th class="tl-target">Target</th>
                 <th class="num">Visits</th>
                 <th class="num">Visitors</th>
                 <th class="num">Signups</th>
@@ -164,7 +164,7 @@ $conversion = $totalVisits > 0 ? round(($totalSignups / $totalVisits) * 100, 1) 
                         </div>
                         <span class="muted"><?= e($link['name']) ?></span>
                     </td>
-                    <td><code><?= e($link['target_path']) ?></code></td>
+                    <td class="tl-target"><code><?= e($link['target_path']) ?></code></td>
                     <td class="num"><?= number_format($visits) ?></td>
                     <td class="num"><?= number_format((int) $link['visitors']) ?></td>
                     <td class="num"><?= number_format($signups) ?></td>

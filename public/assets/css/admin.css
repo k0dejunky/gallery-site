@@ -846,20 +846,27 @@ body.admin-theme {
 
 /* A cell holding four or five controls used to wrap one-per-line and make every
    row three rows tall. One nowrap flex group keeps the row a single line and
-   separates the destructive controls from the routine ones. */
+   separates the destructive controls from the routine ones.
+
+   The group is right-aligned because the column header is: left-aligned flex
+   content sat flush to the cell's left padding while the right-aligned header
+   hugged the far edge, leaving a dead strip between the last button and its
+   own heading. */
 .admin-theme .adm-actions {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     flex-wrap: nowrap;
-    gap: .3rem;
+    gap: .35rem;
 }
 
 .admin-theme .adm-actions form { margin: 0; }
+
 .admin-theme .adm-actions-gap {
     flex: none;
     width: 1px;
     height: 18px;
-    margin: 0 .2rem;
+    margin: 0 .25rem;
     background: var(--adm-border-strong);
 }
 
@@ -965,8 +972,17 @@ body.admin-theme {
 /* ---------- Traffic table ------------------------------------------------- */
 
 .admin-theme .traffic-table td:first-child { min-width: 12rem; }
+.admin-theme .traffic-table .tl-target code { white-space: nowrap; }
 .admin-theme .traffic-table .tl-name { display: flex; align-items: center; gap: .4rem; }
 .admin-theme .traffic-table tr.is-terminated td { opacity: .62; }
+
+/* Equal button widths so the group reads as one rectangle rather than a ragged
+   run of differently sized pills. Sized for the longest label (Reactivate). */
+.admin-theme .traffic-table .adm-actions > .btn,
+.admin-theme .traffic-table .adm-actions > form > .btn {
+    min-width: 5.9rem;
+    justify-content: center;
+}
 
 .admin-theme .traffic-table .tl-detail {
     background: var(--adm-surface-2);
@@ -1532,10 +1548,13 @@ body.admin-theme {
     font-size: 12.5px;
 }
 
-.admin-theme code { background: var(--adm-surface-3); padding: .1rem .35rem; border-radius: 4px; font-size: .92em; overflow-wrap: anywhere; }
+.admin-theme code { background: var(--adm-surface-3); padding: .1rem .35rem; border-radius: 4px; font-size: .92em; }
 .admin-theme .filter-inactive { background: var(--adm-surface-2) !important; border-color: var(--adm-border-strong) !important; color: var(--adm-text-faint) !important; }
 .admin-theme .theme-swatch { background: var(--adm-surface); border: 1px solid var(--adm-border); }
-.admin-theme .pay-secret { letter-spacing: .12em; }
+.admin-theme .pay-secret {
+    letter-spacing: .12em;
+    overflow-wrap: anywhere;
+}
 
 /* ---------- Responsive -------------------------------------------------- */
 
