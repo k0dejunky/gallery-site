@@ -475,11 +475,11 @@ return [
     ['POST', '/admin/auto-poster/queue/dismiss', 'AutoPosterController@dismissQueued'],
     ['POST', '/admin/auto-poster/clear-log', 'AutoPosterController@clearLog'],
 
-    // Emailer (admin only; content engine behind the membership permission)
+    // Emailer (admin only; content engine behind the membership permission).
+    // The scheduled digest is gone - every email this site sends is queued by
+    // the event that causes it, so there is no "send now" or digest schedule.
     ['GET', '/admin/emailer', 'EmailerController@index', 'membership'],
     ['POST', '/admin/emailer/save', 'EmailerController@save', 'membership'],
-    ['POST', '/admin/emailer/send-now', 'EmailerController@sendNow', 'membership'],
-    ['POST', '/admin/emailer/test', 'EmailerController@test', 'membership'],
     ['POST', '/admin/emailer/test-lifecycle/{kind}', 'EmailerController@testLifecycle', 'membership'],
     ['POST', '/admin/emailer/retry', 'EmailerController@retry', 'membership'],
 ];

@@ -193,6 +193,12 @@ class LiveSession
             return;
         }
 
+        // One live email a day (see the same guard in Gallery). Claiming the
+        // marker before checking burned it on a mail that was never queued.
+        if (\App\Models\EmailQueue::broadcastSentToday('live')) {
+            return;
+        }
+
         $claimed = Database::run(
             'UPDATE ' . self::TABLE . ' SET live_notified_at = CURRENT_TIMESTAMP
              WHERE id = ? AND live_notified_at IS NULL',

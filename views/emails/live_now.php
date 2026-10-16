@@ -3,8 +3,12 @@
  * "Live now" notification. Rendered once at enqueue time; the
  * {{unsubscribe-url}} placeholder is swapped for the recipient's signed
  * opt-out link by the worker. Variable: $liveUrl (public /live page URL).
+ *
+ * The CTA goes through Traffic::buildUrl() so a click is attributed to the
+ * email digest the same way every other outbound link is, instead of landing
+ * as a direct visit.
  */
-$liveUrl = absolute_url('/live');
+$liveUrl = \App\Models\Traffic::buildUrl('/live', 'email-digest');
 $siteName = (string) config('app.site_name');
 ?>
 <!DOCTYPE html>

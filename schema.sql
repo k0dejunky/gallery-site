@@ -536,6 +536,7 @@ CREATE TABLE IF NOT EXISTS auto_poster_queue (
 CREATE TABLE IF NOT EXISTS email_queue (
     id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     audience   ENUM('subscriber','non_subscriber','notification') NOT NULL,
+    kind       VARCHAR(30) NOT NULL DEFAULT 'notification',
     user_id    INT UNSIGNED NULL,
     email      VARCHAR(255) NOT NULL,
     subject    VARCHAR(255) NOT NULL,
@@ -551,6 +552,7 @@ CREATE TABLE IF NOT EXISTS email_queue (
     INDEX idx_email_queue_status (status),
     INDEX idx_email_queue_due (status, scheduled_at, next_attempt_at),
     INDEX idx_email_queue_audience (audience),
+    INDEX idx_email_queue_kind (kind, created_at),
     CONSTRAINT fk_email_queue_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

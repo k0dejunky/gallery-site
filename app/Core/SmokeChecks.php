@@ -80,8 +80,8 @@ class SmokeChecks
             'app/Controllers/EmailerController.php',
             'app/Controllers/UnsubscribeController.php',
             'bin/email_worker.php',
-            'views/emails/newsletter.php',
-            'views/emails/newsletter.text.php',
+            'views/emails/new_gallery.php',
+            'views/emails/chat_reply.php',
             'views/unsubscribe.php',
             'views/admin/emailer.php',
             'database/migrations/012_email_queue.sql',
@@ -480,11 +480,11 @@ class SmokeChecks
         });
         $add('smoke.lifecycle.admin', 'Smoke · Lifecycle', 'Admin emailer exposes lifecycle toggles + test sends', static function () use ($lcEmailer, $lcView, $ok, $bad): array {
             return strpos($lcEmailer, 'function testLifecycle') !== false
-                && strpos($lcView, 'lifecycleStats') !== false
                 && strpos($lcView, 'lifecycle_renewal_reminders') !== false
                 && strpos($lcView, 'lifecycle_winbacks') !== false
-                ? $ok('admin test-send + toggles + counts present')
-                : $bad('EmailerController/emailer view must expose lifecycle test-send, toggles and stats');
+                && strpos($lcView, 'test-lifecycle') !== false
+                ? $ok('admin test-send + toggles present')
+                : $bad('EmailerController/emailer view must expose the lifecycle test-send and both toggles');
         });
 
         // ------------------------------------------------- PPV / one-off charges
@@ -1000,8 +1000,8 @@ class SmokeChecks
         $authCtrlOg    = $read("$root/app/Controllers/AuthController.php");
         $staticCtrlOg  = $read("$root/app/Controllers/StaticPageController.php");
         $newGalleryMail = $read("$root/views/emails/new_gallery.php");
-        $newsletterMail = $read("$root/views/emails/newsletter.php");
-        $newsletterText = $read("$root/views/emails/newsletter.text.php");
+        $liveNowMail    = $read("$root/views/emails/live_now.php");
+        $winbackMail    = $read("$root/views/emails/winback.php");
         $add('smoke.campaign.share_partial', 'Smoke · Campaign', 'Share bar signs every network link with Traffic::buildUrl', static function () use ($shareBar, $ok, $bad): array {
             // Facebook is deliberately NOT offered (the platform bans adult
             // content); X, WhatsApp, Reddit and the copy-link button remain.
@@ -1049,8 +1049,10 @@ class SmokeChecks
             }
             return $ok('all 6 sources thumb + absolute');
         });
-        $add('smoke.campaign.email_attribution', 'Smoke · Campaign', 'Email CTAs carry tracked ?c= links', static function () use ($newsletterMail, $newsletterText, $newGalleryMail, $ok, $bad): array {
-            foreach (['newsletter.html' => $newsletterMail, 'newsletter.text' => $newsletterText] as $name => $src) {
+        $add('smoke.campaign.email_attribution', 'Smoke · Campaign', 'Email CTAs carry tracked ?c= links', static function () use ($liveNowMail, $winbackMail, $newGalleryMail, $ok, $bad): array {
+            // The scheduled digest is gone, so the remaining CTAs are the live
+            // broadcast and the win-back ('email-digest') plus the gallery alert.
+            foreach (['live_now.html' => $liveNowMail, 'winback.html' => $winbackMail] as $name => $src) {
                 if (strpos($src, 'Traffic::buildUrl(') === false || strpos($src, "'email-digest'") === false) {
                     return $bad("$name CTA must go through Traffic::buildUrl(..., 'email-digest')");
                 }
@@ -1617,22 +1619,6 @@ class SmokeChecks
                 ? $ok('countdown present')
                 : $bad('auto-poster queue must show a live months/days/hours/minutes/seconds countdown');
         });
-        $add('smoke.emailer.utc_watermark', 'Smoke · Emailer', 'The digest watermark is stamped in UTC, not the box local time', static function () use ($root, $ok, $bad): array {
-            $src = (string) @file_get_contents("$root/app/Models/EmailQueue.php");
-            $cfg = (string) @file_get_contents("$root/app/Models/EmailerConfig.php");
-            // nextSendAt() parses last_sent_at as UTC; anything written with
-            // date() drifts the schedule by the host's offset on every send.
-            if (strpos($cfg, "new DateTimeZone('UTC')") === false) {
-                return $bad('EmailerConfig::nextSendAt must read last_sent_at as UTC');
-            }
-            if (preg_match('/EmailerConfig::markSent\(\s*date\(/', $src)) {
-                return $bad('markSent must be given gmdate(), not date(): last_sent_at is read back as UTC');
-            }
-            return strpos($src, 'EmailerConfig::markSent($sentAtUtc') !== false
-                ? $ok('watermark stamped with gmdate()')
-                : $bad('EmailQueue::enqueueDigest must stamp last_sent_at in UTC');
-        });
-
         $add('smoke.ap.template_view', 'Smoke · Auto Poster', 'One platform-editable template panel per page with live preview', static function () use ($apv, $ok, $bad): array {
             return strpos($apv, 'name="pattern"') !== false
                 && strpos($apv, 'ap-platform-switch') !== false
@@ -1819,46 +1805,76 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
         });
 
         // ------------------------------------------------------------ Emailer
+        // The scheduled digest is gone: every email the site sends is queued by
+        // the event that causes it. These checks hold that shape in place.
         $eq   = $read("$root/app/Models/EmailQueue.php");
         $ecfg = $read("$root/app/Models/EmailerConfig.php");
         $mail = $read("$root/app/Core/Mailer.php");
         $ew   = $read("$root/bin/email_worker.php");
         $acrn = $read("$root/bin/apply_cron.php");
-        $nlt  = $read("$root/views/emails/newsletter.php");
-        $nltt = $read("$root/views/emails/newsletter.text.php");
         $unv  = $read("$root/views/unsubscribe.php");
         $ecv  = $read("$root/views/admin/emailer.php");
         $ecCtrl = $read("$root/app/Controllers/EmailerController.php");
         $adminLayout2 = $read("$root/views/admin/layout.php");
         $routesSrc = $read("$root/config/routes.php");
+        $schema  = $read("$root/schema.sql");
+        $lcQueue = $read("$root/app/Models/EmailQueue.php");
+        $lcHouse = $read("$root/app/Core/Housekeeping.php");
+        $galleryM = $read("$root/app/Models/Gallery.php");
+        $liveM   = $read("$root/app/Models/LiveSession.php");
 
-        $add('smoke.email.config_schedule', 'Smoke · Emailer', 'EmailerConfig exposes MAX_SAMPLE + due/nextSendAt', static function () use ($ecfg, $ok, $bad): array {
-            return strpos($ecfg, 'MAX_SAMPLE') !== false && strpos($ecfg, 'public static function due(') !== false
-                && strpos($ecfg, 'public static function nextSendAt(') !== false
-                ? $ok('schedule engine present')
-                : $bad('EmailerConfig must expose MAX_SAMPLE and the due()/nextSendAt() schedule engine');
+        $add('smoke.email.no_digest', 'Smoke · Emailer', 'The scheduled newsletter digest is gone', static function () use ($eq, $ecfg, $ew, $ecCtrl, $routesSrc, $ok, $bad): array {
+            $dead = [
+                'enqueueDigest'        => strpos($eq, 'function enqueueDigest'),
+                'sample()'             => strpos($eq, 'function sample('),
+                'subscribers()'        => strpos($eq, 'function subscribers('),
+                'subjectFor()'         => strpos($eq, 'function subjectFor('),
+                'due()/nextSendAt()'   => strpos($ecfg, 'function due(') !== false || strpos($ecfg, 'function nextSendAt(') !== false,
+                'markSent watermark'   => strpos($ecfg, 'function markSent('),
+                'schedule modes'       => strpos($ecfg, 'MODES'),
+                'worker enqueue'       => strpos($ew, 'enqueueDigest'),
+                'send-now action'      => strpos($ecCtrl, 'function sendNow('),
+                'send-now route'       => strpos($routesSrc, '/admin/emailer/send-now'),
+                'digest test route'    => strpos($routesSrc, "'/admin/emailer/test'"),
+            ];
+            $left = array_keys(array_filter($dead));
+
+            return $left === []
+                ? $ok('no digest scheduling, sampling or blast left')
+                : $bad('the digest must stay removed; still present: ' . implode(', ', $left));
         });
-        $add('smoke.email.config_timezone', 'Smoke · Emailer', 'EmailerConfig evaluates the schedule in the site timezone', static function () use ($ecfg, $ok, $bad): array {
-            return strpos($ecfg, 'DateTimeImmutable') !== false && strpos($ecfg, 'setTimezone') !== false
-                && strpos($ecfg, 'SiteConfig::timezone()') !== false
-                && strpos($ecfg, 'DateTimeZone::listIdentifiers()') !== false
-                ? $ok('schedule runs on the site-wide timezone')
-                : $bad('EmailerConfig::timezone() must delegate to the site-wide SiteConfig::timezone() (no emailer-specific zone)');
+
+        $add('smoke.email.kind_column', 'Smoke · Emailer', 'email_queue.kind separates the broadcasts from transactional mail', static function () use ($schema, $eq, $ok, $bad): array {
+            return preg_match('/kind\s+VARCHAR\(30\)/', $schema) === 1
+                && strpos($schema, 'idx_email_queue_kind') !== false
+                && strpos($eq, 'function kindForFlag') !== false
+                && strpos($eq, "CAPPED_KINDS") !== false
+                ? $ok('kind + cap scoping present')
+                : $bad('email_queue must carry a kind column and EmailQueue must map notification flags to capped kinds (gallery/live)');
         });
-        $add('smoke.email.digest_templates', 'Smoke · Emailer', 'Digest renders subscriber + non-subscriber templates', static function () use ($eq, $ok, $bad): array {
-            return strpos($eq, "render_email('newsletter'") !== false && strpos($eq, "render_email('newsletter.text'") !== false
-                && strpos($eq, 'include_non_subscribers') !== false
-                ? $ok('both audiences rendered')
-                : $bad('EmailQueue::enqueueDigest must render separate subscriber/non-subscriber templates');
+
+        $add('smoke.email.cap_scoped_to_broadcasts', 'Smoke · Emailer', 'The daily cap applies to gallery/live only, never to billing or chat', static function () use ($eq, $ok, $bad): array {
+            return strpos($eq, 'private static function usersAtNotificationCap(int $cap, string $kind)') !== false
+                && strpos($eq, "in_array(\$kind, EmailerConfig::CAPPED_KINDS, true)") !== false
+                && strpos($eq, "'lifecycle'") !== false
+                && strpos($eq, 'function broadcastSentToday(') !== false
+                ? $ok('cap is per kind; lifecycle/chat exempt')
+                : $bad('the per-day cap must be scoped to the gallery/live kinds so a billing reminder cannot use up the gallery email');
         });
-        $add('smoke.email.digest_public_galleries_only', 'Smoke · Emailer', 'Digest sample never advertises a secret or scheduled gallery', static function () use ($eq, $ok, $bad): array {
-            return strpos($eq, 'is_secret = 0') !== false
-                && strpos($eq, 'emailableGallerySql') !== false
-                && strpos($eq, 'Gallery::publishedVisibleSql') !== false
-                && substr_count($eq, 'self::emailableGallerySql(') >= 4
-                ? $ok('sample + fallback are public-only')
-                : $bad('EmailQueue sample()/sampleRandomGallery() must sample only public, published, non-secret galleries (the digest links straight into them)');
+
+        $add('smoke.email.one_email_per_day_claimed_last', 'Smoke · Emailer', 'A gallery only claims its once-only marker when an email will actually be sent', static function () use ($galleryM, $liveM, $eq, $ok, $bad): array {
+            $galleryCheck = "broadcastSentToday('gallery')";
+            $liveCheck    = "broadcastSentToday('live')";
+            $galleryOrdered = strpos($galleryM, $galleryCheck) !== false
+                && strpos($galleryM, $galleryCheck) < strpos($galleryM, 'UPDATE galleries SET notified_at');
+            $liveOrdered = strpos($liveM, $liveCheck) !== false
+                && strpos($liveM, $liveCheck) < strpos($liveM, 'SET live_notified_at');
+
+            return ($galleryOrdered && $liveOrdered)
+                ? $ok('slot claimed only after the day\'s email is still available')
+                : $bad('Gallery/LiveSession must check broadcastSentToday() BEFORE claiming notified_at / live_notified_at (gallery=' . var_export($galleryOrdered, true) . ', live=' . var_export($liveOrdered, true) . ')');
         });
+
         $add('smoke.email.opt_out_filter', 'Smoke · Emailer', 'Recipients exclude opted-out accounts', static function () use ($eq, $ok, $bad): array {
             return strpos($eq, 'COALESCE(u.marketing_opt_out, 0) = 0') !== false
                 ? $ok('opt-outs filtered')
@@ -1899,27 +1915,17 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 ? $ok('helpers present')
                 : $bad('helpers.php must provide absolute_url() and render_email() for email templates');
         });
-        $add('smoke.email.sub_view', 'Smoke · Emailer', 'Newsletter HTML uses public thumb/blur + unsubscribe link', static function () use ($nlt, $ok, $bad): array {
-            return strpos($nlt, '$subscriber ? \'thumb\' : \'blur\'') !== false && strpos($nlt, 'absolute_url(') !== false
-                && strpos($nlt, '{{unsubscribe-url}}') !== false
-                ? $ok('subscriber/guest split + opt-out')
-                : $bad('views/emails/newsletter.php must show sharp thumbs to subscribers, blur to guests and carry the unsubscribe link');
-        });
-        $add('smoke.email.text_view', 'Smoke · Emailer', 'Plain-text newsletter carries the unsubscribe link', static function () use ($nltt, $ok, $bad): array {
-            return strpos($nltt, '{{unsubscribe-url}}') !== false
-                ? $ok('opt-out in text part')
-                : $bad('views/emails/newsletter.text.php must carry the unsubscribe link');
-        });
         $add('smoke.email.unsub_view', 'Smoke · Emailer', 'Unsubscribe page renders opt-out confirmation', static function () use ($unv, $ok, $bad): array {
             return strpos($unv, '$optOut') !== false && strpos($unv, '$message') !== false
                 ? $ok('confirmation page')
                 : $bad('views/unsubscribe.php must render the opt-out result and message');
         });
-        $add('smoke.email.worker', 'Smoke · Emailer', 'email_worker.php locks, enqueues when due, sends batches', static function () use ($ew, $ok, $bad): array {
-            return strpos($ew, 'flock') !== false && strpos($ew, 'EmailerConfig::due(') !== false
-                && strpos($ew, 'EmailQueue::sendDue(') !== false
-                ? $ok('worker wired')
-                : $bad('bin/email_worker.php must flock, enqueue when EmailerConfig::due() and send EmailQueue::sendDue() batches');
+        $add('smoke.email.worker', 'Smoke · Emailer', 'email_worker.php locks and delivers batches only (nothing is generated)', static function () use ($ew, $ok, $bad): array {
+            return strpos($ew, 'flock') !== false && strpos($ew, 'EmailQueue::sendDue(') !== false
+                && strpos($ew, 'enqueueDigest') === false
+                && strpos($ew, 'EmailerConfig::due(') === false
+                ? $ok('delivery pump only')
+                : $bad('bin/email_worker.php must flock and deliver EmailQueue::sendDue() batches, and must not enqueue anything itself');
         });
         $add('smoke.email.cron_entry', 'Smoke · Emailer', 'apply_cron.php installs the emailer cron job', static function () use ($acrn, $ok, $bad): array {
             return strpos($acrn, 'gallery-emailer') !== false && strpos($acrn, 'email_worker.php --once') !== false
@@ -1928,10 +1934,10 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
         });
         $add('smoke.email.routes', 'Smoke · Emailer', 'Public unsubscribe + admin emailer routes registered', static function () use ($routesSrc, $ok, $bad): array {
             return strpos($routesSrc, "'/unsubscribe'") !== false && strpos($routesSrc, '/admin/emailer/save') !== false
-                && strpos($routesSrc, '/admin/emailer/send-now') !== false && strpos($routesSrc, '/admin/emailer/test') !== false
+                && strpos($routesSrc, '/admin/emailer/test-lifecycle/{kind}') !== false
                 && strpos($routesSrc, '/admin/emailer/retry') !== false
                 ? $ok('routes present')
-                : $bad('routes.php must register public /unsubscribe and the admin emailer save/send-now/test/retry routes');
+                : $bad('routes.php must register public /unsubscribe and the admin emailer save/test-lifecycle/retry routes (and no send-now)');
         });
         $add('smoke.email.permission', 'Smoke · Emailer', 'Emailer admin gated by membership permission', static function () use ($ecCtrl, $ok, $bad): array {
             return strpos($ecCtrl, 'extends MembershipAdminController') !== false
@@ -1946,14 +1952,35 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 ? $ok('nav item gated')
                 : $bad('views/admin/layout.php must link the Emailer page behind the membership permission');
         });
-        $add('smoke.email.admin_view', 'Smoke · Emailer', 'Admin emailer view exposes settings/test/send-now/queue (site timezone, no per-emailer zone)', static function () use ($ecv, $ok, $bad): array {
-            return strpos($ecv, 'send-now') !== false && strpos($ecv, 'name="sample_count"') !== false
-                && strpos($ecv, 'name="timezone"') === false
-                && strpos($ecv, 'site timezone set on Settings') !== false
-                && strpos($ecv, 'tzdate(') !== false
-                && strpos($ecv, 'retry') !== false && strpos($ecv, 'audience') !== false
-                ? $ok('view wired; no per-emailer timezone selector')
-                : $bad('views/admin/emailer.php must expose settings, sample count, test/send-now actions and queue retry, display times via tzdate(), and have no own timezone selector');
+        $add('smoke.email.admin_view', 'Smoke · Emailer', 'Admin emailer view lists the mail types + switches + queue, no schedule', static function () use ($ecv, $ok, $bad): array {
+            $listsTypes = strpos($ecv, "Today's new gallery") !== false
+                && strpos($ecv, 'New chat reply') !== false
+                && strpos($ecv, 'Live start') !== false
+                && strpos($ecv, 'Renewal reminder (7 days before a rebill)') !== false
+                && strpos($ecv, 'Win-back') !== false;
+            $hasSwitches = strpos($ecv, 'name="enabled"') !== false
+                && strpos($ecv, 'name="lifecycle_renewal_reminders"') !== false
+                && strpos($ecv, 'name="lifecycle_winbacks"') !== false
+                && strpos($ecv, 'name="notification_daily_cap"') !== false;
+            $noSchedule = strpos($ecv, 'name="mode"') === false
+                && strpos($ecv, 'name="sample_count"') === false
+                && strpos($ecv, 'name="hour"') === false
+                && strpos($ecv, 'send-now') === false
+                && strpos($ecv, 'name="subject_subscriber"') === false;
+            $hasQueue = strpos($ecv, 'retry') !== false && strpos($ecv, 'test-lifecycle') !== false;
+
+            return ($listsTypes && $hasSwitches && $noSchedule && $hasQueue)
+                ? $ok('mail types + switches + queue, no schedule or blast')
+                : $bad('views/admin/emailer.php must list the mail types, expose the switches and queue retry, and carry no digest schedule/sample/subject controls (types=' . var_export($listsTypes, true) . ' switches=' . var_export($hasSwitches, true) . ' noSchedule=' . var_export($noSchedule, true) . ' queue=' . var_export($hasQueue, true) . ')');
+        });
+        $add('smoke.email.lifecycle_toggles', 'Smoke · Emailer', 'Renewal reminder (7 days) and win-back still fire from housekeeping', static function () use ($lcQueue, $lcHouse, $ok, $bad): array {
+            return strpos($lcQueue, 'function enqueueTx') !== false
+                && strpos($lcQueue, 'function lifecycleRecord') !== false
+                && strpos($lcQueue, 'function lifecycleAlreadySent') !== false
+                && strpos($lcHouse, 'Lifecycle::runRenewalReminders') !== false
+                && strpos($lcHouse, 'Lifecycle::runWinbacks') !== false
+                ? $ok('enqueueTx + exactly-once log + housekeeping hooks')
+                : $bad('EmailQueue must implement enqueueTx/lifecycleRecord/lifecycleAlreadySent and Housekeeping must run the renewal reminder + win-back scans');
         });
 
         // ------------------------------------------------ AI category suggestions

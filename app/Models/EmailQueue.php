@@ -3,23 +3,33 @@
 namespace App\Models;
 
 use App\Core\Database;
-use App\Models\Gallery;
 
 /**
  * Queue and dispatch engine for the auto-emailer.
  *
- * A digest is a single "small sample of the latest uploads" email sent to
- * every subscriber (sharp thumbnails + a CTA back to the gallery) and, when
- * enabled, to every registered non-subscriber (heavily blurred previews + a
- * CTA to become a member). Each recipient gets its own row in email_queue
- * carrying a snapshot of the audience-specific subject/body, so a digest can
- * never change after it was enqueued. The cron-driven worker hands "queued"
- * rows to Mailer::sendHtml() and marks them sent/failed.
+ * There is no digest any more. The periodic newsletter - a sample of the newest
+ * uploads mailed to every subscriber and free member on a schedule - was
+ * removed, so the only mail this site sends is:
  *
- * Unsubscribing: the body contains a per-audience placeholder that the worker
+ *   chat / support   a new chat reply or support answer (per member, always)
+ *   gallery          ONE email for the day a gallery is posted (broadcast)
+ *   live             the live-start broadcast (per member, always)
+ *   lifecycle        the 7-day renewal reminder, a win-back, and billing
+ *                    dunning (payment failed / past due / expired)
+ *
+ * Each row in email_queue carries the audience-specific subject/body snapshot,
+ * so an email can never change after it was enqueued. A `kind` column labels
+ * which of the above it is; only the two broadcasts (gallery, live) are subject
+ * to the per-member daily cap, so a billing reminder or a chat answer can never
+ * be dropped for want of an allowance.
+ *
+ * The cron-driven worker hands "queued" rows to Mailer::sendHtml() and marks
+ * them sent/failed.
+ *
+ * Unsubscribing: the body contains a per-recipient placeholder that the worker
  * swaps for a per-user signed /unsubscribe link (HMAC over GALLERY_MEDIA_KEY).
- * Following it sets the user's marketing_opt_out flag, filtering them out of
- * every future recipient query.
+ * Following it sets the user's marketing_opt_out flag, which filters them out
+ * of every broadcast. Billing mail bypasses it - it is account-critical.
  */
 class EmailQueue
 {
@@ -29,266 +39,29 @@ class EmailQueue
     /** How many failed delivery attempts before a row is given up on. */
     public const MAX_ATTEMPTS = 3;
 
-    /** Roles that never receive marketing mail (admins always count as members). */
+    /** Roles that never receive broadcast mail (admins always count as members). */
     private const EXCLUDED_ROLES = ['super_admin', 'admin', 'editor', 'moderator', 'viewer'];
 
     /**
-     * SQL matching a gallery that may be advertised by email: not deleted, not
-     * scheduled for the future, and not secret. The digest links straight into
-     * the gallery it samples, so a secret (or not-yet-published) gallery must
-     * never appear in the sample — members without access would get a link
-     * that 404s for them, and a secret gallery's existence would leak.
+     * The queue `kind` a member preference flag maps to. The flags name the
+     * event; the kinds name the daily-cap bucket.
      */
-    private static function emailableGallerySql(string $alias = 'g'): string
+    public static function kindForFlag(string $flagColumn): string
     {
-        return $alias . '.is_secret = 0 AND ' . Gallery::publishedVisibleSql($alias);
+        switch ($flagColumn) {
+            case 'notify_new_gallery':
+                return 'gallery';
+            case 'notify_live':
+                return 'live';
+            case 'notify_chat_reply':
+                return 'chat';
+            default:
+                return 'notification';
+        }
     }
 
     /**
-     * Members with a usable paid membership (level 1+): opted-in, non-admin
-     * accounts holding an active/cancelled subscription whose expiry (if any)
-     * is still in the future.
-     */
-    public static function subscribers(): array
-    {
-        return self::recipients(true);
-    }
-
-    /**
-     * Free members (membership level 0): opted-in, non-admin accounts with no
-     * usable subscription right now.
-     */
-    public static function nonSubscribers(): array
-    {
-        return self::recipients(false);
-    }
-
-    /**
-     * Shared recipient query. $paid true = has a usable subscription; false =
-     * has none. Classification follows the membership level alone (0 = Free),
-     * so every non-admin account lands in exactly one audience. Both sides
-     * require an active account and an explicit non-opt-out (default 0 = opted
-     * in). Email verification is not required: unverified free members still
-     * count as non-subscribers.
-     *
-     * @return array<int, array{id: int, email: string}>
-     */
-    private static function recipients(bool $paid): array
-    {
-        $excluded = implode(', ', array_map(static fn (string $r): string => "'" . $r . "'", self::EXCLUDED_ROLES));
-
-        $subscription = 'EXISTS (
-            SELECT 1 FROM subscriptions s
-            WHERE s.user_id = u.id
-              AND s.status IN (\'active\', \'cancelled\')
-              AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
-        )';
-
-        // The EXISTS/NOT EXISTS flips between the paid and free audiences.
-        $having = $paid ? $subscription : 'NOT ' . $subscription;
-
-        return Database::run(
-            "SELECT u.id, u.email
-             FROM users u
-             WHERE u.status = 'active'
-               AND COALESCE(u.marketing_opt_out, 0) = 0
-               AND u.role NOT IN ($excluded)
-               AND $having
-             ORDER BY u.id ASC",
-            []
-        )->fetchAll();
-    }
-
-    /**
-     * The newest image uploads the digest will show: images (never videos)
-     * still attached to emailable (public, published, non-secret) galleries,
-     * deduplicated per photo, each carrying one such gallery so the email can
-     * link straight to it. Photos that only live in secret or scheduled
-     * galleries are not sampled at all. The newest photo on the list anchors
-     * the "last sent" watermark, so the worker only re-mails after genuinely
-     * new uploads arrive.
-     *
-     * @return array<int, array{id: int, filename: string, created_at: string, gallery_id: int}>
-     */
-    public static function sample(int $count = 6): array
-    {
-        $count = max(1, min(EmailerConfig::MAX_SAMPLE, $count));
-
-        return Database::run(
-            "SELECT p.id, p.filename, p.created_at,
-                    (SELECT MIN(gp2.gallery_id)
-                     FROM gallery_photo gp2
-                     JOIN galleries g2 ON g2.id = gp2.gallery_id
-                     WHERE gp2.photo_id = p.id AND " . self::emailableGallerySql('g2') . ") AS gallery_id
-             FROM gallery_photo gp
-             JOIN photos p ON p.id = gp.photo_id
-             JOIN galleries g ON g.id = gp.gallery_id
-             WHERE " . self::emailableGallerySql('g') . " AND p.is_video = 0
-             GROUP BY p.id
-             ORDER BY p.created_at DESC, p.id DESC
-             LIMIT " . (int) $count,
-            []
-        )->fetchAll();
-    }
-
-    /**
-     * A random emailable gallery's image uploads, newest first, up to $count
-     * rows. Used as the fallback sample when there are no uploads newer than
-     * the last-sent watermark, so the daily digest still delivers on schedule
-     * instead of going silent whenever nothing new was uploaded.
-     *
-     * @return array<int, array{id:int, filename:string, created_at:string, gallery_id:int}>
-     */
-    public static function sampleRandomGallery(int $count = 6): array
-    {
-        $count = max(1, min(EmailerConfig::MAX_SAMPLE, $count));
-
-        $gallery = Database::run(
-            'SELECT g.id
-             FROM galleries g
-             JOIN gallery_photo gp ON gp.gallery_id = g.id
-             JOIN photos p ON p.id = gp.photo_id
-             WHERE ' . self::emailableGallerySql('g') . ' AND p.is_video = 0
-             GROUP BY g.id
-             ORDER BY RAND()
-             LIMIT 1',
-            []
-        )->fetch();
-
-        if (!$gallery) {
-            return [];
-        }
-
-        return Database::run(
-            "SELECT p.id, p.filename, p.created_at,
-                    (SELECT MIN(gp2.gallery_id)
-                     FROM gallery_photo gp2
-                     JOIN galleries g2 ON g2.id = gp2.gallery_id
-                     WHERE gp2.photo_id = p.id AND " . self::emailableGallerySql('g2') . ") AS gallery_id
-             FROM gallery_photo gp
-             JOIN photos p ON p.id = gp.photo_id
-             WHERE gp.gallery_id = ? AND p.is_video = 0
-             GROUP BY p.id
-             ORDER BY p.created_at DESC, p.id DESC
-             LIMIT " . (int) $count,
-            [(int) $gallery['id']]
-        )->fetchAll();
-    }
-
-    /**
-     * Resolve the subject line for an audience from the config, substituting
-     * the site name and the headline photo count. Falls back generically when
-     * the admin left the field blank.
-     */
-    public static function subjectFor(array $config, string $audience, int $count): string
-    {
-        $template = $audience === 'non_subscriber'
-            ? (string) ($config['subject_non_subscriber'] ?? '')
-            : (string) ($config['subject_subscriber'] ?? '');
-
-        $subject = str_replace(
-            ['{site}', '{count}'],
-            [(string) config('app.site_name'), (string) $count],
-            $template
-        );
-
-        return trim($subject) !== '' ? trim($subject) : 'New in the ' . config('app.site_name') . ' gallery';
-    }
-
-    /**
-     * Build and queue one digest for every eligible recipient, then advance
-     * the "last sent" watermark.
-     *
-     * @param array $config The validated EmailerConfig (its schedule/mode is
-     *                      not consulted here — the caller decides when this
-     *                      runs, so "Send now" reuses the same path).
-     * @param bool  $force  Send even when there is no upload newer than the
-     *                      last-sent watermark (worker "no_new_uploads" skip).
-     *
-     * @return array{ok: bool, reason?: string, audience?: array{subscriber: int, non_subscriber: int}, count?: int}
-     */
-    public static function enqueueDigest(array $config, bool $force = false): array
-    {
-        $samples = self::sample((int) ($config['sample_count'] ?? 6));
-
-        if ($samples === []) {
-            return ['ok' => false, 'reason' => 'no_sample'];
-        }
-
-        $newestId = (int) $samples[0]['id'];
-        $lastId   = (int) ($config['last_sent_photo_id'] ?? 0);
-
-        $fallback = false;
-
-        if (!$force && $lastId > 0 && $newestId <= $lastId) {
-            // No uploads newer than the last digest: fall back to a random
-            // gallery's photos so the scheduled digest still delivers instead
-            // of going quiet. The watermark is NOT advanced on a fallback, so
-            // the next tick still knows there was nothing genuinely new.
-            $fallbackSamples = self::sampleRandomGallery((int) ($config['sample_count'] ?? 6));
-            if ($fallbackSamples !== []) {
-                $samples  = $fallbackSamples;
-                $fallback = true;
-            } else {
-                return ['ok' => false, 'reason' => 'no_sample'];
-            }
-        }
-
-        $count = count($samples);
-
-        $subHtml     = render_email('newsletter', ['subscriber' => true, 'samples' => $samples, 'count' => $count]);
-        $subText     = render_email('newsletter.text', ['subscriber' => true, 'samples' => $samples, 'count' => $count]);
-        $freeHtml    = render_email('newsletter', ['subscriber' => false, 'samples' => $samples, 'count' => $count]);
-        $freeText    = render_email('newsletter.text', ['subscriber' => false, 'samples' => $samples, 'count' => $count]);
-        $subSubject  = self::subjectFor($config, 'subscriber', $count);
-        $freeSubject = self::subjectFor($config, 'non_subscriber', $count);
-
-        $rows = [];
-
-        foreach (self::subscribers() as $user) {
-            $rows[] = ['subscriber', (int) $user['id'], (string) $user['email'], $subSubject, $subHtml, $subText];
-        }
-
-        if (!empty($config['include_non_subscribers'])) {
-            foreach (self::nonSubscribers() as $user) {
-                $rows[] = ['non_subscriber', (int) $user['id'], (string) $user['email'], $freeSubject, $freeHtml, $freeText];
-            }
-        }
-
-        if ($rows === []) {
-            return ['ok' => false, 'reason' => 'no_recipients'];
-        }
-
-        self::insertRows($rows);
-
-        // Only advance the watermark when real new uploads were sampled. A
-        // fallback (random-gallery) digest keeps last_sent_photo_id untouched
-        // so the next tick can still detect genuinely new media.
-        // last_sent_at is read back as UTC by EmailerConfig::nextSendAt(), so it
-        // has to be written as UTC too. date() is the box's local time, which
-        // silently shifted the schedule by the host's UTC offset on every send.
-        $sentAtUtc = gmdate('Y-m-d H:i:s');
-
-        if ($fallback) {
-            EmailerConfig::markSent($sentAtUtc, $lastId);
-        } else {
-            EmailerConfig::markSent($sentAtUtc, $newestId);
-        }
-
-        $perAudience = ['subscriber' => 0, 'non_subscriber' => 0];
-        foreach ($rows as $row) {
-            $perAudience[$row[0]]++;
-        }
-
-        return [
-            'ok' => true,
-            'audience' => $perAudience,
-            'count' => $count,
-        ];
-    }
-
-    /**
-     * Members who have enabled a notification type (notify_new_gallery /
+     * Members who enabled a notification type (notify_new_gallery /
      * notify_live): active, non-admin accounts that have not used the global
      * marketing opt-out. Both paid and free members receive transactional
      * notifications (a new gallery / live start is relevant to everyone).
@@ -319,9 +92,13 @@ class EmailQueue
     }
 
     /**
-     * User ids that have already had their per-day notification allowance
-     * used up today. One grouped query for the whole fan-out, so publishing a
-     * gallery still costs a single read no matter how many members there are.
+     * User ids that have already had their per-day allowance for this kind used
+     * up today. One grouped query for the whole fan-out, so publishing a gallery
+     * still costs a single read no matter how many members there are.
+     *
+     * Scoped to the capped broadcast kinds only: counting every "notification"
+     * row let a billing reminder or a chat answer consume a member's one
+     * allowance and silently drop the day's gallery email.
      *
      * The day boundary is MySQL's own CURDATE(), i.e. exactly the day the queue
      * table itself shows - the admin reading "sent today" sees the same count
@@ -329,21 +106,21 @@ class EmailQueue
      *
      * @return array<int, true> keyed by user id
      */
-    private static function usersAtNotificationCap(int $cap): array
+    private static function usersAtNotificationCap(int $cap, string $kind): array
     {
-        if ($cap <= 0) {
-            return []; // 0 = unlimited
+        if ($cap <= 0 || !in_array($kind, EmailerConfig::CAPPED_KINDS, true)) {
+            return []; // 0 = unlimited, and transactional kinds are never capped
         }
 
         $rows = Database::run(
             "SELECT user_id
              FROM email_queue
-             WHERE audience = 'notification'
+             WHERE kind = ?
                AND user_id IS NOT NULL
                AND DATE(created_at) = CURDATE()
              GROUP BY user_id
              HAVING COUNT(*) >= ?",
-            [$cap]
+            [$kind, $cap]
         )->fetchAll();
 
         $out = [];
@@ -355,33 +132,56 @@ class EmailQueue
     }
 
     /**
-     * Queue a transactional notification (audience = 'notification') to every
-     * member who enabled the given type. The body carries the per-recipient
-     * {{unsubscribe-url}} placeholder like the digest, so opting out of
-     * marketing mail also stops these. Returns the number of recipients.
+     * Whether any broadcast of this kind has already been queued today.
      *
-     * Capped per recipient per day. The only guard used to be "one email per
-     * gallery" (galleries.notified_at), so a day with several publications sent
-     * every member one email each: on 2026-09-28 that was 266 emails to 15
-     * people. The cap keeps the first notification of the day and drops the
-     * rest, which is the difference between one or two emails a day per member
-     * and an unbounded burst. A cap of 0 restores unlimited fan-out.
+     * The caller (gallery publish / live start) uses this BEFORE claiming its
+     * once-only marker. Claiming first and being dropped by the cap afterwards
+     * consumed the marker, so the item was never emailed at all - a second
+     * gallery published the same day was silently swallowed forever.
+     */
+    public static function broadcastSentToday(string $kind): bool
+    {
+        if (!in_array($kind, EmailerConfig::CAPPED_KINDS, true)) {
+            return false;
+        }
+
+        return (int) Database::run(
+            'SELECT COUNT(*) FROM email_queue WHERE kind = ? AND DATE(created_at) = CURDATE()',
+            [$kind]
+        )->fetchColumn() > 0;
+    }
+
+    /**
+     * Queue a broadcast notification (gallery / live) to every member who
+     * enabled the given type. The body carries the per-recipient
+     * {{unsubscribe-url}} placeholder, so opting out of marketing mail also
+     * stops these. Returns the number of recipients.
+     *
+     * Capped per recipient per day, per kind. At the default of 1 a member gets
+     * ONE email for the day a gallery is posted - not one per gallery, which is
+     * what happened on 2026-09-28: 266 emails to 15 people. Chat/support and
+     * billing mail are exempt. A cap of 0 restores unlimited fan-out.
      */
     public static function enqueueNotification(string $flagColumn, string $subject, string $html, string $text): int
     {
+        if (!EmailerConfig::broadcastsEnabled()) {
+            return 0;
+        }
+
         $recipients = self::notificationRecipients($flagColumn);
         if ($recipients === []) {
             return 0;
         }
 
-        $atCap = self::usersAtNotificationCap(self::notificationDailyCap());
+        $kind  = self::kindForFlag($flagColumn);
+        $atCap = self::usersAtNotificationCap(self::notificationDailyCap(), $kind);
 
         $rows = [];
         foreach ($recipients as $user) {
             if (isset($atCap[$user['id']])) {
                 continue;
             }
-            $rows[] = ['notification', $user['id'], $user['email'], $subject, $html, $text];
+            $rows[] = ['notification', $kind, $user['id'], $user['email'], $subject, $html, $text];
         }
 
         if ($rows === []) {
@@ -394,7 +194,8 @@ class EmailQueue
     }
 
     /**
-     * How many notification emails a single member may receive per day.
+     * How many broadcast emails a single member may receive per day, per kind.
+     * Chat, support and billing mail are never subject to this.
      */
     public static function notificationDailyCap(): int
     {
@@ -429,7 +230,17 @@ class EmailQueue
             return 0;
         }
 
-        self::insertRows([['notification', (int) $row['id'], (string) $row['email'], $subject, $html, $text]]);
+        $kind = self::kindForFlag($flagColumn);
+
+        // A broadcast kind still counts against the member's daily allowance.
+        if (in_array($kind, EmailerConfig::CAPPED_KINDS, true)) {
+            $atCap = self::usersAtNotificationCap(self::notificationDailyCap(), $kind);
+            if (isset($atCap[(int) $row['id']])) {
+                return 0;
+            }
+        }
+
+        self::insertRows([['notification', $kind, (int) $row['id'], (string) $row['email'], $subject, $html, $text]]);
 
         return 1;
     }
@@ -486,15 +297,15 @@ class EmailQueue
 
         if ($scheduledAt !== null && $scheduledAt !== '') {
             Database::run(
-                'INSERT INTO email_queue (audience, user_id, email, subject, html_body, text_body, scheduled_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)',
-                ['notification', $userId, $email, $subject, $html, $text, $scheduledAt]
+                'INSERT INTO email_queue (audience, kind, user_id, email, subject, html_body, text_body, scheduled_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                ['notification', 'lifecycle', $userId, $email, $subject, $html, $text, $scheduledAt]
             );
         } else {
             Database::run(
-                'INSERT INTO email_queue (audience, user_id, email, subject, html_body, text_body)
-                 VALUES (?, ?, ?, ?, ?, ?)',
-                ['notification', $userId, $email, $subject, $html, $text]
+                'INSERT INTO email_queue (audience, kind, user_id, email, subject, html_body, text_body)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)',
+                ['notification', 'lifecycle', $userId, $email, $subject, $html, $text]
             );
         }
 
@@ -550,17 +361,17 @@ class EmailQueue
      * Batch-insert queued rows 200 at a time so even a large mailing stays
      * inside a single prepared statement.
      *
-     * @param array<int, array{0: string, 1: int, 2: string, 3: string, 4: string, 5: string}> $rows
+     * @param array<int, array{0: string, 1: string, 2: int, 3: string, 4: string, 5: string, 6: string}> $rows
      */
     private static function insertRows(array $rows): void
     {
-        $columns = '(audience, user_id, email, subject, html_body, text_body)';
+        $columns = '(audience, kind, user_id, email, subject, html_body, text_body)';
 
         foreach (array_chunk($rows, 200) as $chunk) {
             $values  = [];
             $params  = [];
             foreach ($chunk as $row) {
-                $values[] = '(?, ?, ?, ?, ?, ?)';
+                $values[] = '(?, ?, ?, ?, ?, ?, ?)';
                 foreach ($row as $value) {
                     $params[] = $value;
                 }
@@ -731,6 +542,23 @@ class EmailQueue
     }
 
     /**
+     * Counts by kind for the admin page, so the operator can see exactly what
+     * is being mailed and how often.
+     *
+     * @return array<string,int>
+     */
+    public static function kindCounts(): array
+    {
+        $out = [];
+
+        foreach (Database::run('SELECT kind, COUNT(*) AS c FROM email_queue GROUP BY kind')->fetchAll() as $row) {
+            $out[(string) $row['kind']] = (int) $row['c'];
+        }
+
+        return $out;
+    }
+
+    /**
      * The most recent queue rows, newest first, for the admin list.
      */
     public static function recent(int $limit = 50): array
@@ -805,8 +633,9 @@ class EmailQueue
     }
 
     /**
-     * Opt a user out of all marketing email. Returns true when an account was
-     * updated.
+     * Opt a user out of marketing email (the gallery + live broadcasts).
+     * Returns true when an account was updated. Chat/support and billing mail
+     * are unaffected - those are transactional or account-critical.
      */
     public static function optOut(int $userId): bool
     {

@@ -124,12 +124,33 @@ class Gallery
 
     /**
      * Email members who enabled notify_new_gallery that a gallery has gone
-     * live, exactly once per gallery (guarded by galleries.notified_at).
-     * Safe to call from publishNow and the housekeeping sweep; a gallery
-     * already notified is skipped.
+     * live: ONE email for the day, never one per gallery. Safe to call from
+     * publishNow and the housekeeping sweep.
+     *
+     * The order matters. This used to claim galleries.notified_at first and only
+     * then discover the recipients' daily allowance was spent, so a second
+     * gallery published the same day consumed its marker without an email ever
+     * being queued - it was silently swallowed for good. Checking first means a
+     * gallery that is not the day's email stays un-emailed but also unmarked,
+     * and still gets its in-app announcement below.
      */
     public static function notifyNewGalleryIfUnsent(int $galleryId): void
     {
+        $gallery = Database::run(
+            'SELECT id, title, description, is_secret, notified_at FROM galleries WHERE id = ?',
+            [$galleryId]
+        )->fetch();
+
+        if ($gallery === false || $gallery['notified_at'] !== null) {
+            return; // gone, or this gallery was already announced
+        }
+
+        // One gallery email a day: if the day's slot is already taken, do not
+        // burn this gallery's marker on an email that will not be sent.
+        if (\App\Models\EmailQueue::broadcastSentToday('gallery')) {
+            return;
+        }
+
         $claimed = Database::run(
             'UPDATE galleries SET notified_at = CURRENT_TIMESTAMP
              WHERE id = ? AND notified_at IS NULL',
@@ -137,16 +158,7 @@ class Gallery
         );
 
         if ((int) $claimed->rowCount() !== 1) {
-            return; // already notified (or a concurrent run won the race)
-        }
-
-        $gallery = Database::run(
-            'SELECT id, title, description, is_secret FROM galleries WHERE id = ?',
-            [$galleryId]
-        )->fetch();
-
-        if ($gallery === false) {
-            return;
+            return; // a concurrent run won the race
         }
 
         $subject = 'New gallery: ' . mb_substr((string) $gallery['title'], 0, 120);
@@ -156,7 +168,8 @@ class Gallery
         \App\Models\EmailQueue::enqueueNotification('notify_new_gallery', $subject, $html, $text);
 
         // In-app fan-out for public galleries so the bell icon is meaningful.
-        // Secret galleries are never broadcast (the title would leak).
+        // Secret galleries are never broadcast (the title would leak). Every
+        // gallery gets this, whether or not it won the day's email slot.
         if (empty($gallery['is_secret'])) {
             \App\Models\Notification::broadcastToMembers(
                 'gallery',

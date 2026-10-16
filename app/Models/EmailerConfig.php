@@ -2,32 +2,34 @@
 
 namespace App\Models;
 
-use DateTimeImmutable;
-use DateTimeZone;
-
 /**
- * Persists the auto-emailer (newsletter digest) configuration in a JSON file
- * under storage/ (gitignored), mirroring the AutoPosterConfig convention.
+ * Persists the auto-emailer configuration in a JSON file under storage/
+ * (gitignored), mirroring the AutoPosterConfig convention.
  *
- * The schedule is defined by a mode plus a wall-clock time in a chosen
- * timezone:
- *   - hourly:  every N hours
- *   - daily:   every day at HH:MM
- *   - weekly:  every day-of-week at HH:MM
- * Runtime state (last_sent_at, last_sent_photo_id) lives in the same file so
- * the cron-driven worker can tell when a new digest is due and only sends
- * when there is genuinely new media to sample.
+ * The emailer no longer runs a schedule. It used to mail a periodic digest of
+ * the newest uploads to every member on a wall-clock timer; that is gone, and
+ * what is left is event-driven only:
+ *   - a new chat reply or support notification,
+ *   - one email for the day a gallery is posted,
+ *   - the live-start broadcast,
+ *   - a renewal reminder 7 days before a rebill,
+ *   - a win-back to a lapsed member,
+ *   - billing dunning (payment failed / past due / expired), which is
+ *     account-critical and always sent.
+ *
+ * So this class is down to the switches and the one remaining limit: how many
+ * broadcast emails a single member may receive per day, per kind.
  */
 class EmailerConfig
 {
     /** Relative path (from the app root) to the JSON config file. */
     private const FILE = '/storage/emailer.json';
 
-    /** Supported schedule modes. */
-    public const MODES = ['hourly', 'daily', 'weekly'];
-
-    /** How large a single "small sample" of the latest uploads may be. */
-    public const MAX_SAMPLE = 12;
+    /**
+     * Broadcast kinds that share the per-member daily allowance. Chat, support
+     * and billing mail are transactional and are never capped.
+     */
+    public const CAPPED_KINDS = ['gallery', 'live'];
 
     /**
      * The config file's absolute path.
@@ -38,209 +40,83 @@ class EmailerConfig
     }
 
     /**
-     * The defaults every config starts from (and individual fields fall back
-     * to when the stored file is missing, invalid or missing a key).
+     * Defaults every config starts from (and individual fields fall back to
+     * when the stored file is missing, invalid or missing a key).
+     *
+     * `enabled` is the master switch for the two broadcast emails (new gallery,
+     * live start). Chat/support, renewal reminders, win-backs and dunning are
+     * transactional and are not gated by it.
      */
     public static function defaults(): array
     {
         return [
-            'enabled'                => false,
-            'mode'                   => 'daily',
-            'every_hours'            => 6,
-            'day_of_week'            => 1,
-            'hour'                   => 9,
-            'minute'                 => 0,
-            'timezone'               => 'UTC',
-            'sample_count'           => 6,
-            'include_non_subscribers'=> true,
-            'subject_subscriber'     => 'New in the {site} gallery — {count} fresh uploads',
-            'subject_non_subscriber' => 'A blurred peek at what\'s new on {site}',
+            'enabled'                     => false,
             'lifecycle_renewal_reminders' => true,
             'lifecycle_winbacks'          => true,
-            // Notification emails (new gallery / live) per member per day.
-            // 1 keeps a member at one digest + one notification = at most
-            // two emails a day; 0 disables the cap entirely.
-            'notification_daily_cap'     => 1,
-            'last_sent_at'           => null,
-            'last_sent_photo_id'     => 0,
+            // Per member, per capped kind, per day. 1 means "one email when
+            // today's new gallery is posted" and one live notice a day.
+            'notification_daily_cap'      => 1,
         ];
     }
 
     /**
-     * Load the saved config, normalising every field so a stale or hand-edited
-     * file can never poison the schedule or the worker.
+     * Load the saved config, normalising every field. Unknown keys left over
+     * from the retired digest schedule (mode/hour/sample_count/subjects/…) are
+     * ignored here and dropped on the next save, so an old file can never
+     * resurrect schedule behaviour.
      */
     public static function all(): array
     {
+        $data = [];
+
         $path = self::file();
-
-        if (!is_file($path)) {
-            return self::defaults();
-        }
-
-        $data = json_decode((string) file_get_contents($path), true);
-
-        if (!is_array($data)) {
-            return self::defaults();
+        if (is_file($path)) {
+            $decoded = json_decode((string) file_get_contents($path), true);
+            if (is_array($decoded)) {
+                $data = $decoded;
+            }
         }
 
         $d = self::defaults();
 
-        $d['enabled']                 = !empty($data['enabled']);
-        $d['mode']                    = in_array((string) ($data['mode'] ?? ''), self::MODES, true) ? $data['mode'] : $d['mode'];
-        $d['every_hours']             = max(1, min(720, (int) ($data['every_hours'] ?? $d['every_hours'])));
-        $d['day_of_week']             = max(0, min(6, (int) ($data['day_of_week'] ?? $d['day_of_week'])));
-        $d['hour']                    = max(0, min(23, (int) ($data['hour'] ?? $d['hour'])));
-        $d['minute']                  = max(0, min(59, (int) ($data['minute'] ?? $d['minute'])));
-        $d['timezone']                = self::validatedTimezone((string) ($data['timezone'] ?? 'UTC'));
-        $d['sample_count']            = max(1, min(self::MAX_SAMPLE, (int) ($data['sample_count'] ?? $d['sample_count'])));
-        $d['include_non_subscribers'] = !empty($data['include_non_subscribers']);
-        $d['subject_subscriber']      = trim((string) ($data['subject_subscriber'] ?? $d['subject_subscriber']));
-        $d['subject_non_subscriber']  = trim((string) ($data['subject_non_subscriber'] ?? $d['subject_non_subscriber']));
+        $d['enabled']                     = !empty($data['enabled']);
         $d['lifecycle_renewal_reminders'] = !array_key_exists('lifecycle_renewal_reminders', $data) ? true : !empty($data['lifecycle_renewal_reminders']);
         $d['lifecycle_winbacks']          = !array_key_exists('lifecycle_winbacks', $data) ? true : !empty($data['lifecycle_winbacks']);
-        $d['notification_daily_cap']     = !array_key_exists('notification_daily_cap', $data)
+        $d['notification_daily_cap']      = !array_key_exists('notification_daily_cap', $data)
             ? $d['notification_daily_cap']
             : max(0, min(10, (int) $data['notification_daily_cap']));
-
-        $lastSent = (string) ($data['last_sent_at'] ?? '');
-        $d['last_sent_at'] = self::validatedUtcDatetime($lastSent);
-        $d['last_sent_photo_id'] = max(0, (int) ($data['last_sent_photo_id'] ?? 0));
 
         return $d;
     }
 
     /**
-     * The timezone the scheduler evaluates in. The emailer has no timezone of
-     * its own: it always runs on the site-wide timezone set on Settings, the
-     * same zone every other schedule and clock on the site uses. A stored
-     * "timezone" value is kept for compatibility but ignored for scheduling.
+     * Whether the two broadcast emails (new gallery, live start) may go out.
      */
-    public static function timezone(array $config): string
+    public static function broadcastsEnabled(): bool
+    {
+        return !empty(self::all()['enabled']);
+    }
+
+    /**
+     * Persist an admin-submitted config. Only the surviving keys are written.
+     */
+    public static function save(array $in): void
+    {
+        self::write([
+            'enabled'                     => !empty($in['enabled']),
+            'lifecycle_renewal_reminders' => !empty($in['lifecycle_renewal_reminders']),
+            'lifecycle_winbacks'          => !empty($in['lifecycle_winbacks']),
+            'notification_daily_cap'      => max(0, min(10, (int) ($in['notification_daily_cap'] ?? 1))),
+        ]);
+    }
+
+    /**
+     * Validate a PHP IANA timezone identifier, defaulting to UTC. Kept because
+     * Housekeeping and the admin page read the site timezone through here.
+     */
+    public static function timezone(array $config = []): string
     {
         return SiteConfig::timezone();
-    }
-
-    /**
-     * Persist an admin-submitted config. Preserves runtime state
-     * (last_sent_at / last_sent_photo_id) across saves.
-     */
-    public static function save(array $in, string $timezone = 'UTC'): void
-    {
-        $current = self::all();
-        $d       = self::defaults();
-
-        $d['enabled']                 = !empty($in['enabled']);
-        $d['mode']                    = in_array((string) ($in['mode'] ?? ''), self::MODES, true) ? (string) $in['mode'] : 'daily';
-        $d['every_hours']             = max(1, min(720, (int) ($in['every_hours'] ?? 6)));
-        $d['day_of_week']             = max(0, min(6, (int) ($in['day_of_week'] ?? 1)));
-        $d['hour']                    = max(0, min(23, (int) ($in['hour'] ?? 9)));
-        $d['minute']                  = max(0, min(59, (int) ($in['minute'] ?? 0)));
-        $d['timezone']                = SiteConfig::timezone();
-        $d['sample_count']            = max(1, min(self::MAX_SAMPLE, (int) ($in['sample_count'] ?? 6)));
-        $d['include_non_subscribers'] = !empty($in['include_non_subscribers']);
-        $d['subject_subscriber']      = trim((string) ($in['subject_subscriber'] ?? ''));
-        $d['subject_non_subscriber']  = trim((string) ($in['subject_non_subscriber'] ?? ''));
-        $d['lifecycle_renewal_reminders'] = !empty($in['lifecycle_renewal_reminders']);
-        $d['lifecycle_winbacks']          = !empty($in['lifecycle_winbacks']);
-        $d['notification_daily_cap']     = max(0, min(10, (int) ($in['notification_daily_cap'] ?? 1)));
-        $d['last_sent_at']            = $current['last_sent_at'];
-        $d['last_sent_photo_id']      = $current['last_sent_photo_id'];
-
-        self::write($d);
-    }
-
-    /**
-     * Record that a digest was generated "now". $newestPhotoId is the id of
-     * the newest photo the digest sampled, so the worker can skip re-sending
-     * until a new upload arrives.
-     */
-    public static function markSent(string $utcNow, int $newestPhotoId): void
-    {
-        $config = self::all();
-        $config['last_sent_at']       = self::validatedUtcDatetime($utcNow);
-        $config['last_sent_photo_id'] = max(0, $newestPhotoId);
-        self::write($config);
-    }
-
-    /**
-     * The next time a digest is scheduled, expressed in the configured
-     * timezone. Never returns a time in the past when the config's clock
-     * fields move backwards: the first candidate strictly after the last send
-     * (or after now when nothing was ever sent) is returned.
-     */
-    public static function nextSendAt(array $config, ?DateTimeZone $tz = null): DateTimeImmutable
-    {
-        $tz = $tz ?? new DateTimeZone(self::timezone($config));
-
-        $last = $config['last_sent_at'];
-        $base = is_string($last) && $last !== ''
-            ? (new DateTimeImmutable($last, new DateTimeZone('UTC')))->setTimezone($tz)
-            : new DateTimeImmutable('now', $tz);
-
-        if ($config['mode'] === 'hourly') {
-            return $base->modify('+' . max(1, (int) $config['every_hours']) . ' hours');
-        }
-
-        $next = $base->setTime((int) $config['hour'], (int) $config['minute']);
-        if ($next <= $base) {
-            $next = $next->modify('+1 day');
-        }
-
-        if ($config['mode'] === 'weekly') {
-            $dow = (int) $config['day_of_week'];
-            while ((int) $next->format('w') !== $dow) {
-                $next = $next->modify('+1 day');
-            }
-        }
-
-        return $next;
-    }
-
-    /**
-     * Whether a digest is due right now, according to the schedule in the
-     * configured timezone. Disabled configs are never due.
-     */
-    public static function due(array $config, ?DateTimeImmutable $now = null): bool
-    {
-        if (empty($config['enabled'])) {
-            return false;
-        }
-
-        $tz  = new DateTimeZone(self::timezone($config));
-        $now = $now ?? new DateTimeImmutable('now', $tz);
-
-        return $now >= self::nextSendAt($config, $tz);
-    }
-
-    /**
-     * Validate a PHP IANA timezone identifier, defaulting to UTC.
-     */
-    public static function validatedTimezone(string $timezone): string
-    {
-        if ($timezone !== '' && in_array($timezone, DateTimeZone::listIdentifiers(), true)) {
-            return $timezone;
-        }
-
-        return 'UTC';
-    }
-
-    /**
-     * Normalise a stored last_sent_at value to a UTC 'Y-m-d H:i:s' string
-     * (or null when blank/invalid).
-     */
-    private static function validatedUtcDatetime(string $value): ?string
-    {
-        if ($value === '') {
-            return null;
-        }
-
-        try {
-            $dt = new DateTimeImmutable($value, new DateTimeZone('UTC'));
-            return $dt->format('Y-m-d H:i:s');
-        } catch (\Throwable $ex) {
-            return null;
-        }
     }
 
     /**
