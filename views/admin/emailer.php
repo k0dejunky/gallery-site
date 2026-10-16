@@ -148,6 +148,16 @@ switch ($config['mode'] ?? 'daily') {
         </p>
 
         <p>
+            <label for="notification_daily_cap">Notification emails per member per day</label><br>
+            <input type="number" name="notification_daily_cap" id="notification_daily_cap" min="0" max="10" value="<?= (int) ($config['notification_daily_cap'] ?? 1) ?>" style="width:120px;">
+        </p>
+        <p class="muted" style="font-size:.8rem;">
+            New-gallery and live-start notifications used to be limited to one per gallery only, so a day with several publications sent
+            every member one email each. This cap keeps the first notification of the day and drops the rest. At <code>1</code> a member
+            receives at most one digest plus one notification — two emails a day. Set <code>0</code> to remove the cap.
+        </p>
+
+        <p>
             <label for="subject_subscriber">Subscriber subject <span class="muted">(<code>{site}</code>, <code>{count}</code>)</span></label><br>
             <input type="text" name="subject_subscriber" id="subject_subscriber" value="<?= e((string) ($config['subject_subscriber'] ?? '')) ?>" maxlength="200" style="width:100%;box-sizing:border-box;">
         </p>

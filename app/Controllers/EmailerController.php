@@ -66,6 +66,7 @@ class EmailerController extends MembershipAdminController
             'subject_non_subscriber'  => (string) $this->request->post('subject_non_subscriber', ''),
             'lifecycle_renewal_reminders' => $this->request->post('lifecycle_renewal_reminders') !== null,
             'lifecycle_winbacks'          => $this->request->post('lifecycle_winbacks') !== null,
+            'notification_daily_cap'     => (int) $this->request->post('notification_daily_cap', 1),
         ]);
 
         $this->flash('success', 'Emailer settings saved.');

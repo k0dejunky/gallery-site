@@ -513,6 +513,78 @@ class TestSuite
             }
         });
 
+        $add('db.email_notification_daily_cap', 'Database', 'A member gets at most one notification email per day', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: no CURDATE() to cap on'];
+                }
+
+                // The 2026-09-28 burst was 266 new-gallery emails to 15 members
+                // because the only guard was per gallery, not per day. Prove the
+                // per-day cap holds: the first notification goes out, the second
+                // on the same day is dropped, and the cap is per recipient.
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                $email = 'captest+' . bin2hex(random_bytes(4)) . '@example.invalid';
+                $now   = date('Y-m-d H:i:s');
+
+                try {
+                    Database::run(
+                        "INSERT INTO users (email, password_hash, role, status, notify_new_gallery, created_at)
+                         VALUES (?, 'x', 'user', 'active', 1, ?)",
+                        [$email, $now]
+                    );
+                    $userId = (int) Database::connection()->lastInsertId();
+
+                    $first = \App\Models\EmailQueue::enqueueNotification(
+                        'notify_new_gallery',
+                        'Cap test one',
+                        '<p>one</p>',
+                        'one'
+                    );
+
+                    // Same day, second gallery: this is the 2026-09-28 case.
+                    $second = \App\Models\EmailQueue::enqueueNotification(
+                        'notify_new_gallery',
+                        'Cap test two',
+                        '<p>two</p>',
+                        'two'
+                    );
+
+                    $rows = (int) Database::run(
+                        'SELECT COUNT(*) FROM email_queue
+                         WHERE user_id = ? AND audience = \'notification\' AND DATE(created_at) = CURDATE()',
+                        [$userId]
+                    )->fetchColumn();
+
+                    $cap = \App\Models\EmailQueue::notificationDailyCap();
+
+                    // $first/$second are whole-audience counts (a live box has
+                    // other opted-in members), so the assertion is per member:
+                    // this user is reached on the first call and never again
+                    // that day.
+                    return [
+                        'pass'   => $first >= 1 && $second === 0 && $rows === 1,
+                        'detail' => 'cap=' . $cap . ', fanout ' . $first . ' then ' . $second . ', this member rows today=' . $rows,
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                    try {
+                        Database::run('DELETE FROM users WHERE email = ?', [$email]);
+                    } catch (\Throwable $ignored) {
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.autopost_claim', 'Database', 'Auto-poster claim executes (single-table UPDATE, secret guard)', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) === 'mysql') {

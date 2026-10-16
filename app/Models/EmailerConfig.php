@@ -57,6 +57,10 @@ class EmailerConfig
             'subject_non_subscriber' => 'A blurred peek at what\'s new on {site}',
             'lifecycle_renewal_reminders' => true,
             'lifecycle_winbacks'          => true,
+            // Notification emails (new gallery / live) per member per day.
+            // 1 keeps a member at one digest + one notification = at most
+            // two emails a day; 0 disables the cap entirely.
+            'notification_daily_cap'     => 1,
             'last_sent_at'           => null,
             'last_sent_photo_id'     => 0,
         ];
@@ -95,6 +99,9 @@ class EmailerConfig
         $d['subject_non_subscriber']  = trim((string) ($data['subject_non_subscriber'] ?? $d['subject_non_subscriber']));
         $d['lifecycle_renewal_reminders'] = !array_key_exists('lifecycle_renewal_reminders', $data) ? true : !empty($data['lifecycle_renewal_reminders']);
         $d['lifecycle_winbacks']          = !array_key_exists('lifecycle_winbacks', $data) ? true : !empty($data['lifecycle_winbacks']);
+        $d['notification_daily_cap']     = !array_key_exists('notification_daily_cap', $data)
+            ? $d['notification_daily_cap']
+            : max(0, min(10, (int) $data['notification_daily_cap']));
 
         $lastSent = (string) ($data['last_sent_at'] ?? '');
         $d['last_sent_at'] = self::validatedUtcDatetime($lastSent);
@@ -136,6 +143,7 @@ class EmailerConfig
         $d['subject_non_subscriber']  = trim((string) ($in['subject_non_subscriber'] ?? ''));
         $d['lifecycle_renewal_reminders'] = !empty($in['lifecycle_renewal_reminders']);
         $d['lifecycle_winbacks']          = !empty($in['lifecycle_winbacks']);
+        $d['notification_daily_cap']     = max(0, min(10, (int) ($in['notification_daily_cap'] ?? 1)));
         $d['last_sent_at']            = $current['last_sent_at'];
         $d['last_sent_photo_id']      = $current['last_sent_photo_id'];
 

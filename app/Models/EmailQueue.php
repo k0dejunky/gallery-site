@@ -319,10 +319,53 @@ class EmailQueue
     }
 
     /**
+     * User ids that have already had their per-day notification allowance
+     * used up today. One grouped query for the whole fan-out, so publishing a
+     * gallery still costs a single read no matter how many members there are.
+     *
+     * The day boundary is MySQL's own CURDATE(), i.e. exactly the day the queue
+     * table itself shows - the admin reading "sent today" sees the same count
+     * the cap is enforcing.
+     *
+     * @return array<int, true> keyed by user id
+     */
+    private static function usersAtNotificationCap(int $cap): array
+    {
+        if ($cap <= 0) {
+            return []; // 0 = unlimited
+        }
+
+        $rows = Database::run(
+            "SELECT user_id
+             FROM email_queue
+             WHERE audience = 'notification'
+               AND user_id IS NOT NULL
+               AND DATE(created_at) = CURDATE()
+             GROUP BY user_id
+             HAVING COUNT(*) >= ?",
+            [$cap]
+        )->fetchAll();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row['user_id']] = true;
+        }
+
+        return $out;
+    }
+
+    /**
      * Queue a transactional notification (audience = 'notification') to every
      * member who enabled the given type. The body carries the per-recipient
      * {{unsubscribe-url}} placeholder like the digest, so opting out of
      * marketing mail also stops these. Returns the number of recipients.
+     *
+     * Capped per recipient per day. The only guard used to be "one email per
+     * gallery" (galleries.notified_at), so a day with several publications sent
+     * every member one email each: on 2026-09-28 that was 266 emails to 15
+     * people. The cap keeps the first notification of the day and drops the
+     * rest, which is the difference between one or two emails a day per member
+     * and an unbounded burst. A cap of 0 restores unlimited fan-out.
      */
     public static function enqueueNotification(string $flagColumn, string $subject, string $html, string $text): int
     {
@@ -331,14 +374,33 @@ class EmailQueue
             return 0;
         }
 
+        $atCap = self::usersAtNotificationCap(self::notificationDailyCap());
+
         $rows = [];
         foreach ($recipients as $user) {
+            if (isset($atCap[$user['id']])) {
+                continue;
+            }
             $rows[] = ['notification', $user['id'], $user['email'], $subject, $html, $text];
+        }
+
+        if ($rows === []) {
+            return 0;
         }
 
         self::insertRows($rows);
 
         return count($rows);
+    }
+
+    /**
+     * How many notification emails a single member may receive per day.
+     */
+    public static function notificationDailyCap(): int
+    {
+        $cap = (int) (EmailerConfig::all()['notification_daily_cap'] ?? 1);
+
+        return max(0, min(10, $cap));
     }
 
     /**
