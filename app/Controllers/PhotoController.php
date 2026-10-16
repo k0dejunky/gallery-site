@@ -308,6 +308,271 @@ class PhotoController extends Controller
     }
 
     /**
+     * Stream a JPEG sample of what the watermark looks like on one piece of
+     * media in this gallery, so it can be approved before the whole gallery is
+     * processed. The original is never touched: images are watermarked into a
+     * temp file, videos are sampled at the 1s mark into a frame that is then
+     * watermarked with the same GD path. ?photo= picks the sample media;
+     * without it the gallery's first media is used.
+     */
+    public function watermarkSample(int $galleryId): void
+    {
+        $gallery = Gallery::find($galleryId);
+
+        if ($gallery === null) {
+            $this->notFound();
+            return;
+        }
+
+        $logoPath = watermark_logo_path();
+
+        if ($logoPath === null) {
+            http_response_code(422);
+            header('Content-Type: text/plain');
+            echo 'The site title image could not be read. Upload one under Admin > Theme first.';
+            return;
+        }
+
+        $config = config('app.uploads');
+
+        $photoId = (int) $this->request->query('photo', '0');
+        $photo   = $photoId > 0 ? Photo::find($photoId) : null;
+
+        if ($photo !== null && Photo::firstGalleryId((int) $photo['id']) !== $galleryId) {
+            $photo = null;
+        }
+
+        if ($photo === null) {
+            $photos = Gallery::photos($galleryId);
+            $photo  = $photos[0] ?? null;
+        }
+
+        if ($photo === null) {
+            http_response_code(404);
+            header('Content-Type: text/plain');
+            echo 'This gallery has no media to sample.';
+            return;
+        }
+
+        $path = $config['dir'] . '/' . $photo['filename'];
+
+        if (!is_file($path)) {
+            http_response_code(404);
+            header('Content-Type: text/plain');
+            echo 'Media file not found.';
+            return;
+        }
+
+        $tmp = gallery_temp_dir() . '/wm_sample_' . bin2hex(random_bytes(8)) . '.jpg';
+        $ok  = false;
+
+        try {
+            if (is_video($photo['filename'])) {
+                // Grab a frame at the source aspect ratio, then watermark the
+                // frame - the same geometry/opacity the burn uses.
+                $probe = [];
+                $rc    = 0;
+                @exec(
+                    escapeshellarg('/usr/bin/ffprobe') . ' -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 '
+                    . escapeshellarg($path) . ' 2>/dev/null',
+                    $probe,
+                    $rc
+                );
+
+                $sw = 800;
+                $sh = 450;
+                if ($rc === 0 && isset($probe[0]) && strpos($probe[0], ',') !== false) {
+                    [$vw, $vh] = array_map('intval', explode(',', (string) $probe[0]));
+                    if ($vw > 0 && $vh > 0) {
+                        $ratio = $vh / $vw;
+                        $sw    = 800;
+                        $sh    = max(2, (int) round(800 * $ratio / 2) * 2);
+                    }
+                }
+
+                $ok = create_video_frame($path, $tmp, $sw, $sh, 1);
+
+                if ($ok) {
+                    $ok = ImageEditor::watermarkLogo($tmp, $logoPath, $tmp);
+                }
+            } else {
+                $ok = ImageEditor::watermarkLogo($path, $logoPath, $tmp);
+            }
+        } catch (\Throwable $error) {
+            error_log('[photo-edit] watermark sample failed: ' . $error->getMessage());
+            $ok = false;
+        }
+
+        if (!$ok || !is_file($tmp)) {
+            @unlink($tmp);
+            http_response_code(500);
+            header('Content-Type: text/plain');
+            echo 'Could not render the watermark sample.';
+            return;
+        }
+
+        header('Content-Type: image/jpeg');
+        header('Cache-Control: private, max-age=30');
+        readfile($tmp);
+        @unlink($tmp);
+    }
+
+    /**
+     * Queue a watermark job for one gallery: the selected media, or every item
+     * in the gallery when 'scope' is 'all'. Processing happens in the
+     * supervised background worker (videos have to be re-encoded, which is far
+     * too slow for an HTTP request).
+     */
+    public function bulkWatermark(int $galleryId): void
+    {
+        $gallery = Gallery::find($galleryId);
+
+        if ($gallery === null) {
+            $this->notFound();
+            return;
+        }
+
+        if (watermark_logo_path() === null) {
+            $this->flash('error', 'The site title image is missing. Upload one under Admin > Theme before watermarking.');
+            $this->redirect('/admin/galleries/' . $galleryId);
+        }
+
+        // Accept both the bulk toolbar's repeated photo_ids[] inputs and the
+        // watermark dialog's comma-joined hidden field.
+        $rawIds = $this->request->post('photo_ids', []);
+
+        if (is_string($rawIds)) {
+            $rawIds = explode(',', $rawIds);
+        }
+
+        $selected = array_values(array_filter(array_unique(array_map(
+            'intval',
+            is_array($rawIds) ? $rawIds : []
+        )), static fn (int $id): bool => $id > 0));
+
+        if ($selected === [] && (string) $this->request->post('scope', '') === 'all') {
+            $selected = array_map(
+                static fn (array $photo): int => (int) $photo['id'],
+                Gallery::photos($galleryId)
+            );
+        }
+
+        if ($selected === []) {
+            $this->flash('error', 'Select at least one photo or video to watermark.');
+            $this->redirect('/admin/galleries/' . $galleryId);
+        }
+
+        $userId = (int) Auth::user()['id'];
+        $jobId  = PhotoJob::createBulkWatermark($userId, $galleryId, $selected);
+
+        AuditLog::record(
+            $userId,
+            'update',
+            'gallery',
+            $galleryId,
+            'Queued watermark (background job #' . $jobId . ')',
+            ['count' => count($selected)]
+        );
+
+        $this->flash('success', count($selected) . ' item' . (count($selected) === 1 ? '' : 's')
+            . ' queued for watermarking. Originals are backed up and can be restored. Processing continues in the background.');
+        $this->redirect('/admin/galleries/' . $galleryId);
+    }
+
+    /**
+     * Restore the originals taken by the last completed watermark job for this
+     * gallery. Both images and videos are restored, each media's variants are
+     * rebuilt from the restored file, and the job's backup list is cleared so a
+     * second click cannot restore stale copies twice.
+     */
+    public function watermarkUndo(int $galleryId): void
+    {
+        $gallery = Gallery::find($galleryId);
+
+        if ($gallery === null) {
+            $this->notFound();
+            return;
+        }
+
+        $job = Database::run(
+            "SELECT * FROM photo_edit_jobs WHERE gallery_id = ? AND operation = ? AND status = 'completed' AND metadata_json LIKE '%\"backups\":[{%' ORDER BY id DESC LIMIT 1",
+            [$galleryId, 'bulk_watermark']
+        )->fetch();
+
+        if (!$job) {
+            $this->flash('error', 'There is no completed watermark run to undo for this gallery.');
+            $this->redirect('/admin/galleries/' . $galleryId);
+        }
+
+        $meta    = json_decode((string) ($job['metadata_json'] ?? '{}'), true) ?: [];
+        $backups = is_array($meta['backups'] ?? null) ? $meta['backups'] : [];
+        $config  = config('app.uploads');
+        $restored = 0;
+
+        foreach ($backups as $entry) {
+            if (!is_array($entry) || !is_file((string) ($entry['path'] ?? ''))) {
+                continue;
+            }
+
+            $photo = Photo::find((int) ($entry['photo_id'] ?? 0));
+
+            if ($photo === null) {
+                continue;
+            }
+
+            $path = $config['dir'] . '/' . $photo['filename'];
+
+            // The backup IS the original: put it back over the watermarked file,
+            // then consume the backup so a repeat click can't restore again and
+            // the backups directory cannot grow without bound.
+            if (@copy((string) $entry['path'], $path)) {
+                @unlink((string) $entry['path']);
+                $restored++;
+
+                if (is_video($photo['filename'])) {
+                    create_video_thumbnail(
+                        $path,
+                        $config['dir'] . '/thumb_' . $photo['filename'],
+                        $config['thumb_width'],
+                        $config['thumb_height']
+                    );
+                } else {
+                    create_image_variants(
+                        $path,
+                        $config['dir'] . '/web_' . $photo['filename'],
+                        $config['dir'] . '/thumb_' . $photo['filename'],
+                        $config['web_max_width'],
+                        $config['thumb_width'],
+                        $config['thumb_height']
+                    );
+                }
+            }
+        }
+
+        // Consume the backups so the button cannot run twice against one job.
+        $meta['backups'] = [];
+        Database::run('UPDATE photo_edit_jobs SET metadata_json = ? WHERE id = ?', [
+            json_encode($meta),
+            (int) $job['id'],
+        ]);
+
+        if ($restored > 0) {
+            \App\Core\Cache::bump('gallery');
+            \App\Core\Cache::bump('media');
+        }
+
+        AuditLog::record((int) Auth::user()['id'], 'update', 'gallery', $galleryId, 'Undid watermark (job #' . (int) $job['id'] . ')', ['restored' => $restored]);
+
+        $this->flash(
+            $restored > 0 ? 'success' : 'error',
+            $restored > 0
+                ? $restored . ' item' . ($restored === 1 ? '' : 's') . ' restored to the pre-watermark original.'
+                : 'No backed-up originals could be restored for that run.'
+        );
+        $this->redirect('/admin/galleries/' . $galleryId);
+    }
+
+    /**
      * Admin photo editor: show the current media and every available edit
      * tool. Images get the full toolset (blur, sharpen, resize, rotate, crop,
      * text, watermark, thumbnail), videos get thumbnail selection (upload,
@@ -421,12 +686,9 @@ class PhotoController extends Controller
                 $message = 'Text added.';
                 break;
             case 'watermark':
-                $ok      = ImageEditor::watermark(
-                    $path,
-                    (string) $this->request->post('text', ''),
-                    $this->textSize(),
-                    $this->number('opacity', 15)
-                );
+                // The watermark is the theme's title image, drawn once at 20%
+                // opacity in the bottom-right corner.
+                $ok      = ImageEditor::watermarkLogo($path);
                 $message = 'Watermark applied.';
                 break;
             case 'canvas':

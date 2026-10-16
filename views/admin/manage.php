@@ -590,11 +590,12 @@
     <form method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/bulk-rotate') ?>" class="bulk-photo-form">
         <?= csrf_field() ?>
         <div class="bulk-photo-toolbar">
-            <label><input type="checkbox" id="select-all-images"> Select all images</label>
+            <label><input type="checkbox" id="select-all-images"> Select all</label>
             <span class="muted" id="selected-image-count">0 selected</span>
             <?php if (!empty($activeEditJob) && in_array($activeEditJob['status'], ['queued', 'running'], true)): ?>
                 <span class="muted" id="edit-job-status">
-                    Rotate in progress: <?= e($activeEditJob['status']) ?>
+                    <?= $activeEditJob['operation'] === 'bulk_watermark' ? 'Watermark in progress' : 'Rotate in progress' ?>:
+                    <?= e($activeEditJob['status']) ?>
                     (<?= (int) $activeEditJob['done'] + (int) $activeEditJob['failed'] ?>/<?= (int) $activeEditJob['total'] ?>, <?= (int) $activeEditJob['progress'] ?>%)
                 </span>
             <?php endif; ?>
@@ -603,8 +604,20 @@
             <input type="text" name="caption" placeholder="Caption for selected…" style="max-width:170px;" disabled data-bulk-caption-input>
             <button type="submit" class="btn btn-sm btn-outline" formaction="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/bulk-caption') ?>" disabled data-bulk-caption>Set caption</button>
             <button type="submit" class="btn btn-sm btn-danger" formaction="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/bulk-delete') ?>" disabled data-bulk-delete data-confirm="Remove the selected photos from this gallery? Files are deleted only if no other gallery uses them.">Delete selected</button>
+            <?php // Watermark uses the theme title image, bottom-right at 20% opacity; the preview opens before anything runs. ?>
+            <button type="button" class="btn btn-sm" id="watermark-open" disabled data-watermark-button>Watermark…</button>
+            <?php
+            $wmBackups = [];
+            if (!empty($activeEditJob) && $activeEditJob['operation'] === 'bulk_watermark' && $activeEditJob['status'] === 'completed') {
+                $wmMeta = json_decode((string) ($activeEditJob['metadata_json'] ?? '{}'), true) ?: [];
+                $wmBackups = is_array($wmMeta['backups'] ?? null) ? $wmMeta['backups'] : [];
+            }
+            ?>
+            <?php if ($wmBackups !== []): ?>
+                <button type="submit" class="btn btn-sm btn-outline" id="watermark-undo" formaction="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/watermark-undo') ?>" data-confirm="Restore the originals saved by the last watermark run for this gallery?">Undo watermark (<?= count($wmBackups) ?>)</button>
+            <?php endif; ?>
             <?php if (!empty($activeEditJob) && in_array($activeEditJob['status'], ['queued', 'running'], true)): ?>
-                <span class="muted" title="Another rotation is already processing this gallery.">Buttons disabled while a job runs.</span>
+                <span class="muted" title="Another job is already processing this gallery.">Buttons disabled while a job runs.</span>
             <?php endif; ?>
         </div>
     <table>
@@ -622,9 +635,8 @@
             <?php foreach ($photos as $photo): ?>
                 <tr>
                     <td>
-                        <?php if (!is_video($photo['filename'])): ?>
-                            <input type="checkbox" name="photo_ids[]" value="<?= (int) $photo['id'] ?>" data-image-select aria-label="Select image <?= (int) $photo['id'] ?>">
-                        <?php endif; ?>
+                        <?php // Videos are selectable too: the watermark job re-encodes them. ?>
+                        <input type="checkbox" name="photo_ids[]" value="<?= (int) $photo['id'] ?>" data-image-select aria-label="Select <?= is_video($photo['filename']) ? 'video' : 'image' ?> <?= (int) $photo['id'] ?>">
                     </td>
                     <td>
                         <?php if (is_video($photo['filename'])): ?>
@@ -739,6 +751,7 @@
         var buttons = Array.prototype.slice.call(document.querySelectorAll('[data-bulk-rotate], [data-bulk-caption], [data-bulk-delete]'));
         var captionInput = document.querySelector('[data-bulk-caption-input]');
         var count = document.getElementById('selected-image-count');
+        var watermarkButton = document.getElementById('watermark-open');
         var jobActive = <?php echo (!empty($activeEditJob) && in_array($activeEditJob['status'], ['queued', 'running'], true)) ? 'true' : 'false'; ?>;
         if (jobActive) {
             boxes.forEach(function (box) { box.disabled = true; });
@@ -749,6 +762,7 @@
             count.textContent = selected + ' selected';
             buttons.forEach(function (button) { button.disabled = selected === 0 || jobActive; });
             if (captionInput) captionInput.disabled = selected === 0 || jobActive;
+            if (watermarkButton) watermarkButton.disabled = selected === 0 || jobActive;
             if (all) all.checked = boxes.length > 0 && selected === boxes.length;
         }
         if (all) all.addEventListener('change', function () {
@@ -760,6 +774,139 @@
     }());
     </script>
 <?php endif; ?>
+
+<?php // Watermark preview / apply dialog: sample one item before queueing the gallery-wide job. ?>
+<style>
+    .wm-dialog{border:0;border-radius:10px;padding:1.25rem;background:var(--card-bg,#fff);color:var(--card-text-color,inherit);max-width:min(94vw,640px);width:640px}
+    .wm-dialog::backdrop{background:rgba(0,0,0,.72)}
+    .wm-dialog h3{margin:0 0 .5rem}
+    .wm-spec{margin:0 0 .75rem;padding:.6rem .75rem;border:1px solid var(--card-border,#ddd);border-radius:6px;background:var(--stat-bg,#f8f8fb);font-size:.9rem}
+    .wm-preview{border:1px solid var(--card-border,#ddd);border-radius:6px;background:#111;display:flex;align-items:center;justify-content:center;min-height:200px;overflow:hidden}
+    .wm-preview img{max-width:100%;max-height:52vh;display:block}
+    .wm-scope{display:flex;gap:1rem;flex-wrap:wrap;margin:.75rem 0}
+    .wm-actions{display:flex;gap:.5rem;align-items:center;margin-top:.9rem}
+    .wm-status{margin-top:.6rem;font-size:.9rem}
+</style>
+<dialog class="wm-dialog" id="wm-dialog" aria-labelledby="wm-title">
+    <h3 id="wm-title">Watermark this gallery</h3>
+    <div class="wm-spec">
+        The theme's <strong>title image</strong> (<em>Admin &gt; Theme</em>) is stamped once,
+        <strong>bottom-right</strong>, at <strong>20% opacity</strong>, sized to 15% of the media
+        width. Preview one item below before running it across the whole gallery.
+    </div>
+    <div class="wm-scope">
+        <label><input type="radio" name="wm-scope" value="selected" checked> <span id="wm-selected-label">Selected items</span></label>
+        <label><input type="radio" name="wm-scope" value="all"> This whole gallery (<?= count($photos ?? []) ?> items)</label>
+    </div>
+    <p><label><input type="checkbox" id="wm-sample" checked> Preview a sample first</label></p>
+    <div class="wm-preview" id="wm-preview" hidden><img id="wm-preview-img" alt="Watermark sample"></div>
+    <p class="muted" id="wm-note">Videos are re-encoded with the watermark burned in, so a gallery with videos takes roughly as long as the videos themselves to play.</p>
+    <div class="wm-actions">
+        <button type="button" class="btn btn-primary" id="wm-apply" disabled>Apply watermark</button>
+        <button type="button" class="btn btn-outline" id="wm-cancel">Cancel</button>
+        <span class="wm-status muted" id="wm-status"></span>
+    </div>
+</dialog>
+<form method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/bulk-watermark') ?>" id="wm-form" hidden>
+    <?= csrf_field() ?>
+    <input type="hidden" name="photo_ids" id="wm-photo-ids">
+    <input type="hidden" name="scope" id="wm-scope-input">
+</form>
+<script nonce="<?= csp_nonce() ?>">
+(function () {
+    var dialog      = document.getElementById('wm-dialog');
+    var openBtn     = document.getElementById('watermark-open');
+    var applyBtn    = document.getElementById('wm-apply');
+    var cancelBtn   = document.getElementById('wm-cancel');
+    var previewBox  = document.getElementById('wm-preview');
+    var previewImg  = document.getElementById('wm-preview-img');
+    var sampleCheck = document.getElementById('wm-sample');
+    var statusEl    = document.getElementById('wm-status');
+    var noteEl      = document.getElementById('wm-note');
+    var form        = document.getElementById('wm-form');
+    var idsInput    = document.getElementById('wm-photo-ids');
+    var scopeInput  = document.getElementById('wm-scope-input');
+    var selectedLbl = document.getElementById('wm-selected-label');
+    if (!dialog || !openBtn || typeof dialog.showModal !== 'function') return;
+
+    var sampleUrl = <?= json_encode(url('/admin/galleries/' . (int) $gallery['id'] . '/watermark-sample')) ?>;
+
+    function boxes() {
+        return Array.prototype.slice.call(document.querySelectorAll('[data-image-select]'));
+    }
+    function selected() {
+        return boxes().filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+    }
+
+    function reset() {
+        previewBox.hidden = true;
+        previewImg.removeAttribute('src');
+        applyBtn.disabled = false;
+        statusEl.textContent = '';
+        noteEl.hidden = false;
+    }
+
+    function loadSample() {
+        var ids = selected();
+        if (!ids.length || !sampleCheck.checked) {
+            previewBox.hidden = true;
+            applyBtn.disabled = ids.length === 0;
+            return;
+        }
+        previewBox.hidden = false;
+        previewImg.removeAttribute('src');
+        statusEl.textContent = 'Rendering sample…';
+        applyBtn.disabled = true;
+        fetch(sampleUrl + '?photo=' + encodeURIComponent(ids[0]), { credentials: 'same-origin' })
+            .then(function (r) {
+                if (!r.ok) { return r.text().then(function (t) { throw new Error(t || 'Sample failed'); }); }
+                return r.blob();
+            })
+            .then(function (blob) {
+                previewImg.src = URL.createObjectURL(blob);
+                statusEl.textContent = '';
+                applyBtn.disabled = false;
+            })
+            .catch(function (err) {
+                previewBox.hidden = true;
+                statusEl.textContent = err.message || 'Could not render a sample.';
+            });
+    }
+
+    openBtn.addEventListener('click', function () {
+        var n = selected().length;
+        document.querySelector('input[name="wm-scope"][value="selected"]').checked = true;
+        selectedLbl.textContent = 'Selected items (' + n + ')';
+        reset();
+        dialog.showModal();
+    });
+    cancelBtn.addEventListener('click', function () { dialog.close(); });
+    dialog.addEventListener('click', function (e) { if (e.target === dialog) dialog.close(); });
+    sampleCheck.addEventListener('change', loadSample);
+
+    applyBtn.addEventListener('click', function () {
+        var checked = document.querySelector('input[name="wm-scope"]:checked');
+        var scope = checked ? checked.value : 'selected';
+        var ids = scope === 'all' ? [] : selected();
+        if (scope !== 'all' && ids.length === 0) {
+            statusEl.textContent = 'Select at least one item.';
+            return;
+        }
+        idsInput.value = ids.join(',');
+        scopeInput.value = scope === 'all' ? 'all' : '';
+        applyBtn.disabled = true;
+        statusEl.textContent = 'Queued — processing continues in the background…';
+        form.submit();
+    });
+
+    // While a job runs, reload the page periodically so the progress line and
+    // the restored item list refresh as the worker updates them.
+    var jobRunning = <?php echo (!empty($activeEditJob) && in_array($activeEditJob['status'], ['queued', 'running'], true)) ? 'true' : 'false'; ?>;
+    if (jobRunning) {
+        setTimeout(function () { window.location.reload(); }, 5000);
+    }
+}());
+</script>
 
 <?php // Collapsible gallery queue: galleries waiting for a future publish moment. ?>
 <details style="margin-top:1.5rem;border:1px solid var(--card-border,#ddd);border-radius:var(--card-radius,8px);padding:1.25rem;background:var(--card-bg,#fff);">

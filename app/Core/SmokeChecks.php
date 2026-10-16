@@ -2934,6 +2934,131 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad('image_full.php no longer defaults to the web rendition (defaultIsWeb=' . var_export($defaultIsWeb, true) . ')');
         });
 
+        // ------------------------------------------------------------ Watermark
+        $helpers = "$root/app/Core/helpers.php";
+        $editor  = "$root/app/Core/ImageEditor.php";
+        $photo   = "$root/app/Controllers/PhotoController.php";
+        $worker  = "$root/bin/photo_edit_worker.php";
+        $manage  = "$root/views/admin/manage.php";
+        $routes  = "$root/config/routes.php";
+
+        $add('smoke.watermark.single_bottom_right_draw', 'Smoke · Watermark', 'The logo watermark is drawn once in the bottom-right corner, not tiled', static function () use ($editor, $ok, $bad): array {
+            $src = (string) @file_get_contents($editor);
+            $usesLogo = str_contains($src, 'function watermarkLogo');
+            $oldTextVersion = str_contains($src, 'function watermark(string $path, string $text');
+
+            // Inspect the watermarkLogo body only: comments naming
+            // imagecopymerge() as a rejected approach must not trip this.
+            $body = '';
+            if ($usesLogo && preg_match('/function watermarkLogo\s*\([^)]*\)\s*:\s*bool\s*\{(.*)\n    \}/s', $src, $m)) {
+                $body = $m[1];
+            }
+            $compositesOnce = str_contains($body, 'imagecopy(');
+            $noLoops = $body !== '' && !preg_match('/\b(for|while)\s*\(/s', $body);
+            // Placement is owned by the shared helper: the logo is the last
+            // thing drawn, offset from the bottom-right by the padding.
+            $sharedGeometry = str_contains($src, 'watermark_geometry(');
+            $cornerFromGeometry = str_contains((string) @file_get_contents(dirname($editor) . '/helpers.php'), "'y'    => \$mediaH - \$pad - \$wmH");
+
+            return (!$oldTextVersion && $usesLogo && $body !== '' && $compositesOnce && $noLoops && $sharedGeometry && $cornerFromGeometry)
+                ? $ok('one imagecopy() composite inside watermarkLogo, no tiling loops')
+                : $bad('ImageEditor must draw the title image once via imagecopy() with no tiling loops (oldTextVersion=' . var_export($oldTextVersion, true) . ' watermarkLogo=' . var_export($usesLogo, true) . ' body=' . var_export($body !== '', true) . ' imagecopy=' . var_export($compositesOnce, true) . ' noLoops=' . var_export($noLoops, true) . ' geometry=' . var_export($sharedGeometry, true) . ' corner=' . var_export($cornerFromGeometry, true) . ')');
+        });
+
+        $add('smoke.watermark.opacity_is_20_percent', 'Smoke · Watermark', 'Both render paths fade the logo to 20%', static function () use ($helpers, $editor, $ok, $bad): array {
+            $h = (string) @file_get_contents($helpers);
+            $e = (string) @file_get_contents($editor);
+
+            $opacity = defined('WATERMARK_OPACITY') ? (float) WATERMARK_OPACITY : 0.0;
+            $constOk = abs($opacity - 0.20) < 0.001 && str_contains($h, "const WATERMARK_OPACITY = 0.20;");
+            // GD: an opaque pixel must fade to alpha ~102 (127 * 0.8 floor).
+            $gdOk = str_contains($h, '$floor = (int) round(127 * (1 - $factor));');
+            // ffmpeg: colorchannelmixer alpha must come from the same constant.
+            $ffOk = str_contains($h, 'colorchannelmixer=aa=')
+                && str_contains($h, 'number_format(WATERMARK_OPACITY, 2');
+            // The GD path must read the shared constant, not a literal.
+            $useOk = str_contains($e, '\\WATERMARK_OPACITY');
+
+            return ($constOk && $gdOk && $ffOk && $useOk)
+                ? $ok('WATERMARK_OPACITY 0.20 drives the GD fade + ffmpeg alpha')
+                : $bad('the two watermark paths no longer share a 20% opacity (const=' . var_export($constOk, true) . ' gd=' . var_export($gdOk, true) . ' ffmpeg=' . var_export($ffOk, true) . ' use=' . var_export($useOk, true) . ')');
+        });
+
+        $add('smoke.watermark.uses_theme_title_image', 'Smoke · Watermark', 'The watermark is the theme title image, resolved to an absolute path', static function () use ($helpers, $ok, $bad): array {
+            $h = (string) @file_get_contents($helpers);
+
+            $readsTheme = str_contains($h, "Theme::titleImage(App\\Models\\Theme::SCOPE_SITE)")
+                || str_contains($h, 'Theme::titleImage(Theme::SCOPE_SITE)');
+            $resolvesAssets = str_contains($h, "'/public/'") || str_contains($h, '"/public/"');
+            $returnsNull = str_contains($h, 'function watermark_logo_path(): ?string');
+
+            return ($readsTheme && $resolvesAssets && $returnsNull)
+                ? $ok('watermark_logo_path() reads Theme::titleImage() and maps /assets + /storage')
+                : $bad('watermark_logo_path() must resolve Theme::titleImage() (theme=' . var_export($readsTheme, true) . ' assets=' . var_export($resolvesAssets, true) . ' signature=' . var_export($returnsNull, true) . ')');
+        });
+
+        $add('smoke.watermark.runs_in_the_background_worker', 'Smoke · Watermark', 'Batch watermarking is queued and done by the supervised worker, never inline', static function () use ($photo, $worker, $routes, $ok, $bad): array {
+            $c = (string) @file_get_contents($photo);
+            $w = (string) @file_get_contents($worker);
+            $r = (string) @file_get_contents($routes);
+
+            $queued = str_contains($c, 'PhotoJob::createBulkWatermark(');
+            $workerCase = str_contains($w, "case 'bulk_watermark':") && str_contains($w, 'function runBulkWatermark');
+            $videoBurn = str_contains($w, 'burn_video_watermark(');
+            $routesOk = str_contains($r, "PhotoController@bulkWatermark")
+                && str_contains($r, "PhotoController@watermarkSample")
+                && str_contains($r, "PhotoController@watermarkUndo");
+            $previewFirst = str_contains($c, 'function watermarkSample(int $galleryId)');
+
+            return ($queued && $workerCase && $videoBurn && $routesOk && $previewFirst)
+                ? $ok('sample -> queue -> worker burn for videos')
+                : $bad('watermark batch flow is broken (queued=' . var_export($queued, true) . ' worker=' . var_export($workerCase, true) . ' burn=' . var_export($videoBurn, true) . ' routes=' . var_export($routesOk, true) . ' sample=' . var_export($previewFirst, true) . ')');
+        });
+
+        $add('smoke.watermark.backs_up_originals_for_undo', 'Smoke · Watermark', 'Every original is copied to backups/ before it is replaced, and undo restores it', static function () use ($worker, $photo, $ok, $bad): array {
+            $w = (string) @file_get_contents($worker);
+            $c = (string) @file_get_contents($photo);
+
+            $backupDir = str_contains($w, '/backups/watermark/');
+            $imagesToo = str_contains($w, 'could not back up the original');
+            $recorded = str_contains($w, 'PhotoJob::addWatermarkBackup(');
+            $undo = str_contains($c, 'function watermarkUndo(int $galleryId)')
+                && str_contains($c, "'bulk_watermark'");
+            $consumed = str_contains($c, 'meta[\'backups\'] = [];');
+
+            return ($backupDir && $imagesToo && $recorded && $undo && $consumed)
+                ? $ok('images and videos are backed up; undo replays and consumes the list')
+                : $bad('watermark backup/undo is incomplete (dir=' . var_export($backupDir, true) . ' images=' . var_export($imagesToo, true) . ' recorded=' . var_export($recorded, true) . ' undo=' . var_export($undo, true) . ' consumed=' . var_export($consumed, true) . ')');
+        });
+
+        $add('smoke.watermark.video_keeps_its_container', 'Smoke · Watermark', 'Re-encoded video keeps its source extension so the served MIME still matches', static function () use ($helpers, $worker, $ok, $bad): array {
+            $h = (string) @file_get_contents($helpers);
+            $w = (string) @file_get_contents($worker);
+
+            $sameExt = str_contains($h, '$extCodec') && str_contains($h, "'webm'");
+            $workerCopies = str_contains($w, "'\" . \"wm-\"") || str_contains($w, "'.wm-'") || str_contains($w, '.wm-');
+            $yuv = str_contains($h, 'format=yuv420p');
+
+            return ($sameExt && $workerCopies && $yuv)
+                ? $ok('source-matched muxer (webm -> libvpx), temp written beside the original')
+                : $bad('video watermark must keep the container (codec=' . var_export($sameExt, true) . ' temp=' . var_export($workerCopies, true) . ' pixfmt=' . var_export($yuv, true) . ')');
+        });
+
+        $add('smoke.watermark.admin_ui_offers_a_preview', 'Smoke · Watermark', 'Manage page has the watermark button and a preview-first dialog', static function () use ($manage, $ok, $bad): array {
+            $m = (string) @file_get_contents($manage);
+
+            $button = str_contains($m, 'id="watermark-open"');
+            $dialog = str_contains($m, 'id="wm-dialog"');
+            $sample = str_contains($m, 'watermark-sample');
+            $scope = str_contains($m, 'value="all"') && str_contains($m, 'name="scope"');
+            $videos = str_contains($m, "is_video(\$photo['filename']) ? 'video' : 'image'");
+            $undoBtn = str_contains($m, 'id="watermark-undo"');
+
+            return ($button && $dialog && $sample && $scope && $videos && $undoBtn)
+                ? $ok('button + preview dialog + scope toggle + video selection + undo')
+                : $bad('manage.php watermark UI is incomplete (button=' . var_export($button, true) . ' dialog=' . var_export($dialog, true) . ' sample=' . var_export($sample, true) . ' scope=' . var_export($scope, true) . ' videos=' . var_export($videos, true) . ' undo=' . var_export($undoBtn, true) . ')');
+        });
+
         $cache = $tests;
 
         return $cache;

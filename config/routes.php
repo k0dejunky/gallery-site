@@ -218,6 +218,11 @@ return [
     ['POST', '/admin/galleries/{galleryId}/photos/bulk-rotate', 'PhotoController@bulkRotate', 'galleries'],
     ['POST', '/admin/galleries/{galleryId}/photos/bulk-caption', 'PhotoController@bulkCaption', 'galleries'],
     ['POST', '/admin/galleries/{galleryId}/photos/bulk-delete', 'PhotoController@bulkDelete', 'galleries'],
+    // Bulk watermark: preview one sample, then apply to the selection (or the
+    // whole gallery with scope=all) in the background worker.
+    ['GET', '/admin/galleries/{galleryId}/watermark-sample', 'PhotoController@watermarkSample', 'galleries'],
+    ['POST', '/admin/galleries/{galleryId}/photos/bulk-watermark', 'PhotoController@bulkWatermark', 'galleries'],
+    ['POST', '/admin/galleries/{galleryId}/watermark-undo', 'PhotoController@watermarkUndo', 'galleries'],
     ['GET', '/admin/photos/{id}/edit', 'PhotoController@edit', 'galleries'],
     ['POST', '/admin/photos/{id}/edit', 'PhotoController@applyEdit', 'galleries'],
     ['GET', '/admin/videos/{id}/edit', 'VideoEditorController@edit', 'videos'],

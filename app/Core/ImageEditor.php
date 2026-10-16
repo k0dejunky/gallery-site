@@ -363,19 +363,20 @@ class ImageEditor
     }
 
     /**
-     * Stamp faint repeated text across the whole image (a watermark). The
-     * opacity is 1-100 and controls how visible the text is.
+     * Stamp the site's title image (the theme logo) once in the bottom-right
+     * corner at WATERMARK_OPACITY, scaled to 15% of the image width.
+     *
+     * This replaces the old tiled text watermark, which repeated the string
+     * across the whole image (and ignored the requested position entirely).
+     * Media too small for a legible logo is left untouched and reported as
+     * true - there is nothing to undo for a no-op.
+     *
+     * When $dest is null the image is edited in place; pass a path to write the
+     * result somewhere else (the sample preview uses this so the original is
+     * never modified for a preview).
      */
-    public static function watermark(string $path, string $text, int $size, int $opacity): bool
+    public static function watermarkLogo(string $path, ?string $logoPath = null, ?string $dest = null): bool
     {
-        $text = trim($text);
-
-        if ($text === '') {
-            return false;
-        }
-
-        $opacity = max(1, min(100, $opacity));
-
         $opened = self::open($path);
 
         if ($opened === null) {
@@ -386,44 +387,74 @@ class ImageEditor
 
         $width  = (int) imagesx($image);
         $height = (int) imagesy($image);
-        $alpha  = (int) round(127 * (1 - $opacity / 100));
 
-        $font = self::font();
+        $logoPath = $logoPath ?? watermark_logo_path();
 
-        if ($font !== null) {
-            $bbox = imagettfbbox($size, 0, $font, $text);
-            $tw   = abs($bbox[4] - $bbox[0]);
-            $th   = abs($bbox[5] - $bbox[1]);
+        if ($logoPath === null) {
+            imagedestroy($image);
 
-            $color = imagecolorallocatealpha($image, 150, 150, 150, $alpha);
-            $stepX = max($tw + $size, 120);
-            $stepY = max(($th + (int) round($th * 0.7)), 60);
-
-            for ($y = 0; $y < $height; $y += $stepY) {
-                for ($x = 0; $x < $width; $x += $stepX) {
-                    imagettftext($image, $size, 0, $x, $y + (int) round($th * 0.8), $color, $font, $text);
-                }
-            }
-        } else {
-            $tw = strlen($text) * imagefontwidth(5);
-            $th = imagefontheight(5);
-
-            $color = imagecolorallocatealpha($image, 150, 150, 150, $alpha);
-            $stepX = max($tw + 30, 80);
-            $stepY = max($th * 3, 40);
-
-            for ($y = 0; $y < $height; $y += $stepY) {
-                for ($x = 0; $x < $width; $x += $stepX) {
-                    imagestring($image, 5, $x, $y, $text, $color);
-                }
-            }
+            return false;
         }
 
-        $ok = save_image($image, $path, $type, 90);
+        $logoOpened = self::open($logoPath);
 
-        imagedestroy($image);
+        if ($logoOpened === null) {
+            imagedestroy($image);
 
-        return $ok;
+            return false;
+        }
+
+        [$logo, $logoType] = $logoOpened;
+        unset($logoType);
+
+        $logoW = (int) imagesx($logo);
+        $logoH = (int) imagesy($logo);
+
+        $skip  = null;
+        $geo   = watermark_geometry($width, $height, $logoW, $logoH, $skip);
+
+        if ($geo === null) {
+            // Too small to carry a readable logo: leave the pixels alone.
+            imagedestroy($image);
+            imagedestroy($logo);
+
+            return true;
+        }
+
+        // Scale the logo into its own alpha-capable canvas so its own
+        // transparency (and aspect ratio) survive the resize.
+        $wm = imagecreatetruecolor($geo['w'], $geo['h']);
+
+        if ($wm === false) {
+            imagedestroy($image);
+            imagedestroy($logo);
+
+            return false;
+        }
+
+        imagealphablending($wm, false);
+        imagesavealpha($wm, true);
+        imagecopyresampled(
+            $wm, $logo,
+            0, 0, 0, 0,
+            $geo['w'], $geo['h'], $logoW, $logoH
+        );
+        imagedestroy($logo);
+
+        // Fade the logo's alpha, then composite. imagealphablending() ON (not
+        // imagecopymerge, which flattens a source alpha channel).
+        watermark_fade_alpha($wm, \WATERMARK_OPACITY);
+        imagealphablending($image, true);
+        imagecopy(
+            $image, $wm,
+            $geo['x'], $geo['y'], 0, 0,
+            $geo['w'], $geo['h']
+        );
+        imagedestroy($wm);
+
+        $target = $dest ?? $path;
+
+        return save_image($image, $target, $type, 90);
     }
 
     /**
@@ -433,7 +464,8 @@ class ImageEditor
      */
     private static function textOrigin(int $width, int $height, int $tw, int $th, int $pad, string $position): array
     {
-        $ascent = (int) round($th * 0.8);
+        $ascent   = (int) round($th * 0.8);
+        $descent  = max(1, (int) round($th * 0.2));
 
         if (strpos($position, 'left') !== false) {
             $x = $pad;
@@ -446,7 +478,11 @@ class ImageEditor
         if (strpos($position, 'top') !== false) {
             $y = $pad + $ascent;
         } elseif (strpos($position, 'bottom') !== false) {
-            $y = $height - $pad;
+            // imagettftext()'s y is the BASELINE, so a "bottom" block that puts
+            // the baseline on the padding line lets its descenders (g/j/p/q/y)
+            // run past the image edge. Lift the baseline by one descent so the
+            // glyph bottoms land on $height - $pad, matching bitmapOrigin().
+            $y = $height - $pad + $descent;
         } else {
             $y = (int) (($height - $th + $ascent) / 2);
         }

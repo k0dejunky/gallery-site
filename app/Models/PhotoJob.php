@@ -70,6 +70,53 @@ class PhotoJob
         return (int) Database::connection()->lastInsertId();
     }
 
+    /**
+     * Queue a watermark job for the selected photos (images AND videos). The
+     * logo path is snapshotted at queue time so a theme change mid-run cannot
+     * produce a gallery watermarked with two different logos. The worker also
+     * records each video's backup path here as it works, which is what
+     * watermarkUndo() replays.
+     */
+    public static function createBulkWatermark(int $userId, int $galleryId, array $photoIds): int
+    {
+        Database::run(
+            'INSERT INTO photo_edit_jobs (user_id, gallery_id, operation, status, total, metadata_json)
+             VALUES (?, ?, ?, ?, ?, ?)',
+            [
+                $userId,
+                $galleryId,
+                'bulk_watermark',
+                'queued',
+                count($photoIds),
+                json_encode([
+                    'photo_ids' => array_values($photoIds),
+                    'logo_path' => watermark_logo_path(),
+                    'backups'   => [],
+                ]),
+            ]
+        );
+
+        return (int) Database::connection()->lastInsertId();
+    }
+
+    /** Record the backups taken so far for a watermark job (drives undo). */
+    public static function addWatermarkBackup(int $id, int $photoId, string $backupPath): void
+    {
+        $row = self::findById($id);
+
+        if ($row === null) {
+            return;
+        }
+
+        $meta = json_decode((string) ($row['metadata_json'] ?? '{}'), true) ?: [];
+        $meta['backups'][] = ['photo_id' => $photoId, 'path' => $backupPath];
+
+        Database::run('UPDATE photo_edit_jobs SET metadata_json = ? WHERE id = ?', [
+            json_encode($meta),
+            $id,
+        ]);
+    }
+
     /** Latest job for a gallery (used to show status / disable buttons while running). */
     public static function latestForGallery(int $galleryId): ?array
     {

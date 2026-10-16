@@ -1039,7 +1039,11 @@ function _load_image(string $src)
     // optimized resampling) into a temporary file, then load that smaller file
     // with GD. This makes uploads of very large images complete quickly.
     $maxWorking = 4000;
-    $prescaled = null;
+    $prescaled  = null;
+    // Remember the real source: the pre-scale below may swap $src for a temp
+    // file, and the ImageMagick fallback further down must never read a temp
+    // path that is about to be deleted.
+    $originalSrc = $src;
 
     if (max($info[0], $info[1]) > $maxWorking
         && in_array($type, [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)) {
@@ -1087,16 +1091,25 @@ function _load_image(string $src)
         $image = @imagecreatefrombmp($src);
     }
 
-    if ($prescaled !== null) {
-        @unlink($prescaled);
-    }
-
     if ($image === false) {
         // getimagesize recognised the file (AVIF/TIFF/BMP report a type) but
-        // GD still cannot decode it. Fall back to ImageMagick.
-        $imagick = _load_image_imagick($src);
+        // GD still cannot decode it. Fall back to ImageMagick - against the
+        // ORIGINAL source, never the pre-scale temp: that temp is deleted in
+        // the next line, so pointing the fallback at it would read a path that
+        // no longer exists and silently fail formats ImageMagick can actually
+        // decode (HEIC/HEIF).
+        if ($prescaled !== null) {
+            @unlink($prescaled);
+            $prescaled = null;
+        }
+
+        $imagick = _load_image_imagick($originalSrc);
 
         return $imagick !== null ? $imagick : [false, 0];
+    }
+
+    if ($prescaled !== null) {
+        @unlink($prescaled);
     }
 
     return [$image, $type];
@@ -1295,6 +1308,219 @@ function save_image($image, string $dest, int $type, int $quality = 85): bool
 }
 
 /**
+ * Opacity the watermark is drawn at (0-1). Kept in one place so the GD alpha
+ * fade and the ffmpeg colorchannelmixer value can never drift apart.
+ */
+const WATERMARK_OPACITY = 0.20;
+
+/** Smallest / largest the watermark logo is ever drawn (px wide). */
+const WATERMARK_MIN_WIDTH = 80;
+const WATERMARK_MAX_WIDTH = 320;
+
+/**
+ * Resolve the theme's title image (what the admin uploads in /admin/theme)
+ * to an absolute filesystem path. Theme paths are web-relative to the site
+ * root: '/assets/...' lives under public/, '/storage/...' under the app root.
+ * Returns null when the file is missing or unreadable, so callers can fail
+ * loudly instead of silently watermarking nothing.
+ */
+function watermark_logo_path(): ?string
+{
+    $rel = (string) \App\Models\Theme::titleImage(App\Models\Theme::SCOPE_SITE);
+    $rel = trim($rel);
+
+    if ($rel === '' || strpos($rel, '://') !== false) {
+        return null;
+    }
+
+    $root  = dirname(__DIR__, 2);
+    $path  = '/' . ltrim($rel, '/');
+    $full  = strpos($path, '/public/') === 0
+        ? $root . $path
+        : ($root . '/public' . $path);
+
+    return is_file($full) && is_readable($full) ? $full : null;
+}
+
+/**
+ * Watermark placement + size for one piece of media. The logo is drawn once,
+ * bottom-right, scaled to 15% of the media width (aspect preserved) and
+ * clamped to MIN_WATERMARK_WIDTH..MAX_WATERMARK_WIDTH (and to the media width
+ * minus padding, so it can never hang off the edge). Media too small to hold a
+ * legible logo returns null - the caller skips it.
+ */
+function watermark_geometry(int $mediaW, int $mediaH, int $logoW, int $logoH, ?array &$skip = null): ?array
+{
+    $min = WATERMARK_MIN_WIDTH;             // 80px
+    $max = WATERMARK_MAX_WIDTH;             // 320px
+    $pad = max(12, (int) round($mediaW * 0.02));
+
+    $room = $mediaW - (2 * $pad);
+    if ($room < $min) {
+        $skip = 'media_narrow';
+        return null;
+    }
+
+    // Scale to 15% of the media width, then clamp.
+    $wmW = (int) round($mediaW * 0.15);
+    $wmW = max($min, min($max, $wmW));
+    $wmW = min($wmW, $room);
+
+    $scale = $wmW / max(1, $logoW);
+    $wmH   = max(1, (int) round($logoH * $scale));
+
+    return [
+        'w'    => $wmW,
+        'h'    => $wmH,
+        'x'    => $mediaW - $pad - $wmW,
+        'y'    => $mediaH - $pad - $wmH,
+        'pad'  => $pad,
+    ];
+}
+
+/**
+ * Scale the alpha channel of a truecolor GD image by $factor (0 = invisible,
+ * 1 = untouched). Used to fade the watermark logo to WATERMARK_OPACITY: GD's
+ * imagecopymerge() destroys a source alpha channel, so the fade is done on the
+ * pixels of the (tiny) logo canvas instead and then composited with
+ * imagecopy(). Values: alpha 0 = opaque, 127 = transparent, so the visible
+ * fraction becomes factor * original.
+ */
+function watermark_fade_alpha($image, float $factor)
+{
+    $w = imagesx($image);
+    $h = imagesy($image);
+    $floor = (int) round(127 * (1 - $factor));
+
+    for ($y = 0; $y < $h; $y++) {
+        for ($x = 0; $x < $w; $x++) {
+            $c = imagecolorat($image, $x, $y);
+            $a = ($c >> 24) & 0xFF;
+            if ($a === 0 && $factor >= 1) {
+                continue;
+            }
+            $newA = $floor + (int) round($a * $factor);
+            if ($newA === $a || $newA > 127) {
+                continue;
+            }
+            $color = imagecolorallocatealpha(
+                $image,
+                ($c >> 16) & 0xFF,
+                ($c >> 8) & 0xFF,
+                $c & 0xFF,
+                min(127, max(0, $newA))
+            );
+            imagesetpixel($image, $x, $y, $color);
+        }
+    }
+}
+
+/**
+ * Burn a semi-transparent copy of the title image into a video (bottom-right)
+ * by re-encoding it with ffmpeg's overlay filter. $dest must carry the SAME
+ * extension as $src so ffmpeg picks the muxer that matches what the site serves
+ * (a .webm file holding MP4 bytes would be sent to browsers as video/webm and
+ * fail to play). Returns true only when the output exists and was produced
+ * with a clean exit code; the caller swaps it in on success.
+ */
+function burn_video_watermark(string $src, string $dest, ?string $logoPath = null): bool
+{
+    if (!is_file($src)) {
+        return false;
+    }
+
+    $logoPath = $logoPath ?? watermark_logo_path();
+
+    if ($logoPath === null) {
+        return false;
+    }
+
+    // SVG (and anything else neither GD nor this ffmpeg build can decode)
+    // cannot be rasterised here, so refuse rather than emit an unwatermarked
+    // copy that looks like a success.
+    $logoInfo = @getimagesize($logoPath);
+    if ($logoInfo === false) {
+        return false;
+    }
+
+    [$logoW, $logoH] = $logoInfo;
+
+    $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
+
+    // Probe the real frame size so the logo size/placement are computed
+    // against the pixels (rotation metadata can differ from the container).
+    $probeOut = [];
+    $probeRc  = 0;
+    @exec(
+        escapeshellarg('/usr/bin/ffprobe') . ' -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 '
+        . escapeshellarg($src) . ' 2>/dev/null',
+        $probeOut,
+        $probeRc
+    );
+
+    $srcW = 1920;
+    $srcH = 1080;
+    if ($probeRc === 0 && isset($probeOut[0]) && strpos($probeOut[0], ',') !== false) {
+        $dims = array_map('intval', explode(',', (string) $probeOut[0]));
+        if (($dims[0] ?? 0) > 0 && ($dims[1] ?? 0) > 0) {
+            [$srcW, $srcH] = [$dims[0], $dims[1]];
+        }
+    }
+
+    $geo = watermark_geometry($srcW, $srcH, $logoW, $logoH, $skip);
+    if ($geo === null) {
+        return false;
+    }
+
+    // WebM has to stay WebM (libvpx/vorbis); every other accepted container is
+    // fine with H.264 + AAC. The destination extension decides both the muxer
+    // (ffmpeg infers it from the output name) and the codec set, so a temp file
+    // that loses the extension silently breaks the encode.
+    $ext = strtolower((string) pathinfo($dest, PATHINFO_EXTENSION));
+
+    $h264Containers = ['mp4', 'm4v', 'mov', 'avi', 'mkv', 'ts', 'm2ts', 'mts', 'flv', '3gp', '3g2', 'mpg', 'mpeg', 'wmv', 'asf', 'vob', 'm2v'];
+    if ($ext === 'webm') {
+        $extCodec = '-c:v libvpx -b:v 1.5M -c:a libvorbis';
+    } elseif (in_array($ext, $h264Containers, true)) {
+        $extCodec = '-c:v libx264 -preset veryfast -crf 23 -c:a aac -movflags +faststart';
+    } else {
+        // Unknown/unsupported container (e.g. .ogg): refuse instead of writing
+        // an unwatermarked copy that looks like a success, and instead of
+        // putting the wrong container in a file we would serve under this name.
+        return false;
+    }
+
+    $timeoutBin = trim((string) (shell_exec('command -v timeout') ?: ''));
+    $prefix     = $timeoutBin !== '' ? 'timeout 3600 ' : '';
+
+    // The logo is faded to WATERMARK_OPACITY via its alpha channel and then
+    // overlaid so the video's own pixels show through.
+    $alpha = rtrim(rtrim(number_format(WATERMARK_OPACITY, 2, '.', ''), '0'), '.');
+    $filter = '[1:v]scale=' . $geo['w'] . ':' . $geo['h']
+        . ',format=rgba,colorchannelmixer=aa=' . $alpha . '[wm];'
+        . '[0:v][wm]overlay=' . $geo['x'] . ':' . $geo['y'] . ':format=auto,format=yuv420p[v]';
+
+    $cmd = $prefix . escapeshellarg($ffmpeg) . ' -nostdin -y -hide_banner -loglevel error'
+        . ' -i ' . escapeshellarg($src)
+        . ' -i ' . escapeshellarg($logoPath)
+        . ' -filter_complex ' . escapeshellarg($filter)
+        . ' -map "[v]" -map 0:a? ' . $extCodec
+        . ' ' . escapeshellarg($dest) . ' 2>&1';
+
+    exec($cmd, $lines, $status);
+
+    if ($status !== 0 || !is_file($dest) || filesize($dest) < 1024) {
+        @unlink($dest);
+        return false;
+    }
+
+    // moov first so the watermarked copy streams like the original.
+    faststart_video_if_needed($dest);
+
+    return true;
+}
+
+/**
  * Map an EXIF orientation value to the ffmpeg transpose chain that bakes the
  * rotation into the pixels. ffmpeg ignores EXIF rotation metadata, so photos
  * from phones would come out sideways unless corrected here.
@@ -1407,7 +1633,13 @@ function create_image_variants(string $src, string $webDest, string $thumbDest, 
 
         exec($cmd, $out, $rc);
 
-        if ($rc === 0 && is_file($webDest) && is_file($thumbDest)) {
+        // All four outputs must exist: this ffmpeg invocation also writes the
+        // WebP variants, and returning success on JPEG alone left the grids
+        // without their web_*.webp / thumb_*.webp copies whenever libwebp was
+        // missing from the encoder while the return code still came back 0.
+        if ($rc === 0
+            && is_file($webDest) && is_file($thumbDest)
+            && is_file($webpWebDest) && is_file($webpThumbDest)) {
             _make_avif($webDest);
             _make_avif($thumbDest);
 
@@ -1570,7 +1802,14 @@ function _variants_gd(string $src, string $webDest, string $thumbDest, int $maxD
         imagedestroy($source);
     }
 
-    save_image($web, $webDest, $type, 82);
+    // Check the web-variant write: discarding its result meant a failed write
+    // still returned the thumbnail's success, so the gallery served the FULL
+    // original through ?size=web and the caller believed it was fine.
+    if (!save_image($web, $webDest, $type, 82)) {
+        imagedestroy($web);
+
+        return false;
+    }
 
     $wW = imagesx($web);
     $wH = imagesy($web);
