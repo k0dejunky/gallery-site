@@ -1679,3 +1679,23 @@ function admin_empty(string $icon, string $title, string $body = '', ?array $act
 
     return $html . '</div>';
 }
+
+/**
+ * Render the UTM source for a traffic-attributed signup.
+ *
+ * The Traffic page shows this in two tables (per-link and global), so the
+ * "utm_source / utm_medium, or direct" formatting lives in one place.
+ *
+ * @param array $row a signup row with optional utm_source / utm_medium.
+ */
+function trafficSourceLabel(array $row): string
+{
+    $parts = array_filter(
+        [$row['utm_source'] ?? null, $row['utm_medium'] ?? null],
+        static fn ($v) => $v !== null && $v !== ''
+    );
+
+    return $parts === []
+        ? '<span class="muted">direct</span>'
+        : e(implode(' / ', $parts));
+}

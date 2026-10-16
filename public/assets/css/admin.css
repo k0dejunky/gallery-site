@@ -842,6 +842,164 @@ body.admin-theme {
     .admin-theme * { transition-duration: .01ms !important; }
 }
 
+/* ---------- Row action groups -------------------------------------------- */
+
+/* A cell holding four or five controls used to wrap one-per-line and make every
+   row three rows tall. One nowrap flex group keeps the row a single line and
+   separates the destructive controls from the routine ones. */
+.admin-theme .adm-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: .3rem;
+}
+
+.admin-theme .adm-actions form { margin: 0; }
+.admin-theme .adm-actions-gap {
+    flex: none;
+    width: 1px;
+    height: 18px;
+    margin: 0 .2rem;
+    background: var(--adm-border-strong);
+}
+
+.admin-theme td.act, .admin-theme th.act { white-space: nowrap; }
+.admin-theme td.act { text-align: right; }
+.admin-theme th.act { text-align: right; }
+
+/* Right-aligned numeric columns: tabular figures so digits line up down the
+   column instead of jittering row to row. */
+.admin-theme td.num, .admin-theme th.num {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+/* A totals row belongs to the table, not to the surrounding card. */
+.admin-theme tfoot th, .admin-theme tfoot td {
+    background: var(--adm-surface-2);
+    border-top: 2px solid var(--adm-border-strong);
+    border-bottom: 0;
+    font-weight: 700;
+    color: var(--adm-text);
+}
+
+.admin-theme tfoot th { text-align: left; }
+
+/* ---------- Collapsible create panel ------------------------------------- */
+
+.admin-theme details.adm-create > summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--adm-text);
+    margin: 0;
+}
+
+.admin-theme details.adm-create > summary::-webkit-details-marker { display: none; }
+/* Beaten by the generic `details.sys-card > summary::before` triangle, which
+   ties on specificity - so match the compound selector. */
+.admin-theme details.sys-card.adm-create > summary::before { content: none; }
+
+.admin-theme details.adm-create > summary::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    margin-left: auto;
+    border-right: 2px solid var(--adm-text-faint);
+    border-bottom: 2px solid var(--adm-text-faint);
+    transform: rotate(45deg) translate(-2px, -2px);
+    transition: transform .15s ease;
+}
+
+.admin-theme details.adm-create[open] > summary::after { transform: rotate(-135deg) translate(-2px, -2px); }
+
+.admin-theme .adm-field-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+    gap: .85rem;
+    margin-top: 1rem;
+}
+
+.admin-theme .adm-field-grid label { display: grid; gap: .25rem; min-width: 0; }
+
+.admin-theme .adm-field-grid label > span {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--adm-text-dim);
+}
+
+.admin-theme .adm-field-grid label > small { font-size: 11.5px; color: var(--adm-text-faint); }
+.admin-theme .adm-field-grid input { width: 100%; }
+
+.admin-theme .adm-create-foot {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+    padding-top: .85rem;
+    border-top: 1px solid var(--adm-border);
+}
+
+.admin-theme .adm-preview {
+    flex: 1 1 260px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--adm-text-dim);
+    background: var(--adm-surface-2);
+    border: 1px dashed var(--adm-border-strong);
+    border-radius: var(--adm-radius-sm);
+    padding: .4rem .6rem;
+}
+
+.admin-theme .adm-create-actions { display: flex; gap: .4rem; flex: none; margin-left: auto; }
+
+/* ---------- Traffic table ------------------------------------------------- */
+
+.admin-theme .traffic-table td:first-child { min-width: 12rem; }
+.admin-theme .traffic-table .tl-name { display: flex; align-items: center; gap: .4rem; }
+.admin-theme .traffic-table tr.is-terminated td { opacity: .62; }
+
+.admin-theme .traffic-table .tl-detail {
+    background: var(--adm-surface-2);
+    padding: .85rem 1rem;
+    white-space: normal;
+    /* This row holds a single cell, so it is also `td:last-child` and would
+       otherwise inherit the centred last-column rule. */
+    text-align: left;
+}
+
+.admin-theme .traffic-table .tl-detail-head {
+    display: flex;
+    align-items: baseline;
+    gap: .75rem;
+    flex-wrap: wrap;
+    margin-bottom: .6rem;
+    font-size: 13px;
+}
+
+.admin-theme .traffic-table .tl-detail-head a { margin-left: auto; font-size: 12.5px; }
+
+/* The per-link sub-table is a detail, not a second page: smaller and flatter. */
+.admin-theme .traffic-table .tl-sub {
+    font-size: 12.5px;
+    background: var(--adm-surface);
+}
+
+.admin-theme .traffic-table .tl-sub thead th {
+    top: 0;
+    font-size: 10.5px;
+    background: var(--adm-surface-3);
+}
+
 /* ---------- Empty states ------------------------------------------------- */
 
 /* "No X yet" on its own line is not a state, it is an apology. These give the

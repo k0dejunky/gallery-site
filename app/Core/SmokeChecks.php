@@ -907,7 +907,9 @@ class SmokeChecks
                 : $bad('traffic view must expose an inline expandable signups list per link');
         });
         $add('smoke.traffic.view_recent', 'Smoke · Traffic', 'Summary page lists recent signups across links', static function () use ($trafficView, $ok, $bad): array {
-            return strpos($trafficView, 'Recent Signups') !== false && strpos($trafficView, '$recentSignups') !== false
+            // Section headings are sentence case in source and uppercased by CSS,
+            // so match the words rather than one exact capitalisation.
+            return stripos($trafficView, 'Recent signups') !== false && strpos($trafficView, '$recentSignups') !== false
                 ? $ok('recent signups section')
                 : $bad('traffic view must render a recent signups section fed by the controller');
         });
