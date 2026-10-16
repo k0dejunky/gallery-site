@@ -2,24 +2,24 @@
 
 <?php // Operational alert banners: failed backup, silent cron, login spike. ?>
 <?php if (!empty($backupFailure)): ?>
-    <p style="background:#fee2e2;border:1px solid #ef4444;color:#991b1b;padding:.5rem .75rem;border-radius:var(--border-radius);">
+    <div class="alert alert-error">
         <b>Last background backup failed:</b> <?= e((string) $backupFailure) ?> — see <a href="<?= url('/admin/system') ?>">System → Backups</a>.
-    </p>
+    </div>
 <?php endif; ?>
 <?php if ($cronAgeMin !== null && $cronAgeMin > 45): ?>
-    <p style="background:#fef3c7;border:1px solid #f59e0b;color:#92400e;padding:.5rem .75rem;border-radius:var(--border-radius);">
+    <div class="alert alert-warning">
         <b>Housekeeping cron quiet for <?= (int) $cronAgeMin ?> min</b> (expected ~15). Check /etc/cron.d on the server.
     </p>
 <?php elseif ($cronAgeMin === null): ?>
-    <p style="background:#fef3c7;border:1px solid #f59e0b;color:#92400e;padding:.5rem .75rem;border-radius:var(--border-radius);">
+    <div class="alert alert-warning">
         <b>Housekeeping cron has never run.</b> Install the cron entry from System page instructions.
-    </p>
+    </div>
 <?php endif; ?>
 <?php if ((int) $security['fails_hour'] >= 25): ?>
-    <p style="background:#fee2e2;border:1px solid #ef4444;color:#991b1b;padding:.5rem .75rem;border-radius:var(--border-radius);">
+    <div class="alert alert-error">
         <b>Login-failure spike:</b> <?= number_format((int) $security['fails_hour']) ?> failed attempts in the last hour —
         <a href="<?= url('/admin/system') ?>">review offenders</a>.
-    </p>
+    </div>
 <?php endif; ?>
 
 <?php // One-click entry points for the most common admin tasks, plus an

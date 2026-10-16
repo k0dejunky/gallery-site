@@ -170,8 +170,8 @@ $paletteGrid = [
     #theme-preview .pv-sidebar-link.active { background: var(--sidebar-active-bg); color: var(--sidebar-active-color); border-color: var(--sidebar-active-border); font-weight: bold; }
     #theme-preview .pv-sidebar-link:hover { background: var(--sidebar-link-hover); }
     #theme-preview .pv-site-main { flex: 1; min-width: 0; }
-    .theme-palette[open] > summary h2::after { content: "\25BC"; }
-    .theme-palette > summary h2::after { content: "\25B6"; }
+    .theme-palette[open] > summary::after { content: "\25BC"; }
+    .theme-palette > summary::after { content: "\25B6"; }
     .theme-palette { display: flex; flex-direction: column; }
     .theme-palette > summary { list-style: none; cursor: pointer; padding: var(--spacing-sm) var(--spacing-md); background: var(--pink-100); border: var(--input-border-width) solid var(--pink-300); border-radius: var(--border-radius); display: flex; align-items: center; user-select: none; margin: 0; }
     .theme-palette > summary::-webkit-details-marker { display: none; }

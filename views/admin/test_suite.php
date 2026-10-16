@@ -1,3 +1,4 @@
+$title = 'Test Suite';
 <style>
     .test-hero { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
     .test-tools { display: flex; gap: .5rem; align-items: center; }

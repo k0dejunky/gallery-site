@@ -28,320 +28,12 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
     <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') . ' Admin' : e(config('app.site_name')) . ' Admin' ?></title>
     <link rel="stylesheet" href="<?= e(url('/assets/admin-shared.css')) ?>?v=2">
     <link rel="stylesheet" href="<?= e(url('/assets/css/user.css')) ?>?v=31">
+    <link rel="stylesheet" href="<?= e(url('/assets/css/admin.css')) ?>?v=<?= (int) (@filemtime(dirname(__DIR__, 2) . '/public/assets/css/admin.css') ?: 1) ?>">
     <style>
-<?= \App\Models\Theme::css(\App\Models\Theme::SCOPE_ADMIN) ?>
-<?= \App\Models\Theme::cssLayout(\App\Models\Theme::SCOPE_ADMIN) ?>
-        body { font-family: sans-serif; max-width: none; width: 100%; margin: 0; padding: 1rem 1.5rem; box-sizing: border-box; color: var(--purple-900); background: var(--pink-200); font-size: var(--font-size-base); line-height: var(--line-height); }
-        a { color: var(--purple-600); }
-        input[type="text"], input[type="email"], input[type="password"], input[type="url"], textarea, select { padding: 0.4rem 0.6rem; border: 1px solid var(--pink-300); border-radius: 4px; background: var(--pink-100); color: var(--purple-900); }
-        input:focus, textarea:focus, select:focus { outline: 2px solid var(--purple-400); }
-        .title-header { text-align: center; margin-bottom: var(--spacing-lg); }
-        .title-header img { max-width: 480px; height: auto; border-radius: var(--border-radius-lg); box-shadow: var(--shadow); }
-        .admin-shell { display: flex; gap: var(--spacing-lg); align-items: flex-start; }
-        .admin-nav { flex: 0 0 230px; display: flex; flex-direction: column; gap: var(--spacing-xs); padding: var(--spacing-md); background: var(--sidebar-bg); border: var(--input-border-width) solid var(--sidebar-border); border-radius: var(--border-radius-lg); position: sticky; top: 0; }
-        .admin-nav .nav-brand { font-weight: bold; font-size: var(--font-size-lg); color: var(--sidebar-heading); text-decoration: none; margin: 0 0 var(--spacing-sm); }
-        .admin-nav .nav-item { display: block; padding: var(--spacing-sm) var(--card-padding); border-radius: var(--border-radius); color: var(--sidebar-link-color); text-decoration: none; background: var(--sidebar-link-bg); border: var(--input-border-width) solid var(--sidebar-link-border); }
-        .admin-nav .nav-item:hover { background: var(--sidebar-link-hover); }
-        .admin-nav .nav-item.active { background: var(--sidebar-active-bg); border-color: var(--sidebar-active-border); color: var(--sidebar-active-color); }
-        .admin-nav .nav-sep { border-top: var(--input-border-width) solid var(--sidebar-border); margin: var(--spacing-sm) 0; }
-        .admin-nav .nav-logout { width: 100%; }
-         .admin-nav .nav-logout button { width: 100%; background: var(--btn-danger-bg); color: var(--btn-danger-color); border: var(--input-border-width) solid var(--btn-danger-border); padding: var(--spacing-xs) var(--spacing-sm); font-size: var(--font-size-sm); }
-         .admin-nav .nav-logout button:hover { background: var(--btn-danger-hover-bg); }
-         .nav-top-content { margin-bottom: var(--spacing-xs); }
-        /* Theme scope tabs follow the sidebar palette so they always match the
-           active theme, regardless of where the block sits in the menu. */
-        .admin-nav .theme-tabs { display: inline-flex; gap: var(--spacing-xs); background: var(--sidebar-link-bg); border: var(--input-border-width) solid var(--sidebar-link-border); border-radius: var(--border-radius); padding: var(--spacing-xs); width: 100%; }
-        .admin-nav .theme-tab { flex: 1; padding: var(--spacing-sm) var(--spacing-md); border: none; border-radius: var(--border-radius); background: transparent; color: var(--sidebar-link-color); cursor: pointer; font-weight: bold; text-align: center; }
-        .admin-nav .theme-tab:hover { background: var(--sidebar-link-hover); }
-        .admin-nav .theme-tab.active { background: var(--sidebar-active-bg); border: var(--input-border-width) solid var(--sidebar-active-border); color: var(--sidebar-active-color); }
-        .admin-nav .btn { text-align: left; }
-        .admin-main { flex: 1; min-width: 0; }
-        .btn { display: inline-block; padding: var(--btn-padding); background: var(--btn-bg); color: var(--btn-color); text-decoration: none; border-radius: var(--btn-radius); border: none; cursor: pointer; font-size: var(--btn-font-size); text-align: center; }
-        .btn:hover { background: var(--btn-hover-bg); }
-        .btn-danger { background: var(--btn-danger-bg); color: var(--btn-danger-color); border: var(--input-border-width) solid var(--btn-danger-border); }
-        .btn-danger:hover { background: var(--btn-danger-hover-bg); }
-        .btn-sm { padding: var(--spacing-xs) var(--spacing-sm); font-size: var(--font-size-sm); }
-        .btn-outline { background: var(--pink-100); color: var(--purple-700); border: 1px solid var(--pink-400); }
-        .btn-outline:hover { background: var(--pink-200); }
-        form.inline { display: inline; }
-        .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
-        .bulk-photo-toolbar { display: flex; align-items: center; gap: var(--spacing-sm); flex-wrap: wrap; margin: 0 0 var(--spacing-sm); padding: var(--spacing-sm); background: var(--sidebar-bg); border: 1px solid var(--sidebar-border); border-radius: var(--border-radius); }
-        .bulk-photo-toolbar label { display: inline-flex; align-items: center; gap: .35rem; font-size: var(--font-size-sm); }
-        .bulk-photo-toolbar .btn:disabled { opacity: .5; cursor: not-allowed; }
-        .admin-form { max-width: 480px; margin: 0 auto; }
-        .admin-form input[type="text"], .admin-form textarea, .admin-form select { width: 100%; box-sizing: border-box; }
-        .admin-form .type-row { text-align: center; margin-bottom: 1rem; }
-        .admin-form .type-row .muted { display: block; margin-top: 0.35rem; }
-        .admin-form .actions { display: flex; gap: 0.5rem; justify-content: center; text-align: center; margin-bottom: 0; }
-        .admin-form .actions .btn { flex: 1; max-width: 12rem; text-align: center; }
-        .chips-justify { justify-content: space-between; }
-        .editor-grid { display: grid; grid-template-columns: 1fr 300px; gap: 1.25rem; align-items: start; margin-top: 1rem; }
-        .editor-preview { background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 10px; padding: 0.75rem; text-align: center; }
-        .editor-preview img, .editor-preview video { max-width: 100%; border-radius: 8px; }
-        .editor-preview .thumb-row { display: flex; gap: 0.75rem; align-items: flex-start; justify-content: center; margin-top: 0.75rem; flex-wrap: wrap; }
-        .editor-preview figure { margin: 0; }
-        .editor-tools { display: flex; flex-direction: column; gap: 0.75rem; }
-        .canvas-editor { margin: 1rem 0; padding: 1rem; background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 10px; }
-        .canvas-stage { min-height: 320px; display: grid; place-items: center; background: #24152d; border-radius: 8px; overflow: auto; position: relative; }
-        .canvas-stage canvas { max-width: 100%; max-height: 70vh; display: block; }
-        .crop-overlay { position: absolute; pointer-events: none; cursor: crosshair; }
-        .crop-selection { position: absolute; border: 2px solid #fff; box-shadow: 0 0 0 9999px rgba(0, 0, 0, .55); }
-        .crop-selection[hidden] { display: none; }
-        .canvas-loading { color: #fff; }
-        .canvas-toolbar { display: grid; gap: 0.8rem; margin-top: 0.8rem; }
-        .canvas-actions, .canvas-controls { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-        .canvas-actions { justify-content: center; }
-        .canvas-controls label { display: grid; gap: 0.25rem; min-width: 145px; font-size: 0.85rem; }
-        .canvas-controls input[type="range"] { width: 145px; }
-        .canvas-hint { margin-left: 0.5rem; font-size: 0.85rem; }
-        .tool-box { background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 8px; padding: 0.75rem; }
-        .tool-box h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
-        .tool-box label { display: block; margin: 0.35rem 0; font-size: 0.85rem; color: var(--purple-800); }
-        .tool-box input[type="text"], .tool-box input[type="number"], .tool-box select, .tool-box input[type="file"] { width: 100%; box-sizing: border-box; margin-top: 0.15rem; }
-        .tool-box input[type="color"] { width: 44px; height: 34px; padding: 2px; border: 1px solid var(--pink-400); border-radius: 6px; background: none; cursor: pointer; }
-        .tool-box .btn { margin-top: 0.5rem; }
-        .rotate-row { display: flex; gap: 0.4rem; }
-        @media (max-width: 820px) { .editor-grid { grid-template-columns: 1fr; } }
-        .media-item { display: flex; flex-direction: column; gap: 0.3rem; background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 8px; padding: 0.4rem; }
-        .media-item img, .media-item video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; background: var(--purple-900); }
-        .media-name { font-size: 0.7rem; color: var(--purple-700); word-break: break-all; text-align: center; }
-        table { border-collapse: collapse; width: 100%; background: var(--pink-100); }
-        th, td { border: 1px solid var(--pink-300); padding: 0.5rem; text-align: left; vertical-align: middle; color: var(--purple-900); }
-        th { background: var(--pink-300); color: var(--purple-900); }
-        .flash { padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1rem; color: var(--purple-900); }
-        .flash.error { background: var(--pink-300); border-left: 4px solid var(--pink-600); }
-        .flash.success { background: var(--pink-200); border-left: 4px solid var(--purple-500); }
-        .log-diff { margin-top: 0.35rem; display: grid; gap: 0.15rem; }
-        .log-diff-line { font-size: 0.85rem; line-height: 1.4; }
-        .log-diff-line .diff-field { font-weight: bold; color: var(--purple-800); }
-        .log-diff-line .diff-before { color: var(--purple-700); text-decoration: line-through; opacity: 0.8; }
-        .log-diff-line .diff-arrow { color: var(--purple-500); margin: 0 0.2rem; }
-        .log-diff-line .diff-after { font-weight: bold; color: var(--purple-900); }
-        .pagination { display: flex; gap: 0.5rem; margin-top: 1.5rem; flex-wrap: wrap; }
-        .pagination a, .pagination span { padding: 0.35rem 0.7rem; border: 1px solid var(--pagination-border); border-radius: 4px; text-decoration: none; color: var(--pagination-color); background: var(--pagination-bg); }
-        .pagination a:hover { background: var(--pagination-hover-bg); }
-        .pagination .current { background: var(--pagination-active-bg); color: var(--pagination-active-color); border-color: var(--pagination-border); }
-        .admin-main table td:last-child { text-align: center; }
-        .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; align-items: center; }
-        .chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; border: 1px solid var(--pink-400); border-radius: 999px; background: var(--pink-300); color: var(--purple-700); text-decoration: none; }
-        .chip a { text-decoration: none; color: inherit; }
-        .chip:hover { background: var(--filter-hover-bg); }
-        .chip.active:hover { background: var(--filter-hover-bg); }
-        .chip:has(input[type="checkbox"]) { cursor: pointer; }
-        .chip input[type="checkbox"] { display: none; }
-        .chip:has(input[type="checkbox"]:checked) { background: var(--purple-300); border-color: var(--purple-400); color: var(--purple-900); }
-        .favorite-option.selected { background: var(--filter-bg); border-color: var(--filter-border); color: var(--filter-color); }
-        .favorite-option.selected:hover { background: var(--filter-hover-bg); }
-        .favorite-option:not(.selected) { background: var(--filter-inactive-bg); border-color: var(--filter-inactive-border); color: var(--filter-inactive-color); }
-        .favorite-option:not(.selected):hover { background: var(--filter-inactive-hover); }
-        .filter-inactive { background: var(--filter-inactive-bg); border-color: var(--filter-inactive-border); color: var(--filter-inactive-color); }
-        .filter-inactive:hover { background: var(--filter-inactive-hover); }
-        .section-title { color: var(--purple-800); border-bottom: 2px solid var(--pink-300); padding-bottom: 0.35rem; margin-top: 1.5rem; }
-        .muted { color: var(--purple-800); opacity: 0.75; }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin: 1rem 0 1.5rem; align-items: start; }
-        .stats-stack { display: flex; flex-direction: column; gap: 1.25rem; }
-        .stats-period { display: flex; align-items: center; gap: 0.5rem; margin: 1rem 0 0.5rem; font-size: 0.9rem; color: var(--purple-700); }
-        .stats-period select { padding: 0.35rem 0.6rem; border: 1px solid var(--pink-300); border-radius: 4px; background: var(--pink-100); color: var(--purple-900); cursor: pointer; }
-        .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin: 1rem 0 0.25rem; }
-        .stat-card { background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 10px; padding: 0.9rem 1rem; }
-        .stat-card b { display: block; font-size: 1.5rem; color: var(--purple-900); }
-        .stat-card small { color: var(--purple-700); text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.7rem; }
-        .stats-panel { background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 10px; padding: 0.75rem 1rem; }
-        .stats-panel h2 { margin: 0.25rem 0 0.5rem; font-size: 1.05rem; color: var(--purple-800); border-bottom: 1px solid var(--pink-300); padding-bottom: 0.35rem; }
-        .stats-panel table { margin-top: 0.5rem; }
-        .trend { font-weight: bold; white-space: nowrap; }
-        .trend-up { color: #1d7a3a; }
-        .trend-down { color: #b3261e; }
-        .trend-new { color: var(--purple-500); }
-        .trend-flat { color: var(--purple-700); opacity: 0.6; }
-        @media (max-width: 900px) { .stats-grid { grid-template-columns: 1fr; } }
-        .theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
-        .theme-swatch { display: grid; grid-template-columns: 75px 1fr 44px auto; align-items: center; gap: 0.6rem; background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 8px; padding: 0.6rem; }
-        .theme-swatch .theme-name { grid-column: 1; grid-row: 1; font-size: 0.85rem; color: var(--purple-800); }
-        .theme-swatch input[type="color"] { grid-column: 3; grid-row: 1; width: 44px; height: 34px; border: 1px solid var(--pink-400); border-radius: 6px; background: none; padding: 2px; cursor: pointer; }
-        .theme-swatch code { grid-column: 4; grid-row: 1; font-size: 0.8rem; color: var(--purple-700); }
-        .theme-swatch .theme-description { grid-column: 1 / -1; grid-row: 2; font-size: 0.8rem; color: var(--purple-700); }
-        pre { background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 8px; padding: 1rem; overflow-x: auto; color: var(--purple-900); }
-        code { background: var(--pink-100); padding: 0.1rem 0.35rem; border-radius: 4px; }
-        h1, h2, h3 { color: var(--purple-800); text-align: center; }
-
-        /* Theme choice cards & preview (for settings page) */
-        .theme-choice-layout { display: grid; grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.4fr); gap: var(--spacing-lg); align-items: start; }
-        .theme-choice-list { display: grid; gap: var(--spacing-sm); }
-        .theme-choice-card { display: flex; flex-direction: column; gap: var(--spacing-xs); padding: var(--card-padding); border: var(--input-border-width) solid var(--pink-300); border-radius: var(--card-radius); background: var(--pink-100); color: var(--purple-900); cursor: pointer; }
-        .theme-choice-card:hover, .theme-choice-card.selected { border-color: var(--purple-400); background: var(--pink-200); }
-        .theme-choice-card input { position: absolute; opacity: 0; pointer-events: none; }
-        .theme-choice-card span { font-size: var(--font-size-xs); color: var(--purple-700); }
-        .theme-choice-preview-label { margin-bottom: var(--spacing-xs); color: var(--purple-700); font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: 0.05em; }
-        .theme-choice-preview { padding: var(--spacing-md); background: var(--pink-200); color: var(--purple-900); border: var(--input-border-width) solid var(--pink-300); border-radius: var(--border-radius-lg); box-shadow: var(--shadow); }
-        .theme-choice-preview > img { display: block; max-width: 180px; max-height: 52px; margin: 0 auto var(--spacing-sm); border-radius: var(--border-radius); }
-        .theme-choice-preview-nav { display: flex; gap: var(--spacing-md); align-items: center; flex-wrap: wrap; padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-md); border-bottom: var(--input-border-width) solid var(--pink-300); }
-        .theme-choice-preview-nav b { color: var(--purple-900); }
-        .theme-choice-preview-nav a, .theme-choice-preview-card a { color: var(--purple-600); text-decoration: none; }
-        .theme-choice-preview-nav a:hover, .theme-choice-preview-card a:hover { color: var(--purple-400); }
-        .theme-choice-preview-body { display: grid; grid-template-columns: 130px 1fr; gap: var(--spacing-md); }
-        .theme-choice-preview aside { display: flex; flex-direction: column; gap: var(--spacing-xs); padding: var(--spacing-sm); background: var(--sidebar-bg); border: var(--input-border-width) solid var(--sidebar-border); border-radius: var(--border-radius); }
-        .theme-choice-preview aside b { color: var(--sidebar-heading); font-size: var(--font-size-xs); }
-        .theme-choice-preview aside span { padding: var(--spacing-xs); background: var(--sidebar-link-bg); border: var(--input-border-width) solid var(--sidebar-link-border); border-radius: var(--border-radius); color: var(--sidebar-link-color); font-size: var(--font-size-xs); }
-        .theme-choice-preview-card { display: flex; flex-direction: column; gap: var(--spacing-xs); padding: var(--card-padding); margin-bottom: var(--spacing-sm); background: var(--card-bg); border: var(--input-border-width) solid var(--card-border); border-radius: var(--card-radius); }
-        .theme-choice-preview-card b { color: var(--card-title-color); }
-        .theme-choice-preview-card small { color: var(--card-text-color); }
-        .theme-choice-preview button { padding: var(--btn-padding); background: var(--btn-bg); color: var(--btn-color); border: 0; border-radius: var(--btn-radius); cursor: pointer; font-size: var(--btn-font-size); }
-        .theme-choice-preview button:hover { background: var(--btn-hover-bg); }
-        @media (max-width: 768px) { .theme-choice-layout { grid-template-columns: 1fr; } }
-
-        /* Global progress / busy overlay */
-        .progress-overlay {
-            position: fixed; inset: 0; z-index: 10000;
-            display: none; align-items: center; justify-content: center;
-            background: rgba(20, 12, 30, 0.55); backdrop-filter: blur(1px);
-        }
-        .progress-overlay.active { display: flex; }
-        .progress-box {
-            width: min(340px, 86vw); background: var(--pink-100); color: var(--purple-900);
-            border: 1px solid var(--purple-400); border-radius: 12px;
-            padding: 1.25rem 1.5rem; box-shadow: 0 10px 40px rgba(0,0,0,.35);
-            text-align: center;
-        }
-        .progress-box .pb-label { font-weight: 600; margin-bottom: .4rem; }
-        .progress-box .pb-sub { font-size: .85rem; color: var(--purple-700); margin-bottom: .9rem; min-height: 1.1em; }
-        .progress-track { height: 10px; border-radius: 999px; background: var(--pink-300); overflow: hidden; }
-        .progress-fill {
-            height: 100%; width: 0%; border-radius: 999px; background: var(--purple-500);
-            transition: width .2s ease;
-        }
-        .progress-box .pb-percent { margin-top: .5rem; font-size: .85rem; color: var(--purple-800); }
-        .progress-box .pb-pulse { margin-top: .8rem; font-size: .85rem; color: var(--purple-700); }
-        .pb-spinner {
-            width: 22px; height: 22px; margin: 0 auto .6rem;
-            border: 3px solid var(--pink-300); border-top-color: var(--purple-500);
-            border-radius: 50%; animation: pb-spin .8s linear infinite;
-        }
-        @keyframes pb-spin { to { transform: rotate(360deg); } }
-
-        /* ---- Mobile navigation drawer ---- */
-        .nav-toggle { display: none; }
-        .nav-backdrop { display: none; }
-        @media (max-width: 900px) {
-            .admin-shell { display: block; }
-            .admin-nav {
-                position: fixed; top: 0; left: 0; bottom: 0; z-index: 900;
-                width: 250px; max-width: 82vw; overflow-y: auto;
-                border-radius: 0 var(--border-radius-lg) var(--border-radius-lg) 0;
-                transform: translateX(-105%); transition: transform .22s ease;
-                box-shadow: var(--shadow);
-            }
-            body.nav-open .admin-nav { transform: translateX(0); }
-            .nav-backdrop {
-                display: none; position: fixed; inset: 0; z-index: 890;
-                background: rgba(20, 12, 30, .45);
-            }
-            body.nav-open .nav-backdrop { display: block; }
-            .nav-toggle {
-                display: inline-flex; align-items: center; justify-content: center;
-                width: 2.4rem; height: 2.4rem; font-size: 1.35rem; line-height: 1;
-                background: var(--sidebar-link-bg); color: var(--purple-700);
-                border: 1px solid var(--pink-400); border-radius: var(--border-radius);
-                cursor: pointer; margin-bottom: .75rem;
-            }
-            .admin-main { width: 100%; }
-            body { padding: .75rem .9rem; }
-            .stat-cards { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
-            .quick-actions { justify-content: flex-start; }
-        }
-
-        /* ---- Quick actions bar ---- */
-        .quick-actions {
-            display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
-            margin: 0 0 1rem; padding: .6rem .8rem;
-            background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: var(--border-radius-lg);
-        }
-        .quick-actions .qa-label { font-size: var(--font-size-sm); color: var(--purple-700); font-weight: bold; margin-right: .25rem; }
-
-        /* ---- Top search bar ---- */
-        .admin-top-search { margin-bottom: 1rem; }
-        .admin-top-search input {
-            width: 100%; box-sizing: border-box;
-            padding: .5rem .85rem; font-size: var(--font-size-sm);
-            border: 1px solid var(--pink-300); border-radius: 8px;
-            background: var(--pink-100); color: var(--purple-900);
-        }
-        .admin-top-search input:focus { outline: 2px solid var(--purple-400); }
-
-        /* ---- Status pills ---- */
-        .pill {
-            display: inline-flex; align-items: center; gap: .3rem;
-            padding: .1rem .55rem; border-radius: 999px;
-            font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
-            background: var(--pink-300); color: var(--purple-700);
-            border: 1px solid var(--pink-400); white-space: nowrap;
-        }
-        .pill-ok   { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
-        .pill-err  { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
-        .pill-warn { background: #fffbeb; color: #b45309; border-color: #fde68a; }
-        .pill-info { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
-        .pill-muted{ background: var(--pink-200); color: var(--purple-800); border-color: var(--pink-300); }
-
-        /* ---- Flash toasts ---- */
-        .flash-stack {
-            position: fixed; top: .9rem; right: .9rem; z-index: 950;
-            display: flex; flex-direction: column; gap: .5rem; max-width: min(360px, 92vw);
-        }
-        .flash-toast {
-            display: flex; align-items: flex-start; gap: .6rem;
-            padding: .7rem .9rem; border-radius: var(--border-radius); box-shadow: var(--shadow);
-            background: var(--pink-100); color: var(--purple-900);
-            border-left: 4px solid var(--purple-500);
-            animation: toast-in .25s ease;
-        }
-        .flash-toast.error { background: #fef2f2; border-left-color: #dc2626; color: #7f1d1d; }
-        .flash-toast.success { background: #f0fdf4; border-left-color: #16a34a; color: #14532d; }
-        .flash-toast .flash-close { margin-left: auto; background: none; border: none; cursor: pointer; color: inherit; opacity: .6; font-size: 1rem; line-height: 1; padding: 0 .1rem; }
-        .flash-toast.hide { opacity: 0; transform: translateX(8px); transition: all .3s ease; }
-        @keyframes toast-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
-
-        /* ---- Command palette ---- */
-        .palette-overlay {
-            position: fixed; inset: 0; z-index: 1000;
-            display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh;
-            background: rgba(20, 12, 30, .5);
-        }
-        .palette-overlay[hidden] { display: none; }
-        .palette {
-            width: min(560px, 92vw); background: var(--pink-100); color: var(--purple-900);
-            border: 1px solid var(--pink-400); border-radius: var(--border-radius-lg);
-            box-shadow: 0 18px 50px rgba(0, 0, 0, .4); overflow: hidden;
-        }
-        .palette-input {
-            width: 100%; box-sizing: border-box; padding: .9rem 1rem; font-size: 1rem;
-            border: none; border-bottom: 1px solid var(--pink-300); background: var(--pink-200);
-            color: var(--purple-900); outline: none;
-        }
-        .palette-list { max-height: 55vh; overflow-y: auto; padding: .4rem; }
-        .palette-group { font-size: .72rem; font-weight: bold; text-transform: uppercase; letter-spacing: .05em; color: var(--purple-600); padding: .55rem .6rem .2rem; }
-        .palette-item {
-            display: flex; align-items: center; gap: .6rem;
-            padding: .5rem .6rem; border-radius: var(--border-radius); cursor: pointer;
-            text-decoration: none; color: var(--purple-900);
-        }
-        .palette-item .pi-kind { font-size: .7rem; color: var(--purple-600); min-width: 3.4rem; text-transform: uppercase; }
-        .palette-item .pi-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .palette-item.active, .palette-item:hover { background: var(--sidebar-active-bg, #7c3aed); color: var(--sidebar-active-color, #fff); }
-        .palette-item.active .pi-kind { color: inherit; opacity: .85; }
-        .palette-empty { padding: 1rem; text-align: center; color: var(--purple-700); }
-        .palette-hint { padding: .4rem .7rem; font-size: .72rem; color: var(--purple-600); border-top: 1px solid var(--pink-300); }
-
-        /* ---- Collapsible dashboard sections ---- */
-        details.sys-card > summary {
-            cursor: pointer; list-style: none; user-select: none; display: flex; align-items: center; gap: .35rem;
-        }
-        details.sys-card > summary::-webkit-details-marker { display: none; }
-        details.sys-card > summary::before {
-            content: '▸'; display: inline-block; transition: transform .15s ease; color: var(--purple-500);
-        }
-        details.sys-card[open] > summary::before { transform: rotate(90deg); }
-        details.sys-card > summary h2 { margin: 0; }
-        details.sys-card > summary .collapsible-meta { margin-left: auto; font-size: var(--font-size-sm); }
+    <?= \App\Models\Theme::css(\App\Models\Theme::SCOPE_ADMIN) ?>
+    <?= \App\Models\Theme::cssLayout(\App\Models\Theme::SCOPE_ADMIN) ?>
+        body.admin-theme { font-size: var(--font-size-base); line-height: var(--line-height); }
+        .admin-theme a { color: var(--adm-accent-strong); }
     </style>
 </head>
 <body class="admin-theme site-compact" data-base="<?= e(config('app.base_path')) ?>" data-user="1">
@@ -356,17 +48,17 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
     </div>
     <style>.impersonating .title-header { display: none; }</style>
 <?php endif; ?>
-    <header class="title-header"<?= $isSiteEditor ? ' style="display:none"' : '' ?>>
-            <img src="<?= e(\App\Models\Theme::titleImageUrl(\App\Models\Theme::SCOPE_ADMIN)) ?>" alt="<?= e(config('app.site_name')) ?> Admin">
-    </header>
     <div class="admin-shell" data-se-move-key="shell">
         <div class="nav-backdrop" id="nav-backdrop" aria-hidden="true" data-se-move-key="nav-backdrop"></div>
         <nav class="admin-nav" id="admin-nav" data-se-move-key="nav">
             <?php if (!empty($topContent)): ?>
-                <div class="nav-top-content"><?= $topContent ?></div>
-                <div class="nav-sep"></div>
+                <div class="nav-top-content" data-se-move-key="nav-top-content"><?= $topContent ?></div>
+                <div class="nav-sep" data-se-move-key="nav-sep-top"></div>
             <?php endif; ?>
-            <a class="nav-brand" href="<?= url('/admin') ?>" data-se-move-key="nav-brand">Admin</a>
+            <a class="nav-brand" href="<?= url('/admin') ?>" data-se-move-key="nav-brand">
+                <img src="<?= e(\App\Models\Theme::titleImageUrl(\App\Models\Theme::SCOPE_ADMIN)) ?>" alt="<?= e(config('app.site_name')) ?> Admin" onerror="this.remove()">
+            </a>
+            <div class="nav-group" data-se-move-key="nav-group-overview">Overview</div>
             <a class="nav-item <?= $navActive('/admin', true) ?>" href="<?= url('/admin') ?>" data-se-move-key="nav-dashboard">Dashboard</a>
             <a class="nav-item <?= $navActive('/admin/abandoned-uploads') ?>" href="<?= url('/admin/abandoned-uploads') ?>" data-se-move-key="nav-abandoned-uploads">Abandoned Uploads</a>
             <a class="nav-item <?= $navActive('/admin/trends') ?>" href="<?= url('/admin/trends') ?>" data-se-move-key="nav-trends">Trends</a>
@@ -376,42 +68,44 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             <?php if (\App\Core\Auth::can('analytics')): ?>
                 <a class="nav-item <?= $navActive('/admin/analytics') ?>" href="<?= url('/admin/analytics') ?>" data-se-move-key="nav-analytics">Web Analytics</a>
             <?php endif; ?>
+            <div class="nav-group" data-se-move-key="nav-group-content">Content</div>
             <a class="nav-item <?= $navActive('/admin/galleries') ?>" href="<?= url('/admin/galleries') ?>" data-se-move-key="nav-galleries">Gallery Management</a>
-            <a class="nav-item <?= $navActive('/admin/engagement') ?>" href="<?= url('/admin/engagement') ?>" data-se-move-key="nav-engagement">Engagement</a>
-            <a class="nav-item <?= $navActive('/admin/earnings') ?>" href="<?= url('/admin/earnings') ?>" data-se-move-key="nav-earnings">Earnings</a>
-            <a class="nav-item <?= $navActive('/admin/profile') ?>" href="<?= url('/admin/profile') ?>" data-se-move-key="nav-profile">Creator Profile</a>
-            <a class="nav-item <?= $navActive('/admin/video-projects') ?>" href="<?= url('/admin/video-projects') ?>" data-se-move-key="nav-video-projects">Video Projects</a>
-            <a class="nav-item <?= $navActive('/admin/auto-poster') ?>" href="<?= url('/admin/auto-poster') ?>" data-se-move-key="nav-auto-poster">Auto Poster</a>
-            <?php if (\App\Core\Auth::can('membership')): ?>
-                <a class="nav-item <?= $navActive('/admin/emailer') ?>" href="<?= url('/admin/emailer') ?>" data-se-move-key="nav-emailer">Emailer</a>
-            <?php endif; ?>
             <a class="nav-item <?= $navActive('/admin/categories') ?>" href="<?= url('/admin/categories') ?>" data-se-move-key="nav-categories">Categories</a>
             <a class="nav-item <?= $navActive('/admin/category-suggestions') ?>" href="<?= url('/admin/category-suggestions') ?>" data-se-move-key="nav-category-suggestions">AI Suggestions</a>
-            <a class="nav-item <?= $navActive('/admin/users') ?>" href="<?= url('/admin/users') ?>" data-se-move-key="nav-users">Users</a>
-            <a class="nav-item <?= $navActive('/admin/plans') ?>" href="<?= url('/admin/plans') ?>" data-se-move-key="nav-plans">Membership</a>
-            <?php if (\App\Core\Auth::can('membership')): ?>
-                <a class="nav-item <?= $navActive('/admin/subscriptions') ?>" href="<?= url('/admin/subscriptions') ?>" data-se-move-key="nav-subscriptions">Subscriptions</a>
-                <a class="nav-item <?= $navActive('/admin/payment-processors') ?>" href="<?= url('/admin/payment-processors') ?>" data-se-move-key="nav-payments">Payments</a>
-            <?php endif; ?>
+            <a class="nav-item <?= $navActive('/admin/video-projects') ?>" href="<?= url('/admin/video-projects') ?>" data-se-move-key="nav-video-projects">Video Projects</a>
+            <a class="nav-item <?= $navActive('/admin/profile') ?>" href="<?= url('/admin/profile') ?>" data-se-move-key="nav-profile">Creator Profile</a>
             <a class="nav-item <?= $navActive('/admin/theme') ?>" href="<?= url('/admin/theme') ?>" data-se-move-key="nav-theme">Theme</a>
             <?php if (\App\Core\Auth::can('site_editor')): ?>
                 <a class="nav-item <?= $navActive('/admin/site-editor') ?>" href="<?= url('/admin/site-editor') ?>" data-se-move-key="nav-site-editor">Site Editor</a>
             <?php endif; ?>
-            <a class="nav-item <?= $navActive('/admin/logs') ?>" href="<?= url('/admin/logs') ?>" data-se-move-key="nav-logs">Logs</a>
-            <?php if (\App\Core\Auth::can('user_monitor')): ?>
-                <a class="nav-item <?= $navActive('/admin/user-monitor') ?>" href="<?= url('/admin/user-monitor') ?>" data-se-move-key="nav-user-monitor">User Monitor</a>
-            <?php endif; ?>
-            <a class="nav-item <?= $navActive('/admin/error-logs') ?>" href="<?= url('/admin/error-logs') ?>" data-se-move-key="nav-error-logs">Error Logs</a>
-            <a class="nav-item <?= $navActive('/admin/system') ?>" href="<?= url('/admin/system') ?>" data-se-move-key="nav-system">System</a>
-            <a class="nav-item <?= $navActive('/admin/mail') ?>" href="<?= url('/admin/mail') ?>" data-se-move-key="nav-mail">Email</a>
-            <a class="nav-item <?= $navActive('/admin/test-suite') ?>" href="<?= url('/admin/test-suite') ?>" data-se-move-key="nav-test-suite">Test suite</a>
-            <a class="nav-item <?= $navActive('/admin/help') ?>" href="<?= url('/admin/help') ?>" data-se-move-key="nav-help">Documentation</a>
-            <?php if (\App\Core\Auth::can('support')): ?>
-                <a class="nav-item <?= $navActive('/admin/support') ?>" href="<?= url('/admin/support') ?>" data-se-move-key="nav-support">Support</a>
-            <?php endif; ?>
+            <div class="nav-group" data-se-move-key="nav-group-community">Community &amp; growth</div>
+            <a class="nav-item <?= $navActive('/admin/engagement') ?>" href="<?= url('/admin/engagement') ?>" data-se-move-key="nav-engagement">Engagement</a>
+            <a class="nav-item <?= $navActive('/admin/users') ?>" href="<?= url('/admin/users') ?>" data-se-move-key="nav-users">Users</a>
             <?php if (\App\Core\Auth::can('chat')): ?>
                 <a class="nav-item <?= $navActive('/admin/chat') ?>" href="<?= url('/admin/chat') ?>" data-se-move-key="nav-chat">Chat</a>
             <?php endif; ?>
+            <?php if (\App\Core\Auth::can('support')): ?>
+                <a class="nav-item <?= $navActive('/admin/support') ?>" href="<?= url('/admin/support') ?>" data-se-move-key="nav-support">Support</a>
+            <?php endif; ?>
+            <a class="nav-item <?= $navActive('/admin/auto-poster') ?>" href="<?= url('/admin/auto-poster') ?>" data-se-move-key="nav-auto-poster">Auto Poster</a>
+            <div class="nav-group" data-se-move-key="nav-group-money">Monetization</div>
+            <a class="nav-item <?= $navActive('/admin/earnings') ?>" href="<?= url('/admin/earnings') ?>" data-se-move-key="nav-earnings">Earnings</a>
+            <?php if (\App\Core\Auth::can('membership')): ?>
+                <a class="nav-item <?= $navActive('/admin/plans') ?>" href="<?= url('/admin/plans') ?>" data-se-move-key="nav-plans">Membership Plans</a>
+                <a class="nav-item <?= $navActive('/admin/subscriptions') ?>" href="<?= url('/admin/subscriptions') ?>" data-se-move-key="nav-subscriptions">Subscriptions</a>
+                <a class="nav-item <?= $navActive('/admin/payment-processors') ?>" href="<?= url('/admin/payment-processors') ?>" data-se-move-key="nav-payments">Payment Processors</a>
+                <a class="nav-item <?= $navActive('/admin/emailer') ?>" href="<?= url('/admin/emailer') ?>" data-se-move-key="nav-emailer">Emailer</a>
+            <?php endif; ?>
+            <div class="nav-group" data-se-move-key="nav-group-system">System</div>
+            <a class="nav-item <?= $navActive('/admin/system') ?>" href="<?= url('/admin/system') ?>" data-se-move-key="nav-system">System</a>
+            <a class="nav-item <?= $navActive('/admin/mail') ?>" href="<?= url('/admin/mail') ?>" data-se-move-key="nav-mail">Email</a>
+            <a class="nav-item <?= $navActive('/admin/logs') ?>" href="<?= url('/admin/logs') ?>" data-se-move-key="nav-logs">Logs</a>
+            <a class="nav-item <?= $navActive('/admin/error-logs') ?>" href="<?= url('/admin/error-logs') ?>" data-se-move-key="nav-error-logs">Error Logs</a>
+            <?php if (\App\Core\Auth::can('user_monitor')): ?>
+                <a class="nav-item <?= $navActive('/admin/user-monitor') ?>" href="<?= url('/admin/user-monitor') ?>" data-se-move-key="nav-user-monitor">User Monitor</a>
+            <?php endif; ?>
+            <a class="nav-item <?= $navActive('/admin/test-suite') ?>" href="<?= url('/admin/test-suite') ?>" data-se-move-key="nav-test-suite">Test suite</a>
+            <a class="nav-item <?= $navActive('/admin/help') ?>" href="<?= url('/admin/help') ?>" data-se-move-key="nav-help">Documentation</a>
             <div class="nav-sep" data-se-move-key="nav-sep"></div>
             <a class="nav-item" href="<?= url('/galleries') ?>" data-se-move-key="nav-view-site">View Site</a>
             <a class="nav-item <?= $navActive('/settings') ?>" href="<?= url('/settings') ?>" data-se-move-key="nav-settings">Settings</a>
@@ -421,11 +115,15 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             </form>
         </nav>
         <main class="admin-main" data-se-move-key="main">
-            <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="admin-nav">☰</button>
-            <form class="admin-top-search" method="get" action="<?= url('/admin/search') ?>" data-se-move-key="nav-search">
-                <input type="search" name="q" placeholder="Search users, galleries…" value=""
-                       aria-label="Global admin search">
-            </form>
+            <div class="admin-topbar">
+                <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="admin-nav">&#9776;</button>
+                <h1 class="topbar-title"><?= isset($title) ? e($title) : 'Dashboard' ?></h1>
+                <span class="topbar-spacer"></span>
+                <form class="admin-top-search" method="get" action="<?= url('/admin/search') ?>" data-se-move-key="nav-search">
+                    <input type="search" name="q" placeholder="Search users, galleries&hellip;" value="" aria-label="Global admin search">
+                </form>
+                <a class="topbar-link" href="<?= url('/galleries') ?>">View site</a>
+            </div>
             <div class="flash-stack" role="status" aria-live="polite">
             <?php foreach ($flash as $flashType => $flashMessages): ?>
                 <?php foreach ($flashMessages as $flashMessage): ?>
