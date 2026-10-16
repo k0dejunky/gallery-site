@@ -1186,8 +1186,12 @@ class SmokeChecks
                 : $bad('daily-broadcast admin routes must be registered');
         });
         $add('smoke.chat_daily.view', 'Smoke · Daily chat', 'Admin chat page has a daily-chat form and send log', static function () use ($chatView, $ok, $bad): array {
-            return strpos($chatView, 'Daily Chat Send Log') !== false
-                && strpos($chatView, 'daily-broadcast') !== false
+            // Assert on the endpoint, the composer and the log data rather than
+            // the heading prose, so rewording the page cannot break the gate
+            // while dropping the feature would.
+            return strpos($chatView, '/admin/chat/daily-broadcast') !== false
+                && strpos($chatView, 'name="message"') !== false
+                && strpos($chatView, 'value="schedule"') !== false
                 && strpos($chatView, '$broadcasts') !== false
                 ? $ok('form + send log present')
                 : $bad('admin chat view must render the daily chat form and send log');
@@ -1234,11 +1238,14 @@ class SmokeChecks
                 : $bad('questionnaire admin/member routes must be registered');
         });
         $add('smoke.questionnaire.admin_view', 'Smoke · Questionnaires', 'Admin chat page has the send-questionnaire form + log', static function () use ($chatViewQ, $ok, $bad): array {
-            return strpos($chatViewQ, 'Send a questionnaire to all users') !== false
-                && strpos($chatViewQ, 'allow_replies') !== false
+            // Structure, not prose: the endpoint, the builder container and the
+            // reply toggle must exist for the feature to work at all.
+            return strpos($chatViewQ, '/admin/chat/questionnaire') !== false
                 && strpos($chatViewQ, 'questionnaire-form') !== false
-                && strpos($chatViewQ, 'Questionnaires') !== false
-                ? $ok('form + allow-replies + log present')
+                && strpos($chatViewQ, 'id="question-rows"') !== false
+                && strpos($chatViewQ, 'allow_replies') !== false
+                && strpos($chatViewQ, '$questionnaires') !== false
+                ? $ok('form + builder + allow-replies + log present')
                 : $bad('admin chat view must render the questionnaire form and list');
         });
         $add('smoke.questionnaire.member_view', 'Smoke · Questionnaires', 'Member chat page renders questionnaires and a disabled answered state', static function () use ($chatIndex, $ok, $bad): array {
@@ -1279,7 +1286,8 @@ class SmokeChecks
         $add('smoke.chat_operator_message.admin', 'Smoke · Operator messaging', 'Admin can message any user and toggle replies', static function () use ($chatAdmin, $chatView, $routes, $ok, $bad): array {
             return strpos($chatAdmin, 'function newConversation') !== false
                 && strpos($chatAdmin, 'function toggleReply') !== false
-                && strpos($chatView, 'Message any user') !== false
+                && strpos($chatView, 'name="user_email"') !== false
+                && strpos($chatView, '/admin/chat/new') !== false
                 && strpos($chatView, 'reply-toggle') !== false
                 && in_array(['POST', '/admin/chat/new', 'AdminChatController@newConversation', 'chat'], $routes, true)
                 && in_array(['POST', '/admin/chat/{id}/reply-toggle', 'AdminChatController@toggleReply', 'chat'], $routes, true)
