@@ -24,12 +24,15 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
 <div class="stats-panel" style="margin-bottom:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <h2>Auto Poster</h2>
-        <div role="tablist" aria-label="Platform" id="ap-platform-switch" style="display:inline-flex;gap:.25rem;border:1px solid #d1d5db;border-radius:8px;padding:.25rem;flex-wrap:wrap;">
+        <?php // 23 channels wrapped into ragged rows as inline-flex. An auto-fill
+              // grid of equal cells keeps them aligned however many exist. ?>
+        <div role="tablist" aria-label="Platform" id="ap-platform-switch" class="ap-tabs">
             <?php foreach ($enabledCh as $ch): ?>
                 <?php $chKey = (string) $ch['key']; $chLabel = (string) $ch['label']; $active = $chKey === $platform; ?>
-                <a role="tab" id="ap-tab-<?= e($chKey) ?>" aria-selected="<?= $active ? 'true' : 'false' ?>"
+                <a role="tab" id="ap-tab-<?= e($chKey) ?>" class="ap-tab<?= $active ? ' active' : '' ?>"
+                   aria-selected="<?= $active ? 'true' : 'false' ?>"
                    href="<?= e($chKey === 'x' ? url('/admin/auto-poster') : url('/admin/auto-poster/' . $chKey)) ?>"
-                   style="padding:.35rem .9rem;border-radius:6px;text-decoration:none;font-size:.9rem;<?= $active ? 'background:#4f46e5;color:#fff;font-weight:600;' : 'color:#374151;' ?>"><?= e($chLabel) ?></a>
+                   title="<?= e($chLabel) ?>"><?= e($chLabel) ?></a>
             <?php endforeach; ?>
         </div>
     </div>
@@ -38,15 +41,17 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
         Each tab formats its posts automatically for that channel.
         Schedule times use the site timezone set on Settings.
     </p>
-    <form method="post" action="<?= url('/admin/auto-poster/channels/enable') ?>" style="margin-top:.6rem;">
+    <form method="post" action="<?= url('/admin/auto-poster/channels/enable') ?>" class="ap-channels-form">
         <?= csrf_field() ?>
         <input type="hidden" name="platform" value="<?= e($platform) ?>">
-        <span class="muted" style="font-size:.8rem;">Channels enabled for the auto-queue:</span>
+        <span class="ap-channels-label">Channels enabled for the auto-queue</span>
+        <div class="ap-channels">
         <?php foreach (Platforms::enabled() as $ch): ?>
             <?php $chKey = (string) $ch['key']; ?>
-            <label class="chip" style="margin-left:.4rem;"><input type="checkbox" name="channels[]" value="<?= e($chKey) ?>" <?= in_array($chKey, (array) ($config['enabled_channels'] ?? Platforms::enabledKeys()), true) ? 'checked' : '' ?>> <?= e((string) $ch['label']) ?></label>
+            <label class="ap-chip"><input type="checkbox" name="channels[]" value="<?= e($chKey) ?>" <?= in_array($chKey, (array) ($config['enabled_channels'] ?? Platforms::enabledKeys()), true) ? 'checked' : '' ?>> <?= e((string) $ch['label']) ?></label>
         <?php endforeach; ?>
-        <button type="submit" class="btn btn-sm" style="margin-left:.5rem;">Save channels</button>
+        </div>
+        <button type="submit" class="btn btn-sm ap-channels-save">Save channels</button>
     </form>
 </div>
 
@@ -251,11 +256,10 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
                 <thead>
                     <tr>
                         <th>Status</th>
-                        <th>Platform</th>
                         <th>Gallery</th>
                         <th>Text</th>
                         <th>Posted</th>
-                        <th style="text-align:right;">Actions</th>
+                        <th class="act">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -269,7 +273,6 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
                     <?php $rpEditable = $rpStatus === 'failed'; ?>
                     <tr>
                         <td><span class="ap-pill ap-pill-<?= e($rpPill) ?>"><span class="ap-dot"></span><?= e(ucfirst($rpStatus)) ?></span></td>
-                        <td><?= e(\App\Core\Platforms::label((string) ($rp['platform'] ?? ''))) ?></td>
                         <td class="muted" style="font-size:.8rem;"><?= e((string) $rp['gallery_title']) ?></td>
                         <?php if ($rpEditable): ?>
                             <?php // Failed posts: editable text so the wording can be fixed, then reposted/scheduled. ?>
@@ -289,37 +292,40 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
                             </td>
                         <?php endif; ?>
                         <td class="ap-time"><span class="muted"><?= $rpTs ? e(tzdate('Y-m-d H:i', $rpTs)) : '&mdash;' ?></span></td>
-                        <td style="text-align:right;white-space:nowrap;">
+                        <td class="act">
                             <?php if ($rpEditable): ?>
-                                <?php // One shared form; the textarea/schedule/buttons link to it via the HTML5 "form" attribute. ?>
+                                <?php // One shared form; the schedule picker and both buttons link to it
+                                      // via the HTML5 "form" attribute. ?>
                                 <form id="ap-edit-<?= (int) $rp['id'] ?>" method="post" action="<?= url('/admin/auto-poster/history/edit') ?>">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
                                 </form>
-                                 <input type="datetime-local" name="scheduled_at" form="ap-edit-<?= (int) $rp['id'] ?>"
-                                        value="<?= e(\App\Models\AutoPostQueue::rescheduleDefault($platform)) ?>"
-                                       style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;width:9.5rem;"
+                                <input type="datetime-local" name="scheduled_at" class="ap-when" form="ap-edit-<?= (int) $rp['id'] ?>"
+                                       value="<?= e(\App\Models\AutoPostQueue::rescheduleDefault($platform)) ?>"
                                        aria-label="Schedule repost time for post #<?= (int) $rp['id'] ?>">
-                                <button type="submit" name="action" value="repost" form="ap-edit-<?= (int) $rp['id'] ?>"
-                                        class="btn btn-sm" title="Publish the edited text now">Repost now</button>
-                                <button type="submit" name="action" value="reschedule" form="ap-edit-<?= (int) $rp['id'] ?>"
-                                        class="btn btn-sm" title="Queue the edited text to publish at the chosen time">Reschedule</button>
+                                <div class="adm-actions">
+                                    <button type="submit" name="action" value="repost" form="ap-edit-<?= (int) $rp['id'] ?>"
+                                            class="btn btn-sm" title="Publish the edited text now">Repost now</button>
+                                    <button type="submit" name="action" value="reschedule" form="ap-edit-<?= (int) $rp['id'] ?>"
+                                            class="btn btn-sm" title="Queue the edited text to publish at the chosen time">Reschedule</button>
+                                </div>
                             <?php else: ?>
-                                <form class="inline" method="post" action="<?= url('/admin/auto-poster/history/repost') ?>"
-                                      data-confirm="Repost #<?= (int) $rp['id'] ?> to <?= e($platformName) ?> now?">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
-                                    <button type="submit" class="btn btn-sm" title="Post the same content again right away">Repost</button>
-                                </form>
-                                <form class="inline" method="post" action="<?= url('/admin/auto-poster/history/reschedule') ?>">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
-                                     <input type="datetime-local" name="scheduled_at"
-                                            value="<?= e(\App\Models\AutoPostQueue::rescheduleDefault($platform)) ?>"
-                                           style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;width:9.5rem;"
-                                           aria-label="Schedule repost time for post #<?= (int) $rp['id'] ?>">
-                                    <button type="submit" class="btn btn-sm" title="Queue to publish again at the chosen time">Reschedule</button>
-                                </form>
+                                <div class="adm-actions ap-actions-stack">
+                                    <form class="inline" method="post" action="<?= url('/admin/auto-poster/history/repost') ?>"
+                                          data-confirm="Repost #<?= (int) $rp['id'] ?> to <?= e($platformName) ?> now?">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
+                                        <button type="submit" class="btn btn-sm" title="Post the same content again right away">Repost</button>
+                                    </form>
+                                    <form class="inline" method="post" action="<?= url('/admin/auto-poster/history/reschedule') ?>">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="post_id" value="<?= (int) $rp['id'] ?>">
+                                        <input type="datetime-local" name="scheduled_at" class="ap-when"
+                                               value="<?= e(\App\Models\AutoPostQueue::rescheduleDefault($platform)) ?>"
+                                               aria-label="Schedule repost time for post #<?= (int) $rp['id'] ?>">
+                                        <button type="submit" class="btn btn-sm" title="Queue to publish again at the chosen time">Reschedule</button>
+                                    </form>
+                                </div>
                             <?php endif; ?>
                         </td>
                     </tr>

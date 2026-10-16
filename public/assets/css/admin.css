@@ -969,6 +969,161 @@ body.admin-theme {
 
 .admin-theme .adm-create-actions { display: flex; gap: .4rem; flex: none; margin-left: auto; }
 
+/* ---------- Auto poster --------------------------------------------------- */
+
+/* Channel switcher: 23 channels used to wrap into three ragged rows of
+   inline-flex pills with hardcoded colours. Equal grid cells stay aligned no
+   matter how many channels exist. */
+.admin-theme .ap-tabs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+    gap: .35rem;
+    width: 100%;
+    margin-bottom: .75rem;
+}
+
+.admin-theme .ap-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: .4rem .6rem;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+    text-decoration: none;
+    color: var(--adm-text-dim);
+    background: var(--adm-surface);
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: border-color .12s ease, background .12s ease, color .12s ease;
+}
+
+.admin-theme .ap-tab:hover {
+    color: var(--adm-accent-strong);
+    border-color: var(--adm-accent);
+    background: var(--adm-accent-soft);
+}
+
+.admin-theme .ap-tab.active {
+    background: var(--adm-accent-strong);
+    border-color: var(--adm-accent-strong);
+    color: #fff;
+    font-weight: 600;
+}
+
+/* Channel enable toggles. */
+.admin-theme .ap-channels-form {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .4rem;
+    margin-top: .9rem;
+    padding-top: .85rem;
+    border-top: 1px solid var(--adm-border);
+}
+
+.admin-theme .ap-channels-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--adm-text-faint);
+    margin-right: .25rem;
+}
+
+.admin-theme .ap-channels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    min-width: 0;
+}
+
+.admin-theme .ap-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    margin: 0;
+    padding: .28rem .65rem;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--adm-text-dim);
+    background: var(--adm-surface);
+    border: 1px solid var(--adm-border);
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color .12s ease, background .12s ease, color .12s ease;
+}
+
+.admin-theme .ap-chip:hover { border-color: var(--adm-accent); }
+
+.admin-theme .ap-chip:has(input:checked) {
+    color: var(--adm-accent-strong);
+    background: var(--adm-accent-soft);
+    border-color: var(--adm-accent);
+    font-weight: 600;
+}
+
+.admin-theme .ap-chip input { margin: 0; accent-color: var(--adm-accent-strong); }
+
+.admin-theme .ap-channels-save { flex: none; align-self: center; }
+
+/* user.css sets `table td:nth-child(1) { overflow-wrap: anywhere; word-break:
+   break-word }` for member-side category names. It leaks into admin and was
+   breaking the status badge mid-word ("SKIPP / ED"), because a badge is short,
+   fixed content that must never wrap. Same for every other status pill. */
+.admin-theme .ap-pill,
+.admin-theme .status-badge,
+.admin-theme .pill {
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
+}
+
+/* Row actions on the recent-posts table: the schedule picker on its own line,
+   the buttons right-aligned beneath it. Inline they overflowed the cell and
+   the datetime input got clipped by the calendar glyph. */
+.admin-theme .ap-actions-stack { flex-direction: column; align-items: stretch; gap: .3rem; }
+.admin-theme .ap-actions-stack > .inline { display: flex; justify-content: flex-end; gap: .3rem; }
+.admin-theme .ap-actions-stack .ap-when { flex: 1 1 auto; min-width: 0; width: auto; }
+
+/* Repost and Reschedule are separate forms (different endpoints), so they
+   cannot share one flex row as boxes. `display: contents` dissolves the form
+   wrappers for layout only - the forms still submit normally - which puts the
+   schedule picker and both buttons on a single line instead of two. */
+.admin-theme td.act .ap-actions-stack {
+    display: grid;
+    /* 11rem is what a native datetime-local needs for "10/16/2026, 07:35 AM"
+       plus its calendar picker. Narrower and the time is clipped. */
+    grid-template-columns: minmax(11rem, auto) auto auto;
+    align-items: center;
+    gap: .3rem;
+}
+
+.admin-theme td.act .ap-actions-stack > .inline { display: contents; }
+.admin-theme td.act .ap-actions-stack .ap-when { grid-area: 1 / 1; }
+.admin-theme td.act .ap-actions-stack > .inline:first-child .btn { grid-area: 1 / 2; }
+.admin-theme td.act .ap-actions-stack > .inline:last-child .btn { grid-area: 1 / 3; }
+
+/* The datetime picker replaced a fixed 9.5rem inline width. */
+.admin-theme .ap-when {
+    font-size: 12.5px;
+    padding: .25rem .4rem;
+    border: 1px solid var(--adm-border-strong);
+    border-radius: var(--adm-radius-sm);
+    background: var(--adm-surface);
+    color: var(--adm-text);
+    width: 100%;
+}
+
+
+/* A status column needs to be wide enough for its longest badge. */
+.admin-theme .ap-table td:first-child,
+.admin-theme .ap-table th:first-child { min-width: 6.5rem; }
+
 /* ---------- Traffic table ------------------------------------------------- */
 
 .admin-theme .traffic-table td:first-child { min-width: 12rem; }
