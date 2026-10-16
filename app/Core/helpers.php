@@ -1658,7 +1658,7 @@ function create_video_frame(string $src, string $dest, int $width, int $height, 
  * the operator an icon, a headline, one line of explanation and - where there
  * is an obvious next step - a button that performs it.
  *
- * @param string $icon    AdminIcon name, e.g. 'image'.
+ * @param string $icon    Icon name, e.g. 'image'.
  * @param string $title   Short headline, e.g. 'No categories yet'.
  * @param string $body    One sentence explaining what will appear here.
  * @param array{href?:string,label?:string}|null $action
@@ -1666,7 +1666,7 @@ function create_video_frame(string $src, string $dest, int $width, int $height, 
 function admin_empty(string $icon, string $title, string $body = '', ?array $action = null): string
 {
     $html = '<div class="adm-empty">'
-        . '<span class="adm-empty-ico">' . \App\Core\AdminIcon::svg($icon, 'nav-ico') . '</span>'
+        . '<span class="adm-empty-ico">' . \App\Core\Icon::svg($icon, 'nav-ico') . '</span>'
         . '<strong>' . e($title) . '</strong>';
 
     if ($body !== '') {

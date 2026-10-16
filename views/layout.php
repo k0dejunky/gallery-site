@@ -100,9 +100,9 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     <link rel="preload" as="image" href="<?= e($lcpPreload) ?>" fetchpriority="high">
     <?php endif; ?>
     <link rel="preload" as="style" href="<?= e(url('/theme.css') . '?v=' . \App\Models\Theme::themeCssVersion($userThemePreset)) ?>">
-    <link rel="preload" as="style" href="<?= url('/assets/css/user.css') ?>?v=32">
+    <link rel="preload" as="style" href="<?= url('/assets/css/user.css') ?>?v=33">
     <link rel="stylesheet" href="<?= e(url('/theme.css') . '?v=' . \App\Models\Theme::themeCssVersion($userThemePreset)) ?>">
-    <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=32">
+    <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=33">
 </head>
 <body<?= $isAuthPage ? '' : ' class="site-compact"' ?> data-base="<?= e(config('app.base_path')) ?>" data-user="<?= $user !== null ? '1' : '0' ?>">
 <?php if ($ageGateRequired): ?>
@@ -198,43 +198,124 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
             }
         }
         ?>
+        <?php
+        // The member rail mirrors the admin's: an identity block at the top, a
+        // scrollable column of icon links grouped by purpose, and the sign-out
+        // control pinned at the bottom. Colours still come from the theme's
+        // --sidebar-* tokens, so the theme editor keeps working on it.
+        $icon = static fn (string $name): string => \App\Core\Icon::svg($name, 'rail-ico');
+        $navWallUnread = $user !== null ? \App\Models\Notification::unreadCount((int) $user['id']) : 0;
+        $memberName = (string) ($user['email'] ?? '');
+        $memberInitial = $memberName !== '' ? strtoupper(substr($memberName, 0, 1)) : '?';
+        $memberLevel = \App\Core\Auth::hasActiveSubscription() ? 'Active member' : 'Free account';
+
+        $railGroups = [
+            [
+                'label' => 'Overview',
+                'items' => [
+                    ['key' => 'pub-account', 'label' => 'Dashboard', 'href' => '/account', 'icon' => 'grid',
+                     'active' => $currentPath === url('/account')],
+                ],
+            ],
+            [
+                'label' => 'Browse',
+                'items' => [
+                    ['key' => 'pub-galleries', 'label' => 'Galleries', 'href' => '/galleries', 'icon' => 'image',
+                     'active' => strpos($currentPath, url('/galleries')) === 0],
+                    ['key' => 'pub-favorites', 'label' => 'Favorites', 'href' => '/favorites', 'icon' => 'heart',
+                     'active' => strpos($currentPath, url('/favorites')) === 0,
+                     'badge' => ($user !== null && !\App\Core\Auth::hasActiveSubscription())
+                        ? '<span class="nav-gated" title="Favorites require a Silver or higher membership">Silver</span>' : ''],
+                    ['key' => 'pub-collections', 'label' => 'Collections', 'href' => '/collections', 'icon' => 'book',
+                     'active' => strpos($currentPath, url('/collections')) === 0],
+                ],
+            ],
+            [
+                'label' => 'Community',
+                'items' => [
+                    ['key' => 'pub-wall', 'label' => 'Wall', 'href' => '/wall', 'icon' => 'users',
+                     'active' => strpos($currentPath, url('/wall')) === 0,
+                     'badge' => $navWallUnread > 0 ? '<span class="nav-unread" aria-label="' . (int) $navWallUnread . ' unread notifications">' . (int) $navWallUnread . '</span>' : ''],
+                    ['key' => 'pub-chat', 'label' => 'Chat', 'href' => '/chat', 'icon' => 'chat', 'show' => $user !== null,
+                     'active' => strpos($currentPath, url('/chat')) === 0,
+                     // canChat() needs a real user row, so this must not run for guests.
+                     'badge' => ($user !== null && \App\Models\ChatMessage::canChat((int) $user['id']) && !empty($chatUnreadCount))
+                        ? '<span class="nav-unread" aria-label="' . (int) $chatUnreadCount . ' unread replies">' . (int) $chatUnreadCount . '</span>' : ''],
+                    ['key' => 'pub-live', 'label' => 'Live', 'href' => '/live', 'icon' => 'broadcast',
+                     'show' => $user !== null && \App\Core\Auth::hasActiveSubscription(),
+                     'active' => strpos($currentPath, url('/live')) === 0],
+                ],
+            ],
+            [
+                'label' => 'Account',
+                'items' => [
+                    ['key' => 'pub-membership', 'label' => 'Membership', 'href' => '/membership', 'icon' => 'card',
+                     'active' => strpos($currentPath, url('/membership')) === 0],
+                    ['key' => 'pub-support', 'label' => 'Support', 'href' => '/support', 'icon' => 'lifebuoy',
+                     'active' => strpos($currentPath, url('/support')) === 0,
+                     'badge' => !empty($supportUnreadCount) ? '<span class="nav-unread" aria-label="' . (int) $supportUnreadCount . ' unread replies">' . (int) $supportUnreadCount . '</span>' : ''],
+                    ['key' => 'pub-settings', 'label' => 'Settings', 'href' => '/settings', 'icon' => 'sliders',
+                     'active' => strpos($currentPath, url('/settings')) === 0],
+                    ['key' => 'pub-admin', 'label' => 'Admin', 'href' => '/admin', 'icon' => 'server',
+                     'show' => $user !== null && \App\Core\Auth::isAdmin()],
+                ],
+            ],
+        ];
+        ?>
         <nav class="home-nav-actions user-nav" aria-label="Site menu">
-            <a class="nav-brand" href="<?= url('/account') ?>" data-se-move-key="pub-dashboard">Dashboard</a>
-            <a class="nav-item<?= $currentPath === url('/account') ? ' active' : '' ?>" href="<?= url('/account') ?>" data-se-move-key="pub-account">Dashboard</a>
-            <a class="nav-item<?= strpos($currentPath, url('/galleries')) === 0 ? ' active' : '' ?>" href="<?= url('/galleries') ?>" data-se-move-key="pub-galleries">Galleries</a>
-            <a class="nav-item<?= strpos($currentPath, url('/favorites')) === 0 ? ' active' : '' ?>" href="<?= url('/favorites') ?>" data-se-move-key="pub-favorites">Favorites<?php if ($user !== null && !\App\Core\Auth::hasActiveSubscription()): ?> <span class="nav-gated" title="Favorites require a Silver or higher membership">Silver</span><?php endif; ?></a>
-            <a class="nav-item<?= strpos($currentPath, url('/collections')) === 0 ? ' active' : '' ?>" href="<?= url('/collections') ?>" data-se-move-key="pub-collections">Collections</a>
-            <a class="nav-item<?= strpos($currentPath, url('/membership')) === 0 ? ' active' : '' ?>" href="<?= url('/membership') ?>" data-se-move-key="pub-membership">Membership</a>
-            <a class="nav-item<?= strpos($currentPath, url('/support')) === 0 ? ' active' : '' ?>" href="<?= url('/support') ?>" data-se-move-key="pub-support">Support<?php if (!empty($supportUnreadCount)): ?> <span class="nav-unread" aria-label="<?= (int) $supportUnreadCount ?> unread replies"><?= (int) $supportUnreadCount ?></span><?php endif; ?></a>
-            <?php $navWallUnread = $user !== null ? \App\Models\Notification::unreadCount((int) $user['id']) : 0; ?>
-            <a class="nav-item<?= strpos($currentPath, url('/wall')) === 0 ? ' active' : '' ?>" href="<?= url('/wall') ?>" data-se-move-key="pub-wall">Wall<?php if ($navWallUnread > 0): ?> <span class="nav-unread" aria-label="<?= $navWallUnread ?> unread notifications"><?= $navWallUnread ?></span><?php endif; ?></a>
             <?php if ($user !== null): ?>
-                <a class="nav-item<?= strpos($currentPath, url('/chat')) === 0 ? ' active' : '' ?>" href="<?= url('/chat') ?>" data-se-move-key="pub-chat">Chat<?php if (\App\Models\ChatMessage::canChat((int) $user['id']) && !empty($chatUnreadCount)): ?> <span class="nav-unread" aria-label="<?= (int) $chatUnreadCount ?> unread replies"><?= (int) $chatUnreadCount ?></span><?php endif; ?></a>
+                <a class="rail-identity<?= $currentPath === url('/account') ? ' active' : '' ?>" href="<?= url('/account') ?>"
+                   data-se-move-key="pub-dashboard" title="<?= e($memberName) ?>">
+                    <span class="rail-avatar" aria-hidden="true"><?= e($memberInitial) ?></span>
+                    <span class="rail-identity-text">
+                        <strong><?= e($memberName) ?></strong>
+                        <small><?= e($memberLevel) ?></small>
+                    </span>
+                </a>
+            <?php else: ?>
+                <div class="rail-identity rail-guest">
+                    <span class="rail-avatar" aria-hidden="true">?</span>
+                    <span class="rail-identity-text">
+                        <strong>Guest</strong>
+                        <small><a href="<?= url('/login') ?>">Sign in</a> or <a href="<?= url('/signup') ?>">join</a></small>
+                    </span>
+                </div>
             <?php endif; ?>
-            <?php if ($user !== null && \App\Core\Auth::hasActiveSubscription()): ?>
-                <a class="nav-item<?= strpos($currentPath, url('/live')) === 0 ? ' active' : '' ?>" href="<?= url('/live') ?>" data-se-move-key="pub-live">Live</a>
-            <?php endif; ?>
-            <?php if ($user !== null && \App\Core\Auth::isAdmin()): ?>
-                <a class="nav-item" href="<?= url('/admin') ?>" data-se-move-key="pub-admin">Admin</a>
-            <?php endif; ?>
-            <a class="nav-item<?= strpos($currentPath, url('/settings')) === 0 ? ' active' : '' ?>" href="<?= url('/settings') ?>" data-se-move-key="pub-settings">Settings</a>
-            <form class="nav-logout" method="post" action="<?= url('/logout') ?>" data-se-move-key="pub-logout">
-                <?= csrf_field() ?>
-                <button type="submit" class="btn btn-sm btn-danger">Logout</button>
-            </form>
-            <div class="nav-sep"></div>
-            <?php if (strpos($currentPath, url('/chat')) !== 0): ?>
-                <div class="nav-section-label">Favorite categories</div>
-                <?php if (empty($navCategories)): ?>
-                    <p class="muted nav-empty">No favorite categories yet.</p>
-                <?php else: ?>
-                    <?php foreach ($navCategories as $cat): ?>
-                        <?php // Keep the current type filter (images/videos) on the category link. ?>
-                        <?php $isActive = (int) $cat['id'] === $activeCategoryId; ?>
-                        <a class="nav-item<?= $isActive ? ' active' : '' ?>" href="<?= url('/galleries/category/' . e($cat['slug']) . $typeSuffix) ?>"><?= e($cat['name']) ?></a>
+            <div class="rail-scroll">
+                <div class="rail-main">
+                <?php foreach ($railGroups as $group): ?>
+                    <div class="rail-group"><?= e($group['label']) ?></div>
+                    <?php foreach ($group['items'] as $item): ?>
+                        <?php if (isset($item['show']) && !$item['show']) { continue; } ?>
+                        <a class="nav-item<?= $item['active'] ? ' active' : '' ?>" href="<?= e(url($item['href'])) ?>"
+                           data-se-move-key="<?= e($item['key']) ?>"<?= $item['active'] ? ' aria-current="page"' : '' ?>>
+                            <?= $icon($item['icon']) ?><span><?= e($item['label']) ?></span><?= $item['badge'] ?? '' ?>
+                        </a>
                     <?php endforeach; ?>
+                <?php endforeach; ?>
+                </div>
+                <div class="rail-categories">
+                <?php if (strpos($currentPath, url('/chat')) !== 0): ?>
+                    <div class="rail-group">Favorite categories</div>
+                    <?php if (empty($navCategories)): ?>
+                        <p class="muted rail-empty">No favorite categories yet.</p>
+                    <?php else: ?>
+                        <?php foreach ($navCategories as $cat): ?>
+                            <?php // Keep the current type filter (images/videos) on the category link. ?>
+                            <?php $isActive = (int) $cat['id'] === $activeCategoryId; ?>
+                            <a class="nav-item rail-category<?= $isActive ? ' active' : '' ?>" href="<?= url('/galleries/category/' . e($cat['slug']) . $typeSuffix) ?>"<?= $isActive ? ' aria-current="page"' : '' ?>><?= $icon('tag') ?><span><?= e($cat['name']) ?></span></a>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 <?php endif; ?>
-                <div class="nav-sep"></div>
+                </div>
+            </div>
+            <?php if ($user !== null): ?>
+                <div class="rail-foot">
+                    <form class="nav-logout" method="post" action="<?= url('/logout') ?>" data-se-move-key="pub-logout">
+                        <?= csrf_field() ?>
+                        <button type="submit" class="rail-logout-btn" aria-label="Sign out" title="Sign out"><?= $icon('logout') ?><span>Sign out</span></button>
+                    </form>
+                </div>
             <?php endif; ?>
         </nav>
         </div>

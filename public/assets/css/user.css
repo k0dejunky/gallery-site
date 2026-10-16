@@ -339,3 +339,406 @@ body.site-compact .title-header img { max-width: 380px; }
 .wall-post-foot{display:flex;align-items:center;justify-content:space-between;gap:var(--spacing-sm);margin-top:var(--spacing-xs)}
 .wall-post-foot .muted{font-size:var(--font-size-sm)}
 @media(max-width:640px){.wall-post-open{display:none}.wall-photos-3{grid-template-columns:repeat(3,1fr)}}
+
+/* ==========================================================================
+   DARK GALLERY SKIN — member-facing site only.
+   --------------------------------------------------------------------------
+   The shipped palette was bright bubblegum pink for the page, the cards, the
+   chips and the text: --card-bg was #f472b6 sitting on a #f9a8d4 page, so
+   everything read as one loud pink block with no depth, and the media (the
+   only thing this site is for) had no contrast to sit against.
+
+   This block re-defines the design tokens on the public site only
+   (`body:not(.admin-theme)`), so the admin surface keeps the light palette.
+   Because every base rule already consumes the tokens, re-pointing them
+   re-skins the whole site without duplicating the stylesheet. The brand —
+   amethyst purple + pink — survives as the accent colour, not as the walls.
+   ========================================================================== */
+body:not(.admin-theme) {
+    /* Surfaces: near-black plum, so thumbnails carry the page. */
+    --pink-100: #2b1123;
+    --pink-200: #120711;
+    --pink-300: #45203a;
+    --pink-400: #6d2b52;
+
+    --card-bg:              #1e0d1a;
+    --card-border:          #45203a;
+    --card-placeholder-bg:  #2b1123;
+    --card-title-color:     #fbe9f4;
+    --card-text-color:      #d9c1d6;
+
+    --table-bg:             #1e0d1a;
+    --table-border:         #45203a;
+    --table-header-bg:      #2b1123;
+    --table-header-color:   #fbcfe8;
+    --table-text:           #e6d3e3;
+
+    --sidebar-bg:           #190a14;
+    --sidebar-border:       #45203a;
+    --sidebar-heading:      #f9a8d4;
+    --sidebar-link-bg:      #2b1123;
+    --sidebar-link-color:   #fbe9f4;
+    --sidebar-link-border:  #45203a;
+    --sidebar-link-hover:   #3a1830;
+    --sidebar-active-bg:    #9333ea;
+    --sidebar-active-color: #ffffff;
+    --sidebar-active-border:#c084fc;
+
+    --stat-bg:              #1e0d1a;
+    --stat-border:          #45203a;
+    --stat-number-color:    #ffffff;
+    --stat-label-color:     #d9c1d6;
+
+    --promo-card-bg:        #1e0d1a;
+    --promo-card-border:    #45203a;
+    --promo-card-title:     #fbe9f4;
+    --promo-card-text:      #d9c1d6;
+
+    --btn-danger-bg:        #3b1024;
+    --btn-danger-color:     #fecdd3;
+    --btn-danger-border:    #f43f5e;
+
+    color: #f3e7f1;
+    /* A soft amethyst glow instead of a flat fill keeps the page from going dead. */
+    background: #120711 radial-gradient(1100px 620px at 50% -8%, #35123a 0%, rgba(53,18,58,0) 62%);
+    background-attachment: fixed;
+}
+
+/* Typography that was hardcoded dark for the light palette. */
+body:not(.admin-theme) a { color: #f0abfc; }
+body:not(.admin-theme) a:hover { color: #fbcfe8; }
+body:not(.admin-theme) h1,
+body:not(.admin-theme) h2,
+body:not(.admin-theme) h3,
+body:not(.admin-theme) h4,
+body:not(.admin-theme) h5,
+body:not(.admin-theme) h6 { color: #fdf2f8; }
+body:not(.admin-theme) .muted { color: #c3a6c9; }
+body:not(.admin-theme) .section-title { color: #f9a8d4; border-color: #45203a; }
+body:not(.admin-theme) .fav-section h2 { color: #f9a8d4; border-color: #45203a; }
+body:not(.admin-theme) .nav { border-color: #45203a; }
+body:not(.admin-theme) .nav a,
+body:not(.admin-theme) .nav .brand { color: #fbe9f4; }
+body:not(.admin-theme) .nav a:hover { color: #fbcfe8; }
+
+/* Chips: the category row was 60 loud pink pills; now quiet dark tags. */
+body:not(.admin-theme) .chip {
+    background: #24101f;
+    border-color: #45203a;
+    color: #f0abfc;
+}
+body:not(.admin-theme) .chip:hover { background: #3a1830; color: #ffffff; }
+body:not(.admin-theme) .chip.active {
+    background: #9333ea;
+    border-color: #c084fc;
+    color: #ffffff;
+}
+
+/* Buttons keep the pink accent, but as a solid pill with white text. */
+body:not(.admin-theme) .btn {
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: .01em;
+    color: #15060f;
+    background: linear-gradient(135deg, #f472b6, #ec4899);
+    box-shadow: 0 2px 10px rgba(236,72,153,.28);
+}
+body:not(.admin-theme) .btn:hover {
+    background: linear-gradient(135deg, #f9a8d4, #f0489a);
+    box-shadow: 0 4px 16px rgba(236,72,153,.4);
+}
+body:not(.admin-theme) .btn-outline {
+    background: transparent;
+    border-color: #6d2b52;
+    color: #f0abfc;
+}
+body:not(.admin-theme) .btn-outline:hover { background: rgba(236,72,153,.14); color: #ffffff; }
+body:not(.admin-theme) .btn-danger {
+    background: var(--btn-danger-bg);
+    border-color: var(--btn-danger-border);
+    color: var(--btn-danger-color);
+}
+
+/* Auth panel and flashes were light panels with dark-on-dark text. */
+body:not(.admin-theme) .auth-panel {
+    background: #1e0d1a;
+    border-color: #45203a;
+    color: #f3e7f1;
+}
+body:not(.admin-theme) .auth-panel h1 { color: #fdf2f8; }
+body:not(.admin-theme) .auth-panel .auth-links { color: #c3a6c9; }
+body:not(.admin-theme) .flash { color: #f3e7f1; }
+body:not(.admin-theme) .flash.error { background: #3b1024; border-left-color: #f43f5e; color: #fecdd3; }
+body:not(.admin-theme) .flash.success { background: #1f2a14; border-left-color: #84cc16; color: #d9f99d; }
+
+/* Form controls: dark fill + light text, visible focus ring. */
+body:not(.admin-theme) input[type="text"],
+body:not(.admin-theme) input[type="email"],
+body:not(.admin-theme) input[type="password"],
+body:not(.admin-theme) input[type="url"],
+body:not(.admin-theme) input[type="search"],
+body:not(.admin-theme) textarea,
+body:not(.admin-theme) select {
+    background: #2b1123;
+    border-color: #45203a;
+    color: #f3e7f1;
+}
+body:not(.admin-theme) input::placeholder,
+body:not(.admin-theme) textarea::placeholder { color: #9a7c9f; }
+body:not(.admin-theme) input:focus,
+body:not(.admin-theme) textarea:focus,
+body:not(.admin-theme) select:focus { outline-color: #c084fc; }
+
+/* Theme-editor previews inside the site (not the admin theme editor). */
+body:not(.admin-theme) .theme-choice-card { background: #24101f; border-color: #45203a; color: #f3e7f1; }
+body:not(.admin-theme) .theme-choice-card:hover,
+body:not(.admin-theme) .theme-choice-card.selected { border-color: #c084fc; background: #3a1830; }
+
+/* Pagination + gallery captions. */
+body:not(.admin-theme) .pagination a,
+body:not(.admin-theme) .pagination span {
+    background: #24101f;
+    border-color: #45203a;
+    color: #f0abfc;
+}
+body:not(.admin-theme) .pagination a:hover { background: #3a1830; }
+body:not(.admin-theme) .pagination .current { background: #9333ea; border-color: #c084fc; color: #ffffff; }
+body:not(.admin-theme) .gallery-item figcaption,
+body:not(.admin-theme) .gallery-item figcaption a { color: #f0abfc; }
+body:not(.admin-theme) .card-media-count,
+body:not(.admin-theme) .card-details .card-date { color: #b292b9; }
+
+/* Readability: the site-wide compact scale dropped the base size to 13px and
+   the smallest text to 9.4px. Nudge it up while keeping the dense layout. */
+body.site-compact {
+    --font-size-xs: 0.68rem;
+    --font-size-sm: 0.78rem;
+    --font-size-base: 0.9rem;
+    --font-size-lg: 1.02rem;
+    --font-size-xl: 1.2rem;
+    --font-size-h1: 1.45rem;
+    --line-height: 1.45;
+    --btn-padding: 0.36rem 0.7rem;
+    --btn-font-size: 0.8rem;
+    --card-padding: 0.55rem;
+    --chip-padding: 0.22rem 0.58rem;
+}
+
+/* --- Card polish: depth, hover lift, cover treatment ---------------------- */
+body:not(.admin-theme) .card {
+    border-color: #34162b;
+    box-shadow: 0 1px 2px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.28);
+    transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+body:not(.admin-theme) .card:hover {
+    border-color: #6d2b52;
+    box-shadow: 0 4px 8px rgba(0,0,0,.5), 0 18px 42px rgba(0,0,0,.42);
+    transform: translateY(-3px);
+}
+body:not(.admin-theme) .card-compact h2 { color: #fdf2f8; }
+body:not(.admin-theme) .card-cover img,
+body:not(.admin-theme) .card-cover picture,
+body:not(.admin-theme) .card-cover .card-placeholder {
+    border-radius: 10px;
+    background: #24101f;
+}
+body:not(.admin-theme) .gallery-item {
+    background: #1e0d1a;
+    border-color: #34162b;
+}
+body:not(.admin-theme) .gallery-item:hover { border-color: #6d2b52; }
+body:not(.admin-theme) .card-details { border-color: #34162b; }
+body:not(.admin-theme) .card-expand-btn { color: #f0abfc; }
+body:not(.admin-theme) .card-expand-btn:hover { color: #ffffff; }
+body:not(.admin-theme) .video-badge { color: rgba(255,255,255,.95); }
+
+/* Age-gate panel follows the same surface treatment. */
+body:not(.admin-theme) .age-gate { background: linear-gradient(150deg, #2a0f22 0%, #12060e 60%, #3b1030 100%); }
+body:not(.admin-theme) .age-gate-panel { background: #1e0d1a; border-color: #45203a; color: #f3e7f1; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+body:not(.admin-theme) .age-gate-panel h1 { color: #fdf2f8; }
+body:not(.admin-theme) .age-gate-panel p { color: #c3a6c9; }
+body:not(.admin-theme) .age-gate-logos { color: #f0abfc; }
+body:not(.admin-theme) .age-gate-panel .thin-link { color: #f0abfc; }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Member rail
+
+   The member sidebar used to be a floating rounded card holding plain text
+   links, a duplicated "Dashboard" heading and a full-width Logout button, and
+   on a phone it stacked all of it plus every favorite category above the
+   content. It now mirrors the admin rail: identity block at the top, a
+   scrollable column of icon links grouped by purpose, sign-out pinned at the
+   bottom.
+
+   Colours still come from the theme's --sidebar-* tokens rather than the
+   admin's fixed --adm-side-* palette, so the theme editor keeps working.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.home-layout { display: grid; grid-template-columns: 252px minmax(0, 1fr); gap: var(--spacing-lg); align-items: start; }
+body.site-compact .home-layout { grid-template-columns: 224px minmax(0, 1fr); }
+
+/* theme_base.css sets `.home-main { width: 0 }` so the column could shrink in a
+   flex row. In a grid that pins it to zero and the content collapses under the
+   rail, so it has to be reset. */
+.home-main { width: auto; max-width: 100%; }
+
+/* max-height, not height: the rail starts below the site's title image, so a
+   full 100vh would push the sign-out footer past the bottom of the viewport
+   until the page was scrolled. 6rem covers the title image plus its margin. */
+.home-nav-wrap { position: sticky; top: 0; max-height: calc(100vh - 6rem); min-height: 24rem; min-width: 0; }
+
+.home-nav-actions.user-nav {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
+    border-radius: 0;
+    border: 0;
+    border-right: 1px solid var(--sidebar-border);
+    background: var(--sidebar-bg);
+}
+
+.rail-identity {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: 1.1rem 1.15rem 1rem;
+    border-bottom: 1px solid var(--sidebar-border);
+    text-decoration: none;
+    color: var(--sidebar-heading);
+}
+
+.rail-avatar {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--sidebar-active-color);
+    background: var(--sidebar-active-bg);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08);
+}
+
+.rail-identity-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.rail-identity-text strong { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail-identity-text small { font-size: 11px; opacity: .7; }
+
+.rail-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: .35rem 0 1rem;
+    scrollbar-width: thin;
+}
+.rail-scroll::-webkit-scrollbar { width: 8px; }
+.rail-scroll::-webkit-scrollbar-thumb { background: var(--sidebar-link-border); border-radius: 8px; }
+
+.rail-group {
+    margin: 0;
+    padding: .9rem 1.15rem .3rem;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--sidebar-heading);
+    opacity: .62;
+}
+
+.user-nav .nav-item {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    margin: 1px .6rem;
+    padding: .5rem .6rem;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--sidebar-link-color);
+    font-size: 13.5px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background .12s ease, color .12s ease;
+}
+
+.user-nav .nav-item > span:first-of-type { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-nav .nav-item:hover { background: var(--sidebar-link-hover); color: var(--sidebar-active-color); }
+.user-nav .nav-item.active { background: var(--sidebar-active-bg); color: var(--sidebar-active-color); font-weight: 600; }
+
+.user-nav .nav-item .rail-ico { flex: none; width: 18px; height: 18px; opacity: .72; }
+.user-nav .nav-item.active .rail-ico { opacity: 1; }
+.user-nav .nav-item:hover .rail-ico { opacity: .95; }
+
+.user-nav .nav-unread,
+.user-nav .nav-gated { margin-left: auto; }
+
+.rail-empty { margin: 0; padding: .35rem 1.15rem; font-size: 12.5px; }
+
+.rail-foot { flex: none; padding: .7rem .6rem; border-top: 1px solid var(--sidebar-border); }
+.home-nav-actions .rail-foot .nav-logout { width: auto; margin: 0; }
+
+.rail-logout-btn {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    width: 100%;
+    padding: .5rem .6rem;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--sidebar-link-color);
+    font: inherit;
+    font-size: 13.5px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease;
+}
+
+.rail-logout-btn .rail-ico { flex: none; width: 18px; height: 18px; opacity: .72; }
+.rail-logout-btn:hover { background: var(--sidebar-link-hover); color: var(--sidebar-active-color); }
+
+/* Phone: the main links are already in the fixed bottom bar, so the rail keeps
+   only what that bar does not have - the favorite categories - as a single
+   scrolling strip instead of ~25 stacked full-width rows. */
+@media (max-width: 768px) {
+    .home-layout,
+    body.site-compact .home-layout { grid-template-columns: minmax(0, 1fr); }
+
+    .home-nav-wrap { position: static; height: auto; max-height: none; min-height: 0; width: auto; }
+
+    .home-nav-actions.user-nav {
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--sidebar-border);
+        border-radius: var(--border-radius-lg);
+    }
+
+    .rail-identity,
+    .rail-foot,
+    .rail-main { display: none; }
+
+    .rail-scroll {
+        display: flex;
+        gap: .35rem;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: .55rem;
+        scrollbar-width: none;
+    }
+    .rail-scroll::-webkit-scrollbar { display: none; }
+
+    .rail-categories { display: flex; gap: .35rem; align-items: center; }
+
+    .rail-group { display: none; }
+    .user-nav .nav-item { margin: 0; white-space: nowrap; }
+    .rail-empty { padding: .35rem .5rem; }
+}

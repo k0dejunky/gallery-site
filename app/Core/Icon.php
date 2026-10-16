@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Core;
 
 /**
- * Inline SVG icons for the admin chrome.
+ * Inline SVG icons for the site chrome.
  *
  * The admin sidebar used to be 31 text-only links, which is slow to scan and
  * wastes the one piece of real estate the operator looks at all day. Icons are
@@ -17,7 +17,7 @@ namespace App\Core;
  * round caps and joins. Dot-only details (e.g. the palette swatches) rely on a
  * zero-length subpath plus a round linecap, the usual trick.
  */
-final class AdminIcon
+final class Icon
 {
     /** @var array<string, string> icon name => SVG path data */
     private const PATHS = [
@@ -58,6 +58,8 @@ final class AdminIcon
         'chevron'     => 'M9 18l6-6-6-6',
         'plus'        => 'M12 5v14M5 12h14',
         'minus'       => 'M5 12h14',
+        'broadcast'   => 'M12 12h.01M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8',
+        'play'        => 'M7 4.5v15l12-7.5z',
         'dot'         => 'M12 12h.01',
     ];
 
@@ -65,13 +67,13 @@ final class AdminIcon
     {
     }
 
-    /** True when $name has a glyph — used by the smoke suite to keep nav complete. */
+    /** True when $name has a glyph — used by the smoke suite to keep navs complete. */
     public static function has(string $name): bool
     {
         return isset(self::PATHS[$name]);
     }
 
-    /** @return string[] every icon name the admin chrome knows about */
+    /** @return string[] every icon name the chrome knows about */
     public static function names(): array
     {
         return array_keys(self::PATHS);

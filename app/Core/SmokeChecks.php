@@ -277,7 +277,47 @@ class SmokeChecks
         // with no icon, a stylesheet that stops loading, or the accessibility
         // scaffolding going missing.
         $adminCss = $read("$root/public/assets/css/admin.css");
-        $adminIconSrc = $read("$root/app/Core/AdminIcon.php");
+        $adminIconSrc = $read("$root/app/Core/Icon.php");
+        $userLayout = $read("$root/views/layout.php");
+        $userCss = $read("$root/public/assets/css/user.css");
+        $add('smoke.user.rail', 'Smoke · Admin UI', 'Member rail mirrors the admin: icons, groups, identity and a sign-out footer', static function () use ($root, $userLayout, $userCss, $ok, $bad): array {
+            // rail-identity carries a conditional class, so no closing quote.
+            foreach (['class="home-nav-actions user-nav"', 'class="rail-identity', 'class="rail-scroll"',
+                      'class="rail-foot"', 'class="rail-logout-btn"', 'aria-label="Site menu"'] as $needle) {
+                if (strpos($userLayout, $needle) === false) {
+                    return $bad('views/layout.php member rail is missing ' . $needle);
+                }
+            }
+            // Every rail entry declares an icon, and the icon must exist.
+            if (!preg_match_all("/'key'\s*=>\s*'(pub-[a-z-]+)'.*?'icon'\s*=>\s*'([a-z0-9-]+)'/", $userLayout, $m, PREG_SET_ORDER)) {
+                return $bad('member rail entries must be declared as key + icon pairs');
+            }
+            if (!class_exists(\App\Core\Icon::class)) {
+                return $bad('App\Core\Icon must exist');
+            }
+            $missing = [];
+            foreach ($m as $entry) {
+                if (!\App\Core\Icon::has($entry[2])) {
+                    $missing[] = $entry[1] . ' -> ' . $entry[2];
+                }
+            }
+            if ($missing !== []) {
+                return $bad('rail entries with an unknown icon: ' . implode(', ', $missing));
+            }
+            // The old rail had a "Dashboard" brand heading immediately above a
+            // "Dashboard" link. pub-dashboard now lives on the identity block and
+            // must appear exactly once in the whole layout.
+            if (substr_count($userLayout, 'data-se-move-key="pub-dashboard"') !== 1) {
+                return $bad('pub-dashboard must appear exactly once (the duplicated Dashboard heading is gone)');
+            }
+            foreach (['.rail-identity', '.rail-scroll', '.rail-group', '.rail-foot', '.rail-ico'] as $sel) {
+                if (strpos($userCss, $sel) === false) {
+                    return $bad('user.css is missing ' . $sel);
+                }
+            }
+            return $ok(count($m) . ' rail entries, all icons resolve, identity + footer present');
+        });
+
         $add('smoke.admin.design_system', 'Smoke · Admin UI', 'Admin shell loads its stylesheet after the theme CSS', static function () use ($adminLayout, $adminCss, $ok, $bad): array {
             $adminAt = strpos($adminLayout, '/assets/css/admin.css');
             $themeAt = strpos($adminLayout, 'Theme::css(');
@@ -299,9 +339,9 @@ class SmokeChecks
                 : $bad('public/assets/css/admin.css looks truncated (' . strlen($adminCss) . ' bytes)');
         });
 
-        $add('smoke.admin.nav_icons', 'Smoke · Admin UI', 'Every admin nav entry has an icon that exists in AdminIcon', static function () use ($adminLayout, $adminIconSrc, $root, $ok, $bad): array {
-            if (!class_exists(\App\Core\AdminIcon::class)) {
-                return $bad('App\Core\AdminIcon must exist');
+        $add('smoke.admin.nav_icons', 'Smoke · Admin UI', 'Every admin nav entry has an icon that exists in Icon', static function () use ($adminLayout, $adminIconSrc, $root, $ok, $bad): array {
+            if (!class_exists(\App\Core\Icon::class)) {
+                return $bad('App\Core\Icon must exist');
             }
             // The sidebar is a PHP array; parse the icon names out of the entries.
             if (!preg_match_all("/'key'\s*=>\s*'(nav-[a-z0-9-]+)'.*?'icon'\s*=>\s*'([a-z0-9-]+)'/", $adminLayout, $m, PREG_SET_ORDER)) {
@@ -309,7 +349,7 @@ class SmokeChecks
             }
             $missing = [];
             foreach ($m as $entry) {
-                if (!\App\Core\AdminIcon::has($entry[2])) {
+                if (!\App\Core\Icon::has($entry[2])) {
                     $missing[] = $entry[1] . ' -> ' . $entry[2];
                 }
             }

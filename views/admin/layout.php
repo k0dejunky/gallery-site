@@ -122,7 +122,7 @@ $adminEmail = (string) ($adminUser['email'] ?? '');
 $adminRole = (string) ($adminUser['role'] ?? 'admin');
 $adminRoleLabel = ['super_admin' => 'Super admin', 'admin' => 'Administrator', 'moderator' => 'Moderator'][$adminRole] ?? ucfirst(str_replace('_', ' ', $adminRole));
 $adminInitial = $adminEmail !== '' ? strtoupper(substr($adminEmail, 0, 1)) : '?';
-$icon = static fn (string $name): string => \App\Core\AdminIcon::svg($name);
+$icon = static fn (string $name): string => \App\Core\Icon::svg($name);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -131,7 +131,7 @@ $icon = static fn (string $name): string => \App\Core\AdminIcon::svg($name);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') . ' Admin' : e(config('app.site_name')) . ' Admin' ?></title>
     <link rel="stylesheet" href="<?= e(url('/assets/admin-shared.css')) ?>?v=2">
-    <link rel="stylesheet" href="<?= e(url('/assets/css/user.css')) ?>?v=31">
+    <link rel="stylesheet" href="<?= e(url('/assets/css/user.css')) ?>?v=33">
     <style>
     <?= \App\Models\Theme::css(\App\Models\Theme::SCOPE_ADMIN) ?>
     <?= \App\Models\Theme::cssLayout(\App\Models\Theme::SCOPE_ADMIN) ?>
