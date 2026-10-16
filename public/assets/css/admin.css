@@ -1222,9 +1222,20 @@ body.admin-theme {
     background: var(--adm-surface);
     border: 1px solid var(--adm-border);
     border-radius: var(--adm-radius);
-    overflow: hidden;
     font-size: 13px;
 }
+
+/* `overflow: hidden` here used to round the table's corners, but it also makes
+   the table its own scroll container. A sticky <thead> then resolves against
+   the table's box instead of the viewport, so `top: var(--adm-topbar-h)` pushed
+   the header down inside the table and it sat on top of the first rows.
+   The corners are now rounded on the edge cells instead. */
+.admin-theme table > thead > tr > th:first-child { border-top-left-radius: var(--adm-radius); }
+.admin-theme table > thead > tr > th:last-child { border-top-right-radius: var(--adm-radius); }
+.admin-theme table > tbody:last-of-type > tr:last-child > td:first-child { border-bottom-left-radius: var(--adm-radius); }
+.admin-theme table > tbody:last-of-type > tr:last-child > td:last-child { border-bottom-right-radius: var(--adm-radius); }
+.admin-theme table > tfoot > tr:last-child > td:first-child { border-bottom-left-radius: var(--adm-radius); }
+.admin-theme table > tfoot > tr:last-child > td:last-child { border-bottom-right-radius: var(--adm-radius); }
 
 .admin-theme th, .admin-theme td {
     padding: .55rem .75rem;
@@ -1258,17 +1269,27 @@ body.admin-theme {
 .admin-theme table thead th:first-child { border-top-left-radius: var(--adm-radius); }
 .admin-theme table thead th:last-child { border-top-right-radius: var(--adm-radius); }
 
+/* A sticky header resolves `top` against its nearest scrollport. When that is
+   the page, the header must clear the topbar; when it is a card or wrapper
+   that only scrolls sideways, `top` is measured from that box and anything
+   greater than 0 pushes the header down onto the first rows - which is what
+   the Analytics, Emailer and Earnings tables were doing inside .stats-panel.
+   Every element here sets overflow, so its tables use top: 0. */
 .admin-theme .users-table-wrap,
 .admin-theme .table-scroll,
 .admin-theme .mg-table-wrap,
 .admin-theme .sys-card,
-.admin-theme .card { --adm-sticky-top: 0; }
+.admin-theme .card,
+.admin-theme .stats-panel,
+.admin-theme .tool-box { --adm-sticky-top: 0; }
 
 .admin-theme .users-table-wrap table thead th,
 .admin-theme .table-scroll table thead th,
 .admin-theme .mg-table-wrap table thead th,
 .admin-theme .sys-card table thead th,
-.admin-theme .card table thead th { top: 0; }
+.admin-theme .card table thead th,
+.admin-theme .stats-panel table thead th,
+.admin-theme .tool-box table thead th { top: 0; }
 
 .admin-theme th {
     background: var(--adm-surface-2);

@@ -251,7 +251,7 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
     <?php if (empty($recentPosts)): ?>
         <p class="muted">No <?= e($platformName) ?> posts recorded yet — posted, failed and skipped items will appear here.</p>
     <?php else: ?>
-        <div style="overflow-x:auto;">
+        <div class="users-table-wrap">
             <table class="ap-table">
                 <thead>
                     <tr>
@@ -595,7 +595,7 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
         <?php if (empty($log)): ?>
             <div class="ap-log-empty">No <?= e($platformName) ?> posts have been made yet.</div>
         <?php else: ?>
-            <div style="overflow-x:auto;">
+            <div class="users-table-wrap">
                 <table class="ap-table">
                     <thead>
                         <tr>

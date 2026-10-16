@@ -323,6 +323,26 @@ class SmokeChecks
             return $ok(count($m) . ' nav entries, all icons resolve');
         });
 
+        $add('smoke.admin.table_scrollers', 'Smoke · Admin UI', 'Admin tables are wrapped in the shared scroller, not an ad-hoc overflow div', static function () use ($root, $ok, $bad): array {
+            // A bare `style="overflow-x:auto"` wrapper becomes a scrollport, and a
+            // sticky <thead> inside one resolves `top` against that box instead of
+            // the viewport - pushing the header down onto the first rows. The Auto
+            // Poster tables were doing exactly this. Use .users-table-wrap, which
+            // already pins the header with top: 0.
+            $views = glob("$root/views/admin/*.php") ?: [];
+            $offenders = [];
+            foreach ($views as $view) {
+                $src = (string) @file_get_contents($view);
+                if (preg_match('/<div[^>]*style="[^"]*overflow-x\s*:\s*auto[^"]*"[^>]*>\s*<table/i', $src)) {
+                    $offenders[] = basename($view);
+                }
+            }
+            if ($offenders !== []) {
+                return $bad('these admin views wrap a table in an ad-hoc overflow-x div (use .users-table-wrap): ' . implode(', ', $offenders));
+            }
+            return $ok('no ad-hoc table scrollers');
+        });
+
         $add('smoke.admin.a11y', 'Smoke · Admin UI', 'Admin shell has a skip link, one h1 and aria-current navigation', static function () use ($adminLayout, $root, $ok, $bad): array {
             $views = glob("$root/views/admin/*.php") ?: [];
             $dupes = [];
