@@ -58,7 +58,7 @@
     --adm-shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 1px 3px rgba(16, 24, 40, .06);
     --adm-shadow-lg: 0 12px 32px rgba(16, 24, 40, .12);
     --adm-sidebar-w: 264px;
-    --adm-topbar-h: 58px;
+    --adm-topbar-h: 66px;
 }
 
 .admin-theme {
@@ -224,31 +224,135 @@ body.admin-theme {
     margin-left: auto;
 }
 
+/* Icons: every nav row carries a glyph so 31 destinations scan in one pass
+   instead of reading as a wall of text. */
+.admin-theme .nav-ico {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    stroke-width: 1.7;
+    opacity: .72;
+}
+
+.admin-theme .admin-nav .nav-item {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+
+.admin-theme .admin-nav .nav-item > span:not(.pill) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-theme .admin-nav .nav-item .nav-ico { opacity: .6; }
+.admin-theme .admin-nav .nav-item:hover .nav-ico { opacity: .9; }
+.admin-theme .admin-nav .nav-item.active .nav-ico { opacity: 1; }
+
+.admin-theme .admin-nav .nav-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, .22) transparent;
+    padding-bottom: .5rem;
+    /* Fade the last row out instead of guillotining it, so a half-visible item
+       reads as "there is more" rather than as a broken layout. */
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent 100%);
+}
+
+.admin-theme .admin-nav .nav-scroll::-webkit-scrollbar { width: 8px; }
+.admin-theme .admin-nav .nav-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .18); border-radius: 8px; }
+
+/* Identity + sign out live in a fixed footer so they stay reachable no matter
+   how far the section list scrolls. */
+.admin-theme .admin-nav .nav-foot {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin: 0 .6rem;
+    padding: .7rem .55rem;
+    border-top: 1px solid var(--adm-side-border);
+}
+
+.admin-theme .admin-nav .nav-user {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+}
+
+.admin-theme .admin-nav .nav-avatar {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    color: #fff;
+    background: linear-gradient(140deg, var(--adm-accent), var(--adm-accent-strong));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
+}
+
+.admin-theme .admin-nav .nav-user-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+}
+
+.admin-theme .admin-nav .nav-user-text strong {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--adm-side-text-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-theme .admin-nav .nav-user-text small {
+    font-size: 11px;
+    color: var(--adm-side-text);
+    opacity: .75;
+}
+
+.admin-theme .admin-nav .nav-logout {
+    flex: none;
+    margin: 0;
+    width: auto;
+}
+
+.admin-theme .admin-nav .nav-logout .nav-logout-btn {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    cursor: pointer;
+    border-radius: var(--adm-radius-sm);
+    border: 1px solid rgba(255, 255, 255, .18);
+    background: rgba(255, 255, 255, .06);
+    color: var(--adm-side-text);
+    transition: background .12s ease, color .12s ease;
+}
+
+.admin-theme .admin-nav .nav-logout .nav-logout-btn .nav-ico { opacity: .85; width: 16px; height: 16px; }
+.admin-theme .admin-nav .nav-logout .nav-logout-btn:hover { background: rgba(255, 255, 255, .15); color: #fff; }
+
 .admin-theme .admin-nav .nav-sep {
     height: 1px;
     margin: .65rem 1.15rem;
     border: 0;
     border-top: 1px solid var(--adm-side-border);
-}
-
-.admin-theme .admin-nav .nav-logout {
-    margin: .5rem .6rem 0;
-    width: auto;
-}
-
-.admin-theme .admin-nav .nav-logout button {
-    width: 100%;
-    padding: .5rem .65rem;
-    font-size: 13px;
-    font-weight: 600;
-    border-radius: var(--adm-radius-sm);
-    border: 1px solid rgba(255, 255, 255, .22);
-    background: rgba(255, 255, 255, .08);
-    color: var(--adm-side-text-strong);
-}
-
-.admin-theme .admin-nav .nav-logout button:hover {
-    background: rgba(255, 255, 255, .16);
 }
 
 /* ---------- Main column ------------------------------------------------- */
@@ -259,6 +363,25 @@ body.admin-theme {
     min-width: 0;
     padding: 0 0 3rem;
 }
+
+.admin-theme .admin-main:focus { outline: none; }
+
+/* Skip link: invisible until focused, so keyboard users can jump the sidebar. */
+.admin-theme .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 2000;
+    padding: .6rem 1rem;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--adm-accent-strong);
+    border-radius: 0 0 var(--adm-radius) 0;
+    text-decoration: none;
+}
+
+.admin-theme .skip-link:focus { left: 0; }
 
 .admin-theme .nav-toggle {
     display: none;
@@ -272,11 +395,55 @@ body.admin-theme {
     display: flex;
     align-items: center;
     gap: 1rem;
-    height: var(--adm-topbar-h);
-    padding: 0 1.5rem;
+    min-height: var(--adm-topbar-h);
+    padding: .55rem 1.5rem;
     background: rgba(255, 255, 255, .88);
     backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--adm-border);
+}
+
+.admin-theme .admin-topbar .topbar-lead {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+/* Breadcrumb: gives every page a position ("Admin / System") and a way back up,
+   which the bare page title could not. */
+.admin-theme .adm-crumb {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--adm-text-faint);
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.admin-theme .adm-crumb a {
+    color: var(--adm-text-faint);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+}
+
+.admin-theme .adm-crumb a:hover {
+    color: var(--adm-accent-strong);
+    border-bottom-color: currentColor;
+}
+
+.admin-theme .adm-crumb span[aria-current] {
+    color: var(--adm-text-dim);
+    font-weight: 600;
+}
+
+.admin-theme .adm-crumb .crumb-sep {
+    width: 13px;
+    height: 13px;
+    stroke-width: 2.2;
+    opacity: .55;
+    flex: none;
 }
 
 .admin-theme .admin-topbar .topbar-title {
@@ -294,20 +461,52 @@ body.admin-theme {
 
 .admin-theme .admin-topbar .admin-top-search {
     margin: 0;
-    flex: 0 1 320px;
+    flex: 0 1 340px;
+    position: relative;
+    display: flex;
+    align-items: center;
 }
+
+.admin-theme .admin-topbar .top-search-ico {
+    position: absolute;
+    left: .6rem;
+    display: grid;
+    place-items: center;
+    color: var(--adm-text-faint);
+    pointer-events: none;
+}
+
+.admin-theme .admin-topbar .top-search-ico .nav-ico { width: 15px; height: 15px; stroke-width: 2; }
 
 .admin-theme .admin-topbar .admin-top-search input {
     width: 100%;
     height: 34px;
-    padding: 0 .75rem 0 2rem;
+    padding: 0 3.6rem 0 2rem;
     font-size: 13px;
     border: 1px solid var(--adm-border-strong);
     border-radius: 999px;
-    background: var(--adm-surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b93a7' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E") no-repeat .6rem center / 14px 14px;
+    background: var(--adm-surface-2);
     color: var(--adm-text);
     transition: border-color .12s ease, box-shadow .12s ease;
 }
+
+/* Ctrl-K hint; the palette script owns the shortcut, this just advertises it. */
+.admin-theme .admin-topbar .top-search-kbd {
+    position: absolute;
+    right: .5rem;
+    font-family: inherit;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: .03em;
+    color: var(--adm-text-faint);
+    background: var(--adm-surface);
+    border: 1px solid var(--adm-border-strong);
+    border-radius: 5px;
+    padding: .1rem .3rem;
+    pointer-events: none;
+}
+
+.admin-theme .admin-topbar .admin-top-search input:focus ~ .top-search-kbd { opacity: 0; }
 
 .admin-theme .admin-topbar .admin-top-search input:focus {
     outline: none;
@@ -326,6 +525,7 @@ body.admin-theme {
     white-space: nowrap;
 }
 
+.admin-theme .topbar-link .nav-ico { width: 15px; height: 15px; }
 .admin-theme .topbar-link:hover { color: var(--adm-accent-strong); }
 
 /* Page body */
@@ -345,6 +545,33 @@ body.admin-theme {
 }
 
 /* ---------- Typography -------------------------------------------------- */
+
+/* The topbar owns the single page-level <h1>. Views that also show a heading
+   use this so it reads like a title without becoming a second h1. */
+.admin-theme .adm-h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -.015em;
+    color: var(--adm-text);
+}
+
+/* Keyboard focus has to be visible on every interactive surface, including the
+   ones the theme stylesheet only colours on :hover. */
+.admin-theme :focus-visible {
+    outline: 2px solid var(--adm-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.admin-theme .admin-nav :focus-visible {
+    outline-color: #fff;
+    outline-offset: -2px;
+}
+
+.admin-theme .btn:focus-visible,
+.admin-theme .topbar-link:focus-visible,
+.admin-theme .nav-item:focus-visible { outline-offset: 1px; }
 
 .admin-theme h1, .admin-theme h2, .admin-theme h3, .admin-theme h4 {
     text-align: left;
@@ -503,6 +730,154 @@ body.admin-theme {
 
 .admin-theme .stats-stack { display: grid; gap: 1.25rem; }
 
+/* ---------- Page sections ------------------------------------------------ */
+
+/* A long admin page needs visible structure or it reads as one wall. Every
+   major group of blocks gets a labelled section, and the section owns the
+   vertical rhythm so the blocks inside it do not each re-declare margins. */
+.admin-theme .adm-section { margin: 0 0 2rem; }
+.admin-theme .adm-section:last-child { margin-bottom: 0; }
+
+.admin-theme .adm-section-head {
+    display: flex;
+    align-items: baseline;
+    gap: .75rem;
+    flex-wrap: wrap;
+    margin: 0 0 .9rem;
+    padding-bottom: .5rem;
+    border-bottom: 1px solid var(--adm-border);
+}
+
+.admin-theme .adm-section-head h2 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--adm-text-faint);
+}
+
+.admin-theme .adm-section-head p {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--adm-text-faint);
+}
+
+.admin-theme .adm-section-head .adm-section-aside { margin-left: auto; }
+
+.admin-theme .adm-section > *:last-child { margin-bottom: 0; }
+
+/* Hero KPI: the handful of numbers an operator checks first. Same markup as a
+   stat card, just given more presence. */
+.admin-theme .stat-card.kpi {
+    padding: 1.05rem 1.15rem;
+    border-color: var(--adm-border-strong);
+    background: linear-gradient(180deg, var(--adm-surface) 0%, var(--adm-surface-2) 100%);
+}
+
+.admin-theme .stat-card.kpi b {
+    font-size: 30px;
+    letter-spacing: -.025em;
+}
+
+.admin-theme .stat-card.kpi small { font-size: 11.5px; }
+
+/* ---------- Jump bar ----------------------------------------------------- */
+
+/* Reference pages (System) run to several thousand pixels. A sticky jump bar
+   turns that from a scroll into a lookup. */
+.admin-theme .adm-jump {
+    position: sticky;
+    top: var(--adm-topbar-h);
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    flex-wrap: wrap;
+    margin: 0;
+    padding: .5rem 0;
+    background: var(--adm-bg);
+    border-bottom: 1px solid var(--adm-border);
+}
+
+.admin-theme .adm-jump-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--adm-text-faint);
+    margin-right: .25rem;
+}
+
+.admin-theme .adm-jump a {
+    display: inline-block;
+    padding: .25rem .6rem;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--adm-text-dim);
+    text-decoration: none;
+    background: var(--adm-surface);
+    border: 1px solid var(--adm-border);
+    border-radius: 999px;
+    transition: border-color .12s ease, color .12s ease, background .12s ease;
+}
+
+.admin-theme .adm-jump a:hover {
+    color: var(--adm-accent-strong);
+    border-color: var(--adm-accent);
+    background: var(--adm-accent-soft);
+}
+
+/* Anchored cards must land below the topbar and the jump bar, not under them. */
+.admin-theme [id^="sys-"] { scroll-margin-top: calc(var(--adm-topbar-h) + 3.1rem); }
+.admin-theme :target { animation: adm-flash 1.4s ease-out; }
+
+@keyframes adm-flash {
+    from { box-shadow: 0 0 0 3px var(--adm-accent-ring); }
+    to   { box-shadow: 0 0 0 0 transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-theme :target { animation: none; }
+    .admin-theme * { transition-duration: .01ms !important; }
+}
+
+/* ---------- Empty states ------------------------------------------------- */
+
+/* "No X yet" on its own line is not a state, it is an apology. These give the
+   operator an icon, a line of copy and somewhere to go next. */
+.admin-theme .adm-empty {
+    display: grid;
+    justify-items: center;
+    gap: .45rem;
+    padding: 2.25rem 1.5rem;
+    text-align: center;
+    color: var(--adm-text-faint);
+}
+
+.admin-theme .adm-empty .adm-empty-ico {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--adm-surface-2);
+    border: 1px solid var(--adm-border);
+    color: var(--adm-text-faint);
+    margin-bottom: .25rem;
+}
+
+.admin-theme .adm-empty .adm-empty-ico .nav-ico { width: 19px; height: 19px; }
+
+.admin-theme .adm-empty strong {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--adm-text);
+}
+
+.admin-theme .adm-empty p { margin: 0; font-size: 12.5px; max-width: 46ch; }
+.admin-theme .adm-empty .btn { margin-top: .35rem; }
+
 .admin-theme .trend { font-weight: 700; white-space: nowrap; }
 .admin-theme .trend-up { color: var(--adm-ok); }
 .admin-theme .trend-down { color: var(--adm-err); }
@@ -533,6 +908,39 @@ body.admin-theme {
     border-top: 0;
 }
 
+/* Sticky column headers. The System page scrolls for 10,000px and the Test
+   suite for 45,000px; without this you lose the column names the moment you
+   start reading rows. Offset clears the sticky topbar. Tables that live inside
+   their own scroller keep their header pinned to that box instead. */
+.admin-theme table thead th {
+    position: sticky;
+    top: var(--adm-topbar-h);
+    z-index: 3;
+    background: var(--adm-surface-2);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--adm-text-dim);
+    border-bottom: 1px solid var(--adm-border-strong);
+    box-shadow: 0 1px 0 var(--adm-border-strong);
+}
+
+.admin-theme table thead th:first-child { border-top-left-radius: var(--adm-radius); }
+.admin-theme table thead th:last-child { border-top-right-radius: var(--adm-radius); }
+
+.admin-theme .users-table-wrap,
+.admin-theme .table-scroll,
+.admin-theme .mg-table-wrap,
+.admin-theme .sys-card,
+.admin-theme .card { --adm-sticky-top: 0; }
+
+.admin-theme .users-table-wrap table thead th,
+.admin-theme .table-scroll table thead th,
+.admin-theme .mg-table-wrap table thead th,
+.admin-theme .sys-card table thead th,
+.admin-theme .card table thead th { top: 0; }
+
 .admin-theme th {
     background: var(--adm-surface-2);
     font-size: 11px;
@@ -555,6 +963,10 @@ body.admin-theme {
     box-shadow: var(--adm-shadow);
     overflow: auto;
     margin-bottom: 1.25rem;
+    /* A flex/grid child defaults to min-width:auto, i.e. its min-content width.
+       Without this the wrapper refuses to shrink below the table's width and
+       pushes the whole page sideways instead of scrolling itself. */
+    min-width: 0;
 }
 
 .admin-theme .users-table-wrap table, .admin-theme .table-scroll table {
@@ -1009,7 +1421,7 @@ body.admin-theme {
         justify-content: center;
         width: 2.3rem;
         height: 2.3rem;
-        font-size: 1.2rem;
+        flex: none;
         line-height: 1;
         background: var(--adm-surface);
         color: var(--adm-text);
@@ -1017,6 +1429,8 @@ body.admin-theme {
         border-radius: var(--adm-radius-sm);
         cursor: pointer;
     }
+
+    .admin-theme .nav-toggle .nav-ico { width: 18px; height: 18px; }
 
     .admin-theme .admin-topbar { padding: 0 .9rem; gap: .6rem; }
     .admin-theme .admin-topbar .admin-top-search { display: none; }
@@ -1317,6 +1731,11 @@ body.admin-theme {
 .admin-theme .sales-cards,
 .admin-theme .presets-grid { grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
 
+/* Cards should be as tall as their own content. The default `stretch` padded
+   every short status card out to match a tall chart card beside it. */
+.admin-theme .sys-grid,
+.admin-theme .stats-grid { align-items: start; }
+
 .admin-theme .sys-grid > *,
 .admin-theme .stats-grid > *,
 .admin-theme .cron-card-grid > * { min-width: 0; }
@@ -1333,17 +1752,3 @@ body.admin-theme {
     .admin-theme .stats-grid > [style*="span"] { grid-column: auto !important; }
 }
 
-/* A wide data table that a view did not wrap in a scroller turns into a
-   sideways-scrolling page on a phone. Turn the table itself into the scroller;
-   the row groups still lay out as a table, so the columns stay aligned. Views
-   that already provide a scroller keep their plain <table>. */
-@media (max-width: 900px) {
-    .admin-theme .admin-main table { display: block; overflow-x: auto; }
-
-    .admin-theme .users-table-wrap > table,
-    .admin-theme .table-scroll > table,
-    .admin-theme .mg-table-wrap > table,
-    .admin-theme .sys-card > table,
-    .admin-theme .card > table,
-    .admin-theme details > table { display: table; }
-}

@@ -44,6 +44,19 @@
 
 <p class="muted">Disk free: <b><?= $diskFree !== false ? number_format((float) $diskFree / 1048576) . ' MB' : 'unknown' ?></b></p>
 
+
+<?php // This page is a long reference sheet. A sticky jump bar keeps the seven
+     // groups reachable without scrolling through 10,000px of cards. ?>
+<nav class="adm-jump" aria-label="Jump to section">
+    <span class="adm-jump-label">Jump to</span>
+    <a href="#sys-diagnostics">Health</a>
+    <a href="#sys-ai">AI</a>
+    <a href="#sys-site">Site</a>
+    <a href="#sys-tasks">Tasks</a>
+    <a href="#sys-media">Media</a>
+    <a href="#sys-data">Data</a>
+    <a href="#sys-security">Security</a>
+</nav>
 <div class="sys-grid">
     <!-- Traffic & revenue -->
     <div class="sys-card" style="grid-column:span 2;">
@@ -94,7 +107,7 @@
     </div>
 
     <!-- AI (Ollama) -->
-    <div class="sys-card">
+    <div class="sys-card" id="sys-ai">
         <h2>AI (Ollama)</h2>
         <table>
             <tr><th>Server</th><td class="<?= $ai['ollama_up'] ? 'sys-ok' : 'sys-bad' ?>"><?= $ai['ollama_up'] ? 'up' : 'down (watchdog restarts it)' ?></td></tr>
@@ -118,7 +131,7 @@
     </div>
 
     <!-- Operational diagnostics -->
-    <div class="sys-card">
+    <div class="sys-card" id="sys-diagnostics">
         <h2>Operational diagnostics</h2>
         <table>
             <tr><th>Database</th><td class="<?= $diagnostics['db'] ? 'sys-ok' : 'sys-bad' ?>"><?= $diagnostics['db'] ? 'connected' : 'unavailable' ?></td></tr>
@@ -182,7 +195,7 @@
     </div>
 
     <!-- Maintenance mode + housekeeping -->
-    <div class="sys-card">
+    <div class="sys-card" id="sys-site">
         <h2>Site status</h2>
         <?php if (!empty($maintenance)): ?>
             <p><span class="sys-bad">MAINTENANCE MODE ON</span> — visitors see a downtime page; staff can still browse.</p>
@@ -272,7 +285,7 @@
     </div>
 
     <!-- Media variants -->
-    <div class="sys-card">
+    <div class="sys-card" id="sys-media">
         <h2>Media thumbnails</h2>
         <?php if ($variants['running']): ?>
             <p><b style="color:#b45309;">Regeneration in progress… refresh to update.</b></p>
@@ -298,7 +311,7 @@
     </div>
 
     <!-- CSV exports -->
-    <div class="sys-card">
+    <div class="sys-card" id="sys-data">
         <h2>Exports</h2>
         <p class="muted" style="font-size:.85rem;">Download current data as CSV for spreadsheets and accounting.</p>
         <div class="sys-actions">
@@ -365,7 +378,7 @@
         .cron-card .cron-fields input[type="number"], .cron-card .cron-fields select { padding: .3rem .45rem; border: 1px solid var(--pink-300); border-radius: 4px; background: var(--pink-100); color: var(--purple-900); }
         .cron-card .cron-save { margin-top: .25rem; }
     </style>
-    <div class="sys-card">
+    <div class="sys-card" id="sys-tasks">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;">
             <h2>Scheduled tasks (cron)</h2>
             <?php $cronOkCount = count(array_filter($cronJobs ?? [], fn($j) => !empty($j['ok']))); ?>
@@ -704,7 +717,7 @@
     </div>
 
     <!-- Login security -->
-    <div class="sys-card" id="security">
+    <div class="sys-card" id="sys-security">
         <h2>Login security</h2>
         <p style="margin:.25rem 0 .5rem;">
             Failed logins last hour:

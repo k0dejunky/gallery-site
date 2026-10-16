@@ -1,7 +1,7 @@
 <?php $title = 'Chat #' . (int) $conversation['id']; ?>
 
 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
-    <h1 style="margin:0;">Chat #<?= (int) $conversation['id'] ?> &middot; <?= e((string) $user_email) ?></h1>
+    <h2 class="adm-h1">Chat #<?= (int) $conversation['id'] ?> &middot; <?= e((string) $user_email) ?></h2>
     <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
         <form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/reply-toggle') ?>">
             <?= csrf_field() ?>

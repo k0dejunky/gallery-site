@@ -38,7 +38,7 @@
     <?php if ($q !== ''): ?>
         <p>No categories match &ldquo;<?= e($q) ?>&rdquo;.</p>
     <?php else: ?>
-        <p>No categories yet. Categories describe the content of a gallery (its photos and videos).</p>
+        <?= admin_empty('tag', 'No categories yet', 'Categories describe what is in a gallery, and power the browse filters and the AI suggester.') ?>
     <?php endif; ?>
 <?php else: ?>
     <table>

@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', trafficWireForm);
 <?php if (empty($links)): ?>
     <p class="muted">No traffic links yet. Create one above to start tracking where your signups come from.</p>
 <?php else: ?>
+    <div class="users-table-wrap">
     <table>
         <thead>
             <tr>
@@ -172,6 +173,7 @@ document.addEventListener('DOMContentLoaded', trafficWireForm);
             <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
 <?php endif; ?>
 
 <h2>Recent Signups</h2>

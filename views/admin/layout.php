@@ -19,6 +19,110 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
 
     return $current === $base . $href || strpos($current, $base . $href . '/') === 0 ? 'active' : '';
 };
+
+// The sidebar as data. Rendering the nav and the breadcrumb from one list keeps
+// them in step, and keeps the flat set of site-editor move keys in one place.
+// `perm` is an Auth::can() capability; `exact` marks the dashboard so /admin
+// does not stay lit while you are on /admin/users.
+$navGroups = [
+    [
+        'key'   => 'nav-group-overview',
+        'label' => 'Overview',
+        'items' => [
+            ['key' => 'nav-dashboard', 'label' => 'Dashboard', 'href' => '/admin', 'icon' => 'grid', 'exact' => true],
+            ['key' => 'nav-abandoned-uploads', 'label' => 'Abandoned Uploads', 'href' => '/admin/abandoned-uploads', 'icon' => 'upload'],
+            ['key' => 'nav-trends', 'label' => 'Trends', 'href' => '/admin/trends', 'icon' => 'trend'],
+            ['key' => 'nav-traffic', 'label' => 'Traffic', 'href' => '/admin/traffic', 'icon' => 'bars', 'perm' => 'traffic'],
+            ['key' => 'nav-analytics', 'label' => 'Web Analytics', 'href' => '/admin/analytics', 'icon' => 'pie', 'perm' => 'analytics'],
+        ],
+    ],
+    [
+        'key'   => 'nav-group-content',
+        'label' => 'Content',
+        'items' => [
+            ['key' => 'nav-galleries', 'label' => 'Gallery Management', 'href' => '/admin/galleries', 'icon' => 'image'],
+            ['key' => 'nav-categories', 'label' => 'Categories', 'href' => '/admin/categories', 'icon' => 'tag'],
+            ['key' => 'nav-category-suggestions', 'label' => 'AI Suggestions', 'href' => '/admin/category-suggestions', 'icon' => 'sparkle'],
+            ['key' => 'nav-video-projects', 'label' => 'Video Projects', 'href' => '/admin/video-projects', 'icon' => 'film'],
+            ['key' => 'nav-profile', 'label' => 'Creator Profile', 'href' => '/admin/profile', 'icon' => 'user'],
+            ['key' => 'nav-theme', 'label' => 'Theme', 'href' => '/admin/theme', 'icon' => 'palette'],
+            ['key' => 'nav-site-editor', 'label' => 'Site Editor', 'href' => '/admin/site-editor', 'icon' => 'layout', 'perm' => 'site_editor'],
+        ],
+    ],
+    [
+        'key'   => 'nav-group-community',
+        'label' => 'Community & growth',
+        'items' => [
+            ['key' => 'nav-engagement', 'label' => 'Engagement', 'href' => '/admin/engagement', 'icon' => 'heart'],
+            ['key' => 'nav-users', 'label' => 'Users', 'href' => '/admin/users', 'icon' => 'users'],
+            ['key' => 'nav-chat', 'label' => 'Chat', 'href' => '/admin/chat', 'icon' => 'chat', 'perm' => 'chat'],
+            ['key' => 'nav-support', 'label' => 'Support', 'href' => '/admin/support', 'icon' => 'lifebuoy', 'perm' => 'support'],
+            ['key' => 'nav-auto-poster', 'label' => 'Auto Poster', 'href' => '/admin/auto-poster', 'icon' => 'send'],
+        ],
+    ],
+    [
+        'key'   => 'nav-group-money',
+        'label' => 'Monetization',
+        'items' => [
+            ['key' => 'nav-earnings', 'label' => 'Earnings', 'href' => '/admin/earnings', 'icon' => 'dollar'],
+            ['key' => 'nav-plans', 'label' => 'Membership Plans', 'href' => '/admin/plans', 'icon' => 'card', 'perm' => 'membership'],
+            ['key' => 'nav-subscriptions', 'label' => 'Subscriptions', 'href' => '/admin/subscriptions', 'icon' => 'repeat', 'perm' => 'membership'],
+            ['key' => 'nav-payments', 'label' => 'Payment Processors', 'href' => '/admin/payment-processors', 'icon' => 'bank', 'perm' => 'membership'],
+            ['key' => 'nav-emailer', 'label' => 'Emailer', 'href' => '/admin/emailer', 'icon' => 'mail', 'perm' => 'membership'],
+        ],
+    ],
+    [
+        'key'   => 'nav-group-system',
+        'label' => 'System',
+        'items' => [
+            ['key' => 'nav-system', 'label' => 'System', 'href' => '/admin/system', 'icon' => 'server'],
+            ['key' => 'nav-mail', 'label' => 'Email', 'href' => '/admin/mail', 'icon' => 'inbox'],
+            ['key' => 'nav-logs', 'label' => 'Logs', 'href' => '/admin/logs', 'icon' => 'doc'],
+            ['key' => 'nav-error-logs', 'label' => 'Error Logs', 'href' => '/admin/error-logs', 'icon' => 'alert'],
+            ['key' => 'nav-user-monitor', 'label' => 'User Monitor', 'href' => '/admin/user-monitor', 'icon' => 'activity', 'perm' => 'user_monitor'],
+            ['key' => 'nav-test-suite', 'label' => 'Test suite', 'href' => '/admin/test-suite', 'icon' => 'check'],
+            ['key' => 'nav-help', 'label' => 'Documentation', 'href' => '/admin/help', 'icon' => 'book'],
+        ],
+    ],
+];
+
+// Drop anything the signed-in admin may not see, then work out where we are so
+// the breadcrumb can show "Admin / <group> / <page>".
+$navGroups = array_values(array_filter(array_map(static function (array $group): array {
+    $group['items'] = array_values(array_filter($group['items'], static function (array $item): bool {
+        return !isset($item['perm']) || \App\Core\Auth::can($item['perm']);
+    }));
+
+    return $group;
+}, $navGroups), static function (array $group): bool {
+    return $group['items'] !== [];
+}));
+
+$crumbGroup = null;
+$crumbGroupHref = null;
+foreach ($navGroups as $group) {
+    foreach ($group['items'] as $item) {
+        if ($navActive($item['href'], !empty($item['exact'])) === 'active') {
+            $crumbGroup = $group['label'];
+            $crumbGroupHref = $item['href'];
+            break 2;
+        }
+    }
+    if ($crumbGroupHref === null && $group['items'] !== []) {
+        $crumbGroupHref = $group['items'][0]['href'];
+    }
+}
+
+$pageTitle = isset($title) ? (string) $title : 'Dashboard';
+
+// Sidebar identity. Long emails are the norm here, so the label is clamped to
+// one line and the full address stays in the title attribute.
+$adminUser = \App\Core\Auth::user();
+$adminEmail = (string) ($adminUser['email'] ?? '');
+$adminRole = (string) ($adminUser['role'] ?? 'admin');
+$adminRoleLabel = ['super_admin' => 'Super admin', 'admin' => 'Administrator', 'moderator' => 'Moderator'][$adminRole] ?? ucfirst(str_replace('_', ' ', $adminRole));
+$adminInitial = $adminEmail !== '' ? strtoupper(substr($adminEmail, 0, 1)) : '?';
+$icon = static fn (string $name): string => \App\Core\AdminIcon::svg($name);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -28,15 +132,16 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
     <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') . ' Admin' : e(config('app.site_name')) . ' Admin' ?></title>
     <link rel="stylesheet" href="<?= e(url('/assets/admin-shared.css')) ?>?v=2">
     <link rel="stylesheet" href="<?= e(url('/assets/css/user.css')) ?>?v=31">
-    <link rel="stylesheet" href="<?= e(url('/assets/css/admin.css')) ?>?v=<?= (int) (@filemtime(dirname(__DIR__, 2) . '/public/assets/css/admin.css') ?: 1) ?>">
     <style>
     <?= \App\Models\Theme::css(\App\Models\Theme::SCOPE_ADMIN) ?>
     <?= \App\Models\Theme::cssLayout(\App\Models\Theme::SCOPE_ADMIN) ?>
         body.admin-theme { font-size: var(--font-size-base); line-height: var(--line-height); }
         .admin-theme a { color: var(--adm-accent-strong); }
     </style>
+    <link rel="stylesheet" href="<?= e(url('/assets/css/admin.css')) ?>?v=<?= (int) (@filemtime(dirname(__DIR__, 2) . '/public/assets/css/admin.css') ?: 1) ?>">
 </head>
 <body class="admin-theme site-compact" data-base="<?= e(config('app.base_path')) ?>" data-user="1">
+<a class="skip-link" href="#admin-content">Skip to main content</a>
 <?php $isSiteEditor = strpos($_SERVER['REQUEST_URI'] ?? '', '/admin/site-editor') !== false; ?>
 <?php if (!empty($_SESSION['impersonator_id'])): ?>
     <div style="background:#7f1d1d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;justify-content:center;border-radius:var(--border-radius);margin-bottom:var(--spacing-md);">
@@ -50,7 +155,7 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
 <?php endif; ?>
     <div class="admin-shell" data-se-move-key="shell">
         <div class="nav-backdrop" id="nav-backdrop" aria-hidden="true" data-se-move-key="nav-backdrop"></div>
-        <nav class="admin-nav" id="admin-nav" data-se-move-key="nav">
+        <nav class="admin-nav" id="admin-nav" aria-label="Admin sections" data-se-move-key="nav">
             <?php if (!empty($topContent)): ?>
                 <div class="nav-top-content" data-se-move-key="nav-top-content"><?= $topContent ?></div>
                 <div class="nav-sep" data-se-move-key="nav-sep-top"></div>
@@ -58,71 +163,66 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
             <a class="nav-brand" href="<?= url('/admin') ?>" data-se-move-key="nav-brand">
                 <img src="<?= e(\App\Models\Theme::titleImageUrl(\App\Models\Theme::SCOPE_ADMIN)) ?>" alt="<?= e(config('app.site_name')) ?> Admin" onerror="this.remove()">
             </a>
-            <div class="nav-group" data-se-move-key="nav-group-overview">Overview</div>
-            <a class="nav-item <?= $navActive('/admin', true) ?>" href="<?= url('/admin') ?>" data-se-move-key="nav-dashboard">Dashboard</a>
-            <a class="nav-item <?= $navActive('/admin/abandoned-uploads') ?>" href="<?= url('/admin/abandoned-uploads') ?>" data-se-move-key="nav-abandoned-uploads">Abandoned Uploads</a>
-            <a class="nav-item <?= $navActive('/admin/trends') ?>" href="<?= url('/admin/trends') ?>" data-se-move-key="nav-trends">Trends</a>
-            <?php if (\App\Core\Auth::can('traffic')): ?>
-                <a class="nav-item <?= $navActive('/admin/traffic') ?>" href="<?= url('/admin/traffic') ?>" data-se-move-key="nav-traffic">Traffic</a>
-            <?php endif; ?>
-            <?php if (\App\Core\Auth::can('analytics')): ?>
-                <a class="nav-item <?= $navActive('/admin/analytics') ?>" href="<?= url('/admin/analytics') ?>" data-se-move-key="nav-analytics">Web Analytics</a>
-            <?php endif; ?>
-            <div class="nav-group" data-se-move-key="nav-group-content">Content</div>
-            <a class="nav-item <?= $navActive('/admin/galleries') ?>" href="<?= url('/admin/galleries') ?>" data-se-move-key="nav-galleries">Gallery Management</a>
-            <a class="nav-item <?= $navActive('/admin/categories') ?>" href="<?= url('/admin/categories') ?>" data-se-move-key="nav-categories">Categories</a>
-            <a class="nav-item <?= $navActive('/admin/category-suggestions') ?>" href="<?= url('/admin/category-suggestions') ?>" data-se-move-key="nav-category-suggestions">AI Suggestions</a>
-            <a class="nav-item <?= $navActive('/admin/video-projects') ?>" href="<?= url('/admin/video-projects') ?>" data-se-move-key="nav-video-projects">Video Projects</a>
-            <a class="nav-item <?= $navActive('/admin/profile') ?>" href="<?= url('/admin/profile') ?>" data-se-move-key="nav-profile">Creator Profile</a>
-            <a class="nav-item <?= $navActive('/admin/theme') ?>" href="<?= url('/admin/theme') ?>" data-se-move-key="nav-theme">Theme</a>
-            <?php if (\App\Core\Auth::can('site_editor')): ?>
-                <a class="nav-item <?= $navActive('/admin/site-editor') ?>" href="<?= url('/admin/site-editor') ?>" data-se-move-key="nav-site-editor">Site Editor</a>
-            <?php endif; ?>
-            <div class="nav-group" data-se-move-key="nav-group-community">Community &amp; growth</div>
-            <a class="nav-item <?= $navActive('/admin/engagement') ?>" href="<?= url('/admin/engagement') ?>" data-se-move-key="nav-engagement">Engagement</a>
-            <a class="nav-item <?= $navActive('/admin/users') ?>" href="<?= url('/admin/users') ?>" data-se-move-key="nav-users">Users</a>
-            <?php if (\App\Core\Auth::can('chat')): ?>
-                <a class="nav-item <?= $navActive('/admin/chat') ?>" href="<?= url('/admin/chat') ?>" data-se-move-key="nav-chat">Chat</a>
-            <?php endif; ?>
-            <?php if (\App\Core\Auth::can('support')): ?>
-                <a class="nav-item <?= $navActive('/admin/support') ?>" href="<?= url('/admin/support') ?>" data-se-move-key="nav-support">Support</a>
-            <?php endif; ?>
-            <a class="nav-item <?= $navActive('/admin/auto-poster') ?>" href="<?= url('/admin/auto-poster') ?>" data-se-move-key="nav-auto-poster">Auto Poster</a>
-            <div class="nav-group" data-se-move-key="nav-group-money">Monetization</div>
-            <a class="nav-item <?= $navActive('/admin/earnings') ?>" href="<?= url('/admin/earnings') ?>" data-se-move-key="nav-earnings">Earnings</a>
-            <?php if (\App\Core\Auth::can('membership')): ?>
-                <a class="nav-item <?= $navActive('/admin/plans') ?>" href="<?= url('/admin/plans') ?>" data-se-move-key="nav-plans">Membership Plans</a>
-                <a class="nav-item <?= $navActive('/admin/subscriptions') ?>" href="<?= url('/admin/subscriptions') ?>" data-se-move-key="nav-subscriptions">Subscriptions</a>
-                <a class="nav-item <?= $navActive('/admin/payment-processors') ?>" href="<?= url('/admin/payment-processors') ?>" data-se-move-key="nav-payments">Payment Processors</a>
-                <a class="nav-item <?= $navActive('/admin/emailer') ?>" href="<?= url('/admin/emailer') ?>" data-se-move-key="nav-emailer">Emailer</a>
-            <?php endif; ?>
-            <div class="nav-group" data-se-move-key="nav-group-system">System</div>
-            <a class="nav-item <?= $navActive('/admin/system') ?>" href="<?= url('/admin/system') ?>" data-se-move-key="nav-system">System</a>
-            <a class="nav-item <?= $navActive('/admin/mail') ?>" href="<?= url('/admin/mail') ?>" data-se-move-key="nav-mail">Email</a>
-            <a class="nav-item <?= $navActive('/admin/logs') ?>" href="<?= url('/admin/logs') ?>" data-se-move-key="nav-logs">Logs</a>
-            <a class="nav-item <?= $navActive('/admin/error-logs') ?>" href="<?= url('/admin/error-logs') ?>" data-se-move-key="nav-error-logs">Error Logs</a>
-            <?php if (\App\Core\Auth::can('user_monitor')): ?>
-                <a class="nav-item <?= $navActive('/admin/user-monitor') ?>" href="<?= url('/admin/user-monitor') ?>" data-se-move-key="nav-user-monitor">User Monitor</a>
-            <?php endif; ?>
-            <a class="nav-item <?= $navActive('/admin/test-suite') ?>" href="<?= url('/admin/test-suite') ?>" data-se-move-key="nav-test-suite">Test suite</a>
-            <a class="nav-item <?= $navActive('/admin/help') ?>" href="<?= url('/admin/help') ?>" data-se-move-key="nav-help">Documentation</a>
-            <div class="nav-sep" data-se-move-key="nav-sep"></div>
-            <a class="nav-item" href="<?= url('/galleries') ?>" data-se-move-key="nav-view-site">View Site</a>
-            <a class="nav-item <?= $navActive('/settings') ?>" href="<?= url('/settings') ?>" data-se-move-key="nav-settings">Settings</a>
-            <form class="nav-logout" method="post" action="<?= url('/logout') ?>" data-se-move-key="nav-logout">
-                <?= csrf_field() ?>
-                <button type="submit" class="btn btn-sm btn-danger">Logout</button>
-            </form>
-        </nav>
-        <main class="admin-main" data-se-move-key="main">
-            <div class="admin-topbar">
-                <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="admin-nav">&#9776;</button>
-                <h1 class="topbar-title"><?= isset($title) ? e($title) : 'Dashboard' ?></h1>
-                <span class="topbar-spacer"></span>
-                <form class="admin-top-search" method="get" action="<?= url('/admin/search') ?>" data-se-move-key="nav-search">
-                    <input type="search" name="q" placeholder="Search users, galleries&hellip;" value="" aria-label="Global admin search">
+            <div class="nav-scroll">
+            <?php foreach ($navGroups as $group): ?>
+                <div class="nav-group" data-se-move-key="<?= e($group['key']) ?>"><?= e($group['label']) ?></div>
+                <?php foreach ($group['items'] as $item): ?>
+                    <?php $isActive = $navActive($item['href'], !empty($item['exact'])) === 'active'; ?>
+                    <a class="nav-item <?= $isActive ? 'active' : '' ?>" href="<?= e(url($item['href'])) ?>"
+                       data-se-move-key="<?= e($item['key']) ?>"<?= $isActive ? ' aria-current="page"' : '' ?>>
+                        <?= $icon($item['icon']) ?><span><?= e($item['label']) ?></span>
+                    </a>
+                <?php endforeach; ?>
+            <?php endforeach; ?>
+                <div class="nav-sep" data-se-move-key="nav-sep"></div>
+                <a class="nav-item" href="<?= e(url('/galleries')) ?>" data-se-move-key="nav-view-site"><?= $icon('external') ?><span>View Site</span></a>
+                <a class="nav-item <?= $navActive('/settings') ?>" href="<?= e(url('/settings')) ?>" data-se-move-key="nav-settings"><?= $icon('sliders') ?><span>Settings</span></a>
+            </div>
+            <div class="nav-foot" data-se-move-key="nav-foot">
+                <div class="nav-user" title="<?= e($adminEmail) ?>">
+                    <span class="nav-avatar" aria-hidden="true"><?= e($adminInitial) ?></span>
+                    <span class="nav-user-text">
+                        <strong><?= e($adminEmail) ?></strong>
+                        <small><?= e($adminRoleLabel) ?></small>
+                    </span>
+                </div>
+                <form class="nav-logout" method="post" action="<?= e(url('/logout')) ?>" data-se-move-key="nav-logout">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="nav-logout-btn" aria-label="Sign out" title="Sign out"><?= $icon('logout') ?></button>
                 </form>
-                <a class="topbar-link" href="<?= url('/galleries') ?>">View site</a>
+            </div>
+        </nav>
+        <main class="admin-main" id="admin-content" tabindex="-1" data-se-move-key="main">
+            <div class="admin-topbar">
+                <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="admin-nav"><?= $icon('menu') ?></button>
+                <div class="topbar-lead">
+                    <?php if ($crumbGroup !== null || $pageTitle !== 'Dashboard'): ?>
+                        <nav class="adm-crumb" aria-label="Breadcrumb">
+                            <a href="<?= e(url('/admin')) ?>">Admin</a>
+                            <?php if ($crumbGroup !== null): ?>
+                                <?= $icon('chevron', 'crumb-sep') ?>
+                                <?php if ($current === $base . $crumbGroupHref): ?>
+                                    <span><?= e($crumbGroup) ?></span>
+                                <?php else: ?>
+                                    <a href="<?= e(url($crumbGroupHref)) ?>"><?= e($crumbGroup) ?></a>
+                                    <?= $icon('chevron', 'crumb-sep') ?>
+                                    <span aria-current="page"><?= e($pageTitle) ?></span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <?= $icon('chevron', 'crumb-sep') ?>
+                                <span aria-current="page"><?= e($pageTitle) ?></span>
+                            <?php endif; ?>
+                        </nav>
+                    <?php endif; ?>
+                    <h1 class="topbar-title"><?= e($pageTitle) ?></h1>
+                </div>
+                <span class="topbar-spacer"></span>
+                <form class="admin-top-search" method="get" action="<?= e(url('/admin/search')) ?>" data-se-move-key="nav-search">
+                    <span class="top-search-ico" aria-hidden="true"><?= $icon('search', 'nav-ico') ?></span>
+                    <input type="search" name="q" placeholder="Search users, galleries&hellip;" value="" aria-label="Global admin search">
+                    <kbd class="top-search-kbd" aria-hidden="true">Ctrl K</kbd>
+                </form>
+                <a class="topbar-link" href="<?= e(url('/galleries')) ?>"><?= $icon('external') ?><span>View site</span></a>
             </div>
             <div class="flash-stack" role="status" aria-live="polite">
             <?php foreach ($flash as $flashType => $flashMessages): ?>
@@ -644,13 +744,22 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
             }
 
             // --- Remembered collapsible sections ---
-            document.querySelectorAll('details.sys-card[data-collapse-key]').forEach(function (details) {
+            // aria-expanded is kept in step with the real open state so assistive
+            // tech announces the panel correctly; browsers do not do this for
+            // <details> on their own.
+            document.querySelectorAll('details[data-collapse-key]').forEach(function (details) {
                 var key = 'admin-collapse-' + details.getAttribute('data-collapse-key');
                 try {
                     var saved = localStorage.getItem(key);
                     if (saved === 'closed') details.removeAttribute('open');
                 } catch (ignore) {}
+                var sync = function () {
+                    var summary = details.querySelector(':scope > summary');
+                    if (summary) summary.setAttribute('aria-expanded', details.hasAttribute('open') ? 'true' : 'false');
+                };
+                sync();
                 details.addEventListener('toggle', function () {
+                    sync();
                     try {
                         localStorage.setItem(key, details.hasAttribute('open') ? 'open' : 'closed');
                     } catch (ignore) {}

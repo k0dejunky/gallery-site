@@ -1,4 +1,4 @@
-<?php $title = 'Admin'; ?>
+<?php $title = 'Dashboard'; ?>
 
 <?php // Operational alert banners: failed backup, silent cron, login spike. ?>
 <?php if (!empty($backupFailure)): ?>
@@ -79,25 +79,37 @@
 </div>
 <?php endif; ?>
 
-<?php // Membership growth cards: recurring revenue + recent signups. ?>
-<div class="stat-cards">
-    <div class="stat-card"><b>$<?= number_format((float) $growth['mrr'], 2) ?></b><small>Recurring / month</small></div>
-    <div class="stat-card"><b><?= number_format($growth['new_today']) ?></b><small>Signups Today</small></div>
-    <div class="stat-card"><b><?= number_format($growth['new_week']) ?></b><small>Signups 7 Days</small></div>
-    <?php foreach (array_slice($growth['by_processor'], 0, 2) as $proc): ?>
-        <div class="stat-card"><b><?= number_format((int) $proc['members']) ?> · $<?= number_format((float) $proc['mrr'], 0) ?>/mo</b><small>via <?= e((string) $proc['name']) ?></small></div>
-    <?php endforeach; ?>
-</div>
 
-<?php // Headline stat cards: lifetime totals for the whole site. ?>
-<div class="stat-cards">
-    <div class="stat-card"><b><?= number_format($summary['total_views']) ?></b><small>Total Views</small></div>
-    <div class="stat-card"><b><?= number_format($summary['galleries']) ?></b><small>Galleries</small></div>
-    <div class="stat-card"><b><?= number_format($summary['total_members']) ?></b><small>Members</small></div>
-    <div class="stat-card"><b><?= number_format($summary['total_users']) ?></b><small>Users</small></div>
-    <div class="stat-card"><b><?= number_format($summary['logged_in_members']) ?></b><small>Logged In Members</small></div>
-</div>
+<?php // A dashboard this long only reads if it has structure, so the blocks
+     // below are grouped into labelled sections instead of one flat run. ?>
+<section class="adm-section">
+    <div class="adm-section-head"><h2>At a glance</h2></div>
+    <?php // Headline stat cards: lifetime totals for the whole site. These are
+         // the numbers an operator checks first, so they lead as hero KPIs. ?>
+    <div class="stat-cards adm-kpi-band">
+    <?php // Headline stat cards: lifetime totals for the whole site. ?>
+    <div class="stat-cards">
+        <div class="stat-card kpi"><b><?= number_format($summary['total_views']) ?></b><small>Total Views</small></div>
+        <div class="stat-card kpi"><b><?= number_format($summary['galleries']) ?></b><small>Galleries</small></div>
+        <div class="stat-card kpi"><b><?= number_format($summary['total_members']) ?></b><small>Members</small></div>
+        <div class="stat-card kpi"><b><?= number_format($summary['total_users']) ?></b><small>Users</small></div>
+        <div class="stat-card kpi"><b><?= number_format($summary['logged_in_members']) ?></b><small>Logged In Members</small></div>
+    </div>
+    </div>
 
+    <?php // Membership growth cards: recurring revenue + recent signups. ?>
+    <div class="stat-cards">
+        <div class="stat-card"><b>$<?= number_format((float) $growth['mrr'], 2) ?></b><small>Recurring / month</small></div>
+        <div class="stat-card"><b><?= number_format($growth['new_today']) ?></b><small>Signups Today</small></div>
+        <div class="stat-card"><b><?= number_format($growth['new_week']) ?></b><small>Signups 7 Days</small></div>
+        <?php foreach (array_slice($growth['by_processor'], 0, 2) as $proc): ?>
+            <div class="stat-card"><b><?= number_format((int) $proc['members']) ?> · $<?= number_format((float) $proc['mrr'], 0) ?>/mo</b><small>via <?= e((string) $proc['name']) ?></small></div>
+        <?php endforeach; ?>
+    </div>
+</section>
+
+<section class="adm-section">
+    <div class="adm-section-head"><h2>Content</h2></div>
 <?php // Media statistics: total, queued (scheduled for future publish) and
     // currently-published photos/videos. ?>
 <div class="sys-card" style="margin-top:var(--spacing-lg);">
@@ -138,7 +150,12 @@
         </div>
     </div>
 </div>
+</section>
 
+<section class="adm-section">
+    <div class="adm-section-head"><h2>Operations</h2>
+        <p>AI, storage and access health</p>
+    </div>
 <?php // Chat statistics: AI master switch, training queue, base model. ?>
 <div class="stat-cards" style="margin-top:var(--spacing-lg);">
     <div class="stat-card" style="border-left:4px solid <?= !empty($chatStats['aiEnabled']) ? 'var(--success,#16a34a)' : 'var(--danger,#c62828)' ?>;">
@@ -327,7 +344,12 @@
 </script>
 </div>
 <?php endif; ?>
+</section>
 
+<section class="adm-section">
+    <div class="adm-section-head"><h2>Reports</h2>
+        <p>Each panel remembers whether you left it open</p>
+    </div>
 <?php // Revenue & churn: monthly bars + trailing totals, all server-rendered SVG. ?>
 <details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="finance" open>
     <summary><h2>Revenue &amp; churn — last 6 months</h2></summary>
@@ -613,7 +635,10 @@
         </div>
     </div>
 </details>
+</section>
 
+<section class="adm-section">
+    <div class="adm-section-head"><h2>Support &amp; activity</h2></div>
 <?php // Support ticket workload. ?>
 <div class="sys-card" style="margin-top:var(--spacing-lg);">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
@@ -652,4 +677,5 @@
         </table>
     <?php endif; ?>
 </div>
+</section>
 

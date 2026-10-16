@@ -1,7 +1,7 @@
 <?php $title = 'Questionnaire Results'; ?>
 
 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem;">
-    <h1 style="margin:0;">Questionnaire: <?= e((string) $questionnaire['title']) ?></h1>
+    <h2 class="adm-h1">Questionnaire: <?= e((string) $questionnaire['title']) ?></h2>
     <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat') ?>">&larr; Back to chat</a>
 </div>
 

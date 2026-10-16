@@ -35,6 +35,7 @@
 <?php if (empty($plans)): ?>
     <p>No plans yet.</p>
 <?php else: ?>
+    <div class="users-table-wrap">
     <table>
         <thead>
             <tr>
@@ -72,6 +73,7 @@
             <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
 <?php endif; ?>
 
 <p style="margin: var(--spacing-md) 0 var(--spacing-lg);">

@@ -1,5 +1,5 @@
 <?php $title = 'Import galleries'; ?>
-<h1>Bulk import galleries</h1>
+<h2 class="adm-h1">Bulk import galleries</h2>
 <p class="muted">Create galleries from a CSV. Photos are added afterward through the normal upload UI.</p>
 
 <section class="card" style="padding:1rem;margin-bottom:1rem;">

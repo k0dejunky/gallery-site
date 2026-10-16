@@ -25,7 +25,7 @@
 <div class="stats-panel" style="margin-bottom:1rem;">
     <h2>Per-month revenue</h2>
     <?php if (empty($series)): ?>
-        <p class="muted">No one-off revenue in this window.</p>
+        <?= admin_empty('dollar', 'No one-off revenue', 'PPV unlocks and tips land here once a member pays.') ?>
     <?php else: ?>
         <table>
             <thead><tr><th>Month</th><th>PPV unlocks</th><th>Tips</th><th>Total</th></tr></thead>

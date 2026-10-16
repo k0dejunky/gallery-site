@@ -7,6 +7,7 @@
     <?= csrf_field() ?>
     <button type="submit" class="btn btn-sm">Run PayPal reconciliation now</button>
 </form>
+<div class="users-table-wrap">
 <table>
     <thead><tr><th>Membership ID</th><th>Age</th><th>User</th><th>Plan</th><th>Processor</th><th>Reference</th><th>Actions</th></tr></thead>
     <tbody>
@@ -33,6 +34,7 @@
     <?php endforeach; ?>
     </tbody>
 </table>
+</div>
 <?php endif; ?>
 
 <?php if (!empty($plans)): ?>
@@ -120,6 +122,7 @@
 <?php if (empty($subscriptions)): ?>
     <p>No subscriptions yet.</p>
 <?php else: ?>
+    <div class="users-table-wrap">
     <table>
         <thead>
             <tr>
@@ -176,4 +179,5 @@
             <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
 <?php endif; ?>

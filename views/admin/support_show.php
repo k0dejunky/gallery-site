@@ -3,7 +3,7 @@
 <?php $isClosed = in_array($ticket['status'], ['resolved', 'ignored'], true); ?>
 <div class="admin-support-thread">
 <header class="admin-thread-header">
-    <div><a class="support-back" href="<?= url('/admin/support') ?>">&larr; Support tickets</a><h1>#<?= (int) $ticket['id'] ?> &middot; <?= e($ticket['subject']) ?></h1><p class="admin-ticket-meta"><span><?= e($ticket['email']) ?></span><span>Opened <?= e(tzdate('M j, Y g:i', $ticket['created_at'])) ?></span><span><?= count($replies) ?> repl<?= count($replies) === 1 ? 'y' : 'ies' ?></span></p></div>
+    <div><a class="support-back" href="<?= url('/admin/support') ?>">&larr; Support tickets</a><h2 class="adm-h1">#<?= (int) $ticket['id'] ?> &middot; <?= e($ticket['subject']) ?></h2><p class="admin-ticket-meta"><span><?= e($ticket['email']) ?></span><span>Opened <?= e(tzdate('M j, Y g:i', $ticket['created_at'])) ?></span><span><?= count($replies) ?> repl<?= count($replies) === 1 ? 'y' : 'ies' ?></span></p></div>
     <span class="status-badge support-status-<?= e($ticket['status']) ?>"><?= e(ucfirst($ticket['status'])) ?></span>
 </header>
 <div class="support-status-banner<?= $isClosed ? ' closed' : '' ?>"><strong><?= $isClosed ? 'Closed ticket' : 'Conversation open' ?></strong><span><?= $isClosed ? 'Replies are disabled until the ticket is reopened.' : 'Reply to the customer or update the status below.' ?></span></div>

@@ -190,7 +190,7 @@ $paletteGrid = [
     .layout-groups-inner { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--spacing-sm); padding: var(--spacing-md); }
     .theme-palettes { display: grid; grid-template-columns: 1fr; gap: 0; }
     .theme-palette h2 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--purple-800); }
-    .theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.5rem; }
+    .theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.5rem; }
     .theme-swatch { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.5rem; border: 1px solid var(--pink-300); border-radius: 6px; background: var(--pink-100); position: relative; }
     .theme-swatch:hover { border-color: var(--pink-400); }
     .theme-name { font-size: 0.75rem; font-weight: bold; color: var(--purple-800); }
@@ -404,7 +404,7 @@ $paletteGrid = [
                     <?php foreach ($paletteSections as $secName => $secKeys): ?>
                         <details class="theme-palette">
                             <summary><h2><?= e($secName) ?></h2></summary>
-                            <div class="theme-grid"<?= in_array($secName, ['Button colors', 'Sidebar colors', 'Gallery card colors']) ? ' style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"' : '' ?>>
+                            <div class="theme-grid"<?= in_array($secName, ['Button colors', 'Sidebar colors', 'Gallery card colors']) ? ' style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));"' : '' ?>>
                                 <?php foreach ($secKeys as $key): ?>
                                     <div class="theme-swatch">
                                          <span class="theme-name"><?= e($key) ?></span>

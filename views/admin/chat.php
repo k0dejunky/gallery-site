@@ -1,7 +1,7 @@
 <?php $title = 'Chat Admin'; ?>
 
 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem;">
-    <h1 style="margin:0;">Chat</h1>
+    <h2 class="adm-h1">Chat</h2>
     <div>
         <span class="muted" style="font-size:.85rem;">
             AI master switch: <strong><?= !empty($state['ai_enabled']) ? 'ON' : 'OFF' ?></strong> &middot;
@@ -61,6 +61,7 @@
     <?php if (empty($tokens)): ?>
         <p class="muted">No device tokens yet.</p>
     <?php else: ?>
+        <div class="users-table-wrap">
         <table>
             <thead>
                 <tr><th>Label</th><th>Scopes</th><th>Expires</th><th>Last used</th><th>Created by</th><th>Status</th><th style="text-align:right;">Action</th></tr>
@@ -107,6 +108,8 @@
                 <?php endforeach; ?>
             </tbody>
         </table>
+        </div>
+        </div>
     <?php endif; ?>
 </div>
 
@@ -156,6 +159,7 @@
         </form>
     </div>
     <?php if (!empty($liveChatMutes)): ?>
+        <div class="users-table-wrap">
         <table style="width:100%;max-width:640px;margin-top:.75rem;font-size:.85rem;">
             <thead><tr><th style="text-align:left;">Email</th><th style="text-align:left;">Muted until (site time)</th></tr></thead>
             <tbody>
@@ -167,6 +171,8 @@
                 <?php endforeach; ?>
             </tbody>
         </table>
+        </div>
+        </div>
     <?php endif; ?>
 </section>
 
@@ -224,6 +230,7 @@
 
 <?php if (!empty($questionnaires)): ?>
     <h3>Questionnaires</h3>
+    <div class="users-table-wrap">
     <table>
         <thead>
             <tr><th>#</th><th>Title</th><th>Status</th><th>Replies</th><th>Notified</th><th>Scheduled</th><th>Sent</th><th style="text-align:right;">Actions</th></tr>
@@ -257,6 +264,8 @@
             <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
+    </div>
 <?php endif; ?>
 
 <script nonce="<?= csp_nonce() ?>">
@@ -308,6 +317,7 @@
 <?php if (empty($broadcasts)): ?>
     <p class="muted" style="margin-top:0;">No daily chat broadcasts yet.</p>
 <?php else: ?>
+    <div class="users-table-wrap">
     <table>
         <thead>
             <tr><th>#</th><th>Message</th><th>Status</th><th>Scheduled</th><th>Sent</th><th>Recipients</th><th>Created by</th><th style="text-align:right;">Actions</th></tr>
@@ -343,6 +353,8 @@
             <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
+    </div>
 <?php endif; ?>
 
 <?php // Message any user: open a conversation with any account and send an operator message ?>
@@ -369,8 +381,9 @@
 </form>
 
 <?php if (empty($conversations)): ?>
-    <p class="muted">No conversations yet.</p>
+    <?= admin_empty('chat', 'No conversations yet', 'A conversation starts the first time a member opens the operator chat app.') ?>
 <?php else: ?>
+    <div class="users-table-wrap">
     <table>
         <thead>
             <tr><th>#</th><th>User</th><th>Mode</th><th>Status</th><th>Messages</th><th>Updated</th><th style="text-align:center;">Member replies</th><th style="text-align:right;">Actions</th></tr>
@@ -401,6 +414,7 @@
             <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
     <?php if ($pages > 1): ?>
         <div style="display:flex;gap:.35rem;margin-top:.75rem;">
             <?php for ($p = 1; $p <= $pages; $p++): ?>

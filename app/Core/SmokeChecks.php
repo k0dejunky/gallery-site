@@ -271,6 +271,82 @@ class SmokeChecks
                 ? $ok('gtag gated; admin and checkout pages untracked')
                 : $bad('layout must gate GA behind $gaAllowed via partials/ga.php, and admin layout / braintree checkout must not embed gtag');
         });
+        // ----------------------------------------------- Admin design system
+        // The admin chrome is generated from data in views/admin/layout.php, so
+        // these guard the parts a future edit can quietly break: a nav entry
+        // with no icon, a stylesheet that stops loading, or the accessibility
+        // scaffolding going missing.
+        $adminCss = $read("$root/public/assets/css/admin.css");
+        $adminIconSrc = $read("$root/app/Core/AdminIcon.php");
+        $add('smoke.admin.design_system', 'Smoke · Admin UI', 'Admin shell loads its stylesheet after the theme CSS', static function () use ($adminLayout, $adminCss, $ok, $bad): array {
+            $adminAt = strpos($adminLayout, '/assets/css/admin.css');
+            $themeAt = strpos($adminLayout, 'Theme::css(');
+            $userAt  = strpos($adminLayout, '/assets/css/user.css');
+            if ($adminAt === false) {
+                return $bad('admin layout must link /assets/css/admin.css');
+            }
+            if ($themeAt === false || $userAt === false) {
+                return $bad('admin layout must still load the theme + user CSS');
+            }
+            if ($adminAt < $themeAt || $adminAt < $userAt) {
+                return $bad('admin.css must be linked AFTER the theme CSS so it wins the cascade');
+            }
+            if (strpos($adminLayout, 'filemtime') === false) {
+                return $bad('admin.css must be cache-busted with filemtime');
+            }
+            return strlen($adminCss) > 20000
+                ? $ok('admin.css linked last, filemtime-busted, ' . strlen($adminCss) . ' bytes')
+                : $bad('public/assets/css/admin.css looks truncated (' . strlen($adminCss) . ' bytes)');
+        });
+
+        $add('smoke.admin.nav_icons', 'Smoke · Admin UI', 'Every admin nav entry has an icon that exists in AdminIcon', static function () use ($adminLayout, $adminIconSrc, $root, $ok, $bad): array {
+            if (!class_exists(\App\Core\AdminIcon::class)) {
+                return $bad('App\Core\AdminIcon must exist');
+            }
+            // The sidebar is a PHP array; parse the icon names out of the entries.
+            if (!preg_match_all("/'key'\s*=>\s*'(nav-[a-z0-9-]+)'.*?'icon'\s*=>\s*'([a-z0-9-]+)'/", $adminLayout, $m, PREG_SET_ORDER)) {
+                return $bad('admin layout must declare nav entries as key + icon pairs');
+            }
+            $missing = [];
+            foreach ($m as $entry) {
+                if (!\App\Core\AdminIcon::has($entry[2])) {
+                    $missing[] = $entry[1] . ' -> ' . $entry[2];
+                }
+            }
+            if ($missing !== []) {
+                return $bad('nav entries with an unknown icon: ' . implode(', ', $missing));
+            }
+            if (strpos($adminLayout, '<nav class="admin-nav"') === false
+                || strpos($adminLayout, 'aria-label="Admin sections"') === false) {
+                return $bad('the sidebar <nav> must carry an accessible name');
+            }
+            return $ok(count($m) . ' nav entries, all icons resolve');
+        });
+
+        $add('smoke.admin.a11y', 'Smoke · Admin UI', 'Admin shell has a skip link, one h1 and aria-current navigation', static function () use ($adminLayout, $root, $ok, $bad): array {
+            $views = glob("$root/views/admin/*.php") ?: [];
+            $dupes = [];
+            foreach ($views as $view) {
+                $src = (string) @file_get_contents($view);
+                // login.php renders its own shell, so it is exempt.
+                if (basename($view) === 'login.php' || basename($view) === 'layout.php') {
+                    continue;
+                }
+                if (preg_match_all('/<h1[\s>]/i', $src) > 0) {
+                    $dupes[] = basename($view);
+                }
+            }
+            if ($dupes !== []) {
+                return $bad('these admin views still emit their own <h1> (the topbar owns the page h1): ' . implode(', ', $dupes));
+            }
+            foreach (['class="skip-link"', 'id="admin-content"', 'aria-current="page"', 'class="adm-crumb"'] as $needle) {
+                if (strpos($adminLayout, $needle) === false) {
+                    return $bad('admin layout is missing ' . $needle);
+                }
+            }
+            return $ok('skip link, main landmark, breadcrumb and aria-current present; no view-level h1');
+        });
+
         $add('smoke.ui.copy_link_full_url', 'Smoke · UI', 'Admin trial links show the full URL and copy via the Clipboard API', static function () use ($root, $layoutSrc, $ok, $bad): array {
             $subs  = (string) @file_get_contents($root . '/views/admin/subscriptions.php');
             $admin = (string) @file_get_contents($root . '/views/admin/layout.php');
@@ -760,8 +836,12 @@ class SmokeChecks
             return strpos($authCore, "'traffic'") !== false ? $ok('permission declared') : $bad('Auth::PERMISSIONS must declare the traffic permission');
         });
         $add('smoke.traffic.nav', 'Smoke · Traffic', 'Admin nav links to the Traffic page', static function () use ($adminLayout, $ok, $bad): array {
-            return strpos($adminLayout, 'nav-traffic') !== false && strpos($adminLayout, "can('traffic')") !== false
-                ? $ok('nav item present')
+            // The sidebar is data (see $navGroups); a gated entry is one that
+            // declares a 'perm' the renderer checks with Auth::can().
+            return strpos($adminLayout, "'key' => 'nav-traffic'") !== false
+                && strpos($adminLayout, "'perm' => 'traffic'") !== false
+                && strpos($adminLayout, 'Auth::can($item[') !== false
+                ? $ok('nav item present and gated')
                 : $bad('admin layout must render a permission-gated Traffic nav item');
         });
         $add('smoke.traffic.controller', 'Smoke · Traffic', 'TrafficController guards with requirePermission', static function () use ($trafficCtrl, $ok, $bad): array {
@@ -1782,7 +1862,9 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad('EmailerController must require the membership permission');
         });
         $add('smoke.email.nav', 'Smoke · Emailer', 'Admin sidebar links Emailer behind membership', static function () use ($adminLayout2, $ok, $bad): array {
-            return strpos($adminLayout2, "Auth::can('membership')") !== false && strpos($adminLayout2, '/admin/emailer') !== false
+            return strpos($adminLayout2, "'key' => 'nav-emailer'") !== false
+                && strpos($adminLayout2, "'href' => '/admin/emailer'") !== false
+                && strpos($adminLayout2, "'perm' => 'membership'") !== false
                 ? $ok('nav item gated')
                 : $bad('views/admin/layout.php must link the Emailer page behind the membership permission');
         });
