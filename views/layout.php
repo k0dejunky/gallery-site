@@ -100,9 +100,9 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     <link rel="preload" as="image" href="<?= e($lcpPreload) ?>" fetchpriority="high">
     <?php endif; ?>
     <link rel="preload" as="style" href="<?= e(url('/theme.css') . '?v=' . \App\Models\Theme::themeCssVersion($userThemePreset)) ?>">
-    <link rel="preload" as="style" href="<?= url('/assets/css/user.css') ?>?v=33">
+    <link rel="preload" as="style" href="<?= e(asset_url('/assets/css/user.css')) ?>">
     <link rel="stylesheet" href="<?= e(url('/theme.css') . '?v=' . \App\Models\Theme::themeCssVersion($userThemePreset)) ?>">
-    <link rel="stylesheet" href="<?= url('/assets/css/user.css') ?>?v=33">
+    <link rel="stylesheet" href="<?= e(asset_url('/assets/css/user.css')) ?>">
 </head>
 <body<?= $isAuthPage ? '' : ' class="site-compact"' ?> data-base="<?= e(config('app.base_path')) ?>" data-user="<?= $user !== null ? '1' : '0' ?>">
 <?php if ($ageGateRequired): ?>

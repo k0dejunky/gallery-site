@@ -548,17 +548,6 @@ $operatorIsOnline = !empty($operatorOnline);
     </div>
 </section>
 
-<style>
-    /* Scoped to this page: a right-aligned action group inside a table cell.
-       The old markup left every button stacked full width in the last column. */
-    .admin-theme .row-actions { display: flex; gap: .35rem; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
-    .admin-theme .row-actions form { margin: 0; }
-    /* Questionnaire builder rows. */
-    .admin-theme .question-rows { display: flex; flex-direction: column; gap: .6rem; margin-top: .7rem; }
-    .admin-theme .question-rows .q-row { border: 1px solid var(--adm-border); border-radius: var(--adm-radius); padding: .6rem; display: flex; flex-direction: column; gap: .4rem; }
-    .admin-theme .question-rows .q-top { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
-    .admin-theme .question-rows .q-top input[type="text"] { flex: 1 1 220px; min-width: 0; }
-</style>
 
 <script nonce="<?= csp_nonce() ?>">
 <?php // Training-count badge: polls the count and writes it into the overview card. ?>

@@ -2347,3 +2347,115 @@ body.admin-theme {
     --stat-bg: #ffd9e8;
     --stat-border: #f472b6;
 }
+
+/* ---------- Gallery create + manage: staged uploads ---------------------- */
+/* Shared by views/admin/create.php and views/admin/manage.php. The markup lives
+   in views/admin/partials/staged_uploads.php and the behaviour in
+   views/admin/partials/upload_client.php; these rules used to be copied
+   verbatim into both pages' inline <style> blocks. */
+.admin-theme .upload-panel { min-width: 0; width: 100%; box-sizing: border-box; }
+.admin-theme .drop-zone {
+    border: 2px dashed var(--card-border, #bbb);
+    border-radius: var(--border-radius, 6px);
+    padding: 2rem 1.5rem;
+    text-align: center;
+    color: var(--text-muted, #666);
+    background: var(--card-bg, #fafafa);
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease;
+}
+.admin-theme .drop-zone:hover { border-color: var(--purple-400, #a855f7); }
+.admin-theme .drop-zone.dragover { border-color: var(--purple-500, #9333ea); background: color-mix(in srgb, var(--purple-500, #9333ea) 8%, transparent); }
+.admin-theme .drop-zone .dz-icon { font-size: 2rem; line-height: 1; margin-bottom: .35rem; }
+.admin-theme .drop-zone .dz-main { font-weight: 600; color: var(--purple-700, #6b21a8); }
+.admin-theme .drop-zone .dz-hint { font-size: var(--font-size-sm, .9rem); margin-top: .4rem; }
+
+.admin-theme .pending-head { display: flex; align-items: center; justify-content: space-between; margin: 1.25rem 0 .75rem; }
+.admin-theme .pending-head h2 { margin: 0; font-size: var(--font-size-lg, 1.15rem); }
+.admin-theme .pending-head .count { color: var(--text-muted, #888); font-size: var(--font-size-sm, .9rem); }
+
+.admin-theme .pending-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 1rem; }
+.admin-theme .pending-tile {
+    border: 1px solid var(--card-border, #ddd);
+    border-radius: var(--border-radius, 6px);
+    overflow: hidden;
+    background: var(--card-bg, #fff);
+    position: relative;
+}
+.admin-theme .pending-tile .media { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; background: #111; }
+.admin-theme .pending-tile .tile-name {
+    display: block;
+    padding: .3rem .45rem;
+    font-size: var(--font-size-xs, .75rem);
+    color: var(--text-muted, #666);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.admin-theme .pending-tile .tile-controls { display: flex; gap: .35rem; padding: .4rem .45rem; border-top: 1px solid var(--card-border, #eee); }
+.admin-theme .pending-tile .tile-controls button {
+    flex: 1;
+    border: 1px solid var(--card-border, #ddd);
+    background: var(--card-bg, #f4f4f4);
+    border-radius: 4px;
+    padding: .25rem .3rem;
+    font-size: var(--font-size-xs, .75rem);
+    cursor: pointer;
+}
+.admin-theme .pending-tile .tile-controls button:hover { background: var(--pink-100, #eee); }
+.admin-theme .pending-tile .tile-controls button.danger { color: var(--danger, #c62828); border-color: var(--danger, #c62828); }
+.admin-theme .pending-tile.is-busy::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,.25); }
+.admin-theme .tile-spinner { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(255,255,255,.7); color: var(--text-muted, #888); font-size: var(--font-size-xs, .75rem); }
+.admin-theme .pending-tile.is-waiting { opacity: .85; }
+.admin-theme .pending-tile.is-failed { opacity: .55; border-color: var(--danger, #c62828); }
+.admin-theme .pending-tile.is-failed .tile-name { color: var(--danger, #c62828); }
+/* The admin tile-grid empty state; distinct from user.css's .empty-state, which
+   is the member-facing one. Higher specificity so it wins on admin pages. */
+.admin-theme .pending-tiles .empty-state { padding: 1.5rem; text-align: center; color: var(--text-muted, #888); border: 1px dashed var(--card-border, #ddd); border-radius: var(--border-radius, 6px); }
+
+/* ---------- Gallery create: page layout ---------------------------------- */
+.admin-theme .create-page { max-width: none; }
+.admin-theme .create-page h1 { margin: 0 0 .25rem; }
+.admin-theme .create-page .page-sub { margin: 0 0 1.25rem; }
+.admin-theme .create-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; align-items: start; width: 100%; }
+.admin-theme .create-form-card {
+    border: 1px solid var(--card-border, #ddd);
+    border-radius: var(--card-radius, 8px);
+    background: var(--card-bg, #fff);
+    padding: 1.25rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+.admin-theme .create-form-card h2 { margin: 0 0 1rem; font-size: var(--font-size-lg, 1.15rem); }
+.admin-theme .create-form-card input[type="text"],
+.admin-theme .create-form-card textarea,
+.admin-theme .create-form-card select { width: 100%; box-sizing: border-box; }
+.admin-theme .create-form-card .field { margin-bottom: 1rem; }
+.admin-theme .create-form-card .field label { display: block; margin-bottom: .35rem; font-weight: 600; }
+.admin-theme .create-form-card .field .muted { display: block; margin-top: .3rem; }
+.admin-theme .type-switch-row { display: flex; gap: .5rem; }
+.admin-theme .create-actions { display: flex; gap: .5rem; margin-top: 1.25rem; }
+.admin-theme .create-actions .btn { flex: 1; text-align: center; }
+.admin-theme .create-actions .btn:last-child { flex: 0 0 auto; }
+.admin-theme .cat-chips { display: flex; flex-wrap: wrap; gap: .4rem; max-height: 150px; overflow-y: auto; }
+
+/* ---------- Gallery manage: watermark dialog ----------------------------- */
+/* Used by views/admin/manage.php. Was an inline <style> block on that page. */
+.admin-theme .wm-dialog { border: 0; border-radius: 10px; padding: 1.25rem; background: var(--card-bg, #fff); color: var(--card-text-color, inherit); max-width: min(94vw, 640px); width: 640px; }
+.admin-theme .wm-dialog::backdrop { background: rgba(0, 0, 0, .72); }
+.admin-theme .wm-dialog h3 { margin: 0 0 .5rem; }
+.admin-theme .wm-spec { margin: 0 0 .75rem; padding: .6rem .75rem; border: 1px solid var(--card-border, #ddd); border-radius: 6px; background: var(--stat-bg, #f8f8fb); font-size: .9rem; }
+.admin-theme .wm-preview { border: 1px solid var(--card-border, #ddd); border-radius: 6px; background: #111; display: flex; align-items: center; justify-content: center; min-height: 200px; overflow: hidden; }
+.admin-theme .wm-preview img { max-width: 100%; max-height: 52vh; display: block; }
+.admin-theme .wm-scope { display: flex; gap: 1rem; flex-wrap: wrap; margin: .75rem 0; }
+.admin-theme .wm-actions { display: flex; gap: .5rem; align-items: center; margin-top: .9rem; }
+.admin-theme .wm-status { margin-top: .6rem; font-size: .9rem; }
+
+/* ---------- Chat console: table action groups ---------------------------- */
+/* Used by views/admin/chat.php. Was an inline <style> block on that page. */
+.admin-theme .row-actions { display: flex; gap: .35rem; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+.admin-theme .row-actions form { margin: 0; }
+.admin-theme .question-rows { display: flex; flex-direction: column; gap: .6rem; margin-top: .7rem; }
+.admin-theme .question-rows .q-row { border: 1px solid var(--adm-border); border-radius: var(--adm-radius); padding: .6rem; display: flex; flex-direction: column; gap: .4rem; }
+.admin-theme .question-rows .q-top { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+.admin-theme .question-rows .q-top input[type="text"] { flex: 1 1 220px; min-width: 0; }

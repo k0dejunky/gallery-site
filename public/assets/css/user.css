@@ -742,3 +742,23 @@ body.site-compact .home-layout { grid-template-columns: 224px minmax(0, 1fr); }
     .user-nav .nav-item { margin: 0; white-space: nowrap; }
     .rail-empty { padding: .35rem .5rem; }
 }
+
+/* ---------- Error pages -------------------------------------------------- */
+/* Shared by views/errors/404.php and error.php (the "minimal pink page"),
+   which used to carry identical inline <style> blocks. Kept here so the two
+   pages cannot drift apart. */
+.error-page { font-family: sans-serif; max-width: 600px; margin: 4rem auto; padding: 0 1rem; background: #f9a8d4; color: #3b0764; }
+.error-page h1 { color: #581c87; text-align: center; }
+.error-page a { color: #6b21a8; }
+.error-page .card { background: #f472b6; border: 1px solid #ec4899; border-radius: 8px; padding: 1.5rem; box-shadow: 0 1px 4px rgba(88, 28, 135, 0.15); }
+.error-page .title-header { text-align: center; margin-bottom: 1.25rem; }
+.error-page .title-header img { max-width: 100%; height: auto; border-radius: 10px; box-shadow: 0 2px 10px rgba(88, 28, 135, 0.3); }
+.error-page .error-actions { text-align: center; }
+.error-page .error-search { margin-top: 1rem; text-align: center; }
+
+/* 503: a deliberately different, calm dark screen. */
+.error-503 { font-family: system-ui, sans-serif; background: #1e1b2e; color: #f3f0ff; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; text-align: center; }
+.error-503 .box { max-width: 480px; padding: 2rem; }
+.error-503 h1 { font-size: 1.6rem; margin-bottom: .5rem; }
+.error-503 p { color: #b9b3d0; line-height: 1.5; }
+.error-503 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #f59e0b; margin-right: .5rem; }

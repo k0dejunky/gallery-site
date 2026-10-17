@@ -82,6 +82,10 @@ class SmokeChecks
             'bin/email_worker.php',
             'views/emails/new_gallery.php',
             'views/emails/chat_reply.php',
+            'views/emails/layout.php',
+            'views/errors/partials/shell.php',
+            'views/admin/partials/staged_uploads.php',
+            'views/admin/partials/upload_client.php',
             'views/unsubscribe.php',
             'views/admin/emailer.php',
             'database/migrations/012_email_queue.sql',
@@ -331,8 +335,8 @@ class SmokeChecks
             if ($adminAt < $themeAt || $adminAt < $userAt) {
                 return $bad('admin.css must be linked AFTER the theme CSS so it wins the cascade');
             }
-            if (strpos($adminLayout, 'filemtime') === false) {
-                return $bad('admin.css must be cache-busted with filemtime');
+            if (strpos($adminLayout, 'asset_url(') === false) {
+                return $bad('admin.css must be cache-busted through asset_url() (filemtime)');
             }
             return strlen($adminCss) > 20000
                 ? $ok('admin.css linked last, filemtime-busted, ' . strlen($adminCss) . ' bytes')
@@ -3092,6 +3096,117 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             return ($button && $dialog && $sample && $scope && $videos && $undoBtn)
                 ? $ok('button + preview dialog + scope toggle + video selection + undo')
                 : $bad('manage.php watermark UI is incomplete (button=' . var_export($button, true) . ' dialog=' . var_export($dialog, true) . ' sample=' . var_export($sample, true) . ' scope=' . var_export($scope, true) . ' videos=' . var_export($videos, true) . ' undo=' . var_export($undoBtn, true) . ')');
+        });
+
+        // -------------------------------------------------- Shared view partials
+        $add('smoke.partials.upload_client', 'Smoke · Shared views', 'create + manage share one staged-upload client and markup', static function () use ($root, $ok, $bad): array {
+            $create  = (string) @file_get_contents("$root/views/admin/create.php");
+            $manage  = (string) @file_get_contents("$root/views/admin/manage.php");
+            $client  = (string) @file_get_contents("$root/views/admin/partials/upload_client.php");
+            $markup  = (string) @file_get_contents("$root/views/admin/partials/staged_uploads.php");
+
+            $requiresPartials = static fn (string $src): bool =>
+                strpos($src, 'partials/staged_uploads.php') !== false
+                && strpos($src, 'partials/upload_client.php') !== false;
+
+            $checks = [
+                'create requires the partials'     => $requiresPartials($create),
+                'manage requires the partials'     => $requiresPartials($manage),
+                'client keeps the chunked uploader' => strpos($client, 'function uploadChunked(') !== false
+                    && strpos($client, 'function uploadDirect(') !== false
+                    && strpos($client, 'function processQueue(') !== false,
+                'client keeps the tile actions'    => strpos($client, "act === 'delete'") !== false
+                    && strpos($client, "act === 'rotate'") !== false,
+                'markup keeps the drop zone + tiles' => strpos($markup, 'id="drop-zone"') !== false
+                    && strpos($markup, 'id="pending-tiles"') !== false
+                    && strpos($markup, 'id="pending-count"') !== false,
+                // guard against a future copy-paste re-splitting the client
+                'create keeps no private copy'     => strpos($create, 'function uploadChunked(') === false,
+                'manage keeps no private copy'     => strpos($manage, 'function uploadChunked(') === false,
+            ];
+
+            $missing = array_keys(array_filter($checks, static fn (bool $v): bool => !$v));
+
+            return $missing === []
+                ? $ok('both pages require the shared staged-upload partials')
+                : $bad('staged uploads must stay in the shared partials: ' . implode(', ', $missing));
+        });
+
+        $add('smoke.partials.email_layout', 'Smoke · Shared views', 'Every HTML email renders through one shared layout', static function () use ($root, $ok, $bad): array {
+            $layout = (string) @file_get_contents("$root/views/emails/layout.php");
+            $helpers = (string) @file_get_contents("$root/app/Core/helpers.php");
+
+            $templates = ['new_gallery', 'chat_reply', 'live_now', 'winback',
+                'payment_failed', 'past_due', 'expired', 'renewal_reminder'];
+            $duplicated = [];
+            foreach ($templates as $t) {
+                $src = (string) @file_get_contents("$root/views/emails/$t.php");
+                // a template must NOT carry its own document chrome any more
+                if (strpos($src, '<!DOCTYPE') !== false) { $duplicated[] = $t; }
+            }
+
+            $checks = [
+                'layout has the chrome'      => strpos($layout, '<!DOCTYPE html>') !== false
+                    && strpos($layout, '#6d2ea8') !== false
+                    && strpos($layout, '{{unsubscribe-url}}') !== false,
+                'render_email wraps by default' => strpos($helpers, 'function render_email(string $template, array $data = [], bool $withLayout = true)') !== false
+                    && strpos($helpers, "require __DIR__ . '/../../views/emails/layout.php';") !== false,
+                'no template carries chrome' => $duplicated === [],
+            ];
+
+            $missing = array_keys(array_filter($checks, static fn (bool $v): bool => !$v));
+
+            return $missing === []
+                ? $ok('8 templates render body-only through views/emails/layout.php')
+                : $bad('email chrome must stay in the layout: ' . implode(', ', $missing)
+                    . ($duplicated !== [] ? ' (own chrome: ' . implode(', ', $duplicated) . ')' : ''));
+        });
+
+        $add('smoke.partials.error_shell', 'Smoke · Shared views', '404 + error share one shell; error pages keep no inline CSS', static function () use ($root, $ok, $bad): array {
+            $shell = (string) @file_get_contents("$root/views/errors/partials/shell.php");
+            $css   = (string) @file_get_contents("$root/public/assets/css/user.css");
+
+            $inline = [];
+            foreach (['404', 'error', '503'] as $e) {
+                $src = (string) @file_get_contents("$root/views/errors/$e.php");
+                if (strpos($src, '<style') !== false) { $inline[] = $e; }
+            }
+
+            $checks = [
+                '404/error use the shell' => strpos((string) @file_get_contents("$root/views/errors/404.php"), 'partials/shell.php') !== false
+                    && strpos((string) @file_get_contents("$root/views/errors/error.php"), 'partials/shell.php') !== false,
+                'shell has the chrome'    => strpos($shell, 'AmethystTitleImage.png') !== false
+                    && strpos($shell, 'class="error-page"') !== false,
+                'error CSS lives in user.css' => strpos($css, '.error-page') !== false && strpos($css, '.error-503') !== false,
+                'no error page keeps inline CSS' => $inline === [],
+            ];
+
+            $missing = array_keys(array_filter($checks, static fn (bool $v): bool => !$v));
+
+            return $missing === []
+                ? $ok('error pages share one shell, styles in user.css')
+                : $bad('error pages must share the shell: ' . implode(', ', $missing)
+                    . ($inline !== [] ? ' (inline css: ' . implode(', ', $inline) . ')' : ''));
+        });
+
+        $add('smoke.assets.versioned', 'Smoke · Shared views', 'Stylesheets are cache-busted by filemtime, never hand-pinned', static function () use ($root, $ok, $bad): array {
+            $helpers = (string) @file_get_contents("$root/app/Core/helpers.php");
+            $adminLayout = (string) @file_get_contents("$root/views/admin/layout.php");
+            $userLayout  = (string) @file_get_contents("$root/views/layout.php");
+
+            $checks = [
+                'asset_url() exists' => strpos($helpers, 'function asset_url(') !== false,
+                'both layouts use it' => strpos($adminLayout, 'asset_url(') !== false
+                    && strpos($userLayout, 'asset_url(') !== false,
+                'no hand-pinned version' => strpos($adminLayout, '?v=33') === false
+                    && strpos($userLayout, '?v=33') === false,
+            ];
+
+            $missing = array_keys(array_filter($checks, static fn (bool $v): bool => !$v));
+
+            return $missing === []
+                ? $ok('user.css + admin.css versioned by filemtime')
+                : $bad('stylesheets must use asset_url(): ' . implode(', ', $missing));
         });
 
         $cache = $tests;

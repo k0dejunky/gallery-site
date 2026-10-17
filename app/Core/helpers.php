@@ -102,15 +102,61 @@ function absolute_url(string $path = ''): string
 }
 
 /**
- * Render an email template from views/emails/ into a string buffer. Email
- * templates are plain PHP fragments (no shared layout) so they can be safely
- * rendered both by the web request (admin send-now / test) and the CLI worker.
+ * Versioned URL for a static asset under public/, cache-busted by the file's
+ * own mtime.
+ *
+ * The admin layout already did this for admin.css, but user.css was pinned by
+ * hand at ?v=33 in two layouts - so every CSS edit needed a manual bump or
+ * clients kept serving the old stylesheet. One helper now, so no asset can be
+ * forgotten.
  */
-function render_email(string $template, array $data = []): string
+function asset_url(string $path): string
+{
+    $rel  = '/' . ltrim($path, '/');
+    $file = dirname(__DIR__, 2) . '/public' . $rel;
+    $ver  = is_file($file) ? (int) filemtime($file) : 0;
+
+    return url($rel) . ($ver > 0 ? '?v=' . $ver : '');
+}
+
+/**
+ * Render an email template from views/emails/ into a string buffer.
+ *
+ * Templates are plain PHP fragments with no chrome of their own: they emit only
+ * their body rows and set $emailTitle / $headerHref / $emailFooter, which this
+ * function forwards into the shared views/emails/layout.php wrapper. Before the
+ * layout existed every template carried its own copy of the DOCTYPE, the
+ * presentation table, the brand header and the footer, so a change to any of it
+ * meant editing eight files.
+ *
+ * Two kinds of template are never wrapped:
+ *   - anything ending in '.text' (the plain-text alternative part), and
+ *   - the layout itself.
+ * Pass $withLayout = false to skip wrapping for a one-off.
+ *
+ * Still renders correctly from the web request (admin test / send-now) AND the
+ * CLI worker, because it stays a pure string function.
+ */
+function render_email(string $template, array $data = [], bool $withLayout = true): string
 {
     extract($data, EXTR_SKIP);
     ob_start();
     require __DIR__ . '/../../views/emails/' . $template . '.php';
+    $body = (string) ob_get_clean();
+
+    if (!$withLayout || $template === 'layout' || substr($template, -5) === '.text') {
+        return $body;
+    }
+
+    // $emailTitle / $headerHref / $emailFooter were set by the template in this
+    // same scope; give them sane defaults and hand everything to the layout.
+    $emailTitle  = (string) ($emailTitle ?? 'notification');
+    $headerHref  = (string) ($headerHref ?? absolute_url('/'));
+    $emailFooter = (string) ($emailFooter ?? 'marketing');
+    $content     = $body;
+
+    ob_start();
+    require __DIR__ . '/../../views/emails/layout.php';
 
     return (string) ob_get_clean();
 }
