@@ -375,6 +375,9 @@ class AdminChatController extends Controller
             $state['finetuned_model'] = ChatAi::FINETUNED_MODEL;
             $state['ai_content_search'] = $this->request->post('ai_content_search') === '1';
             $state['ai_content_search_max'] = max(1, min(12, (int) $this->request->post('ai_content_search_max', '6')));
+            // Background AI replies: the member's POST returns immediately and
+            // bin/chat_ai_worker.php generates the reply (for slow local models).
+            $state['chat_ai_async'] = $this->request->post('chat_ai_async') === '1';
         }
 
         \App\Core\ChatSettings::save($state);

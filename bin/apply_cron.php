@@ -121,6 +121,11 @@ $crond['gallery-questionnaires'] =
 // analysis can take a while on CPU); flock inside the worker prevents overlap.
 $crond['gallery-categorizer'] =
     "* * * * * {$php}/bin/categorize_worker.php --once >> " . SITE_ROOT . "/storage/logs/categorizer.log 2>&1\n";
+// Background AI chat replies (chat_ai_async): at most 3 replies per tick, so
+// a local CPU model never runs more than three generations in parallel with
+// requests; the worker itself is a no-op while the flag is off.
+$crond['gallery-chat-ai'] =
+    "* * * * * {$php}/bin/chat_ai_worker.php --once >> " . SITE_ROOT . "/storage/logs/chat_ai.log 2>&1\n";
 $crond['gallery-backup'] =
     "{$backupM} {$backupH} {$backupD} * * {$php}/bin/gallery_backup.php >> " . SITE_ROOT . "/storage/logs/backup.log 2>&1\n";
 // Daily small DB-only dump (cheap safety net on top of the monthly full

@@ -39,6 +39,7 @@ class ChatSettings
             'trainer_since_id'     => 0,
             'ai_content_search'    => true,
             'ai_content_search_max' => 6,
+            'chat_ai_async'        => false,
             'live_chat_filters'    => [],
             'trainer_trained_pairs' => 0,
             'operator_away_message'  => '',

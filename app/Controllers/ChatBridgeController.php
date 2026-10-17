@@ -55,6 +55,33 @@ class ChatBridgeController extends Controller
     }
 
     /**
+     * Machine-to-machine rate limits, scoped per identity (device token id, or
+     * the shared GALLERY_CHAT_KEY) and per bucket (reads vs writes). The shared
+     * key is GRANDFATHERED with 5x the per-device budget so the always-on
+     * training PC can never be locked out by its own polling or uploads; device
+     * tokens get the normal budget. Denied calls answer 429 + Retry-After.
+     * Limits are deliberately generous: the app's SSE stream and polls stay an
+     * order of magnitude below them during normal use.
+     */
+    private function throttle(bool $write): void
+    {
+        $token = $this->deviceToken();
+        $isShared = $token === null;
+
+        $limit = ($write ? 60 : 240) * ($isShared ? 5 : 1);
+        $window = 60;
+        $identifiers = [
+            'chat_bridge:' . ($write ? 'write' : 'read'),
+            $isShared ? 'shared' : 'device:' . (int) $token['id'],
+        ];
+
+        if (!\App\Core\RateLimiter::allow($identifiers, $limit, $window)) {
+            header('Retry-After: ' . $window);
+            $this->json(['ok' => false, 'error' => 'Rate limit exceeded. Try again shortly.'], 429);
+        }
+    }
+
+    /**
      * Record operator presence. Called by the operator-app endpoints (inbox,
      * stream, events, reply) so the operator chat is "online" while the Android
      * app is actively used. The training PC's endpoints never call this.
@@ -75,6 +102,7 @@ class ChatBridgeController extends Controller
     /** The AI/Live mode + pending message count for a conversation. */
     public function config(): void
     {
+        $this->throttle(false);
         $cid = max(0, (int) $this->request->query('conversation', 0));
         $conv = $cid > 0 ? ChatMessage::find($cid) : null;
 
@@ -104,6 +132,7 @@ class ChatBridgeController extends Controller
     /** Member messages awaiting a reply (newest first, capped server-side). */
     public function pending(): void
     {
+        $this->throttle(false);
         $cid = max(0, (int) $this->request->query('conversation', 0));
 
         // Newest 20 member messages, bounded in SQL: the old form loaded the
@@ -127,6 +156,7 @@ class ChatBridgeController extends Controller
      */
     public function inbox(): void
     {
+        $this->throttle(false);
         $this->presence();
 
         $limit = max(1, min(100, (int) $this->request->query('limit', 50)));
@@ -197,6 +227,7 @@ class ChatBridgeController extends Controller
      */
     public function thread(): void
     {
+        $this->throttle(false);
         $cid = max(0, (int) $this->request->query('conversation', 0));
         $conv = $cid > 0 ? ChatMessage::find($cid) : null;
         if ($conv === null) {
@@ -229,6 +260,7 @@ class ChatBridgeController extends Controller
      */
     public function history(): void
     {
+        $this->throttle(false);
         $cid = max(0, (int) $this->request->query('conversation', 0));
         $before = max(0, (int) $this->request->query('before', 0));
         $limit = max(1, min(200, (int) $this->request->query('limit', 50)));
@@ -262,6 +294,7 @@ class ChatBridgeController extends Controller
      */
     public function stream(): void
     {
+        $this->throttle(false);
         $this->presence();
 
         $cid = max(0, (int) $this->request->query('conversation', 0));
@@ -312,6 +345,7 @@ class ChatBridgeController extends Controller
      */
     public function events(): void
     {
+        $this->throttle(false);
         $this->presence();
 
         $since = max(0, (int) $this->request->query('since', 0));
@@ -375,6 +409,7 @@ class ChatBridgeController extends Controller
      */
     public function reply(): void
     {
+        $this->throttle(true);
         $this->presence();
 
         // Support both JSON (text only) and multipart (text + optional file).
@@ -519,6 +554,7 @@ class ChatBridgeController extends Controller
      */
     public function users(): void
     {
+        $this->throttle(false);
         $q = trim((string) $this->request->query('q', ''));
         $where = "u.role NOT IN ('super_admin', 'admin', 'editor', 'moderator', 'viewer')";
         $params = [];
@@ -554,6 +590,7 @@ class ChatBridgeController extends Controller
      */
     public function start(): void
     {
+        $this->throttle(true);
         $data = json_decode($this->rawBody(), true);
         if (!is_array($data)) {
             $data = [];
@@ -585,6 +622,7 @@ class ChatBridgeController extends Controller
      */
     public function replyToggle(): void
     {
+        $this->throttle(true);
         $data = json_decode($this->rawBody(), true);
         if (!is_array($data)) {
             $data = [];
@@ -606,6 +644,7 @@ class ChatBridgeController extends Controller
     /** Recent conversation + few-shot context (for the app/AI to build a reply). */
     public function context(): void
     {
+        $this->throttle(false);
         $cid = max(0, (int) $this->request->query('conversation', 0));
         $conv = $cid > 0 ? ChatMessage::find($cid) : null;
         if ($conv === null) {
@@ -636,6 +675,7 @@ class ChatBridgeController extends Controller
     /** Cleaned training pairs as JSONL (for the always-on training PC). */
     public function trainingData(): void
     {
+        $this->throttle(false);
         $since = max(0, (int) $this->request->query('since_id', 0));
 
         // Only serve cleaned pairs (operator-curated); test/junk pairs from
@@ -664,6 +704,7 @@ class ChatBridgeController extends Controller
      */
     public function trainingProgress(): void
     {
+        $this->throttle(false);
         $data = json_decode($this->rawBody(), true);
         if (!is_array($data)) {
             $data = [];
@@ -683,6 +724,7 @@ class ChatBridgeController extends Controller
      */
     public function trainingCount(): void
     {
+        $this->throttle(false);
         $sinceId = max(0, (int) $this->request->query('since_id', \App\Core\ChatSettings::trainerSinceId()));
         $waiting = (int) \App\Core\Database::run(
             'SELECT COUNT(*) FROM chat_training_pairs WHERE cleaned = 1 AND id > ?',
@@ -701,6 +743,7 @@ class ChatBridgeController extends Controller
     /** Accept an uploaded trained adapter + metadata; verify checksum. */
     public function trainingUpload(): void
     {
+        $this->throttle(true);
         // Adapter uploads rebuild the Ollama fine-tuned model, so they require
         // a per-device operator token (the legacy shared key is not enough).
         if ($this->deviceToken() === null) {
@@ -898,6 +941,7 @@ class ChatBridgeController extends Controller
      */
     public function mode(): void
     {
+        $this->throttle(true);
         $data = json_decode($this->rawBody(), true);
         if (!is_array($data)) {
             $data = [];
@@ -930,6 +974,7 @@ class ChatBridgeController extends Controller
      */
     public function read(): void
     {
+        $this->throttle(true);
         $data = json_decode($this->rawBody(), true);
         if (!is_array($data)) {
             $data = [];
@@ -996,6 +1041,7 @@ class ChatBridgeController extends Controller
      */
     public function apkInfo(): void
     {
+        $this->throttle(false);
         $manifest = $this->apkManifest();
 
         if ($manifest === null) {
@@ -1022,6 +1068,7 @@ class ChatBridgeController extends Controller
      */
     public function apk(): void
     {
+        $this->throttle(false);
         $version = (string) $this->request->query('version', '');
         $path = $this->apkPath($version);
 

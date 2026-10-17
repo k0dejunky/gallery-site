@@ -1335,6 +1335,90 @@ class SmokeChecks
                 ? $ok('expiring-media columns present in schema and migration')
                 : $bad('chat_messages column drift: ' . implode(', ', $missing));
         });
+        $add('smoke.schema.chat_ai_jobs', 'Smoke · Chat correctness', 'Background AI queue exists in schema and migration 064', static function () use ($read, $root, $ok, $bad): array {
+            $schema = $read("$root/schema.sql");
+            $migration = $read("$root/database/migrations/064_chat_ai_jobs.sql");
+            $m = [];
+            if (preg_match('/CREATE TABLE IF NOT EXISTS chat_ai_jobs \((.*?)\) ENGINE/s', $schema, $m) !== 1) {
+                return $bad('chat_ai_jobs CREATE TABLE not found in schema.sql');
+            }
+            $missing = [];
+            foreach (['uq_chat_ai_jobs_message', 'user_message_id', "ENUM('queued', 'running', 'done', 'error')"] as $n) {
+                if (strpos($m[1], $n) === false) $missing[] = $n;
+            }
+            foreach (['idx_chat_msg_conv_id', 'idx_chat_reply_idem_created', 'idx_notifications_created'] as $n) {
+                if (strpos($migration, $n) === false) $missing[] = $n . ' (migration)';
+            }
+            if (strpos($migration, 'DELETE FROM chat_reply_idempotency') === false || strpos($migration, 'DELETE FROM notifications') === false) {
+                $missing[] = 'one-time prunes';
+            }
+            return $missing === []
+                ? $ok('queue table + indexes + prunes present')
+                : $bad('migration 064 drift: ' . implode(', ', $missing));
+        });
+        $add('smoke.chat_ai.async_flag', 'Smoke · Chat correctness', 'chat_ai_async queues replies for the worker instead of blocking', static function () use ($read, $root, $ok, $bad): array {
+            $settings = $read("$root/app/Core/ChatSettings.php");
+            $ctrl     = $read("$root/app/Controllers/ChatController.php");
+            $worker   = $read("$root/bin/chat_ai_worker.php");
+            $cron     = $read("$root/bin/apply_cron.php");
+            $checks = [
+                "settings default"  => strpos($settings, "'chat_ai_async'") !== false,
+                "send guard"        => strpos($ctrl, "chat_ai_async") !== false && strpos($ctrl, 'ChatAiJob::enqueue(') !== false,
+                "worker claims"     => strpos($worker, 'ChatAiJob::claimNext()') !== false && strpos($worker, 'ChatAiJob::recoverStale()') !== false,
+                "cron entry"        => strpos($cron, 'bin/chat_ai_worker.php') !== false,
+            ];
+            $failing = array_keys(array_filter($checks, static fn (bool $v): bool => !$v));
+            return $failing === []
+                ? $ok('async flag, enqueue, worker, cron all wired')
+                : $bad('chat_ai_async wiring incomplete: ' . implode(', ', $failing));
+        });
+        $add('smoke.chat_ai.shared_responder', 'Smoke · Chat correctness', 'Worker and sync send share one responder', static function () use ($read, $root, $ok, $bad): array {
+            $ctrl = $read("$root/app/Controllers/ChatController.php");
+            $job  = $read("$root/app/Models/ChatAiJob.php");
+            $resp = $read("$root/app/Core/ChatAiResponder.php");
+            return strpos($ctrl, 'ChatAiResponder::generate(') !== false
+                && strpos($job, 'ChatAiResponder::generate(') !== false
+                && strpos($resp, 'ChatContentSearch::find(') !== false
+                && strpos($resp, 'messagesLatest($conversationId, 12)') !== false
+                ? $ok('one generation path for sync and queued replies')
+                : $bad('sync path and worker must both call ChatAiResponder::generate');
+        });
+        $add('smoke.chat_bridge.throttled', 'Smoke · Chat correctness', 'Bridge endpoints are rate limited per identity and bucket', static function () use ($bridgeCtrl, $ok, $bad): array {
+            $m = [];
+            if (preg_match('/private function throttle\(bool \$write\): void\s*\{(.*?)\n    \}/s', $bridgeCtrl, $m) !== 1) {
+                return $bad('ChatBridgeController::throttle() not found');
+            }
+            $body = $m[1];
+            if (strpos($body, 'RateLimiter::allow(') === false || strpos($body, 'Retry-After') === false) {
+                return $bad('throttle() must use RateLimiter::allow with Retry-After on denial');
+            }
+            if (strpos($body, '* ($isShared ? 5 : 1)') === false) {
+                return $bad('the shared GALLERY_CHAT_KEY must be grandfathered with a bigger budget');
+            }
+            if (preg_match('/function reply\s*\([^)]*\)\s*:\s*void\s*\{\s*\$this->throttle\(true\);/s', $bridgeCtrl) !== 1) {
+                return $bad('reply() must throttle writes');
+            }
+            if (preg_match('/function config\s*\([^)]*\)\s*:\s*void\s*\{\s*\$this->throttle\(false\);/s', $bridgeCtrl) !== 1) {
+                return $bad('config() must throttle reads');
+            }
+            return $ok('writes/reads throttled, shared key grandfathered');
+        });
+        $add('smoke.housekeeping.chat_retention', 'Smoke · Chat correctness', 'Housekeeping prunes chat keys, read notices and finished jobs', static function () use ($read, $root, $ok, $bad): array {
+            $hk = $read("$root/app/Core/Housekeeping.php");
+            if (strpos($hk, 'pruneChatRetention') === false || strpos($hk, 'chat_prunes') === false) {
+                return $bad('Housekeeping must run pruneChatRetention and report chat_prunes');
+            }
+            $m = [];
+            if (preg_match('/function pruneChatRetention\(\): array\s*\{(.*?)\n    \}/s', $hk, $m) !== 1) {
+                return $bad('pruneChatRetention() not found');
+            }
+            $body = $m[1];
+            return strpos($body, 'chat_reply_idempotency') !== false
+                && strpos($body, 'read_at IS NOT NULL') !== false
+                && strpos($body, 'chat_ai_jobs') !== false
+                ? $ok('idempotency keys, read notifications and finished jobs pruned')
+                : $bad('pruneChatRetention must prune keys, read notifications and done/error jobs');
+        });
         $add('smoke.chat_bridge.unread_predicate', 'Smoke · Chat correctness', 'Bridge config counts unread past the operator read mark', static function () use ($bridgeCtrl, $ok, $bad): array {
             $m = [];
             if (preg_match('/function config\s*\([^)]*\)\s*:\s*void\s*\{(.*?)\n    \}/s', $bridgeCtrl, $m) !== 1) {

@@ -35,6 +35,7 @@ class Housekeeping
             'temp_files_removed' => 0,
             'disk_growth_alerted' => false,
             'chat_broadcast' => 0,
+            'chat_prunes'   => [],
             'ffmpeg_count'  => 0,
         ];
 
@@ -214,6 +215,11 @@ class Housekeeping
         // fresh attributed link even when no admin scheduled one.
         $out['chat_broadcast'] = self::scheduleDailyChatBroadcast();
 
+        // Chat retention: keep the idempotency window, the wall inbox and the
+        // background-reply queue from growing without bound. Counts land in
+        // $out so the cron log shows what each run removed.
+        $out['chat_prunes'] = self::pruneChatRetention();
+
         // Refer-a-friend: +7 free days to referrers whose referred members
         // have become paying.
         $out['referral_rewards'] = self::rewardReferrals();
@@ -295,6 +301,36 @@ class Housekeeping
         $createdBy = $admin !== false ? (int) $admin['id'] : 1;
 
         return \App\Models\ChatBroadcast::create($msg, null, $createdBy);
+    }
+
+    /**
+     * Chat retention (daily, inside run()):
+     *  - chat_reply_idempotency keys older than 7 days (they only need to
+     *    outlive a client's retry window);
+     *  - READ notifications older than 90 days (unread ones are never touched);
+     *  - finished/failed chat_ai_jobs older than 7 days.
+     *
+     * @return array<string, int> rows removed per table
+     */
+    private static function pruneChatRetention(): array
+    {
+        $out = [];
+
+        $out['reply_keys'] = (int) Database::run(
+            'DELETE FROM chat_reply_idempotency WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)'
+        )->rowCount();
+
+        $out['notifications'] = (int) Database::run(
+            'DELETE FROM notifications WHERE read_at IS NOT NULL AND created_at < DATE_SUB(NOW(), INTERVAL 90 DAY)'
+        )->rowCount();
+
+        $out['ai_jobs'] = (int) Database::run(
+            "DELETE FROM chat_ai_jobs
+              WHERE status IN ('done', 'error')
+                AND updated_at < DATE_SUB(NOW(), INTERVAL 7 DAY)"
+        )->rowCount();
+
+        return $out;
     }
 
     /**

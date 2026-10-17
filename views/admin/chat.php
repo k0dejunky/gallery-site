@@ -114,6 +114,12 @@ $operatorIsOnline = !empty($operatorOnline);
                         AI searches site galleries to answer content questions
                     </label>
                 </p>
+                <p class="check-row">
+                    <label>
+                        <input type="checkbox" name="chat_ai_async" value="1"<?= !empty($state['chat_ai_async']) ? ' checked' : '' ?>>
+                        Generate AI replies in the background (recommended for slow local models; replies arrive a moment later)
+                    </label>
+                </p>
                 <label class="adm-field">
                     <span>Maximum galleries to search</span>
                     <input type="number" name="ai_content_search_max" min="1" max="12" value="<?= (int) ($state['ai_content_search_max'] ?? 6) ?>">

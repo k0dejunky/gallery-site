@@ -143,64 +143,42 @@ class ChatController extends Controller
 
         $result = ['ok' => true, 'user_message_id' => ChatMessage::latestId($cid)];
 
-        // Synchronous AI reply only in AI modes (retrieval/finetuned).
-        // In operator mode the message waits for a human via the Android app
-        // or admin panel.
+        // AI reply in AI modes (retrieval/finetuned). In operator mode the
+        // message waits for a human via the Android app or admin panel.
         $convMode = (string) ($conv['ai_mode'] ?? ChatMessage::MODE_RETRIEVAL);
 
         // Respect the site-wide AI master switch: when it's off, no AI reply
         // regardless of the conversation's AI mode (operator answers instead).
-        $aiEnabled = \App\Core\ChatSettings::aiEnabled();
+        $settings = \App\Core\ChatSettings::all();
+        $aiEnabled = !empty($settings['ai_enabled']);
 
         // An attachment-only message has no text to answer — a human (operator
         // mode) or the admin sees the media; never feed an empty prompt to AI.
         if ($message !== '' && $aiEnabled && ChatMessage::isAiMode($convMode)) {
-            // When the member asks for specific content, search the galleries
-            // they can actually view and feed the matches into the prompt so
-            // the AI can name real galleries (linked in the chat UI).
-            $settings = \App\Core\ChatSettings::all();
-            $content  = [];
-            if (!empty($settings['ai_content_search'])) {
-                $content = \App\Core\ChatContentSearch::find(
-                    $message,
+            if (!empty($settings['chat_ai_async'])) {
+                // Background mode (slow local models): the worker generates the
+                // reply; the member's stream picks it up when it is stored.
+                \App\Models\ChatAiJob::enqueue(
+                    $cid,
                     $userId,
-                    Auth::effectiveLevel(),
-                    max(1, min(12, (int) ($settings['ai_content_search_max'] ?? 6)))
+                    (int) $result['user_message_id'],
+                    $message,
+                    $convMode,
+                    Auth::effectiveLevel()
                 );
-            }
-
-            $aiReply = ChatAi::reply(
-                $convMode,
-                $message,
-                // Only the most recent messages feed the model — the full
-                // history makes a single generation exceed the HTTP timeout
-                // on slow conversations.
-                ChatMessage::messagesLatest($cid, 12),
-                ChatMessage::similarContext($message),
-                $content
-            );
-
-            if ($aiReply['ok']) {
-                $replyText = (string) $aiReply['reply'];
-                // Only the galleries the model actually named become clickable
-                // refs (longest title match against the reply text).
-                $refs = array_values(array_filter(
-                    $content,
-                    static fn (array $g): bool => mb_strpos($replyText, (string) ($g['title'] ?? '')) !== false
-                ));
-                $refs = array_map(
-                    static fn (array $g): array => ['title' => (string) $g['title'], 'url' => (string) $g['url']],
-                    $refs
-                );
-
-                ChatMessage::addMessage($cid, ChatMessage::ROLE_MODEL, $replyText, null, $refs);
-                $result['ai_reply'] = $replyText;
-                $result['ai_reply_id'] = ChatMessage::latestId($cid);
-                if ($refs !== []) {
-                    $result['ai_content_refs'] = $refs;
-                }
+                $result['ai_pending'] = true;
+                $result['ai_queued']  = true;
             } else {
-                $result['ai_pending'] = true; // model down; operator can respond via the Android app
+                $gen = \App\Core\ChatAiResponder::generate($cid, $userId, $message, $convMode, Auth::effectiveLevel());
+                if (!empty($gen['ok'])) {
+                    $result['ai_reply']    = (string) $gen['reply'];
+                    $result['ai_reply_id'] = (int) ($gen['id'] ?? ChatMessage::latestId($cid));
+                    if (!empty($gen['refs'])) {
+                        $result['ai_content_refs'] = $gen['refs'];
+                    }
+                } else {
+                    $result['ai_pending'] = true; // model down; operator can respond via the Android app
+                }
             }
         } else {
             // AI off or operator-only mode: operator answers manually.
