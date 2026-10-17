@@ -680,6 +680,37 @@ class ChatMessage
         return $stmt->rowCount() > 0;
     }
 
+    /** Record that the member is typing right now (throttled pings). */
+    public static function markMemberTyping(int $conversationId): void
+    {
+        Database::run(
+            'UPDATE chat_conversations SET member_typing_at = NOW() WHERE id = ?',
+            [$conversationId]
+        );
+    }
+
+    /**
+     * Whether the member typed within the last $windowSec seconds. The window
+     * is intentionally longer than the web composer's ping interval (3 s) so
+     * the indicator stays up while someone types continuously.
+     *
+     * The comparison runs ENTIRELY in SQL: member_typing_at is written with
+     * MySQL NOW(), so subtracting PHP time() skews the window whenever the
+     * MySQL session timezone differs from the app timezone (it did — 6 h on
+     * the dev box, which kept the indicator permanently off).
+     */
+    public static function memberTyping(int $conversationId, int $windowSec = 7): bool
+    {
+        $live = Database::run(
+            'SELECT (member_typing_at IS NOT NULL
+                       AND TIMESTAMPDIFF(SECOND, member_typing_at, NOW()) <= ?) AS live
+             FROM chat_conversations WHERE id = ? LIMIT 1',
+            [max(1, $windowSec), $conversationId]
+        )->fetchColumn();
+
+        return (bool) $live;
+    }
+
     /**
      * Whether a conversation mode uses the AI to reply. Operator mode is
      * answered only by a human via the Android app / admin panel.

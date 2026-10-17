@@ -667,6 +667,7 @@ CREATE TABLE IF NOT EXISTS chat_conversations (
     ai_mode     ENUM('retrieval','finetuned','operator') NOT NULL DEFAULT 'retrieval',
     status      ENUM('open','closed') NOT NULL DEFAULT 'open',
     member_reply_enabled TINYINT(1) NOT NULL DEFAULT 1,
+    member_typing_at DATETIME NULL,
     last_read_message_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
     operator_read_through_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

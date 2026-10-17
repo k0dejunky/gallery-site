@@ -311,21 +311,35 @@ class ChatBridgeController extends Controller
         $latestId = ChatMessage::latestId($cid);
         $new = \App\Models\ChatMessage::decorateMessages(ChatMessage::messages($cid, $since), '/webhooks/chat/attachment');
         if ($new !== []) {
-            echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'conversation' => $cid]) . "\n\n";
-            flush();
             $since = $latestId;
         }
+
+        // Emit the current frame immediately (message backlog + typing state)
+        // so the app can render the "member is typing" indicator on connect.
+        $typing = ChatMessage::memberTyping($cid);
+        $lastTyping = $typing;
+        echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'conversation' => $cid, 'typing' => $typing]) . "\n\n";
+        flush();
 
         $start = time();
         while (time() - $start < 30) {
             $new = \App\Models\ChatMessage::decorateMessages(ChatMessage::messages($cid, $since), '/webhooks/chat/attachment');
             if ($new !== []) {
                 $latestId = ChatMessage::latestId($cid);
-                echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'conversation' => $cid]) . "\n\n";
-                flush();
                 $since = $latestId;
+            }
+
+            // Typing frames: emit on every state CHANGE, and keep re-emitting
+            // while the member is actively typing (the composer pings every
+            // ~3 s; the app hides the indicator 7 s after the last true).
+            $typing = ChatMessage::memberTyping($cid);
+            if ($new !== [] || $typing !== $lastTyping || $typing) {
+                echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'conversation' => $cid, 'typing' => $typing]) . "\n\n";
+                flush();
+                $lastTyping = $typing;
                 continue;
             }
+
             echo ": keepalive\n\n";
             flush();
             usleep(1500000);

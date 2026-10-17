@@ -1458,6 +1458,54 @@ class SmokeChecks
                 ? $ok('mismatched reuse rejected instead of answered with the old id')
                 : $bad('reply() must compare the stored message text and refuse a mismatched key reuse');
         });
+        $add('smoke.chat.member_typing', 'Smoke · Chat correctness', 'Member typing pings feed the bridge stream within a short TTL', static function () use ($read, $root, $ok, $bad): array {
+            $ctrl = $read("$root/app/Controllers/ChatController.php");
+            if (preg_match('/function typing\s*\([^)]*\)\s*:\s*void\s*\{(.*?)\n    \}/s', $ctrl, $m) !== 1) {
+                return $bad('ChatController::typing() not found');
+            }
+            $body = $m[1];
+            if (strpos($body, "RateLimiter::allow(['chat_typing:'") === false) {
+                return $bad('typing() must be rate limited per member');
+            }
+            if (strpos($body, 'ChatMessage::markMemberTyping') === false) {
+                return $bad('typing() must record the member typing state');
+            }
+            $model = $read("$root/app/Models/ChatMessage.php");
+            if (strpos($model, 'function markMemberTyping') === false || strpos($model, 'function memberTyping') === false) {
+                return $bad('ChatMessage must provide markMemberTyping() and memberTyping()');
+            }
+            if (preg_match('/function memberTyping\s*\([^)]*\)\s*:\s*bool/s', $model, $wm) !== 1
+                || strpos($wm[0], '$windowSec = 7') === false) {
+                return $bad('memberTyping() must default to a 7s window (longer than the 3s ping interval)');
+            }
+            $body = [];
+            if (preg_match('/function memberTyping\s*\([^)]*\)\s*:\s*bool\s*\{(.*?)\n    \}/s', $model, $body) !== 1) {
+                return $bad('memberTyping() body not found');
+            }
+            // The freshness test must run in SQL: member_typing_at is written
+            // with MySQL NOW(), so comparing against PHP time() breaks whenever
+            // the MySQL session timezone differs from the app timezone (it did
+            // on the dev box — 6h skew, indicator permanently off).
+            if (strpos($body[1], 'TIMESTAMPDIFF') === false) {
+                return $bad('memberTyping() must compare in SQL (TIMESTAMPDIFF), not against PHP time()');
+            }
+            if (strpos($body[1], 'strtotime') !== false || strpos($body[1], 'time()') !== false) {
+                return $bad('memberTyping() must not mix PHP time() with MySQL-written timestamps');
+            }
+            $bridge = $read("$root/app/Controllers/ChatBridgeController.php");
+            if (strpos($bridge, "'typing' => \$typing") === false) {
+                return $bad('the bridge stream payload must carry the typing state');
+            }
+            $routes = $read("$root/config/routes.php");
+            if (strpos($routes, "'/chat/typing'") === false) {
+                return $bad('POST /chat/typing must be registered');
+            }
+            $migration = "$root/database/migrations/065_chat_typing.sql";
+            if (!is_file($migration) || strpos((string) file_get_contents($migration), 'member_typing_at') === false) {
+                return $bad('migration 065 must add chat_conversations.member_typing_at');
+            }
+            return $ok('throttled member ping, 7s TTL, bridge emits the state, migration present');
+        });
         $add('smoke.chat_admin.queue', 'Smoke · Chat correctness', 'Admin chat queue shows unread counts and waiting-first order', static function () use ($chatAdmin, $ok, $bad): array {
             $m = [];
             if (preg_match('/function index\s*\([^)]*\)\s*:\s*void\s*\{(.*?)\n    \}/s', $chatAdmin, $m) !== 1) {

@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.48",
-  "versionCode": 59,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.48.apk",
-  "changelog": "Replies can no longer be lost silently. Every send now uses a fresh idempotency key, the server's idempotent answer is only accepted when it really is this message, and anything unconfirmed is queued for automatic delivery instead of being overwritten. Queued replies are now visible: a strip above the thread lists them with per-item retry and discard, and a reply the server rejects reports why instead of disappearing. The passcode lock throttles guesses (5 wrong tries, doubling lockout up to 15 minutes) and \"Forgot passcode?\" clears the saved credentials too, so it cannot be bypassed. Leaving the live screen now cleanly stops the broadcast, and all live calls use the pinned connection.",
+  "latestVersion": "2.49",
+  "versionCode": 60,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.49.apk",
+  "changelog": "Videos now play right in the chat with a full-screen player, and photos are compressed on-device before upload so large attachments send quickly. Tapping any attachment opens a responsive full-screen viewer. The chat shows when a member is typing, the message field accepts up to 2000 characters, and long conversations open smoothly because passcode checks and image work no longer block the screen. Attachment previews carry screen-reader labels.",
   "publishedAt": "2026-10-17"
 }

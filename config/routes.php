@@ -136,6 +136,7 @@ return [
     ['GET', '/chat/history', 'ChatController@history'],
     ['GET', '/chat/stream', 'ChatController@stream'],
     ['GET', '/chat/attachment', 'ChatController@attachment'],
+    ['POST', '/chat/typing', 'ChatController@typing'],
     ['POST', '/chat/questionnaire/{id}/answer', 'QuestionnaireController@answer'],
 
     // Chat bridge webhooks (Android app + training PC; Bearer GALLERY_CHAT_KEY)

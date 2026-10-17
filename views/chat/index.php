@@ -335,6 +335,18 @@ hideBadge();
             });
     });
 
+    // Typing presence: ping the server (throttled to every 3 s) while the
+    // member writes, so the operator app can show "Member is typing…".
+    var lastTypingPing = 0;
+    input.addEventListener('input', function () {
+        var now = Date.now();
+        if (now - lastTypingPing < 3000 || !input.value) { return; }
+        lastTypingPing = now;
+        var ping = new FormData();
+        ping.append('_token', csrf);
+        fetch('<?= url('/chat/typing') ?>', { method: 'POST', body: ping }).catch(function () {});
+    });
+
     // Enter sends the message; Shift+Enter inserts a newline. The isComposing
     // guard keeps CJK/IME Enter-to-confirm from firing a send.
     input.addEventListener('keydown', function (e) {

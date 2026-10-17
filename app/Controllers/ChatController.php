@@ -202,6 +202,36 @@ class ChatController extends Controller
     }
 
     /**
+     * Throttled ping from the member's composer while they write. The bridge
+     * stream reports it to the operator app ("Member is typing…"). Never
+     * creates a conversation and never feeds the AI — pure presence.
+     */
+    public function typing(): void
+    {
+        $user = Auth::requireUser();
+        $userId = (int) $user['id'];
+
+        if (!ChatMessage::canChat($userId)) {
+            $this->json(['ok' => false, 'error' => 'Forbidden']);
+            return;
+        }
+
+        // The web composer pings every ~3 s while typing; 20/min leaves room
+        // for a few composer tabs without becoming a spam vector.
+        if (!RateLimiter::allow(['chat_typing:' . $userId], 20, 60)) {
+            $this->json(['ok' => false]);
+            return;
+        }
+
+        $conv = ChatMessage::forUser($userId);
+        if ($conv !== null && ChatMessage::memberReplyEnabled((int) $conv['id'])) {
+            ChatMessage::markMemberTyping((int) $conv['id']);
+        }
+
+        $this->json(['ok' => true]);
+    }
+
+    /**
      * Poll for new messages (id > since). Returns JSON for the polling JS so
      * model/operator responses appear live.
      */
