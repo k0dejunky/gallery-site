@@ -1309,6 +1309,72 @@ class SmokeChecks
                 : $bad('chat bridge must expose user search, start, and reply-toggle webhooks');
         });
 
+        // ----------------------------------------------------- Chat correctness
+        $add('smoke.chat_ui.single_questionnaire', 'Smoke · Chat correctness', 'Member chat view renders each questionnaire exactly once', static function () use ($chatIndex, $ok, $bad): array {
+            // A second render block reintroduced a duplicate DOM id; the browser
+            // then shows the first (possibly answered/disabled) form twice and
+            // an answered member's repeat submit is rejected. One id template.
+            $count = substr_count($chatIndex, 'id="questionnaire-');
+            return $count === 1
+                ? $ok('one questionnaire render block')
+                : $bad("views/chat/index.php contains $count questionnaire id templates (must be 1)");
+        });
+        $add('smoke.schema.chat_messages_expiring', 'Smoke · Chat correctness', 'schema.sql chat_messages matches migration 043 columns', static function () use ($read, $root, $ok, $bad): array {
+            $schema = $read("$root/schema.sql");
+            $migration = $read("$root/database/migrations/043_chat_expiring_media.sql");
+            $m = [];
+            if (preg_match('/CREATE TABLE IF NOT EXISTS chat_messages \((.*?)\) ENGINE/s', $schema, $m) !== 1) {
+                return $bad('chat_messages CREATE TABLE not found in schema.sql');
+            }
+            $missing = [];
+            foreach (['expires_at', 'max_views', 'view_count'] as $col) {
+                if (strpos($m[1], $col) === false) $missing[] = $col;
+                if (strpos($migration, $col) === false) $missing[] = $col . ' (migration)';
+            }
+            return $missing === []
+                ? $ok('expiring-media columns present in schema and migration')
+                : $bad('chat_messages column drift: ' . implode(', ', $missing));
+        });
+        $add('smoke.chat_bridge.unread_predicate', 'Smoke · Chat correctness', 'Bridge config counts unread past the operator read mark', static function () use ($bridgeCtrl, $ok, $bad): array {
+            $m = [];
+            if (preg_match('/function config\s*\([^)]*\)\s*:\s*void\s*\{(.*?)\n    \}/s', $bridgeCtrl, $m) !== 1) {
+                return $bad('ChatBridgeController::config() not found');
+            }
+            $body = $m[1];
+            if (strpos($body, 'operator_read_through_id') === false) {
+                return $bad('config() must compare against operator_read_through_id, not a constant 0');
+            }
+            if (strpos($body, '[$cid, 0]') !== false) {
+                return $bad('config() must not count with a hardcoded 0 read mark');
+            }
+            return $ok('unread uses the operator read-through mark');
+        });
+        $add('smoke.chat_bridge.pending_bounded', 'Smoke · Chat correctness', 'Bridge pending() is bounded in SQL', static function () use ($bridgeCtrl, $ok, $bad): array {
+            $m = [];
+            if (preg_match('/function pending\s*\([^)]*\)\s*:\s*void\s*\{(.*?)\n    \}/s', $bridgeCtrl, $m) !== 1) {
+                return $bad('ChatBridgeController::pending() not found');
+            }
+            $body = $m[1];
+            if (strpos($body, 'LIMIT 20') === false || strpos($body, 'sender_role') === false) {
+                return $bad('pending() must filter sender_role in SQL with LIMIT 20');
+            }
+            if (strpos($body, 'array_slice(') !== false) {
+                return $bad('pending() must not fetch the whole conversation and slice in PHP');
+            }
+            return $ok('pending() bounded in SQL');
+        });
+        $add('smoke.chat_bridge.idempotent_mismatch', 'Smoke · Chat correctness', 'Bridge reply() refuses a reused key with different text', static function () use ($bridgeCtrl, $ok, $bad): array {
+            $m = [];
+            if (preg_match('/function reply\s*\([^)]*\)\s*:\s*void\s*\{(.*?)\n    \}/s', $bridgeCtrl, $m) !== 1) {
+                return $bad('ChatBridgeController::reply() not found');
+            }
+            $body = $m[1];
+            return strpos($body, 'Idempotency key was already used for different content.') !== false
+                && strpos($body, 'MAX_MESSAGE_LENGTH') !== false
+                ? $ok('mismatched reuse rejected instead of answered with the old id')
+                : $bad('reply() must compare the stored message text and refuse a mismatched key reuse');
+        });
+
         // ----------------------------------------------------- Server optimizations
         $serverOptModel = $read("$root/app/Models/ServerOptimizations.php");
         $applyServer    = $read("$root/bin/apply_server_optimizations.php");

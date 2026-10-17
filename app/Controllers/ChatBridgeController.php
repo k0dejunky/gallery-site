@@ -78,12 +78,16 @@ class ChatBridgeController extends Controller
         $cid = max(0, (int) $this->request->query('conversation', 0));
         $conv = $cid > 0 ? ChatMessage::find($cid) : null;
 
-        $pending = $cid > 0
-            ? (int) \App\Core\Database::run(
+        // Unread means "newer than the operator's read-through mark", the same
+        // predicate the inbox uses. The hardcoded `id > 0` counted every member
+        // message ever, so the badge never cleared.
+        $pending = 0;
+        if ($cid > 0 && $conv) {
+            $pending = (int) \App\Core\Database::run(
                 "SELECT COUNT(*) FROM chat_messages WHERE conversation_id = ? AND sender_role = 'user' AND id > ?",
-                [$cid, 0]
-            )->fetchColumn()
-            : 0;
+                [$cid, (int) ($conv['operator_read_through_id'] ?? 0)]
+            )->fetchColumn();
+        }
 
         $this->json([
             'ok'           => true,
@@ -97,23 +101,23 @@ class ChatBridgeController extends Controller
         ]);
     }
 
-    /** Member messages awaiting a reply (newest first). */
+    /** Member messages awaiting a reply (newest first, capped server-side). */
     public function pending(): void
     {
         $cid = max(0, (int) $this->request->query('conversation', 0));
 
+        // Newest 20 member messages, bounded in SQL: the old form loaded the
+        // whole conversation to slice it in PHP.
         $rows = $cid > 0
-            ? ChatMessage::messages($cid, 0, false)
+            ? \App\Core\Database::run(
+                "SELECT * FROM chat_messages
+                  WHERE conversation_id = ? AND sender_role = 'user'
+                  ORDER BY id DESC LIMIT 20",
+                [$cid]
+            )->fetchAll()
             : [];
 
-        $userMessages = [];
-        foreach ($rows as $row) {
-            if (($row['sender_role'] ?? '') === 'user') {
-                $userMessages[] = $row;
-            }
-        }
-
-        $this->json(['ok' => true, 'messages' => array_slice($userMessages, 0, 20), 'conversation' => $cid]);
+        $this->json(['ok' => true, 'messages' => $rows, 'conversation' => $cid]);
     }
 
     /**
@@ -416,6 +420,25 @@ class ChatBridgeController extends Controller
                 return;
             }
             if ($existing !== false && $existing !== null && $existing['message_id'] !== null) {
+                // The key was already used. A genuine retry of the SAME message
+                // still answers idempotently; text that differs means the key
+                // was reused for different content, and answering with the OLD
+                // message's id would make the client overwrite the new text
+                // with it (silent loss - the v2.47 bug class). Refuse instead,
+                // so the client re-sends under a fresh key.
+                $stored = \App\Core\Database::run(
+                    'SELECT message FROM chat_messages WHERE id = ?',
+                    [(int) $existing['message_id']]
+                )->fetch();
+                $wanted = mb_substr(trim($msg), 0, ChatMessage::MAX_MESSAGE_LENGTH);
+                if ($stored !== false && $stored !== null && (string) $stored['message'] !== $wanted) {
+                    $db->rollBack();
+                    $this->json([
+                        'ok' => false,
+                        'error' => 'Idempotency key was already used for different content.',
+                    ]);
+                    return;
+                }
                 $db->commit();
                 $this->json(['ok' => true, 'id' => (int) $existing['message_id'], 'idempotent' => true]);
                 return;

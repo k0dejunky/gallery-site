@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.47",
-  "versionCode": 58,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.47.apk",
-  "changelog": "Fix: the reply field was missing, so a message could not be typed. v2.46 declared the composer's text field as 0dp wide without a layout weight, which collapses it to zero width in the row - the attach and send buttons were there but there was nowhere to type. The field now carries weight 1 and fills the space between them. A new JVM layout test parses every layout and fails the build if any view is declared zero-sized without a weight or a positioning behaviour, so this cannot ship again.",
-  "publishedAt": "2026-10-16"
+  "latestVersion": "2.48",
+  "versionCode": 59,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.48.apk",
+  "changelog": "Replies can no longer be lost silently. Every send now uses a fresh idempotency key, the server's idempotent answer is only accepted when it really is this message, and anything unconfirmed is queued for automatic delivery instead of being overwritten. Queued replies are now visible: a strip above the thread lists them with per-item retry and discard, and a reply the server rejects reports why instead of disappearing. The passcode lock throttles guesses (5 wrong tries, doubling lockout up to 15 minutes) and \"Forgot passcode?\" clears the saved credentials too, so it cannot be bypassed. Leaving the live screen now cleanly stops the broadcast, and all live calls use the pinned connection.",
+  "publishedAt": "2026-10-17"
 }
