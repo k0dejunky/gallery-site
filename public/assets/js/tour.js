@@ -153,8 +153,12 @@
         card.style.left = x + 'px';
         card.style.top = y + 'px';
       } else {
+        // No target (the Welcome step): centre the card instead of parking
+        // it at the top, where it would cover the site header — and with it
+        // the mobile hamburger button.
         card.style.left = (window.innerWidth/2 - w/2) + 'px';
-        card.style.top = '24px';
+        var h = card.offsetHeight;
+        card.style.top = Math.round(Math.max(12, (window.innerHeight - h) / 2)) + 'px';
       }
     };
     placeCard();

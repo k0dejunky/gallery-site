@@ -614,6 +614,6 @@ document.addEventListener('error',function(e){
 },true);
     </script>
     <script nonce="<?= csp_nonce() ?>" src="<?= url('/assets/js/user.js') ?>?v=16" defer></script>
-    <script nonce="<?= csp_nonce() ?>" src="<?= url('/assets/js/tour.js') ?>?v=8" defer></script>
+    <script nonce="<?= csp_nonce() ?>" src="<?= url('/assets/js/tour.js') ?>?v=9" defer></script>
 </body>
 </html>

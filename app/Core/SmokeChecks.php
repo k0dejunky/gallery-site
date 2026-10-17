@@ -343,6 +343,49 @@ class SmokeChecks
                 : $bad('public/assets/css/admin.css looks truncated (' . strlen($adminCss) . ' bytes)');
         });
 
+        $add('smoke.admin.mobile_nav', 'Smoke · Admin UI', 'The mobile drawer opens: nav-open rules must match the body element', static function () use ($adminCss, $adminLayout, $ok, $bad): array {
+            // ".admin-theme body.nav-open" requires a <body> nested inside an
+            // .admin-theme element, which can never exist (body IS the root and
+            // carries .admin-theme itself) — the drawer stayed off-screen and
+            // the mobile hamburger looked dead. The rules must scope the body
+            // with a compound selector instead.
+            if (strpos($adminCss, '.admin-theme body.nav-open') !== false) {
+                return $bad('admin.css must not scope nav-open with ".admin-theme body" (an impossible descendant selector)');
+            }
+            foreach (['body.admin-theme.nav-open .admin-nav', 'body.admin-theme.nav-open .nav-backdrop'] as $needle) {
+                if (strpos($adminCss, $needle) === false) {
+                    return $bad('admin.css is missing ' . $needle);
+                }
+            }
+            foreach (['id="nav-toggle"', 'id="nav-backdrop"', "classList.toggle('nav-open'"] as $needle) {
+                if (strpos($adminLayout, $needle) === false) {
+                    return $bad('views/admin/layout.php is missing ' . $needle);
+                }
+            }
+            return $ok('drawer opens via body.admin-theme.nav-open; toggle + backdrop wired');
+        });
+
+        $add('smoke.tour.card_over_header', 'Smoke · Admin UI', 'The tour welcome card never parks over the site header', static function () use ($root, $userLayout, $adminLayout, $ok, $bad): array {
+            $tourJs = (string) @file_get_contents("$root/public/assets/js/tour.js");
+            if ($tourJs === '') {
+                return $bad('public/assets/js/tour.js is missing');
+            }
+            // The Welcome step has no target: pinning the card at top:24px put
+            // it straight over the header row, covering the mobile hamburger.
+            if (strpos($tourJs, "card.style.top = '24px'") !== false) {
+                return $bad("tour.js must not pin the target-less card to top:24px (it covers the header/hamburger)");
+            }
+            if (strpos($tourJs, '(window.innerHeight - h) / 2') === false) {
+                return $bad('tour.js must vertically centre the target-less card');
+            }
+            foreach ([$userLayout, $adminLayout] as $layout) {
+                if (preg_match('/tour\.js.*\?v=\d+/', $layout) !== 1) {
+                    return $bad('tour.js must be loaded cache-busted in both layouts');
+                }
+            }
+            return $ok('welcome card is centred clear of the header; tour.js versioned');
+        });
+
         $add('smoke.admin.nav_icons', 'Smoke · Admin UI', 'Every admin nav entry has an icon that exists in Icon', static function () use ($adminLayout, $adminIconSrc, $root, $ok, $bad): array {
             if (!class_exists(\App\Core\Icon::class)) {
                 return $bad('App\Core\Icon must exist');

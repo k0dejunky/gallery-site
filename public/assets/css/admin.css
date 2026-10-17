@@ -1977,7 +1977,7 @@ body.admin-theme {
         box-shadow: var(--adm-shadow-lg);
     }
 
-    .admin-theme body.nav-open .admin-nav { transform: translateX(0); }
+    body.admin-theme.nav-open .admin-nav { transform: translateX(0); }
 
     .admin-theme .nav-backdrop {
         display: none;
@@ -1987,7 +1987,7 @@ body.admin-theme {
         background: rgba(15, 18, 28, .45);
     }
 
-    .admin-theme body.nav-open .nav-backdrop { display: block; }
+    body.admin-theme.nav-open .nav-backdrop { display: block; }
 
     .admin-theme .nav-toggle {
         display: inline-flex;
