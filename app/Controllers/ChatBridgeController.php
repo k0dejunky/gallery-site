@@ -496,6 +496,7 @@ class ChatBridgeController extends Controller
 
             // Let the member know the operator replied (honours opt-out).
             \App\Models\EmailQueue::notifyChatReply((int) $cid);
+            ChatMessage::notifyMemberReply((int) $cid, $msg);
         }
 
         // Replying implies the operator has read the thread: clear unread.

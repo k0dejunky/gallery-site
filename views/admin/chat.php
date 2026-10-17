@@ -491,9 +491,16 @@ $operatorIsOnline = !empty($operatorOnline);
                 <option value="operator" <?= $filterMode === 'operator' ? 'selected' : '' ?>>Operator only</option>
             </select>
         </label>
+        <label class="adm-field">
+            <span>Queue</span>
+            <select name="queue">
+                <option value="" <?= $filterQueue === '' ? 'selected' : '' ?>>Everyone</option>
+                <option value="unread" <?= $filterQueue === 'unread' ? 'selected' : '' ?>>Waiting for reply</option>
+            </select>
+        </label>
         <div class="adm-field-actions">
             <button type="submit" class="btn btn-sm">Filter</button>
-            <?php if ($filterQ !== '' || $filterMode !== ''): ?>
+            <?php if ($filterQ !== '' || $filterMode !== '' || $filterQueue !== ''): ?>
                 <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat') ?>">Clear</a>
             <?php endif; ?>
         </div>
@@ -510,10 +517,33 @@ $operatorIsOnline = !empty($operatorOnline);
                     </thead>
                     <tbody>
                         <?php foreach ($conversations as $c): ?>
-                            <?php $replyEnabled = (int) ($c['member_reply_enabled'] ?? 1) === 1; ?>
+                            <?php
+                                $replyEnabled = (int) ($c['member_reply_enabled'] ?? 1) === 1;
+                                $unread = (int) ($c['unread_count'] ?? 0);
+                                $preview = trim((string) ($c['last_message'] ?? ''));
+                                if (mb_strlen($preview) > 60) {
+                                    $preview = mb_substr($preview, 0, 60) . '…';
+                                }
+                                $who = (($c['last_sender'] ?? '') === 'user') ? 'Member' : 'You';
+                            ?>
                             <tr>
                                 <td>#<?= (int) $c['id'] ?></td>
-                                <td><?= e((string) $c['user_email']) ?></td>
+                                <td>
+                                    <div>
+                                        <?= e((string) $c['user_email']) ?>
+                                        <?php if ($unread > 0): ?>
+                                            <span class="pill pill-warn" title="<?= $unread === 1 ? '1 message waiting for a reply' : $unread . ' messages waiting for a reply' ?>"><?= $unread ?> waiting</span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php if ($preview !== ''): ?>
+                                        <div class="muted" style="font-size:.78rem;margin-top:.15rem;">
+                                            <span style="opacity:.7;"><?= $who ?>:</span> <?= e($preview) ?>
+                                            <?php if ($unread > 0 && !empty($c['oldest_unread_at'])): ?>
+                                                <span style="opacity:.7;">· since <?= e(tzdate('M j, g:i A', (string) $c['oldest_unread_at'])) ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
                                 <td><span class="pill <?= $c['ai_mode'] === 'finetuned' ? 'pill-info' : ($c['ai_mode'] === 'operator' ? 'pill-warn' : 'pill-muted') ?>"><?= e((string) $c['ai_mode']) ?></span></td>
                                 <td><?= e((string) $c['status']) ?></td>
                                 <td><?= (int) $c['message_count'] ?> (<?= (int) $c['user_count'] ?> user)</td>
@@ -540,7 +570,7 @@ $operatorIsOnline = !empty($operatorOnline);
             <?php if ($pages > 1): ?>
                 <div class="adm-field-actions" style="margin-top:.75rem;justify-content:flex-start;">
                     <?php for ($p = 1; $p <= $pages; $p++): ?>
-                        <a class="btn btn-sm <?= $p === $page ? '' : 'btn-outline' ?>" href="<?= e(url('/admin/chat?page=' . $p . ($filterQ !== '' ? '&q=' . rawurlencode($filterQ) : '') . ($filterMode !== '' ? '&mode=' . rawurlencode($filterMode) : ''))) ?>"><?= $p ?></a>
+                        <a class="btn btn-sm <?= $p === $page ? '' : 'btn-outline' ?>" href="<?= e(url('/admin/chat?page=' . $p . ($filterQ !== '' ? '&q=' . rawurlencode($filterQ) : '') . ($filterMode !== '' ? '&mode=' . rawurlencode($filterMode) : '') . ($filterQueue !== '' ? '&queue=' . rawurlencode($filterQueue) : ''))) ?>"><?= $p ?></a>
                     <?php endfor; ?>
                 </div>
             <?php endif; ?>

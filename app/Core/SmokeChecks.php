@@ -1374,6 +1374,88 @@ class SmokeChecks
                 ? $ok('mismatched reuse rejected instead of answered with the old id')
                 : $bad('reply() must compare the stored message text and refuse a mismatched key reuse');
         });
+        $add('smoke.chat_admin.queue', 'Smoke · Chat correctness', 'Admin chat queue shows unread counts and waiting-first order', static function () use ($chatAdmin, $ok, $bad): array {
+            $m = [];
+            if (preg_match('/function index\s*\([^)]*\)\s*:\s*void\s*\{(.*?)\n    \}/s', $chatAdmin, $m) !== 1) {
+                return $bad('AdminChatController::index() not found');
+            }
+            $body = $m[1];
+            $needed = ['unread_count', 'oldest_unread_at', "queue === 'unread'", 'last_message'];
+            $missing = [];
+            foreach ($needed as $n) {
+                if (strpos($body, $n) === false) $missing[] = $n;
+            }
+            return $missing === [] && strpos($body, 'ORDER BY (oldest_unread_at IS NULL) ASC') !== false
+                ? $ok('unread counts + oldest-waiting-first ordering present')
+                : $bad('admin chat index must compute unread counts and sort waiting conversations first'
+                    . ($missing !== [] ? ' (missing: ' . implode(', ', $missing) . ')' : ''));
+        });
+        $add('smoke.chat_admin.queue_view', 'Smoke · Chat correctness', 'Admin chat list renders the waiting queue UI', static function () use ($chatView, $ok, $bad): array {
+            return strpos($chatView, 'name="queue"') !== false
+                && strpos($chatView, 'Waiting for reply') !== false
+                && strpos($chatView, 'waiting</span>') !== false
+                && strpos($chatView, 'unread_count') !== false
+                ? $ok('queue filter + unread badge + preview present')
+                : $bad('views/admin/chat.php must render the queue filter, unread badge and last-message preview');
+        });
+        $add('smoke.chat_admin.reply_clears_unread', 'Smoke · Chat correctness', 'Admin panel replies clear the unread queue marker', static function () use ($chatAdmin, $ok, $bad): array {
+            $m = [];
+            if (preg_match('/function operatorReply\s*\([^)]*\)\s*:\s*void\s*\{(.*?)\n    \}/s', $chatAdmin, $m) !== 1) {
+                return $bad('AdminChatController::operatorReply() not found');
+            }
+            $body = $m[1];
+            return strpos($body, 'operator_read_through_id') !== false
+                && strpos($body, 'CAST(? AS UNSIGNED)') !== false
+                ? $ok('reply advances operator_read_through_id (numeric CAST)')
+                : $bad('operatorReply() must clear unread via operator_read_through_id with CAST(? AS UNSIGNED)');
+        });
+        $add('smoke.chat.reply_notifies_wall', 'Smoke · Chat correctness', 'Operator replies add a wall notification for the member', static function () use ($chatMessage, $bridgeCtrl, $chatAdmin, $ok, $bad): array {
+            $m = [];
+            if (preg_match('/function notifyMemberReply\s*\([^)]*\)\s*:\s*void\s*\{(.*?)\n    \}/s', $chatMessage, $m) !== 1) {
+                return $bad('ChatMessage::notifyMemberReply() not found');
+            }
+            $body = $m[1];
+            if (strpos($body, "'chat_reply'") === false || strpos($body, "'/chat'") === false || strpos($body, 'Notification::add') === false) {
+                return $bad('notifyMemberReply must add a chat_reply notification linking to /chat');
+            }
+            return strpos($bridgeCtrl, 'ChatMessage::notifyMemberReply((int) $cid, $msg)') !== false
+                && strpos($chatAdmin, 'ChatMessage::notifyMemberReply($id, $message)') !== false
+                ? $ok('bridge + admin replies both notify the wall')
+                : $bad('both operator reply paths must call ChatMessage::notifyMemberReply');
+        });
+        $add('smoke.chat.member_attachment', 'Smoke · Chat correctness', 'Web chat send() accepts member attachments with the shared cap', static function () use ($chatCtrl, $ok, $bad): array {
+            $m = [];
+            if (preg_match('/function send\s*\([^)]*\)\s*:\s*void\s*\{(.*?)\n    \}/s', $chatCtrl, $m) !== 1) {
+                return $bad('ChatController::send() not found');
+            }
+            $body = $m[1];
+            $needed = [
+                "\$this->request->file('attachment')",
+                'storeAttachment($file)',
+                'MAX_ATTACHMENT_BYTES',
+                'addMessage($cid, ChatMessage::ROLE_USER, $message, $attachment)',
+                "\$message !== ''",
+            ];
+            $missing = [];
+            foreach ($needed as $n) {
+                if (strpos($body, $n) === false) $missing[] = $n;
+            }
+            return $missing === [] && strpos($chatCtrl, '25 * 1024 * 1024') !== false
+                ? $ok('attachment stored via storeAttachment and bounded by the 25 MB cap')
+                : $bad('ChatController::send() must accept an attachment through storeAttachment with a 25 MB cap'
+                    . ($missing !== [] ? ' (missing: ' . implode(', ', $missing) . ')' : ''));
+        });
+        $add('smoke.chat_ui.member_attach_compose', 'Smoke · Chat correctness', 'Member composer offers a gated file attachment', static function () use ($chatIndex, $ok, $bad): array {
+            $needed = ['id="chat-file"', "body.append('attachment', file)", '25 * 1024 * 1024'];
+            $missing = [];
+            foreach ($needed as $n) {
+                if (strpos($chatIndex, $n) === false) $missing[] = $n;
+            }
+            return $missing === []
+                ? $ok('composer file input sizes files client-side before upload')
+                : $bad('views/chat/index.php composer must offer a file input that rides FormData'
+                    . ($missing !== [] ? ' (missing: ' . implode(', ', $missing) . ')' : ''));
+        });
 
         // ----------------------------------------------------- Server optimizations
         $serverOptModel = $read("$root/app/Models/ServerOptimizations.php");

@@ -143,8 +143,11 @@
         <form class="chat-composer" id="chat-form">
             <?= csrf_field() ?>
             <textarea id="chat-input" rows="2" maxlength="2000" placeholder="Type a message…" aria-label="Message"></textarea>
+            <label class="btn btn-outline" for="chat-file" title="Attach a file (images, video, audio, PDF, text; max 25 MB)" style="display:flex;align-items:center;">📎</label>
+            <input type="file" id="chat-file" accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.oga,.wav,.pdf,.txt" style="display:none;" aria-label="Attach a file">
             <button type="submit" class="btn" id="chat-send">Send</button>
         </form>
+        <p class="muted" id="chat-file-name" style="display:none;margin:.35rem 0 0;"></p>
         <?php else: ?>
         <p class="muted">Replies are currently disabled for this conversation. Messages from the site will still appear here. If this looks wrong, <a href="<?= e(url('/support')) ?>">contact support</a>.</p>
         <?php endif; ?>
@@ -156,7 +159,22 @@
     var thread = document.getElementById('chat-thread');
     var form = document.getElementById('chat-form');
     var input = document.getElementById('chat-input');
+    var fileInput = document.getElementById('chat-file');
+    var fileName = document.getElementById('chat-file-name');
     if (!form || !input) { return; }
+
+    if (fileInput && fileName) {
+        fileInput.addEventListener('change', function () {
+            var f = fileInput.files && fileInput.files[0];
+            if (f) {
+                fileName.textContent = '📎 ' + f.name + ' (' + Math.max(1, Math.round(f.size / 1048576)) + ' MB)';
+                fileName.style.display = '';
+            } else {
+                fileName.textContent = '';
+                fileName.style.display = 'none';
+            }
+        });
+    }
 
     var csrf = document.querySelector('#chat-form input[name="_token"]').value;
     var latestId = <?= (int) ($latestId ?? 0) ?>;
@@ -260,7 +278,8 @@
         messages.forEach(function (m) {
             // Skip the stream echo of a message we already rendered optimistically.
             if (m.sender_role === 'user') {
-                var idx = pendingSends.indexOf(String(m.message || '').trim());
+                var echoKey = String(m.message || '').trim() || (m.attachment_name ? '\u0000attach' : '');
+                var idx = echoKey === '' ? -1 : pendingSends.indexOf(echoKey);
                 if (idx >= 0) {
                     pendingSends.splice(idx, 1);
                     latestId = Math.max(latestId, m.id);
@@ -277,14 +296,22 @@
     form.addEventListener('submit', function (e) {
         e.preventDefault();
         var text = input.value.trim();
-        if (!text) { return; }
+        var file = (fileInput && fileInput.files && fileInput.files[0]) ? fileInput.files[0] : null;
+        if (!text && !file) { return; }
+        if (file && file.size > 25 * 1024 * 1024) {
+            alert('Attachments must be 25 MB or smaller.');
+            return;
+        }
         var body = new FormData();
         body.append('_token', csrf);
         body.append('message', text);
+        if (file) { body.append('attachment', file); }
         input.value = '';
+        if (fileInput) { fileInput.value = ''; }
+        if (fileName) { fileName.textContent = ''; fileName.style.display = 'none'; }
         // Optimistic: show your message immediately, don't wait for the POST.
-        var optimistic = append({ id: 0, sender_role: 'user', message: text, attachment_name: null, attachment_url: null, attachment_thumb_url: null });
-        pendingSends.push(text);
+        var optimistic = append({ id: 0, sender_role: 'user', message: text, attachment_name: file ? file.name : null, attachment_url: null, attachment_thumb_url: null });
+        pendingSends.push(text || '\u0000attach');
 hideBadge();
 
     // Start scrolled to the bottom so the newest messages are visible.

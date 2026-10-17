@@ -31,6 +31,7 @@ class AdminChatController extends Controller
 
         $q      = trim((string) $this->request->query('q', ''));
         $mode   = (string) $this->request->query('mode', '');
+        $queue  = (string) $this->request->query('queue', '');
         $page   = max(1, (int) $this->request->query('page', 1));
         $per    = 25;
         $offset = ($page - 1) * $per;
@@ -47,6 +48,12 @@ class AdminChatController extends Controller
             $params[] = '%' . $q . '%';
             $params[] = (int) $q;
         }
+        // Waiting queue: conversations with member messages the operator has
+        // not read past yet.
+        if ($queue === 'unread') {
+            $where[] = "(SELECT COUNT(*) FROM chat_messages um WHERE um.conversation_id = c.id
+                          AND um.sender_role = 'user' AND um.id > c.operator_read_through_id) > 0";
+        }
 
         $whereSql = implode(' AND ', $where);
 
@@ -55,13 +62,22 @@ class AdminChatController extends Controller
             $params
         )->fetchColumn();
 
+        // Waiting conversations sort first (longest wait first); everything
+        // else keeps the most-recently-active ordering.
         $conversations = Database::run(
             "SELECT c.*, u.email AS user_email,
                     (SELECT COUNT(*) FROM chat_messages m WHERE m.conversation_id = c.id) AS message_count,
-                    (SELECT COUNT(*) FROM chat_messages m WHERE m.conversation_id = c.id AND m.sender_role = 'user') AS user_count
+                    (SELECT COUNT(*) FROM chat_messages m WHERE m.conversation_id = c.id AND m.sender_role = 'user') AS user_count,
+                    (SELECT COUNT(*) FROM chat_messages m WHERE m.conversation_id = c.id
+                      AND m.sender_role = 'user' AND m.id > c.operator_read_through_id) AS unread_count,
+                    (SELECT MIN(m.created_at) FROM chat_messages m WHERE m.conversation_id = c.id
+                      AND m.sender_role = 'user' AND m.id > c.operator_read_through_id) AS oldest_unread_at,
+                    (SELECT m.message FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_message,
+                    (SELECT m.sender_role FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_sender,
+                    (SELECT m.created_at FROM chat_messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_message_at
              FROM chat_conversations c JOIN users u ON u.id = c.user_id
              WHERE $whereSql
-             ORDER BY c.updated_at DESC
+             ORDER BY (oldest_unread_at IS NULL) ASC, oldest_unread_at ASC, c.updated_at DESC
              LIMIT $per OFFSET $offset",
             $params
         )->fetchAll();
@@ -77,6 +93,7 @@ class AdminChatController extends Controller
             'pages'        => max(1, (int) ceil($total / $per)),
             'filterQ'      => $q,
             'filterMode'   => $mode,
+            'filterQueue'  => $queue,
             'ai'           => $ai,
             'state'        => $state,
             'operatorOnline' => \App\Core\ChatSettings::operatorOnline(),
@@ -313,6 +330,17 @@ class AdminChatController extends Controller
 
         // Let the member know the operator replied (honours their opt-out).
         \App\Models\EmailQueue::notifyChatReply($id);
+        ChatMessage::notifyMemberReply($id, $message);
+
+        // Replying implies the operator has read the thread: clear unread so
+        // the "waiting for reply" queue badge reflects reality on this path
+        // too (the bridge does the same). CAST keeps GREATEST numeric.
+        Database::run(
+            'UPDATE chat_conversations
+                SET operator_read_through_id = GREATEST(COALESCE(operator_read_through_id, 0), CAST(? AS UNSIGNED))
+              WHERE id = ?',
+            [ChatMessage::latestId($id), $id]
+        );
 
         $this->flash('success', 'Operator reply sent (message #' . $newId . ').');
         $this->redirect('/admin/chat/' . $id);

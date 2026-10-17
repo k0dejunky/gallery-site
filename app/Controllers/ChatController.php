@@ -16,6 +16,13 @@ use App\Models\ChatQuestionnaire;
  */
 class ChatController extends Controller
 {
+    /**
+     * Member attachments share the operator app's cap and the model-level
+     * type allow-list (ChatMessage::storeAttachment). 25 MB is the agreed
+     * product limit for both directions.
+     */
+    private const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
     public function index(): void
     {
         $user = Auth::requireUser();
@@ -96,8 +103,29 @@ class ChatController extends Controller
 
         $message = (string) $this->request->post('message', '');
         $message = trim($message);
-        if ($message === '' || mb_strlen($message) > ChatMessage::MAX_MESSAGE_LENGTH) {
-            $this->json(['ok' => false, 'error' => 'Message must be 1–' . ChatMessage::MAX_MESSAGE_LENGTH . ' characters.']);
+
+        // Optional member attachment. Same 25 MB cap and type allow-list as
+        // the operator app (ChatMessage::storeAttachment sniffs the content).
+        $attachment = null;
+        $file = $this->request->file('attachment');
+        if (is_array($file) && (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            if ((int) ($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+                $this->json(['ok' => false, 'error' => 'The attachment upload failed. Please try again.']);
+                return;
+            }
+            if ((int) ($file['size'] ?? 0) > self::MAX_ATTACHMENT_BYTES) {
+                $this->json(['ok' => false, 'error' => 'Attachments must be 25 MB or smaller.']);
+                return;
+            }
+            $attachment = ChatMessage::storeAttachment($file);
+            if ($attachment === null) {
+                $this->json(['ok' => false, 'error' => 'That file type is not supported. Images, video, audio, PDF and text files only.']);
+                return;
+            }
+        }
+
+        if (($message === '' && $attachment === null) || mb_strlen($message) > ChatMessage::MAX_MESSAGE_LENGTH) {
+            $this->json(['ok' => false, 'error' => 'Attach a file or write a message (max ' . ChatMessage::MAX_MESSAGE_LENGTH . ' characters).']);
             return;
         }
 
@@ -111,7 +139,7 @@ class ChatController extends Controller
         }
         $conv = ChatMessage::find($cid);
 
-        ChatMessage::addMessage($cid, ChatMessage::ROLE_USER, $message);
+        ChatMessage::addMessage($cid, ChatMessage::ROLE_USER, $message, $attachment);
 
         $result = ['ok' => true, 'user_message_id' => ChatMessage::latestId($cid)];
 
@@ -124,7 +152,9 @@ class ChatController extends Controller
         // regardless of the conversation's AI mode (operator answers instead).
         $aiEnabled = \App\Core\ChatSettings::aiEnabled();
 
-        if ($aiEnabled && ChatMessage::isAiMode($convMode)) {
+        // An attachment-only message has no text to answer — a human (operator
+        // mode) or the admin sees the media; never feed an empty prompt to AI.
+        if ($message !== '' && $aiEnabled && ChatMessage::isAiMode($convMode)) {
             // When the member asks for specific content, search the galleries
             // they can actually view and feed the matches into the prompt so
             // the AI can name real galleries (linked in the chat UI).

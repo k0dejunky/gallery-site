@@ -722,6 +722,39 @@ class ChatMessage
     }
 
     /**
+     * In-app (wall) notification letting the member know the operator replied.
+     * Companion to EmailQueue::notifyChatReply, which handles the email side.
+     */
+    public static function notifyMemberReply(int $conversationId, string $preview = ''): void
+    {
+        $conversationId = max(0, $conversationId);
+        if ($conversationId <= 0) {
+            return;
+        }
+
+        $userId = (int) Database::run(
+            'SELECT user_id FROM chat_conversations WHERE id = ? LIMIT 1',
+            [$conversationId]
+        )->fetchColumn();
+        if ($userId <= 0) {
+            return;
+        }
+
+        $preview = trim($preview);
+        if (mb_strlen($preview) > 60) {
+            $preview = mb_substr($preview, 0, 59) . '…';
+        }
+
+        Notification::add(
+            $userId,
+            'chat_reply',
+            'New reply from the site',
+            $preview !== '' ? $preview : 'You have a new message waiting in chat.',
+            '/chat'
+        );
+    }
+
+    /**
      * The operator's most-similar past replies to a member message, as
      * few-shot context for retrieval mode. Uses a simple word-overlap score
      * over the training corpus (lightweight, no ML dependencies).
