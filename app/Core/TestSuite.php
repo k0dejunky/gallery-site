@@ -585,6 +585,91 @@ class TestSuite
             }
         });
 
+        $add('db.retention_email_cycle', 'Database', 'Trial-ending + inactive win-back audiences queue once per member/subscription', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                $email = 'retentiontest+' . bin2hex(random_bytes(4)) . '@example.invalid';
+                $now   = date('Y-m-d H:i:s');
+
+                try {
+                    Database::run(
+                        "INSERT INTO users (email, password_hash, role, status, email_verified_at, marketing_opt_out, last_seen_at, created_at)
+                         VALUES (?, 'x', 'user', 'active', ?, 0, DATE_SUB(NOW(), INTERVAL 40 DAY), ?)",
+                        [$email, $now, $now]
+                    );
+                    $userId = (int) Database::connection()->lastInsertId();
+
+                    // Inactive verified member with no subscription: scanned
+                    // and queued exactly once (the scanner is scoped to this
+                    // member, so no live inbox is ever touched).
+                    $first = \App\Core\Lifecycle::runInactiveWinbacks(30, $userId);
+                    $again = \App\Core\Lifecycle::runInactiveWinbacks(30, $userId);
+
+                    $logged = (int) Database::run(
+                        "SELECT COUNT(*) FROM retention_email_log WHERE user_id = ? AND event_key = 'winback_inactive'",
+                        [$userId]
+                    )->fetchColumn();
+                    $queued = (int) Database::run(
+                        "SELECT COUNT(*) FROM email_queue WHERE user_id = ? AND kind = 'lifecycle' AND subject = ?",
+                        [$userId, "It's been a while"]
+                    )->fetchColumn();
+
+                    // An opted-out member is refused even for a fresh event.
+                    Database::run('UPDATE users SET marketing_opt_out = 1 WHERE id = ?', [$userId]);
+                    $optedOut = \App\Core\Lifecycle::sendToUser('probe_optout', $userId, 'winback_inactive', 'Opt-out probe', []);
+                    Database::run('UPDATE users SET marketing_opt_out = 0 WHERE id = ?', [$userId]);
+
+                    // Trial ending in 2 days: nudged once, and the generic
+                    // renewal reminder must skip it (that was the bug where a
+                    // trial got "your renewal is coming up" copy).
+                    $planId = (int) Database::run(
+                        'SELECT id FROM plans WHERE active = 1 ORDER BY sort_order ASC, id ASC LIMIT 1'
+                    )->fetchColumn();
+                    if ($planId <= 0) {
+                        return ['pass' => true, 'detail' => 'no active plan fixture; trial audience not exercised'];
+                    }
+
+                    Database::run(
+                        "INSERT INTO subscriptions (user_id, plan_id, status, transaction_ref, starts_at, expires_at)
+                         VALUES (?, ?, 'active', ?, ?, DATE_ADD(NOW(), INTERVAL 2 DAY))",
+                        [$userId, $planId, 'TRIAL-TEST' . $userId, $now]
+                    );
+
+                    $trialFirst = \App\Core\Lifecycle::runTrialEndings(3, $userId);
+                    $trialAgain = \App\Core\Lifecycle::runTrialEndings(3, $userId);
+                    $renewals   = \App\Core\Lifecycle::runRenewalReminders(7, $userId);
+                    $still      = \App\Core\Lifecycle::runInactiveWinbacks(30, $userId);
+
+                    return [
+                        'pass'   => $first === 1 && $again === 0 && $logged === 1 && $queued === 1
+                            && $optedOut === false
+                            && $trialFirst === 1 && $trialAgain === 0 && $renewals === 0 && $still === 0,
+                        'detail' => "inactive=$first/$again logged=$logged queued=$queued optedout="
+                            . ($optedOut ? 'sent' : 'refused') . " trial=$trialFirst/$trialAgain renewals=$renewals",
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                    try {
+                        Database::run('DELETE FROM users WHERE email = ?', [$email]);
+                    } catch (\Throwable $ignored) {
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.autopost_claim', 'Database', 'Auto-poster claim executes (single-table UPDATE, secret guard)', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) === 'mysql') {

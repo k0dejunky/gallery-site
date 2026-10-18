@@ -508,7 +508,7 @@ class SmokeChecks
                 : $bad('schema.sql must carry subscription_email_log and email_queue scheduled_at/next_attempt_at/idx_email_queue_due');
         });
         $add('smoke.lifecycle.service', 'Smoke · Lifecycle', 'Lifecycle service provides dunning + win-back entry points', static function () use ($lcService, $ok, $bad): array {
-            foreach (['function send', 'function onPaymentFailed', 'function onPastDue', 'function onExpired', 'function onWinback', 'function runRenewalReminders', 'function runWinbacks'] as $needle) {
+            foreach (['function send', 'function onPaymentFailed', 'function onPastDue', 'function onExpired', 'function onWinback', 'function runRenewalReminders', 'function runWinbacks', 'function runTrialEndings', 'function runInactiveWinbacks', 'function sendToUser'] as $needle) {
                 if (strpos($lcService, $needle) === false) {
                     return $bad("Lifecycle.php missing $needle");
                 }
@@ -535,11 +535,38 @@ class SmokeChecks
         });
         $add('smoke.lifecycle.admin', 'Smoke · Lifecycle', 'Admin emailer exposes lifecycle toggles + test sends', static function () use ($lcEmailer, $lcView, $ok, $bad): array {
             return strpos($lcEmailer, 'function testLifecycle') !== false
+                && strpos($lcEmailer, 'lifecycle_trial_endings') !== false
+                && strpos($lcEmailer, 'lifecycle_inactive_winbacks') !== false
                 && strpos($lcView, 'lifecycle_renewal_reminders') !== false
                 && strpos($lcView, 'lifecycle_winbacks') !== false
+                && strpos($lcView, 'lifecycle_trial_endings') !== false
+                && strpos($lcView, 'lifecycle_inactive_winbacks') !== false
                 && strpos($lcView, 'test-lifecycle') !== false
                 ? $ok('admin test-send + toggles present')
-                : $bad('EmailerController/emailer view must expose the lifecycle test-send and both toggles');
+                : $bad('EmailerController/emailer view must expose the lifecycle test-send and every lifecycle toggle');
+        });
+        $add('smoke.lifecycle.retention_audiences', 'Smoke · Lifecycle', 'Trial-ending + inactive-member win-back audiences, once per member', static function () use ($root, $lcService, $lcSchema, $lcQueue, $lcHouse, $read, $ok, $bad): array {
+            $trialHtml = $read("$root/views/emails/trial_ending.php");
+            $trialText = $read("$root/views/emails/trial_ending.text.php");
+            $inactHtml = $read("$root/views/emails/winback_inactive.php");
+            $inactText = $read("$root/views/emails/winback_inactive.text.php");
+            $emailerCfg = $read("$root/app/Models/EmailerConfig.php");
+
+            $missing = [];
+            if (strpos($lcService, "transaction_ref LIKE 'TRIAL-%'") === false) $missing[] = 'trial-ending scan';
+            if (strpos($lcService, "'TRIAL-%']") === false) $missing[] = 'renewal reminders exclude trials';
+            if (strpos($lcService, 'function runInactiveWinbacks(') === false || strpos($lcService, 'last_seen_at <= DATE_SUB') === false || strpos($lcService, 'Subscription::activeWhere') === false) $missing[] = 'inactive-member scan';
+            if (strpos($lcService, 'function sendToUser(') === false) $missing[] = 'user-keyed sender';
+            if (strpos($lcQueue, 'function userEventAlreadySent') === false || strpos($lcQueue, 'function userEventRecord') === false) $missing[] = 'user-keyed dedupe in EmailQueue';
+            if (strpos($lcSchema, 'retention_email_log') === false) $missing[] = 'retention_email_log in schema';
+            if (strpos($lcHouse, 'Lifecycle::runTrialEndings') === false || strpos($lcHouse, 'Lifecycle::runInactiveWinbacks') === false) $missing[] = 'housekeeping wiring';
+            if (strpos($emailerCfg, 'lifecycle_trial_endings') === false || strpos($emailerCfg, 'lifecycle_inactive_winbacks') === false) $missing[] = 'EmailerConfig flags';
+            if (strpos($trialHtml, '{{unsubscribe-url}}') === false || strpos($inactHtml, '{{unsubscribe-url}}') === false) $missing[] = 'marketing unsubscribe footer in both templates';
+            if (trim($trialText) === '' || trim($inactText) === '') $missing[] = 'plain-text twins';
+
+            return $missing === []
+                ? $ok('trial + inactive audiences scan, dedupe once per member, templates carry the unsubscribe footer')
+                : $bad('retention audiences incomplete: ' . implode(', ', $missing));
         });
 
         // ------------------------------------------------- PPV / one-off charges

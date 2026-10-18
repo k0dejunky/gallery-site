@@ -120,11 +120,15 @@ class Housekeeping
             }
         }
 
-        // Renewal reminders (7 days out) and win-backs (7 days lapsed),
-        // gated by the emailer's lifecycle toggles.
-        $emailerCfg              = EmailerConfig::all();
+        // Renewal reminders (7 days out), win-backs (7 days lapsed), trial
+        // endings (3 days out) and inactive-member win-backs (30 days unseen),
+        // gated by the emailer's lifecycle toggles. Each audience is deduped
+        // per subscription/member, so the 15-minute cadence cannot repeat one.
+        $emailerCfg               = EmailerConfig::all();
         $out['renewal_reminders'] = !empty($emailerCfg['lifecycle_renewal_reminders']) ? Lifecycle::runRenewalReminders(7) : 0;
         $out['winbacks']          = !empty($emailerCfg['lifecycle_winbacks']) ? Lifecycle::runWinbacks(7) : 0;
+        $out['trial_endings']     = !empty($emailerCfg['lifecycle_trial_endings']) ? Lifecycle::runTrialEndings(3) : 0;
+        $out['inactive_winbacks'] = !empty($emailerCfg['lifecycle_inactive_winbacks']) ? Lifecycle::runInactiveWinbacks(30) : 0;
 
         // Staging directories abandoned mid-upload for more than 72 hours.
         $base = $root . '/storage/uploads/pending';

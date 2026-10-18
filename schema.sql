@@ -568,6 +568,18 @@ CREATE TABLE IF NOT EXISTS subscription_email_log (
     CONSTRAINT fk_sel_queue FOREIGN KEY (email_queue_id) REFERENCES email_queue(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE IF NOT EXISTS retention_email_log (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    event_key VARCHAR(40) NOT NULL,
+    email_queue_id BIGINT UNSIGNED NULL,
+    sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_rel_user_event (user_id, event_key),
+    KEY idx_rel_event (event_key),
+    CONSTRAINT fk_rel_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_rel_queue FOREIGN KEY (email_queue_id) REFERENCES email_queue(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, level, active) VALUES
     ('Silver', 'silver', 5.00, 'monthly', 'Full access for one month.', 1, 1, 1),
     ('Gold', 'gold', 10.00, 'monthly', 'Full access for one month.', 2, 2, 1),

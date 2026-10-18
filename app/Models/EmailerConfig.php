@@ -53,6 +53,8 @@ class EmailerConfig
             'enabled'                     => false,
             'lifecycle_renewal_reminders' => true,
             'lifecycle_winbacks'          => true,
+            'lifecycle_trial_endings'     => true,
+            'lifecycle_inactive_winbacks' => true,
             // Per member, per capped kind, per day. 1 means "one email when
             // today's new gallery is posted" and one live notice a day.
             'notification_daily_cap'      => 1,
@@ -82,6 +84,8 @@ class EmailerConfig
         $d['enabled']                     = !empty($data['enabled']);
         $d['lifecycle_renewal_reminders'] = !array_key_exists('lifecycle_renewal_reminders', $data) ? true : !empty($data['lifecycle_renewal_reminders']);
         $d['lifecycle_winbacks']          = !array_key_exists('lifecycle_winbacks', $data) ? true : !empty($data['lifecycle_winbacks']);
+        $d['lifecycle_trial_endings']     = !array_key_exists('lifecycle_trial_endings', $data) ? true : !empty($data['lifecycle_trial_endings']);
+        $d['lifecycle_inactive_winbacks'] = !array_key_exists('lifecycle_inactive_winbacks', $data) ? true : !empty($data['lifecycle_inactive_winbacks']);
         $d['notification_daily_cap']      = !array_key_exists('notification_daily_cap', $data)
             ? $d['notification_daily_cap']
             : max(0, min(10, (int) $data['notification_daily_cap']));
@@ -106,6 +110,8 @@ class EmailerConfig
             'enabled'                     => !empty($in['enabled']),
             'lifecycle_renewal_reminders' => !empty($in['lifecycle_renewal_reminders']),
             'lifecycle_winbacks'          => !empty($in['lifecycle_winbacks']),
+            'lifecycle_trial_endings'     => !empty($in['lifecycle_trial_endings']),
+            'lifecycle_inactive_winbacks' => !empty($in['lifecycle_inactive_winbacks']),
             'notification_daily_cap'      => max(0, min(10, (int) ($in['notification_daily_cap'] ?? 1))),
         ]);
     }

@@ -47,6 +47,8 @@ class EmailerController extends MembershipAdminController
             'enabled'                     => $this->request->post('enabled') !== null,
             'lifecycle_renewal_reminders' => $this->request->post('lifecycle_renewal_reminders') !== null,
             'lifecycle_winbacks'          => $this->request->post('lifecycle_winbacks') !== null,
+            'lifecycle_trial_endings'     => $this->request->post('lifecycle_trial_endings') !== null,
+            'lifecycle_inactive_winbacks' => $this->request->post('lifecycle_inactive_winbacks') !== null,
             'notification_daily_cap'      => (int) $this->request->post('notification_daily_cap', 1),
         ]);
 

@@ -341,7 +341,37 @@ class EmailQueue
     }
 
     /**
+     * Whether a user-keyed retention email was already queued (the member may
+     * have no subscription, so this log is keyed by user_id + event_key).
+     */
+    public static function userEventAlreadySent(int $userId, string $eventKey): bool
+    {
+        $row = Database::run(
+            'SELECT id FROM retention_email_log WHERE user_id = ? AND event_key = ? LIMIT 1',
+            [$userId, $eventKey]
+        )->fetch();
+
+        return $row !== false;
+    }
+
+    /**
+     * Record that a user-keyed retention email was queued.
+     */
+    public static function userEventRecord(int $userId, string $eventKey, int $emailQueueId): bool
+    {
+        $stmt = Database::run(
+            'INSERT INTO retention_email_log (user_id, event_key, email_queue_id)
+             VALUES (?, ?, ?)',
+            [$userId, $eventKey, $emailQueueId]
+        );
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
      * Per-event counts of lifecycle emails sent, for the admin emailer page.
+     * Merges the subscription-keyed log with the user-keyed retention log
+     * (their event keys do not overlap).
      *
      * @return array<string,int>
      */
@@ -352,6 +382,12 @@ class EmailQueue
             'SELECT event_key, COUNT(*) AS c FROM subscription_email_log GROUP BY event_key'
         )->fetchAll() as $row) {
             $stats[(string) $row['event_key']] = (int) $row['c'];
+        }
+        foreach (Database::run(
+            'SELECT event_key, COUNT(*) AS c FROM retention_email_log GROUP BY event_key'
+        )->fetchAll() as $row) {
+            $key = (string) $row['event_key'];
+            $stats[$key] = ($stats[$key] ?? 0) + (int) $row['c'];
         }
 
         return $stats;

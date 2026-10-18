@@ -111,8 +111,15 @@ $cap          = (int) ($config['notification_daily_cap'] ?? 1);
         <p>
             <label class="chip"><input type="checkbox" name="lifecycle_winbacks" value="1"<?= !empty($config['lifecycle_winbacks']) ? ' checked' : '' ?>> Send a win-back email to lapsed members who haven't opted out (7 days after expiry/cancel)</label>
         </p>
+        <p>
+            <label class="chip"><input type="checkbox" name="lifecycle_trial_endings" value="1"<?= !empty($config['lifecycle_trial_endings']) ? ' checked' : '' ?>> Nudge free trials 3 days before they end (upgrade prompt; opted-out members skipped)</label>
+        </p>
+        <p>
+            <label class="chip"><input type="checkbox" name="lifecycle_inactive_winbacks" value="1"<?= !empty($config['lifecycle_inactive_winbacks']) ? ' checked' : '' ?>> Win-back members with no membership who haven't visited for 30 days</label>
+        </p>
         <p class="muted" style="font-size:.8rem;">
-            Each lifecycle email is sent at most once per subscription, keyed in <code>subscription_email_log</code>.
+            Each lifecycle email is sent at most once per subscription, keyed in <code>subscription_email_log</code>;
+            member-level nudges (trial ending, inactive win-back) are once per member in <code>retention_email_log</code>.
         </p>
 
         <p>
