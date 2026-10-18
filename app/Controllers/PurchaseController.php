@@ -26,8 +26,10 @@ class PurchaseController extends Controller
     {
         Auth::requireLogin();
 
-        if (!Auth::recentlyAuthenticated()) {
-            $this->json(['error' => 'Please confirm your password first.'], 428);
+        // Form flow: browse-then-return routes through the password-confirm
+        // page (a bare JSON 428 used to render raw JSON in the browser when a
+        // member with a stale session submitted the unlock-code form).
+        if (!$this->requireStepUp($this->request->header('HTTP_REFERER') ?: url('/galleries/' . $id))) {
             return;
         }
 
