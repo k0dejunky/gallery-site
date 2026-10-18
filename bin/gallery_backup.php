@@ -138,7 +138,7 @@ if ($duRc === 0 && isset($duOut[0])) {
     $mediaBytes = (int) trim((string) preg_split('/\s+/', (string) $duOut[0])[0] ?? '0') * 1024;
 }
 $freeBytes = @disk_free_space($root);
-$requiredBytes = $mediaBytes * 1.05 + 5 * 1073741824;
+$requiredBytes = $mediaBytes * 1.05 + 8 * 1073741824;
 if ($freeBytes !== false && $freeBytes < $requiredBytes) {
     @file_put_contents($backupDir . '/.failed', date('Y-m-d H:i:s') . " backup aborted (disk pre-flight: need ~"
         . round($requiredBytes / 1073741824, 1) . " GB free, have " . round($freeBytes / 1073741824, 1) . " GB)\n", FILE_APPEND);
@@ -150,11 +150,12 @@ if ($freeBytes !== false && $freeBytes < $requiredBytes) {
 
 $script = <<<BASH
 #!/bin/bash
-set -e
+set -eo pipefail
 cd {$root}
-trap 'rm -f {$backupDir}/.running {$target}.part-* {$sqlt}; if [ ! -f {$backupDir}/.last_ok ]; then echo "\$(date "+%F %T") backup aborted (dump/tar/verify failed)" >> {$backupDir}/.failed; fi' EXIT
-rm -f {$backupDir}/.failed {$backupDir}/.last_ok
 DUMP=\$(mktemp /tmp/gallery-dump-XXXXXX.sql)
+VERR=\$(mktemp /tmp/gallery-verify-XXXXXX.log)
+trap 'rm -f {$backupDir}/.running {$target}.part-* {$sqlt} \$VERR; if [ ! -f {$backupDir}/.last_ok ]; then echo "\$(date "+%F %T") backup aborted (dump/tar/verify failed)" >> {$backupDir}/.failed; fi' EXIT
+rm -f {$backupDir}/.failed {$backupDir}/.last_ok
 # DB password goes via MYSQL_PWD (not -p) so it never shows in ps.
 MYSQL_PWD='{$dbPass}' {$mysqldump} > "\$DUMP"
 TARGET={$target}
@@ -163,12 +164,18 @@ SQLT={$sqlt}
 # separately in the secrets vault so a leaked archive cannot expose them.
 # Stream the tar straight into 4 GB parts — no single intermediate tar, so the
 # backup never needs 2x the media size on disk (videos don't compress).
+# pipefail is on: if tar dies mid-stream (disk full, read error) the pipeline
+# fails here instead of split quietly writing a truncated stream.
 tar czf - --warning=no-file-changed --ignore-failed-read -C {$root} storage/uploads storage/*.json storage/cron | split -b 4G -d - "\$TARGET.part-"
 PARTS=\$(ls -1 "\$TARGET".part-* | wc -l)
 test "\$PARTS" -ge 1 || { echo "\$(date "+%F %T") tar/split failed for \$TARGET" >> {$backupDir}/.failed; exit 1; }
-# Each part is a chunk of one gzip stream: zcat concatenates + decompresses
-# them together to verify the whole archive reads back cleanly.
-zcat "\$TARGET".part-* > /dev/null || { echo "\$(date "+%F %T") media archive verification failed: \$TARGET" >> {$backupDir}/.failed; exit 1; }
+# Each part is a chunk of one gzip stream. The parts must be fed as ONE
+# contiguous stream (cat | zcat): "zcat part-*" reads every part as its own
+# file and fails with "unexpected end of file" whenever a gzip member is split
+# across a part boundary — which is always the case for a multi-part archive,
+# so that form can never verify one. Its stderr is kept in the failure note so
+# a real truncation says exactly why.
+cat "\$TARGET".part-* | zcat > /dev/null 2> "\$VERR" || { echo "\$(date "+%F %T") media archive verification failed: \$TARGET — \$(tail -c 300 "\$VERR" | tr '\n' ' ')" >> {$backupDir}/.failed; exit 1; }
 gzip -c "\$DUMP" > "\$SQLT"
 rm -f "\$DUMP"
 gzip -t "\$SQLT" || { echo "\$(date "+%F %T") db dump verification failed: \$SQLT" >> {$backupDir}/.failed; exit 1; }

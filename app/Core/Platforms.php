@@ -771,9 +771,12 @@ amethyst2213.com',
             ],
             'oauth'       => null,
             'instances'   => false,
-            'enabled'     => true,
+            // Retired 2026-10: the Weasyl API (www.weasyl.com/api) is offline
+            // (404s while the site itself is up). The client + config stay so
+            // posting history still renders; the registry gate stops new posts.
+            'enabled'     => false,
             'content_gate' => 'furry',
-            'requires'    => 'Weasyl account + API key. Explicit rating allowed.',
+            'requires'    => 'Weasyl account + API key. Explicit rating allowed. (Retired — the Weasyl API is offline.)',
         ],
 
         'sofurry' => [
@@ -887,8 +890,8 @@ amethyst2213.com',
 
     /**
      * Resolve any platform identifier (canonical key or a stored dbKey) to a
-     * canonical key. Legacy 'twitter' maps to 'x'; 'reddit' resolves but stays
-     * disabled. Returns '' when the platform is unknown.
+     * canonical key. Legacy 'twitter' maps to 'x'. Returns '' when the
+     * platform is unknown.
      */
     public static function canonicalize(string $key): string
     {

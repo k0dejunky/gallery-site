@@ -26,6 +26,11 @@ class Router
     {
         $this->request = $request;
 
+        // RFC 9110: HEAD is GET without a body. Normalise it for route
+        // matching so HEAD /files/x answers with GET's headers instead of
+        // 405/404 (the SAPI discards the body itself).
+        $requestMethod = $request->method() === 'HEAD' ? 'GET' : $request->method();
+
         // Biller postback endpoints are server-to-server calls with no
         // session and no CSRF token; they verify authenticity with their own
         // shared-secret digests instead. The live-stream start/stop endpoints
@@ -62,7 +67,7 @@ class Router
 
             $isLiteral = strpos($path, '{') === false;
 
-            if ($method === $request->method()) {
+            if ($method === $requestMethod) {
                 if ($perm !== null && !Auth::can($perm)) {
                     $this->denyAccess();
                     return;

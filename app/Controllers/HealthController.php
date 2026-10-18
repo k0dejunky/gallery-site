@@ -31,6 +31,15 @@ class HealthController extends Controller
         $lastOk  = is_file($backupDir . '/.last_ok') ? @filemtime($backupDir . '/.last_ok') : 0;
         $running = is_file($backupDir . '/.running');
 
+        // The full media archive (multi-part tar.gz) only runs monthly, so its
+        // age is tracked separately from .last_ok: a run that failed
+        // verification writes .failed while .last_ok stays absent/stale.
+        $lastArchive = 0;
+        foreach (glob($backupDir . '/gallery-backup-*.tar.gz.part-00') ?: [] as $part) {
+            $lastArchive = max($lastArchive, (int) @filemtime($part));
+        }
+        $lastBackupFailure = is_file($backupDir . '/.failed') ? @filemtime($backupDir . '/.failed') : 0;
+
         $redis = false;
         try {
             $redis = \App\Core\Cache::available();
@@ -131,6 +140,8 @@ class HealthController extends Controller
             'backup' => [
                 'running' => $running,
                 'last_ok_age_sec' => $lastOk > 0 ? time() - $lastOk : null,
+                'last_archive_age_sec' => $lastArchive > 0 ? time() - $lastArchive : null,
+                'last_failure_age_sec' => $lastBackupFailure > 0 ? time() - $lastBackupFailure : null,
             ],
             'housekeeping_age_sec' => $lastHousekeeping > 0 ? time() - $lastHousekeeping : null,
             'workers' => [

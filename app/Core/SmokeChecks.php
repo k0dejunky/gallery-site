@@ -174,6 +174,14 @@ class SmokeChecks
             return $duplicates === [] ? $ok('unique') : $bad('duplicate routes: ' . implode(', ', $duplicates));
         });
 
+        $add('smoke.routes.head_as_get', 'Smoke · Routes', 'HEAD requests match GET routes (RFC 9110)', static function () use ($root, $read, $ok, $bad): array {
+            $router = $read("$root/app/Core/Router.php");
+            return strpos($router, "\$request->method() === 'HEAD' ? 'GET'") !== false
+                && strpos($router, '$method === $requestMethod') !== false
+                ? $ok('HEAD normalised to GET before route matching')
+                : $bad('Router must normalise HEAD to GET so HEAD /files/x answers 200 with GET\'s headers, not 405/404');
+        });
+
         // One check per route: controller file exists AND action method exists.
         foreach ($routes as $i => $route) {
             $key = strtoupper((string) $route[0]) . ' ' . $routeRe((string) $route[1]);
@@ -2007,6 +2015,65 @@ class SmokeChecks
             return strpos($wc, "mb_substr(\$body, 0, 397)") !== false && strpos($wc, 'Weasyl submit failed (HTTP') !== false
                 ? $ok('body capped')
                 : $bad('WeasylClient must cap the upstream API error body it embeds in the error string, or markFailed will exceed VARCHAR(500)');
+        });
+        $add('smoke.ap.weasyl_retired', 'Smoke · Auto Poster', 'Weasyl retired: registry gate off, client kept for history', static function () use ($root, $read, $ok, $bad): array {
+            $platforms = $read("$root/app/Core/Platforms.php");
+            if (preg_match("/'weasyl'\s*=>\s*\[(.*?)\n        \]/s", $platforms, $m) !== 1) {
+                return $bad('weasyl entry missing from the platform registry');
+            }
+            if (strpos($m[1], "'enabled'     => false") === false) {
+                return $bad("the weasyl registry entry must be 'enabled' => false — the Weasyl API (www.weasyl.com/api) is offline");
+            }
+            $client = $read("$root/app/Models/WeasylClient.php");
+            return strpos($client, 'class WeasylClient') !== false
+                ? $ok('weasyl disabled; client + config kept so posting history still renders')
+                : $bad('WeasylClient must stay in the tree so already-recorded posts still render');
+        });
+        $add('smoke.ap.circuit_breaker', 'Smoke · Auto Poster', 'Channels auto-pause after a failure streak (skip while paused, resume on retry)', static function () use ($root, $read, $ok, $bad): array {
+            $queue = $read("$root/app/Models/AutoPostQueue.php");
+            $cfg   = $read("$root/app/Models/AutoPosterConfig.php");
+
+            $missing = [];
+            if (strpos($queue, 'FAILURE_STREAK_LIMIT = 10') === false) $missing[] = 'FAILURE_STREAK_LIMIT';
+            if (strpos($queue, 'function failureStreak(') === false) $missing[] = 'failureStreak()';
+            if (strpos($queue, "AutoPosterConfig::platformPause(\$platform)") === false) $missing[] = 'post() pause check';
+            if (strpos($queue, "AutoPosterConfig::pausePlatform(\$platform, \$streak, \$error)") === false) $missing[] = 'failure-streak pause trigger';
+            if (strpos($queue, "AutoPosterConfig::resumePlatform((string) \$row['platform'])") === false) $missing[] = 'requeue() resume';
+            if (strpos($queue, "AutoPosterConfig::platformPause(\$pf) !== null") === false) $missing[] = 'refill/idle pause skip';
+            if (strpos($cfg, 'function platformPause(') === false) $missing[] = 'platformPause()';
+            if (strpos($cfg, 'function pausePlatform(') === false) $missing[] = 'pausePlatform()';
+            if (strpos($cfg, 'function resumePlatform(') === false) $missing[] = 'resumePlatform()';
+            if (strpos($cfg, "self::resumePlatform(\$canonical)") === false) $missing[] = 'saveChannel() resume';
+
+            return $missing === []
+                ? $ok('pause on streak, skip while paused, resume on retry or credential save')
+                : $bad('circuit breaker incomplete: ' . implode(', ', $missing));
+        });
+        $add('smoke.backup.writer_hardened', 'Smoke · System', 'Full backup fails loudly on tar/verify errors and records why', static function () use ($root, $read, $ok, $bad): array {
+            $b = $read("$root/bin/gallery_backup.php");
+            $missing = [];
+            if (strpos($b, 'set -eo pipefail') === false) $missing[] = 'pipefail (a tar death must fail the pipeline, not leave truncated parts)';
+            if (strpos($b, 'cat "\$TARGET".part-* | zcat > /dev/null 2> "\$VERR"') === false) $missing[] = 'verification feeds the split parts as one stream (cat | zcat) with stderr captured into .failed';
+            return $missing === []
+                ? $ok('pipefail + split parts stitched for verification + verification stderr recorded in the failure note')
+                : $bad('gallery_backup.php missing: ' . implode(', ', $missing));
+        });
+        $add('smoke.health.backup_detail', 'Smoke · API health', 'Health reports archive + failure ages for the (monthly) media backup', static function () use ($root, $read, $ok, $bad): array {
+            $h = $read("$root/app/Controllers/HealthController.php");
+            return strpos($h, "'last_archive_age_sec'") !== false
+                && strpos($h, "'last_failure_age_sec'") !== false
+                && strpos($h, 'gallery-backup-*.tar.gz.part-00') !== false
+                ? $ok('backup payload: running + last_ok + archive + failure ages')
+                : $bad('HealthController backup block must surface last_archive_age_sec and last_failure_age_sec (a failed monthly run writes .failed while .last_ok stays absent)');
+        });
+        $add('smoke.consent.bottom_nav', 'Smoke · UI', 'Cookie banner clears the member bottom navigation on phones', static function () use ($root, $read, $ok, $bad): array {
+            $css    = $read("$root/public/assets/css/user.css");
+            $banner = $read("$root/views/partials/consent_banner.php");
+
+            return strpos($css, 'body:has(.media-bottom-nav) #consent-banner') !== false
+                && strpos($banner, 'style="position:fixed') === false
+                ? $ok('banner styling in user.css, offset above the bottom nav')
+                : $bad('the consent banner must move its inline styles into user.css and sit above .media-bottom-nav on phones (it otherwise covers the nav)');
         });
         $add('smoke.ap.worker_isolates_rows', 'Smoke · Auto Poster', 'Worker isolates per-row failures so one bad row cannot abort the batch', static function () use ($root, $read, $ok, $bad): array {
             $w = $read("$root/bin/autopost_worker.php");

@@ -110,6 +110,10 @@ class AutoPosterConfig
         $current = self::channel($canonical);
         $merged  = array_merge($current, $values);
         self::put(Platforms::dbKey($canonical), $merged);
+
+        // Saving a channel's credentials is the admin's fix for an auto-pause
+        // (dead API / revoked token) — clear it so the queue flows again.
+        self::resumePlatform($canonical);
     }
 
     /**
@@ -164,6 +168,69 @@ class AutoPosterConfig
         }
 
         self::put('enabled_channels', $clean);
+    }
+
+    /**
+     * The auto-pause record for a channel ({paused_at, streak, reason}) or
+     * null when the channel is not paused. Written by the queue's circuit
+     * breaker after a run of consecutive hard failures, cleared when the admin
+     * saves credentials or retries a failed post.
+     */
+    public static function platformPause(string $platform): ?array
+    {
+        $canonical = Platforms::canonicalize($platform);
+        if ($canonical === '') {
+            return null;
+        }
+
+        $all    = self::all();
+        $pauses = is_array($all['platform_pauses'] ?? null) ? $all['platform_pauses'] : [];
+        $pause  = $pauses[$canonical] ?? null;
+
+        return is_array($pause) ? $pause : null;
+    }
+
+    /**
+     * Auto-pause a channel: too many consecutive failures means the connection
+     * itself is broken (dead API, revoked credentials), so queued rows are
+     * skipped instead of spraying failures until an admin fixes it.
+     */
+    public static function pausePlatform(string $platform, int $streak, string $reason = ''): void
+    {
+        $canonical = Platforms::canonicalize($platform);
+        if ($canonical === '') {
+            return;
+        }
+
+        $all    = self::all();
+        $pauses = is_array($all['platform_pauses'] ?? null) ? $all['platform_pauses'] : [];
+        $pauses[$canonical] = [
+            'paused_at' => gmdate('c'),
+            'streak'    => $streak,
+            'reason'    => mb_substr($reason, 0, 300),
+        ];
+
+        self::put('platform_pauses', $pauses);
+    }
+
+    /**
+     * Clear a channel's auto-pause so posting can resume.
+     */
+    public static function resumePlatform(string $platform): void
+    {
+        $canonical = Platforms::canonicalize($platform);
+        if ($canonical === '') {
+            return;
+        }
+
+        $all    = self::all();
+        $pauses = is_array($all['platform_pauses'] ?? null) ? $all['platform_pauses'] : [];
+        if (!isset($pauses[$canonical])) {
+            return;
+        }
+
+        unset($pauses[$canonical]);
+        self::put('platform_pauses', $pauses);
     }
 
     /**

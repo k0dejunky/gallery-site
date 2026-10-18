@@ -151,6 +151,13 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
             <?php endif; ?>
         </div>
     </div>
+    <?php $apPause = is_array($config['platform_pauses'] ?? null) ? ($config['platform_pauses'][$platform] ?? null) : null; ?>
+    <?php if (is_array($apPause)): ?>
+        <p class="ap-pill-failed" style="display:inline-block;margin:.25rem 0 .75rem;padding:.4rem .6rem;border-radius:6px;font-size:.82rem;">
+            Auto-paused after <?= (int) ($apPause['streak'] ?? 0) ?> consecutive failures<?= !empty($apPause['reason']) ? ' — ' . e((string) $apPause['reason']) : '' ?>.
+            Fix the connection, then Retry a failed post below to resume. Saving this channel&rsquo;s credentials also resumes it.
+        </p>
+    <?php endif; ?>
     <div id="ap-queue-body">
     <?php if (empty($queue)): ?>
         <p class="muted">The queue is empty — add a recommended post above.</p>

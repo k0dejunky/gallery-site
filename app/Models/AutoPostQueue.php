@@ -32,6 +32,13 @@ class AutoPostQueue
     /** Minutes ahead of "now" a newly queued post is scheduled by default. */
     public const DEFAULT_SCHEDULE_MINUTES = 60;
 
+    /**
+     * Consecutive hard failures on one channel that auto-pause it (circuit
+     * breaker). A run this long means the connection itself is broken — a dead
+     * API or revoked credentials — not that individual posts are bad.
+     */
+    public const FAILURE_STREAK_LIMIT = 10;
+
     /** Recent window (days) a gallery must have new uploads in to be offered. */
     public const RECENT_WINDOW_DAYS = 14;
 
@@ -864,10 +871,13 @@ class AutoPostQueue
             : Platforms::enabledKeys();
 
         // Only refill platforms that have nothing queued AND are actually able to
-        // post (an unauthorized platform's rows would just be marked skipped).
+        // post (an unauthorized platform's rows would just be marked skipped,
+        // and an auto-paused one would too).
         $idlePlatforms = array_values(array_filter(
             $platforms,
-            static fn (string $pf): bool => !self::hasQueued(Platforms::dbKey($pf)) && self::platformAuthorized($pf)
+            static fn (string $pf): bool => !self::hasQueued(Platforms::dbKey($pf))
+                && self::platformAuthorized($pf)
+                && AutoPosterConfig::platformPause($pf) === null
         ));
 
         if ($idlePlatforms === []) {
@@ -961,6 +971,12 @@ class AutoPostQueue
 
         foreach ($platforms as $pf) {
             if (!self::platformAuthorized($pf)) {
+                continue;
+            }
+
+            // Never refill a channel the circuit breaker paused: its rows would
+            // only be skipped, and a burst would drain the moment it resumed.
+            if (AutoPosterConfig::platformPause($pf) !== null) {
                 continue;
             }
 
@@ -1139,6 +1155,35 @@ class AutoPostQueue
     }
 
     /**
+     * How many of the channel's most recently finished rows failed in a row.
+     * Only the leading failures count: a posted/skipped/dismissed row breaks
+     * the streak. Feeds the circuit breaker in post().
+     */
+    public static function failureStreak(string $platform): int
+    {
+        $canonical = Platforms::canonicalize($platform);
+        $dbKey     = $canonical !== '' ? Platforms::dbKey($canonical) : $platform;
+
+        $rows = Database::run(
+            "SELECT status FROM auto_poster_queue
+             WHERE platform = ? AND status IN ('posted', 'failed', 'skipped', 'dismissed')
+             ORDER BY id DESC
+             LIMIT " . self::FAILURE_STREAK_LIMIT,
+            [$dbKey]
+        )->fetchAll();
+
+        $streak = 0;
+        foreach ($rows as $row) {
+            if ((string) $row['status'] !== 'failed') {
+                break;
+            }
+            $streak++;
+        }
+
+        return $streak;
+    }
+
+    /**
      * Most recent failed posts, newest first, joined to their gallery so the
      * admin can see what failed and retry it. Used on the dashboard and the
      * Auto Poster page.
@@ -1164,13 +1209,28 @@ class AutoPostQueue
     public static function requeue(int $id): bool
     {
         $row = Database::run(
+            'SELECT platform FROM auto_poster_queue WHERE id = ? AND status = ?',
+            [$id, 'failed']
+        )->fetch();
+
+        $updated = Database::run(
             'UPDATE auto_poster_queue
              SET status = ?, error = NULL, scheduled_at = NULL, posted_at = NULL
              WHERE id = ? AND status = ?',
             ['queued', $id, 'failed']
         );
 
-        return $row->rowCount() > 0;
+        if ($updated->rowCount() === 0) {
+            return false;
+        }
+
+        // Retrying a failed post is the admin's "it's fixed now" gesture for an
+        // auto-paused channel — clear the pause so posting resumes.
+        if ($row) {
+            AutoPosterConfig::resumePlatform((string) $row['platform']);
+        }
+
+        return true;
     }
 
     /**
@@ -1705,6 +1765,21 @@ class AutoPostQueue
 
         $platform = (string) $item['platform'];
 
+        // Circuit breaker: a channel that was auto-paused (or paused by the
+        // admin) resolves its queued rows as skipped instead of hammering a
+        // broken connection. Retrying any failed post — or saving the channel's
+        // credentials — resumes it.
+        $pause = AutoPosterConfig::platformPause($platform);
+        if ($pause !== null) {
+            $note = ucfirst($platform) . ' is paused after ' . (int) ($pause['streak'] ?? 0)
+                . ' consecutive failures (' . (string) ($pause['reason'] ?? 'connection broken') . ')'
+                . ' — skipped. Fix the connection, then Retry a failed post to resume.';
+            self::markSkipped((int) $item['id'], $note);
+            AutoPosterConfig::log($platform, '', 'skipped', $note);
+
+            return ['ok' => false, 'skipped' => true, 'error' => $note];
+        }
+
         // Only send to platforms with an authorized API connection. An
         // unauthorized platform is skipped (recorded, never attempted) rather
         // than failed, so the autopost cron stays healthy.
@@ -1848,6 +1923,8 @@ class AutoPostQueue
             $result = ['ok' => false, 'error' => $e->getMessage() . ' (thrown by the platform client)'];
         }
 
+        $target = (string) ($meta['chat_id'] ?? $meta['community'] ?? $meta['instance'] ?? $meta['relay'] ?? '');
+
         if ($result['ok']) {
             $url = (string) ($result['url'] ?? '');
             self::markPosted((int) $item['id'], $url);
@@ -1861,11 +1938,25 @@ class AutoPostQueue
                 WallPost::createForGallery(0, $galleryId, trim((string) $item['text']));
             }
         } else {
-            self::markFailed((int) $item['id'], (string) ($result['error'] ?? 'Unknown error'));
-            $result['error'] = ($result['error'] ?? 'Unknown error') . ' (logged as failed)';
-        }
+            $error = (string) ($result['error'] ?? 'Unknown error');
+            self::markFailed((int) $item['id'], $error);
+            $result['error'] = $error . ' (logged as failed)';
 
-        $target = (string) ($meta['chat_id'] ?? $meta['community'] ?? $meta['instance'] ?? $meta['relay'] ?? '');
+            // Circuit breaker: after a run of consecutive hard failures the
+            // channel itself is broken (dead API, revoked credentials). Pause
+            // it so the rest of the queue is skipped instead of spraying
+            // failures, and tell the admin how to bring it back.
+            $streak = self::failureStreak($platform);
+            if ($streak >= self::FAILURE_STREAK_LIMIT) {
+                AutoPosterConfig::pausePlatform($platform, $streak, $error);
+                AutoPosterConfig::log(
+                    $platform,
+                    $target,
+                    'paused',
+                    "Auto-paused after {$streak} consecutive failures. Fix the channel, then Retry a failed post to resume. Last error: {$error}"
+                );
+            }
+        }
 
         AutoPosterConfig::log(
             $platform,

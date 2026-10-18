@@ -75,11 +75,15 @@ img.is-loaded{animation:none;opacity:1;transition:opacity .2s ease}
 .table-scroll{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
 .settings-back{margin-bottom:var(--spacing-lg)}.settings-card{margin-bottom:var(--spacing-lg)}.settings-card h2{margin-top:0;text-align:left}.settings-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--spacing-sm) var(--spacing-md);margin-bottom:var(--spacing-md)}.settings-fields label{font-weight:700;color:var(--purple-800)}.settings-fields input{display:block;width:100%;box-sizing:border-box;margin-top:.3rem}@media(max-width:640px){.settings-fields{grid-template-columns:1fr}}
 @media (prefers-reduced-motion: reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+#consent-banner{position:fixed;left:0;right:0;bottom:0;z-index:99996;background:#fff;border-top:2px solid var(--pink-300);padding:.65rem 1rem;display:flex;gap:.75rem 1rem;align-items:center;justify-content:center;flex-wrap:wrap;font-size:var(--font-size-sm);color:var(--purple-900);box-shadow:0 -6px 24px rgba(30,16,51,.18)}
 @media(max-width:768px){
   body:has(.home-layout){padding-bottom:5rem}
   .media-bottom-nav{position:fixed;display:flex;left:0;right:0;bottom:0;z-index:1000;justify-content:space-around;gap:.25rem;padding:.5rem;background:var(--sidebar-bg);border-top:1px solid var(--sidebar-border);box-shadow:0 -2px 12px rgba(0,0,0,.12)}
   .media-bottom-nav a{flex:1;padding:.45rem .2rem;text-align:center;font-size:var(--font-size-xs);color:var(--sidebar-link-color);text-decoration:none;border-radius:var(--border-radius)}
   .media-bottom-nav a:hover,.media-bottom-nav a:focus{background:var(--sidebar-link-hover)}
+  /* Keep the cookie banner clear of the member bottom navigation instead of
+     covering it. The nav is ~3rem tall (padding + link padding + xs text). */
+  body:has(.media-bottom-nav) #consent-banner{bottom:calc(3rem + env(safe-area-inset-bottom,0px))}
   .table-scroll table{min-width:38rem}
 }
 
