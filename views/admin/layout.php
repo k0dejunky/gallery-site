@@ -43,6 +43,7 @@ $navGroups = [
             ['key' => 'nav-galleries', 'label' => 'Gallery Management', 'href' => '/admin/galleries', 'icon' => 'image'],
             ['key' => 'nav-categories', 'label' => 'Categories', 'href' => '/admin/categories', 'icon' => 'tag'],
             ['key' => 'nav-category-suggestions', 'label' => 'AI Suggestions', 'href' => '/admin/category-suggestions', 'icon' => 'sparkle'],
+            ['key' => 'nav-description-suggestions', 'label' => 'AI Descriptions', 'href' => '/admin/description-suggestions', 'icon' => 'sparkle'],
             ['key' => 'nav-video-projects', 'label' => 'Video Projects', 'href' => '/admin/video-projects', 'icon' => 'film'],
             ['key' => 'nav-profile', 'label' => 'Creator Profile', 'href' => '/admin/profile', 'icon' => 'user'],
             ['key' => 'nav-theme', 'label' => 'Theme', 'href' => '/admin/theme', 'icon' => 'palette'],

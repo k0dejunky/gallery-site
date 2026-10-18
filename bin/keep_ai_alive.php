@@ -98,23 +98,33 @@ if (!$basePresent) {
 }
 
 // --- 3. Is the runner wedged? A tiny real generation must complete. ----------
-// The category worker holds a vision request on the single runner slot for
-// minutes per gallery; while it works, both probes below just queue behind it
-// and time out. That is BUSY, not wedged - restarting (or warning) here would
-// be noise at best and would kill every analysis mid-flight. Skip the probes
-// entirely while the worker owns the lock.
-$catLock = dirname(__DIR__) . '/storage/logs/categorizer.lock';
-$fh      = is_file($catLock) ? @fopen($catLock, 'c') : false;
-$busy    = false;
-if ($fh !== false) {
-    $busy = !flock($fh, LOCK_EX | LOCK_NB);
-    if (!$busy) {
+// The category and description workers hold a vision request on the single
+// runner slot for minutes per gallery; while either works, both probes below
+// just queue behind it and time out. That is BUSY, not wedged - restarting
+// (or warning) here would be noise at best and would kill every analysis
+// mid-flight. Skip the probes entirely while a worker owns its lock.
+$workerLocks = [
+    'categorizer' => dirname(__DIR__) . '/storage/logs/categorizer.lock',
+    'describer'   => dirname(__DIR__) . '/storage/logs/describer.lock',
+];
+$busyName = '';
+foreach ($workerLocks as $workerName => $workerLock) {
+    $fh = is_file($workerLock) ? @fopen($workerLock, 'c') : false;
+    if ($fh === false) {
+        continue;
+    }
+    $held = !flock($fh, LOCK_EX | LOCK_NB);
+    if (!$held) {
         flock($fh, LOCK_UN);
     }
     fclose($fh);
+    if ($held) {
+        $busyName = $workerName;
+        break;
+    }
 }
-if ($busy) {
-    $log('categorizer worker busy; skipping runner probes this tick');
+if ($busyName !== '') {
+    $log($busyName . ' worker busy; skipping runner probes this tick');
     exit(0);
 }
 

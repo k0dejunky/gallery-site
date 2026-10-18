@@ -237,6 +237,10 @@ class MediaUploader
         // off or a job is already queued/running).
         \App\Models\CategorySuggestion::enqueue($galleryId);
 
+        // Same hook for a description proposal - only when the gallery has
+        // none yet (driven by bin/describe_worker.php; never overwrites copy).
+        \App\Models\DescriptionSuggestion::enqueueIfEmpty($galleryId);
+
         return $photoId;
     }
 }

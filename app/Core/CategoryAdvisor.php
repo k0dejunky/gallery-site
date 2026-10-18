@@ -244,7 +244,8 @@ class CategoryAdvisor
 
     /* ---------------- drivers ---------------- */
 
-    private static function callOllama(string $prompt, array $images): string
+    /** Public: DescriptionAdvisor shares the same driver plumbing. */
+    public static function callOllama(string $prompt, array $images): string
     {
         $model = (string) env_value('CATEGORIZER_MODEL', 'qwen2.5vl:3b');
         $url   = rtrim((string) env_value('OLLAMA_URL', 'http://127.0.0.1:11434'), '/') . '/api/generate';
@@ -281,7 +282,8 @@ class CategoryAdvisor
         return $text;
     }
 
-    private static function callApi(string $prompt, array $images): string
+    /** Public: DescriptionAdvisor shares the same driver plumbing. */
+    public static function callApi(string $prompt, array $images): string
     {
         $url   = rtrim((string) env_value('CATEGORIZER_API_URL'), '/');
         $key   = (string) env_value('CATEGORIZER_API_KEY');
@@ -335,17 +337,17 @@ class CategoryAdvisor
     /* ---------------- media sampling ---------------- */
 
     /**
-     * Up to MAX_IMAGES base64 JPEGs: the cover's thumbnail (or a frame from
-     * a video's sample clip) plus thumbs of later files. Missing variants are
-     * skipped - a text-only analysis still works.
+     * Up to $max base64 JPEGs: the cover's thumbnail (or a frame from a
+     * video's sample clip) plus thumbs of later files. Missing variants are
+     * skipped - a text-only analysis still works. Shared with DescriptionAdvisor.
      */
-    private static function sampleImages(array $gallery): array
+    public static function sampleImages(array $gallery, int $max = self::MAX_IMAGES): array
     {
         $uploads = rtrim((string) config('app.uploads.dir'), '/');
         $photos  = Gallery::photos((int) $gallery['id']);
 
         $images = [];
-        foreach (array_slice($photos, 0, self::MAX_IMAGES) as $photo) {
+        foreach (array_slice($photos, 0, max(1, $max)) as $photo) {
             $filename = (string) $photo['filename'];
 
             // Prefer the generated thumb variant (400x300) - small payload.

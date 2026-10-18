@@ -1071,6 +1071,35 @@ CREATE TABLE IF NOT EXISTS gallery_category_suggestions (
     FOREIGN KEY (decided_by)  REFERENCES users(id)      ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- AI gallery descriptions: the same job/proposal shape as categories, but
+-- one text per gallery; accept (optionally edited) writes galleries.description.
+CREATE TABLE IF NOT EXISTS gallery_description_jobs (
+    gallery_id  INT UNSIGNED PRIMARY KEY,
+    status      VARCHAR(12) NOT NULL DEFAULT 'queued',
+    engine      VARCHAR(16) NOT NULL DEFAULT '',
+    error       TEXT NULL,
+    attempts    TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_desc_jobs_status (status, updated_at),
+    FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS gallery_description_suggestions (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    gallery_id  INT UNSIGNED NOT NULL,
+    description TEXT NOT NULL,
+    status      VARCHAR(12)  NOT NULL DEFAULT 'pending',
+    engine      VARCHAR(16)  NOT NULL DEFAULT '',
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    decided_at  DATETIME NULL,
+    decided_by  INT UNSIGNED NULL,
+    INDEX idx_desc_suggestions_status (status),
+    INDEX idx_desc_suggestions_gallery (gallery_id, status),
+    FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE,
+    FOREIGN KEY (decided_by) REFERENCES users(id)      ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- Chat questionnaires: structured multi-question forms sent to all active registered users.

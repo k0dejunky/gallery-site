@@ -126,6 +126,47 @@
     </form>
 <?php endif; ?>
 <?php endif; ?>
+
+<?php // AI description suggestion: staged by bin/describe_worker.php. Accept
+// writes galleries.description (optionally after editing); dismiss only
+// retires the proposal. Nothing here is ever applied automatically. ?>
+<?php if (!empty($descriptionSuggestion) || in_array(($descriptionJob['status'] ?? ''), ['error', 'queued', 'running'], true)): ?>
+<h2 style="margin-top:1.5rem;">AI Description</h2>
+<?php if (($descriptionJob['status'] ?? '') === 'error'): ?>
+    <p class="muted" style="color:var(--red-600, #b91c1c);">
+        Last description attempt failed: <?= e($descriptionJob['error'] ?? 'unknown error') ?>
+        <form class="inline" method="post" action="<?= url('/admin/description-suggestions/reanalyze') ?>" style="display:inline;margin-left:.5rem;">
+            <?= csrf_field() ?>
+            <input type="hidden" name="gallery_id" value="<?= (int) $gallery['id'] ?>">
+            <button type="submit" class="btn btn-sm">Retry</button>
+        </form>
+    </p>
+<?php elseif (in_array(($descriptionJob['status'] ?? ''), ['queued', 'running'], true)): ?>
+    <p class="muted">Description generation <?= e($descriptionJob['status']) ?> — refresh shortly to see the proposal.</p>
+<?php endif; ?>
+
+<?php if (!empty($descriptionSuggestion)): ?>
+    <p class="muted">The AI wrote this description; accept to save it onto the gallery (your current description, if any, is replaced), dismiss to ignore. Tweak the text right here, or on the <a href="<?= url('/admin/description-suggestions') ?>">AI Descriptions</a> page.</p>
+    <form method="post" action="<?= url('/admin/description-suggestions/accept') ?>">
+        <?= csrf_field() ?>
+        <input type="hidden" name="id" value="<?= (int) $descriptionSuggestion['id'] ?>">
+        <textarea name="text" rows="2" maxlength="600" style="width:100%;" aria-label="Proposed description"><?= e((string) $descriptionSuggestion['description']) ?></textarea>
+        <div style="margin-top:.5rem;display:flex;gap:.5rem;flex-wrap:wrap;">
+            <button type="submit" class="btn btn-sm">Accept description</button>
+        </div>
+    </form>
+    <form class="inline" method="post" action="<?= url('/admin/description-suggestions/dismiss') ?>" style="margin-top:.5rem;">
+        <?= csrf_field() ?>
+        <input type="hidden" name="id" value="<?= (int) $descriptionSuggestion['id'] ?>">
+        <button type="submit" class="btn btn-sm btn-outline">Dismiss ✕</button>
+    </form>
+    <form class="inline" method="post" action="<?= url('/admin/description-suggestions/reanalyze') ?>" style="margin-top:.5rem;margin-left:.5rem;">
+        <?= csrf_field() ?>
+        <input type="hidden" name="gallery_id" value="<?= (int) $gallery['id'] ?>">
+        <button type="submit" class="btn btn-sm btn-outline">Regenerate</button>
+    </form>
+<?php endif; ?>
+<?php endif; ?>
 <script nonce="<?= csp_nonce() ?>">
 (function () {
     var labels = document.querySelectorAll('[data-category-name]');

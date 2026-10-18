@@ -2494,6 +2494,65 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad('CategoryAdvisor must batch categories via CHUNK_SIZE, ask for every fit ("select EVERY one that fits"), and keep no MAX_SUGGESTIONS/array_slice cap');
         });
 
+        // ------------------------------------------------ AI gallery descriptions
+        $dsAdvisor = $read("$root/app/Core/DescriptionAdvisor.php");
+        $dsModel   = $read("$root/app/Models/DescriptionSuggestion.php");
+        $dsCtrl    = $read("$root/app/Controllers/DescriptionSuggestionController.php");
+        $dsWorker  = $read("$root/bin/describe_worker.php");
+        $dsView    = $read("$root/views/admin/description_suggestions.php");
+        $dsMigr    = $read("$root/database/migrations/067_gallery_descriptions.sql");
+        $keepAlive = $read("$root/bin/keep_ai_alive.php");
+
+        $add('smoke.descriptions.schema', 'Smoke · Describer', 'job + suggestion tables in schema.sql and migration 067', static function () use ($czSchema, $dsMigr, $ok, $bad): array {
+            $okSchema = strpos($czSchema, 'gallery_description_suggestions') !== false
+                && strpos($czSchema, 'gallery_description_jobs') !== false;
+            $okMigr = strpos($dsMigr, 'gallery_description_suggestions') !== false
+                && strpos($dsMigr, 'gallery_description_jobs') !== false;
+            return $okSchema && $okMigr
+                ? $ok('both tables defined')
+                : $bad('schema.sql and database/migrations/067_gallery_descriptions.sql must both define gallery_description_jobs + gallery_description_suggestions');
+        });
+        $add('smoke.descriptions.manual_accept', 'Smoke · Describer', 'only accept() writes galleries.description; worker stages proposals', static function () use ($dsModel, $dsWorker, $dsCtrl, $ok, $bad): array {
+            $writesOnlyOnAccept = strpos($dsModel, 'Gallery::updateDescription') !== false
+                && strpos($dsModel, 'AuditLog::record') !== false
+                && strpos($dsWorker, 'updateDescription') === false
+                && strpos($dsWorker, 'UPDATE galleries') === false;
+            return $writesOnlyOnAccept && strpos($dsCtrl, 'DescriptionSuggestion::accept') !== false
+                ? $ok('accept-only writes with audit')
+                : $bad('DescriptionSuggestion::accept must be the only writer of galleries.description (audited); bin/describe_worker.php must never update galleries');
+        });
+        $add('smoke.descriptions.worker', 'Smoke · Describer', 'worker flock + --once + cron + upload hook + watchdog lock', static function () use ($dsWorker, $acrn, $czUpload, $keepAlive, $ok, $bad): array {
+            return strpos($dsWorker, 'flock') !== false && strpos($dsWorker, '--once') !== false
+                && strpos($acrn, 'gallery-describer') !== false && strpos($acrn, 'describe_worker.php --once') !== false
+                && strpos($czUpload, 'DescriptionSuggestion::enqueueIfEmpty') !== false
+                && strpos($keepAlive, 'describer.lock') !== false
+                ? $ok('worker + cron + upload hook + watchdog lock wired')
+                : $bad('bin/describe_worker.php must flock with --once, apply_cron.php must install gallery-describer, MediaUploader::commit must use enqueueIfEmpty, and keep_ai_alive.php must skip probes while describer.lock is held');
+        });
+        $add('smoke.descriptions.routes_ui', 'Smoke · Describer', 'review routes + permission gate + review view + nav link + manage block', static function () use ($routesSrc, $dsCtrl, $dsView, $adminLayout2, $czManage, $ok, $bad): array {
+            $routesOk = strpos($routesSrc, "'/admin/description-suggestions'") !== false
+                && strpos($routesSrc, '/admin/description-suggestions/accept') !== false
+                && strpos($routesSrc, '/admin/description-suggestions/backfill') !== false;
+            return $routesOk
+                && strpos($dsCtrl, "Auth::requirePermission('galleries')") !== false
+                && strpos($dsView, 'description-suggestions/accept') !== false
+                && strpos($adminLayout2, '/admin/description-suggestions') !== false
+                && strpos($czManage, 'AI Description') !== false
+                ? $ok('routes, gate, view, nav and manage block present')
+                : $bad('routes.php must register /admin/description-suggestions[+/accept|/dismiss|/backfill] gated by the galleries permission; the review view, admin nav and manage page block must render');
+        });
+        $add('smoke.descriptions.prompt', 'Smoke · Describer', 'single-call prompt: JSON description, length + tone rules, tolerant parse', static function () use ($dsAdvisor, $ok, $bad): array {
+            $json = strpos($dsAdvisor, '{"description": "..."}') !== false;
+            $rules = strpos($dsAdvisor, '140-220 characters') !== false
+                && strpos($dsAdvisor, 'No hashtags') !== false
+                && strpos($dsAdvisor, 'no explicit anatomical words') !== false;
+            $parse = strpos($dsAdvisor, 'public static function parse(') !== false
+                && strpos($dsAdvisor, 'json_decode($text, true)') !== false;
+            return $json && $rules && $parse
+                ? $ok('single JSON call + guardrails + tolerant parser')
+                : $bad('DescriptionAdvisor must ask for ONLY {"description": "..."} with 140-220 char / no-hashtag / tasteful rules and expose a tolerant parse()');
+        });
+
         // ------------------------------------------------ Site timezone
         $siteConfigC = $read("$root/app/Models/SiteConfig.php");
         $helpers     = $read("$root/app/Core/helpers.php");

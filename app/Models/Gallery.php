@@ -732,6 +732,20 @@ class Gallery
         \App\Core\PageCache::invalidate();
     }
 
+    /**
+     * Replace only the description (the AI description accept path - the
+     * manage form still posts everything through update()).
+     */
+    public static function updateDescription(int $id, string $description): void
+    {
+        Database::run(
+            'UPDATE galleries SET description = ? WHERE id = ?',
+            [mb_substr(trim($description), 0, 600), $id]
+        );
+        \App\Core\Cache::bump('gallery');
+        \App\Core\PageCache::invalidate();
+    }
+
     public static function allowedUsers(int $galleryId): array
     {
         return Database::run(

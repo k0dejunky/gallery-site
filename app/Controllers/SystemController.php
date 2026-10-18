@@ -734,6 +734,18 @@ class SystemController extends Controller
             $czNote = $czDriver === 'off' ? '' : ($czQueue > 0 ? $czQueue . ' queued' : 'idle');
         }
 
+        [$dsTs, $dsAt] = $lastRun($logs . '/describer.log');
+        $dsNote   = $this->lastLineSummary($logs . '/describer.log');
+        $dsDriver = \App\Models\DescriptionSuggestion::driver();
+        // Same "no recent line = idle while the queue is empty" logic as the categorizer.
+        $dsQueue  = (int) ($dsDriver === 'off'
+            ? 0
+            : \App\Models\DescriptionSuggestion::stats()['queued']);
+        $dsFresh  = $dsQueue === 0 || ($dsTs !== null && ($now - $dsTs) <= 10 * 60);
+        if ($dsNote === '') {
+            $dsNote = $dsDriver === 'off' ? '' : ($dsQueue > 0 ? $dsQueue . ' queued' : 'idle');
+        }
+
         [$waTs, $waAt] = $lastRun($logs . '/web-analytics.log');
         $waNote = $this->lastLineSummary($logs . '/web-analytics.log');
         $waEvery = (int) ($this->cronSchedule()['web_analytics']['every_minutes'] ?? 60);
@@ -795,6 +807,15 @@ class SystemController extends Controller
                 'lastAgo'  => $this->relativeAge($czTs),
                 'ok'       => $czDriver === 'off' || $czFresh,
                 'note'     => $czDriver === 'off' ? 'driver=off in .env' : $czNote,
+            ],
+            [
+                'id'       => 'describer',
+                'schedule' => 'every minute',
+                'desc'     => 'AI gallery descriptions: write a short description for galleries without one and stage it for review',
+                'lastRun'  => $dsAt,
+                'lastAgo'  => $this->relativeAge($dsTs),
+                'ok'       => $dsDriver === 'off' || $dsFresh,
+                'note'     => $dsDriver === 'off' ? 'driver=off in .env' : $dsNote,
             ],
             [
                 'id'       => 'backup',

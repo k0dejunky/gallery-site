@@ -121,6 +121,10 @@ $crond['gallery-questionnaires'] =
 // analysis can take a while on CPU); flock inside the worker prevents overlap.
 $crond['gallery-categorizer'] =
     "* * * * * {$php}/bin/categorize_worker.php --once >> " . SITE_ROOT . "/storage/logs/categorizer.log 2>&1\n";
+// AI gallery descriptions: same queue mechanics (drain up to 3 per tick; one
+// vision call each); the worker is a no-op while CATEGORIZER_DRIVER=off.
+$crond['gallery-describer'] =
+    "* * * * * {$php}/bin/describe_worker.php --once >> " . SITE_ROOT . "/storage/logs/describer.log 2>&1\n";
 // Background AI chat replies (chat_ai_async): at most 3 replies per tick, so
 // a local CPU model never runs more than three generations in parallel with
 // requests; the worker itself is a no-op while the flag is off.

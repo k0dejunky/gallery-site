@@ -261,6 +261,8 @@ class AdminController extends Controller
             ),
             'suggestions' => \App\Models\CategorySuggestion::pendingFor($id),
             'suggestionJob' => \App\Models\CategorySuggestion::jobFor($id),
+            'descriptionSuggestion' => \App\Models\DescriptionSuggestion::pendingFor($id),
+            'descriptionJob' => \App\Models\DescriptionSuggestion::jobFor($id),
             'tagValue'  => $tagValue,
             'activeEditJob' => \App\Models\PhotoJob::latestForGallery($id),
             'queuedGalleries' => Gallery::queuedForPublishing(Auth::isSuperAdmin()),

@@ -432,6 +432,108 @@ class TestSuite
             }
         });
 
+        $add('db.description_accept_cycle', 'Database', 'enqueue -> claim -> stage -> accept writes (edited) text; dismiss never writes', function () {
+            $gid = null;
+            try {
+                $actor = (int) Database::run('SELECT id FROM users ORDER BY id ASC LIMIT 1')->fetchColumn();
+                $g = Database::run("INSERT INTO galleries (title, type) VALUES ('TmpDescriptionCycle', 'images')");
+                $gid = (int) Database::connection()->lastInsertId();
+
+                $queued = \App\Models\DescriptionSuggestion::enqueue($gid);
+
+                // Make our job the oldest so a box with a real backlog claims it first.
+                \App\Core\Database::run(
+                    "UPDATE gallery_description_jobs SET updated_at = '2001-01-01 00:00:00' WHERE gallery_id = ?",
+                    [$gid]
+                );
+                $claimedOk = false;
+                $parked    = [];
+                for ($i = 0; $i < 25; $i++) {
+                    $claimed = \App\Models\DescriptionSuggestion::claimNext();
+                    if ($claimed === null) {
+                        break;
+                    }
+                    if ($claimed === $gid) {
+                        $claimedOk = true;
+                        break;
+                    }
+                    $parked[] = $claimed;
+                }
+                foreach ($parked as $parkId) {
+                    Database::run("UPDATE gallery_description_jobs SET status = 'queued', attempts = attempts - 1 WHERE gallery_id = ?", [$parkId]);
+                }
+
+                Database::run(
+                    "INSERT INTO gallery_description_suggestions (gallery_id, description, status, engine) VALUES (?, 'Proposed copy', 'pending', 'ollama')",
+                    [$gid]
+                );
+                \App\Models\DescriptionSuggestion::complete($gid, 'ollama');
+
+                $pending = \App\Models\DescriptionSuggestion::pendingFor($gid);
+                $sid     = $pending !== null ? (int) $pending['id'] : 0;
+                // The admin may edit before accepting; the edited text wins.
+                $accepted = $sid > 0 && \App\Models\DescriptionSuggestion::accept($sid, $actor, 'Hand-tuned copy.');
+                $written  = (string) Database::run('SELECT description FROM galleries WHERE id = ?', [$gid])->fetchColumn();
+                $retired  = \App\Models\DescriptionSuggestion::pendingFor($gid) === null;
+                $reaccept = $sid > 0 && !\App\Models\DescriptionSuggestion::accept($sid, $actor);
+
+                // Dismiss path: description must stay untouched.
+                Database::run(
+                    "INSERT INTO gallery_description_suggestions (gallery_id, description, status, engine) VALUES (?, 'Ignored copy', 'pending', 'ollama')",
+                    [$gid]
+                );
+                $dismissRow = \App\Models\DescriptionSuggestion::pendingFor($gid);
+                $did        = $dismissRow !== null ? (int) $dismissRow['id'] : 0;
+                $dismissed  = $did > 0 && \App\Models\DescriptionSuggestion::dismiss($did, $actor);
+                $stillSame  = (string) Database::run('SELECT description FROM galleries WHERE id = ?', [$gid])->fetchColumn() === 'Hand-tuned copy.';
+
+                $pass = $queued && $claimedOk && $pending !== null && $accepted
+                    && $written === 'Hand-tuned copy.' && $retired && $reaccept
+                    && $dismissed && $stillSame;
+
+                return ['pass' => $pass, 'detail' => sprintf(
+                    'queued=%d claimed=%d staged=%d accepted=%d written=%s retired=%d reaccept-refused=%d dismissed=%d unchanged=%d',
+                    (int) $queued, (int) $claimedOk, (int) ($pending !== null), (int) $accepted,
+                    json_encode($written), (int) $retired, (int) $reaccept, (int) $dismissed, (int) $stillSame
+                )];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            } finally {
+                if ($gid !== null) {
+                    try {
+                        Database::run('DELETE FROM gallery_description_suggestions WHERE gallery_id = ?', [$gid]);
+                        Database::run('DELETE FROM gallery_description_jobs WHERE gallery_id = ?', [$gid]);
+                        Database::run('DELETE FROM galleries WHERE id = ?', [$gid]);
+                    } catch (\Throwable $ignored) {
+                    }
+                }
+            }
+        });
+
+        $add('db.description_advisor_parse', 'Database', 'parse() tolerates JSON fences, plain prose, labels, quotes and caps length', function () {
+            $json    = \App\Core\DescriptionAdvisor::parse('{"description":"A playful poolside set with sunlit color."}');
+            $fenced  = \App\Core\DescriptionAdvisor::parse("```json\n{\"description\":\"Fenced copy here.\"}\n```");
+            $prose   = \App\Core\DescriptionAdvisor::parse("Description: Plain prose copy drops its label.");
+            $prosey  = \App\Core\DescriptionAdvisor::parse("  Just one\n\n  long   line of prose.  ");
+            $quoted  = \App\Core\DescriptionAdvisor::parse('{"description":"\u201cCurly quoted take.\u201d"}');
+            $empty   = \App\Core\DescriptionAdvisor::parse('{"note":"no description key"}');
+            $capped  = \App\Core\DescriptionAdvisor::parse('{"description":"' . str_repeat('x', 900) . '"}');
+
+            $pass = $json === 'A playful poolside set with sunlit color.'
+                && $fenced === 'Fenced copy here.'
+                && $prose === 'Plain prose copy drops its label.'
+                && $prosey === 'Just one long line of prose.'
+                && $quoted === 'Curly quoted take.'
+                && $empty === ''
+                && mb_strlen($capped) === \App\Models\DescriptionSuggestion::MAX_LENGTH;
+
+            return ['pass' => $pass, 'detail' => sprintf(
+                'json=%s fenced=%s prose=%s ws=%s quotes=%s empty=%s cap=%d',
+                json_encode($json), json_encode($fenced), json_encode($prose),
+                json_encode($prosey), json_encode($quoted), json_encode($empty), mb_strlen($capped)
+            )];
+        });
+
         $add('db.categorizer_advisor_resolve', 'Database', 'resolve() keeps every batch match, drops unknown names, merges deduped', function () {
             $made = [];
             try {
