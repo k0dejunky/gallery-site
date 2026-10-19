@@ -105,6 +105,29 @@ return [
         'max_chapters'    => 24,
     ],
 
+    // A gallery whose title starts with one of these is treated as a TEST
+    // gallery: it is never announced (no member email, no in-app bell, no
+    // social auto-post). Working on the site means creating throwaway
+    // galleries, and each one that went live mailed every opted-in member the
+    // title of a set that was never meant to be seen. The admin form also has
+    // an explicit "test gallery" tick, which is the reliable way; this list
+    // is the safety net for galleries created by a script or an import.
+    //
+    // A pattern matches when the title starts with it and the next character
+    // is not a letter, so "Test Gallery" matches but "Testament" does not.
+    'gallery_test_patterns' => [
+        'probe',
+        'test',
+        'testing',
+        'smoketest',
+        'tmp',
+        'temp',
+        'scratch',
+        'fixture',
+        'debug',
+        'demo',
+    ],
+
     'auth' => [
         // Brute-force protection: N failed logins per email/IP are allowed
         // within the window before the user is temporarily locked out.

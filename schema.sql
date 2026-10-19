@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS galleries (
     type         VARCHAR(10) NOT NULL DEFAULT 'images',
     min_level    INT UNSIGNED NOT NULL DEFAULT 0,
     is_secret    TINYINT(1) NOT NULL DEFAULT 0,
+    is_test      TINYINT(1) NOT NULL DEFAULT 0,
     published_at DATETIME NULL DEFAULT NULL,
     notified_at  DATETIME NULL DEFAULT NULL,
     views        INT UNSIGNED NOT NULL DEFAULT 0,
@@ -116,6 +117,7 @@ CREATE TABLE IF NOT EXISTS galleries (
     deleted_at   DATETIME NULL,
     INDEX idx_galleries_listing (deleted_at, published_at, created_at),
     INDEX idx_galleries_views (views),
+    INDEX idx_galleries_test (is_test, notified_at),
     FULLTEXT KEY ft_search (title, description)
 );
 

@@ -768,6 +768,52 @@ function video_poster_is_padded(string $poster, int $srcW, int $srcH): bool
 }
 
 /**
+ * Is this gallery one that must never be announced to members?
+ *
+ * A TEST gallery is a normal, visible gallery that simply must not be
+ * announced: no "new gallery" email, no in-app bell notification, no social
+ * auto-post. Working on the site means creating throwaway galleries, and
+ * every one of those that went live mailed all the opted-in members the
+ * title of a set that was never meant to be seen.
+ *
+ * Two ways to be one:
+ *   - the explicit is_test flag (the admin form's tick, or a script),
+ *   - a title that starts with one of app.gallery_test_patterns.
+ *
+ * Pure function - unit tested directly.
+ *
+ * @param array $gallery a gallery row (needs at least 'title'; 'is_test' is
+ *                       honoured when present)
+ */
+function is_test_gallery(array $gallery): bool
+{
+    if (!empty($gallery['is_test'])) {
+        return true;
+    }
+
+    $title = trim((string) ($gallery['title'] ?? ''));
+    if ($title === '') {
+        return false;
+    }
+    $title = mb_strtolower($title);
+
+    foreach ((array) config('app.gallery_test_patterns', []) as $pattern) {
+        $pattern = mb_strtolower(trim((string) $pattern));
+        if ($pattern === '' || !str_starts_with($title, $pattern)) {
+            continue;
+        }
+        // The next character must not be a letter, so "Test Gallery" matches
+        // but "Testament" does not.
+        $next = mb_substr($title, mb_strlen($pattern), 1);
+        if ($next === '' || !preg_match('/^\p{L}$/u', $next)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * The DISPLAY size of any uploaded media file, in pixels.
  *
  * For a video that is the size the viewer sees: the coded size with the

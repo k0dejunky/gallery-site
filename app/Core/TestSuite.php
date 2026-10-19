@@ -959,6 +959,84 @@ class TestSuite
             }
         });
 
+        $add('db.test_gallery_is_not_announced', 'Database', 'a test gallery sends no member email and no notification', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                $title = 'PROBE db test gallery ' . bin2hex(random_bytes(3));
+
+                try {
+                    // A gallery created the ordinary way, flagged as a test one.
+                    $id = \App\Models\Gallery::create($title, 'scratch', 'images', 0, null, false, true);
+                    $isTest = (int) Database::run('SELECT is_test FROM galleries WHERE id = ?', [$id])->fetchColumn();
+
+                    // The announcement attempt must do nothing at all: no
+                    // email, no bell, and - importantly - the gallery stays
+                    // unmarked so clearing the flag later still announces it.
+                    \App\Models\Gallery::notifyNewGalleryIfUnsent($id);
+
+                    $mails = (int) Database::run(
+                        "SELECT COUNT(*) FROM email_queue WHERE subject LIKE ?",
+                        ['%' . $title . '%']
+                    )->fetchColumn();
+                    $bells = (int) Database::run(
+                        "SELECT COUNT(*) FROM notifications WHERE title LIKE ?",
+                        ['%' . $title . '%']
+                    )->fetchColumn();
+                    $notified = Database::run('SELECT notified_at FROM galleries WHERE id = ?', [$id])->fetchColumn();
+
+                    // A gallery with a normal title DOES get announced, so
+                    // the check above is not passing for the wrong reason.
+                    $realTitle = 'Real gallery ' . bin2hex(random_bytes(3));
+                    $realId = \App\Models\Gallery::create($realTitle, 'real', 'images', 0, null, false, false);
+                    \App\Models\Gallery::notifyNewGalleryIfUnsent($id);
+                    \App\Models\Gallery::notifyNewGalleryIfUnsent($realId);
+                    $realMails = (int) Database::run(
+                        "SELECT COUNT(*) FROM email_queue WHERE subject LIKE ?",
+                        ['%' . $realTitle . '%']
+                    )->fetchColumn();
+
+                    return [
+                        'pass' => $isTest === 1
+                            && $mails === 0
+                            && $bells === 0
+                            && $notified === null
+                            && $realMails >= 1,
+                        'detail' => sprintf(
+                            'is_test=%d, test mails=%d, test bells=%d, notified_at=%s, real gallery mails=%d',
+                            $isTest,
+                            $mails,
+                            $bells,
+                            $notified === null ? 'null' : (string) $notified,
+                            $realMails
+                        ),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                    foreach ([$title, 'Real gallery'] as $needle) {
+                        try {
+                            Database::run('DELETE FROM galleries WHERE title LIKE ?', [$needle . '%']);
+                            Database::run('DELETE FROM email_queue WHERE subject LIKE ?', ['%' . $needle . '%']);
+                            Database::run('DELETE FROM notifications WHERE title LIKE ?', ['%' . $needle . '%']);
+                        } catch (\Throwable $ignored) {
+                        }
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.retention_email_cycle', 'Database', 'Trial-ending + inactive win-back audiences queue once per member/subscription', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

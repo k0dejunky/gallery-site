@@ -242,6 +242,12 @@ class Housekeeping
      * galleries that are visible and were created in the last 14 days. The
      * 14-day window stops a legacy site from notifying its entire back
      * catalogue on first deploy; the LIMIT bounds a burst.
+     *
+     * Test and secret galleries are excluded in the SQL, not just in the
+     * notifier: a gallery that is skipped stays unmarked (so clearing the
+     * flag later still announces it), and if the skipped ones were left in
+     * the result set they would eat the LIMIT and starve the real galleries
+     * behind them.
      */
     private static function notifyNewGalleries(): int
     {
@@ -249,10 +255,12 @@ class Housekeeping
             'SELECT id FROM galleries
              WHERE deleted_at IS NULL
                AND notified_at IS NULL
+               AND is_test = 0
+               AND is_secret = 0
                AND (published_at IS NULL OR published_at <= CURRENT_TIMESTAMP)
                AND created_at >= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 14 DAY)
              ORDER BY id ASC
-             LIMIT 50'
+             LIMIT 200'
         )->fetchAll();
 
         $count = 0;

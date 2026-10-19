@@ -59,6 +59,11 @@
                     </select>
                 </div>
 
+                <div class="field">
+                    <label><input type="checkbox" name="is_test" value="1" id="is-test"> Test gallery (do not announce it)</label>
+                    <span class="muted">Members are not emailed about it, it does not show in their notifications, and it is not posted to social media. Use this for galleries you are still working on.</span>
+                </div>
+
                 <?php if (\App\Core\Auth::isSuperAdmin()): ?>
                 <div class="field">
                     <label><input type="checkbox" name="is_secret" value="1" id="is-secret"> Secret gallery</label>

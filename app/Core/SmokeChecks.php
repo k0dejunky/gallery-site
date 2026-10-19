@@ -2251,6 +2251,15 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
         $lcHouse = $read("$root/app/Core/Housekeeping.php");
         $galleryM = $read("$root/app/Models/Gallery.php");
         $liveM   = $read("$root/app/Models/LiveSession.php");
+        // For the test-gallery suppression check.
+        $tgHelpers = $read("$root/app/Core/helpers.php");
+        $tgCfg     = $read("$root/config/app.php");
+        $tgHouse   = $read("$root/app/Core/Housekeeping.php");
+        $tgSchema  = $read("$root/schema.sql");
+        $tgMigr    = $read("$root/database/migrations/070_gallery_test_flag.sql");
+        $tgAutoPost = $read("$root/app/Models/AutoPostQueue.php");
+        $tgCreate  = $read("$root/views/admin/create.php");
+        $tgManage  = $read("$root/views/admin/manage.php");
 
         $add('smoke.email.no_digest', 'Smoke · Emailer', 'The scheduled newsletter digest is gone', static function () use ($eq, $ecfg, $ew, $ecCtrl, $routesSrc, $ok, $bad): array {
             $dead = [
@@ -2302,6 +2311,43 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             return ($galleryOrdered && $liveOrdered)
                 ? $ok('slot claimed only after the day\'s email is still available')
                 : $bad('Gallery/LiveSession must check broadcastSentToday() BEFORE claiming notified_at / live_notified_at (gallery=' . var_export($galleryOrdered, true) . ', live=' . var_export($liveOrdered, true) . ')');
+        });
+
+        $add('smoke.email.test_galleries_not_announced', 'Smoke · Emailer', 'A test gallery is never announced: no member email, no bell, no auto-post', static function () use ($galleryM, $tgHelpers, $tgCfg, $tgHouse, $tgSchema, $tgMigr, $tgAutoPost, $tgCreate, $tgManage, $ok, $bad): array {
+            // The detector: an explicit flag, or a title that looks like a test.
+            $detect = strpos($tgHelpers, 'function is_test_gallery(') !== false
+                && strpos($tgHelpers, "config('app.gallery_test_patterns'") !== false;
+            $patterns = strpos($tgCfg, "'gallery_test_patterns'") !== false;
+
+            // The guard has to sit BEFORE the gallery claims its once-only
+            // marker, so a suppressed gallery stays un-marked (clearing the
+            // flag later still announces it) and never eats the day's email.
+            $guardPos = strpos($galleryM, 'is_test_gallery($gallery)');
+            $claimPos = strpos($galleryM, 'UPDATE galleries SET notified_at');
+            $guard = $guardPos !== false && $claimPos !== false && $guardPos < $claimPos;
+            // A secret gallery must not be emailed either: the title would
+            // leak to every opted-in member.
+            $secret = strpos($galleryM, "!empty(\$gallery['is_secret'])") !== false;
+
+            // The sweep must not even select a suppressed gallery, or the
+            // skipped ones would eat its LIMIT and starve the real ones.
+            $sweep = strpos($tgHouse, 'AND is_test = 0') !== false
+                && strpos($tgHouse, 'AND is_secret = 0') !== false;
+
+            $schema = strpos($tgSchema, 'is_test      TINYINT(1) NOT NULL DEFAULT 0') !== false;
+            $migr   = strpos($tgMigr, 'ADD COLUMN is_test') !== false;
+
+            // Social auto-posting is an announcement too.
+            $autopost = strpos($tgAutoPost, 'is_test_gallery($gallery)') !== false;
+
+            // The admin forms need the tick.
+            $forms = strpos($tgCreate, 'name="is_test"') !== false
+                && strpos($tgManage, 'name="is_test"') !== false
+                && strpos($tgManage, 'name="is_test" value="0"') !== false;
+
+            return $detect && $patterns && $guard && $secret && $sweep && $schema && $migr && $autopost && $forms
+                ? $ok('test and secret galleries are never announced')
+                : $bad('helpers.php must expose is_test_gallery() driven by app.gallery_test_patterns; Gallery::notifyNewGalleryIfUnsent must return for a test or secret gallery BEFORE claiming notified_at; the housekeeping sweep must filter is_test = 0 and is_secret = 0; galleries.is_test needs a column in schema.sql plus a migration; AutoPostQueue must skip test galleries; and the admin create/manage forms need the is_test tick (with a hidden is_test=0 companion on the manage form so unticking clears it)');
         });
 
         $add('smoke.email.opt_out_filter', 'Smoke · Emailer', 'Recipients exclude opted-out accounts', static function () use ($eq, $ok, $bad): array {

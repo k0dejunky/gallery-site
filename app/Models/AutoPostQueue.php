@@ -671,6 +671,17 @@ class AutoPostQueue
         $queued    = [];
         $duplicate = [];
 
+        // A TEST gallery is never announced anywhere, and social media is the
+        // last place a throwaway set should end up. A secret gallery is
+        // hidden from members, so its title must not leak there either.
+        $gallery = Database::run(
+            'SELECT id, title, is_secret, is_test FROM galleries WHERE id = ?',
+            [$galleryId]
+        )->fetch();
+        if ($gallery === false || is_test_gallery($gallery) || !empty($gallery['is_secret'])) {
+            return compact('queued', 'duplicate');
+        }
+
         foreach (Platforms::enabled() as $channel) {
             $key     = (string) $channel['key'];
             $dbKey   = Platforms::dbKey($key);

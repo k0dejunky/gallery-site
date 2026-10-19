@@ -803,6 +803,9 @@ class GalleryController extends Controller
         $type        = $this->request->input('type', 'images') === 'videos' ? 'videos' : 'images';
         $minLevel    = max(0, min(3, (int) $this->request->input('min_level', '0')));
         $isSecret    = Auth::isSuperAdmin() && $this->request->post('is_secret') === '1';
+        // A test gallery is never announced to members: no "new gallery"
+        // email, no in-app bell, no social auto-post.
+        $isTest      = $this->request->post('is_test') === '1';
         $allowedUsers = $this->request->post('allowed_users', []);
         $allowedUsers = is_array($allowedUsers) ? $allowedUsers : [];
         $categoryIds = $this->request->post('categories', []);
@@ -838,7 +841,7 @@ class GalleryController extends Controller
             $publishedAt = Gallery::normalizePublishAt($publishAtRaw);
         }
 
-        $galleryId = Gallery::create($title, $description, $type, $minLevel, $publishedAt, $isSecret);
+        $galleryId = Gallery::create($title, $description, $type, $minLevel, $publishedAt, $isSecret, $isTest);
         Gallery::setCategories($galleryId, $categoryIds);
         if ($isSecret) {
             Gallery::setAllowedUsers($galleryId, $allowedUsers);
@@ -1611,6 +1614,9 @@ class GalleryController extends Controller
         $type        = $this->request->input('type', 'images') === 'videos' ? 'videos' : 'images';
         $minLevel    = max(0, min(3, (int) $this->request->input('min_level', '0')));
         $isSecret    = Auth::isSuperAdmin() && $this->request->post('is_secret') === '1';
+        // The manage form posts a hidden is_test=0 next to the tick, so an
+        // unticked box clears the flag instead of leaving it stale.
+        $isTest      = $this->request->post('is_test') === '1';
         $allowedUsers = $this->request->post('allowed_users', []);
         $allowedUsers = is_array($allowedUsers) ? $allowedUsers : [];
         $categoryIds = $this->request->post('categories', []);
@@ -1643,7 +1649,7 @@ if ($publishAtRaw !== '') {
             $this->redirect('/admin/galleries/' . $id . '/edit');
         }
 
-        Gallery::update($id, $title, $description, $type, $minLevel, $publishedAt, $isSecret);
+        Gallery::update($id, $title, $description, $type, $minLevel, $publishedAt, $isSecret, $isTest);
         Gallery::setCategories($id, $categoryIds);
         Gallery::setAllowedUsers($id, $isSecret ? $allowedUsers : []);
 

@@ -49,6 +49,10 @@
         <label for="manage-tags">Tags</label>
         <input type="text" name="tags" id="manage-tags" value="<?= e($tagValue ?? '') ?>" placeholder="comma, separated, tags" style="min-width:280px;">
     </p>
+    <p>
+        <label><input type="hidden" name="is_test" value="0"><input type="checkbox" name="is_test" value="1" <?= !empty($gallery['is_test']) ? 'checked' : '' ?>> Test gallery (do not announce it)</label>
+        <span class="muted">Members are not emailed about it, it does not show in their notifications, and it is not posted to social media.</span>
+    </p>
     <?php if (\App\Core\Auth::isSuperAdmin()): ?>
     <?php $allowedIds = array_map('intval', array_column($allowedUsers ?? [], 'id')); ?>
     <p>

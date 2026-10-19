@@ -133,16 +133,27 @@ class Gallery
      * being queued - it was silently swallowed for good. Checking first means a
      * gallery that is not the day's email stays un-emailed but also unmarked,
      * and still gets its in-app announcement below.
+     *
+     * A gallery that must not be announced - a TEST gallery, or a SECRET one,
+     * whose title would leak - returns before anything is claimed. It is
+     * deliberately left unmarked, so clearing the flag later still lets it be
+     * announced, and it never consumes the day's single email slot.
      */
     public static function notifyNewGalleryIfUnsent(int $galleryId): void
     {
         $gallery = Database::run(
-            'SELECT id, title, description, is_secret, notified_at FROM galleries WHERE id = ?',
+            'SELECT id, title, description, is_secret, is_test, notified_at FROM galleries WHERE id = ?',
             [$galleryId]
         )->fetch();
 
         if ($gallery === false || $gallery['notified_at'] !== null) {
             return; // gone, or this gallery was already announced
+        }
+
+        // Never announce a test gallery (no email, no bell, no auto-post) and
+        // never announce a secret one: the title would leak to every member.
+        if (is_test_gallery($gallery) || !empty($gallery['is_secret'])) {
+            return;
         }
 
         // One gallery email a day: if the day's slot is already taken, do not
@@ -170,14 +181,12 @@ class Gallery
         // In-app fan-out for public galleries so the bell icon is meaningful.
         // Secret galleries are never broadcast (the title would leak). Every
         // gallery gets this, whether or not it won the day's email slot.
-        if (empty($gallery['is_secret'])) {
-            \App\Models\Notification::broadcastToMembers(
-                'gallery',
-                'New gallery: ' . mb_substr((string) $gallery['title'], 0, 80),
-                mb_substr((string) ($gallery['description'] ?: 'A new set is live.'), 0, 120),
-                '/galleries/' . (int) $gallery['id']
-            );
-        }
+        \App\Models\Notification::broadcastToMembers(
+            'gallery',
+            'New gallery: ' . mb_substr((string) $gallery['title'], 0, 80),
+            mb_substr((string) ($gallery['description'] ?: 'A new set is live.'), 0, 120),
+            '/galleries/' . (int) $gallery['id']
+        );
     }
 
     /**
@@ -690,14 +699,21 @@ class Gallery
 
     /**
      * Insert a new gallery (image or video gallery) and return its id.
+     *
+     * $isTest marks a gallery that must never be announced to members (no
+     * email, no bell, no auto-post). A gallery whose title looks like a test
+     * gallery is flagged automatically, so a script or an import cannot
+     * accidentally mail every member the title of a throwaway set.
      */
-    public static function create(string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, bool $isSecret = false): int
+    public static function create(string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, bool $isSecret = false, bool $isTest = false): int
     {
         $type = $type === 'videos' ? 'videos' : 'images';
 
+        $isTest = $isTest || is_test_gallery(['title' => $title]);
+
         Database::run(
-            'INSERT INTO galleries (title, description, type, min_level, is_secret, published_at, created_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-            [$title, $description, $type, $minLevel, $isSecret ? 1 : 0, $publishedAt]
+            'INSERT INTO galleries (title, description, type, min_level, is_secret, is_test, published_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+            [$title, $description, $type, $minLevel, $isSecret ? 1 : 0, $isTest ? 1 : 0, $publishedAt]
         );
 
         \App\Core\Cache::bump('gallery');
@@ -709,24 +725,31 @@ class Gallery
 
     /**
      * Update a gallery's title, description and type.
+     *
+     * $isSecret and $isTest are applied only when given; passing null leaves
+     * that flag alone, so a form that only posts one of them cannot wipe the
+     * other.
      */
-    public static function update(int $id, string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, ?bool $isSecret = null): void
+    public static function update(int $id, string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, ?bool $isSecret = null, ?bool $isTest = null): void
     {
         $type = $type === 'videos' ? 'videos' : 'images';
 
-        if ($isSecret === null) {
-            Database::run(
-                'UPDATE galleries SET title = ?, description = ?, type = ?, min_level = ?, published_at = ? WHERE id = ?',
-                [$title, $description, $type, $minLevel, $publishedAt, $id]
-            );
-            \App\Core\Cache::bump('gallery');
-            \App\Core\PageCache::invalidate();
-            return;
+        $sets   = ['title = ?', 'description = ?', 'type = ?', 'min_level = ?', 'published_at = ?'];
+        $values = [$title, $description, $type, $minLevel, $publishedAt];
+
+        if ($isSecret !== null) {
+            $sets[]   = 'is_secret = ?';
+            $values[] = $isSecret ? 1 : 0;
+        }
+        if ($isTest !== null) {
+            $sets[]   = 'is_test = ?';
+            $values[] = $isTest ? 1 : 0;
         }
 
+        $values[] = $id;
         Database::run(
-            'UPDATE galleries SET title = ?, description = ?, type = ?, min_level = ?, is_secret = ?, published_at = ? WHERE id = ?',
-            [$title, $description, $type, $minLevel, $isSecret ? 1 : 0, $publishedAt, $id]
+            'UPDATE galleries SET ' . implode(', ', $sets) . ' WHERE id = ?',
+            $values
         );
         \App\Core\Cache::bump('gallery');
         \App\Core\PageCache::invalidate();
