@@ -3,7 +3,6 @@
 // the card queues the gallery's first video into the playlist.
 $cover = $cover ?? null;
 $gid   = (int) $gallery['id'];
-$isVideoGallery = (int) ($gallery['type'] ?? 'images') === 1 || ($gallery['type'] ?? '') === 'videos';
 $firstVideo = $firstVideo ?? null;
 ?>
 <div class="card card-compact browse-gallery-card">

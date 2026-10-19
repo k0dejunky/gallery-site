@@ -257,18 +257,53 @@
   }
 
   function initVideoResume(video){
-    var key='gallery-video-position-'+video.getAttribute('data-video-id'), saved=0, resume=video.parentNode.querySelector('.video-resume');
+    if(!video || video.__resumeBound) return;
+    video.__resumeBound = true;
+    var key='gallery-video-position-'+video.getAttribute('data-video-id'), saved=0,
+        // The Resume strip is a SIBLING of .gallery-player (it sits inside the
+        // figure, after the player wrapper), not a child of the video's parent -
+        // looking only at video.parentNode never found it, so saved positions
+        // were written but never offered or applied.
+        scope=document.getElementById('video-player-wrap')||video.closest('figure')||video.parentNode,
+        resume=scope.querySelector('.video-resume');
     try{saved=parseFloat(localStorage.getItem(key))||0;}catch(e){}
-    if(saved>0&&isFinite(saved)){
+    if(saved>0&&isFinite(saved)&&resume){
       resume.hidden=false;
       resume.querySelector('.video-resume-time').textContent=formatTime(saved);
       resume.querySelector('button').onclick=function(){video.currentTime=saved;resume.hidden=true;video.play().catch(function(){});};
-      video.addEventListener('loadedmetadata',function(){video.currentTime=Math.min(saved,Math.max(0,video.duration-0.5));},{once:true});
+      /* Apply the saved position ONCE, and never over a seek the viewer has
+         already made. Binding this to loadedmetadata meant it could fire
+         after the viewer had scrubbed to a chapter (or dragged the seek bar)
+         and silently yank them back to the old position. */
+      var applyResume=function(){
+        if(video.__userSeeked) return;
+        var target=Math.min(saved,Math.max(0,(video.duration||0)-0.5));
+        if(target>0) video.currentTime=target;
+      };
+      if(video.readyState>=1){ applyResume(); }
+      else { video.addEventListener('loadedmetadata',applyResume,{once:true}); }
     }
-    video.addEventListener('timeupdate',function(){if(video.currentTime>1&&!video.ended)try{localStorage.setItem(key,video.currentTime);}catch(e){}});
-    video.addEventListener('pause',function(){if(video.currentTime>1&&!video.ended)try{localStorage.setItem(key,video.currentTime);}catch(e){}});
+    /* Persisting on every timeupdate wrote to localStorage up to 4x a second
+       for the whole runtime; on a long video that is thousands of sync writes
+       on the main thread. Store at most every 5s, and always on the events that
+       actually mark where the viewer stopped. */
+    var pending=0, lastWrite=0;
+    function persist(){
+      lastWrite=Date.now();
+      if(video.currentTime>1&&!video.ended){try{localStorage.setItem(key,video.currentTime);}catch(e){}}
+    }
+    function schedule(){
+      if(pending) return;
+      pending=setTimeout(function(){pending=0;persist();},5000);
+    }
+    video.addEventListener('timeupdate',function(){ if(video.currentTime>1&&!video.ended){ schedule(); } });
+    video.addEventListener('pause',function(){ if(pending){clearTimeout(pending);pending=0;} persist(); });
     video.addEventListener('ended',function(){try{localStorage.removeItem(key);}catch(e){};if(resume)resume.hidden=true;});
+    /* Closing the tab mid-video (mobile especially) fires pagehide, not pause:
+       without this the last 5 seconds are lost every time. */
+    window.addEventListener('pagehide', function(){ if(video.isConnected && video.currentTime>1 && !video.ended){ persist(); } });
   }
+  window.GalleryResume = initVideoResume;
   function formatTime(seconds){var minutes=Math.floor(seconds/60),secs=Math.floor(seconds%60);return minutes+':'+(secs<10?'0':'')+secs;}
   })();
 
@@ -490,45 +525,55 @@
   });
 })();
 
-/* Picture-in-picture: [data-pip] button toggles PiP for the nearest <video>
-   in the same wrapper. Falls back gracefully when the browser does not
-   support PiP (the button stays inert). */
-(function(){
-  function togglePip(video, btn){
-    if(!video || typeof video.requestPictureInPicture !== 'function') return;
-    if(document.pictureInPictureElement === video){
-      document.exitPictureInPicture().catch(function(){});
-    }else{
-      video.requestPictureInPicture().catch(function(){});
-    }
-  }
-  document.addEventListener('click', function(e){
-    var btn = e.target && e.target.closest ? e.target.closest('[data-pip]') : null;
-    if(!btn) return;
-    e.preventDefault();
-    var video = btn.closest('figure, .live-player-wrap, .player-wrap')
-      ? btn.closest('figure, .live-player-wrap, .player-wrap').querySelector('video')
-      : btn.parentElement.querySelector('video');
-    togglePip(video, btn);
-  });
-  document.addEventListener('enterpictureinpicture', function(e){
-    var btn = document.querySelector('[data-pip]');
-    if(btn && btn.textContent.indexOf('Close') === -1) btn.textContent = 'Close picture in picture';
-  });
-  document.addEventListener('leavepictureinpicture', function(e){
-    var btn = document.querySelector('[data-pip]');
-    if(btn && btn.textContent.indexOf('Picture') === -1) btn.textContent = 'Picture in picture';
-  });
-})();
-
 /* Custom video player: themed control bar for gallery MP4s and the live HLS
-   stream. Binds to [data-player] wrappers; builds play/pause, seek, time,
-   speed, volume, PiP and fullscreen controls, plus an HLS quality menu for
-   live. Falls back to the native controls if this script fails to run. */
+   stream. Binds to [data-player] wrappers; builds play/pause, seek (with a
+   buffered-range fill and chapter ticks), time, speed, volume, quality (a VOD
+   rendition menu off the server-rendered ladder, or HLS levels for live),
+   picture-in-picture and fullscreen controls, plus a buffering/error overlay
+   with a Retry button. Falls back to the native controls if this script fails
+   to run.
+
+   Player preferences (volume, mute, speed, rendition, resume position) persist
+   in localStorage, namespaced by the signed-in user id so a shared browser
+   does not leak one account's settings into another's. */
 (function(){
   var SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
   var liveHls = null;
-  function fmt(s){ s = Math.max(0, Math.floor(s)); var m = Math.floor(s/60); var x = Math.floor(s%60); return m + ':' + (x<10?'0':'') + x; }
+  function fmt(s){ s = Math.max(0, Math.floor(s)); var m = Math.floor(s/60); var x = Math.floor(s%60); return m + ':' + (x<10?'0':'')+x; }
+  function fmtHours(s){ s = Math.max(0, Math.floor(s)); var h = Math.floor(s/3600), m = Math.floor((s%3600)/60), x = s%60; return (h ? h + ':' + (m<10?'0':'') + m : m) + ':' + (x<10?'0':'')+x; }
+
+  function store(key, value){
+    try{
+      var ns = (document.body && document.body.getAttribute('data-uid')) || '0';
+      if(value === null || value === undefined){ localStorage.removeItem('vp' + ns + '.' + key); return; }
+      localStorage.setItem('vp' + ns + '.' + key, value);
+    }catch(e){}
+  }
+  function load(key){
+    try{
+      var ns = (document.body && document.body.getAttribute('data-uid')) || '0';
+      var v = localStorage.getItem('vp' + ns + '.' + key);
+      return v === null ? null : v;
+    }catch(e){ return null; }
+  }
+
+  /* Pick the rendition the browser should start on: an explicit previous
+     choice, else the lowest rung when the connection looks metered or slow
+     (Network Information API), else the mid rung the server chose as src. */
+  function chooseRendition(sources, current){
+    var keys = Object.keys(sources);
+    if(!keys.length) return current;
+    var pref = load('quality');
+    if(pref && sources[pref]) return pref;
+    var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if(conn){
+      if(conn.saveData) return keys[0];
+      var eff = conn.effectiveType || '';
+      if(eff === 'slow-2g' || eff === '2g' || eff === '3g') return keys[0];
+    }
+    if(window.matchMedia && window.matchMedia('(prefers-reduced-data: reduce)').matches) return keys[0];
+    return current;
+  }
 
   function init(el){
     var video = el.querySelector('video');
@@ -537,22 +582,122 @@
 
     var isLive = el.hasAttribute('data-live');
     var fsTarget = el.getAttribute('data-fullscreen');
+    var sources = {};
+    try{ sources = JSON.parse(video.getAttribute('data-sources') || '{}') || {}; }catch(e){ sources = {}; }
+    var chapters = [];
+    try{ chapters = JSON.parse(video.getAttribute('data-chapters') || '[]') || []; }catch(e){ chapters = []; }
     var bar = document.createElement('div');
     bar.className = 'player-bar';
     bar.innerHTML =
       (isLive ? '<span class="player-live-dot" title="LIVE"></span>' : '') +
       '<button type="button" class="player-btn" data-act="play" aria-label="Play or pause">&#9654;</button>' +
-      '<div class="player-seek"><input type="range" min="0" max="1000" value="0" step="1" aria-label="Seek"></div>' +
+      '<div class="player-seek">' +
+        '<div class="player-seek-track">' +
+          '<div class="player-buffered" data-buffered></div>' +
+          (chapters.length ? '<div class="player-ticks">' + chapters.map(function(c){
+            return '<span class="player-tick" style="left:' + Math.min(100, Math.max(0, (c.start / (video.duration || 0)) * 100)) + '%"></span>';
+          }).join('') + '</div>' : '') +
+        '</div>' +
+        '<input type="range" min="0" max="1000" value="0" step="1" aria-label="Seek">' +
+      '</div>' +
       '<span class="player-time">0:00 / 0:00</span>' +
       '<button type="button" class="player-btn player-speed" data-act="speed" title="Playback speed">1&#215;</button>' +
-      (isLive ? '<button type="button" class="player-btn" data-act="quality" title="Quality">&#9881;</button>' : '') +
+      (isLive || Object.keys(sources).length > 1
+        ? '<button type="button" class="player-btn" data-act="quality" title="Quality" aria-haspopup="true" aria-expanded="false">&#9881;</button>' : '') +
       '<button type="button" class="player-btn" data-act="vol" aria-label="Mute or unmute">&#128266;</button>' +
       '<label class="player-keep" title="Keep the picture-in-picture window open after the video ends (allows replay)"><input type="checkbox" data-act="keep" checked>Keep open</label>' +
       '<button type="button" class="player-btn" data-act="pip" title="Picture in picture">&#9210;</button>' +
       '<button type="button" class="player-btn" data-act="fs" title="Full screen">&#9974;</button>';
     el.appendChild(bar);
 
+    /* Buffering / error overlay with a working Retry: without it a failed or
+       stalled Range request left a black rectangle with no way forward. */
+    var overlay = el.querySelector('[data-overlay]');
+    var spinner = el.querySelector('[data-spinner]');
+    var overlayMsg = el.querySelector('[data-overlay-msg]');
+    var retryBtn = el.querySelector('[data-retry]');
+    function showOverlay(msg, retry){
+      if(!overlay) return;
+      overlay.hidden = false;
+      if(overlayMsg) overlayMsg.textContent = msg || '';
+      if(spinner) spinner.hidden = !msg;
+      if(retryBtn) retryBtn.hidden = !retry;
+    }
+    function hideOverlay(){ if(overlay) overlay.hidden = true; }
+    function retry(){
+      var t = video.currentTime;
+      hideOverlay();
+      video.load();
+      if(t > 0 && isFinite(t)){ video.currentTime = t; }
+      video.play().catch(function(){});
+    }
+    if(retryBtn) retryBtn.addEventListener('click', retry);
+
+    /* --- rendition (quality) switching --------------------------------- */
+    var currentRendition = null;
+    var switching = false;
+    function applyRendition(key, persist){
+      if(switching || !sources[key] || key === currentRendition) return;
+      var wasPlaying = !video.paused && !video.ended;
+      var t = video.currentTime;
+      switching = true;
+      currentRendition = key;
+      if(persist !== false) store('quality', key);
+      video.src = sources[key].url;
+      video.load();
+      var restore = function(){
+        if(t > 0 && isFinite(t) && isFinite(video.duration)) video.currentTime = Math.min(t, Math.max(0, video.duration - 0.25));
+        if(wasPlaying) video.play().catch(function(){});
+        switching = false;
+      };
+      video.addEventListener('loadedmetadata', restore, {once:true});
+      video.addEventListener('error', function(){ switching = false; }, {once:true});
+    }
+    function toggleLevels(el2){
+      el2 = el2 || el;
+      var menu = el2.querySelector('.player-quality');
+      var qb = el2.querySelector('[data-act="quality"]');
+      if(menu){ menu.remove(); if(qb) qb.setAttribute('aria-expanded','false'); return; }
+      var keys = Object.keys(sources);
+      if(!isLive && !keys.length && !liveHls) return;
+      menu = document.createElement('div');
+      menu.className = 'player-quality';
+      var items = isLive
+        ? '<button type="button" data-l="auto">Auto</button>' +
+          (liveHls && liveHls.levels || []).map(function(lv, i){ return '<button type="button" data-l="' + i + '">' + (lv.height ? lv.height + 'p' : 'Auto') + '</button>'; }).join('')
+        : keys.map(function(k){
+            var s = sources[k];
+            var extra = s.bytes ? ' · ' + Math.round(s.bytes / 1048576) + ' MB' : '';
+            return '<button type="button" data-q="' + k + '"' + (k === currentRendition ? ' aria-current="true"' : '') + '>' + s.label + extra + '</button>';
+          }).join('');
+      menu.innerHTML = items;
+      el2.appendChild(menu);
+      if(qb) qb.setAttribute('aria-expanded','true');
+      menu.addEventListener('click', function(e){
+        var b = e.target && e.target.closest ? e.target.closest('button') : null;
+        if(!b) return;
+        if(b.hasAttribute('data-l') && liveHls){
+          liveHls.currentLevel = b.getAttribute('data-l') === 'auto' ? -1 : parseInt(b.getAttribute('data-l'), 10);
+        } else if(b.hasAttribute('data-q')){
+          applyRendition(b.getAttribute('data-q'), true);
+        }
+        menu.remove();
+        if(qb) qb.setAttribute('aria-expanded','false');
+      });
+    }
+    el.addEventListener('click', function(e){
+      // Clicking anywhere else in the player closes an open rendition menu.
+      if(el.querySelector('.player-quality') && !(e.target && e.target.closest && e.target.closest('.player-quality, [data-act="quality"]'))){
+        var m = el.querySelector('.player-quality');
+        if(m) m.remove();
+        var qb2 = el.querySelector('[data-act="quality"]');
+        if(qb2) qb2.setAttribute('aria-expanded','false');
+      }
+    });
+
     var seek = bar.querySelector('.player-seek input');
+    var track = bar.querySelector('.player-seek-track');
+    var bufferedEl = bar.querySelector('[data-buffered]');
     var time = bar.querySelector('.player-time');
     var speedBtn = bar.querySelector('[data-act="speed"]');
     var playBtn = bar.querySelector('[data-act="play"]');
@@ -560,6 +705,16 @@
     var speedIdx = SPEEDS.indexOf(1);
 
     video.controls = false;
+    /* Chapter ticks sit above the track as percentages, so they have to be
+       re-laid-out once the real duration is known (the markup above uses 0). */
+    function layoutTicks(){
+      if(!track || !chapters.length || !isFinite(video.duration) || video.duration <= 0) return;
+      var ticks = track.querySelectorAll('.player-tick');
+      for(var i = 0; i < ticks.length; i++){
+        var c = chapters[i];
+        if(c) ticks[i].style.left = Math.min(100, Math.max(0, (c.start / video.duration) * 100)) + '%';
+      }
+    }
 
     function setIcon(){
       if(playBtn) playBtn.innerHTML = video.paused ? '&#9654;' : '&#10074;&#10074;';
@@ -570,25 +725,38 @@
       if(!video.duration || isNaN(video.duration)){ seek.value = 0; time.textContent = '0:00 / 0:00'; return; }
       seek.value = Math.round(video.currentTime / video.duration * 1000);
       time.textContent = fmt(video.currentTime) + ' / ' + fmt(video.duration);
+      if(bufferedEl && video.buffered && video.buffered.length){
+        var end = 0;
+        for(var i = 0; i < video.buffered.length; i++){
+          if(video.buffered.start(i) <= video.currentTime && video.buffered.end(i) >= video.currentTime){ end = video.buffered.end(i); break; }
+        }
+        if(!end && video.buffered.length) end = video.buffered.end(video.buffered.length - 1);
+        bufferedEl.style.width = Math.min(100, (end / video.duration) * 100) + '%';
+      }
     }
     if(playBtn) playBtn.addEventListener('click', function(){
       if(video.paused){ video.play().catch(function(){}); } else { video.pause(); }
     });
-    video.addEventListener('play', setIcon);
-    video.addEventListener('pause', setIcon);
+    video.addEventListener('play', function(){ setIcon(); hideOverlay(); });
+    video.addEventListener('pause', function(){ setIcon(); bar.classList.add('show'); });
     video.addEventListener('timeupdate', updateSeek);
+    video.addEventListener('progress', updateSeek);
+    video.addEventListener('durationchange', function(){ layoutTicks(); updateSeek(); });
     video.addEventListener('loadedmetadata', updateSeek);
     seek.addEventListener('input', function(){
-      if(video.duration && !isLive){ video.currentTime = seek.value / 1000 * video.duration; }
+      if(video.duration && !isLive){ video.__userSeeked = true; video.currentTime = seek.value / 1000 * video.duration; }
     });
     if(speedBtn) speedBtn.addEventListener('click', function(){
       speedIdx = (speedIdx + 1) % SPEEDS.length;
       video.playbackRate = SPEEDS[speedIdx];
       speedBtn.textContent = SPEEDS[speedIdx] + '\u00d7';
+      store('speed', String(SPEEDS[speedIdx]));
     });
     if(volBtn) volBtn.addEventListener('click', function(){
       video.muted = !video.muted;
       volBtn.innerHTML = video.muted ? '&#128263;' : '&#128266;';
+      volBtn.setAttribute('aria-label', video.muted ? 'Unmute' : 'Mute');
+      store('muted', video.muted ? '1' : '0');
     });
     bar.querySelector('[data-act="pip"]').addEventListener('click', function(){
       if(document.pictureInPictureElement === video){ document.exitPictureInPicture().catch(function(){}); }
@@ -622,47 +790,172 @@
     var qualBtn = bar.querySelector('[data-act="quality"]');
     if(qualBtn) qualBtn.addEventListener('click', function(){ toggleLevels(el); });
 
+    /* --- buffering / error state ---------------------------------------- */
+    video.addEventListener('waiting', function(){ showOverlay('Buffering…', false); });
+    video.addEventListener('stalled', function(){ showOverlay('Buffering…', false); });
+    video.addEventListener('seeking', function(){ if(video.readyState < 3) showOverlay('Seeking…', false); });
+    video.addEventListener('playing', hideOverlay);
+    video.addEventListener('canplay', hideOverlay);
+    video.addEventListener('error', function(){
+      var err = video.error;
+      var msg = 'This video could not be loaded.';
+      if(err && err.code === 2) msg = 'This video could not be loaded (network error).';
+      else if(err && err.code === 3) msg = 'This video could not be decoded.';
+      else if(err && err.code === 4) msg = 'This video format is not supported by your browser.';
+      showOverlay(msg, true);
+    });
+
+    /* --- restore remembered settings ------------------------------------ */
+    var savedSpeed = parseFloat(load('speed'));
+    if(isFinite(savedSpeed) && savedSpeed > 0){
+      var si = SPEEDS.indexOf(savedSpeed);
+      speedIdx = si >= 0 ? si : speedIdx;
+      video.playbackRate = SPEEDS[speedIdx];
+      if(speedBtn) speedBtn.textContent = SPEEDS[speedIdx] + '\u00d7';
+    }
+    var savedVol = parseFloat(load('volume'));
+    if(isFinite(savedVol) && savedVol >= 0 && savedVol <= 1){
+      video.volume = savedVol;
+      video.muted = false;
+    } else if(!video.muted){
+      video.muted = load('muted') === '1';
+    }
+    if(volBtn){
+      volBtn.innerHTML = video.muted ? '&#128263;' : '&#128266;';
+      volBtn.setAttribute('aria-label', video.muted ? 'Unmute' : 'Mute');
+    }
+    video.addEventListener('volumechange', function(){
+      store('volume', String(video.volume));
+      store('muted', video.muted ? '1' : '0');
+    });
+
+    /* --- auto-hide bar: mouse, touch and keyboard ------------------------ */
     var hideTimer = null;
     function scheduleHide(){ if(hideTimer) clearTimeout(hideTimer); if(!video.paused){ hideTimer = setTimeout(function(){ bar.classList.remove('show'); }, 2600); } }
-    el.addEventListener('mousemove', function(){ bar.classList.add('show'); scheduleHide(); });
+    function reveal(){ bar.classList.add('show'); scheduleHide(); }
+    el.addEventListener('mousemove', reveal);
     el.addEventListener('mouseleave', function(){ if(!video.paused) bar.classList.remove('show'); });
-    video.addEventListener('pause', function(){ bar.classList.add('show'); });
+    /* Touch: a tap on the picture reveals the bar (and a second tap hides it
+       again). Without this the controls were unreachable on phones, where
+       there is no mousemove. */
+    el.addEventListener('touchstart', reveal, {passive:true});
+    el.addEventListener('pointerdown', function(e){
+      if(e.pointerType === 'touch') reveal();
+    });
+    document.addEventListener('keydown', function(e){
+      if(!el.isConnected || document.hidden) return;
+      var t = e.target;
+      if(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if(document.querySelector('.player-quality')) { return; }
+      var handled = true;
+      switch(e.key){
+        case ' ': case 'k': case 'K':
+          if(video.paused){ video.play().catch(function(){}); } else { video.pause(); }
+          break;
+        case 'j': case 'J': seekBy(-10); break;
+        case 'l': case 'L': seekBy(10); break;
+        case 'ArrowLeft': seekBy(-5); break;
+        case 'ArrowRight': seekBy(5); break;
+        case 'ArrowUp': stepVolume(0.1); break;
+        case 'ArrowDown': stepVolume(-0.1); break;
+        case 'm': case 'M': if(volBtn) volBtn.click(); break;
+        case 'f': case 'F': bar.querySelector('[data-act="fs"]').click(); break;
+        default:
+          if(e.key >= '0' && e.key <= '9'){ jumpTo(e.key / 10); }
+          else { handled = false; }
+      }
+      if(handled){ e.preventDefault(); reveal(); }
+    });
+    function seekBy(delta){
+      if(!isFinite(video.duration) || isLive) return;
+      video.__userSeeked = true;
+      video.currentTime = Math.min(Math.max(0, video.currentTime + delta), Math.max(0, video.duration - 0.25));
+      showOverlay('Seeking…', false);
+    }
+    function stepVolume(delta){
+      video.muted = false;
+      video.volume = Math.min(1, Math.max(0, video.volume + delta));
+      if(volBtn){ volBtn.innerHTML = '&#128266;'; volBtn.setAttribute('aria-label','Mute'); }
+    }
+    function jumpTo(fraction){
+      if(!isFinite(video.duration) || isLive) return;
+      video.currentTime = Math.min(Math.max(0, video.duration - 0.25), video.duration * fraction);
+    }
+
+    /* --- chapter list (server-rendered buttons) --------------------------- */
+    el.querySelectorAll('[data-chapter-seek]').forEach(function(btn){
+      if(btn.__chapterBound) return;
+      btn.__chapterBound = true;
+      btn.addEventListener('click', function(){
+        var t = parseFloat(btn.getAttribute('data-chapter-seek'));
+        if(!isFinite(t)) return;
+        video.__userSeeked = true;
+        video.currentTime = Math.min(Math.max(0, t), isFinite(video.duration) ? Math.max(0, video.duration - 0.25) : t);
+        video.play().catch(function(){});
+        reveal();
+      });
+    });
+
+    /* --- keyboard shortcut help ("?") ------------------------------------ */
+    var keysPanel = null;
+    function toggleKeys(){
+      if(keysPanel){ keysPanel.remove(); keysPanel = null; return; }
+      keysPanel = document.createElement('div');
+      keysPanel.className = 'player-keys';
+      keysPanel.setAttribute('role', 'note');
+      keysPanel.innerHTML = '<strong>Keyboard</strong>'
+        + '<dl>'
+        + '<dt>Space / K</dt><dd>Play or pause</dd>'
+        + '<dt>J / L</dt><dd>Back or forward 10s</dd>'
+        + '<dt>&larr; / &rarr;</dt><dd>Seek 5s</dd>'
+        + '<dt>&uarr; / &darr;</dt><dd>Volume</dd>'
+        + '<dt>M</dt><dd>Mute</dd>'
+        + '<dt>F</dt><dd>Full screen</dd>'
+        + '<dt>0-9</dt><dd>Jump to 0-90%</dd>'
+        + '<dt>?</dt><dd>This list</dd>'
+        + '</dl>';
+      el.appendChild(keysPanel);
+    }
+    document.addEventListener('keydown', function(e){
+      if(e.key !== '?' && e.key !== '/') return;
+      if(!el.isConnected) return;
+      var t = e.target;
+      if(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      e.preventDefault();
+      toggleKeys();
+    });
+
+    /* --- start on the right rendition ----------------------------------- */
+    var startRendition = chooseRendition(sources, null);
+    if(startRendition){
+      // Only switch when the server's src is not the picked rung: the element
+      // already has src=sources[key].url in that case, so setting it again
+      // would throw away the first bytes.
+      var already = video.getAttribute('src') === sources[startRendition].url;
+      if(!already){ currentRendition = startRendition; video.src = sources[startRendition].url; }
+      else { currentRendition = startRendition; }
+    }
 
     setIcon();
     updateSeek();
+    layoutTicks();
     bar.classList.add('show');
     setTimeout(function(){ if(video.paused) bar.classList.remove('show'); }, 3200);
   }
 
-  function toggleLevels(el){
-    var menu = el.querySelector('.player-quality');
-    if(menu){ menu.remove(); return; }
-    if(!liveHls) return;
-    menu = document.createElement('div');
-    menu.className = 'player-quality';
-    var items = '<button type="button" data-l="auto">Auto</button>' +
-      (liveHls.levels || []).map(function(lv, i){ return '<button type="button" data-l="' + i + '">' + (lv.height ? lv.height + 'p' : 'Auto') + '</button>'; }).join('');
-    menu.innerHTML = items;
-    el.appendChild(menu);
-    menu.addEventListener('click', function(e){
-      var b = e.target && e.target.closest ? e.target.closest('[data-l]') : null;
-      if(!b) return;
-      liveHls.currentLevel = b.getAttribute('data-l') === 'auto' ? -1 : parseInt(b.getAttribute('data-l'), 10);
-      menu.remove();
-    });
-  }
-
   window.PlayerUI = {
     init: init,
-    setLevels: function(hls){ liveHls = hls; },
-    toggleLevels: toggleLevels
+    setLevels: function(hls){ liveHls = hls; }
   };
 
+  /* Public entry point used after an AJAX media swap: the swapped markup can
+     bring a brand-new [data-player] wrapper (and a brand-new <video>), and the
+     bar is only ever attached once per element. */
   function initAll(){ document.querySelectorAll('[data-player]').forEach(function(el){ init(el); }); }
+  window.PlayerUI.initAll = initAll;
   if(document.readyState !== 'loading'){ initAll(); } else { document.addEventListener('DOMContentLoaded', initAll); }
   window.addEventListener('load', initAll);
 })();
-
 /* Picture-in-picture "keep open": when a video ends inside PiP and the user
    opted to keep it open, the browser auto-closes the PiP window on ended —
    reopen it so it stays up for replay. A manual close (not right after ended)
@@ -724,7 +1017,13 @@ document.addEventListener('leavepictureinpicture', function(){
   function bindVideo(video){
     if(!video || video.__advBound) return;
     video.__advBound = true;
-    video.addEventListener('ended', function(){ clearSlideshowTimer(); advanceNext(); });
+    video.addEventListener('ended', function(){
+      clearSlideshowTimer();
+      // Autoplay off (or Repeat on, which the queue module handles by
+      // replaying this video) must stop this path from advancing too.
+      if(window.GalleryQueue && !window.GalleryQueue.canAdvance()) return;
+      advanceNext();
+    });
   }
 
   function updatePlaylist(doc){
@@ -779,6 +1078,11 @@ document.addEventListener('leavepictureinpicture', function(){
             var ngp = doc.querySelector('.gallery-player');
             var ogp = wrap.querySelector('.gallery-player');
             if(ngp && ogp){ ogp.outerHTML = ngp.outerHTML; }
+            // A swapped video can bring a different ladder/poster/chapters set
+            // and a new <video> element: rebuild the control bar for it.
+            if(window.PlayerUI && window.PlayerUI.initAll) window.PlayerUI.initAll();
+            var v3 = wrap.querySelector('video');
+            if(v3 && window.GalleryResume) window.GalleryResume(v3);
           }
           var video2 = wrap.querySelector('video');
           if(video2) bindVideo(video2);
@@ -838,13 +1142,48 @@ document.addEventListener('leavepictureinpicture', function(){
 /* Playlist queue + in-page gallery browser for the video player.
    Browsing happens inside the page (fetch + DOM swap), so a picture-in-picture
    window keeps playing. Picking a video adds it to a sessionStorage queue
-   (front/end prompt when items are queued) and/or plays it in place. */
+   (front/end prompt when items are queued) and/or plays it in place.
+
+   The queue is the transient "Up next" list only; the durable playlist is the
+   server-side collection (see the Save-queue-as-collection button), which
+   survives a new tab/device. Queue preferences (autoplay/repeat/shuffle) are
+   remembered per signed-in user. */
 (function(){
   var QKEY = 'galleryPlaylistQueue';
   var queue = [];
+  var prefs = { autoplay: true, repeat: false, shuffle: false };
+  var CSRF = (function(){
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  })();
+
+  function ns(){
+    var body = document.body;
+    return 'vp' + ((body && body.getAttribute('data-uid')) || '0') + '.';
+  }
   function loadQ(){ try{ queue = JSON.parse(sessionStorage.getItem(QKEY)||'[]')||[]; }catch(e){ queue=[]; } }
   function saveQ(){ try{ sessionStorage.setItem(QKEY, JSON.stringify(queue)); }catch(e){} }
+  function loadPrefs(){
+    try{
+      prefs.autoplay = localStorage.getItem(ns()+'autoplay') !== '0';
+      prefs.repeat   = localStorage.getItem(ns()+'repeat') === '1';
+      prefs.shuffle  = localStorage.getItem(ns()+'shuffle') === '1';
+    }catch(e){}
+  }
+  function savePref(name, value){
+    try{ localStorage.setItem(ns()+name, value ? '1' : '0'); }catch(e){}
+  }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function seconds(t){ var p=String(t||'').split(':').map(Number); if(p.some(isNaN)) return 0; return p.reduce(function(a,b){return a*60+b;},0); }
+
+  function queueSeconds(){
+    return queue.reduce(function(a,q){ return a + seconds(q.duration); },0);
+  }
+  function fmtTotal(total){
+    total = Math.max(0, Math.floor(total));
+    var h=Math.floor(total/3600), m=Math.floor((total%3600)/60), x=total%60;
+    return (h ? h+':'+(m<10?'0':'')+m : m) + ':' + (x<10?'0':'')+x;
+  }
 
   // Remove browse tiles whose video is already in the playlist/queue, so a
   // queued video no longer appears in the browse list.
@@ -861,77 +1200,155 @@ document.addEventListener('leavepictureinpicture', function(){
   function init(){
     var btn = document.getElementById('browse-galleries-btn');
     var panel = document.getElementById('player-browse');
-    if(!btn || !panel || panel.__init) return;
-    panel.__init = true;
-    var body = panel.querySelector('.pb-body');
-    var search = document.getElementById('pb-search');
-    var base = (document.body && document.body.getAttribute('data-base')) || '';
+    if(btn && panel && !panel.__init){
+      panel.__init = true;
+      var body = panel.querySelector('.pb-body');
+      var search = document.getElementById('pb-search');
+      var base = (document.body && document.body.getAttribute('data-base')) || '';
 
-    function loadList(q, offset){
-      var url = base + '/browse/videos';
-      var qs = [];
-      if(q){ qs.push('q=' + encodeURIComponent(q)); }
-      if(offset){ qs.push('offset=' + offset); }
-      if(qs.length){ url += '?' + qs.join('&'); }
-      return fetch(url).then(function(r){ return r.text(); });
-    }
-
-    function showList(q){
-      body.innerHTML = '<p class="muted">Loading&hellip;</p>';
-      loadList(q || '').then(function(html){ body.innerHTML = html; removeQueuedTiles(); }).catch(function(){ body.innerHTML = '<p class="muted">Could not load videos.</p>'; });
-    }
-
-    btn.addEventListener('click', function(){
-      panel.hidden = !panel.hidden;
-      if(!panel.hidden && !body.childNodes.length){
-        showList(search ? search.value : '');
+      function loadList(q, offset){
+        var url = base + '/browse/videos';
+        var qs = [];
+        if(q){ qs.push('q=' + encodeURIComponent(q)); }
+        if(offset){ qs.push('offset=' + offset); }
+        if(qs.length){ url += '?' + qs.join('&'); }
+        return fetch(url).then(function(r){ return r.text(); });
       }
-    });
 
-    // Debounced search re-fetches the video list.
-    var debounce = null;
-    if(search){
-      search.addEventListener('input', function(){
-        clearTimeout(debounce);
-        debounce = setTimeout(function(){ showList(search.value); }, 250);
+      function showList(q){
+        body.innerHTML = '<p class="muted">Loading&hellip;</p>';
+        loadList(q || '').then(function(html){ body.innerHTML = html; removeQueuedTiles(); }).catch(function(){ body.innerHTML = '<p class="muted">Could not load videos.</p>'; });
+      }
+
+      btn.addEventListener('click', function(){
+        panel.hidden = !panel.hidden;
+        btn.setAttribute('aria-expanded', panel.hidden ? 'false' : 'true');
+        if(!panel.hidden && !body.childNodes.length){
+          showList(search ? search.value : '');
+        }
+      });
+
+      // Debounced search re-fetches the video list.
+      var debounce = null;
+      if(search){
+        search.addEventListener('input', function(){
+          clearTimeout(debounce);
+          debounce = setTimeout(function(){ showList(search.value); }, 250);
+        });
+      }
+
+      panel.addEventListener('click', function(e){
+        var more = e.target.closest('.pb-more');
+        if(more){
+          e.preventDefault();
+          loadList(more.getAttribute('data-q') || '', parseInt(more.getAttribute('data-offset'), 10) || 0)
+            .then(function(html){
+              var holder = document.createElement('div');
+              holder.innerHTML = html;
+              more.remove();
+              // Append each child directly so the grid pattern is preserved.
+              Array.prototype.forEach.call(holder.children, function(child){ body.appendChild(child); });
+              removeQueuedTiles();
+            })
+            .catch(function(){});
+          return;
+        }
+        var vid = e.target.closest('[data-browse-video]');
+        if(vid){
+          e.preventDefault();
+          chooseAction({
+            id: vid.getAttribute('data-browse-video'),
+            title: vid.getAttribute('data-video-title') || 'Video',
+            thumb: vid.getAttribute('data-video-thumb') || '',
+            web: vid.getAttribute('data-video-web') || '',
+            url: vid.getAttribute('data-video-url') || (base + '/videos/' + vid.getAttribute('data-browse-video')),
+            duration: vid.getAttribute('data-video-duration') || ''
+          });
+        }
       });
     }
 
-    panel.addEventListener('click', function(e){
-      var more = e.target.closest('.pb-more');
-      if(more){
-        e.preventDefault();
-        loadList(more.getAttribute('data-q') || '', parseInt(more.getAttribute('data-offset'), 10) || 0)
-          .then(function(html){
-            var holder = document.createElement('div');
-            holder.innerHTML = html;
-            more.remove();
-            // Append each child directly so the grid pattern is preserved.
-            Array.prototype.forEach.call(holder.children, function(child){ body.appendChild(child); });
-            removeQueuedTiles();
-          })
-          .catch(function(){});
-        return;
-      }
-      var vid = e.target.closest('[data-browse-video]');
-      if(vid){
-        e.preventDefault();
-        chooseAction({
-          id: vid.getAttribute('data-browse-video'),
-          title: vid.getAttribute('data-video-title') || 'Video',
-          thumb: vid.getAttribute('data-video-thumb') || '',
-          web: vid.getAttribute('data-video-web') || '',
-          url: vid.getAttribute('data-video-url') || (base + '/videos/' + vid.getAttribute('data-browse-video')),
-          duration: vid.getAttribute('data-video-duration') || ''
-        });
-      }
+    bindPlaylistControls();
+  }
+
+  function bindPlaylistControls(){
+    var aside = document.querySelector('.player-playlist');
+    if(!aside || aside.__ctrlsBound) return;
+    aside.__ctrlsBound = true;
+
+    aside.querySelectorAll('[data-queue]').forEach(function(btn){
+      var name = btn.getAttribute('data-queue');
+      btn.setAttribute('aria-pressed', prefs[name] ? 'true' : 'false');
+      btn.textContent = labelFor(name, prefs[name]);
+      btn.addEventListener('click', function(){
+        prefs[name] = !prefs[name];
+        savePref(name, prefs[name]);
+        btn.setAttribute('aria-pressed', prefs[name] ? 'true' : 'false');
+        btn.textContent = labelFor(name, prefs[name]);
+      });
     });
+
+    var saveBtn = aside.querySelector('[data-save-collection]');
+    if(saveBtn && !saveBtn.__saveBound){
+      saveBtn.__saveBound = true;
+      saveBtn.addEventListener('click', function(){
+        if(!queue.length){ window.alert('Queue something first, then save it as a collection.'); return; }
+        var name = window.prompt('Name this playlist', 'Watch later');
+        if(!name || !name.trim()) return;
+        var base = (document.body && document.body.getAttribute('data-base')) || '';
+        var body = new URLSearchParams();
+        body.append('name', name.trim());
+        queue.forEach(function(q){ body.append('photo_ids[]', q.id); });
+        if(CSRF) body.append('_token', CSRF);
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving…';
+        fetch(base + '/collections/from-queue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+          body: body.toString(),
+          credentials: 'same-origin'
+        })
+          .then(function(r){ return r.text().then(function(t){ return { ok: r.ok, url: r.url, body: t }; }); })
+          .then(function(res){
+            if(res.ok || res.body.indexOf('collection') !== -1){
+              window.location.href = res.url && res.url.indexOf('/collections') !== -1 ? res.url : (base + '/collections');
+            } else {
+              saveBtn.disabled = false;
+              saveBtn.textContent = 'Save queue as collection';
+              window.alert('Could not save that playlist. Please try again.');
+            }
+          })
+          .catch(function(){
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save queue as collection';
+          });
+      });
+    }
+
+    var toggle = document.querySelector('[data-playlist-toggle]');
+    if(toggle && !toggle.__collapseBound){
+      toggle.__collapseBound = true;
+      toggle.addEventListener('click', function(){
+        var body = document.getElementById('player-playlist-body');
+        if(!body) return;
+        var open = toggle.getAttribute('aria-expanded') === 'true';
+        toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+        toggle.textContent = open ? 'Show playlist' : 'Hide playlist';
+        body.hidden = open;
+      });
+    }
+  }
+
+  function labelFor(name, on){
+    if(name === 'autoplay') return 'Autoplay: ' + (on ? 'on' : 'off');
+    if(name === 'repeat') return 'Repeat: ' + (on ? 'on' : 'off');
+    return 'Shuffle: ' + (on ? 'on' : 'off');
   }
 
   function chooseAction(item){
     var video = document.querySelector('#video-player-wrap video');
     if(!video) return;
-    var already = queue.some(function(q){ return q.id === item.id; });
+    var already = queue.some(function(q){ return String(q.id) === String(item.id); });
     var doIt = function(how){
       if(!already){
         if(how === 'front'){ queue.unshift(item); }
@@ -957,7 +1374,7 @@ document.addEventListener('leavepictureinpicture', function(){
     var d = document.createElement('div');
     d.id = 'queue-prompt';
     d.className = 'queue-prompt';
-    d.innerHTML = '<div class="queue-prompt-card" role="dialog" aria-modal="true">' +
+    d.innerHTML = '<div class="queue-prompt-card" role="dialog" aria-modal="true" aria-label="Add to playlist">' +
       '<p>Add &ldquo;' + esc(item.title) + '&rdquo; to the playlist?</p>' +
       '<div class="queue-prompt-actions">' +
       '<button type="button" data-q="play">Play now</button>' +
@@ -966,10 +1383,30 @@ document.addEventListener('leavepictureinpicture', function(){
       '<button type="button" class="qp-cancel" data-q="cancel">Cancel</button>' +
       '</div></div>';
     document.body.appendChild(d);
-    d.querySelectorAll('button').forEach(function(b){
+
+    /* Focus trap: the dialog is modal, so Tab must not walk out of it and
+       Escape must close it. Without this a keyboard user was stranded behind
+       the overlay (or had to hunt for the cancel button). */
+    var buttons = Array.prototype.slice.call(d.querySelectorAll('button'));
+    var first = buttons[0];
+    var last = buttons[buttons.length - 1];
+    if(first) first.focus();
+    d.addEventListener('keydown', function(e){
+      if(e.key === 'Escape'){ e.preventDefault(); d.remove(); return; }
+      if(e.key !== 'Tab') return;
+      if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+    });
+    var restore = document.activeElement;
+    d.addEventListener('click', function(e){
+      if(e.target === d){ d.remove(); if(restore && restore.focus) restore.focus(); }
+    });
+
+    buttons.forEach(function(b){
       b.addEventListener('click', function(){
         var how = b.getAttribute('data-q');
         d.remove();
+        if(restore && restore.focus) restore.focus();
         if(how === 'cancel') return;
         if(how === 'front') doIt('front');
         else if(how === 'end') doIt('end');
@@ -983,15 +1420,45 @@ document.addEventListener('leavepictureinpicture', function(){
     var video = document.querySelector('#video-player-wrap video');
     if(!video || !item.web) return;
     var wasPaused = video.paused;
+    var at = video.currentTime;
     video.src = item.web;
     video.load();
     if(!wasPaused){ video.play().catch(function(){}); }
+    if(at > 0 && isFinite(video.duration) === false){
+      video.addEventListener('loadedmetadata', function(){
+        if(at > 0 && isFinite(video.duration)) video.currentTime = Math.min(at, Math.max(0, video.duration - 0.25));
+      }, {once:true});
+    }
     // highlight the matching playlist row if one exists
     var li = document.querySelector('.player-playlist .pl-item[data-video-id="' + item.id + '"]');
     if(li){
       document.querySelectorAll('.player-playlist .pl-item').forEach(function(x){ x.classList.remove('active'); });
       li.classList.add('active');
     }
+  }
+
+  /* The next video to play when the current one ends. Repeat wins over
+     autoplay; shuffle picks a random queued item; otherwise the row after the
+     active one. Returns null when nothing should play. */
+  function nextQueued(){
+    if(prefs.repeat){
+      var video = document.querySelector('#video-player-wrap video');
+      if(video) return { action: 'restart' };
+    }
+    if(!queue.length) return null;
+    if(prefs.shuffle){
+      return { action: 'play', item: queue[Math.floor(Math.random() * queue.length)] };
+    }
+    var active = document.querySelector('.player-playlist .pl-item.active');
+    if(active && active.nextElementSibling){
+      var next = active.nextElementSibling.getAttribute('data-video-id');
+      for(var i = 0; i < queue.length; i++){
+        if(String(queue[i].id) === String(next)) return { action: 'play', item: queue[i] };
+      }
+    }
+    // Fall back to the first queued row (the queue is "up next" even when the
+    // current video is not in the collection playlist).
+    return { action: 'play', item: queue[0] };
   }
 
   function renderQueue(){
@@ -1004,8 +1471,10 @@ document.addEventListener('leavepictureinpicture', function(){
     if(sep) sep.remove();
     var empty = aside.querySelector('.pl-empty');
     var clearBtn = aside.querySelector('.pl-clear');
+    var saveBtn = aside.querySelector('[data-save-collection]');
     if(!queue.length){
       if(clearBtn) clearBtn.remove();
+      if(saveBtn) saveBtn.hidden = true;
       // Keep the empty state only when there is no collection playlist either.
       if(!ul.querySelector('.pl-item') && !empty){
         empty = document.createElement('p');
@@ -1033,7 +1502,8 @@ document.addEventListener('leavepictureinpicture', function(){
     }
     var wrap = document.createElement('li');
     wrap.className = 'pl-item pl-queued-sep';
-    wrap.innerHTML = '<div class="pl-title" style="font-weight:600;">Up next</div>';
+    wrap.innerHTML = '<div class="pl-title" style="font-weight:600;">Up next &middot; '
+      + queue.length + (queue.length === 1 ? ' video · ' : ' videos · ') + fmtTotal(queueSeconds()) + '</div>';
     ul.appendChild(wrap);
     queue.forEach(function(item){
       var li = document.createElement('li');
@@ -1045,7 +1515,7 @@ document.addEventListener('leavepictureinpicture', function(){
         '<span class="pl-title">' + esc(item.title) + '</span>' +
         (item.duration ? '<span class="pl-duration">' + esc(item.duration) + '</span>' : '') +
         '</a>' +
-        '<button type="button" class="pl-remove" data-id="' + esc(item.id) + '" aria-label="Remove from playlist" title="Remove from playlist">&times;</button>';
+        '<button type="button" class="pl-remove" data-id="' + esc(item.id) + '" aria-label="Remove ' + esc(item.title) + ' from playlist" title="Remove from playlist">&times;</button>';
       ul.appendChild(li);
       li.querySelector('a').addEventListener('click', function(e){
         e.preventDefault();
@@ -1059,13 +1529,46 @@ document.addEventListener('leavepictureinpicture', function(){
         renderQueue();
       });
     });
-    // auto-advance flows into queued rows via the playlist ended handler
+    if(saveBtn) saveBtn.hidden = false;
+    bindPlaylistControls();
+  }
+
+  /* Autoplay-next now honours the user's choice. The previous behaviour always
+     advanced on "ended", which made stopping the queue impossible. */
+  function bindEnded(){
+    var video = document.querySelector('#video-player-wrap video');
+    if(!video || video.__queueEndedBound) return;
+    video.__queueEndedBound = true;
+    video.addEventListener('ended', function(){
+      if(prefs.repeat){ video.currentTime = 0; video.play().catch(function(){}); return; }
+      if(!prefs.autoplay) return;
+      var nxt = nextQueued();
+      if(!nxt) return;
+      if(nxt.action === 'restart'){ video.currentTime = 0; video.play().catch(function(){}); return; }
+      if(nxt.item && nxt.item.web) playItem(nxt.item);
+    });
+  }
+
+  function wire(){
+    init();
+    bindPlaylistControls();
+    bindEnded();
+    renderQueue();
   }
 
   loadQ();
-  if(document.readyState !== 'loading'){ init(); } else { document.addEventListener('DOMContentLoaded', init); }
-  window.addEventListener('load', function(){ init(); renderQueue(); });
-  // Expose for the media-nav swap handler to re-render queued rows after a
-  // prev/next navigation replaces the playlist aside.
-  window.GalleryQueue = { render: renderQueue };
+  loadPrefs();
+  if(document.readyState !== 'loading'){ wire(); } else { document.addEventListener('DOMContentLoaded', wire); }
+  window.addEventListener('load', function(){ wire(); renderQueue(); });
+  // Exposed so the media-nav swap handler can re-render queued rows (and rebind
+  // the controls) after a prev/next navigation replaces the playlist aside.
+  window.GalleryQueue = {
+    render: function(){ wire(); renderQueue(); },
+    prefs: prefs,
+    next: nextQueued,
+    /* Single decision point for "should 'ended' move to the next video?".
+       The media-nav swap module asks the same question, so the Autoplay /
+       Repeat toggles cannot be bypassed by that older code path. */
+    canAdvance: function(){ return prefs.autoplay && !prefs.repeat; }
+  };
 })();

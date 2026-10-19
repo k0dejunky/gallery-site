@@ -101,6 +101,9 @@ return [
     ['POST', '/collections/{id}/galleries/{galleryId}/delete', 'CollectionController@removeGallery'],
     ['POST', '/collections/{id}/photos', 'CollectionController@addPhoto'],
     ['POST', '/collections/{id}/photos/{photoId}/delete', 'CollectionController@removePhoto'],
+    ['POST', '/collections/{id}/move', 'CollectionController@move'],
+    // Turn the player's "Up next" queue into a durable, cross-device playlist.
+    ['POST', '/collections/from-queue', 'CollectionController@fromQueue'],
     ['GET', '/go/{code}', 'ReferralController@go'],
     ['GET', '/account/referrals', 'ReferralController@page'],
 

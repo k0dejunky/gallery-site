@@ -54,6 +54,10 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <?php // AJAX POSTs (e.g. saving the player's queue as a collection) need the
+          // CSRF token outside a form; every server-rendered form still uses
+          // csrf_field(), and this token is the same per-session value. ?>
+    <meta name="csrf-token" content="<?= e(\App\Core\Csrf::token()) ?>">
     <meta name="rating" content="RTA-5042-1996-1400-1577-RTA">
     <meta name="icra" content="nudity, sexual content, adult content">
     <?php if ($gaAllowed ?? false): ?>
@@ -104,7 +108,7 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     <link rel="stylesheet" href="<?= e(url('/theme.css') . '?v=' . \App\Models\Theme::themeCssVersion($userThemePreset)) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/user.css')) ?>">
 </head>
-<body<?= $isAuthPage ? '' : ' class="site-compact"' ?> data-base="<?= e(config('app.base_path')) ?>" data-user="<?= $user !== null ? '1' : '0' ?>">
+<body<?= $isAuthPage ? '' : ' class="site-compact"' ?> data-base="<?= e(config('app.base_path')) ?>" data-user="<?= $user !== null ? '1' : '0' ?>" data-uid="<?= (int) ($user['id'] ?? 0) ?>">
 <?php if ($ageGateRequired): ?>
 <style>
     .age-gate{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;background:linear-gradient(160deg,#2a1240,#4a1d5f 55%,#7e1d4f);color:#fff;}
@@ -613,7 +617,7 @@ document.addEventListener('error',function(e){
   }
 },true);
     </script>
-    <script nonce="<?= csp_nonce() ?>" src="<?= url('/assets/js/user.js') ?>?v=16" defer></script>
+    <script nonce="<?= csp_nonce() ?>" src="<?= url('/assets/js/user.js') ?>?v=19" defer></script>
     <script nonce="<?= csp_nonce() ?>" src="<?= url('/assets/js/tour.js') ?>?v=9" defer></script>
 </body>
 </html>

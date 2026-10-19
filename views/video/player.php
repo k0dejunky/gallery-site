@@ -48,6 +48,30 @@ $breadcrumbItems = [
     ['label' => 'Gallery', 'url' => url('/galleries/' . (int) ($gallery['id'] ?? 0))],
     ['label' => $photo['caption'] ?: 'Video'],
 ];
+
+// Playback ladder: only the rungs that actually exist on disk are offered, so
+// the quality menu can never hand the browser a URL that 404s. Ordered
+// low -> high by config; the player picks the first rung when the connection
+// looks metered/slow.
+$qualitySources = [];
+$rungPaths = video_rung_paths((string) $photo['filename']);
+foreach (video_ladder() as $rung) {
+    $rungPath = $rungPaths[$rung['size']] ?? '';
+    if ($rungPath === '' || !is_file($rungPath)) {
+        continue;
+    }
+    $qualitySources[$rung['size']] = [
+        'label' => (string) $rung['label'],
+        'url'   => file_url((string) $photo['filename'], $rung['size']),
+        'bytes' => (int) @filesize($rungPath),
+    ];
+}
+$posterUrl = video_poster_url((string) $photo['filename']);
+$chapters  = is_array($chapters ?? null) ? $chapters : [];
+$playlistTotal = 0;
+foreach ((array) ($playlist ?? []) as $item) {
+    $playlistTotal += (int) ($item['duration_seconds'] ?? 0);
+}
 ?>
 <?php require __DIR__ . '/../partials/breadcrumbs.php'; ?>
 <?php if (!empty($canViewFull)): ?>
@@ -94,7 +118,9 @@ $breadcrumbItems = [
                 </figcaption>
                 <?php
                 $gateTitle = $title;
-                $gateLevel = 0;
+                // Say what the gate actually requires; a Gold-only video must
+                // not advertise itself as "members content".
+                $gateLevel = (int) ($minimumLevel ?? 0);
                 $gateMedia = 'video';
                 require __DIR__ . '/../partials/membership_gate.php';
                 ?>
@@ -102,7 +128,35 @@ $breadcrumbItems = [
             <p class="media-progress" role="status">Item <?= (int) ($currentIndex + 1) ?> of <?= (int) ($mediaCount ?? 1) ?></p>
             <div class="gallery-player" data-player>
                 <?php if (is_video($photo['filename'])): ?>
-                    <video id="gallery-video-<?= (int) $photo['id'] ?>" data-video-id="<?= (int) $photo['id'] ?>" data-media-type="video" src="<?= e($src) ?>" controls preload="metadata" playsinline aria-label="<?= e($title) ?>"></video>
+                    <video id="gallery-video-<?= (int) $photo['id'] ?>"
+                           data-video-id="<?= (int) $photo['id'] ?>"
+                           data-media-type="video"
+                           src="<?= e($src) ?>"
+                           <?= $posterUrl !== '' ? 'poster="' . e($posterUrl) . '"' : '' ?>
+                           data-sources='<?= e(json_encode((object) $qualitySources, JSON_UNESCAPED_SLASHES)) ?>'
+                           <?php if ($chapters !== []): ?>data-chapters='<?= e(json_encode($chapters, JSON_UNESCAPED_SLASHES)) ?>'<?php endif; ?>
+                           controls preload="metadata" playsinline
+                           aria-label="<?= e($title) ?>"></video>
+                    <div class="player-overlay" data-overlay hidden>
+                        <span class="player-spinner" data-spinner aria-hidden="true"></span>
+                        <p class="player-overlay-msg" data-overlay-msg role="status"></p>
+                        <button type="button" class="btn btn-sm player-retry" data-retry hidden>Retry</button>
+                    </div>
+                    <?php if ($chapters !== []): ?>
+                        <details class="player-chapters">
+                            <summary>Chapters (<?= count($chapters) ?>)</summary>
+                            <ol>
+                                <?php foreach ($chapters as $ch): ?>
+                                    <li>
+                                        <button type="button" data-chapter-seek="<?= (float) $ch['start'] ?>">
+                                            <span class="ch-time"><?= e(gmdate('i:s', (int) round((float) $ch['start']))) ?></span>
+                                            <span class="ch-title"><?= e((string) $ch['title']) ?></span>
+                                        </button>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ol>
+                        </details>
+                    <?php endif; ?>
                 <?php else: ?>
                     <img id="slideshow-img" data-video-id="<?= (int) $photo['id'] ?>" data-media-type="image" src="<?= e($src) ?>" alt="<?= e($title) ?>" style="max-width:100%;max-height:calc(100dvh - 260px);height:auto;border-radius:10px;box-shadow:0 2px 14px rgba(59,7,100,.35);">
                     <div class="slideshow-bar" data-slideshow-bar>
@@ -126,7 +180,19 @@ $breadcrumbItems = [
     <?php if (!empty($canViewFull)): ?>
     <div class="player-side">
         <aside class="player-playlist" id="player-playlist">
-            <h3><?= !empty($playlistName) ? e($playlistName) : 'Up next' ?><?= !empty($playlist) ? ' <span class="muted" style="font-weight:400;">(' . count($playlist) . ')</span>' : '' ?></h3>
+            <button type="button" class="pl-collapse" data-playlist-toggle aria-expanded="true" aria-controls="player-playlist-body">Hide playlist</button>
+            <div id="player-playlist-body">
+            <h3><?= !empty($playlistName) ? e($playlistName) : 'Up next' ?>
+                <?php if (!empty($playlist)): ?>
+                    <span class="muted" style="font-weight:400;">(<?= count($playlist) ?><?= $playlistTotal > 0 ? ', ' . e(gmdate('H:i:s', $playlistTotal)) : '' ?>)</span>
+                <?php endif; ?>
+            </h3>
+            <div class="pl-controls" role="group" aria-label="Playback queue">
+                <button type="button" class="pl-ctl" data-queue="autoplay" aria-pressed="true" title="Play the next video automatically">Autoplay: on</button>
+                <button type="button" class="pl-ctl" data-queue="repeat" aria-pressed="false" title="Repeat this video when it ends">Repeat: off</button>
+                <button type="button" class="pl-ctl" data-queue="shuffle" aria-pressed="false" title="Shuffle the queue order">Shuffle: off</button>
+                <button type="button" class="pl-ctl pl-save" data-save-collection<?= empty($collections) ? ' hidden' : '' ?>>Save queue as collection</button>
+            </div>
             <ul>
                 <?php if (!empty($playlist)): ?>
                     <?php foreach ($playlist as $item): ?>
@@ -143,6 +209,7 @@ $breadcrumbItems = [
             <?php if (empty($playlist)): ?>
                 <p class="pl-empty muted" style="padding:.5rem;margin:.25rem 0 0;font-size:.85rem;">No videos queued. Browse galleries to add to the playlist.</p>
             <?php endif; ?>
+            </div>
         </aside>
 
         <div style="text-align:center;">

@@ -380,12 +380,61 @@ class AdminController extends Controller
             return;
         }
 
-        $mime      = mime_for_extension($name);
+        $mime = mime_for_extension($name);
 
         header('Content-Type: ' . $mime);
-        header('Content-Length: ' . filesize($path));
         header('Cache-Control: public, max-age=3600');
-        readfile($path);
+
+        // Serve Range requests so the pending preview behaves like the real
+        // player: without Accept-Ranges a browser cannot seek, and it has to
+        // download the whole file before it will start.
+        $size  = (int) filesize($path);
+        $start = 0;
+        $end   = $size - 1;
+        $range = (string) $this->request->header('Range');
+        $partial = false;
+
+        if ($range !== '' && preg_match('/^bytes=(\d*)-(\d*)$/', trim($range), $m) === 1) {
+            $hasStart = $m[1] !== '';
+            $hasEnd   = $m[2] !== '';
+            if ($hasStart) {
+                $start = (int) $m[1];
+                $end   = $hasEnd ? min((int) $m[2], $size - 1) : $size - 1;
+            } elseif ($hasEnd) {
+                // Suffix range: the last N bytes.
+                $start = max(0, $size - (int) $m[2]);
+                $end   = $size - 1;
+            }
+            if ($start > $end || $start >= $size) {
+                header('Content-Range: bytes */' . $size);
+                http_response_code(416);
+                exit;
+            }
+            $partial = $start > 0 || $end < ($size - 1);
+        }
+
+        header('Accept-Ranges: bytes');
+        if ($partial) {
+            http_response_code(206);
+            header('Content-Range: bytes ' . $start . '-' . $end . '/' . $size);
+        }
+        header('Content-Length: ' . ($end - $start + 1));
+
+        $fh = fopen($path, 'rb');
+        if ($fh !== false) {
+            fseek($fh, $start);
+            $remaining = $end - $start + 1;
+            while ($remaining > 0 && !feof($fh)) {
+                $chunk = fread($fh, (int) min(262144, $remaining));
+                if ($chunk === false || $chunk === '') {
+                    break;
+                }
+                echo $chunk;
+                $remaining -= strlen($chunk);
+                flush();
+            }
+            fclose($fh);
+        }
         exit;
     }
 

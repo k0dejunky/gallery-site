@@ -2590,6 +2590,214 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad('views/settings.php must render the admin-only site timezone selector using $siteTimezone and $siteTimezones');
         });
 
+        // --------------------------------------------- Video ladder + playlist
+        $vcfg      = $read("$root/config/app.php");
+        $vMigr     = $read("$root/database/migrations/068_video_chapters.sql");
+        $vSchema   = $read("$root/schema.sql");
+        $vModel    = $read("$root/app/Models/VideoChapter.php");
+        $vRendWk   = $read("$root/bin/video_rendition_worker.php");
+        $vChapWk   = $read("$root/bin/video_chapters_worker.php");
+        $vSamples  = $read("$root/bin/generate_video_samples.php");
+        $vPlayer   = $read("$root/views/video/player.php");
+        $vStorage  = $read("$root/app/Controllers/StorageController.php");
+        $vCollC    = $read("$root/app/Controllers/CollectionController.php");
+        $vCollM    = $read("$root/app/Models/Collection.php");
+        $vCollV    = $read("$root/views/collections/show.php");
+        $vAdmin    = $read("$root/app/Controllers/AdminController.php");
+        $vGalleryC = $read("$root/app/Controllers/GalleryController.php");
+        $vLayout   = $read("$root/views/layout.php");
+        $userJs2   = $read("$root/public/assets/js/user.js");
+        $userCss2  = $read("$root/public/assets/css/user.css");
+
+        $add('smoke.video.ladder_config', 'Smoke · Video player', 'ladder config drives lo/mid/hi rungs + chapters settings', static function () use ($vcfg, $ok, $bad): array {
+            $ladder = strpos($vcfg, "'video_ladder'") !== false
+                && strpos($vcfg, "'prefix'  => 'weblo_'") !== false
+                && strpos($vcfg, "'prefix'  => 'web_'") !== false
+                && strpos($vcfg, "'prefix'  => 'webhi_'") !== false;
+            $chapters = strpos($vcfg, "'video_chapters'") !== false
+                && strpos($vcfg, "'scene_threshold'") !== false
+                && strpos($vcfg, "'max_chapters'") !== false;
+            // The 1080p rung is capped at 1920x1080 and only wanted when the
+            // source is bigger (video_ladder_plan), so it never upscales.
+            $hiRung = strpos($vcfg, "'max_w'   => 1920") !== false
+                && strpos($vcfg, "'max_h'   => 1080") !== false;
+            return $ladder && $chapters && $hiRung
+                ? $ok('three rungs (480p/720p/1080p) + chapter settings configured')
+                : $bad("config/app.php must define app.video_ladder with the weblo_/web_/webhi_ rungs and app.video_chapters (scene_threshold, max_chapters)");
+        });
+
+        $add('smoke.video.ladder_helpers', 'Smoke · Video player', 'plan/rendition/path/poster helpers exist and are pure where tested', static function () use ($helpers, $ok, $bad): array {
+            $fns = strpos($helpers, 'function video_ladder(') !== false
+                && strpos($helpers, 'function video_ladder_plan(') !== false
+                && strpos($helpers, 'function video_rung_paths(') !== false
+                && strpos($helpers, 'function create_video_rendition(') !== false
+                && strpos($helpers, 'function video_poster_path(') !== false
+                && strpos($helpers, 'function video_poster_url(') !== false
+                && strpos($helpers, 'function media_variant_prefix(') !== false
+                && strpos($helpers, 'function create_video_poster_frame(') !== false;
+            $mid = strpos($helpers, 'function create_video_web_rendition(') !== false
+                && strpos($helpers, "'mid'") !== false
+                && strpos($helpers, "create_video_rendition(\$src, \$dest, \$mid)") !== false;
+            return $fns && $mid
+                ? $ok('ladder helpers present; the upload-time rendition delegates to the mid rung')
+                : $bad('helpers.php must expose video_ladder/video_ladder_plan/video_rung_paths/create_video_rendition/video_poster_url/media_variant_prefix/create_video_poster_frame, and create_video_web_rendition must delegate to the configured mid rung');
+        });
+
+        $add('smoke.video.variant_prefixes', 'Smoke · Video player', 'one prefix source of truth; new rungs never fall back to the original', static function () use ($helpers, $vStorage, $ok, $bad): array {
+            $single = strpos($helpers, 'function media_variant_prefix(') !== false
+                && strpos($helpers, "'poster'") !== false
+                && strpos($vStorage, 'media_variant_prefix($size)') !== false;
+            $sizes = strpos($vStorage, "'poster', 'web_lo', 'web_hi'") !== false;
+            // The new rungs degrade to the 720p rendition, never to the original:
+            // a missing hi rung must not start streaming a 1 GB file.
+            $fallback = strpos($vStorage, "\$fallback = config('app.uploads.dir') . '/web_' . \$file;") !== false;
+            return $single && $sizes && $fallback
+                ? $ok('prefixes resolved centrally; rungs fall back to 720p')
+                : $bad('StorageController must resolve variant prefixes through media_variant_prefix(), know poster/web_lo/web_hi, and fall back to the web_ rendition (never the original) for a missing rung');
+        });
+
+        $add('smoke.video.chapters_schema', 'Smoke · Video player', 'video_chapters in schema.sql + migration 068 + model', static function () use ($vSchema, $vMigr, $vModel, $ok, $bad): array {
+            $sql = strpos($vSchema, 'video_chapters') !== false
+                && strpos($vSchema, 'start_seconds') !== false;
+            $migr = strpos($vMigr, 'video_chapters') !== false
+                && strpos($vMigr, 'FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE') !== false;
+            $model = strpos($vModel, 'class VideoChapter') !== false
+                && strpos($vModel, 'public static function parseSceneTimes(') !== false
+                && strpos($vModel, 'public static function replaceForPhoto(') !== false
+                && strpos($vModel, 'public static function needsAnalysis(') !== false
+                // Unix epoch from the DB, not strtotime() in PHP: the two
+                // timezones can differ, which made every video look stale.
+                && strpos($vModel, 'UNIX_TIMESTAMP(MAX(created_at))') !== false
+                && strpos($vModel, 'MIN_DURATION') !== false;
+            return $sql && $migr && $model
+                ? $ok('table, migration and model present')
+                : $bad('schema.sql + database/migrations/068_video_chapters.sql must define video_chapters (cascade on photos), and VideoChapter must expose parseSceneTimes/replaceForPhoto/needsAnalysis with a minimum duration');
+        });
+
+        $add('smoke.video.workers', 'Smoke · Video player', 'rendition + chapters workers flock, --once, cron, AI lock respect', static function () use ($vRendWk, $vChapWk, $vSamples, $acrn, $ok, $bad): array {
+            $rend = strpos($vRendWk, 'flock') !== false
+                && strpos($vRendWk, '--limit') !== false
+                && strpos($vRendWk, 'video_ladder_plan(') !== false
+                && strpos($vRendWk, 'ENCODE_TIMEOUT') !== false
+                && strpos($vRendWk, 'describer.lock') !== false
+                && strpos($vRendWk, 'categorizer.lock') !== false
+                && strpos($vRendWk, ".part' . getmypid()") !== false;
+            $chap = strpos($vChapWk, 'flock') !== false
+                && strpos($acrn, 'video_chapters_worker.php --once --limit=2') !== false
+                && strpos($vChapWk, 'parseSceneTimes(') !== false
+                && strpos($vChapWk, 'VideoChapter::needsAnalysis(') !== false
+                && strpos($vChapWk, 'showinfo') !== false;
+            $cron = strpos($acrn, 'gallery-video-renditions') !== false
+                && strpos($acrn, 'gallery-video-chapters') !== false
+                && strpos($acrn, 'gallery-video-samples') !== false;
+            $samples = strpos($vSamples, '--limit') !== false && strpos($vSamples, '--once') !== false;
+            return $rend && $chap && $cron && $samples
+                ? $ok('both workers + cron + bounded sample ticks')
+                : $bad('bin/video_rendition_worker.php and bin/video_chapters_worker.php must flock, honour --once, and bin/apply_cron.php must install gallery-video-renditions/chapters/samples; bin/generate_video_samples.php must accept --once --limit');
+        });
+
+        $add('smoke.video.pending_uploads', 'Smoke · Video player', 'staged videos get a sample clip and finalize renames it', static function () use ($vGalleryC, $ok, $bad): array {
+            $clip = strpos($vGalleryC, 'create_video_sample_clip($dest, video_sample_path($filename))') !== false;
+            $rename = strpos($vGalleryC, 'video_sample_path($finalName)') !== false;
+            return $clip && $rename
+                ? $ok('pendingUpload builds the clip; finalizePending renames it with the final filename')
+                : $bad('GalleryController::pendingUpload must create the sample clip and finalizePending must rename uploads/previews/preview_pending_* to the final filename (otherwise /previews/{id} 404s and the video is never indexed)');
+        });
+
+        $add('smoke.video.player_wiring', 'Smoke · Video player', 'poster, rendition sources, chapters, overlay + retry in the player view', static function () use ($vPlayer, $ok, $bad): array {
+            $okAll = strpos($vPlayer, "data-sources=") !== false
+                && strpos($vPlayer, 'data-chapters=') !== false
+                && strpos($vPlayer, 'poster=') !== false
+                && strpos($vPlayer, 'data-overlay') !== false
+                && strpos($vPlayer, 'data-retry') !== false
+                && strpos($vPlayer, 'data-chapter-seek') !== false
+                && strpos($vPlayer, 'pl-controls') !== false
+                && strpos($vPlayer, 'data-save-collection') !== false
+                && strpos($vPlayer, 'data-playlist-toggle') !== false
+                && strpos($vPlayer, '$gateLevel = (int) ($minimumLevel ?? 0)') !== false;
+            return $okAll
+                ? $ok('ladder sources, chapters, poster, overlay/retry, playlist controls, real gate level')
+                : $bad('views/video/player.php must render data-sources, data-chapters, poster, the buffering/error overlay with a Retry button, chapter seek buttons, the playlist control row (autoplay/repeat/shuffle/save), a playlist collapse toggle, and use $minimumLevel for the gate');
+        });
+
+        $add('smoke.video.player_behaviour', 'Smoke · Video player', 're-init after swap, throttled resume, autoplay toggle, no dead pip block', static function () use ($userJs2, $ok, $bad): array {
+            $reinit = strpos($userJs2, 'PlayerUI.initAll') !== false;
+            $resume = strpos($userJs2, 'pagehide') !== false
+                && strpos($userJs2, 'setTimeout(function(){pending=0;persist();},5000)') !== false
+                // The Resume strip is a sibling of .gallery-player; resolving it
+                // from video.parentNode silently disabled the whole feature.
+                && strpos($userJs2, "document.getElementById('video-player-wrap')||video.closest('figure')") !== false;
+            // Resume must never stomp a seek the viewer already made.
+            $noStomp = strpos($userJs2, 'video.__userSeeked') !== false
+                && strpos($userJs2, 'if(video.__userSeeked) return;') !== false
+                && substr_count($userJs2, '__userSeeked = true') >= 3;
+            $autoplay = strpos($userJs2, 'canAdvance') !== false
+                && strpos($userJs2, "data-queue')") !== false;
+            $quality = strpos($userJs2, 'data-sources') !== false
+                && strpos($userJs2, 'saveData') !== false
+                && strpos($userJs2, 'player-quality') !== false;
+            $a11y = strpos($userJs2, "e.key === 'Escape'") !== false && strpos($userJs2, 'aria-pressed') !== false;
+            $pip = strpos($userJs2, 'data-pip') === false;
+            return $reinit && $resume && $noStomp && $autoplay && $quality && $a11y && $pip
+                ? $ok('swap re-init, throttled resume, autoplay gate, VOD quality menu, focus trap, dead pip code removed')
+                : $bad('user.js must re-init the player after an AJAX swap, throttle resume writes (5s + pause + pagehide), never let the saved position override a seek the viewer already made (video.__userSeeked on the seek bar, chapters and keyboard seeks), gate auto-advance on the autoplay/repeat preference, offer the VOD ladder menu (auto-pick the low rung on saveData), trap Escape in the queue dialog, and no longer contain the dead [data-pip] block');
+        });
+
+        $add('smoke.video.styles', 'Smoke · Video player', 'overlay/spinner/chapters/buffered/safe-area/mobile sheet styles', static function () use ($userCss2, $ok, $bad): array {
+            return strpos($userCss2, '.player-overlay') !== false
+                && strpos($userCss2, '.player-buffered') !== false
+                && strpos($userCss2, '.player-chapters') !== false
+                && strpos($userCss2, '.player-tick') !== false
+                && strpos($userCss2, 'env(safe-area-inset-bottom') !== false
+                && strpos($userCss2, '.pl-controls') !== false
+                && strpos($userCss2, '.pl-collapse') !== false
+                ? $ok('player chrome styled, including the phone safe-area and collapsible sheet')
+                : $bad('user.css must style .player-overlay, .player-buffered, .player-chapters, .player-tick, add env(safe-area-inset-bottom) padding to .player-bar, and add .pl-controls/.pl-collapse');
+        });
+
+        $add('smoke.video.asset_versions', 'Smoke · Video player', 'user.js cache-busted after the player rewrite', static function () use ($vLayout, $ok, $bad): array {
+            // The PHP short-echo tag splits the attribute, so the tag closes and "?v=17"
+            // follows it; match across that split (like the tour.js check)
+            // instead of expecting the version next to the filename.
+            return preg_match('#/assets/js/user\.js.*\?v=\d+#', $vLayout) === 1
+                ? $ok('user.js carries a ?v= cache-buster')
+                : $bad('views/layout.php must load /assets/js/user.js with a ?v= cache-buster');
+        });
+
+        $add('smoke.video.admin_ranges', 'Smoke · Video player', 'abandoned-upload preview advertises and honours Range', static function () use ($vAdmin, $ok, $bad): array {
+            return strpos($vAdmin, 'public function abandonedFile(') !== false
+                && strpos($vAdmin, "header('Accept-Ranges: bytes')") !== false
+                && strpos($vAdmin, 'http_response_code(206)') !== false
+                && strpos($vAdmin, "Content-Range") !== false
+                ? $ok('pending previews stream ranges')
+                : $bad('AdminController::abandonedFile must advertise Accept-Ranges and serve 206 + Content-Range so a pending video preview can seek');
+        });
+
+        $add('smoke.collections.reorder', 'Smoke · Video player', 'playlist reorder + queue-to-collection with server-side ownership', static function () use ($vCollM, $vCollC, $vCollV, $routesSrc, $ok, $bad): array {
+            $model = strpos($vCollM, 'public static function movePhoto(') !== false
+                && strpos($vCollM, 'public static function addPhotos(') !== false
+                && strpos($vCollM, 'is_video = 1') !== false
+                && strpos($vCollM, 'self::owns(') !== false;
+            $ctrl = strpos($vCollC, 'public function move(') !== false
+                && strpos($vCollC, 'public function fromQueue(') !== false
+                && strpos($vCollC, 'Auth::requireLogin()') !== false;
+            $routes = strpos($routesSrc, "'/collections/{id}/move'") !== false
+                && strpos($routesSrc, "'/collections/from-queue'") !== false;
+            $view = strpos($vCollV, "/move'") !== false && strpos($vCollV, 'name="dir" value="down"') !== false;
+            return $model && $ctrl && $routes && $view
+                ? $ok('movePhoto/addPhotos ownership-checked; routes + controller + reorder buttons wired')
+                : $bad('Collection::movePhoto/addPhotos must enforce ownership and only accept video ids; CollectionController@move/@fromQueue must require login; routes /collections/{id}/move + /collections/from-queue must exist and the collection view must render up/down buttons');
+        });
+
+        $add('smoke.collections.player_pref_ns', 'Smoke · Video player', 'player prefs are namespaced per signed-in user', static function () use ($vLayout, $userJs2, $ok, $bad): array {
+            return strpos($vLayout, 'data-uid=') !== false
+                && strpos($vLayout, 'csrf-token') !== false
+                && strpos($userJs2, "getAttribute('data-uid')") !== false
+                && strpos($userJs2, 'csrf-token') !== false
+                ? $ok('layout exposes data-uid + a CSRF meta; user.js namespaces prefs and sends the token')
+                : $bad('views/layout.php must expose data-uid and a csrf-token meta, and user.js must namespace player preferences by uid and post the CSRF token when saving a queue');
+        });
+
         // ------------------------------------------------------- API health
         $sysCtrl  = $read("$root/app/Controllers/SystemController.php");
         $sysView  = $read("$root/views/admin/system.php");

@@ -510,6 +510,232 @@ class TestSuite
             }
         });
 
+        $add('db.video_ladder_plan', 'Database', 'ladder plan picks only the rungs a source actually needs (no upscaling)', function () {
+            $keys = static function (array $plan): array {
+                return array_values(array_map(static fn ($r) => (string) $r['key'], $plan));
+            };
+
+            // 480p source: only the always-on mid rung (it IS the 720p upload
+            // rendition; encoding a "480p" copy of a 480p source is pointless).
+            $sd   = $keys(video_ladder_plan(854, 480));
+            // A 1080p source is NOT re-encoded to 1080p (that rung exists for
+            // bigger sources), but it does get the 480p one.
+            $hd   = $keys(video_ladder_plan(1920, 1080));
+            // 1440p: mid + hi.
+            $qhd  = $keys(video_ladder_plan(2560, 1440));
+            // 4K portrait: everything, in ascending resolution order.
+            $uhd  = $keys(video_ladder_plan(2160, 3840));
+            // Unknown dimensions: trust only the synchronous mid rung.
+            $none = $keys(video_ladder_plan(0, 0));
+
+            $prefixes = [];
+            foreach (video_ladder() as $rung) {
+                $prefixes[$rung['key']] = $rung['prefix'];
+            }
+
+            $pass = $sd === ['mid']
+                && $hd === ['lo', 'mid']
+                && $qhd === ['lo', 'mid', 'hi']
+                && $uhd === ['lo', 'mid', 'hi']
+                && $none === ['mid']
+                && ($prefixes['lo'] ?? '') === 'weblo_'
+                && ($prefixes['mid'] ?? '') === 'web_'
+                && ($prefixes['hi'] ?? '') === 'webhi_'
+                // The mid rung must stay exactly what uploads build today, or
+                // every existing rendition becomes "the wrong" one.
+                && (int) (video_ladder()[1]['max_w'] ?? 0) === 1280;
+
+            return ['pass' => $pass, 'detail' => sprintf(
+                '480p=[%s] 1080p=[%s] 1440p=[%s] 4K=[%s] unknown=[%s] prefixes=%s',
+                implode(',', $sd), implode(',', $hd), implode(',', $qhd), implode(',', $uhd), implode(',', $none),
+                json_encode($prefixes)
+            )];
+        });
+
+        $add('db.video_chapter_parse', 'Database', 'scene times become chapters: t=0 first, gaps collapsed, capped, even fallback', function () {
+            // Fast cuts 1s apart must collapse to nothing (min gap 10s).
+            $bunched = \App\Models\VideoChapter::parseSceneTimes([1, 2, 3, 4, 5], 300.0, 10.0, 24);
+            $bunchedStarts = array_column($bunched, 'start');
+            // A clip under MIN_DURATION gets no chapters at all.
+            $short = \App\Models\VideoChapter::parseSceneTimes([5, 20], 40.0);
+            // A static 10-minute clip falls back to even 60s markers.
+            $static = \App\Models\VideoChapter::parseSceneTimes([], 600.0);
+            $staticStarts = array_column($static, 'start');
+            // Real cuts are kept, sorted, deduped, and the cap is respected.
+            $many = [];
+            for ($t = 15; $t < 600; $t += 12) {
+                $many[] = (float) $t;
+            }
+            $capped = \App\Models\VideoChapter::parseSceneTimes(array_reverse($many), 600.0, 10.0, 6);
+            $cappedStarts = array_column($capped, 'start');
+            // Markers at/after the duration are dropped.
+            $edge = \App\Models\VideoChapter::parseSceneTimes([30.0, 299.0, 300.0, 400.0], 300.0);
+
+            // Five cuts one second apart all fall inside the 10s minimum gap,
+            // so there is nothing to mark and the even 60s split takes over.
+            $pass = array_column($bunched, 'start') === [0.0, 60.0, 120.0, 180.0, 240.0]
+                && ($bunched[0]['title'] ?? '') === 'Start'
+                && ($bunched[1]['title'] ?? '') === 'Part 1'
+                && $short === []
+                && $staticStarts === [0.0, 60.0, 120.0, 180.0, 240.0, 300.0, 360.0, 420.0, 480.0, 540.0]
+                && count($capped) === 6
+                && $cappedStarts[0] === 0.0
+                && $cappedStarts === array_values(array_unique($cappedStarts))
+                && $cappedStarts === array_values($cappedStarts)
+                && $cappedStarts[5] < 600.0
+                && count($edge) === 3
+                && array_column($edge, 'start') === [0.0, 30.0, 299.0];
+
+            return ['pass' => $pass, 'detail' => sprintf(
+                'bunched=%d short=%d static=%s capped=%s edge=%s',
+                count($bunched), count($short), json_encode($staticStarts),
+                json_encode($cappedStarts), json_encode(array_column($edge, 'start'))
+            )];
+        });
+
+        $add('db.collection_reorder_cycle', 'Database', 'movePhoto swaps the manual order, refuses the ends and other users', function () {
+            $ownerId = null;
+            $otherId = null;
+            $photoIds = [];
+            $collectionId = null;
+            try {
+                \App\Models\User::create('probe.order.owner@example.test', 'pw-' . bin2hex(random_bytes(4)), 'user');
+                \App\Models\User::create('probe.order.other@example.test', 'pw-' . bin2hex(random_bytes(4)), 'user');
+                $ownerId = (int) Database::run("SELECT id FROM users WHERE email = 'probe.order.owner@example.test'")->fetchColumn();
+                $otherId = (int) Database::run("SELECT id FROM users WHERE email = 'probe.order.other@example.test'")->fetchColumn();
+
+                // Three real video photos (files on disk are not needed: the
+                // model only validates the row's is_video flag).
+                foreach (['a.mp4', 'b.mp4', 'c.mp4'] as $i => $name) {
+                    Database::run(
+                        'INSERT INTO photos (filename, hash, is_video, duration_seconds) VALUES (?, ?, 1, 60)',
+                        ['probe_order_' . $i . '_' . $name, sha1('probe_order_' . $i . '_' . $name . bin2hex(random_bytes(4)))]
+                    );
+                    $photoIds[] = (int) Database::connection()->lastInsertId();
+                }
+
+                $collectionId = \App\Models\Collection::create($ownerId, 'Probe order');
+                $added = \App\Models\Collection::addPhotos($collectionId, $ownerId, $photoIds);
+
+                $order = static function () use ($collectionId): array {
+                    return array_map('intval', array_column(
+                        \App\Core\Database::run(
+                            'SELECT photo_id FROM collection_items WHERE collection_id = ? ORDER BY position ASC, id ASC',
+                            [$collectionId]
+                        )->fetchAll(),
+                        'photo_id'
+                    ));
+                };
+
+                $initial = $order();
+                $down    = \App\Models\Collection::movePhoto($collectionId, $ownerId, $photoIds[0], 'down');
+                $afterDown = $order();
+                // Moving the new first item up is a no-op, not a corruption.
+                $pastEnd = \App\Models\Collection::movePhoto($collectionId, $ownerId, $photoIds[1], 'up');
+                $unchanged = $order();
+                // ...and the last item cannot move down either.
+                $pastLast = \App\Models\Collection::movePhoto($collectionId, $ownerId, $photoIds[2], 'down');
+                $stillOrdered = $order();
+                // Another user cannot reorder someone else's playlist, and a
+                // non-video id can never be inserted.
+                $foreign = \App\Models\Collection::movePhoto($collectionId, $otherId, $photoIds[0], 'down');
+                $foreignOrder = $order();
+                $badAdd = \App\Models\Collection::addPhotos($collectionId, $ownerId, [999999999]);
+                $reAdd  = \App\Models\Collection::addPhotos($collectionId, $ownerId, $photoIds);
+
+                $pass = $added === 3
+                    && $initial === $photoIds
+                    && $down && $afterDown === [$photoIds[1], $photoIds[0], $photoIds[2]]
+                    && $pastEnd === false && $unchanged === $afterDown
+                    && $pastLast === false && $stillOrdered === $afterDown
+                    && $foreign === false && $foreignOrder === $afterDown
+                    && $badAdd === 0 && $reAdd === 0;
+
+                return ['pass' => $pass, 'detail' => sprintf(
+                    'added=%d down=%d pastFirst=%d pastLast=%d foreign=%d badAdd=%d reAdd=%d order=%s',
+                    (int) $added, (int) $down, (int) $pastEnd, (int) $pastLast, (int) $foreign,
+                    (int) $badAdd, (int) $reAdd, json_encode($stillOrdered)
+                )];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            } finally {
+                if ($collectionId !== null) {
+                    try { Database::run('DELETE FROM collection_items WHERE collection_id = ?', [$collectionId]); } catch (\Throwable $ignored) {}
+                    try { Database::run('DELETE FROM collections WHERE id = ?', [$collectionId]); } catch (\Throwable $ignored) {}
+                }
+                foreach ($photoIds as $pid) {
+                    try { Database::run('DELETE FROM photos WHERE id = ?', [$pid]); } catch (\Throwable $ignored) {}
+                }
+                foreach ([$ownerId, $otherId] as $uid) {
+                    if ($uid !== null) {
+                        try { Database::run('DELETE FROM users WHERE id = ?', [$uid]); } catch (\Throwable $ignored) {}
+                    }
+                }
+            }
+        });
+
+        $add('db.video_chapter_store_cycle', 'Database', 'chapters round-trip, replace is idempotent and cascade with the photo', function () {
+            $photoId = null;
+            try {
+                $probeFile = 'probe_chapters_' . bin2hex(random_bytes(3)) . '.mp4';
+                Database::run(
+                    'INSERT INTO photos (filename, hash, is_video, duration_seconds) VALUES (?, ?, 1, 300)',
+                    [$probeFile, sha1($probeFile . bin2hex(random_bytes(4)))]
+                );
+                $photoId = (int) Database::connection()->lastInsertId();
+
+                $none = \App\Models\VideoChapter::forPhoto($photoId);
+                $stale = \App\Models\VideoChapter::needsAnalysis($photoId, time());
+
+                $written = \App\Models\VideoChapter::replaceForPhoto($photoId, [
+                    ['start' => 0.0, 'title' => 'Start'],
+                    ['start' => 61.25, 'title' => 'Middle'],
+                    ['start' => 200.5, 'title' => str_repeat('long ', 40)],
+                ]);
+                $stored = \App\Models\VideoChapter::forPhoto($photoId);
+
+                $rewritten = \App\Models\VideoChapter::replaceForPhoto($photoId, [
+                    ['start' => 0.0, 'title' => 'Start'],
+                    ['start' => 61.25, 'title' => 'Middle'],
+                ]);
+                $after = \App\Models\VideoChapter::forPhoto($photoId);
+                $has = \App\Models\VideoChapter::hasChapters($photoId);
+
+                // Chapters written now are newer than a source mtime from the
+                // past, so the worker does not re-analyse on every tick.
+                $fresh = \App\Models\VideoChapter::needsAnalysis($photoId, time() - 3600);
+
+                // Deleting the photo must take its chapters with it.
+                Database::run('DELETE FROM photos WHERE id = ?', [$photoId]);
+                $orphan = (int) Database::run('SELECT COUNT(*) FROM video_chapters WHERE photo_id = ?', [$photoId])->fetchColumn();
+
+                $pass = $none === []
+                    && $stale === true
+                    && $written === 3
+                    && count($stored) === 3
+                    && (float) $stored[1]['start'] === 61.25
+                    && mb_strlen($stored[2]['title']) <= 120
+                    && $rewritten === 2
+                    && count($after) === 2
+                    && $has === true
+                    && $fresh === false
+                    && $orphan === 0;
+
+                return ['pass' => $pass, 'detail' => sprintf(
+                    'empty=%d stale=%d written=%d stored=%d rewritten=%d titleLen=%d fresh=%d orphan=%d',
+                    count($none), (int) $stale, (int) $written, count($stored), (int) $rewritten,
+                    mb_strlen($stored[2]['title'] ?? ''), (int) $fresh, $orphan
+                )];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            } finally {
+                if ($photoId !== null) {
+                    try { Database::run('DELETE FROM video_chapters WHERE photo_id = ?', [$photoId]); } catch (\Throwable $ignored) {}
+                    try { Database::run('DELETE FROM photos WHERE id = ?', [$photoId]); } catch (\Throwable $ignored) {}
+                }
+            }
+        });
+
         $add('db.description_advisor_parse', 'Database', 'parse() tolerates JSON fences, plain prose, labels, quotes and caps length', function () {
             $json    = \App\Core\DescriptionAdvisor::parse('{"description":"A playful poolside set with sunlit color."}');
             $fenced  = \App\Core\DescriptionAdvisor::parse("```json\n{\"description\":\"Fenced copy here.\"}\n```");

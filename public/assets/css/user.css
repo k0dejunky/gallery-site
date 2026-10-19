@@ -217,6 +217,38 @@ table td:nth-child(1) { overflow-wrap: anywhere; word-break: break-word; }
 .player-keep{display:inline-flex;align-items:center;gap:.3rem;color:rgba(255,255,255,.9);font-size:12px;cursor:pointer;white-space:nowrap}
 .player-keep input{accent-color:#ff9fd4;cursor:pointer}
 
+/* Seek track: a buffered-range fill and chapter ticks sit under the range
+   input, which stays transparent on top so dragging still works. */
+.player-seek-track{position:absolute;left:0;right:0;top:50%;height:4px;transform:translateY(-50%);border-radius:4px;background:rgba(255,255,255,.28);overflow:hidden;pointer-events:none}
+.player-buffered{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(255,255,255,.42);transition:width .25s linear}
+.player-ticks{position:absolute;inset:0}
+.player-tick{position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.85);transform:translateX(-1px)}
+.player-tick:first-child{display:none}
+
+/* Buffering / error overlay with a working Retry button. */
+.player-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;background:rgba(8,3,16,.62);color:#fff;z-index:2;text-align:center;padding:1rem}
+.player-overlay[hidden]{display:none}
+.player-overlay-msg{margin:0;font-size:.9rem}
+.player-spinner{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.28);border-top-color:#ff9fd4;animation:player-spin .9s linear infinite}
+.player-spinner[hidden]{display:none}
+@keyframes player-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.player-spinner{animation-duration:2.4s}}
+
+/* Chapter list + keyboard help, both inside the player frame. */
+.player-chapters{position:absolute;left:0;right:0;top:0;background:rgba(20,8,34,.92);color:#fff;padding:.5rem .75rem;z-index:3;font-size:.85rem;max-height:60%;overflow:auto}
+.player-chapters summary{cursor:pointer;font-weight:600}
+.player-chapters ol{list-style:none;margin:.5rem 0 0;padding:0;display:flex;flex-direction:column;gap:.15rem}
+.player-chapters button{display:flex;gap:.6rem;width:100%;text-align:left;background:none;border:0;color:#fff;padding:.3rem .4rem;border-radius:6px;cursor:pointer;font:inherit}
+.player-chapters button:hover{background:rgba(255,255,255,.16);color:#ffd0e8}
+.player-chapters .ch-time{color:#ff9fd4;font-variant-numeric:tabular-nums;min-width:3.2em}
+.player-keys{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(20,8,34,.95);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:.75rem 1rem;z-index:6;font-size:.82rem;max-width:min(92%,320px)}
+.player-keys dl{display:grid;grid-template-columns:auto 1fr;gap:.2rem .7rem;margin:.5rem 0 0}
+.player-keys dt{color:#ff9fd4;font-family:ui-monospace,monospace}
+.player-keys dd{margin:0}
+
+/* The control bar sits above the home-indicator area on phones. */
+.player-bar{padding-bottom:calc(.4rem + env(safe-area-inset-bottom,0px))}
+
 /* Collection playlist panel beside the video player */
 .player-layout{display:flex;gap:1rem;align-items:flex-start}
 .player-main{flex:1;min-width:0}
@@ -256,6 +288,19 @@ table td:nth-child(1) { overflow-wrap: anywhere; word-break: break-word; }
 .pl-duration{font-size:.75rem;color:var(--text-muted);white-space:nowrap}
 .pl-remove{flex:0 0 auto;background:none;border:none;color:var(--text-muted);font-size:1.05rem;line-height:1;padding:.35rem .55rem;cursor:pointer}
 .pl-remove:hover{color:#dc2626}
+.pl-controls{display:flex;flex-wrap:wrap;gap:.3rem;margin:0 0 .6rem}
+.pl-ctl{font:inherit;font-size:.72rem;padding:.2rem .5rem;border-radius:999px;border:1px solid var(--card-border);background:var(--pink-100);color:var(--text-color);cursor:pointer}
+.pl-ctl[aria-pressed=true]{background:var(--purple-500);border-color:var(--purple-500);color:#fff}
+.pl-ctl[disabled]{opacity:.6;cursor:wait}
+.pl-collapse{display:none}
+/* On phones the playlist becomes a collapsible sheet under the player, so the
+   video keeps the full width and the queue is one tap away. */
+@media(max-width:820px){
+  .player-playlist{max-height:none;overflow:visible}
+  .pl-collapse{display:block;width:100%;font:inherit;font-size:.85rem;padding:.45rem;border-radius:8px;border:1px solid var(--card-border);background:var(--pink-100);color:var(--text-color);cursor:pointer}
+  .player-playlist .pl-item img{width:96px;height:60px;flex:0 0 96px}
+  .collection-order{display:flex;gap:.35rem;margin:0 .6rem}
+}
 @media(max-width:820px){.player-layout{flex-direction:column}.player-side{flex:none;width:100%;max-height:none}.player-side .pb-body{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.player-playlist{width:100%;flex:none;max-height:320px}}
 
 /* In-page gallery browser + playlist queue */

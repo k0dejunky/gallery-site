@@ -133,6 +133,12 @@ class ImageController extends Controller
             'playlistQuery' => $playlistQuery,
             'playlistId'    => $playlistId,
             'canViewFull'   => $canViewFull,
+            // Scene-detected chapter markers for the player's chapter list
+            // (empty until the chapters worker has analysed the video).
+            'chapters'      => $requireVideo ? \App\Models\VideoChapter::forPhoto($id) : [],
+            // Level the membership gate asks for, so the panel can say what is
+            // actually required instead of always claiming "login only".
+            'minimumLevel'  => Photo::minimumGalleryLevel($id),
             'comments'      => \App\Models\Comment::forEntity(\App\Models\Comment::TYPE_PHOTO, $id),
             'commentCount'  => \App\Models\Comment::countFor(\App\Models\Comment::TYPE_PHOTO, $id),
         ]);

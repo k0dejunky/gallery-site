@@ -1,10 +1,21 @@
-<?php $title = e((string) ($collection['name'] ?? 'Collection')); ?>
+<?php
+$title = e((string) ($collection['name'] ?? 'Collection'));
+$collectionId = (int) ($collection['id'] ?? 0);
+$totalSeconds = 0;
+foreach ((array) ($videos ?? []) as $v) {
+    $totalSeconds += (int) ($v['duration_seconds'] ?? 0);
+}
+$mediaCount = count((array) ($videos ?? [])) + count((array) ($images ?? [])) + count((array) ($galleries ?? []));
+?>
 <h1><?= e((string) ($collection['name'] ?? 'Collection')) ?></h1>
 <p class="muted" style="margin-bottom:1rem;">
     <a href="<?= url('/collections') ?>">&larr; Back to collections</a>
+    <?php if ($mediaCount > 0): ?>
+        &nbsp; &middot; &nbsp; <?= (int) $mediaCount ?> item<?= $mediaCount === 1 ? '' : 's' ?><?= $totalSeconds > 0 ? ', ' . e(gmdate($totalSeconds >= 3600 ? 'H:i:s' : 'i:s', $totalSeconds)) : '' ?>
+    <?php endif; ?>
     <?php if (!empty($firstMediaId)): ?>
         &nbsp; &middot; &nbsp;
-        <a class="btn btn-sm" href="<?= url(($firstMediaIsVideo ? '/videos/' : '/images/') . (int) $firstMediaId . '?playlist=' . (int) $collection['id']) ?>">&#9654; Play collection</a>
+        <a class="btn btn-sm" href="<?= url(($firstMediaIsVideo ? '/videos/' : '/images/') . (int) $firstMediaId . '?playlist=' . $collectionId) ?>">&#9654; Play collection</a>
     <?php endif; ?>
 </p>
 
@@ -55,7 +66,14 @@
                             <p class="muted" style="margin:0;font-size:.85rem;"><?= e(!empty($v['duration_seconds']) ? gmdate('i:s', (int) $v['duration_seconds']) : '') ?></p>
                         </div>
                     </a>
-                    <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/photos/' . (int) $v['id'] . '/delete') ?>" style="padding:.6rem;">
+                    <form method="post" action="<?= url('/collections/' . $collectionId . '/move') ?>" class="collection-order" style="padding:.6rem;">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="photo_id" value="<?= (int) $v['id'] ?>">
+                        <input type="hidden" name="dir" value="up">
+                        <button type="submit" class="btn btn-sm btn-outline" title="Move up in the playlist" aria-label="Move <?= e($v['caption'] !== '' ? (string) $v['caption'] : 'this video') ?> up">&#9650; Up</button>
+                        <button type="submit" class="btn btn-sm btn-outline" name="dir" value="down" title="Move down in the playlist" aria-label="Move <?= e($v['caption'] !== '' ? (string) $v['caption'] : 'this video') ?> down">&#9660; Down</button>
+                    </form>
+                    <form method="post" action="<?= url('/collections/' . $collectionId . '/photos/' . (int) $v['id'] . '/delete') ?>" style="padding:0 .6rem .6rem;">
                         <?= csrf_field() ?>
                         <button type="submit" class="btn btn-sm btn-outline" style="width:100%;">Remove video</button>
                     </form>

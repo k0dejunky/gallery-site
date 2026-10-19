@@ -126,21 +126,31 @@ class StorageController extends Controller
             }
         }
 
-        if ($size === 'thumb') {
-            $name = 'thumb_' . $name;
-        } elseif ($size === 'blur') {
-            // Blurred preview copy: served on the guest login/signup pages
-            // using the same heavy blur the auto-poster applies to previews.
-            // Generated once from the existing thumbnail and cached.
-            $name = 'blur_thumb_' . $name;
-        } elseif ($size === 'web') {
-            $name = 'web_' . $name;
+        // Variants resolve through media_variant_prefix() so the prefix used
+        // to mint the URL is always the prefix used to find the file. 'blur'
+        // is the guest-facing blurred copy of the thumbnail, 'poster' the wide
+        // player poster, and 'web_lo'/'web_hi' the extra video ladder rungs.
+        if (in_array($size, ['thumb', 'web', 'blur', 'poster', 'web_lo', 'web_hi'], true)) {
+            $name = media_variant_prefix($size) . $name;
         }
 
         // A missing web rendition (e.g. a video uploaded before renditions were
         // generated) falls back to the original file instead of 404ing.
         if ($size === 'web' && !is_file(config('app.uploads.dir') . '/' . $name)) {
             $name = preg_replace('/^web_/', '', $name);
+        }
+
+        // A ladder rung that was never built (or was cleaned up) degrades to
+        // the 720p rendition rather than to the multi-hundred-MB original: the
+        // player's quality menu only offers rungs that exist, so this only
+        // matters if a rung disappears mid-session.
+        if (($size === 'web_lo' || $size === 'web_hi') && !is_file(config('app.uploads.dir') . '/' . $name)) {
+            $fallback = config('app.uploads.dir') . '/web_' . $file;
+            if (is_file($fallback)) {
+                $name = 'web_' . $name;
+            } else {
+                $name = $file;
+            }
         }
 
         // Prefer the WebP copy of a variant when requested and present.
@@ -206,7 +216,7 @@ class StorageController extends Controller
             return;
         }
 
-        $mime = in_array($size, ['thumb', 'blur'], true)
+        $mime = in_array($size, ['thumb', 'blur', 'poster'], true)
             ? $this->imageMimeOf($path)
             : (sniff_mime($path) ?: mime_for_extension($name));
 
@@ -218,17 +228,15 @@ class StorageController extends Controller
             $mime = 'application/octet-stream';
         }
 
-        $len  = (int) filesize($path);
-
         header('Content-Type: ' . $mime);
         header('Accept-Ranges: bytes');
 
-        // Variants (web_/thumb_/blur_) are content-addressed: the derived file
-        // is regenerated and given a new name when the source changes, so the
-        // URL is permanently immutable and can be cached forever in the
-        // browser. Originals keep a shorter public cache (files could be
-        // rotated/replaced with the same name).
-        $isVariant = in_array($size, ['thumb', 'web', 'blur'], true);
+        // Variants (web_/thumb_/blur_/poster_/ladder rungs) are
+        // content-addressed: the derived file is regenerated and given a new
+        // name when the source changes, so the URL is permanently immutable and
+        // can be cached forever in the browser. Originals keep a shorter
+        // public cache (files could be rotated/replaced with the same name).
+        $isVariant = in_array($size, ['thumb', 'web', 'blur', 'poster', 'web_lo', 'web_hi'], true);
         header('Cache-Control: ' . ($isVariant ? 'public, max-age=31536000, immutable' : 'public, max-age=86400'));
 
         // Offload file streaming to Apache via X-SendFile (mod_xsendfile).

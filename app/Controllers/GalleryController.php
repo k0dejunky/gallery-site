@@ -966,11 +966,14 @@ class GalleryController extends Controller
             }
 
             // Move moov to the front + build a web-optimized rendition so the
-            // browser can start/seek quickly without high bandwidth.
+            // browser can start/seek quickly without high bandwidth, plus the
+            // public SEO sample clip (the chunked path did this too; without
+            // it a direct pending upload never got indexed by Google Video).
             if (!$meta['is_image']) {
                 set_time_limit(0);
                 faststart_video_if_needed($dest);
                 create_video_web_rendition($dest, $dir . '/web_' . $filename);
+                create_video_sample_clip($dest, video_sample_path($filename));
             }
 
             $list[] = [
@@ -1488,6 +1491,15 @@ class GalleryController extends Controller
                 if (is_file($variant)) {
                     rename($variant, $config['dir'] . '/' . $prefix . $finalName);
                 }
+            }
+
+            // The public SEO sample clip lives in uploads/previews/ keyed by
+            // the source filename, so it needs the same prefix strip. Without
+            // this the clip stayed under preview_pending_<name>, which no photo
+            // row points at: /previews/{id} 404s and the video is never indexed.
+            $preview = video_sample_path($filename);
+            if (is_file($preview)) {
+                @rename($preview, video_sample_path($finalName));
             }
 
             \App\Core\MediaUploader::commit($galleryId, $finalName, $hash);

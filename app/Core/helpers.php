@@ -210,22 +210,55 @@ function media_token_valid(string $path, string $given): bool
 }
 
 /**
+ * On-disk prefix of a served variant for a given size key. One source of
+ * truth for file_url() (which versions URLs by the variant's mtime) and
+ * StorageController (which resolves the file), so a size key can never be
+ * minted by one and resolved as a different file by the other.
+ * 'web_lo'/'web_hi' read their prefix from the ladder config.
+ */
+function media_variant_prefix(string $size): string
+{
+    switch ($size) {
+        case 'thumb':
+            return 'thumb_';
+        case 'web':
+            return 'web_';
+        case 'blur':
+            return 'blur_thumb_';
+        case 'poster':
+            return 'poster_';
+    }
+
+    foreach (video_ladder() as $rung) {
+        if ($rung['size'] === $size) {
+            return (string) $rung['prefix'];
+        }
+    }
+
+    return '';
+}
+
+/**
  * Build the URL used to serve an uploaded file, optionally pointing at a
  * generated variant served by StorageController: '' = the original full-size
- * file, 'thumb' = the 400x300 crop, 'web' = the fast-loading web variant.
- * Pass $format = 'webp' to prefer the WebP copy of a variant when one exists
- * (it falls back to the original variant format if no WebP file is present).
+ * file, 'thumb' = the 400x300 crop, 'web' = the fast-loading web variant,
+ * 'web_lo'/'web_hi' = the extra video ladder rungs, 'poster' = the wide
+ * poster frame. Pass $format = 'webp' to prefer the WebP copy of a variant
+ * when one exists (it falls back to the original variant format if no WebP
+ * file is present).
  */
 function file_url(string $filename, string $size = '', string $format = ''): string
 {
     static $mtimeCache = [];
 
-    $query = in_array($size, ['thumb', 'web', 'blur'], true) ? '?size=' . $size : '';
+    $variantSizes = ['thumb', 'web', 'blur', 'poster', 'web_lo', 'web_hi'];
+
+    $query = in_array($size, $variantSizes, true) ? '?size=' . $size : '';
 
     // Version the regenerated variants by file mtime so the browser never
     // shows a stale thumbnail/web image after it is edited or recaptured.
-    if ($size === 'thumb' || $size === 'web' || $size === 'blur') {
-        $variant = ($size === 'thumb' ? 'thumb_' : ($size === 'web' ? 'web_' : 'blur_thumb_')) . $filename;
+    if (in_array($size, $variantSizes, true)) {
+        $variant = media_variant_prefix($size) . $filename;
 
         if ($format === 'webp') {
             $webp = preg_replace('/\.[^.]+$/', '.webp', $variant);
@@ -386,20 +419,141 @@ function video_needs_faststart(string $path): bool
 }
 
 /**
- * Generate a web-optimized video rendition (≤1280x720, H.264 CRF 28,
- * ~2-4 Mbps, moov-first) next to the original, so the player streams a
- * fraction of the bandwidth instead of a 1080p ~17 Mbps original. Returns
- * false when the source is missing or the transcode fails.
+ * Generate the web-optimized mid ladder rung (≤1280x720 by default) next to
+ * the original, so the player streams a fraction of the bandwidth instead of a
+ * 1080p ~17 Mbps original. This is the synchronous upload-time rendition; the
+ * lo/hi rungs are built in the background by bin/video_rendition_worker.php.
+ * Settings come from the 'mid' rung in config app.video_ladder. Returns false
+ * when the source is missing or the transcode fails.
  */
 function create_video_web_rendition(string $src, string $dest): bool
+{
+    $mid = null;
+    foreach (video_ladder() as $rung) {
+        if ($rung['key'] === 'mid') {
+            $mid = $rung;
+            break;
+        }
+    }
+
+    if ($mid === null) {
+        return false;
+    }
+
+    return create_video_rendition($src, $dest, $mid);
+}
+
+/**
+ * The configured bitrate ladder (config app.video_ladder), normalized to the
+ * shape the rest of the code uses and ordered low -> high resolution. Each
+ * rung always carries its config 'key' plus the size key StorageController
+ * serves it under ('lo' -> 'web_lo', 'mid' -> 'web', 'hi' -> 'web_hi').
+ */
+function video_ladder(): array
+{
+    $rungs = config('app.video_ladder', []);
+    if (!is_array($rungs) || $rungs === []) {
+        return [];
+    }
+
+    $out = [];
+    foreach ($rungs as $rung) {
+        if (!is_array($rung) || empty($rung['key']) || empty($rung['prefix'])) {
+            continue;
+        }
+        $rung['size'] = $rung['key'] === 'mid' ? 'web' : 'web_' . $rung['key'];
+        $out[] = $rung;
+    }
+
+    usort($out, static fn ($a, $b) => ($a['max_w'] ?? 0) <=> ($b['max_w'] ?? 0));
+
+    return $out;
+}
+
+/**
+ * Which ladder rungs a source video actually needs: a rung is wanted only when
+ * the source exceeds its target box (src_w > max_w or src_h > max_h), so a
+ * 480p clip never gets a pointless 480p re-encode. The mid rung is always
+ * wanted (it is the synchronous upload rendition). Returns a list of the rung
+ * config arrays that apply. Pure function - unit tested directly.
+ */
+function video_ladder_plan(int $srcW, int $srcH): array
+{
+    if ($srcW <= 0 || $srcH <= 0) {
+        // Unknown dimensions: only trust the synchronous mid rung.
+        $mid = array_values(array_filter(video_ladder(), static fn ($r) => $r['key'] === 'mid'));
+        return $mid;
+    }
+
+    $plan = [];
+    foreach (video_ladder() as $rung) {
+        $maxW = (int) ($rung['max_w'] ?? 0);
+        $maxH = (int) ($rung['max_h'] ?? 0);
+        $wants = $rung['key'] === 'mid' ? true : ($srcW > $maxW || $srcH > $maxH);
+        if ($wants) {
+            $plan[] = $rung;
+        }
+    }
+
+    return $plan;
+}
+
+/**
+ * Absolute paths of the source video's ladder variants, keyed by size key
+ * ('web_lo', 'web', 'web_hi') - the same keys StorageController serves. Paths
+ * are returned regardless of whether the file exists; callers stat them.
+ */
+function video_rung_paths(string $filename): array
+{
+    $dir      = rtrim((string) config('app.uploads.dir'), '/');
+    $paths    = [];
+    foreach (video_ladder() as $rung) {
+        $paths[$rung['size']] = $dir . '/' . $rung['prefix'] . basename($filename);
+    }
+
+    return $paths;
+}
+
+/**
+ * Absolute path of a video's poster frame (a wide still used as the player's
+ * poster/preview image), or '' when none exists. Poster frames are 1280x720.
+ */
+function video_poster_path(string $filename): string
+{
+    $p = rtrim((string) config('app.uploads.dir'), '/') . '/poster_' . basename($filename);
+
+    return is_file($p) ? $p : '';
+}
+
+/**
+ * The poster URL of a video for the player's poster attribute, or '' when no
+ * poster frame exists. Gated exactly like the web video rendition (session
+ * token), served by StorageController under ?size=poster.
+ */
+function video_poster_url(string $filename): string
+{
+    return video_poster_path($filename) !== ''
+        ? file_url($filename, 'poster')
+        : '';
+}
+
+/**
+ * Build one ladder rung from a source video using the rung's encoder settings.
+ * Fits within max_w x max_h preserving aspect (scale by width when wider than
+ * max_w, by height when taller than max_h, else leave dimensions alone),
+ * writes a faststart MP4 to $dest. Returns false when the source is missing or
+ * the transcode fails. This is the generic worker used for every ladder rung
+ * (lo/mid/hi) and for the poster frame extraction (via max_w/max_h 1280/720).
+ */
+function create_video_rendition(string $src, string $dest, array $rung, int $timeout = 0): bool
 {
     if (!is_file($src)) {
         return false;
     }
 
-    // Fit within 1280x720 preserving aspect: scale by width when wider than
-    // 1280, by height when taller than 720, else leave dimensions alone.
-    $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
+    $maxW  = (int) ($rung['max_w'] ?? 0);
+    $maxH  = (int) ($rung['max_h'] ?? 0);
+    $ffmpeg  = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
     $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
     $vf = '';
 
@@ -415,18 +569,27 @@ function create_video_web_rendition(string $src, string $dest): bool
         if (count($parts) >= 2) {
             $w = (int) $parts[0];
             $h = (int) $parts[1];
-            if ($w > 1280) {
-                $vf = 'scale=1280:-2';
-            } elseif ($h > 720) {
-                $vf = 'scale=-2:720';
+            if ($maxW > 0 && $w > $maxW) {
+                $vf = 'scale=' . $maxW . ':-2';
+            } elseif ($maxH > 0 && $h > $maxH) {
+                $vf = 'scale=-2:' . $maxH;
             }
         }
     }
 
-    $cmd = escapeshellarg($ffmpeg) . ' -nostdin -y -i ' . escapeshellarg($src)
+    $crf     = (int) ($rung['crf'] ?? 28);
+    $maxrate = (string) ($rung['maxrate'] ?? '4M');
+    $bufsize = (string) ($rung['bufsize'] ?? '8M');
+    $ab      = (string) ($rung['ab'] ?? '96k');
+
+    // $timeout 0 = unbounded (upload path, already inside set_time_limit(0)).
+    // The background worker passes a bound: a 500 MB / 7-minute source can take
+    // 30+ minutes to re-encode on a loaded box, and one such file must not
+    // hold a cron slot (and an ffmpeg guard permit) that whole time.
+    $cmd = ($timeout > 0 ? 'timeout ' . $timeout . ' ' : '') . escapeshellarg($ffmpeg) . ' -nostdin -y -i ' . escapeshellarg($src)
         . ($vf !== '' ? ' -vf ' . escapeshellarg($vf) : '')
-        . ' -c:v libx264 -preset veryfast -crf 28 -maxrate 4M -bufsize 8M'
-        . ' -c:a aac -b:a 96k -movflags +faststart -f mp4 ' . escapeshellarg($dest) . ' 2>&1';
+        . ' -c:v libx264 -preset veryfast -crf ' . $crf . ' -maxrate ' . escapeshellarg($maxrate) . ' -bufsize ' . escapeshellarg($bufsize)
+        . ' -c:a aac -b:a ' . escapeshellarg($ab) . ' -movflags +faststart -f mp4 ' . escapeshellarg($dest) . ' 2>&1';
 
     @exec($cmd, $out, $rc);
 
@@ -1884,11 +2047,67 @@ function _variants_gd(string $src, string $webDest, string $thumbDest, int $maxD
 
 /**
  * Grab a still frame from a video with ffmpeg and scale/crop it to a
- * thumbnail. Tries the 1-second mark first and falls back to 0 seconds for
- * clips that do not have a frame at that offset.
+ * thumbnail. Samples several offsets (1s plus 10/25/40/55/70% of the runtime)
+ * and keeps the sharpest frame, so an auto-captured thumbnail is no longer
+ * whichever frame happens to sit at the 1-second mark (often a black fade-in).
+ * Falls back to 0s when the video is too short to have a frame at 1s.
  */
+/* Sharpness at or above this counts as "a real frame" (see the note in
+   create_video_thumbnail's loop); below it we assume a black/blurred opening
+   and pick the sharpest sampled moment instead. */
+const VIDEO_FRAME_SHARP_FLOOR = 6.0;
+
 function create_video_thumbnail(string $src, string $dest, int $width, int $height): bool
 {
+
+    $duration = video_duration_seconds($src);
+
+    if ($duration >= 3) {
+        $best   = null;
+        $bestS  = -1.0;
+        $scratch = $dest . '.sharp.' . getmypid() . '.jpg';
+
+        foreach (array_unique([1, (int) round($duration * 0.10), (int) round($duration * 0.25),
+                               (int) round($duration * 0.40), (int) round($duration * 0.55),
+                               (int) round($duration * 0.70)]) as $second) {
+            if ($second >= $duration) {
+                $second = $duration - 1;
+            }
+            // A short per-probe budget: this pass only RANKS frames, and the
+            // winner is extracted again with the full budget afterwards. Six
+            // probes at the default 60s would make one stuck source cost the
+            // worker seven minutes before it moved on.
+            if ($second < 0 || !create_video_frame($src, $scratch, $width, $height, $second, 20)) {
+                continue;
+            }
+            $score = image_sharpness_score($scratch);
+            if ($score > $bestS) {
+                $bestS  = $score;
+                $best   = $second;
+            }
+            // The 1s frame is what this site has always used, and on close-up
+            // handheld footage the "sharpest" frame is often an unrepresentative
+            // extreme close-up. Keep today's choice unless it is genuinely bad
+            // (a black fade-in scores near zero), and only then reach for a
+            // sharper moment further in.
+            if ($second === 1 && $score >= VIDEO_FRAME_SHARP_FLOOR) {
+                $best  = 1;
+                $bestS = $score;
+                break;
+            }
+        }
+
+        if ($best !== null) {
+            // Re-extract the winner cleanly (the scratch file is a JPEG probe)
+            // rather than moving the probe, so the final file is written by
+            // the same single code path as every other frame capture.
+            @unlink($scratch);
+            return create_video_frame($src, $dest, $width, $height, $best);
+        }
+
+        @unlink($scratch);
+    }
+
     foreach ([1, 0] as $second) {
         if (create_video_frame($src, $dest, $width, $height, $second)) {
             return true;
@@ -1899,11 +2118,83 @@ function create_video_thumbnail(string $src, string $dest, int $width, int $heig
 }
 
 /**
+ * Rough sharpness score of an image: mean absolute Laplacian response on a
+ * greyscale downscale. Cheap (GD only) and good enough to rank a handful of
+ * candidate frames - a title card or fade-in scores near zero, a detailed
+ * frame scores high. Returns 0.0 when the file cannot be read.
+ */
+function image_sharpness_score(string $path): float
+{
+    if (!is_file($path)) {
+        return 0.0;
+    }
+
+    $img = @imagecreatefromstring((string) @file_get_contents($path));
+    if ($img === false) {
+        return 0.0;
+    }
+
+    $w = imagesx($img);
+    $h = imagesy($img);
+    if ($w < 3 || $h < 3) {
+        imagedestroy($img);
+        return 0.0;
+    }
+
+    // Downscale first: the score only ranks frames, so a 64px wide sample is
+    // plenty and keeps a 400x300 probe to a few thousand pixels.
+    $sw = 64;
+    $sh = max(1, (int) round($h * ($sw / $w)));
+    $small = imagecreatetruecolor($sw, $sh);
+    imagecopyresampled($small, $img, 0, 0, 0, 0, $sw, $sh, $w, $h);
+    imagedestroy($img);
+
+    $sum = 0.0;
+    $n   = 0;
+    for ($y = 1; $y < $sh - 1; $y++) {
+        for ($x = 1; $x < $sw - 1; $x++) {
+            $c = imagecolorat($small, $x, $y);
+            $lum = 0.299 * (($c >> 16) & 0xFF) + 0.587 * (($c >> 8) & 0xFF) + 0.114 * ($c & 0xFF);
+
+            $l = 0.299 * ((imagecolorat($small, $x - 1, $y) >> 16) & 0xFF)
+                + 0.587 * ((imagecolorat($small, $x - 1, $y) >> 8) & 0xFF)
+                + 0.114 * (imagecolorat($small, $x - 1, $y) & 0xFF);
+            $r = 0.299 * ((imagecolorat($small, $x + 1, $y) >> 16) & 0xFF)
+                + 0.587 * ((imagecolorat($small, $x + 1, $y) >> 8) & 0xFF)
+                + 0.114 * (imagecolorat($small, $x + 1, $y) & 0xFF);
+            $u = 0.299 * ((imagecolorat($small, $x, $y - 1) >> 16) & 0xFF)
+                + 0.587 * ((imagecolorat($small, $x, $y - 1) >> 8) & 0xFF)
+                + 0.114 * (imagecolorat($small, $x, $y - 1) & 0xFF);
+            $d = 0.299 * ((imagecolorat($small, $x, $y + 1) >> 16) & 0xFF)
+                + 0.587 * ((imagecolorat($small, $x, $y + 1) >> 8) & 0xFF)
+                + 0.114 * (imagecolorat($small, $x, $y + 1) & 0xFF);
+
+            $sum += abs(4 * $lum - $l - $r - $u - $d);
+            $n++;
+        }
+    }
+
+    imagedestroy($small);
+
+    return $n > 0 ? $sum / $n : 0.0;
+}
+
+/**
+ * Extract a wide poster frame (1280x720 JPEG) from a video for use as the
+ * player's poster image. The frame is chosen with the same sharpness ranking
+ * as create_video_thumbnail(). Returns false when nothing could be captured.
+ */
+function create_video_poster_frame(string $src, string $dest): bool
+{
+    return create_video_thumbnail($src, $dest, 1280, 720);
+}
+
+/**
  * Capture the frame at an exact time offset (in seconds) from a video and
  * scale/crop it to the given dimensions, saving as JPEG. Used by the admin
  * frame picker to choose any frame as the thumbnail.
  */
-function create_video_frame(string $src, string $dest, int $width, int $height, int $second): bool
+function create_video_frame(string $src, string $dest, int $width, int $height, int $second, int $timeout = 60): bool
 {
     $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
     $filter = sprintf(
@@ -1925,7 +2216,7 @@ function create_video_frame(string $src, string $dest, int $width, int $height, 
     // seeking) can never hang the upload request. The caller treats a missing
     // thumbnail as non-fatal, so this prevents the FPM request timeout from
     // marking the whole upload as "rejected by server".
-    $cmd = 'timeout 60 ' . escapeshellarg($ffmpeg) . ' -nostdin -y -ss '
+    $cmd = 'timeout ' . max(5, $timeout) . ' ' . escapeshellarg($ffmpeg) . ' -nostdin -y -ss '
         . escapeshellarg($time)
         . ' -i ' . escapeshellarg($src)
         . ' -an -frames:v 1 -vf ' . escapeshellarg($filter)

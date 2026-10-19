@@ -141,13 +141,83 @@ class CollectionController extends Controller
         $this->redirect('/videos/' . $photoId);
     }
 
-    /** Remove an individual video from a collection. */
+        /** Remove an individual video from a collection. */
     public function removePhoto(int $id, int $photoId): void
     {
         Auth::requireLogin();
 
         Collection::removePhoto($id, (int) $_SESSION['user_id'], $photoId);
         $this->flash('success', 'Removed from collection.');
+        $this->redirect('/collections/' . $id);
+    }
+
+    /**
+     * Move a video one slot up or down the collection's manual order.
+     * POST body: photo_id, dir = up|down.
+     */
+    public function move(int $id): void
+    {
+        Auth::requireLogin();
+
+        $photoId = (int) $this->request->post('photo_id', 0);
+        $dir     = (string) $this->request->post('dir', 'up') === 'down' ? 'down' : 'up';
+
+        if (Collection::movePhoto($id, (int) $_SESSION['user_id'], $photoId, $dir)) {
+            $this->flash('success', 'Playlist reordered.');
+        } else {
+            $this->flash('error', 'Could not move that video.');
+        }
+        $this->redirect('/collections/' . $id);
+    }
+
+    /**
+     * Create a collection from the player's session queue ("Save queue as
+     * collection"). The queue lives in the browser's sessionStorage, so this
+     * is the point where a transient "Up next" list becomes a durable
+     * playlist that survives a new tab and follows the member to another
+     * device. Unknown / non-video ids are ignored, and an empty result is
+     * refused rather than creating an empty collection.
+     */
+    public function fromQueue(): void
+    {
+        Auth::requireLogin();
+
+        $name = trim((string) $this->request->input('name', ''));
+        // Raw POST, not input(): the queue arrives as photo_ids[] and
+        // Request::input() is typed to strings, so it would silently drop the
+        // whole list and create an empty playlist.
+        $ids  = $this->request->post('photo_ids', []);
+
+        if (!is_array($ids)) {
+            $ids = $ids === '' ? [] : [$ids];
+        }
+
+        if ($name === '') {
+            $this->flash('error', 'Give the playlist a name.');
+            $this->redirect('/collections');
+            return;
+        }
+
+        if ($ids === []) {
+            $this->flash('error', 'There was nothing in the queue to save.');
+            $this->redirect('/collections');
+            return;
+        }
+
+        $id = Collection::create((int) $_SESSION['user_id'], $name);
+        $added = Collection::addPhotos($id, (int) $_SESSION['user_id'], $ids);
+
+        if ($added === 0) {
+            // Nothing valid survived validation - do not leave a husk behind.
+            Collection::delete($id, (int) $_SESSION['user_id']);
+            $this->flash('error', 'None of those videos could be saved.');
+            $this->redirect('/collections');
+            return;
+        }
+
+        $this->flash('success', $added === 1
+            ? 'Saved 1 video to "' . $name . '".'
+            : 'Saved ' . $added . ' videos to "' . $name . '".');
         $this->redirect('/collections/' . $id);
     }
 }

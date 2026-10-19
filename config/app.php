@@ -43,6 +43,68 @@ return [
         'font_path'     => '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
     ],
 
+    // Bitrate ladder for member video playback. Each rung is only produced when
+    // the source is larger than the rung's target box (see video_ladder_plan),
+    // and every rung is a self-contained faststart MP4 so the player can offer
+    // a plain quality menu without HLS. Rung order is by 'label' (ascending
+    // resolution); 'prefix' is the on-disk variant prefix that StorageController
+    // resolves for that size key.
+    //
+    // 'web' (720p) is also what uploads build synchronously - it is the size the
+    // player falls back to - while the lo/hi rungs are built in the background
+    // by bin/video_rendition_worker.php. 'maxrate'/'bufsize'/'ab' are ffmpeg
+    // encoder strings, 'crf' is x264 quality (lower = better).
+    'video_ladder' => [
+        [
+            'key'     => 'lo',
+            'label'   => '480p',
+            'prefix'  => 'weblo_',
+            'max_w'   => 854,
+            'max_h'   => 480,
+            'crf'     => 30,
+            'maxrate' => '1200k',
+            'bufsize' => '2400k',
+            'ab'      => '64k',
+        ],
+        [
+            'key'     => 'mid',
+            'label'   => '720p',
+            'prefix'  => 'web_',
+            'max_w'   => 1280,
+            'max_h'   => 720,
+            'crf'     => 28,
+            'maxrate' => '4M',
+            'bufsize' => '8M',
+            'ab'      => '96k',
+        ],
+        [
+            'key'     => 'hi',
+            'label'   => '1080p',
+            'prefix'  => 'webhi_',
+            'max_w'   => 1920,
+            'max_h'   => 1080,
+            'crf'     => 24,
+            'maxrate' => '6M',
+            'bufsize' => '12M',
+            'ab'      => '128k',
+        ],
+    ],
+
+    'video_chapters' => [
+        // Scene-detection chapter markers (bin/video_chapters_worker.php).
+        'enabled'         => true,
+        // Ask the configured AI backend for nicer chapter titles instead of
+        // the default "Part N" placeholders. Off by default because every
+        // title costs a model call.
+        'ai_titles'       => false,
+        // ffmpeg select='gt(scene,T)' threshold: lower finds more cuts.
+        'scene_threshold' => 0.35,
+        // Never place two chapters closer than this (seconds).
+        'min_gap_seconds' => 10.0,
+        // Cap stored chapters per video (VideoChapter::MAX_CHAPTERS).
+        'max_chapters'    => 24,
+    ],
+
     'auth' => [
         // Brute-force protection: N failed logins per email/IP are allowed
         // within the window before the user is temporarily locked out.

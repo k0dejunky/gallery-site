@@ -130,6 +130,22 @@ $crond['gallery-describer'] =
 // requests; the worker itself is a no-op while the flag is off.
 $crond['gallery-chat-ai'] =
     "* * * * * {$php}/bin/chat_ai_worker.php --once >> " . SITE_ROOT . "/storage/logs/chat_ai.log 2>&1\n";
+// Video ladder + poster frames (bin/video_rendition_worker.php): encodes a few
+// rungs per tick and stands down while an AI vision worker holds its lock, so a
+// multi-minute backlog never competes with a model call. Run off-peak-ish every
+// 10 minutes; --budget caps a tick's wall time so the box stays responsive.
+$crond['gallery-video-renditions'] =
+    "*/10 * * * * {$php}/bin/video_rendition_worker.php --once --limit=3 --budget=900 >> " . SITE_ROOT . "/storage/logs/rendition.log 2>&1\n";
+// Scene-detected chapters (bin/video_chapters_worker.php): scene detection is a
+// FULL decode of the video, so a tick is capped at 2 videos (--limit) as well
+// as by the flock - otherwise one tick would chew through the whole library and
+// hold the slot for hours.
+$crond['gallery-video-chapters'] =
+    "17,47 * * * * {$php}/bin/video_chapters_worker.php --once --limit=2 >> " . SITE_ROOT . "/storage/logs/chapters.log 2>&1\n";
+// Public SEO sample clips (Google Video): a couple per tick keeps the CPU free
+// while still filling a large backlog within a day or two.
+$crond['gallery-video-samples'] =
+    "*/5 * * * * {$php}/bin/generate_video_samples.php --once --limit=2 >> " . SITE_ROOT . "/storage/logs/video-samples.log 2>&1\n";
 $crond['gallery-backup'] =
     "{$backupM} {$backupH} {$backupD} * * {$php}/bin/gallery_backup.php >> " . SITE_ROOT . "/storage/logs/backup.log 2>&1\n";
 // Daily small DB-only dump (cheap safety net on top of the monthly full

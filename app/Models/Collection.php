@@ -356,6 +356,102 @@ class Collection
         return true;
     }
 
+        /**
+     * Add many videos to a collection in one go (the player's "Save queue as
+     * collection"). Deduped per video and appended in the given order; returns
+     * how many were actually added. Each id is validated as a real video, so a
+     * crafted POST cannot inject arbitrary photo ids (or a gallery id, which
+     * would smuggle in an image as a "video" item).
+     */
+    public static function addPhotos(int $collectionId, int $userId, array $photoIds): int
+    {
+        if (!self::owns($collectionId, $userId) || $photoIds === []) {
+            return 0;
+        }
+
+        $ids = [];
+        foreach ($photoIds as $id) {
+            $id = (int) $id;
+            if ($id > 0) {
+                $ids[$id] = true;
+            }
+        }
+        $ids = array_keys($ids);
+        if ($ids === []) {
+            return 0;
+        }
+
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        $valid = Database::run(
+            "SELECT id FROM photos WHERE id IN ($ph) AND is_video = 1",
+            $ids
+        )->fetchAll();
+
+        $added = 0;
+        foreach ($valid as $row) {
+            if (self::addPhoto($collectionId, $userId, (int) $row['id'])) {
+                $added++;
+            }
+        }
+
+        return $added;
+    }
+
+    /**
+     * Move a video one slot up or down within a collection's manual order.
+     * $dir is 'up' or 'down'. Swaps the item's position with its neighbour in
+     * the exact order the playlist is rendered in (position, then id), so the
+     * visual order and the stored order can never disagree.
+     */
+    public static function movePhoto(int $collectionId, int $userId, int $photoId, string $dir): bool
+    {
+        if (!self::owns($collectionId, $userId) || $photoId <= 0) {
+            return false;
+        }
+
+        $items = Database::run(
+            'SELECT ci.id, ci.photo_id, ci.position
+             FROM collection_items ci
+             JOIN collections c ON c.id = ci.collection_id
+             WHERE ci.collection_id = ? AND c.user_id = ?
+             ORDER BY ci.position ASC, ci.id ASC',
+            [$collectionId, $userId]
+        )->fetchAll();
+
+        $index = null;
+        foreach ($items as $i => $item) {
+            if ((int) $item['photo_id'] === $photoId) {
+                $index = $i;
+                break;
+            }
+        }
+        if ($index === null) {
+            return false;
+        }
+
+        $target = $dir === 'up' ? $index - 1 : $index + 1;
+        if ($target < 0 || $target >= count($items)) {
+            return false; // already at that end
+        }
+
+        $a = $items[$index];
+        $b = $items[$target];
+        // Park both on a sentinel first: positions are not unique, so a plain
+        // UPDATE swap can transiently collide with a third row's value and
+        // leave two items sharing a position (order then falls back to id).
+        $sentinel = (int) Database::run(
+            'SELECT COALESCE(MAX(position), 0) + 1000 FROM collection_items WHERE collection_id = ?',
+            [$collectionId]
+        )->fetchColumn();
+
+        Database::run('UPDATE collection_items SET position = ? WHERE id = ?', [$sentinel, $a['id']]);
+        Database::run('UPDATE collection_items SET position = ? WHERE id = ?', [$sentinel + 1, $b['id']]);
+        Database::run('UPDATE collection_items SET position = ? WHERE id = ?', [(int) $b['position'], $a['id']]);
+        Database::run('UPDATE collection_items SET position = ? WHERE id = ?', [(int) $a['position'], $b['id']]);
+
+        return true;
+    }
+
     /** Remove a gallery from a collection owned by the user. */
     public static function removeGallery(int $collectionId, int $userId, int $galleryId): bool
     {
