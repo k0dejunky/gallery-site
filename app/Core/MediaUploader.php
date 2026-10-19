@@ -227,9 +227,21 @@ class MediaUploader
         \App\Models\Gallery::attachPhoto($galleryId, $photoId);
         \App\Core\PageCache::invalidate();
 
-        // Cache the video duration (playlist rows show it without probing).
+        // Cache the video duration (playlist rows show it without probing) and
+        // the DISPLAY size (the player sizes its box from it, so a vertical
+        // clip gets a vertical box from the first paint).
         if (is_video($filename)) {
-            \App\Models\Photo::setDuration($photoId, video_duration_seconds($config['dir'] . '/' . $filename));
+            $path = $config['dir'] . '/' . $filename;
+            \App\Models\Photo::setDuration($photoId, video_duration_seconds($path));
+            $dim = media_display_dimensions($path, true);
+            if ($dim !== null) {
+                \App\Models\Photo::setDimensions($photoId, $dim['w'], $dim['h'], $dim['rotation']);
+            }
+        } else {
+            $dim = media_display_dimensions($config['dir'] . '/' . $filename, false);
+            if ($dim !== null) {
+                \App\Models\Photo::setDimensions($photoId, $dim['w'], $dim['h'], $dim['rotation']);
+            }
         }
 
         // Newly committed media: queue the gallery for AI category analysis

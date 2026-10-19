@@ -575,6 +575,117 @@
     return current;
   }
 
+  /* --- sizing -------------------------------------------------------------
+     The player's box must be exactly the video's shape, and as large as
+     possible inside the visible area. CSS alone cannot do the second half:
+     aspect-ratio with a max-height clamps the height but leaves the width
+     alone, which breaks the ratio (measured in Chrome - a 9:16 box stayed
+     900x710 instead of narrowing to 399x710). So the box gets an explicit
+     width and height computed here, and the picture inside is contained in
+     it: no black bars, in any orientation, and never past the viewport. */
+  function aspectFor(el, media){
+    if(media){
+      if(media.videoWidth && media.videoHeight) return media.videoWidth / media.videoHeight;
+      if(media.naturalWidth && media.naturalHeight) return media.naturalWidth / media.naturalHeight;
+    }
+    // The server's estimate, used until the browser has read the metadata.
+    var attr = parseFloat(el.getAttribute('data-aspect'));
+    return attr > 0 ? attr : 0;
+  }
+
+  function fitBox(el, media){
+    if(!el || !el.isConnected) return;
+    if(el.hasAttribute('data-fullscreen')) return;  // the live player fits itself
+    var ar = aspectFor(el, media);
+    if(!(ar > 0)) return;
+
+    // The docked mini player has its own size from the stylesheet.
+    if(el.classList.contains('is-mini')){
+      el.style.width = '';
+      el.style.height = '';
+      el.style.maxHeight = '';
+      return;
+    }
+
+    var deg = el.__vpRot || 0;
+    var boxAr = (deg === 90 || deg === 270) ? (1 / ar) : ar;
+
+    // Measure the column the player sits in. The box's own size is cleared
+    // first so the measurement is not skewed by the previous fit.
+    var prevW = el.style.width, prevH = el.style.height;
+    el.style.width = '';
+    el.style.height = '';
+    var parent = el.parentElement;
+    var column = parent ? parent.getBoundingClientRect().width : 0;
+    el.style.width = prevW;
+    el.style.height = prevH;
+    if(!(column > 40)) column = window.innerWidth;
+
+    // How much of the viewport is actually below the player's own top edge.
+    var rect = el.getBoundingClientRect();
+    var top = Math.max(0, rect.top);
+    var chrome = 110;                       // nav + caption + progress line
+    var cap = window.innerHeight - chrome;  // the most the video may ever be
+    var avail = window.innerHeight - top - chrome;
+    if(avail < 120){
+      // The player sits below the fold (a phone held sideways, where the
+      // page's own header and nav take most of the height). Size the video
+      // for the whole viewport instead: the viewer scrolls it into view and
+      // then sees it as large as the screen allows.
+      avail = cap;
+    }
+    if(avail > cap) avail = cap;
+    if(avail < 120) avail = 120;
+
+    var w = column, h = w / boxAr;
+    if(h > avail){ h = avail; w = h * boxAr; }
+    if(w > column){ w = column; h = w / boxAr; }
+
+    el.style.width = Math.round(w) + 'px';
+    el.style.height = Math.round(h) + 'px';
+    // The stylesheet's max-height is a safety net for the first paint (before
+    // this script runs). Now that the size is computed, it would only fight
+    // the fit: a clamped height with an unchanged width breaks the ratio and
+    // brings the letterbox bars straight back.
+    el.style.maxHeight = 'none';
+
+    // A turned picture is laid out in a box of the opposite ratio, so the
+    // element itself is sized to the box's other axis and then turned.
+    if(deg === 90 || deg === 270){
+      el.style.setProperty('--vp-rot-w', Math.round(h) + 'px');
+      el.style.setProperty('--vp-rot-h', Math.round(w) + 'px');
+    } else if(deg === 180){
+      el.style.setProperty('--vp-rot-w', Math.round(w) + 'px');
+      el.style.setProperty('--vp-rot-h', Math.round(h) + 'px');
+    }
+  }
+
+  /* Wire the box to the viewport: a resize, a turn of the phone and a change
+     of the surrounding column all change how much room the video gets. */
+  function attachFit(el, media){
+    if(el.__fitBound) return;
+    el.__fitBound = true;
+    var timer = null;
+    function schedule(){
+      if(timer) clearTimeout(timer);
+      timer = setTimeout(function(){ fitBox(el, media); }, 60);
+    }
+    el.__scheduleFit = schedule;
+    window.addEventListener('resize', schedule);
+    window.addEventListener('orientationchange', schedule);
+    if(window.ResizeObserver && el.parentElement){
+      try{ new ResizeObserver(schedule).observe(el.parentElement); }catch(e){}
+    }
+    schedule();
+  }
+
+  function parseSources(video){
+    try{ return JSON.parse(video.getAttribute('data-sources') || '{}') || {}; }catch(e){ return {}; }
+  }
+  function parseChapters(video){
+    try{ return JSON.parse(video.getAttribute('data-chapters') || '[]') || []; }catch(e){ return []; }
+  }
+
   function init(el){
     var video = el.querySelector('video');
     if(!video || video.__gplayer) return;
@@ -582,10 +693,8 @@
 
     var isLive = el.hasAttribute('data-live');
     var fsTarget = el.getAttribute('data-fullscreen');
-    var sources = {};
-    try{ sources = JSON.parse(video.getAttribute('data-sources') || '{}') || {}; }catch(e){ sources = {}; }
-    var chapters = [];
-    try{ chapters = JSON.parse(video.getAttribute('data-chapters') || '[]') || []; }catch(e){ chapters = []; }
+    var sources = parseSources(video);
+    var chapters = parseChapters(video);
     var bar = document.createElement('div');
     bar.className = 'player-bar';
     bar.innerHTML =
@@ -607,8 +716,58 @@
       '<button type="button" class="player-btn" data-act="vol" aria-label="Mute or unmute">&#128266;</button>' +
       '<label class="player-keep" title="Keep the picture-in-picture window open after the video ends (allows replay)"><input type="checkbox" data-act="keep" checked>Keep open</label>' +
       '<button type="button" class="player-btn" data-act="pip" title="Picture in picture">&#9210;</button>' +
-      '<button type="button" class="player-btn" data-act="fs" title="Full screen">&#9974;</button>';
+      '<button type="button" class="player-btn" data-act="fs" title="Full screen">&#9974;</button>' +
+      '<button type="button" class="player-btn" data-act="more" title="More options" aria-haspopup="true" aria-expanded="false">&#8942;</button>';
     el.appendChild(bar);
+
+    /* The overflow menu holds the controls that do not fit in the bar on a
+       phone: turn the picture, fill the screen instead of letterboxing it,
+       and theater mode (the video takes the page, the side panels go away). */
+    var more = document.createElement('div');
+    more.className = 'player-more';
+    more.hidden = true;
+    more.innerHTML =
+      '<button type="button" data-more="rotate" aria-pressed="false">Rotate picture</button>' +
+      '<button type="button" data-more="fit" aria-pressed="false">Fill screen</button>' +
+      '<button type="button" data-more="theater" aria-pressed="false">Theater mode</button>';
+    el.appendChild(more);
+    var moreBtn = bar.querySelector('[data-act="more"]');
+    if(moreBtn){
+      moreBtn.addEventListener('click', function(e){
+        e.stopPropagation();
+        more.hidden = !more.hidden;
+        moreBtn.setAttribute('aria-expanded', more.hidden ? 'false' : 'true');
+        if(!more.hidden){
+          var qm = el.querySelector('.player-quality');
+          if(qm) qm.remove();
+        }
+      });
+    }
+    more.addEventListener('click', function(e){
+      var b = e.target && e.target.closest ? e.target.closest('button[data-more]') : null;
+      if(!b) return;
+      var what = b.getAttribute('data-more');
+      if(what === 'rotate'){
+        var deg = ((el.__vpRot || 0) + 90) % 360;
+        el.__vpRot = deg;
+        el.classList.toggle('is-rotated', deg !== 0);
+        if(deg){ el.style.setProperty('--vp-rot-angle', deg + 'deg'); }
+        else { el.style.removeProperty('--vp-rot-angle'); }
+        b.setAttribute('aria-pressed', deg ? 'true' : 'false');
+        b.textContent = deg ? 'Rotate picture (' + deg + '°)' : 'Rotate picture';
+        fitBox(el, video);
+      } else if(what === 'fit'){
+        var fill = el.classList.toggle('is-fill');
+        b.setAttribute('aria-pressed', fill ? 'true' : 'false');
+        b.textContent = fill ? 'Fit picture' : 'Fill screen';
+      } else if(what === 'theater'){
+        var on = document.body.classList.toggle('player-theater');
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        fitBox(el, video);
+      }
+      more.hidden = true;
+      if(moreBtn) moreBtn.setAttribute('aria-expanded', 'false');
+    });
 
     /* Buffering / error overlay with a working Retry: without it a failed or
        stalled Range request left a black rectangle with no way forward. */
@@ -667,7 +826,11 @@
           (liveHls && liveHls.levels || []).map(function(lv, i){ return '<button type="button" data-l="' + i + '">' + (lv.height ? lv.height + 'p' : 'Auto') + '</button>'; }).join('')
         : keys.map(function(k){
             var s = sources[k];
-            var extra = s.bytes ? ' · ' + Math.round(s.bytes / 1048576) + ' MB' : '';
+            var extra = '';
+            // The real pixel size, so a "720p" rung that is really 576x1280
+            // says so instead of pretending to be wider than it is.
+            if(s.w && s.h) extra += ' · ' + s.w + '×' + s.h;
+            if(s.bytes) extra += ' · ' + Math.round(s.bytes / 1048576) + ' MB';
             return '<button type="button" data-q="' + k + '"' + (k === currentRendition ? ' aria-current="true"' : '') + '>' + s.label + extra + '</button>';
           }).join('');
       menu.innerHTML = items;
@@ -715,11 +878,51 @@
         if(c) ticks[i].style.left = Math.min(100, Math.max(0, (c.start / video.duration) * 100)) + '%';
       }
     }
+    /* Rebuild the tick marks from scratch - needed after an AJAX swap, when
+       the chapters belong to a different video. */
+    function renderTicks(){
+      if(!track) return;
+      var holder = track.querySelector('.player-ticks');
+      if(!holder) return;
+      if(!chapters.length){ holder.innerHTML = ''; return; }
+      holder.innerHTML = chapters.map(function(c){
+        return '<span class="player-tick" style="left:' + Math.min(100, Math.max(0, (c.start / (video.duration || 0)) * 100)) + '%"></span>';
+      }).join('');
+    }
 
     function setIcon(){
       if(playBtn) playBtn.innerHTML = video.paused ? '&#9654;' : '&#10074;&#10074;';
       el.classList.toggle('playing', !video.paused);
     }
+
+    /* --- fit the box to the picture and the viewport ---------------------
+       The server sends the picture's display ratio (rotation applied), so
+       the box is the right shape from the first paint. Once the browser has
+       read the real metadata the ratio is confirmed and the box is sized to
+       the largest shape that still fits inside the visible area. */
+    attachFit(el, video);
+    function refreshFit(){
+      fitBox(el, video);
+    }
+    video.addEventListener('loadedmetadata', function(){
+      refreshFit();
+      el.classList.remove('is-poster');
+    });
+    video.addEventListener('loadeddata', function(){ el.classList.remove('is-poster'); });
+    video.addEventListener('playing', function(){ el.classList.remove('is-poster'); });
+    if(video.readyState >= 1){ refreshFit(); }
+
+    /* Fullscreen: the box fills the screen, so the fit is not ours to make
+       any more - but a turned picture still has to be sized to the screen
+       instead of to the inline page box. */
+    document.addEventListener('fullscreenchange', function(){
+      if(document.fullscreenElement === el){
+        el.style.setProperty('--vp-rot-w', '100%');
+        el.style.setProperty('--vp-rot-h', '100%');
+      } else {
+        refreshFit();
+      }
+    });
     function updateSeek(){
       if(isLive){ seek.value = 0; time.textContent = 'LIVE'; return; }
       if(!video.duration || isNaN(video.duration)){ seek.value = 0; time.textContent = '0:00 / 0:00'; return; }
@@ -883,18 +1086,21 @@
     }
 
     /* --- chapter list (server-rendered buttons) --------------------------- */
-    el.querySelectorAll('[data-chapter-seek]').forEach(function(btn){
-      if(btn.__chapterBound) return;
-      btn.__chapterBound = true;
-      btn.addEventListener('click', function(){
-        var t = parseFloat(btn.getAttribute('data-chapter-seek'));
-        if(!isFinite(t)) return;
-        video.__userSeeked = true;
-        video.currentTime = Math.min(Math.max(0, t), isFinite(video.duration) ? Math.max(0, video.duration - 0.25) : t);
-        video.play().catch(function(){});
-        reveal();
+    function bindChapters(){
+      el.querySelectorAll('[data-chapter-seek]').forEach(function(btn){
+        if(btn.__chapterBound) return;
+        btn.__chapterBound = true;
+        btn.addEventListener('click', function(){
+          var t = parseFloat(btn.getAttribute('data-chapter-seek'));
+          if(!isFinite(t)) return;
+          video.__userSeeked = true;
+          video.currentTime = Math.min(Math.max(0, t), isFinite(video.duration) ? Math.max(0, video.duration - 0.25) : t);
+          video.play().catch(function(){});
+          reveal();
+        });
       });
-    });
+    }
+    bindChapters();
 
     /* --- keyboard shortcut help ("?") ------------------------------------ */
     var keysPanel = null;
@@ -925,6 +1131,121 @@
       toggleKeys();
     });
 
+    /* --- "next up" countdown ---------------------------------------------
+       When a video ends and the queue is going to move on, show what is
+       coming and give the viewer a few seconds to cancel it. */
+    var nextUp = null;
+    function advanceNow(){
+      if(window.GalleryNav && window.GalleryNav.advanceNext) window.GalleryNav.advanceNext();
+    }
+    function hideNextUp(){
+      if(!nextUp) return;
+      if(nextUp.__timer) clearInterval(nextUp.__timer);
+      nextUp.remove();
+      nextUp = null;
+    }
+    function showNextUp(info){
+      hideNextUp();
+      if(!info) return;
+      nextUp = document.createElement('div');
+      nextUp.className = 'player-nextup';
+      nextUp.setAttribute('role', 'status');
+      nextUp.innerHTML =
+        '<span class="player-nextup-title"></span>' +
+        '<span class="player-nextup-count">5</span>' +
+        '<button type="button" class="player-btn" data-nextup="play">Play now</button>' +
+        '<button type="button" class="player-btn" data-nextup="cancel">Cancel</button>';
+      var titleEl = nextUp.querySelector('.player-nextup-title');
+      if(titleEl) titleEl.textContent = info.title || 'Next video';
+      var countEl = nextUp.querySelector('.player-nextup-count');
+      var left = 5;
+      nextUp.__timer = setInterval(function(){
+        left--;
+        if(countEl) countEl.textContent = String(left);
+        if(left <= 0){ hideNextUp(); advanceNow(); }
+      }, 1000);
+      nextUp.addEventListener('click', function(e){
+        var b = e.target && e.target.closest ? e.target.closest('button[data-nextup]') : null;
+        if(!b) return;
+        var what = b.getAttribute('data-nextup');
+        hideNextUp();
+        if(what === 'play') advanceNow();
+      });
+      el.appendChild(nextUp);
+      nextUp.classList.add('show');
+    }
+    video.addEventListener('play', hideNextUp);
+    video.addEventListener('seeking', hideNextUp);
+
+    /* --- sticky mini player -----------------------------------------------
+       Scrolling the player past the top of the viewport docks it in the
+       corner so the video is never lost. A placeholder holds the space the
+       player used to occupy, so nothing on the page jumps. */
+    var mini = false;
+    var placeholder = null;
+    function setMini(on){
+      if(on === mini) return;
+      mini = on;
+      if(on){
+        if(!placeholder && el.parentNode){
+          placeholder = document.createElement('div');
+          placeholder.className = 'player-placeholder';
+          // The placeholder has to hold exactly the space the player used,
+          // or the page jumps when the player is docked.
+          var prev = el.getBoundingClientRect();
+          placeholder.style.height = Math.round(prev.height) + 'px';
+          var ap = el.style.getPropertyValue('--vp-aspect');
+          if(ap) placeholder.style.setProperty('--vp-aspect', ap);
+          el.parentNode.insertBefore(placeholder, el);
+        }
+        el.classList.add('is-mini');
+      } else {
+        el.classList.remove('is-mini');
+        if(placeholder && placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
+        placeholder = null;
+      }
+      refreshFit();
+    }
+    var scrollPending = false;
+    function checkMini(){
+      scrollPending = false;
+      if(!el.isConnected) return;
+      if(mini){
+        var ph = placeholder ? placeholder.getBoundingClientRect() : null;
+        // The placeholder is back in view: the player goes back in the page.
+        if(!ph || ph.bottom > 0) setMini(false);
+        return;
+      }
+      var rect = el.getBoundingClientRect();
+      setMini(rect.bottom < 0);
+    }
+    window.addEventListener('scroll', function(){
+      if(scrollPending) return;
+      scrollPending = true;
+      if(window.requestAnimationFrame) window.requestAnimationFrame(checkMini);
+      else checkMini();
+    }, {passive:true});
+
+    /* --- prefetch the next item -------------------------------------------
+       Warming the next clip's connection makes the switch to it instant. */
+    function prefetchNext(){
+      if(!window.GalleryQueue || !window.GalleryQueue.next) return;
+      var nx;
+      try { nx = window.GalleryQueue.next(); } catch(e){ return; }
+      if(!nx || nx.action !== 'play' || !nx.item || !nx.item.web) return;
+      if(el.__prefetched === nx.item.web) return;
+      el.__prefetched = nx.item.web;
+      try{
+        var link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'video';
+        link.href = nx.item.web;
+        document.head.appendChild(link);
+        setTimeout(function(){ if(link.parentNode) link.parentNode.removeChild(link); }, 30000);
+      }catch(e){}
+    }
+    if(window.GalleryQueue) setTimeout(prefetchNext, 2500);
+
     /* --- start on the right rendition ----------------------------------- */
     var startRendition = chooseRendition(sources, null);
     if(startRendition){
@@ -941,17 +1262,67 @@
     layoutTicks();
     bar.classList.add('show');
     setTimeout(function(){ if(video.paused) bar.classList.remove('show'); }, 3200);
+
+    /* --- resync after an AJAX swap ---------------------------------------
+       The swap keeps the SAME <video> element (so picture-in-picture
+       survives) and only changed its src. Everything else - the rendition
+       list, the chapters, the poster, the picture's ratio - belongs to the
+       video being swapped IN and has to be copied over. Keeping the old ones
+       made the quality menu offer the PREVIOUS video's file, and play it. */
+    el.__resync = function(newVideo){
+      sources = parseSources(newVideo);
+      chapters = parseChapters(newVideo);
+      var poster = newVideo.getAttribute('poster');
+      if(poster) video.setAttribute('poster', poster);
+      var aspect = newVideo.getAttribute('data-aspect');
+      if(aspect !== null && aspect !== '') el.setAttribute('data-aspect', aspect);
+      currentRendition = null;
+      renderTicks();
+      // The chapter list is server-rendered markup inside the player box.
+      var newHost = newVideo.closest ? newVideo.closest('.gallery-player') : null;
+      var newCh = newHost ? newHost.querySelector('.player-chapters') : null;
+      var oldCh = el.querySelector('.player-chapters');
+      if(oldCh && newCh){ oldCh.outerHTML = newCh.outerHTML; }
+      else if(oldCh && !newCh){ oldCh.remove(); }
+      bindChapters();
+      el.classList.add('is-poster');
+      fitBox(el, video);
+    };
+    el.__showNextUp = showNextUp;
   }
 
   window.PlayerUI = {
     init: init,
-    setLevels: function(hls){ liveHls = hls; }
+    setLevels: function(hls){ liveHls = hls; },
+    /* Re-fit every player (after a layout change, or a swap). */
+    fit: function(){
+      document.querySelectorAll('[data-player]').forEach(function(el){
+        fitBox(el, el.querySelector('video') || el.querySelector('img'));
+      });
+    }
   };
+
+  /* A gallery of stills has no <video> and so no control bar, but its stage
+     still has to be shaped like the picture. */
+  function initStage(el){
+    if(el.__stageBound) return;
+    el.__stageBound = true;
+    var img = el.querySelector('img');
+    if(!img) return;
+    attachFit(el, img);
+    if(img.complete && img.naturalWidth) fitBox(el, img);
+    else img.addEventListener('load', function(){ fitBox(el, img); });
+  }
 
   /* Public entry point used after an AJAX media swap: the swapped markup can
      bring a brand-new [data-player] wrapper (and a brand-new <video>), and the
      bar is only ever attached once per element. */
-  function initAll(){ document.querySelectorAll('[data-player]').forEach(function(el){ init(el); }); }
+  function initAll(){
+    document.querySelectorAll('[data-player]').forEach(function(el){
+      if(!el.querySelector('video')){ initStage(el); return; }
+      init(el);
+    });
+  }
   window.PlayerUI.initAll = initAll;
   if(document.readyState !== 'loading'){ initAll(); } else { document.addEventListener('DOMContentLoaded', initAll); }
   window.addEventListener('load', initAll);
@@ -998,6 +1369,22 @@ document.addEventListener('leavepictureinpicture', function(){
     if(navNext){ navNext.click(); }
   }
 
+  // The item the queue is going to play next, for the "next up" countdown.
+  function nextInfo(){
+    if(window.GalleryQueue && window.GalleryQueue.next){
+      var nx = null;
+      try { nx = window.GalleryQueue.next(); } catch(e){}
+      if(nx && nx.action === 'play' && nx.item) return { title: nx.item.title || 'Next video' };
+    }
+    var active = document.querySelector('.player-playlist .pl-item.active');
+    var next = active && active.nextElementSibling;
+    if(next){
+      var t = next.querySelector('.pl-title');
+      if(t) return { title: (t.textContent || '').trim() };
+    }
+    return null;
+  }
+
   // When the current item is an image (slideshow frame), auto-advance after
   // a few seconds unless paused or the tab is hidden.
   function scheduleSlideshow(){
@@ -1022,6 +1409,13 @@ document.addEventListener('leavepictureinpicture', function(){
       // Autoplay off (or Repeat on, which the queue module handles by
       // replaying this video) must stop this path from advancing too.
       if(window.GalleryQueue && !window.GalleryQueue.canAdvance()) return;
+      // Show what is coming with a countdown the viewer can cancel.
+      var host = video.closest ? video.closest('[data-player]') : null;
+      var info = nextInfo();
+      if(host && host.__showNextUp && info){
+        host.__showNextUp(info);
+        return;
+      }
       advanceNext();
     });
   }
@@ -1071,6 +1465,12 @@ document.addEventListener('leavepictureinpicture', function(){
           if(nv && curV && nv.getAttribute('src')){
             var video = curV;
             var wasPlaying = video && !video.paused;
+            // Copy the incoming video's data (renditions, chapters, poster,
+            // picture ratio) onto the element we keep. Without this the
+            // quality menu still offered - and played - the PREVIOUS
+            // video's file.
+            var host = curV.closest ? curV.closest('[data-player]') : null;
+            if(host && host.__resync) host.__resync(nv);
             video.src = nv.getAttribute('src');
             video.load();
             if(wasPlaying){ video.play().catch(function(){}); }
@@ -1137,6 +1537,10 @@ document.addEventListener('leavepictureinpicture', function(){
   }
   if(document.readyState !== 'loading'){ bind(); } else { document.addEventListener('DOMContentLoaded', bind); }
   window.addEventListener('load', bind);
+
+  /* The player's "next up" countdown needs a way to move the queue on when
+     the countdown runs out or the viewer presses "Play now". */
+  window.GalleryNav = { advanceNext: advanceNext, nextInfo: nextInfo };
 })();
 
 /* Playlist queue + in-page gallery browser for the video player.

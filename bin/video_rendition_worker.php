@@ -25,18 +25,24 @@ declare(strict_types=1);
  * Usage:
  *   php bin/video_rendition_worker.php --once [--limit=N] [--budget=SECONDS]
  *   php bin/video_rendition_worker.php --once --limit=0    (drain everything)
+ *   php bin/video_rendition_worker.php --once --mismatched=1
+ *        (re-encode only the rungs whose shape is wrong: the ones the old
+ *        single-axis scaler produced for rotated and vertical sources)
  */
 
 require __DIR__ . '/../app/bootstrap.php';
 
 $limit  = null; // null = not given yet; 0 = drain the whole backlog
 $budget = 900;  // seconds per tick; stops mid-backfill to leave the box responsive
+$mismatchOnly = false;
 
 foreach (array_slice($argv, 1) as $arg) {
     if (preg_match('/^--limit=(\d+)$/', $arg, $m)) {
         $limit = (int) $m[1];
     } elseif (preg_match('/^--budget=(\d+)$/', $arg, $m)) {
         $budget = max(60, (int) $m[1]);
+    } elseif ($arg === '--mismatched=1' || $arg === '--mismatched') {
+        $mismatchOnly = true;
     }
 }
 
@@ -99,25 +105,80 @@ if ($ladder === []) {
     exit(0);
 }
 
-/** Probe a video's pixel dimensions (null when unreadable). */
+/**
+ * Probe a video's DISPLAY dimensions (null when unreadable).
+ *
+ * The display size is what the viewer sees: the coded size with the
+ * rotation in the display matrix applied. Sizing a rendition from the coded
+ * size is what turned a 2400x1080 phone clip into a 1280x2844 "720p" file.
+ */
 $dimensions = static function (string $path): ?array {
-    $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
-    $probe   = [];
-    $rc      = 0;
-    @exec(
-        escapeshellarg($ffprobe) . ' -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 '
-        . escapeshellarg($path) . ' 2>/dev/null',
-        $probe,
-        $rc
-    );
-    if ($rc === 0 && isset($probe[0])) {
-        $parts = array_map('intval', explode(',', (string) $probe[0]));
-        if (count($parts) >= 2 && $parts[0] > 0 && $parts[1] > 0) {
-            return [$parts[0], $parts[1]];
-        }
+    $dim = video_display_dimensions($path);
+
+    return $dim === null ? null : [(int) $dim['w'], (int) $dim['h']];
+};
+
+/**
+ * Is an existing rung mis-shaped for the current encoder?
+ *
+ * A rung is fine when it keeps the source's aspect ratio AND fits inside its
+ * target box. The old encoder scaled a single axis, so a vertical clip got a
+ * 1280x2844 "720p" file that blew past its box and made the player draw it
+ * in a narrow strip with black bars around it. Those are the rungs worth
+ * re-encoding; the ones that are already correct are left alone.
+ */
+$rungIsMismatched = static function (string $dest, array $rung, int $srcW, int $srcH): bool {
+    if (!is_file($dest)) {
+        return false;
+    }
+    $have = video_display_dimensions($dest);
+    if ($have === null) {
+        return true; // unreadable -> rebuild
+    }
+    $haveW = (int) $have['w'];
+    $haveH = (int) $have['h'];
+    if ($haveW <= 0 || $haveH <= 0) {
+        return true;
     }
 
-    return null;
+    [$boxW, $boxH] = video_ladder_box($rung, $srcW, $srcH);
+    if ($boxW > 0 && $haveW > $boxW + 2) {
+        return true; // wider than the rung allows
+    }
+    if ($boxH > 0 && $haveH > $boxH + 2) {
+        return true; // taller than the rung allows
+    }
+
+    // The aspect has to match the source's (1% tolerance): a stretched or
+    // wrongly-cropped rendition is just as broken as an oversized one.
+    $srcAr  = $srcW / $srcH;
+    $haveAr = $haveW / $haveH;
+    if ($srcAr > 0 && abs($haveAr - $srcAr) / $srcAr > 0.01) {
+        return true;
+    }
+
+    return false;
+};
+
+/**
+ * Does the source need a poster that is not a 16:9 centre crop?
+ *
+ * The poster is a fixed 1280x720 still that now shows the WHOLE frame
+ * (padded). A source that is not 16:9 was cropped by the old poster code,
+ * so its poster has to be rebuilt.
+ */
+$posterNeedsRebuild = static function (string $poster, int $srcW, int $srcH): bool {
+    if ($srcW <= 0 || $srcH <= 0) {
+        return false;
+    }
+    $ar = $srcW / $srcH;
+
+    if (abs($ar - (16 / 9)) / (16 / 9) <= 0.01) {
+        return false; // 16:9: the old crop and the new padding agree
+    }
+
+    // Already padded -> nothing to do (keeps the repair convergent).
+    return !video_poster_is_padded($poster, $srcW, $srcH);
 };
 
 /** Source files whose rungs may be missing, oldest uploads first. */
@@ -232,9 +293,22 @@ foreach ($candidates as $src => $srcMtime) {
 
     [$srcW, $srcH] = $dims;
 
+    // Keep the photo row's display size in step with the file, so the player
+    // can size its box before the browser has read the video's metadata.
+    $photo = \App\Models\Photo::findByFilename($filename);
+    if ($photo !== null) {
+        \App\Models\Photo::setDimensions((int) $photo['id'], $srcW, $srcH, 0);
+    }
+
     // --- poster frame ---------------------------------------------------
     $poster = $uploads . '/poster_' . $filename;
-    if (!is_file($poster) || (int) @filemtime($poster) < $srcMtime) {
+    $posterStale = !is_file($poster) || (int) @filemtime($poster) < $srcMtime;
+    // A non-16:9 source was centre-cropped by the old poster code; the new
+    // poster shows the whole frame, so it has to be rebuilt.
+    if (!$posterStale && $posterNeedsRebuild($poster, $srcW, $srcH)) {
+        $posterStale = true;
+    }
+    if ($posterStale) {
         if (create_video_poster_frame($src, $poster)) {
             @chmod($poster, 0644);
             $log('poster ' . $filename . ' ' . $srcW . 'x' . $srcH);
@@ -253,8 +327,22 @@ foreach ($candidates as $src => $srcMtime) {
     foreach ($orderPlan(video_ladder_plan($srcW, $srcH)) as $rung) {
         $dest = $uploads . '/' . $rung['prefix'] . $filename;
 
-        if (is_file($dest) && (int) @filemtime($dest) >= $srcMtime) {
-            continue; // current
+        $exists  = is_file($dest);
+        $current = $exists && (int) @filemtime($dest) >= $srcMtime;
+        if ($current) {
+            // The rung is up to date. It still has to be rebuilt when its
+            // SHAPE is wrong: the old single-axis scaler produced a
+            // 1280x2844 "720p" file for a rotated source, and that is what
+            // played a vertical video in a narrow strip with black bars
+            // around it. Probing the rung is a cheap metadata read, and it
+            // converges: once the shape is right it is never touched again.
+            if (!$rungIsMismatched($dest, $rung, $srcW, $srcH)) {
+                continue;
+            }
+        } elseif ($mismatchOnly && !$exists) {
+            // --mismatched only repairs what exists; missing rungs are the
+            // normal backfill's job.
+            continue;
         }
 
         // Encode to a temp name and move into place, so a killed worker never

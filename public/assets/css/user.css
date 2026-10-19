@@ -196,8 +196,43 @@ table td:nth-child(1) { overflow-wrap: anywhere; word-break: break-word; }
 .flash[role=status]{border-left:4px solid var(--btn-bg, #7e22ce)}
 
 /* Custom video player (gallery MP4 + live HLS) */
-.gallery-player{position:relative;max-width:100%;border-radius:12px;overflow:hidden;background:#000;box-shadow:0 2px 14px rgba(59,7,100,.45);display:inline-block;vertical-align:top}
-.gallery-player video{display:block;max-width:100%;max-height:calc(100vh - 190px);max-height:calc(100dvh - 190px);background:#000;margin:0 auto}
+/* The player box carries the video's own aspect ratio (--vp-aspect, set from
+   the source's DISPLAY size so a rotated phone clip is 1080x2400 and not
+   2400x1080) and the video fills it exactly: object-fit:contain means the
+   picture is never cropped, and because the box already has the video's
+   ratio there is nothing left to letterbox - no black bars, in any
+   orientation. The JS fit() sizes the box so it also fits the viewport
+   height, because CSS alone cannot (aspect-ratio + max-height clamps the
+   height but leaves the width alone, which breaks the ratio). */
+.gallery-player{position:relative;width:100%;max-width:100%;margin:0 auto;aspect-ratio:var(--vp-aspect,16/9);max-height:calc(100vh - 190px);max-height:calc(100dvh - 190px);border-radius:12px;overflow:hidden;background:#000;box-shadow:0 2px 14px rgba(59,7,100,.45);display:block;vertical-align:top}
+.gallery-player video{display:block;width:100%;height:100%;object-fit:contain;background:#000;margin:0}
+/* While the poster is up the box is filled edge to edge: the poster is a
+   fixed 16:9 still with the whole frame padded, and cover crops exactly
+   that padding away, so the pre-play frame has the same shape as the video
+   and there is no jump when playback starts. */
+.gallery-player.is-poster video{object-fit:cover}
+/* Fit / Fill: contain shows the whole picture (bars on a screen whose ratio
+   differs from the video's), cover fills the screen and crops the overflow. */
+.gallery-player.is-fill video{object-fit:cover}
+/* Rotated playback: the box takes the INVERTED ratio and the video is turned
+   inside it, so a vertical clip can be watched on a landscape phone. */
+.gallery-player.is-rotated{aspect-ratio:var(--vp-rot-aspect,16/9)}
+.gallery-player.is-rotated video{position:absolute;left:50%;top:50%;width:var(--vp-rot-w,100%);height:var(--vp-rot-h,100%);transform:translate(-50%,-50%) rotate(var(--vp-rot-angle,90deg))}
+/* Fullscreen: the box fills the screen and the picture scales to the largest
+   size that fits it. */
+.gallery-player:fullscreen{width:100%!important;height:100%!important;max-height:none;aspect-ratio:auto;border-radius:0;box-shadow:none}
+.gallery-player:fullscreen video{width:100%;height:100%}
+/* The guest preview stage: the media keeps its own aspect (the browser sizes
+   a replaced element inside max-width/max-height without distorting it) and
+   the stage hugs it, so there is no black area around the picture. */
+.media-stage{position:relative;width:fit-content;max-width:100%;margin:0 auto;border-radius:10px;overflow:hidden;background:#000;box-shadow:0 2px 14px rgba(59,7,100,.35)}
+.media-stage video,.media-stage img{display:block;width:auto;height:auto;max-width:100%;max-height:calc(100vh - 260px);max-height:calc(100dvh - 260px);margin:0 auto;background:#000}
+/* Theater mode: the side panels go away and the video takes the page. */
+body.player-theater .player-side{display:none}
+body.player-theater .player-layout{max-width:none}
+body.player-theater .player-main{max-width:none}
+body.player-theater #video-player-wrap>figcaption,
+body.player-theater #video-player-wrap+.media-progress{display:none}
 .player-bar{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:.4rem;padding:.4rem .6rem;background:linear-gradient(180deg,rgba(15,5,28,0),rgba(15,5,28,.82));color:#fff;font-size:13px;opacity:0;transition:opacity .18s;z-index:3}
 .player-bar.show,.gallery-player:hover .player-bar{opacity:1}
 .player-btn{background:none;border:0;color:#fff;font-size:15px;line-height:1;cursor:pointer;padding:.25rem .35rem;border-radius:6px;font-family:inherit}
@@ -213,6 +248,11 @@ table td:nth-child(1) { overflow-wrap: anywhere; word-break: break-word; }
 .player-quality{position:absolute;bottom:2.6rem;right:.5rem;display:flex;flex-direction:column;gap:.15rem;background:rgba(20,8,34,.94);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:.35rem;z-index:4;min-width:92px}
 .player-quality button{background:none;border:0;color:#fff;text-align:left;padding:.3rem .5rem;border-radius:6px;cursor:pointer;font-size:13px}
 .player-quality button:hover{background:rgba(255,255,255,.16);color:#ffd0e8}
+.player-more{position:absolute;bottom:2.6rem;right:.5rem;display:flex;flex-direction:column;gap:.15rem;background:rgba(20,8,34,.94);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:.35rem;z-index:4;min-width:150px}
+.player-more[hidden]{display:none}
+.player-more button{background:none;border:0;color:#fff;text-align:left;padding:.35rem .5rem;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap}
+.player-more button:hover{background:rgba(255,255,255,.16);color:#ffd0e8}
+.player-more button[aria-pressed=true]{color:#ffd0e8}
 .player-live-dot{width:8px;height:8px;border-radius:50%;background:#ff4777;box-shadow:0 0 6px #ff4777;display:inline-block;margin-right:.3rem;vertical-align:middle}
 .player-keep{display:inline-flex;align-items:center;gap:.3rem;color:rgba(255,255,255,.9);font-size:12px;cursor:pointer;white-space:nowrap}
 .player-keep input{accent-color:#ff9fd4;cursor:pointer}
@@ -248,6 +288,39 @@ table td:nth-child(1) { overflow-wrap: anywhere; word-break: break-word; }
 
 /* The control bar sits above the home-indicator area on phones. */
 .player-bar{padding-bottom:calc(.4rem + env(safe-area-inset-bottom,0px))}
+
+/* New player controls: rotate, fit/fill and theater mode sit next to the
+   fullscreen button and only light up when they change something. */
+.player-btn[aria-pressed=true]{background:rgba(255,159,212,.28);color:#fff}
+.player-btn:disabled{opacity:.35;cursor:default}
+
+/* "Next up" countdown: shown when a video ends and the queue is going to
+   move on, so the viewer can see what is coming and cancel it. */
+.player-nextup{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;background:rgba(8,3,16,.82);color:#fff;z-index:5;text-align:center;padding:1rem}
+.player-nextup.show{display:flex}
+.player-nextup-title{font-weight:700;font-size:1rem;max-width:80%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.player-nextup-count{font-size:2.2rem;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+.player-nextup .player-btn{background:rgba(255,255,255,.16);padding:.35rem .8rem;font-size:.85rem}
+
+/* Sticky mini player: when the player is scrolled off the top it docks in
+   the corner so the video is never lost. The placeholder keeps the space the
+   player used to occupy, so nothing jumps. */
+.player-placeholder{width:100%;aspect-ratio:var(--vp-aspect,16/9)}
+.gallery-player.is-mini{position:fixed;right:14px;bottom:14px;width:min(320px,44vw);max-height:44vh;z-index:60;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.14)}
+.gallery-player.is-mini .player-bar{opacity:1}
+@media(max-width:640px){.gallery-player.is-mini{right:8px;bottom:8px;width:min(240px,58vw)}}
+
+/* On a phone held sideways the viewport is barely taller than the site's own
+   header, and the page furniture above the player would push the video off
+   the screen. The breadcrumbs and the "save to collection" form step aside
+   so the picture gets the space. */
+@media(max-height:560px){
+  body.site-compact .breadcrumbs{display:none}
+  .player-save-form{display:none}
+}
+@media(max-width:820px){
+  .player-save-form{display:none}
+}
 
 /* Collection playlist panel beside the video player */
 .player-layout{display:flex;gap:1rem;align-items:flex-start}

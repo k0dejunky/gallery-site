@@ -552,6 +552,52 @@ class TestSuite
             )];
         });
 
+        $add('db.media_dimensions', 'Database', 'the display size of a media file is stored on the photo row', function () {
+            $cols = Database::run('SHOW COLUMNS FROM photos')->fetchAll();
+            $have = [];
+            foreach ($cols as $c) {
+                $have[$c['Field']] = true;
+            }
+            foreach (['width', 'height', 'rotation'] as $c) {
+                if (!isset($have[$c])) {
+                    return ['pass' => false, 'detail' => 'photos.' . $c . ' is missing (run scripts/migrate.php)'];
+                }
+            }
+
+            // Round-trip through the model on a scratch row.
+            $name = 'probe-dims-' . getmypid() . '.mp4';
+            $hash = sha1($name . 'dims');
+            $id   = null;
+            try {
+                Database::run(
+                    'INSERT INTO photos (filename, is_video, hash, created_at) VALUES (?, 1, ?, CURRENT_TIMESTAMP)',
+                    [$name, $hash]
+                );
+                $id = (int) Database::connection()->lastInsertId();
+
+                \App\Models\Photo::setDimensions($id, 1080, 2400, 90);
+                $dim = \App\Models\Photo::dimensions($id);
+                $ok  = is_array($dim)
+                    && $dim['w'] === 1080
+                    && $dim['h'] === 2400
+                    && $dim['rotation'] === 90;
+
+                // A row that was never measured must read as "unknown", not
+                // as a zero-sized picture.
+                $none = \App\Models\Photo::dimensions($id + 999999);
+
+                return ['pass' => $ok && $none === null, 'detail' => sprintf(
+                    'stored=%s unknown=%s',
+                    json_encode($dim),
+                    $none === null ? 'null' : json_encode($none)
+                )];
+            } finally {
+                if ($id !== null) {
+                    Database::run('DELETE FROM photos WHERE id = ?', [$id]);
+                }
+            }
+        });
+
         $add('db.video_chapter_parse', 'Database', 'scene times become chapters: t=0 first, gaps collapsed, capped, even fallback', function () {
             // Fast cuts 1s apart must collapse to nothing (min gap 10s).
             $bunched = \App\Models\VideoChapter::parseSceneTimes([1, 2, 3, 4, 5], 300.0, 10.0, 24);

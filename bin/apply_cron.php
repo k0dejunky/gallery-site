@@ -146,6 +146,12 @@ $crond['gallery-video-chapters'] =
 // while still filling a large backlog within a day or two.
 $crond['gallery-video-samples'] =
     "*/5 * * * * {$php}/bin/generate_video_samples.php --once --limit=2 >> " . SITE_ROOT . "/storage/logs/video-samples.log 2>&1\n";
+// Display dimensions (bin/media_dimensions_worker.php): the player sizes its
+// box from the media's DISPLAY size, so the size has to be on the photo row.
+// This only probes (ffprobe / getimagesize), it never re-encodes, and it
+// stands down once every row is measured.
+$crond['gallery-media-dimensions'] =
+    "23 * * * * {$php}/bin/media_dimensions_worker.php --once --missing >> " . SITE_ROOT . "/storage/logs/dimensions.log 2>&1\n";
 $crond['gallery-backup'] =
     "{$backupM} {$backupH} {$backupD} * * {$php}/bin/gallery_backup.php >> " . SITE_ROOT . "/storage/logs/backup.log 2>&1\n";
 // Daily small DB-only dump (cheap safety net on top of the monthly full

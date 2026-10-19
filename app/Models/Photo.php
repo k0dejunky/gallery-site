@@ -377,6 +377,54 @@ class Photo
     }
 
     /**
+     * Cache a media file's DISPLAY size in pixels and its display rotation.
+     *
+     * The player sizes its box from these, so a vertical clip gets a vertical
+     * box from the very first paint instead of a wide one that snaps into
+     * shape once the browser has read the video's metadata. A width of 0 (or
+     * a null pair) means "not measured yet" and the player falls back to the
+     * aspect it reads from the video itself.
+     */
+    public static function setDimensions(int $id, int $width, int $height, int $rotation = 0): void
+    {
+        if ($width <= 0 || $height <= 0) {
+            return;
+        }
+
+        Database::run(
+            'UPDATE photos SET width = ?, height = ?, rotation = ? WHERE id = ?',
+            [
+                min(65535, $width),
+                min(65535, $height),
+                ((int) round($rotation / 90) * 90) % 360,
+                $id,
+            ]
+        );
+    }
+
+    /**
+     * A photo's cached display size as ['w' => int, 'h' => int, 'rotation' =>
+     * int], or null when it has never been measured.
+     */
+    public static function dimensions(int $id): ?array
+    {
+        $row = Database::run(
+            'SELECT width, height, rotation FROM photos WHERE id = ?',
+            [$id]
+        )->fetch();
+
+        if (!$row || empty($row['width']) || empty($row['height'])) {
+            return null;
+        }
+
+        return [
+            'w'        => (int) $row['width'],
+            'h'        => (int) $row['height'],
+            'rotation' => (int) ($row['rotation'] ?? 0),
+        ];
+    }
+
+    /**
      * Remove a photo if no gallery references it anymore: deletes the file,
      * its thumbnail and the database row. Used after gallery deletions so
      * orphaned uploads do not accumulate.

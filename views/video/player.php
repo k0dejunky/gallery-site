@@ -53,21 +53,61 @@ $breadcrumbItems = [
 // the quality menu can never hand the browser a URL that 404s. Ordered
 // low -> high by config; the player picks the first rung when the connection
 // looks metered/slow.
+//
+// Each rung also carries the PIXEL SIZE it will have, so the quality menu can
+// say "720p - 576x1280 - 2.1 MB" instead of a label that lies. The size is
+// derived from the source's display size (rotation applied) and the rung's
+// target box, which is exactly what the encoder produces - no probing per
+// page view.
 $qualitySources = [];
 $rungPaths = video_rung_paths((string) $photo['filename']);
+$sourceDims = \App\Models\Photo::dimensions((int) $photo['id']);
+if ($sourceDims === null) {
+    // Not measured yet (a row from before the dimensions worker existed):
+    // fall back to probing the source once, and cache it.
+    $probed = video_display_dimensions($rungPaths['web'] ?? '');
+    if ($probed === null) {
+        foreach ($rungPaths as $candidate) {
+            $probed = video_display_dimensions($candidate);
+            if ($probed !== null) {
+                break;
+            }
+        }
+    }
+    if ($probed !== null) {
+        $sourceDims = ['w' => (int) $probed['w'], 'h' => (int) $probed['h'], 'rotation' => (int) $probed['rotation']];
+        \App\Models\Photo::setDimensions((int) $photo['id'], $sourceDims['w'], $sourceDims['h'], $sourceDims['rotation']);
+    }
+}
 foreach (video_ladder() as $rung) {
     $rungPath = $rungPaths[$rung['size']] ?? '';
     if ($rungPath === '' || !is_file($rungPath)) {
         continue;
     }
+    $rungW = 0;
+    $rungH = 0;
+    if ($sourceDims !== null) {
+        [$boxW, $boxH] = video_ladder_box($rung, $sourceDims['w'], $sourceDims['h']);
+        [$rungW, $rungH] = video_fit_dimensions($sourceDims['w'], $sourceDims['h'], $boxW, $boxH);
+    }
     $qualitySources[$rung['size']] = [
         'label' => (string) $rung['label'],
         'url'   => file_url((string) $photo['filename'], $rung['size']),
         'bytes' => (int) @filesize($rungPath),
+        'w'     => $rungW,
+        'h'     => $rungH,
     ];
 }
 $posterUrl = video_poster_url((string) $photo['filename']);
 $chapters  = is_array($chapters ?? null) ? $chapters : [];
+
+// The player's aspect ratio, from the source's display size. The box is laid
+// out at this ratio from the very first paint, so a vertical clip is never
+// shown in a wide box with black bars around it.
+$playerAspect = '';
+if ($sourceDims !== null && $sourceDims['w'] > 0 && $sourceDims['h'] > 0) {
+    $playerAspect = round($sourceDims['w'] / $sourceDims['h'], 6);
+}
 $playlistTotal = 0;
 foreach ((array) ($playlist ?? []) as $item) {
     $playlistTotal += (int) ($item['duration_seconds'] ?? 0);
@@ -78,7 +118,7 @@ foreach ((array) ($playlist ?? []) as $item) {
 <?php require __DIR__ . '/../partials/media_nav.php'; ?>
 
 <?php if (!empty($collections)): ?>
-    <form method="post" action="<?= url('/collections/' . (int) $collections[0]['id'] . '/photos') ?>" class="settings-form" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.25rem 0 .75rem;">
+    <form method="post" action="<?= url('/collections/' . (int) $collections[0]['id'] . '/photos') ?>" class="settings-form player-save-form" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.25rem 0 .75rem;">
         <?= csrf_field() ?>
         <input type="hidden" name="photo_id" value="<?= (int) $photo['id'] ?>">
         <label class="muted" style="font-size:.9rem;">Save video to collection</label>
@@ -103,15 +143,16 @@ foreach ((array) ($playlist ?? []) as $item) {
                     // members: play the short blurred sample clip, or fall
                     // back to the blurred poster when no clip exists yet. ?>
                 <?php $sampleUrl = video_sample_url((int) $photo['id'], (string) $photo['filename']); ?>
-                <?php if ($sampleUrl !== ''): ?>
-                    <video id="preview-video" src="<?= e($sampleUrl) ?>" controls playsinline
-                           preload="metadata" poster="<?= e(file_url($photo['filename'], 'blur')) ?>"
-                           aria-label="<?= e($title) ?>"
-                           style="max-width:100%;max-height:calc(100dvh - 260px);border-radius:10px;background:#000;box-shadow:0 2px 14px rgba(59,7,100,.35);"></video>
-                <?php else: ?>
-                    <img src="<?= e(file_url($photo['filename'], 'blur')) ?>"
-                         alt="<?= e($title) ?>" decoding="async" style="max-width:100%;max-height:calc(100dvh - 260px);height:auto;border-radius:10px;box-shadow:0 2px 14px rgba(59,7,100,.35);">
-                <?php endif; ?>
+                <div class="media-stage">
+                    <?php if ($sampleUrl !== ''): ?>
+                        <video id="preview-video" src="<?= e($sampleUrl) ?>" controls playsinline
+                               preload="metadata" poster="<?= e(file_url($photo['filename'], 'blur')) ?>"
+                               aria-label="<?= e($title) ?>"></video>
+                    <?php else: ?>
+                        <img src="<?= e(file_url($photo['filename'], 'blur')) ?>"
+                             alt="<?= e($title) ?>" decoding="async">
+                    <?php endif; ?>
+                </div>
                 <figcaption class="muted" style="margin-top:.5rem">
                     <?php if ($photo['caption'] !== ''): ?><span><?= e($photo['caption']) ?></span><br><?php endif; ?>
                     <span><?= number_format((int) ($photo['views'] ?? 0)) ?> views &middot; <?= number_format((int) ($photo['unique_views'] ?? 0)) ?> unique</span>
@@ -126,7 +167,9 @@ foreach ((array) ($playlist ?? []) as $item) {
                 ?>
             <?php else: ?>
             <p class="media-progress" role="status">Item <?= (int) ($currentIndex + 1) ?> of <?= (int) ($mediaCount ?? 1) ?></p>
-            <div class="gallery-player" data-player>
+            <div class="gallery-player<?= is_video($photo['filename']) ? ' is-poster' : '' ?>" data-player
+                 <?= $playerAspect !== '' ? 'style="--vp-aspect:' . e((string) $playerAspect) . '"' : '' ?>
+                 data-aspect="<?= e((string) $playerAspect) ?>">
                 <?php if (is_video($photo['filename'])): ?>
                     <video id="gallery-video-<?= (int) $photo['id'] ?>"
                            data-video-id="<?= (int) $photo['id'] ?>"
@@ -158,7 +201,7 @@ foreach ((array) ($playlist ?? []) as $item) {
                         </details>
                     <?php endif; ?>
                 <?php else: ?>
-                    <img id="slideshow-img" data-video-id="<?= (int) $photo['id'] ?>" data-media-type="image" src="<?= e($src) ?>" alt="<?= e($title) ?>" style="max-width:100%;max-height:calc(100dvh - 260px);height:auto;border-radius:10px;box-shadow:0 2px 14px rgba(59,7,100,.35);">
+                    <img id="slideshow-img" data-video-id="<?= (int) $photo['id'] ?>" data-media-type="image" src="<?= e($src) ?>" alt="<?= e($title) ?>">
                     <div class="slideshow-bar" data-slideshow-bar>
                         <span class="slideshow-note muted">Auto-advances in a few seconds</span>
                         <button type="button" class="btn btn-sm btn-outline" data-slideshow-toggle>Pause slideshow</button>

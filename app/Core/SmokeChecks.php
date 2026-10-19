@@ -2593,10 +2593,13 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
         // --------------------------------------------- Video ladder + playlist
         $vcfg      = $read("$root/config/app.php");
         $vMigr     = $read("$root/database/migrations/068_video_chapters.sql");
+        $vMigr69   = $read("$root/database/migrations/069_video_dimensions.sql");
         $vSchema   = $read("$root/schema.sql");
         $vModel    = $read("$root/app/Models/VideoChapter.php");
+        $vPhoto    = $read("$root/app/Models/Photo.php");
         $vRendWk   = $read("$root/bin/video_rendition_worker.php");
         $vChapWk   = $read("$root/bin/video_chapters_worker.php");
+        $vDimWk    = $read("$root/bin/media_dimensions_worker.php");
         $vSamples  = $read("$root/bin/generate_video_samples.php");
         $vPlayer   = $read("$root/views/video/player.php");
         $vStorage  = $read("$root/app/Controllers/StorageController.php");
@@ -2689,7 +2692,8 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 && strpos($vChapWk, 'showinfo') !== false;
             $cron = strpos($acrn, 'gallery-video-renditions') !== false
                 && strpos($acrn, 'gallery-video-chapters') !== false
-                && strpos($acrn, 'gallery-video-samples') !== false;
+                && strpos($acrn, 'gallery-video-samples') !== false
+                && strpos($acrn, 'gallery-media-dimensions') !== false;
             $samples = strpos($vSamples, '--limit') !== false && strpos($vSamples, '--once') !== false;
             return $rend && $chap && $cron && $samples
                 ? $ok('both workers + cron + bounded sample ticks')
@@ -2718,6 +2722,93 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             return $okAll
                 ? $ok('ladder sources, chapters, poster, overlay/retry, playlist controls, real gate level')
                 : $bad('views/video/player.php must render data-sources, data-chapters, poster, the buffering/error overlay with a Retry button, chapter seek buttons, the playlist control row (autoplay/repeat/shuffle/save), a playlist collapse toggle, and use $minimumLevel for the gate');
+        });
+
+        $add('smoke.video.orientation', 'Smoke · Video player', 'renditions are sized from the DISPLAY size (rotation applied), poster shows the whole frame', static function () use ($helpers, $vPlayer, $ok, $bad): array {
+            // The probe has to read the display matrix, not just the coded
+            // size: a 2400x1080 phone clip is 1080x2400 on screen, and
+            // sizing a rendition from the coded size is what produced a
+            // 1280x2844 "720p" file and put black bars around the video.
+            $probe = strpos($helpers, 'function video_display_dimensions(') !== false
+                && strpos($helpers, 'side_data_list') !== false
+                && strpos($helpers, "['rotation']") !== false;
+            $fit = strpos($helpers, 'function video_fit_dimensions(') !== false
+                && strpos($helpers, 'function video_ladder_box(') !== false;
+            // The encoder must scale both axes from the display size and pin
+            // the sample aspect, and must not disable the autorotate (which
+            // would leave the rotation in the file for the browser to apply
+            // a second time).
+            $encode = strpos($helpers, "video_display_dimensions(\$src)") !== false
+                && strpos($helpers, "scale=' . \$tw . ':' . \$th . ',setsar=1") !== false
+                && strpos($helpers, "' -metadata:s:v:0 rotate=0'") !== false
+                && strpos($helpers, '-noautorotate') === false;
+            // The poster is a fixed 16:9 still that shows the WHOLE frame.
+            $poster = strpos($helpers, "create_video_thumbnail(\$src, \$dest, 1280, 720, 'pad')") !== false
+                && strpos($helpers, "force_original_aspect_ratio=decrease") !== false;
+            // The player asks for the display ratio and gets the real
+            // resolution of every rung.
+            $view = strpos($vPlayer, 'data-aspect=') !== false
+                && strpos($vPlayer, 'video_ladder_box(') !== false
+                && strpos($vPlayer, "'w'     => \$rungW") !== false;
+            return $probe && $fit && $encode && $poster && $view
+                ? $ok('display-aware sizing, padded poster, per-rung resolution in the view')
+                : $bad('helpers.php must expose video_display_dimensions (reading the display matrix) and video_fit_dimensions, create_video_rendition must scale both axes from the display size with setsar=1 and must keep ffmpeg autorotate, the poster must be a padded 16:9 still, and views/video/player.php must publish data-aspect plus each rung\'s real pixel size');
+        });
+
+        $add('smoke.video.media_dimensions', 'Smoke · Video player', 'display size is stored on the photo row and backfilled by a worker', static function () use ($vSchema, $vMigr69, $vPhoto, $vDimWk, $ok, $bad): array {
+            $sql = strpos($vSchema, 'width        SMALLINT UNSIGNED') !== false
+                && strpos($vSchema, 'height       SMALLINT UNSIGNED') !== false
+                && strpos($vSchema, 'rotation     SMALLINT') !== false;
+            $migr = strpos($vMigr69, 'ADD COLUMN width') !== false
+                && strpos($vMigr69, 'ADD COLUMN height') !== false
+                && strpos($vMigr69, 'ADD COLUMN rotation') !== false;
+            $model = strpos($vPhoto, 'public static function setDimensions(') !== false
+                && strpos($vPhoto, 'public static function dimensions(') !== false;
+            $worker = strpos($vDimWk, 'media_display_dimensions(') !== false
+                && strpos($vDimWk, 'flock') !== false
+                && strpos($vDimWk, '--missing') !== false;
+            return $sql && $migr && $model && $worker
+                ? $ok('photos carry the display size and a worker backfills it')
+                : $bad('schema.sql + a migration must add photos.width/height/rotation, Photo must expose setDimensions/dimensions, and bin/media_dimensions_worker.php must backfill them (flock, --missing)');
+        });
+
+        $add('smoke.video.player_box', 'Smoke · Video player', 'the player box is the video\'s shape and fits the viewport (no black bars)', static function () use ($userCss2, $userJs2, $ok, $bad): array {
+            // The box carries the picture's ratio and the picture fills it.
+            $css = strpos($userCss2, 'aspect-ratio:var(--vp-aspect') !== false
+                && strpos($userCss2, 'object-fit:contain') !== false
+                && strpos($userCss2, '.gallery-player.is-poster video{object-fit:cover}') !== false
+                && strpos($userCss2, '.gallery-player:fullscreen') !== false
+                && strpos($userCss2, '.media-stage') !== false;
+            // The size is computed in JS: CSS alone cannot do it (aspect-ratio
+            // with a max-height clamps the height but not the width).
+            $js = strpos($userJs2, 'function fitBox(') !== false
+                && strpos($userJs2, 'function aspectFor(') !== false
+                && strpos($userJs2, 'window.innerHeight - top - chrome') !== false
+                && strpos($userJs2, "addEventListener('orientationchange'") !== false
+                && strpos($userJs2, 'ResizeObserver') !== false;
+            return $css && $js
+                ? $ok('ratio-aware box, poster that fills it, and a viewport-aware fit')
+                : $bad('user.css must size .gallery-player with aspect-ratio:var(--vp-aspect and fill it with object-fit, cover the padded poster, and style :fullscreen; user.js must compute the box size in fitBox() from the real metadata and the viewport');
+        });
+
+        $add('smoke.video.player_upgrades', 'Smoke · Video player', 'quality menu shows the real resolution; rotate, fill, theater, next-up, mini player, prefetch, swap resync', static function () use ($userJs2, $ok, $bad): array {
+            $quality = strpos($userJs2, "s.w + '×' + s.h") !== false;
+            $more = strpos($userJs2, 'data-more="rotate"') !== false
+                && strpos($userJs2, 'data-more="fit"') !== false
+                && strpos($userJs2, 'data-more="theater"') !== false
+                && strpos($userJs2, 'player-theater') !== false;
+            $nextUp = strpos($userJs2, 'player-nextup') !== false
+                && strpos($userJs2, '__showNextUp') !== false;
+            $mini = strpos($userJs2, 'is-mini') !== false
+                && strpos($userJs2, 'player-placeholder') !== false;
+            $prefetch = strpos($userJs2, "link.rel = 'preload'") !== false;
+            // The swap has to re-read the incoming video's renditions: keeping
+            // the old ones made the quality menu play the PREVIOUS file.
+            $resync = strpos($userJs2, 'el.__resync = function(newVideo){') !== false
+                && strpos($userJs2, 'host.__resync(nv)') !== false;
+            return $quality && $more && $nextUp && $mini && $prefetch && $resync
+                ? $ok('all the player upgrades are wired')
+                : $bad('user.js must show each rung\'s real resolution in the quality menu, offer rotate/fill/theater in an overflow menu, show a next-up countdown, dock a sticky mini player, preload the next item, and re-read the renditions after an AJAX swap (__resync)');
         });
 
         $add('smoke.video.player_behaviour', 'Smoke · Video player', 're-init after swap, throttled resume, autoplay toggle, no dead pip block', static function () use ($userJs2, $ok, $bad): array {

@@ -112,21 +112,22 @@ function build_brush_mask(string $file, int $w, int $h, array $points, float $r)
 
 // Source geometry: the masks are drawn at the output frame size, which equals
 // the source size (zoom crops back to the original dimensions).
+//
+// These must be the DISPLAY size, not the coded size: ffmpeg's autorotate
+// transposes a rotated phone clip before the filter graph runs, so a source
+// stored as 2400x1080 is rendered as 1080x2400. Using the coded size made the
+// masks land in the wrong place and stretched the exported picture.
 $srcW = 1920;
 $srcH = 1080;
 $srcFps = 30;
 $srcDuration = null;
-$probeOut = [];
-$probeStatus = 0;
-run_with_timeout('ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 ' . escapeshellarg($source), 30, $probeOut, $probeStatus);
-if (isset($probeOut[0]) && strpos($probeOut[0], ',') !== false) {
-    $dims = array_map('intval', explode(',', $probeOut[0]));
-    if (($dims[0] ?? 0) > 0 && ($dims[1] ?? 0) > 0) {
-        $srcW = $dims[0];
-        $srcH = $dims[1];
-    }
+$srcDisplay = video_display_dimensions($source);
+if ($srcDisplay !== null) {
+    $srcW = (int) $srcDisplay['w'];
+    $srcH = (int) $srcDisplay['h'];
 }
 $probeOut = [];
+$probeStatus = 0;
 run_with_timeout('ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate -of csv=p=0 ' . escapeshellarg($source), 30, $probeOut, $probeStatus);
 if (isset($probeOut[0]) && strpos($probeOut[0], '/') !== false) {
     [$fpsNum, $fpsDen] = array_map('trim', explode('/', $probeOut[0]));
@@ -266,9 +267,12 @@ if (($videoClip['transition'] ?? 'none') === 'fade' && $outDuration !== null && 
 }
 
 // Optional export resolution override (masks are drawn at source size and the
-// final frame is downscaled, so region coordinates stay consistent).
+// final frame is downscaled, so region coordinates stay consistent). The scale
+// FITS the picture inside the requested box instead of stretching it to fill
+// it: a stretched export of a vertical clip was the visible symptom of the
+// same coded-vs-display bug.
 if ($exportW > 0 && $exportH > 0 && ($exportW !== $srcW || $exportH !== $srcH)) {
-    $filters[] = 'scale=' . $exportW . ':' . $exportH;
+    $filters[] = 'scale=' . $exportW . ':' . $exportH . ':force_original_aspect_ratio=decrease,setsar=1';
 }
 
 $filters[] = 'format=yuv420p';

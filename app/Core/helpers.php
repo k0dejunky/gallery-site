@@ -476,6 +476,10 @@ function video_ladder(): array
  * 480p clip never gets a pointless 480p re-encode. The mid rung is always
  * wanted (it is the synchronous upload rendition). Returns a list of the rung
  * config arrays that apply. Pure function - unit tested directly.
+ *
+ * The dimensions must be the DISPLAY size (see video_display_dimensions), and
+ * the box is transposed for a vertical source, so a rung means the same
+ * resolution class in either orientation.
  */
 function video_ladder_plan(int $srcW, int $srcH): array
 {
@@ -487,8 +491,7 @@ function video_ladder_plan(int $srcW, int $srcH): array
 
     $plan = [];
     foreach (video_ladder() as $rung) {
-        $maxW = (int) ($rung['max_w'] ?? 0);
-        $maxH = (int) ($rung['max_h'] ?? 0);
+        [$maxW, $maxH] = video_ladder_box($rung, $srcW, $srcH);
         $wants = $rung['key'] === 'mid' ? true : ($srcW > $maxW || $srcH > $maxH);
         if ($wants) {
             $plan[] = $rung;
@@ -538,12 +541,283 @@ function video_poster_url(string $filename): string
 }
 
 /**
+ * The DISPLAY dimensions of a video's first video stream, in square pixels.
+ *
+ * A phone video is usually stored landscape with a rotation in its display
+ * matrix (2400x1080 + "rotate 90"), so the coded size is NOT what the viewer
+ * sees. Everything that decides an output size - the ladder, the poster, the
+ * player box - has to use the display size, or a vertical clip ends up with a
+ * 1280x2844 "720p" rendition: four times the intended pixels, in the wrong
+ * shape, which is what put black bars around the player.
+ *
+ * Returns null when the file cannot be probed. The array carries:
+ *   coded_w/coded_h  the size as stored in the file
+ *   w/h              the DISPLAY size (rotation applied, sample aspect applied)
+ *   rotation         0, 90, 180 or 270 (clockwise)
+ *   sar              the sample aspect ratio as a float (1 = square pixels)
+ */
+function video_display_dimensions(string $path): ?array
+{
+    if (!is_file($path)) {
+        return null;
+    }
+
+    $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
+    $raw     = [];
+    $rc      = 0;
+    @exec(
+        escapeshellarg($ffprobe) . ' -v error -select_streams v:0 -show_streams -of json '
+        . escapeshellarg($path) . ' 2>/dev/null',
+        $raw,
+        $rc
+    );
+    if ($rc !== 0 || !$raw) {
+        return null;
+    }
+
+    $json   = json_decode(implode("\n", $raw), true);
+    $stream = is_array($json) ? ($json['streams'][0] ?? null) : null;
+    if (!is_array($stream)) {
+        return null;
+    }
+
+    $codedW = (int) ($stream['width'] ?? 0);
+    $codedH = (int) ($stream['height'] ?? 0);
+    if ($codedW <= 0 || $codedH <= 0) {
+        return null;
+    }
+
+    // Rotation: the display matrix, which ffmpeg reports as a side data entry
+    // (4.4 and newer). Older files carry only the legacy "rotate" stream tag,
+    // whose sign is inverted - but both are 90 or 270 for the swap that
+    // matters here.
+    $rotation = 0;
+    foreach ((array) ($stream['side_data_list'] ?? []) as $side) {
+        if (isset($side['rotation'])) {
+            $rotation = (int) round((float) $side['rotation']);
+            break;
+        }
+    }
+    if ($rotation === 0 && isset($stream['tags']['rotate'])) {
+        $rotation = (int) round((float) $stream['tags']['rotate']);
+    }
+    $rotation = ((int) round($rotation / 90) * 90) % 360;
+    if ($rotation < 0) {
+        $rotation += 360;
+    }
+
+    // Sample aspect ratio: anamorphic sources store 720x576 with a 16:15 SAR
+    // and are displayed as 768x576.
+    $sar = 1.0;
+    if (!empty($stream['sample_aspect_ratio'])
+        && preg_match('#^(\d+):(\d+)$#', (string) $stream['sample_aspect_ratio'], $m)
+        && (int) $m[2] > 0) {
+        $sar = (int) $m[1] / (int) $m[2];
+    }
+    if ($sar <= 0) {
+        $sar = 1.0;
+    }
+
+    if ($rotation === 90 || $rotation === 270) {
+        // The rotated frame is coded_h x coded_w and carries the INVERSE SAR,
+        // so its display width shrinks by the SAR factor.
+        $w = (int) round($codedH / $sar);
+        $h = (int) round($codedW);
+    } else {
+        $w = (int) round($codedW * $sar);
+        $h = $codedH;
+    }
+
+    return [
+        'coded_w'  => $codedW,
+        'coded_h'  => $codedH,
+        'w'        => max(1, $w),
+        'h'        => max(1, $h),
+        'rotation' => $rotation,
+        'sar'      => $sar,
+    ];
+}
+
+/**
+ * A ladder rung's target box, transposed when the source is vertical.
+ *
+ * A rung has to mean the same resolution class in either orientation: the
+ * mid rung's 1280x720 box becomes 720x1280 for a vertical clip, which is what
+ * "720p vertical" means in the industry (720 wide, 1280 tall) rather than a
+ * 324x720 sliver.
+ */
+function video_ladder_box(array $rung, int $w, int $h): array
+{
+    $maxW = (int) ($rung['max_w'] ?? 0);
+    $maxH = (int) ($rung['max_h'] ?? 0);
+
+    return $h > $w ? [$maxH, $maxW] : [$maxW, $maxH];
+}
+
+/**
+ * Fit a video's display size inside a target box, preserving the aspect
+ * ratio, never upscaling, and always returning even dimensions (H.264
+ * rejects odd ones). Pure function - unit tested directly.
+ */
+function video_fit_dimensions(int $w, int $h, int $maxW, int $maxH): array
+{
+    if ($w <= 0 || $h <= 0) {
+        return [0, 0];
+    }
+    if ($maxW <= 0 && $maxH <= 0) {
+        return [$w, $h];
+    }
+
+    $scale = 1.0;
+    if ($maxW > 0) {
+        $scale = min($scale, $maxW / $w);
+    }
+    if ($maxH > 0) {
+        $scale = min($scale, $maxH / $h);
+    }
+
+    if ($scale >= 1.0) {
+        // Already inside the box: never upscale. Still snapped to even
+        // dimensions, because an odd-sized source cannot be encoded at all.
+        return [max(2, $w - ($w % 2)), max(2, $h - ($h % 2))];
+    }
+
+    $nw = (int) floor($w * $scale);
+    $nh = (int) floor($h * $scale);
+
+    return [max(2, $nw - ($nw % 2)), max(2, $nh - ($nh % 2))];
+}
+
+/**
+ * Is an existing poster frame one of the PADDED posters (the whole frame
+ * shown inside a fixed 16:9 canvas) rather than an old centre crop?
+ *
+ * The padded poster has hard black edges along the axis it was padded on -
+ * left/right for a source narrower than 16:9, top/bottom for a wider one.
+ * The old centre crop has the picture's own pixels there instead. This lets
+ * the rendition worker repair a cropped poster exactly once instead of
+ * rebuilding it on every tick.
+ */
+function video_poster_is_padded(string $poster, int $srcW, int $srcH): bool
+{
+    if (!is_file($poster) || $srcW <= 0 || $srcH <= 0) {
+        return false;
+    }
+    if (!function_exists('imagecreatefromjpeg')) {
+        return false;
+    }
+
+    $img = @imagecreatefromjpeg($poster);
+    if ($img === false) {
+        return false;
+    }
+
+    $w = imagesx($img);
+    $h = imagesy($img);
+    if ($w < 8 || $h < 8) {
+        imagedestroy($img);
+
+        return false;
+    }
+
+    // A source narrower than 16:9 is padded on the left and right; a wider
+    // one is padded top and bottom.
+    $vertical = ($srcW / $srcH) < (16 / 9);
+
+    $hits  = 0;
+    $total = 0;
+    $step  = max(1, intdiv($h, 32));
+
+    for ($y = 0; $y < $h; $y += $step) {
+        if ($vertical) {
+            for ($k = 0; $k < 4; $k++) {
+                foreach ([$k, $w - 1 - $k] as $x) {
+                    $c = imagecolorat($img, (int) $x, (int) $y);
+                    $r = ($c >> 16) & 0xFF;
+                    $g = ($c >> 8) & 0xFF;
+                    $b = $c & 0xFF;
+                    if ($r < 10 && $g < 10 && $b < 10) {
+                        $hits++;
+                    }
+                    $total++;
+                }
+            }
+        } else {
+            for ($k = 0; $k < 4; $k++) {
+                foreach ([$k, $h - 1 - $k] as $yy) {
+                    // Sample across the middle third: the padding spans the
+                    // full width, but the very corners can be part of a
+                    // letterboxed source picture.
+                    $x = intdiv($w, 3);
+                    $c = imagecolorat($img, $x, (int) $yy);
+                    $r = ($c >> 16) & 0xFF;
+                    $g = ($c >> 8) & 0xFF;
+                    $b = $c & 0xFF;
+                    if ($r < 10 && $g < 10 && $b < 10) {
+                        $hits++;
+                    }
+                    $total++;
+                }
+            }
+        }
+    }
+
+    imagedestroy($img);
+
+    return $total > 0 && $hits > $total * 0.9;
+}
+
+/**
+ * The DISPLAY size of any uploaded media file, in pixels.
+ *
+ * For a video that is the size the viewer sees: the coded size with the
+ * rotation in the display matrix applied (see video_display_dimensions). For
+ * an image it is the size after the EXIF orientation is applied, which is
+ * what create_image_variants() bakes into the pixels.
+ *
+ * Returns null when the file cannot be measured. Pure enough to be trusted
+ * from the upload path, where a failure must never break the upload.
+ */
+function media_display_dimensions(string $path, bool $isVideo): ?array
+{
+    if ($isVideo) {
+        $dim = video_display_dimensions($path);
+        if ($dim === null) {
+            return null;
+        }
+
+        return ['w' => (int) $dim['w'], 'h' => (int) $dim['h'], 'rotation' => (int) $dim['rotation']];
+    }
+
+    $info = @getimagesize($path);
+    if ($info === false || empty($info[0]) || empty($info[1])) {
+        // getimagesize cannot read HEIC/AVIF on every build; ImageMagick can.
+        $info = _imagick_dimensions($path);
+        if ($info === null) {
+            return null;
+        }
+    }
+
+    $w = (int) ($info[0] ?? 0);
+    $h = (int) ($info[1] ?? 0);
+    if ($w <= 0 || $h <= 0) {
+        return null;
+    }
+
+    // EXIF orientations 5-8 store the picture sideways.
+    if (exif_orientation_of($path) >= 5) {
+        [$w, $h] = [$h, $w];
+    }
+
+    return ['w' => $w, 'h' => $h, 'rotation' => 0];
+}
+
+/**
  * Build one ladder rung from a source video using the rung's encoder settings.
- * Fits within max_w x max_h preserving aspect (scale by width when wider than
- * max_w, by height when taller than max_h, else leave dimensions alone),
- * writes a faststart MP4 to $dest. Returns false when the source is missing or
- * the transcode fails. This is the generic worker used for every ladder rung
- * (lo/mid/hi) and for the poster frame extraction (via max_w/max_h 1280/720).
+ * Fits the source's DISPLAY size inside the rung's target box, preserving the
+ * aspect ratio and never upscaling, and writes a faststart MP4 to $dest.
+ * Returns false when the source is missing or the transcode fails. This is the
+ * generic worker used for every ladder rung (lo/mid/hi).
  */
 function create_video_rendition(string $src, string $dest, array $rung, int $timeout = 0): bool
 {
@@ -551,29 +825,25 @@ function create_video_rendition(string $src, string $dest, array $rung, int $tim
         return false;
     }
 
-    $maxW  = (int) ($rung['max_w'] ?? 0);
-    $maxH  = (int) ($rung['max_h'] ?? 0);
-    $ffmpeg  = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
-    $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
-    $vf = '';
+    $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
+    $vf     = '';
 
-    @exec(
-        escapeshellarg($ffprobe) . ' -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 '
-        . escapeshellarg($src) . ' 2>/dev/null',
-        $probe,
-        $rc
-    );
-
-    if ($rc === 0 && isset($probe[0])) {
-        $parts = array_map('intval', explode(',', (string) $probe[0]));
-        if (count($parts) >= 2) {
-            $w = (int) $parts[0];
-            $h = (int) $parts[1];
-            if ($maxW > 0 && $w > $maxW) {
-                $vf = 'scale=' . $maxW . ':-2';
-            } elseif ($maxH > 0 && $h > $maxH) {
-                $vf = 'scale=-2:' . $maxH;
-            }
+    // Size the output from the DISPLAY dimensions. ffmpeg's default
+    // -autorotate transposes the frame BEFORE -vf runs, so the filter sees
+    // the upright picture and the target has to be expressed in the same
+    // (upright, square-pixel) terms. The old code probed the CODED size and
+    // scaled a single axis, which turned a 2400x1080 phone clip into a
+    // 1280x2844 "720p" rendition - four times the intended pixels, and the
+    // reason portrait videos played in a narrow strip with black bars around
+    // them.
+    $dim = video_display_dimensions($src);
+    if ($dim !== null) {
+        [$boxW, $boxH] = video_ladder_box($rung, $dim['w'], $dim['h']);
+        [$tw, $th]      = video_fit_dimensions($dim['w'], $dim['h'], $boxW, $boxH);
+        if ($tw > 0 && $th > 0 && ($tw !== $dim['w'] || $th !== $dim['h'])) {
+            // setsar=1 makes the output square-pixel: without it ffmpeg
+            // carries a rounded SAR (6399:6400) that skews the picture.
+            $vf = 'scale=' . $tw . ':' . $th . ',setsar=1';
         }
     }
 
@@ -588,6 +858,9 @@ function create_video_rendition(string $src, string $dest, array $rung, int $tim
     // hold a cron slot (and an ffmpeg guard permit) that whole time.
     $cmd = ($timeout > 0 ? 'timeout ' . $timeout . ' ' : '') . escapeshellarg($ffmpeg) . ' -nostdin -y -i ' . escapeshellarg($src)
         . ($vf !== '' ? ' -vf ' . escapeshellarg($vf) : '')
+        // The rotation is baked into the pixels by -autorotate; clearing the
+        // tag stops a player from rotating the picture a second time.
+        . ' -metadata:s:v:0 rotate=0'
         . ' -c:v libx264 -preset veryfast -crf ' . $crf . ' -maxrate ' . escapeshellarg($maxrate) . ' -bufsize ' . escapeshellarg($bufsize)
         . ' -c:a aac -b:a ' . escapeshellarg($ab) . ' -movflags +faststart -f mp4 ' . escapeshellarg($dest) . ' 2>&1';
 
@@ -2057,7 +2330,7 @@ function _variants_gd(string $src, string $webDest, string $thumbDest, int $maxD
    and pick the sharpest sampled moment instead. */
 const VIDEO_FRAME_SHARP_FLOOR = 6.0;
 
-function create_video_thumbnail(string $src, string $dest, int $width, int $height): bool
+function create_video_thumbnail(string $src, string $dest, int $width, int $height, string $fit = 'crop'): bool
 {
 
     $duration = video_duration_seconds($src);
@@ -2077,7 +2350,7 @@ function create_video_thumbnail(string $src, string $dest, int $width, int $heig
             // winner is extracted again with the full budget afterwards. Six
             // probes at the default 60s would make one stuck source cost the
             // worker seven minutes before it moved on.
-            if ($second < 0 || !create_video_frame($src, $scratch, $width, $height, $second, 20)) {
+            if ($second < 0 || !create_video_frame($src, $scratch, $width, $height, $second, 20, $fit)) {
                 continue;
             }
             $score = image_sharpness_score($scratch);
@@ -2102,14 +2375,14 @@ function create_video_thumbnail(string $src, string $dest, int $width, int $heig
             // rather than moving the probe, so the final file is written by
             // the same single code path as every other frame capture.
             @unlink($scratch);
-            return create_video_frame($src, $dest, $width, $height, $best);
+            return create_video_frame($src, $dest, $width, $height, $best, 60, $fit);
         }
 
         @unlink($scratch);
     }
 
     foreach ([1, 0] as $second) {
-        if (create_video_frame($src, $dest, $width, $height, $second)) {
+        if (create_video_frame($src, $dest, $width, $height, $second, 60, $fit)) {
             return true;
         }
     }
@@ -2180,27 +2453,51 @@ function image_sharpness_score(string $path): float
 }
 
 /**
- * Extract a wide poster frame (1280x720 JPEG) from a video for use as the
- * player's poster image. The frame is chosen with the same sharpness ranking
- * as create_video_thumbnail(). Returns false when nothing could be captured.
+ * Capture the poster frame of a video: a fixed 1280x720 still that shows the
+ * WHOLE frame (padded, never cropped), so a vertical video loses nothing of
+ * its picture. The frame is chosen with the same sharpness ranking as
+ * create_video_thumbnail(). The player crops the padding away at display time,
+ * which keeps every poster the same shape without putting black bars around
+ * the video. Returns false when nothing could be captured.
  */
 function create_video_poster_frame(string $src, string $dest): bool
 {
-    return create_video_thumbnail($src, $dest, 1280, 720);
+    return create_video_thumbnail($src, $dest, 1280, 720, 'pad');
 }
 
 /**
  * Capture the frame at an exact time offset (in seconds) from a video and
- * scale/crop it to the given dimensions, saving as JPEG. Used by the admin
- * frame picker to choose any frame as the thumbnail.
+ * scale it to the given dimensions, saving as JPEG. Used by the admin frame
+ * picker to choose any frame as the thumbnail.
+ *
+ * $fit decides what happens to a frame whose aspect differs from the box:
+ *   'crop' (default) - fill the box and crop the overflow. Right for the
+ *                      4:3 grid thumbnail, which must fill its tile.
+ *   'pad'            - fit the whole frame inside the box and pad the
+ *                      remainder with black. Right for the player poster:
+ *                      nothing of the picture is lost, and the player crops
+ *                      the padding away at display time.
  */
-function create_video_frame(string $src, string $dest, int $width, int $height, int $second, int $timeout = 60): bool
+function create_video_frame(string $src, string $dest, int $width, int $height, int $second, int $timeout = 60, string $fit = 'crop'): bool
 {
     $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
-    $filter = sprintf(
-        'scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d',
-        $width, $height, $width, $height
-    );
+    if ($fit === 'pad') {
+        // min(...,iw/ih) keeps a small source from being upscaled; the
+        // decrease keeps the aspect; the pad centres the result.
+        $filter = sprintf(
+            "scale=w='min(%d,iw)':h='min(%d,ih)':force_original_aspect_ratio=decrease,"
+            . 'pad=%d:%d:(ow-iw)/2:(oh-ih)/2:color=black',
+            $width,
+            $height,
+            $width,
+            $height
+        );
+    } else {
+        $filter = sprintf(
+            'scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d',
+            $width, $height, $width, $height
+        );
+    }
 
     $second = max(0, $second);
     $time   = sprintf(
