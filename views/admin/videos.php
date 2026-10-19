@@ -1,15 +1,4 @@
 <?php $title = 'Video List'; ?>
-<style>
-    .subhead{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:18px;flex-wrap:wrap}
-    .subhead h1{margin:0}
-    .subhead-actions{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
-    .subhead-actions form{margin:0}
-    .subhead-actions input[type="search"]{padding:.4rem .6rem;border-radius:var(--border-radius-sm);border:1px solid var(--filter-border);background:var(--filter-bg);color:var(--filter-text)}
-    .video-filename{font-weight:700;color:var(--heading-color);word-break:break-word}
-    .video-meta{color:var(--muted-text-color);font-size:.85rem}
-    .video-thumb{display:block;width:112px;height:64px;object-fit:cover;border-radius:6px;background:var(--card-thumb-bg,#24152d)}
-    @media(max-width:600px){.subhead{display:block}.subhead-actions{margin-top:.75rem}.subhead-actions .btn{flex:1;text-align:center}}
-</style>
 
 <div class="subhead">
     <div class="subhead-actions">

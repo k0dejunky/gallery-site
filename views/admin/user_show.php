@@ -1,22 +1,5 @@
 <?php $title = 'User ' . $user['email']; ?>
 <?php // Shared listing styles (users-table, badges, hero) come from /assets/admin-shared.css. ?>
-<style>
-  .ud-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
-  .ud-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--card-radius); padding: 1rem; }
-  .ud-card h3 { margin: 0 0 .5rem; font-size: .95rem; color: var(--heading-color); }
-  .ud-kv { display: flex; justify-content: space-between; gap: 1rem; padding: .2rem 0; font-size: .9rem; }
-  .ud-kv span:first-child { color: var(--muted-text-color); }
-  .badge-active { background: var(--success-bg); color: var(--success-text); padding: .15rem .5rem; border-radius: 999px; font-size: .75rem; font-weight: 700; }
-  .badge-suspended { background: var(--danger-bg); color: var(--danger-text); padding: .15rem .5rem; border-radius: 999px; font-size: .75rem; font-weight: 700; }
-  .ud-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
-  .ud-actions form { margin: 0; }
-  .temp-pass { background: #fffbeb; border: 1px solid #f59e0b; color: #92400e; padding: .75rem 1rem; border-radius: var(--border-radius, 8px); margin-bottom: 1rem; font-size: .95rem; }
-  .temp-pass code { font-size: 1.05rem; font-weight: 700; user-select: all; }
-  details > summary::-webkit-details-marker { display: none; }
-  details > summary::marker { display: none; content: ''; }
-  details > summary { list-style: none; }
-  details[open] > summary { margin-bottom: .5rem; }
-</style>
 
 <div class="users-hero">
     <div>

@@ -7,34 +7,6 @@ $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
 $webhookBase = $scheme . '://' . $host . rtrim((string) config('app.base_path'), '/');
 ?>
 
-<style>
-    .pay-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
-    .pay-card { padding: 1rem; background: var(--card-bg); border: var(--input-border-width) solid var(--card-border); border-radius: var(--card-radius); box-shadow: var(--shadow); color: var(--card-text-color); }
-    .pay-card.inactive { opacity: .62; }
-    .pay-card h3 { margin: 0 0 .25rem; color: var(--card-title-color); }
-    .pay-provider { display: inline-block; padding: .15rem .45rem; background: var(--filter-bg); border: var(--input-border-width) solid var(--filter-border); border-radius: var(--border-radius-sm); color: var(--filter-color); font-size: var(--font-size-xs); font-weight: bold; text-transform: capitalize; }
-    .pay-mode { display: inline-block; padding: .15rem .45rem; border-radius: var(--chip-radius); background: var(--promo-code-bg); color: var(--promo-code-color); font-size: var(--font-size-xs); font-weight: bold; }
-    .pay-mode.live { background: var(--btn-danger-bg); color: var(--btn-danger-color); }
-    .pay-meta { margin: .6rem 0; color: var(--card-text-color); font-size: var(--font-size-sm); line-height: 1.7; }
-    .pay-meta b { color: var(--purple-800); }
-    .pay-secret { font-family: monospace; font-size: var(--font-size-sm); }
-    .pay-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .75rem; }
-    .pay-form { margin-top: 2rem; padding: 1.25rem; background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: var(--border-radius-lg); }
-    .pay-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem 1rem; }
-    .pay-form-grid label { display: block; color: var(--purple-800); font-size: var(--font-size-sm); }
-    .pay-form-grid input, .pay-form-grid select { width: 100%; box-sizing: border-box; margin-top: .25rem; }
-    .pay-form-wide { grid-column: 1 / -1; }
-    .pay-check { display: flex; align-items: center; gap: .4rem; }
-    .pay-check input { width: auto; margin: 0; }
-    .pay-empty { padding: 1.5rem; text-align: center; color: var(--card-text-color); border: 1px dashed var(--card-border); border-radius: var(--border-radius); }
-    .prov-cfg { display: none; margin-top: 1rem; padding: .75rem; border: 1px dashed var(--pink-300); border-radius: var(--border-radius); }
-    .prov-cfg.active { display: block; }
-    .prov-cfg legend { font-size: var(--font-size-sm); font-weight: bold; color: var(--purple-800); padding: 0 .4rem; }
-    .prov-cfg label { display: block; color: var(--purple-800); font-size: var(--font-size-sm); }
-    .prov-cfg input { width: 100%; box-sizing: border-box; margin: .15rem 0 .5rem; }
-    @media (max-width: 720px) { .pay-form-grid { grid-template-columns: 1fr; } .pay-form-wide { grid-column: auto; } }
-</style>
-
 <?php if (empty($processors)): ?>
     <div class="pay-empty">No payment processors configured yet. Use the form below to add one.
     Supported providers: <?= e(implode(', ', array_map(fn ($p) => \App\Models\PaymentProcessor::providerLabel($p), \App\Models\PaymentProcessor::PROVIDERS))) ?>.

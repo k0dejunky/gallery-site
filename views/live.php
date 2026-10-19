@@ -1,73 +1,13 @@
 <?php $title = 'Live'; ?>
 
-<style>
-    .live-page { width: 100%; max-width: none; }
-    .live-top { display: flex; align-items: center; gap: .6rem; margin-bottom: .75rem; }
-    .live-top h1 { margin: 0; }
-    .live-badge { display: inline-block; padding: .15rem .6rem; border-radius: 999px; font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-    .live-badge.on { background: #dc2626; color: #fff; }
-    .live-badge.off { background: var(--card-border, #ddd); color: var(--text-muted, #888); }
-    .live-grid { display: grid; grid-template-columns: 1fr 320px; gap: 1rem; align-items: start; }
-    @media (max-width: 860px) { .live-grid { grid-template-columns: 1fr; } }
-    .live-player-wrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: var(--card-radius, 8px); overflow: hidden; }
-    .live-player-wrap video { width: 100%; height: 100%; object-fit: contain; background: #000; }
-    .live-offline { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-muted, #888); text-align: center; padding: 2rem; }
-    .live-paused { position: absolute; inset: 0; display: none; place-items: center; background: rgba(0,0,0,.55); color: #fff; text-align: center; padding: 2rem; font-size: 1.05rem; backdrop-filter: blur(2px); z-index: 2; }
-    .live-grid:fullscreen { background: #000; position: relative; }
-    .live-grid:fullscreen .live-player-wrap {
-        width: 100% !important;
-        height: 100% !important;
-        aspect-ratio: auto;
-        max-height: none;
-        margin: 0;
-        border-radius: 0;
-    }
-    .live-grid:fullscreen .live-chat {
-        position: absolute;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        width: 300px;
-        max-width: 70vw;
-        max-height: none;
-        border: 0;
-        background: transparent;
-        color: #fff;
-    }
-    .live-grid:fullscreen .live-chat h2 { color: #fff; border-bottom-color: rgba(255,255,255,.35); }
-    .live-grid:fullscreen .live-chat-msg .who { color: #ffd0e8; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
-    .live-grid:fullscreen .live-chat-msg { text-shadow: 0 1px 2px rgba(0,0,0,.8); }
-    .live-grid:fullscreen .live-chat-msg .when { color: rgba(255,255,255,.8); }
-    .live-grid:fullscreen .live-chat-form { border-top-color: rgba(255,255,255,.35); }
-    @media (max-width: 860px) {
-        .live-grid:fullscreen .live-chat {
-            left: 0;
-            right: 0;
-            top: auto;
-            bottom: 0;
-            width: 100%;
-            max-width: none;
-            height: 38vh;
-        }
-    }
-    .live-chat { display: flex; flex-direction: column; height: 100%; max-height: 60vh; border: 1px solid var(--card-border, #ddd); border-radius: var(--card-radius, 8px); background: var(--card-bg, #fff); overflow: hidden; }
-    .live-chat h2 { margin: 0; padding: .6rem .8rem; font-size: .95rem; border-bottom: 1px solid var(--card-border, #eee); }
-    .live-chat-messages { flex: 1; overflow-y: auto; padding: .6rem .8rem; display: flex; flex-direction: column; gap: .35rem; }
-    .live-chat-msg { font-size: .9rem; line-height: 1.35; word-wrap: break-word; }
-    .live-chat-msg .who { font-weight: 700; color: var(--purple-700, #6b21a8); }
-    .live-chat-msg.operator .who { color: #dc2626; }
-    .live-chat-msg .when { color: var(--text-muted, #999); font-size: .72rem; margin-left: .3rem; }
-    .live-chat-form { display: flex; gap: .4rem; padding: .6rem .8rem; border-top: 1px solid var(--card-border, #eee); }
-    .live-chat-form input { flex: 1; }
-    .live-chat-empty { color: var(--text-muted, #999); font-size: .85rem; text-align: center; padding: 1rem; }
-</style>
-
 <div class="live-page">
     <div class="live-top">
         <h1>Live</h1>
-        <span class="live-badge off" id="live-badge">Offline</span>
+        <?php /* The badge changes to LIVE / PAUSED from JS. Without a live
+                region a screen reader is never told the stream started. */ ?>
+        <span class="live-badge off" id="live-badge" role="status" aria-live="polite" aria-atomic="true">Offline</span>
         <span class="muted" id="live-since"></span>
-        <span class="muted" id="live-viewers"></span>
+        <span class="muted" id="live-viewers" role="status" aria-live="polite"></span>
     </div>
 
     <div class="live-grid">
@@ -76,7 +16,7 @@
             <div class="live-offline" id="live-offline">
                 <p>The model is not live right now. Check back soon — a live show could start any moment.</p>
             </div>
-            <div class="live-paused" id="live-paused">
+            <div class="live-paused" id="live-paused" aria-hidden="true">
                 <p>😴 The model will be back in a moment.</p>
             </div>
         </div>
@@ -86,7 +26,7 @@
             <div class="live-chat-messages" id="live-chat-messages"></div>
             <form class="live-chat-form" id="live-chat-form">
                 <?= csrf_field() ?>
-                <input type="text" id="live-chat-input" maxlength="500" placeholder="Say something…" autocomplete="off">
+                <input type="text" id="live-chat-input" maxlength="500" placeholder="Say something…" aria-label="Chat message" autocomplete="off">
                 <button type="submit" class="btn btn-sm">Send</button>
             </form>
         </div>

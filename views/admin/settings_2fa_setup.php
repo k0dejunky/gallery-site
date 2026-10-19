@@ -1,20 +1,5 @@
 <?php $title = 'Set up two-factor authentication'; ?>
 
-<style>
-    .fa-setup { max-width: 560px; margin: 0 auto; }
-    .fa-setup .secret-box {
-        font-family: monospace; font-size: 1.1rem; letter-spacing: .15em;
-        background: var(--pink-100); border: 1px solid var(--pink-300);
-        border-radius: 8px; padding: .75rem 1rem; text-align: center;
-        word-break: break-all; user-select: all;
-    }
-    .fa-setup .uri-box {
-        font-size: .72rem; color: var(--purple-800); word-break: break-all;
-        background: var(--pink-100); border: 1px dashed var(--pink-300);
-        border-radius: 6px; padding: .5rem .75rem; margin-top: .5rem;
-    }
-</style>
-
 <div class="auth-panel fa-setup">
     <p>Open your authenticator app and add the secret below (or the full <code>otpauth://</code> URI), then enter the 6-digit code it generates to confirm.</p>
 

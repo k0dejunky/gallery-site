@@ -35,31 +35,6 @@ foreach ($filterKeys as $key => $label) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Video Editor</title>
 <link rel="stylesheet" href="<?= url('/assets/video-editor/video-editor.css') ?>?v=<?= $cssVer ?>">
-<style>
-  :root { color-scheme: dark; }
-  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0f1115; }
-  #ve-shell { position: fixed; inset: 0; display: flex; flex-direction: column; background: #0f1115; z-index: 99999; }
-  #ve-top { height: 40px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #14171e; border-bottom: 1px solid #262c38; }
-  #ve-top .ve-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
-  #ve-top .ve-filename { margin-left: auto; color: #9aa3b2; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
-  .ve-btn { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border: 1px solid #333a48; border-radius: 4px; background: #20252f; color: #d8dde7; font: 500 11px/1 'Segoe UI', system-ui, sans-serif; text-decoration: none; cursor: pointer; white-space: nowrap; }
-  .ve-btn:hover { background: #29303c; color: #fff; }
-  .ve-btn.is-primary { background: #5b8af5; border-color: #5b8af5; color: #fff; }
-  .ve-btn.is-primary:hover { background: #4a7ae8; }
-  .ve-btn.is-on { background: #5b8af5; border-color: #5b8af5; color: #fff; }
-  #ve-body { flex: 1; min-height: 0; position: relative; display: flex; }
-  #ve-body > #root { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-  .ve-pop { position: absolute; top: 48px; right: 12px; width: 300px; padding: 12px 14px; background: #14171e; border: 1px solid #262c38; border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,.5); color: #d8dde7; font: 12px/1.45 'Segoe UI', system-ui, sans-serif; z-index: 100002; }
-  .ve-pop[hidden] { display: none; }
-  .ve-pop h4 { margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #9aa3b2; }
-  .ve-pop .ve-row { display: flex; align-items: center; gap: 8px; margin: 7px 0; }
-  .ve-pop label { flex: 1; font-size: 11px; color: #9aa3b2; }
-  .ve-pop input[type="color"] { width: 40px; height: 26px; padding: 2px; border: 1px solid #333a48; border-radius: 4px; background: #20252f; cursor: pointer; }
-  .ve-pop input[type="file"] { flex: 1; min-width: 0; font-size: 11px; color: #9aa3b2; }
-  .ve-pop .ve-tip { margin: 10px 0 0; font-size: 10.5px; color: #6d7686; }
-  #ve-thumb-status { min-height: 16px; margin-top: 8px; font-size: 11px; color: #8fb4ff; }
-  #ve-thumb-status.error { color: #ff9b9b; }
-</style>
 </head>
 <body>
 <div id="ve-shell">

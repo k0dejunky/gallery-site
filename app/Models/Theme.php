@@ -105,6 +105,7 @@ class Theme
         'border-radius-lg'   => ['value' => '12px',  'label' => 'Large radius',    'section' => 'border'],
         'font-size-xs'       => ['value' => '0.7rem',  'label' => 'Extra small text',  'section' => 'typography'],
         'font-size-sm'       => ['value' => '0.85rem', 'label' => 'Small text',        'section' => 'typography'],
+        'font-size-md'       => ['value' => '0.95rem', 'label' => 'Medium text',       'section' => 'typography'],
         'font-size-base'     => ['value' => '1rem',    'label' => 'Base font size',    'section' => 'typography'],
         'font-size-lg'       => ['value' => '1.15rem', 'label' => 'Large text',        'section' => 'typography'],
         'font-size-xl'       => ['value' => '1.5rem',  'label' => 'Heading size',      'section' => 'typography'],

@@ -141,7 +141,19 @@ $icon = static fn (string $name): string => \App\Core\Icon::svg($name);
     </style>
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/admin.css')) ?>">
 </head>
-<body class="admin-theme site-compact" data-base="<?= e(config('app.base_path')) ?>" data-user="1">
+<?php
+// A per-page class on the body. The page-specific CSS that used to live in
+// each view's own <style> block now lives in admin.css, and it has to stay
+// scoped to its page: the system page's ".sys-card h2" rule was landing on
+// the dashboard, which uses the same card class.
+$pageSlug = 'dashboard';
+if (preg_match('#/admin/([a-z0-9-]+)#', (string) ($current ?? ''), $m)) {
+    $pageSlug = $m[1];
+} elseif (preg_match('#/admin$#', (string) ($current ?? ''))) {
+    $pageSlug = 'dashboard';
+}
+?>
+<body class="admin-theme site-compact page-<?= e($pageSlug) ?>" data-base="<?= e(config('app.base_path')) ?>" data-user="1">
 <a class="skip-link" href="#admin-content">Skip to main content</a>
 <?php $isSiteEditor = strpos($_SERVER['REQUEST_URI'] ?? '', '/admin/site-editor') !== false; ?>
 <?php if (!empty($_SESSION['impersonator_id'])): ?>
@@ -568,23 +580,15 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
             var base = <?= json_encode(rtrim((string) url('/'), '/')) ?>;
 
             // --- Mobile nav drawer ---
+            // The drawer itself (focus trap, focus restore, aria-hidden) lives
+            // in /assets/js/admin.js, which is loaded by every admin page.
+            // This only closes it when a link inside it is followed, so the
+            // next page starts with the drawer shut.
             var navToggle = document.getElementById('nav-toggle');
-            var navBackdrop = document.getElementById('nav-backdrop');
             function setNav(open) {
                 document.body.classList.toggle('nav-open', open);
                 if (navToggle) navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
             }
-            if (navToggle) {
-                navToggle.addEventListener('click', function () {
-                    setNav(!document.body.classList.contains('nav-open'));
-                });
-            }
-            if (navBackdrop) {
-                navBackdrop.addEventListener('click', function () { setNav(false); });
-            }
-            document.addEventListener('keydown', function (e) {
-                if (e.key === 'Escape') setNav(false);
-            });
 
             // --- Flash toasts ---
             document.querySelectorAll('.flash-toast').forEach(function (toast) {
@@ -824,6 +828,7 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
         })();
     </script>
     <?php require __DIR__ . '/../partials/tour_targets.php'; ?>
+    <script nonce="<?= csp_nonce() ?>" src="<?= e(url('/assets/js/admin.js')) ?>?v=1" defer></script>
     <script nonce="<?= csp_nonce() ?>" src="<?= e(url('/assets/js/tour.js')) ?>?v=9" defer></script>
 </body>
 </html>

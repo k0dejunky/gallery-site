@@ -1,14 +1,4 @@
 <?php $title = 'Create User'; ?>
-<style>
-  .create-user-form{width:100%;max-width:none;box-sizing:border-box;padding:1.25rem;background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--card-radius);box-shadow:var(--shadow);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:1rem}
-  .create-user-form>input[type="hidden"]{display:none}
-  .create-user-column{min-width:0}
-  .create-user-form h2{margin-top:0;padding-bottom:.45rem;border-bottom:1px solid var(--card-border);font-size:1rem}
-  .create-user-form p{max-width:100%;margin:.8rem 0}
-  .create-user-form input,.create-user-form select{width:100%;max-width:100%;box-sizing:border-box}
-  .create-user-actions{grid-column:1/-1;display:flex;justify-content:center;gap:.5rem;flex-wrap:wrap;margin-top:1.25rem!important}
-  @media(max-width:600px){.create-user-form{padding:.85rem;grid-template-columns:1fr}.create-user-actions{grid-column:1}.create-user-actions .btn{flex:1;text-align:center}}
-</style>
 
 <form method="post" action="<?= url('/admin/users') ?>" class="admin-form create-user-form">
     <?= csrf_field() ?>

@@ -40,7 +40,7 @@ $commentCount    = (int) ($commentCount ?? count($comments));
             <?= csrf_field() ?>
             <input type="hidden" name="commentable_type" value="<?= e($commentableType) ?>">
             <input type="hidden" name="commentable_id" value="<?= (int) $commentableId ?>">
-            <textarea name="body" rows="3" style="flex:1;min-width:220px;" placeholder="Leave a comment… (max 2000 chars)" maxlength="2000"></textarea>
+            <textarea name="body" rows="3" aria-label="Your comment" style="flex:1;min-width:220px;" placeholder="Leave a comment… (max 2000 chars)" maxlength="2000"></textarea>
             <button type="submit" class="btn">Post comment</button>
         </form>
     <?php else: ?>

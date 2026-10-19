@@ -122,7 +122,7 @@ foreach ((array) ($playlist ?? []) as $item) {
         <?= csrf_field() ?>
         <input type="hidden" name="photo_id" value="<?= (int) $photo['id'] ?>">
         <label class="muted" style="font-size:.9rem;">Save video to collection</label>
-        <select name="collection_id" data-col-action="<?= url('/collections') ?>/" data-col-suffix="photos" data-action="collectionActionSelect">
+        <select name="collection_id" aria-label="Collection to save this video in" data-col-action="<?= url('/collections') ?>/" data-col-suffix="photos" data-action="collectionActionSelect">
             <?php foreach ($collections as $c): ?>
                 <option value="<?= (int) $c['id'] ?>"><?= e((string) $c['name']) ?></option>
             <?php endforeach; ?>

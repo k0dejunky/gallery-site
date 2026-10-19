@@ -476,6 +476,134 @@ class SmokeChecks
                 ? $ok('full trial URL rendered; Clipboard-API helpers + data-* delegation in both admin and public layouts')
                 : $bad('trial links must render the full absolute URL and the admin layout must delegate data-action/data-copy to a navigator.clipboard helper');
         });
+        $add('smoke.ui.admin_bulk_confirm', 'Smoke · UI', 'A destructive admin bulk action cannot run without a confirmation', static function () use ($root, $ok, $bad): array {
+            $users = (string) @file_get_contents($root . '/views/admin/users.php');
+            $adminJs = (string) @file_get_contents($root . '/public/assets/js/admin.js');
+            $adminLayout = (string) @file_get_contents($root . '/views/admin/layout.php');
+            $memberLayout = (string) @file_get_contents($root . '/views/layout.php');
+
+            // The bulk bar calls window.bulkApply. That handler used to live
+            // in the MEMBER layout, which the admin never loads - so the
+            // admin's data-action delegation found no handler, skipped its
+            // preventDefault(), and the form submitted straight away: bulk
+            // DELETE with no confirmation, while every single-row delete had
+            // one. The handler now lives in the admin's own JS.
+            $handler = strpos($adminJs, 'window.bulkApply') !== false
+                && strpos($adminJs, 'window.toggleBulkRole') !== false;
+            $loaded  = strpos($adminLayout, '/assets/js/admin.js') !== false;
+            $notInMember = strpos($memberLayout, 'window.bulkApply') === false;
+            // And the form carries a data-confirm as a safety net for the
+            // case where admin.js does not load at all.
+            $formGuard = strpos($users, 'id="users-bulk-form"') !== false
+                && preg_match('/id="users-bulk-form"[^>]*data-confirm=/', $users) === 1;
+
+            return $handler && $loaded && $notInMember && $formGuard
+                ? $ok('bulk actions are handled by the admin JS and guarded by a confirm')
+                : $bad('window.bulkApply/toggleBulkRole must be defined in public/assets/js/admin.js (loaded by the admin layout, NOT the member layout), and the users bulk form must carry a data-confirm as a fallback');
+        });
+
+        $add('smoke.ui.css_vars_defined', 'Smoke · UI', 'Every CSS variable the stylesheets use is actually defined', static function () use ($root, $ok, $bad): array {
+            $defined = [];
+            // Tokens the theme emits: the colour palette and the layout scale.
+            $theme = (string) @file_get_contents($root . '/app/Models/Theme.php');
+            foreach (['COLORS', 'LAYOUT_DEFAULTS'] as $constName) {
+                $start = strpos($theme, 'const ' . $constName . ' = [');
+                if ($start === false) {
+                    continue;
+                }
+                $end = strpos($theme, '];', $start);
+                $block = $end === false ? substr($theme, $start) : substr($theme, $start, $end - $start);
+                if (preg_match_all("/'([a-z0-9-]+)'\s*=>/", $block, $m)) {
+                    foreach ($m[1] as $name) {
+                        $defined['--' . $name] = true;
+                    }
+                }
+            }
+            // Tokens defined inside the stylesheets themselves.
+            foreach (['public/assets/css/user.css', 'public/assets/css/admin.css', 'app/Core/theme_base.css'] as $file) {
+                $css = (string) @file_get_contents($root . '/' . $file);
+                if (preg_match_all('/(--[a-z0-9-]+)\s*:/i', $css, $m)) {
+                    foreach ($m[1] as $name) {
+                        $defined[strtolower($name)] = true;
+                    }
+                }
+            }
+            // Everything that is USED.
+            $used = [];
+            foreach (['public/assets/css/user.css', 'public/assets/css/admin.css', 'app/Core/theme_base.css'] as $file) {
+                $css = (string) @file_get_contents($root . '/' . $file);
+                if (preg_match_all('/var\(\s*(--[a-z0-9-]+)/i', $css, $m)) {
+                    foreach ($m[1] as $name) {
+                        $used[strtolower($name)] = true;
+                    }
+                }
+            }
+            // A var() with a fallback is fine even when the token is absent.
+            $missing = [];
+            foreach ($used as $name => $_) {
+                if (isset($defined[$name])) {
+                    continue;
+                }
+                $css = (string) @file_get_contents($root . '/public/assets/css/user.css')
+                    . (string) @file_get_contents($root . '/public/assets/css/admin.css')
+                    . (string) @file_get_contents($root . '/app/Core/theme_base.css');
+                if (preg_match('/var\(\s*' . preg_quote($name, '/') . '\s*,/i', $css)) {
+                    continue;   // has a fallback
+                }
+                $missing[] = $name;
+            }
+            sort($missing);
+            return $missing === []
+                ? $ok('every var() in the stylesheets resolves')
+                : $bad('these CSS variables are used but never defined: ' . implode(', ', $missing));
+        });
+
+        $add('smoke.ui.guest_mobile_nav', 'Smoke · UI', 'A guest on a phone can still sign in and reach the nav', static function () use ($root, $ok, $bad): array {
+            $css = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $layout = (string) @file_get_contents($root . '/views/layout.php');
+            // The phone hides the rail's identity block and its main links, and
+            // the bottom bar is member-only - so a guest was left with no
+            // navigation and no way to log in.
+            $guestVisible = strpos($css, '.rail-identity.rail-guest') !== false;
+            $hasSignIn    = strpos($layout, "rail-identity rail-guest") !== false
+                && strpos($layout, "url('/login')") !== false;
+            return $guestVisible && $hasSignIn
+                ? $ok('the guest identity block survives on phones')
+                : $bad('the <=768px rules must keep .rail-identity.rail-guest visible, and the rail must offer a sign-in link for guests');
+        });
+
+        $add('smoke.ui.no_inline_style_blocks', 'Smoke · UI', 'No view carries its own <style> block', static function () use ($root, $ok, $bad): array {
+            // Documents that deliberately stand alone (their own <html>, their
+            // own CSP) keep their own CSS, and the admin shell injects the
+            // theme's CSS dynamically. Everything else must live in
+            // public/assets/css. The list is a ratchet: it may shrink, never
+            // grow - a new inline block fails the check.
+            $allowed = [
+                'unsubscribe.php'        => 'standalone one-click page',
+                'auth/step_up.php'       => 'standalone password-confirm page',
+                'admin/login.php'        => 'standalone admin sign-in',
+                'admin/layout.php'       => 'injects the theme CSS at runtime',
+                'membership/braintree_checkout.php' => 'standalone checkout page',
+            ];
+            $offenders = [];
+            $files = array_merge(glob($root . '/views/*.php') ?: [], glob($root . '/views/*/*.php') ?: []);
+            foreach ($files as $file) {
+                $rel = substr($file, strlen($root . '/views/'));
+                if (isset($allowed[$rel])) {
+                    continue;
+                }
+                if (str_starts_with($rel, 'emails/')) {
+                    continue;   // email clients need their own inline CSS
+                }
+                // A real tag, not the words "<style>" inside a PHP comment.
+                if (preg_match('/^\s*<style[\s>]/m', (string) @file_get_contents($file)) === 1) {
+                    $offenders[] = $rel;
+                }            }
+            return $offenders === []
+                ? $ok('every view uses the shared stylesheets')
+                : $bad('these views carry their own <style> block - move it into public/assets/css: ' . implode(', ', $offenders));
+        });
+
         $add('smoke.legal.consent_banner', 'Smoke · Legal', 'Consent banner wired into the layout', static function () use ($layoutSrc, $ok, $bad): array {
             return strpos($layoutSrc, "require __DIR__ . '/partials/consent_banner.php'") !== false && strpos($layoutSrc, '$gaShowBanner') !== false
                 ? $ok('banner partial included behind $gaShowBanner')
@@ -2962,10 +3090,13 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 ? $ok('card wired to $apiHealth')
                 : $bad('views/admin/system.php must render the API health card with per-API Test buttons and a Test all action');
         });
-        $add('smoke.apihealth.table_fit', 'Smoke · API health', 'API health table cannot overflow its card', static function () use ($sysView, $ok, $bad): array {
-            return strpos($sysView, 'sys-api-table') !== false
-                && strpos($sysView, 'table-layout: fixed') !== false
-                && strpos($sysView, 'overflow-wrap: anywhere') !== false
+        $add('smoke.apihealth.table_fit', 'Smoke · API health', 'API health table cannot overflow its card', static function () use ($sysView, $adminCss, $ok, $bad): array {
+            // The rule lives in admin.css now (the view's own <style> block
+            // was moved out), so both places are searched.
+            $css = $adminCss . $sysView;
+            return strpos($css, 'sys-api-table') !== false
+                && strpos($css, 'table-layout: fixed') !== false
+                && strpos($css, 'overflow-wrap: anywhere') !== false
                 ? $ok('fixed layout + long-token wrapping')
                 : $bad('the API health table must use a fixed layout with overflow-wrap so long probe summaries never widen the card');
         });

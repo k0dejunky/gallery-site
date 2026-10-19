@@ -1,7 +1,4 @@
 $title = 'Error Logs';
-<style>
-.error-log-message{max-width:760px;white-space:pre-wrap;word-break:break-word;font-family:monospace;font-size:12px}.error-log-source{font-weight:600;color:var(--text-heading)}
-</style>
 <div class="card">
     <div class="table-responsive">
         <table>

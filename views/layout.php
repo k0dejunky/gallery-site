@@ -108,17 +108,20 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     <link rel="stylesheet" href="<?= e(url('/theme.css') . '?v=' . \App\Models\Theme::themeCssVersion($userThemePreset)) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/user.css')) ?>">
 </head>
-<body<?= $isAuthPage ? '' : ' class="site-compact"' ?> data-base="<?= e(config('app.base_path')) ?>" data-user="<?= $user !== null ? '1' : '0' ?>" data-uid="<?= (int) ($user['id'] ?? 0) ?>">
+<?php
+// The body carries the compact scale and, while an admin is impersonating a
+// member, a marker class: the title image is hidden in that state, and the
+// rule has to stay scoped (it used to live in a conditional <style> block).
+$bodyClass = [];
+if (!$isAuthPage) {
+    $bodyClass[] = 'site-compact';
+}
+if (!empty($_SESSION['impersonator_id'])) {
+    $bodyClass[] = 'impersonating';
+}
+?>
+<body<?= $bodyClass ? ' class="' . e(implode(' ', $bodyClass)) . '"' : '' ?> data-base="<?= e(config('app.base_path')) ?>" data-user="<?= $user !== null ? '1' : '0' ?>" data-uid="<?= (int) ($user['id'] ?? 0) ?>">
 <?php if ($ageGateRequired): ?>
-<style>
-    .age-gate{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;background:linear-gradient(160deg,#2a1240,#4a1d5f 55%,#7e1d4f);color:#fff;}
-    .age-gate-panel{max-width:480px;width:100%;text-align:center;background:#fff;color:#1e1b2e;border-radius:var(--border-radius-lg);padding:2rem;box-shadow:0 24px 60px rgba(0,0,0,.45);}
-    .age-gate-panel h1{margin:0 0 .35rem;font-size:1.5rem;}
-    .age-gate-logos{font-variant:small-caps;letter-spacing:.12em;color:#8b5ab5;font-size:.8rem;margin:0 0 .5rem;}
-    .age-gate-panel p{margin:.5rem 0 1.25rem;color:#5a4d6b;}
-    .age-gate-panel .thin-link{color:#8b5ab5;text-decoration:underline;}
-    .age-gate-panel .btn{margin:.2rem .25rem;}
-</style>
 <div class="age-gate" role="dialog" aria-modal="true" aria-labelledby="age-gate-title">
     <div class="age-gate-panel">
         <p class="age-gate-logos">Adults only &middot; 18+</p>
@@ -142,8 +145,7 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
             <button type="submit" class="btn btn-sm" style="background:#fff;color:#7f1d1d;">Return to admin</button>
         </form>
     </div>
-    <style>.title-header { display: none; }</style>
-<?php endif; ?>
+    <?php endif; ?>
     <header class="title-header">
             <img src="<?= e(url(\App\Models\Theme::userTheme($userThemePreset)['title_image'])) ?>" alt="<?= e(config('app.site_name')) ?>">
     </header>
@@ -331,19 +333,70 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     <main id="main-content"><?php echo $content; ?></main>
     <?php endif; ?>
     <?php if ($sidebarNav && $user !== null): ?>
+    <?php
+    // The phone's bottom bar. It used to be nine text-only links at ~10.9px,
+    // which did not fit on a 360px screen, and it had no icons, no
+    // aria-current and no Chat. It is now five icon buttons plus a "More"
+    // sheet that holds everything else.
+    $bottomPrimary = [
+        ['href' => '/galleries',   'label' => 'Galleries',   'icon' => 'image',  'active' => strpos($currentPath, url('/galleries')) === 0],
+        ['href' => '/wall',        'label' => 'Wall',        'icon' => 'heart',  'active' => strpos($currentPath, url('/wall')) === 0,
+         'badge' => $navWallUnread > 0 ? (string) $navWallUnread : ''],
+        ['href' => '/chat',        'label' => 'Chat',        'icon' => 'chat',   'active' => strpos($currentPath, url('/chat')) === 0],
+        ['href' => '/collections', 'label' => 'Collections', 'icon' => 'grid',   'active' => strpos($currentPath, url('/collections')) === 0],
+    ];
+    $bottomMore = [
+        ['href' => '/account',    'label' => 'Dashboard',  'icon' => 'grid',     'active' => $currentPath === url('/account')],
+        ['href' => '/favorites',  'label' => 'Favorites',  'icon' => 'heart',    'active' => strpos($currentPath, url('/favorites')) === 0],
+        ['href' => '/membership', 'label' => 'Membership', 'icon' => 'card',     'active' => strpos($currentPath, url('/membership')) === 0],
+        ['href' => '/support',    'label' => 'Support',    'icon' => 'lifebuoy', 'active' => strpos($currentPath, url('/support')) === 0],
+    ];
+    if (\App\Core\Auth::hasActiveSubscription()) {
+        $bottomMore[] = ['href' => '/live', 'label' => 'Live', 'icon' => 'broadcast', 'active' => strpos($currentPath, url('/live')) === 0];
+    }
+    $bottomMore[] = ['href' => '/settings', 'label' => 'Settings', 'icon' => 'sliders', 'active' => strpos($currentPath, url('/settings')) === 0];
+    ?>
     <nav class="media-bottom-nav" aria-label="Mobile site menu">
-        <a href="<?= url('/account') ?>">Dashboard</a>
-        <a href="<?= url('/galleries') ?>">Galleries</a>
-        <a href="<?= url('/favorites') ?>">Favorites</a>
-        <a href="<?= url('/collections') ?>">Collections</a>
-        <a href="<?= url('/membership') ?>">Membership</a>
-         <a href="<?= url('/support') ?>">Support<?php if (!empty($supportUnreadCount)): ?> <span class="nav-unread"><?= (int) $supportUnreadCount ?></span><?php endif; ?></a>
-        <a href="<?= url('/wall') ?>">Wall<?php if ($navWallUnread > 0): ?> <span class="nav-unread"><?= $navWallUnread ?></span><?php endif; ?></a>
-        <?php if ($user !== null && \App\Core\Auth::hasActiveSubscription()): ?>
-        <a href="<?= url('/live') ?>">Live</a>
-        <?php endif; ?>
-        <a href="<?= url('/settings') ?>">Settings</a>
+        <?php foreach ($bottomPrimary as $item): ?>
+            <a href="<?= url($item['href']) ?>"<?= !empty($item['active']) ? ' aria-current="page"' : '' ?>>
+                <span class="mnav-ico"><?= $icon($item['icon']) ?></span>
+                <span class="mnav-label"><?= e($item['label']) ?></span>
+                <?php if (!empty($item['badge'])): ?>
+                    <span class="nav-unread" aria-label="<?= (int) $item['badge'] ?> unread"><?= (int) $item['badge'] ?></span>
+                <?php endif; ?>
+            </a>
+        <?php endforeach; ?>
+        <button type="button" class="mnav-more" data-action="bottomMoreToggle"
+                aria-expanded="false" aria-controls="bottom-more-sheet">
+            <span class="mnav-ico"><?= $icon('menu') ?></span>
+            <span class="mnav-label">More</span>
+        </button>
     </nav>
+    <div class="media-bottom-sheet" id="bottom-more-sheet" hidden>
+        <div class="mbs-head">
+            <strong>More</strong>
+            <button type="button" class="mbs-close" data-action="bottomMoreToggle" aria-label="Close the menu">&times;</button>
+        </div>
+        <ul>
+            <?php foreach ($bottomMore as $item): ?>
+                <li>
+                    <a href="<?= url($item['href']) ?>"<?= !empty($item['active']) ? ' aria-current="page"' : '' ?>>
+                        <span class="mnav-ico"><?= $icon($item['icon']) ?></span>
+                        <?= e($item['label']) ?>
+                    </a>
+                </li>
+            <?php endforeach; ?>
+            <li>
+                <form method="post" action="<?= url('/logout') ?>">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="mbs-logout">
+                        <span class="mnav-ico"><?= $icon('logout') ?></span>
+                        Sign out
+                    </button>
+                </form>
+            </li>
+        </ul>
+    </div>
     <?php endif; ?>
     <?php if ($user !== null && !\App\Core\Auth::isAdmin()): ?>
     <aside id="member-onboarding" class="member-onboarding" hidden role="dialog" aria-modal="true" aria-labelledby="member-onboarding-title">
@@ -529,6 +582,22 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
 //   data-fallback  -> img error fallback src (applied once)
 //   data-stop-prop -> click does not bubble past the element
 window.galleryNavToggle=function(){ if(window.GalleryNav){window.GalleryNav.toggle();} };
+// The phone's "More" sheet (the bottom bar's overflow menu).
+window.bottomMoreToggle=function(){
+  var sheet=document.getElementById('bottom-more-sheet');
+  if(!sheet) return;
+  var open=sheet.hidden;
+  sheet.hidden=!open;
+  var btn=document.querySelector('[data-action="bottomMoreToggle"][aria-controls="bottom-more-sheet"]');
+  if(btn) btn.setAttribute('aria-expanded', open?'true':'false');
+  document.body.classList.toggle('bottom-more-open', open);
+  if(open){ var f=sheet.querySelector('a,button'); if(f) f.focus(); }
+};
+document.addEventListener('keydown',function(e){
+  if(e.key!=='Escape') return;
+  var sheet=document.getElementById('bottom-more-sheet');
+  if(sheet && !sheet.hidden) window.bottomMoreToggle();
+});
 // Copy text using the async Clipboard API where available (secure context),
 // falling back to a hidden textarea + execCommand for plain-http setups (dev).
 window.__copyText=function(text){
@@ -563,14 +632,9 @@ window.copyToClipboard=function(sel, el){
 window.showPickerOn=function(el){ if(el){try{el.showPicker&&el.showPicker();}catch(_e){}} };
 window.chatFocusInput=function(){ var i=document.getElementById('chat-input'); if(i){i.focus();} };
 window.startSiteTour=function(){ if(window.GalleryTour){GalleryTour.clearSeen();GalleryTour.start();} };
-window.addLinkRow=function(){ var r=document.getElementById('link-rows'); if(r&&r.children[0]){var d=r.children[0].cloneNode(true);d.querySelectorAll('input').forEach(function(i){i.value='';});r.appendChild(d);} };
-window.toggleBulkRole=function(sel){ var el=document.getElementById('bulk-role'); if(el){el.style.display=(sel&&sel.value==='role')?'':'none';} };
-window.bulkApply=function(btn){
-  var n=document.querySelectorAll('.user-check:checked').length;
-  if(!n){alert('No users selected.');return;}
-  if(!confirm('Apply bulk action to '+n+' checked user(s)?')){return;}
-  btn.form.submit();
-};
+// (the admin-only handlers - addLinkRow, toggleBulkRole, bulkApply - live
+//  in /assets/js/admin.js, which only the admin layout loads. They used to
+//  live here, so the admin never had them.)
 window.collectionActionSelect=function(sel){
   var base=sel.getAttribute('data-col-action')||'<?= url('/collections') ?>/';
   var suffix=sel.getAttribute('data-col-suffix')||'photos';

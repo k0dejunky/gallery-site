@@ -32,47 +32,6 @@ $filterUrl = static function (string $type, string $level): string {
 $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
 ?>
 
-<style>
-    .mg-table-wrap { background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 10px; overflow-x: auto; margin-top: 1rem; }
-    .mg-table-wrap table { margin: 0; border: none; width: 100%; }
-    .mg-table-wrap th, .mg-table-wrap td { border-color: var(--pink-200); padding: .35rem .4rem; }
-    .mg-table-wrap thead th { background: var(--pink-200); text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; color: var(--purple-700); }
-    .mg-table-wrap tbody tr { transition: background .12s ease; }
-    .mg-table-wrap tbody tr:hover { background: var(--pink-200); }
-
-    .mg-cover { width: 64px; height: 44px; border-radius: 6px; object-fit: cover; display: block; background: var(--purple-900); border: 1px solid var(--pink-300); }
-    .mg-cover-empty { width: 64px; height: 44px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: var(--pink-200); border: 1px dashed var(--pink-400); color: var(--purple-700); font-size: .68rem; }
-
-    .mg-title { font-weight: 600; color: var(--purple-900); text-decoration: none; display: inline-block; max-width: 8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
-    .mg-title:hover { text-decoration: underline; }
-    @media (min-width: 1440px) { .mg-title { max-width: 13rem; } }
-    .mg-desc { color: var(--purple-800); opacity: .7; font-size: .8rem; margin: .15rem 0 0; max-width: 18rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-
-    .mg-media { white-space: nowrap; font-size: .78rem; color: var(--purple-800); }
-    .mg-media b { color: var(--purple-900); }
-
-    .mg-date { white-space: nowrap; font-size: .82rem; color: var(--purple-800); }
-
-    .mg-actions { display: flex; gap: .25rem; flex-wrap: nowrap; justify-content: flex-end; align-items: center; white-space: nowrap; }
-    .mg-actions form { display: contents; }
-    .mg-actions .btn { padding: .18rem .4rem; font-size: .72rem; line-height: 1.15; white-space: nowrap; }
-    /* Keep all four action buttons on one row even when the table is narrow;
-       the wrapper scrolls horizontally instead of stacking them. */
-    #mg-table th:last-child, #mg-table td:last-child { min-width: 15rem; }
-
-    .mg-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin: .75rem 0; }
-    .mg-filters { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; }
-    .mg-filter-group { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
-    .mg-filter-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--purple-700); margin-right: .2rem; }
-    .mg-filter-btn { background: var(--pink-100); color: var(--purple-800); border: 1px solid var(--pink-300); }
-    .mg-filter-btn:hover { background: var(--pink-200); border-color: var(--pink-400); }
-    .mg-filter-active, .mg-filter-active:hover { background: var(--purple-700); color: #fff; border-color: var(--purple-700); }
-    .mg-filter-clear { font-size: .8rem; color: var(--purple-700); text-decoration: none; }
-
-    .mg-empty { padding: 2.5rem 1rem; text-align: center; color: var(--purple-800); }
-    .mg-empty .btn { margin-top: .75rem; }
-</style>
-
 <?php if (empty($galleries) && !$hasFilter): ?>
     <div class="mg-empty">
         <p>No galleries yet.</p>

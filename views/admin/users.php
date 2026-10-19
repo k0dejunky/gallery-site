@@ -52,27 +52,32 @@
 <?php if (empty($users)): ?>
     <p>No users yet.</p>
 <?php else: ?>
-<form method="post" action="<?= url('/admin/users/bulk') ?>" id="users-bulk-form">
-    <?= csrf_field() ?>
-    <div style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.5rem;">
-        <strong>With selected:</strong>
-        <select name="action" data-action="toggleBulkRole">
-            <option value="role">Set role</option>
-            <option value="suspend">Suspend</option>
-            <option value="activate">Reactivate</option>
-            <option value="delete">Delete</option>
-        </select>
-        <select name="role" id="bulk-role">
-            <?php foreach ($roles as $r): ?>
-                <option value="<?= e($r) ?>"><?= e(str_replace('_', ' ', $r)) ?></option>
-            <?php endforeach; ?>
-            <?php if (!in_array('user', $roles, true)): ?>
-                <option value="user">user</option>
-            <?php endif; ?>
-        </select>
-        <button type="submit" class="btn btn-sm"
-                data-action="bulkApply">Apply</button>
-    </div>
+    <?php /* The form-level confirm is the safety net for when admin.js does not
+            load: the button's own data-action handler never runs, so the
+            native submit path is the one that would fire. When the handler
+            IS present it calls form.submit(), which bypasses this event, and
+            the count-naming confirm in admin.js is the one the admin sees. */ ?>
+    <form method="post" action="<?= url('/admin/users/bulk') ?>" id="users-bulk-form" data-confirm="Apply this action to the selected users?">
+        <?= csrf_field() ?>
+        <div style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.5rem;">
+            <strong>With selected:</strong>
+            <select name="action" data-action="toggleBulkRole">
+                <option value="role">Set role</option>
+                <option value="suspend">Suspend</option>
+                <option value="activate">Reactivate</option>
+                <option value="delete">Delete</option>
+            </select>
+            <select name="role" id="bulk-role">
+                <?php foreach ($roles as $r): ?>
+                    <option value="<?= e($r) ?>"><?= e(str_replace('_', ' ', $r)) ?></option>
+                <?php endforeach; ?>
+                <?php if (!in_array('user', $roles, true)): ?>
+                    <option value="user">user</option>
+                <?php endif; ?>
+            </select>
+            <button type="submit" class="btn btn-sm"
+                    data-action="bulkApply">Apply</button>
+        </div>
     <div class="users-table-wrap"><table class="users-table">
         <thead>
             <tr>

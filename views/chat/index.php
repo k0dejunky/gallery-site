@@ -1,22 +1,5 @@
 <?php $title = 'Chat'; ?>
 
-<style>
-    .chat-page { width: 100%; max-width: none; }
-    .chat-thread { display: flex; flex-direction: column; gap: .3rem; padding: .5rem 0; max-height: 60vh; overflow-y: auto; }
-    .chat-msg { max-width: 78%; padding: 2px 7px; border-radius: 12px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
-    .chat-msg.user { align-self: flex-end; background: var(--purple-600, #9333ea); color: #fff; border-bottom-right-radius: 3px; }
-    .chat-msg.model, .chat-msg.operator { align-self: flex-start; background: var(--pink-100, #fdf2f8); color: var(--purple-900, #4a044e); border: 1px solid var(--pink-300, #f9a8d4); border-bottom-left-radius: 3px; }
-    .chat-msg .who { display: block; font-size: .68rem; opacity: .7; margin-bottom: .05rem; text-transform: uppercase; letter-spacing: .04em; }
-    .chat-msg a.chat-ref { color: inherit; text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
-    .chat-msg.user a.chat-ref { color: #fff; }
-    .chat-msg.model a.chat-ref { color: var(--purple-700, #6b21a8); }
-    .chat-attachment { display: inline-block; margin-top: .45rem; color: inherit; text-decoration: none; font-size: .85rem; }
-    .chat-image { display: block; max-width: 100%; max-height: 420px; width: auto; height: auto; margin-top: .5rem; border-radius: 10px; border: 1px solid rgba(0,0,0,.08); background: #fff; object-fit: contain; user-select: none; -webkit-user-drag: none; pointer-events: none; }
-    .chat-composer { display: flex; gap: .5rem; margin-top: .75rem; }
-    .chat-composer textarea { flex: 1; resize: vertical; }
-    .chat-status { font-size: .8rem; color: var(--text-muted, #888); margin: .5rem 0; }
-</style>
-
 <div class="chat-page">
             <?php if (!empty($questionnaires)): ?>
                 <div class="card" style="margin-bottom:1rem;">
@@ -36,7 +19,7 @@
                                     <div style="margin-bottom:.5rem;">
                                         <label style="display:block;font-weight:600;margin-bottom:.25rem;"><?= e((string)$qq['prompt']) ?></label>
                                         <?php if ($qq['qtype']==='text'): ?>
-                                            <textarea rows="2" disabled style="background:#fff;"><?= e((string)$my) ?></textarea>
+                                            <textarea rows="2" disabled class="chat-answer"><?= e((string)$my) ?></textarea>
                                         <?php elseif ($qq['qtype']==='choice' || $qq['qtype']==='rating'): ?>
                                             <?php if ($qq['qtype']==='choice'): $opts=$qq['options_decoded']??[]; else: $opts=$qq['options_decoded']??['min'=>1,'max'=>5]; $tmp=[]; for($r=(int)$opts['min'];$r<=(int)$opts['max'];$r++){ $tmp[]=$r; } $opts=$tmp; endif; ?>
                                             <?php foreach ($opts as $opt): ?>
@@ -48,7 +31,7 @@
                                                 <label style="display:inline-flex;align-items:center;gap:.3rem;margin-right:.75rem;"><input type="checkbox" disabled <?= in_array((string)$opt, array_map('strval',$vals), true) ? 'checked' : '' ?>> <?= e((string)$opt) ?></label>
                                             <?php endforeach; ?>
                                         <?php elseif ($qq['qtype']==='number'): ?>
-                                            <input type="text" disabled value="<?= e((string)$my) ?>" style="background:#fff;">
+                                            <input type="text" disabled value="<?= e((string)$my) ?>" class="chat-answer">
                                         <?php endif; ?>
                                     </div>
                                 <?php endforeach; ?>
@@ -61,7 +44,7 @@
                                         <div>
                                             <label style="display:block;font-weight:600;margin-bottom:.25rem;"><?= e((string)$qq['prompt']) ?><?= (int)$qq['required']===1?'*':'' ?></label>
                                             <?php if ($qq['qtype']==='text'): ?>
-                                                <textarea name="answers[<?= $key ?>]" rows="2" <?= (int)$qq['required']===1?'required':'' ?>></textarea>
+                                                <textarea name="answers[<?= $key ?>]" rows="2" aria-label="<?= e((string)$qq['prompt']) ?>" <?= (int)$qq['required']===1?'required':'' ?>></textarea>
                                             <?php elseif ($qq['qtype']==='choice'): ?>
                                                 <?php foreach (($qq['options_decoded']??[]) as $opt): ?>
                                                     <label style="display:inline-flex;align-items:center;gap:.3rem;margin-right:.75rem;"><input type="radio" name="answers[<?= $key ?>]" value="<?= e((string)$opt) ?>" <?= (int)$qq['required']===1?'required':'' ?>> <?= e((string)$opt) ?></label>
@@ -76,7 +59,7 @@
                                                     <label style="display:inline-flex;align-items:center;gap:.2rem;margin-right:.5rem;"><input type="radio" name="answers[<?= $key ?>]" value="<?= $r ?>" <?= (int)$qq['required']===1?'required':'' ?>> <?= $r ?></label>
                                                 <?php endfor; ?>
                                             <?php elseif ($qq['qtype']==='number'): ?>
-                                                <input type="number" name="answers[<?= $key ?>]" <?= (int)$qq['required']===1?'required':'' ?>>
+                                                <input type="number" name="answers[<?= $key ?>]" aria-label="<?= e((string)$qq['prompt']) ?>" <?= (int)$qq['required']===1?'required':'' ?>>
                                             <?php endif; ?>
                                         </div>
                                     <?php endforeach; ?>

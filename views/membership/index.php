@@ -304,10 +304,6 @@ $ldJson = [
 </script>
 <?php endif; ?>
 
-    }());
-    </script>
-
-
 <script nonce="<?= csp_nonce() ?>">
 (function () {
     document.querySelectorAll('.pp-select').forEach(function (sel) {

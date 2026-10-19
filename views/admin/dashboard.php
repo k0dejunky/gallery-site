@@ -79,7 +79,6 @@
 </div>
 <?php endif; ?>
 
-
 <?php // A dashboard this long only reads if it has structure, so the blocks
      // below are grouped into labelled sections instead of one flat run. ?>
 <section class="adm-section">
@@ -398,11 +397,7 @@
                href="<?= e(url('/admin?period=' . $p)) ?>"><?= e($label) ?></a>
         <?php endforeach; ?>
     </div>
-    <style>
-        .storage-periods { display: flex; gap: .35rem; flex-wrap: wrap; }
-        .storage-period-active { background: var(--sidebar-active-bg, #0ea5e9); color: var(--sidebar-active-color, #fff); border-color: transparent; }
-    </style>
-    <?php if (empty($storageTrend['gb'])): ?>
+        <?php if (empty($storageTrend['gb'])): ?>
         <p class="muted">No snapshots yet — the housekeeping cron records one every 15 minutes.</p>
     <?php else: ?>
         <?php

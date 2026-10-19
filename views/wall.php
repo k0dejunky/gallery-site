@@ -188,7 +188,7 @@
                             <?= csrf_field() ?>
                             <input type="hidden" name="commentable_type" value="wall_post">
                             <input type="hidden" name="commentable_id" value="<?= (int) $post['id'] ?>">
-                            <textarea name="body" rows="2" style="flex:1;min-width:180px;" placeholder="Say something… (max 2000 chars)" maxlength="2000"></textarea>
+                            <textarea name="body" rows="2" aria-label="Your comment" style="flex:1;min-width:180px;" placeholder="Say something… (max 2000 chars)" maxlength="2000"></textarea>
                             <button type="submit" class="btn btn-sm">Post comment</button>
                         </form>
                     <?php endif; ?>

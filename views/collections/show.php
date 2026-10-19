@@ -1,5 +1,7 @@
 <?php
-$title = e((string) ($collection['name'] ?? 'Collection'));
+// The layout escapes the title itself; escaping it here too would show a
+// collection named "Bob's & Co" as "Bob&#039;s &amp; Co".
+$title = (string) ($collection['name'] ?? 'Collection');
 $collectionId = (int) ($collection['id'] ?? 0);
 $totalSeconds = 0;
 foreach ((array) ($videos ?? []) as $v) {
@@ -23,7 +25,7 @@ $mediaCount = count((array) ($videos ?? [])) + count((array) ($images ?? [])) + 
     <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/rename') ?>" class="settings-form" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
         <?= csrf_field() ?>
         <label class="muted" style="font-size:.9rem;">Rename</label>
-        <input type="text" name="name" required maxlength="120" value="<?= e((string) ($collection['name'] ?? '')) ?>" style="flex:1;min-width:200px;">
+        <input type="text" name="name" required maxlength="120" value="<?= e((string) ($collection['name'] ?? '')) ?>" aria-label="Collection name" style="flex:1;min-width:200px;">
         <button type="submit" class="btn btn-sm">Save name</button>
     </form>
 </section>

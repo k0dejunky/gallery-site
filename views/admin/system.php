@@ -1,31 +1,5 @@
 <?php $title = 'System'; ?>
 
-<style>
-    .sys-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin-top: 1rem; }
-    .sys-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--border-radius); padding: 1rem; }
-    .sys-card h2 { margin: 0 0 .5rem; font-size: var(--font-size-lg); color: var(--card-title-color); }
-    .sys-card table { width: 100%; font-size: var(--font-size-sm); }
-    .sys-card td, .sys-card th { padding: .25rem .35rem; text-align: left; border-bottom: 1px solid var(--table-border); }
-    .sys-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
-    .sys-ok { color: #15803d; font-weight: bold; }
-    .sys-bad { color: var(--btn-danger-color, #b91c1c); font-weight: bold; }
-    /* Table-backed cards get their own full-width row below the compact ones */
-    .sys-stack { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
-    .sys-stack .sys-card { width: 100%; }
-    /* API health card spans two grid columns, giving the detail column room
-       to breathe so long probe summaries stay on fewer/one line per row. */
-    #api-health { grid-column: span 2; }
-    /* API health table: fixed layout so long probe summaries never widen the card */
-    .sys-api-table { table-layout: fixed; }
-    .sys-api-table th, .sys-api-table td { overflow-wrap: anywhere; word-break: break-word; vertical-align: top; }
-    .sys-api-table .ap-integ-col { width: 26%; }
-    .sys-api-table .ap-status-col { width: 6.5rem; }
-    .sys-api-table .ap-summary-col { width: 50%; }
-    .sys-api-table .ap-test-col { width: 5.5rem; white-space: nowrap; text-align: right; }
-    /* Orphan grid AJAX paging keeps the scroll position; dim while loading */
-    #orphan-results.is-loading { opacity: .55; pointer-events: none; transition: opacity .15s; }
-</style>
-
 <?php if ($diskFree !== false && !empty($diskTotal) && (float) $diskTotal > 0): ?>
     <?php
         $diskPct = (float) $diskFree / (float) $diskTotal * 100;
@@ -43,7 +17,6 @@
 <?php endif; ?>
 
 <p class="muted">Disk free: <b><?= $diskFree !== false ? number_format((float) $diskFree / 1048576) . ' MB' : 'unknown' ?></b></p>
-
 
 <?php // This page is a long reference sheet. A sticky jump bar keeps the seven
      // groups reachable without scrolling through 10,000px of cards. ?>
@@ -368,17 +341,7 @@
 <!-- Cards that contain tables: one per row, full width -->
 <div class="sys-stack">
     <!-- Cron jobs -->
-    <style>
-        .cron-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem; }
-        .cron-card { display: flex; flex-direction: column; gap: .5rem; border: 1px solid var(--card-border, var(--pink-300)); border-radius: var(--card-radius, var(--border-radius-lg)); padding: var(--card-padding, .9rem); background: var(--card-bg, var(--pink-100)); box-shadow: var(--shadow); }
-        .cron-card h3 { margin: 0; color: var(--card-title-color, var(--purple-800)); }
-        .cron-card .cron-desc { margin: 0; font-size: .8rem; color: var(--card-text-color, var(--purple-700)); }
-        .cron-card .cron-meta { font-size: .78rem; color: var(--purple-700); line-height: 1.5; }
-        .cron-card .cron-fields { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-top: auto; }
-        .cron-card .cron-fields input[type="number"], .cron-card .cron-fields select { padding: .3rem .45rem; border: 1px solid var(--pink-300); border-radius: 4px; background: var(--pink-100); color: var(--purple-900); }
-        .cron-card .cron-save { margin-top: .25rem; }
-    </style>
-    <div class="sys-card" id="sys-tasks">
+        <div class="sys-card" id="sys-tasks">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;">
             <h2>Scheduled tasks (cron)</h2>
             <?php $cronOkCount = count(array_filter($cronJobs ?? [], fn($j) => !empty($j['ok']))); ?>

@@ -5,7 +5,6 @@ $title = 'My Membership';
 $user = $user ?? \App\Core\Auth::user();
 ?>
 <?php $pendingSub = $pendingSub ?? null; ?>
-<style>.membership-history th,.membership-history td{text-align:center}</style>
 
 <div class="auth-panel" style="max-width: 720px; text-align:center;">
     <h1>My Membership</h1>

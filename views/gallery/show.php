@@ -47,7 +47,7 @@ $breadcrumbItems = [
         <?php if (\App\Core\Auth::check()): ?>
             <form method="post" action="<?= url('/galleries/' . (int) $gallery['id'] . '/unlock') ?>" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-top:.5rem;">
                 <?= csrf_field() ?>
-                <input type="text" name="unlock_code" placeholder="Enter your unlock code" style="min-width:220px;">
+                <input type="text" name="unlock_code" placeholder="Enter your unlock code" aria-label="Unlock code" style="min-width:220px;">
                 <button type="submit" class="btn btn-sm">Unlock</button>
             </form>
             <p class="muted" style="margin:.5rem 0 0;font-size:.85rem;">Have a code? Use it above — or pay by card / PayPal now.</p>
@@ -63,7 +63,7 @@ $breadcrumbItems = [
         <?= csrf_field() ?>
         <input type="hidden" name="gallery_id" value="<?= (int) $gallery['id'] ?>">
         <label class="muted" style="font-size:.9rem;">Save to collection</label>
-        <select name="collection_id" data-col-action="<?= url('/collections') ?>/" data-col-suffix="galleries" data-action="collectionActionSelect">
+        <select name="collection_id" aria-label="Collection to save this gallery in" data-col-action="<?= url('/collections') ?>/" data-col-suffix="galleries" data-action="collectionActionSelect">
             <?php foreach ($collections as $c): ?>
                 <option value="<?= (int) $c['id'] ?>"><?= e((string) $c['name']) ?></option>
             <?php endforeach; ?>
@@ -169,8 +169,8 @@ require __DIR__ . '/../partials/comments.php';
         <p class="muted">Show your appreciation — your note goes straight to the studio.</p>
         <form method="post" action="<?= url('/tip') ?>" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem;">
             <?= csrf_field() ?>
-            <input type="number" step="0.01" min="0.01" name="amount" placeholder="Amount" style="width:120px;">
-            <input type="text" name="note" placeholder="Add a note" style="flex:1;min-width:200px;" maxlength="500">
+            <input type="number" step="0.01" min="0.01" name="amount" placeholder="Amount" aria-label="Tip amount in dollars" style="width:120px;">
+            <input type="text" name="note" placeholder="Add a note" aria-label="Note (optional)" style="flex:1;min-width:200px;" maxlength="500">
             <button type="submit" class="btn btn-outline">Send tip (offline)</button>
         </form>
         <p class="muted" style="font-size:.85rem;margin-bottom:.35rem;">Or send it now by card / PayPal:</p>

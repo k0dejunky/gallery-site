@@ -1,42 +1,4 @@
 <?php $title = 'Site Editor'; ?>
-<style>
-  #se-root{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;margin:0!important;z-index:100000;background:#111;overflow:hidden!important}
-  #se-root>div:nth-child(1),#se-root>div:nth-child(3){position:absolute!important;top:12px;bottom:12px;z-index:100002;box-shadow:0 8px 30px rgba(0,0,0,.45)}
-  #se-root>div:nth-child(1){left:12px}
-  #se-root>div:nth-child(3){right:12px}
-  #se-root>div:nth-child(2){position:absolute!important;inset:0!important;width:auto!important;z-index:100001}
-  #se-left-head,#se-right-head{cursor:move;user-select:none}
-  #se-back{background:#7040a0;border:1px solid #8c5dc0;color:#fff;border-radius:3px;padding:4px 8px;font-size:10px;cursor:pointer}
-  #se-back:hover{background:#8554b5}
-  .se-tool{flex:1;padding:5px 4px;font-size:10px;background:#2a2a2a;border:1px solid #444;border-radius:3px;color:#aaa;cursor:pointer;text-align:center}
-  .se-tool:hover{background:#3a3a3a;color:#ddd}
-  .se-tool.active{background:#5b8af5;color:#fff;border-color:#4a7ae8}
-  .se-btn-p{background:#5b8af5;color:#fff;border:none;border-radius:3px;padding:5px 8px;font-size:11px;cursor:pointer}
-  .se-btn-p:hover{background:#4a7ae8}
-  .se-btn-d{background:#c04040;color:#fff;border:none;border-radius:3px;padding:5px 8px;font-size:11px;cursor:pointer}
-  .se-btn-d:hover{background:#a83535}
-  .se-btn-g{background:#40a040;color:#fff;border:none;border-radius:3px;padding:5px 8px;font-size:11px;cursor:pointer}
-  .se-btn-g:hover{background:#358a35}
-  .se-ci{display:flex;align-items:center;gap:4px;padding:4px 6px;border-radius:3px;cursor:pointer;font-size:11px;margin-bottom:2px}
-  .se-ci:hover{background:#333}
-  .se-ct{font-size:9px;font-weight:700;padding:1px 4px;border-radius:2px;text-transform:uppercase;flex-shrink:0}
-  .se-ct.hide{background:#e8a840;color:#1e1e1e}.se-ct.delete{background:#c04040;color:#fff}.se-ct.move{background:#5b8af5;color:#fff}.se-ct.add{background:#40a040;color:#fff}
-  .se-cl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#bbb}
-  .se-x{background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:0 2px}.se-x:hover{color:#e8a840}
-  .se-show{background:#357a52;border:none;border-radius:2px;color:#fff;cursor:pointer;font-size:9px;padding:2px 4px}.se-show:hover{background:#459966}
-  .se-ti{padding:6px 8px;border-radius:4px;cursor:pointer;margin-bottom:4px;border:1px solid #333;background:#252526}
-  .se-ti:hover{border-color:#5b8af5}.se-tp{border-color:#40a040;background:#1a2a1a}
-  .se-tn{font-size:12px;font-weight:600;color:#ddd}.se-tm{font-size:10px;color:#888;margin-top:2px}
-  .se-ta{display:flex;gap:4px;margin-top:4px}.se-ta button{font-size:10px;padding:2px 6px}
-  #se-root input,#se-root select{background:#2a2a2a;border:1px solid #444;color:#ddd;border-radius:3px;padding:4px 6px;font-size:11px}
-  #se-root input:focus,#se-root select:focus{outline:1px solid #5b8af5}
-  #se-root input::placeholder{color:#666}
-  #se-hl{position:absolute;pointer-events:none;background:rgba(91,138,245,.15);border:2px solid #5b8af5;z-index:99999;display:none;transition:none}
-  #se-sel{position:absolute;pointer-events:none;background:rgba(232,168,64,.1);border:2px solid #e8a840;z-index:99999;display:none;transition:none}
-  .se-scope-tab{flex:1;padding:5px 4px;font-size:10px;background:#2a2a2a;border:1px solid #444;border-radius:3px;color:#aaa;cursor:pointer;text-align:center}
-  .se-scope-tab:hover{background:#3a3a3a;color:#ddd}
-  .se-scope-tab.active{background:#40a040;color:#fff;border-color:#358a35}
-</style>
 <div id="se-root" style="display:flex;height:calc(100vh - 40px);gap:0;overflow:hidden;margin:-1rem -1.5rem;">
   <!-- Left Panel -->
   <div id="se-left-panel" style="width:220px;flex-shrink:0;background:#1e1e1e;color:#ccc;display:flex;flex-direction:column;border-right:1px solid #333;">

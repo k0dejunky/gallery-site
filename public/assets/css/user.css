@@ -29,6 +29,27 @@ img.is-loaded{animation:none;opacity:1;transition:opacity .2s ease}
 .video-resume{display:flex;align-items:center;justify-content:center;gap:.5rem;margin:.75rem auto 0}
 .video-resume[hidden]{display:none}
 .media-bottom-nav{display:none}
+/* The phone's bottom bar: five icon buttons plus a "More" sheet. It used to
+   be nine text-only links at ~10.9px, which did not fit a 360px screen. */
+.media-bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:1200;display:none;align-items:stretch;justify-content:space-around;gap:.1rem;padding:.25rem .25rem calc(.25rem + env(safe-area-inset-bottom,0px));background:var(--card-bg);border-top:1px solid var(--card-border);box-shadow:0 -2px 14px rgba(0,0,0,.35)}
+.media-bottom-nav a,.media-bottom-nav .mnav-more{position:relative;flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.1rem;padding:.3rem .1rem;border:0;border-radius:var(--border-radius);background:none;color:var(--card-text-color);font-size:var(--font-size-xs);text-decoration:none;cursor:pointer}
+.media-bottom-nav a[aria-current="page"]{color:var(--purple-300);background:var(--pink-200)}
+.media-bottom-nav .mnav-ico{display:flex;align-items:center;justify-content:center}
+.media-bottom-nav .mnav-ico svg{width:20px;height:20px;opacity:.85}
+.media-bottom-nav a[aria-current="page"] .mnav-ico svg{opacity:1}
+.media-bottom-nav .mnav-label{font-size:var(--font-size-xs);line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.media-bottom-nav .nav-unread{position:absolute;top:.1rem;right:22%;transform:translateX(50%)}
+/* The overflow sheet */
+.media-bottom-sheet{position:fixed;left:0;right:0;bottom:0;z-index:1210;background:var(--card-bg);border-top:1px solid var(--card-border);border-radius:var(--border-radius-lg) var(--border-radius-lg) 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.45);padding:.5rem .75rem calc(.75rem + env(safe-area-inset-bottom,0px));max-height:80vh;overflow:auto}
+.media-bottom-sheet[hidden]{display:none}
+.media-bottom-sheet .mbs-head{display:flex;align-items:center;justify-content:space-between;padding:.25rem .25rem .5rem}
+.media-bottom-sheet .mbs-close{background:none;border:0;color:var(--card-text-color);font-size:1.5rem;line-height:1;cursor:pointer;padding:.15rem .4rem;border-radius:var(--border-radius)}
+.media-bottom-sheet ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.15rem}
+.media-bottom-sheet a,.media-bottom-sheet .mbs-logout{display:flex;align-items:center;gap:.6rem;width:100%;padding:.6rem .5rem;border:0;border-radius:var(--border-radius);background:none;color:var(--card-text-color);font-size:var(--font-size-base);text-align:left;text-decoration:none;cursor:pointer}
+.media-bottom-sheet a:hover,.media-bottom-sheet .mbs-logout:hover{background:var(--pink-200)}
+.media-bottom-sheet a[aria-current="page"]{color:var(--purple-300)}
+.media-bottom-sheet .mnav-ico svg{width:19px;height:19px;opacity:.8}
+body.bottom-more-open{overflow:hidden}
 .nav-unread{display:inline-block;min-width:1.2em;padding:.08rem .35rem;border-radius:999px;background:#b42318;color:#fff;font-size:.75em;font-weight:700;text-align:center}
 .support-ticket-unread{border-left:4px solid var(--purple-600)}.unread-label{font-weight:700;color:var(--purple-700)}
 .grid-density-compact .grid{gap:var(--spacing-sm);grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}.grid-density-compact .grid img{height:120px}.grid-density-compact .dashboard-grid,.grid-density-compact .dashboard-media{gap:var(--spacing-sm)}
@@ -78,12 +99,13 @@ img.is-loaded{animation:none;opacity:1;transition:opacity .2s ease}
 #consent-banner{position:fixed;left:0;right:0;bottom:0;z-index:99996;background:#fff;border-top:2px solid var(--pink-300);padding:.65rem 1rem;display:flex;gap:.75rem 1rem;align-items:center;justify-content:center;flex-wrap:wrap;font-size:var(--font-size-sm);color:var(--purple-900);box-shadow:0 -6px 24px rgba(30,16,51,.18)}
 @media(max-width:768px){
   body:has(.home-layout){padding-bottom:5rem}
-  .media-bottom-nav{position:fixed;display:flex;left:0;right:0;bottom:0;z-index:1000;justify-content:space-around;gap:.25rem;padding:.5rem;background:var(--sidebar-bg);border-top:1px solid var(--sidebar-border);box-shadow:0 -2px 12px rgba(0,0,0,.12)}
-  .media-bottom-nav a{flex:1;padding:.45rem .2rem;text-align:center;font-size:var(--font-size-xs);color:var(--sidebar-link-color);text-decoration:none;border-radius:var(--border-radius)}
+  .media-bottom-nav{display:flex}
+  .media-bottom-nav a,.media-bottom-nav .mnav-more{color:var(--sidebar-link-color)}
+  .media-bottom-nav a[aria-current="page"],.media-bottom-nav .mnav-more[aria-expanded="true"]{color:var(--purple-200);background:var(--sidebar-link-hover)}
   .media-bottom-nav a:hover,.media-bottom-nav a:focus{background:var(--sidebar-link-hover)}
   /* Keep the cookie banner clear of the member bottom navigation instead of
      covering it. The nav is ~3rem tall (padding + link padding + xs text). */
-  body:has(.media-bottom-nav) #consent-banner{bottom:calc(3rem + env(safe-area-inset-bottom,0px))}
+  body:has(.media-bottom-nav) #consent-banner{bottom:calc(3.5rem + env(safe-area-inset-bottom,0px))}
   .table-scroll table{min-width:38rem}
 }
 
@@ -176,6 +198,15 @@ table td:nth-child(1) { overflow-wrap: anywhere; word-break: break-word; }
 .g-size-sm .grid .card .card-cover img{height:140px;object-fit:cover}
 .g-size-md .grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
 .g-size-lg .grid{grid-template-columns:repeat(auto-fill,minmax(360px,1fr))}
+/* On a phone the fixed minimum was wider than the screen, so the grid
+   collapsed to ONE column with a huge gutter. minmax(0,1fr) lets the
+   columns shrink to whatever fits. */
+@media(max-width:768px){
+  .g-size-sm .grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  .g-size-md .grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+  .g-size-lg .grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+  .g-view-compact .grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+}
 
 /* Masonry layout */
 .g-masonry .grid{display:columns;column-count:3;column-gap:var(--spacing-md)}
@@ -434,6 +465,142 @@ body.site-compact .home-nav-wrap { flex-basis: 176px; }
 body.site-compact th, body.site-compact td { padding: .28rem .38rem; }
 body.site-compact .title-header img { max-width: 380px; }
 
+/* ---------- Chat ---------------------------------------------------------- */
+
+.chat-page { width: 100%; max-width: none; }
+    .chat-thread { display: flex; flex-direction: column; gap: .3rem; padding: .5rem 0; max-height: 60vh; overflow-y: auto; }
+    .chat-msg { max-width: 78%; padding: 2px 7px; border-radius: 12px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
+    .chat-msg.user { align-self: flex-end; background: var(--purple-600, #9333ea); color: #fff; border-bottom-right-radius: 3px; }
+    .chat-msg.model, .chat-msg.operator { align-self: flex-start; background: var(--pink-100, #fdf2f8); color: var(--purple-900, #4a044e); border: 1px solid var(--pink-300, #f9a8d4); border-bottom-left-radius: 3px; }
+    .chat-msg .who { display: block; font-size: .68rem; opacity: .7; margin-bottom: .05rem; text-transform: uppercase; letter-spacing: .04em; }
+    .chat-msg a.chat-ref { color: inherit; text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
+    .chat-msg.user a.chat-ref { color: #fff; }
+    .chat-msg.model a.chat-ref { color: var(--purple-700, #6b21a8); }
+    .chat-attachment { display: inline-block; margin-top: .45rem; color: inherit; text-decoration: none; font-size: .85rem; }
+    .chat-image { display: block; max-width: 100%; max-height: 420px; width: auto; height: auto; margin-top: .5rem; border-radius: 10px; border: 1px solid rgba(0,0,0,.08); background: #fff; object-fit: contain; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+    .chat-composer { display: flex; gap: .5rem; margin-top: .75rem; }
+    .chat-composer textarea { flex: 1; resize: vertical; }
+    .chat-status { font-size: .8rem; color: var(--text-muted, #888); margin: .5rem 0; }
+
+/* An answered questionnaire field must not be a white box on the dark skin. */
+.chat-answer{background:var(--pink-100)!important;color:var(--card-text-color)!important}
+
+/* ---------- Age gate ------------------------------------------------------ */
+
+.age-gate{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;background:linear-gradient(160deg,#2a1240,#4a1d5f 55%,#7e1d4f);color:#fff;}
+    .age-gate-panel{max-width:480px;width:100%;text-align:center;background:#fff;color:#1e1b2e;border-radius:var(--border-radius-lg);padding:2rem;box-shadow:0 24px 60px rgba(0,0,0,.45);}
+    .age-gate-panel h1{margin:0 0 .35rem;font-size:1.5rem;}
+    .age-gate-logos{font-variant:small-caps;letter-spacing:.12em;color:#8b5ab5;font-size:.8rem;margin:0 0 .5rem;}
+    .age-gate-panel p{margin:.5rem 0 1.25rem;color:#5a4d6b;}
+    .age-gate-panel .thin-link{color:#8b5ab5;text-decoration:underline;}
+    .age-gate-panel .btn{margin:.2rem .25rem;}
+/* While an admin is impersonating a member the title image is hidden.
+   This rule used to live in a conditional <style> block in the layout. */
+body.impersonating .title-header { display: none; }
+
+/* ---------- Live stream ------------------------------------------------------ */
+
+.live-page { width: 100%; max-width: none; }
+    .live-top { display: flex; align-items: center; gap: .6rem; margin-bottom: .75rem; }
+    .live-top h1 { margin: 0; }
+    .live-badge { display: inline-block; padding: .15rem .6rem; border-radius: 999px; font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .live-badge.on { background: #dc2626; color: #fff; }
+    .live-badge.off { background: var(--card-border, #ddd); color: var(--text-muted, #888); }
+    .live-grid { display: grid; grid-template-columns: 1fr 320px; gap: 1rem; align-items: start; }
+    @media (max-width: 860px) { .live-grid { grid-template-columns: 1fr; } }
+    .live-player-wrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: var(--card-radius, 8px); overflow: hidden; }
+    .live-player-wrap video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+    .live-offline { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-muted, #888); text-align: center; padding: 2rem; }
+    .live-paused { position: absolute; inset: 0; display: none; place-items: center; background: rgba(0,0,0,.55); color: #fff; text-align: center; padding: 2rem; font-size: 1.05rem; backdrop-filter: blur(2px); z-index: 2; }
+    .live-grid:fullscreen { background: #000; position: relative; }
+    .live-grid:fullscreen .live-player-wrap {
+        width: 100% !important;
+        height: 100% !important;
+        aspect-ratio: auto;
+        max-height: none;
+        margin: 0;
+        border-radius: 0;
+    }
+    .live-grid:fullscreen .live-chat {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 300px;
+        max-width: 70vw;
+        max-height: none;
+        border: 0;
+        background: transparent;
+        color: #fff;
+    }
+    .live-grid:fullscreen .live-chat h2 { color: #fff; border-bottom-color: rgba(255,255,255,.35); }
+    .live-grid:fullscreen .live-chat-msg .who { color: #ffd0e8; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+    .live-grid:fullscreen .live-chat-msg { text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+    .live-grid:fullscreen .live-chat-msg .when { color: rgba(255,255,255,.8); }
+    .live-grid:fullscreen .live-chat-form { border-top-color: rgba(255,255,255,.35); }
+    @media (max-width: 860px) {
+        .live-grid:fullscreen .live-chat {
+            left: 0;
+            right: 0;
+            top: auto;
+            bottom: 0;
+            width: 100%;
+            max-width: none;
+            height: 38vh;
+        }
+    }
+    .live-chat { display: flex; flex-direction: column; height: 100%; max-height: 60vh; border: 1px solid var(--card-border, #ddd); border-radius: var(--card-radius, 8px); background: var(--card-bg, #fff); overflow: hidden; }
+    .live-chat h2 { margin: 0; padding: .6rem .8rem; font-size: .95rem; border-bottom: 1px solid var(--card-border, #eee); }
+    .live-chat-messages { flex: 1; overflow-y: auto; padding: .6rem .8rem; display: flex; flex-direction: column; gap: .35rem; }
+    .live-chat-msg { font-size: .9rem; line-height: 1.35; word-wrap: break-word; }
+    .live-chat-msg .who { font-weight: 700; color: var(--purple-700, #6b21a8); }
+    .live-chat-msg.operator .who { color: #dc2626; }
+    .live-chat-msg .when { color: var(--text-muted, #999); font-size: .72rem; margin-left: .3rem; }
+    .live-chat-form { display: flex; gap: .4rem; padding: .6rem .8rem; border-top: 1px solid var(--card-border, #eee); }
+    .live-chat-form input { flex: 1; }
+    .live-chat-empty { color: var(--text-muted, #999); font-size: .85rem; text-align: center; padding: 1rem; }
+
+/* ---------- Member dashboard ------------------------------------------------------ */
+
+.dashboard { width: 100%; margin: 0; }
+    .dashboard-intro { display: flex; justify-content: space-between; gap: var(--spacing-lg); align-items: end; margin-bottom: var(--spacing-lg); }
+    .dashboard-intro h1 { text-align: left; margin: 0 0 var(--spacing-xs); color: var(--purple-900); }
+    .dashboard-intro p { margin: 0; }
+    .membership-banner { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--spacing-lg); align-items: center; padding: clamp(1.25rem, 3vw, 2rem); margin-bottom: var(--spacing-lg); border: var(--input-border-width) solid var(--card-border); border-radius: var(--card-radius); background: var(--card-bg); color: var(--card-text-color); box-shadow: var(--shadow); }
+    .membership-banner h2 { color: var(--card-title-color); text-align: left; margin: 0 0 var(--spacing-xs); }
+    .membership-banner p { margin: var(--spacing-xs) 0 0; color: var(--card-text-color); }
+    .membership-state { text-align: right; }
+    .membership-state strong { display: block; font-size: var(--font-size-xl); }
+    .membership-state small { opacity: .85; }
+    .dashboard-section { margin-top: var(--spacing-xl); }
+    .dashboard-section h2 { text-align: left; margin-bottom: var(--spacing-sm); }
+    .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: var(--spacing-md); }
+    .dashboard-card { height: 100%; box-sizing: border-box; margin: 0; }
+    .dashboard-card h3 { text-align: left; margin: var(--spacing-sm) 0 var(--spacing-xs); color: var(--card-title-color); }
+    .dashboard-card p { margin: var(--spacing-xs) 0; }
+    .dashboard-card img { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--border-radius-sm); display: block; background: var(--card-placeholder-bg); }
+    .dashboard-media-thumb { width: 100%; height: 130px; object-fit: cover; border-radius: var(--border-radius-sm); display: block; background: var(--card-placeholder-bg); }
+    .dashboard-media { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--spacing-md); }
+    .dashboard-media .card { padding: var(--spacing-sm); margin: 0; }
+    .dashboard-media a { text-decoration: none; color: inherit; }
+    .dashboard-media .dashboard-media-thumb { height: 125px; }
+    .dashboard-media-label { display: block; margin-top: var(--spacing-xs); font-size: var(--font-size-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dashboard-empty { padding: var(--spacing-lg); text-align: center; }
+    @media (max-width: 650px) {
+        .dashboard-intro { display: block; }
+        .dashboard-actions { justify-content: start; margin-top: var(--spacing-md); }
+        .membership-banner { grid-template-columns: 1fr; }
+        .membership-state { text-align: left; }
+    }
+
+/* ---------- Membership detail ------------------------------------------------------ */
+
+.membership-history th,.membership-history td{text-align:center}
+
+/* ---------- Card checkout ------------------------------------------------------ */
+
+[data-cc-number].bt-field, [data-cc-exp].bt-field, [data-cc-cvv].bt-field { min-height:38px; }
+
 /* Wall feed — OnlyFans-style notification posts */
 .wall-feed{display:grid;gap:var(--spacing-md)}
 .wall-post{position:relative;border:1px solid var(--card-border);border-radius:var(--border-radius-lg);background:var(--card-bg);box-shadow:var(--shadow);padding:var(--spacing-md) var(--spacing-md) var(--spacing-sm);overflow:hidden}
@@ -519,6 +686,17 @@ body:not(.admin-theme) {
     --btn-danger-bg:        #3b1024;
     --btn-danger-color:     #fecdd3;
     --btn-danger-border:    #f43f5e;
+
+    /* These four are referenced by the member site but were never defined
+       anywhere in the project. An undefined var() in a SHORTHAND (border,
+       background) invalidates the whole declaration, so the homepage's
+       upsell band was rendering with no border and no background at all,
+       and the muted text fell back to inheriting its parent's colour. */
+    --text-muted:           #b79fb4;
+    --text-color:           #f3e7f1;
+    --border:               #45203a;
+    --brand-1:              #9333ea;
+    --brand-2:              #c084fc;
 
     color: #f3e7f1;
     /* A soft amethyst glow instead of a flat fill keeps the page from going dead. */
@@ -847,6 +1025,12 @@ body.site-compact .home-layout { grid-template-columns: 224px minmax(0, 1fr); }
     .rail-identity,
     .rail-foot,
     .rail-main { display: none; }
+
+    /* A GUEST has no bottom bar (it is member-only), so their identity block
+       - the only "Sign in or join" they get - must stay. Without it a guest on
+       a phone had no navigation and no way to log in at all. */
+    .rail-identity.rail-guest { display: flex; }
+    .rail-identity.rail-guest .rail-identity-text small a { color: var(--sidebar-active-color); text-decoration: underline; }
 
     .rail-scroll {
         display: flex;

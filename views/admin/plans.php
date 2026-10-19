@@ -1,36 +1,5 @@
 <?php $title = 'Plans'; ?>
 
-<style>
-    .sales-panel { margin-top: 2rem; padding: 1.25rem; background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: var(--border-radius-lg); }
-    .sales-panel-header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
-    .sales-panel-header h2 { margin: 0; }
-    .sale-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem 1rem; }
-    .sale-form-grid label { display: block; color: var(--purple-800); font-size: var(--font-size-sm); }
-    .sale-form-grid input, .sale-form-grid select { width: 100%; box-sizing: border-box; margin-top: .25rem; }
-    .sale-form-wide { grid-column: 1 / -1; }
-    .sales-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-top: 1rem; }
-    .promotion-code-tiles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
-    .sale-card { padding: 1rem; background: var(--card-bg); border: var(--input-border-width) solid var(--card-border); border-radius: var(--card-radius); box-shadow: var(--shadow); color: var(--card-text-color); }
-    .sale-card.inactive { opacity: .62; }
-    .sale-card h3 { margin: 0 0 .35rem; color: var(--card-title-color); }
-    .sale-price { font-size: 1.35rem; font-weight: bold; color: var(--purple-900); }
-    .sale-meta { margin: .5rem 0; color: var(--card-text-color); font-size: var(--font-size-sm); line-height: 1.6; }
-    .sale-code { display: inline-block; padding: .15rem .4rem; background: var(--filter-bg); border: var(--input-border-width) solid var(--filter-border); border-radius: var(--border-radius-sm); color: var(--filter-color); font-weight: bold; }
-    .promotion-code-card { background: var(--promo-card-bg); border-color: var(--promo-card-border); }
-    .promotion-code-card { position: relative; overflow: hidden; }
-    .promotion-code-card h3 { color: var(--promo-card-title); margin: 0; font-size: var(--font-size-lg); }
-    .promotion-code-card .sale-meta { color: var(--promo-card-text); }
-    .promotion-code-header { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
-    .promotion-code-status { padding: .2rem .5rem; border-radius: var(--chip-radius); background: var(--promo-code-bg); color: var(--promo-code-color); font-size: var(--font-size-xs); font-weight: bold; white-space: nowrap; }
-    .promotion-code-value { display: block; padding: .65rem .75rem; margin-bottom: .75rem; background: var(--promo-code-bg); border: var(--input-border-width) dashed var(--promo-code-border); border-radius: var(--border-radius); color: var(--promo-code-color); font-family: monospace; font-size: var(--font-size-lg); font-weight: bold; letter-spacing: .08em; text-align: center; }
-    .promotion-code-benefits { display: flex; flex-wrap: wrap; gap: .4rem; margin: .65rem 0; }
-    .promotion-code-benefit { padding: .25rem .5rem; border: var(--input-border-width) solid var(--promo-card-border); border-radius: var(--chip-radius); color: var(--promo-card-text); font-size: var(--font-size-xs); }
-    .promotion-code-usage { margin-top: .75rem; color: var(--promo-card-text); font-size: var(--font-size-xs); }
-    .promotion-code-meter { height: 6px; margin-top: .3rem; overflow: hidden; background: var(--promo-code-bg); border-radius: 999px; }
-    .promotion-code-meter span { display: block; height: 100%; background: var(--promo-code-border); border-radius: inherit; }
-    @media (max-width: 640px) { .sale-form-grid { grid-template-columns: 1fr; } .sale-form-wide { grid-column: auto; } }
-</style>
-
 <h2>Plans</h2>
 <?php if (empty($plans)): ?>
     <p>No plans yet.</p>

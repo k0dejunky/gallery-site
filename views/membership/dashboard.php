@@ -14,39 +14,6 @@ $billingLabels = [
 ];
 ?>
 
-<style>
-    .dashboard { width: 100%; margin: 0; }
-    .dashboard-intro { display: flex; justify-content: space-between; gap: var(--spacing-lg); align-items: end; margin-bottom: var(--spacing-lg); }
-    .dashboard-intro h1 { text-align: left; margin: 0 0 var(--spacing-xs); color: var(--purple-900); }
-    .dashboard-intro p { margin: 0; }
-    .membership-banner { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--spacing-lg); align-items: center; padding: clamp(1.25rem, 3vw, 2rem); margin-bottom: var(--spacing-lg); border: var(--input-border-width) solid var(--card-border); border-radius: var(--card-radius); background: var(--card-bg); color: var(--card-text-color); box-shadow: var(--shadow); }
-    .membership-banner h2 { color: var(--card-title-color); text-align: left; margin: 0 0 var(--spacing-xs); }
-    .membership-banner p { margin: var(--spacing-xs) 0 0; color: var(--card-text-color); }
-    .membership-state { text-align: right; }
-    .membership-state strong { display: block; font-size: var(--font-size-xl); }
-    .membership-state small { opacity: .85; }
-    .dashboard-section { margin-top: var(--spacing-xl); }
-    .dashboard-section h2 { text-align: left; margin-bottom: var(--spacing-sm); }
-    .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: var(--spacing-md); }
-    .dashboard-card { height: 100%; box-sizing: border-box; margin: 0; }
-    .dashboard-card h3 { text-align: left; margin: var(--spacing-sm) 0 var(--spacing-xs); color: var(--card-title-color); }
-    .dashboard-card p { margin: var(--spacing-xs) 0; }
-    .dashboard-card img { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--border-radius-sm); display: block; background: var(--card-placeholder-bg); }
-    .dashboard-media-thumb { width: 100%; height: 130px; object-fit: cover; border-radius: var(--border-radius-sm); display: block; background: var(--card-placeholder-bg); }
-    .dashboard-media { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--spacing-md); }
-    .dashboard-media .card { padding: var(--spacing-sm); margin: 0; }
-    .dashboard-media a { text-decoration: none; color: inherit; }
-    .dashboard-media .dashboard-media-thumb { height: 125px; }
-    .dashboard-media-label { display: block; margin-top: var(--spacing-xs); font-size: var(--font-size-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .dashboard-empty { padding: var(--spacing-lg); text-align: center; }
-    @media (max-width: 650px) {
-        .dashboard-intro { display: block; }
-        .dashboard-actions { justify-content: start; margin-top: var(--spacing-md); }
-        .membership-banner { grid-template-columns: 1fr; }
-        .membership-state { text-align: left; }
-    }
-</style>
-
 <div class="dashboard">
     <div class="dashboard-intro">
          <div>

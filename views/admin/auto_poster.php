@@ -532,62 +532,6 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
 </div>
 
 <?php // ----- Posting log (scoped to this platform) ----- ?>
-<style>
-    .ap-log { margin-top: 1rem; }
-    .ap-log-card { background: var(--pink-100); border: 1px solid var(--pink-300); border-radius: 10px; overflow: hidden; }
-    .ap-log-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; padding: .85rem 1.1rem; border-bottom: 1px solid var(--pink-300); }
-    .ap-log-head h2 { margin: 0; font-size: 1.05rem; color: var(--purple-800); border: 0; padding: 0; }
-    .ap-log-summary { font-size: .8rem; color: var(--purple-700); }
-    .ap-log-empty { padding: 1.25rem 1.1rem; font-size: .9rem; color: var(--purple-800); opacity: .75; }
-    .ap-log details.ap-log-card > summary { cursor: pointer; list-style: none; user-select: none; }
-    .ap-log details.ap-log-card > summary::-webkit-details-marker { display: none; }
-    .ap-log details.ap-log-card > summary::after { content: '▾'; margin-left: auto; font-size: .8rem; color: var(--purple-600); transition: transform .15s ease; }
-    .ap-log details.ap-log-card:not([open]) > summary::after { transform: rotate(-90deg); }
-    .ap-log-body { border-top: 1px solid var(--pink-300); }
-    .ap-log .ap-table { width: 100%; border-collapse: collapse; }
-    .ap-log .ap-table th { text-align: left; padding: .5rem .75rem; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--purple-700); border-bottom: 2px solid var(--pink-300); white-space: nowrap; }
-    .ap-log .ap-table td { padding: .6rem .75rem; border-bottom: 1px solid rgba(244,114,182,.25); vertical-align: middle; font-size: .88rem; color: var(--purple-800); }
-    .ap-log .ap-table tr:last-child td { border-bottom: 0; }
-    .ap-log .ap-table tbody tr:hover { background: rgba(244,114,182,.10); }
-    .ap-time { white-space: nowrap; font-variant-numeric: tabular-nums; }
-    .ap-time-relative { display: block; font-weight: 600; }
-    .ap-time-absolute { font-size: .78rem; opacity: .7; }
-    .ap-pill { display: inline-flex; align-items: center; gap: .35rem; padding: .18rem .6rem; border-radius: 999px; font-size: .72rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; line-height: 1.3; }
-    .ap-pill .ap-dot { width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; opacity: .9; }
-    .ap-pill-success, .ap-pill-info { color: #1d7a3a; background: rgba(29,122,58,.12); }
-    .ap-pill-failed, .ap-pill-error { color: #b3261e; background: rgba(179,38,30,.12); }
-    .ap-pill-pending { color: #92400e; background: rgba(146,64,14,.12); }
-    .ap-target { font-weight: 600; }
-    .ap-msg { overflow-wrap: anywhere; }
-    .ap-msg a.ap-link { color: var(--purple-700); text-decoration: none; font-weight: 600; }
-    .ap-msg a.ap-link:hover { text-decoration: underline; }
-    .ap-msg .ap-err { color: #b3261e; }
-    .ap-rec-grid { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: .6rem; }
-    .ap-rec-card { border: 1px solid var(--border,#e5e7eb); border-radius: .5rem; padding: .5rem; display: flex; flex-direction: column; gap: .4rem; background: #fff; min-width: 0; }
-    .ap-rec-thumb { aspect-ratio: 16/9; border-radius: 4px; overflow: hidden; background: #f3f4f6; }
-    .ap-rec-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .ap-rec-title { font-weight: 600; font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ap-rec-sub { font-size: .72rem; }
-    .ap-rec-form { display: flex; flex-direction: column; gap: .35rem; font-size: .78rem; }
-    .ap-rec-form textarea { width: 100%; box-sizing: border-box; font-size: .75rem; color: #374151; background: #fff; padding: .35rem .4rem; border-radius: 4px; border: 1px solid #d1d5db; resize: vertical; }
-    .ap-rec-count { font-size: .68rem; text-align: right; }
-    .ap-rec-form input[type="datetime-local"] { width: 100%; box-sizing: border-box; font-size: .75rem; padding: .15rem .25rem; border: 1px solid #d1d5db; border-radius: 4px; }
-    .ap-rec-actions { display: flex; gap: .3rem; flex-wrap: wrap; }
-    .ap-rec-actions .btn { flex: 1 1 auto; font-size: .72rem; padding: .25rem .4rem; margin: 0; }
-    .ap-rec-post { background: #0ea5e9 !important; color: #fff !important; }
-    .ap-rec-pager { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
-    .ap-rec-pager .btn { margin: 0 .2rem .2rem 0; }
-    .ap-rec-loading { opacity: .5; pointer-events: none; transition: opacity .15s; }
-    @media (max-width: 1500px) { .ap-rec-grid { grid-template-columns: repeat(5, minmax(0,1fr)); } }
-    @media (max-width: 1100px) { .ap-rec-grid { grid-template-columns: repeat(3, minmax(0,1fr)); } }
-    @media (max-width: 640px)  { .ap-rec-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
-    @media (max-width: 600px) {
-        .ap-log .ap-table th { display: none; }
-        .ap-log .ap-table, .ap-log .ap-table tbody, .ap-log .ap-table tr, .ap-log .ap-table td { display: block; width: 100%; }
-        .ap-log .ap-table tr { padding: .5rem .75rem; border-bottom: 1px solid rgba(244,114,182,.25); }
-        .ap-log .ap-table td { border: 0; padding: .15rem .75rem; }
-    }
-</style>
 <div class="stats-panel ap-log">
     <details class="ap-log-card" open>
         <summary class="ap-log-head">

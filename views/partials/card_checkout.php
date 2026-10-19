@@ -40,8 +40,8 @@ foreach (\App\Models\PaymentProcessor::enabled() as $__pp) {
             <input type="hidden" name="payment_method_nonce" data-cc-nonce>
             <?php if ($ccAmountInput): ?>
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem;">
-                    <input type="number" step="0.01" min="0.01" name="amount" value="<?= (float) $ccAmount > 0 ? e($ccAmount) : '' ?>" placeholder="Amount" style="width:130px;" required>
-                    <input type="text" name="note" placeholder="Add a note" maxlength="500" required style="flex:1;min-width:180px;">
+                    <input type="number" step="0.01" min="0.01" name="amount" value="<?= (float) $ccAmount > 0 ? e($ccAmount) : '' ?>" placeholder="Amount" aria-label="Amount in dollars" style="width:130px;" required>
+                    <input type="text" name="note" placeholder="Add a note" aria-label="Note" maxlength="500" required style="flex:1;min-width:180px;">
                 </div>
             <?php endif; ?>
             <?php if ($btLive): ?>
@@ -66,7 +66,6 @@ foreach (\App\Models\PaymentProcessor::enabled() as $__pp) {
     <?php endif; ?>
 </div>
 <?php if ($ccUser && !empty($ccAction)): ?>
-<style>[data-cc-number].bt-field, [data-cc-exp].bt-field, [data-cc-cvv].bt-field { min-height:38px; }</style>
 <script nonce="<?= csp_nonce() ?>">
 (function () {
     var root = document.getElementById('cc-<?= e($ccId) ?>');

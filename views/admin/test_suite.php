@@ -1,30 +1,4 @@
 $title = 'Test Suite';
-<style>
-    .test-hero { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
-    .test-tools { display: flex; gap: .5rem; align-items: center; }
-    .test-progressbar { height: .5rem; background: var(--filter-bg); border-radius: 999px; overflow: hidden; width: 100%; max-width: 360px; }
-    .test-progressbar span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--purple-600), var(--pink-500)); transition: width .4s ease; }
-    .test-summary { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; color: var(--muted-text-color); font-size: .9rem; }
-    .test-summary b { margin-right: .25rem; }
-    .status-badge.ts-passed { background: #166534; color: #fff; }
-    .status-badge.ts-failed { background: #991b1b; color: #fff; }
-    .status-badge.ts-running { background: #7c3aed; color: #fff; }
-    .status-badge.ts-pending { background: #e5e7eb; color: #1f2937; }
-    .detail-cell { color: var(--muted-text-color); font-size: .82rem; overflow-wrap: anywhere; }
-    .test-group-head, .ts-group > summary { display: flex; align-items: center; gap: .5rem; padding: .6rem .9rem; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--card-radius); cursor: pointer; }
-    .ts-group > summary::-webkit-details-marker { display: none; }
-    .ts-group > summary::before { content: '▸'; display: inline-block; transition: transform .15s ease; color: var(--purple-500); }
-    .ts-group[open] > summary::before { transform: rotate(90deg); }
-    .test-group-head .g-count, .ts-group > summary .g-count { margin-left: auto; font-size: .82rem; color: var(--muted-text-color); }
-    .check-col { width: 2.2rem; text-align: center; }
-    .ts-none { margin-top: 1rem; }
-    .test-runs { margin-top: 1.5rem; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    #ts-runs-table tbody tr { cursor: pointer; }
-    #ts-runs-table tbody tr:hover { background: var(--filter-hover-bg); }
-    #ts-runs-table tbody tr.ts-run-selected { outline: 2px solid var(--purple-500); outline-offset: -2px; }
-    .ts-viewing { margin-bottom: 1rem; font-size: .9rem; color: var(--muted-text-color); }
-</style>
 
 <div class="test-hero">
     <div class="test-tools">

@@ -1,15 +1,5 @@
 <?php $title = 'Create Video Gallery from Export'; ?>
 
-<style>
-    .gallery-create-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; text-align: left; max-width: 1200px; margin: 0 auto; }
-    .gallery-create-grid input[type="text"], .gallery-create-grid textarea { width: 100%; box-sizing: border-box; }
-    .gallery-create-actions { grid-column: 1 / -1; text-align: center; margin-top: 0.5rem; }
-    @media (max-width: 600px) { .gallery-create-grid { grid-template-columns: 1fr; } }
-    .export-preview-card { background: var(--card-bg, #f4f4f4); border: var(--input-border-width, 1px) solid var(--card-border, #ddd); border-radius: var(--border-radius, 6px); padding: 1rem; margin-bottom: 1.5rem; text-align: center; }
-    .export-preview-card video { display: block; max-width: 100%; max-height: 300px; margin: 0 auto 0.75rem; border-radius: var(--border-radius, 6px); background: #000; }
-    .export-preview-card .muted { font-size: var(--font-size-sm, 0.85rem); }
-</style>
-
 <form method="post" action="<?= url('/admin/video-exports/' . (int) $export['id'] . '/create-gallery') ?>">
     <?= csrf_field() ?>
 

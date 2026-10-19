@@ -324,6 +324,82 @@
   });
 })();
 
+/* Modal focus management.
+ *
+ * The age gate and the member-onboarding card are real dialogs: they take
+ * focus, keep it (Tab cycles inside instead of wandering into the page
+ * behind them), close on Escape where that makes sense, and put the rest of
+ * the document out of reach with `inert` so a screen reader does not read the
+ * page underneath.
+ */
+(function(){
+  function focusables(root){
+    return Array.prototype.slice.call(
+      root.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])')
+    ).filter(function(el){ return el.offsetParent !== null; });
+  }
+
+  function trap(container, e){
+    if(e.key!=='Tab') return;
+    var items=focusables(container);
+    if(!items.length){ e.preventDefault(); return; }
+    var first=items[0], last=items[items.length-1];
+    if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+  }
+
+  /* Everything outside an open modal is inert: not focusable, not read out. */
+  function setBackgroundInert(on, keep){
+    var children=Array.prototype.slice.call(document.body.children);
+    children.forEach(function(el){
+      if(el===keep) return;
+      if(el.tagName==='SCRIPT'||el.tagName==='STYLE') return;
+      if('inert' in HTMLElement.prototype){ el.inert=on; }
+      else if(on){ el.setAttribute('aria-hidden','true'); }
+      else { el.removeAttribute('aria-hidden'); }
+    });
+  }
+
+  function initAgeGate(){
+    var gate=document.querySelector('.age-gate');
+    if(!gate) return;
+    setBackgroundInert(true, gate);
+    var first=focusables(gate)[0];
+    if(first) first.focus();
+    gate.addEventListener('keydown', function(e){ trap(gate, e); });
+  }
+
+  function initOnboarding(){
+    var prompt=document.getElementById('member-onboarding');
+    if(!prompt)return;
+    // The age gate and the onboarding never appear together (one is for
+    // guests, the other for members), but if they ever did, the second one
+    // would make the first inert.
+    if(document.querySelector('.age-gate')) return;
+    var key='galleryMemberOnboardingDismissed';
+    try{if(localStorage.getItem(key)==='1')return;}catch(e){}
+    prompt.hidden=false;
+    setBackgroundInert(true, prompt);
+    var dismiss=prompt.querySelector('[data-dismiss-onboarding]');
+    if(dismiss) dismiss.focus();
+    prompt.addEventListener('keydown', function(e){
+      if(e.key==='Escape'&&dismiss){ dismiss.click(); return; }
+      trap(prompt, e);
+    });
+    if(dismiss) dismiss.addEventListener('click', function(){
+      prompt.hidden=true;
+      setBackgroundInert(false, null);
+      try{localStorage.setItem(key,'1');}catch(e){}
+    });
+  }
+
+  function init(){
+    initAgeGate();
+    initOnboarding();
+  }
+  if(document.readyState!=='loading'){ init(); } else { document.addEventListener('DOMContentLoaded', init); }
+})();
+
 /* Gallery card expand/collapse details */
 (function(){
   document.addEventListener('DOMContentLoaded',function(){
