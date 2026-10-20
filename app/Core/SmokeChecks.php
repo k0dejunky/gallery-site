@@ -1592,6 +1592,44 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.rules_not_stranded', 'Smoke · UI', 'A rule that every layout needs is not stranded in a media query', static function () use ($root, $ok, $bad): array {
+            // .collection-order (the reorder buttons on a collection) was
+            // defined INSIDE the phone media query, so on a desktop the
+            // up/down buttons had no layout at all. A rule that a layout
+            // needs at every width has to be at the top level.
+            $must = [
+                '.collection-order' => 'public/assets/css/user.css',
+            ];
+            $problems = [];
+            foreach ($must as $selector => $file) {
+                $css = (string) @file_get_contents($root . '/' . $file);
+                if ($css === '') {
+                    $problems[] = $file . ' could not be read';
+                    continue;
+                }
+                $at = strpos($css, $selector . '{');
+                if ($at === false) {
+                    $problems[] = $selector . ' is not defined in ' . $file;
+                    continue;
+                }
+                // The brace depth at that point: 0 means the rule is at the
+                // top level, anything deeper means it is inside an @media
+                // or @supports block.
+                $depth = 0;
+                for ($i = 0; $i < $at; $i++) {
+                    if ($css[$i] === '{') { $depth++; }
+                    elseif ($css[$i] === '}') { $depth--; }
+                }
+                if ($depth !== 0) {
+                    $problems[] = $selector . ' is defined inside a nested block in ' . $file
+                        . ', so it does not apply at every width';
+                }
+            }
+            return $problems === []
+                ? $ok('the rules every layout needs are at the top level')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).
