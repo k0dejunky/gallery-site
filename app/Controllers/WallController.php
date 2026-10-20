@@ -26,7 +26,15 @@ class WallController extends Controller
         Auth::requireLogin();
 
         $user  = Auth::user();
-        $posts = WallPost::allPublished(30);
+
+        // The wall is a feed: it is paged so the older posts are reachable
+        // instead of stopping at the newest 30.
+        $perPage = 20;
+        $total   = WallPost::countPublished();
+        $pages   = max(1, (int) ceil($total / $perPage));
+        $page    = max(1, min($pages, (int) $this->request->query('page', 1)));
+
+        $posts = WallPost::allPublished($perPage, ($page - 1) * $perPage);
 
         $galleryIds = [];
         foreach ($posts as $post) {
@@ -65,6 +73,8 @@ class WallController extends Controller
             'notifications' => $notifications,
             'unreadIds'     => $unreadIds ?? [],
             'sidebarNav'    => true,
+            'paginator'     => ['page' => $page, 'pages' => $pages, 'total' => $total],
+            'baseUrl'       => url('/wall'),
         ]);
     }
 

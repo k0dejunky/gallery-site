@@ -196,6 +196,9 @@
             </details>
         </section>
     <?php endforeach; ?>
+
+    <?php // The wall is paged, so the older posts are reachable. ?>
+    <?php require __DIR__ . '/partials/pagination.php'; ?>
 <?php endif; ?>
 
 <?php if (\App\Core\Auth::user() === null): ?>

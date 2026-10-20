@@ -11,14 +11,27 @@ use App\Core\Database;
  */
 class WallPost
 {
-    public static function allPublished(int $limit = 30): array
+    /**
+     * A page of the wall feed, newest first (pinned posts stay on top).
+     */
+    public static function allPublished(int $limit = 30, int $offset = 0): array
     {
         return Database::run(
             'SELECT * FROM wall_posts
              WHERE deleted_at IS NULL
              ORDER BY pinned DESC, created_at DESC, id DESC
-             LIMIT ' . max(1, (int) $limit)
+             LIMIT ' . max(1, (int) $limit) . ' OFFSET ' . max(0, (int) $offset)
         )->fetchAll();
+    }
+
+    /**
+     * How many posts the wall has, so the feed can be paged.
+     */
+    public static function countPublished(): int
+    {
+        return (int) Database::run(
+            'SELECT COUNT(*) FROM wall_posts WHERE deleted_at IS NULL'
+        )->fetchColumn();
     }
 
     public static function find(int $id): ?array

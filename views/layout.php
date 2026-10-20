@@ -230,8 +230,7 @@ if (!empty($_SESSION['impersonator_id'])) {
                      'active' => strpos($currentPath, url('/galleries')) === 0],
                     ['key' => 'pub-favorites', 'label' => 'Favorites', 'href' => '/favorites', 'icon' => 'heart',
                      'active' => strpos($currentPath, url('/favorites')) === 0,
-                     'badge' => ($user !== null && !\App\Core\Auth::hasActiveSubscription())
-                        ? '<span class="nav-gated" title="Favorites require a Silver or higher membership">Silver</span>' : ''],
+                     'gate' => ($user !== null && !\App\Core\Auth::hasActiveSubscription()) ? 'Silver' : ''],
                     ['key' => 'pub-collections', 'label' => 'Collections', 'href' => '/collections', 'icon' => 'book',
                      'active' => strpos($currentPath, url('/collections')) === 0],
                 ],
@@ -241,12 +240,14 @@ if (!empty($_SESSION['impersonator_id'])) {
                 'items' => [
                     ['key' => 'pub-wall', 'label' => 'Wall', 'href' => '/wall', 'icon' => 'users',
                      'active' => strpos($currentPath, url('/wall')) === 0,
-                     'badge' => $navWallUnread > 0 ? '<span class="nav-unread" aria-label="' . (int) $navWallUnread . ' unread notifications">' . (int) $navWallUnread . '</span>' : ''],
+                     'badge' => $navWallUnread > 0 ? $navWallUnread : 0,
+                     'badgeLabel' => 'unread notifications'],
                     ['key' => 'pub-chat', 'label' => 'Chat', 'href' => '/chat', 'icon' => 'chat', 'show' => $user !== null,
                      'active' => strpos($currentPath, url('/chat')) === 0,
                      // canChat() needs a real user row, so this must not run for guests.
                      'badge' => ($user !== null && \App\Models\ChatMessage::canChat((int) $user['id']) && !empty($chatUnreadCount))
-                        ? '<span class="nav-unread" aria-label="' . (int) $chatUnreadCount . ' unread replies">' . (int) $chatUnreadCount . '</span>' : ''],
+                         ? (int) $chatUnreadCount : 0,
+                     'badgeLabel' => 'unread replies'],
                     ['key' => 'pub-live', 'label' => 'Live', 'href' => '/live', 'icon' => 'broadcast',
                      'show' => $user !== null && \App\Core\Auth::hasActiveSubscription(),
                      'active' => strpos($currentPath, url('/live')) === 0],
@@ -259,13 +260,51 @@ if (!empty($_SESSION['impersonator_id'])) {
                      'active' => strpos($currentPath, url('/membership')) === 0],
                     ['key' => 'pub-support', 'label' => 'Support', 'href' => '/support', 'icon' => 'lifebuoy',
                      'active' => strpos($currentPath, url('/support')) === 0,
-                     'badge' => !empty($supportUnreadCount) ? '<span class="nav-unread" aria-label="' . (int) $supportUnreadCount . ' unread replies">' . (int) $supportUnreadCount . '</span>' : ''],
+                     'badge' => !empty($supportUnreadCount) ? (int) $supportUnreadCount : 0,
+                     'badgeLabel' => 'unread replies'],
                     ['key' => 'pub-settings', 'label' => 'Settings', 'href' => '/settings', 'icon' => 'sliders',
                      'active' => strpos($currentPath, url('/settings')) === 0],
                     ['key' => 'pub-admin', 'label' => 'Admin', 'href' => '/admin', 'icon' => 'server',
                      'show' => $user !== null && \App\Core\Auth::isAdmin()],
                 ],
             ],
+        ];
+
+        // The phone's bottom bar used to be a second, hand-written copy of the
+        // nav (its own labels, icons and active flags), so a change had to be
+        // made twice and the two drifted apart. It is now derived from the
+        // rail's definition: the primary entries are picked by key, and
+        // everything else goes into the "More" sheet.
+        $navByKey = [];
+        foreach ($railGroups as $group) {
+            foreach ($group['items'] as $item) {
+                if (isset($item['show']) && !$item['show']) { continue; }
+                $navByKey[$item['key']] = $item;
+            }
+        }
+
+        $bottomPrimaryKeys = ['pub-galleries', 'pub-wall', 'pub-chat', 'pub-collections'];
+        $bottomPrimary = [];
+        $bottomMore    = [];
+        foreach ($bottomPrimaryKeys as $key) {
+            if (isset($navByKey[$key])) {
+                $bottomPrimary[] = $navByKey[$key];
+            }
+        }
+        foreach ($navByKey as $key => $item) {
+            if (!in_array($key, $bottomPrimaryKeys, true)) {
+                $bottomMore[] = $item;
+            }
+        }
+
+        // A guest has no account pages, so their nav is short: the galleries
+        // and the two things they can do. The guest identity block and the
+        // guest bottom bar both read this list, so there is one of them.
+        $guestNavItems = [
+            ['key' => 'pub-galleries', 'label' => 'Galleries', 'href' => '/galleries', 'icon' => 'image',
+             'active' => strpos($currentPath, url('/galleries')) === 0],
+            ['key' => 'pub-signin', 'label' => 'Sign in', 'href' => '/login', 'icon' => 'user'],
+            ['key' => 'pub-join', 'label' => 'Join', 'href' => '/signup', 'icon' => 'plus'],
         ];
         ?>
         <nav class="home-nav-actions user-nav" aria-label="Site menu">
@@ -283,7 +322,7 @@ if (!empty($_SESSION['impersonator_id'])) {
                     <span class="rail-avatar" aria-hidden="true">?</span>
                     <span class="rail-identity-text">
                         <strong>Guest</strong>
-                        <small><a href="<?= url('/login') ?>">Sign in</a> or <a href="<?= url('/signup') ?>">join</a></small>
+                        <small><a href="<?= url($guestNavItems[1]['href']) ?>">Sign in</a> or <a href="<?= url($guestNavItems[2]['href']) ?>">join</a></small>
                     </span>
                 </div>
             <?php endif; ?>
@@ -295,7 +334,13 @@ if (!empty($_SESSION['impersonator_id'])) {
                         <?php if (isset($item['show']) && !$item['show']) { continue; } ?>
                         <a class="nav-item<?= $item['active'] ? ' active' : '' ?>" href="<?= e(url($item['href'])) ?>"
                            data-se-move-key="<?= e($item['key']) ?>"<?= $item['active'] ? ' aria-current="page"' : '' ?>>
-                            <?= $icon($item['icon']) ?><span><?= e($item['label']) ?></span><?= $item['badge'] ?? '' ?>
+                            <?= $icon($item['icon']) ?><span><?= e($item['label']) ?></span>
+                            <?php if (!empty($item['badge'])): ?>
+                                <span class="nav-unread" aria-label="<?= (int) $item['badge'] ?> <?= e($item['badgeLabel'] ?? 'unread') ?>"><?= (int) $item['badge'] ?></span>
+                            <?php endif; ?>
+                            <?php if (!empty($item['gate'])): ?>
+                                <span class="nav-gated" title="Favorites require a Silver or higher membership"><?= e($item['gate']) ?></span>
+                            <?php endif; ?>
                         </a>
                     <?php endforeach; ?>
                 <?php endforeach; ?>
@@ -332,46 +377,37 @@ if (!empty($_SESSION['impersonator_id'])) {
     <?php else: ?>
     <main id="main-content"><?php echo $content; ?></main>
     <?php endif; ?>
-    <?php if ($sidebarNav && $user !== null): ?>
+    <?php if ($sidebarNav): ?>
     <?php
     // The phone's bottom bar. It used to be nine text-only links at ~10.9px,
     // which did not fit on a 360px screen, and it had no icons, no
     // aria-current and no Chat. It is now five icon buttons plus a "More"
-    // sheet that holds everything else.
-    $bottomPrimary = [
-        ['href' => '/galleries',   'label' => 'Galleries',   'icon' => 'image',  'active' => strpos($currentPath, url('/galleries')) === 0],
-        ['href' => '/wall',        'label' => 'Wall',        'icon' => 'heart',  'active' => strpos($currentPath, url('/wall')) === 0,
-         'badge' => $navWallUnread > 0 ? (string) $navWallUnread : ''],
-        ['href' => '/chat',        'label' => 'Chat',        'icon' => 'chat',   'active' => strpos($currentPath, url('/chat')) === 0],
-        ['href' => '/collections', 'label' => 'Collections', 'icon' => 'grid',   'active' => strpos($currentPath, url('/collections')) === 0],
-    ];
-    $bottomMore = [
-        ['href' => '/account',    'label' => 'Dashboard',  'icon' => 'grid',     'active' => $currentPath === url('/account')],
-        ['href' => '/favorites',  'label' => 'Favorites',  'icon' => 'heart',    'active' => strpos($currentPath, url('/favorites')) === 0],
-        ['href' => '/membership', 'label' => 'Membership', 'icon' => 'card',     'active' => strpos($currentPath, url('/membership')) === 0],
-        ['href' => '/support',    'label' => 'Support',    'icon' => 'lifebuoy', 'active' => strpos($currentPath, url('/support')) === 0],
-    ];
-    if (\App\Core\Auth::hasActiveSubscription()) {
-        $bottomMore[] = ['href' => '/live', 'label' => 'Live', 'icon' => 'broadcast', 'active' => strpos($currentPath, url('/live')) === 0];
-    }
-    $bottomMore[] = ['href' => '/settings', 'label' => 'Settings', 'icon' => 'sliders', 'active' => strpos($currentPath, url('/settings')) === 0];
+    // sheet that holds everything else - and both are derived from the rail's
+    // definition above, so the nav is written down once.
+    //
+    // A guest gets the bar too: without it they had no navigation at all on
+    // a phone (the rail's guest block is the only thing they had, and it
+    // only appears on the pages that keep the rail).
     ?>
     <nav class="media-bottom-nav" aria-label="Mobile site menu">
-        <?php foreach ($bottomPrimary as $item): ?>
+        <?php foreach ($user !== null ? $bottomPrimary : $guestNavItems as $item): ?>
             <a href="<?= url($item['href']) ?>"<?= !empty($item['active']) ? ' aria-current="page"' : '' ?>>
                 <span class="mnav-ico"><?= $icon($item['icon']) ?></span>
                 <span class="mnav-label"><?= e($item['label']) ?></span>
                 <?php if (!empty($item['badge'])): ?>
-                    <span class="nav-unread" aria-label="<?= (int) $item['badge'] ?> unread"><?= (int) $item['badge'] ?></span>
+                    <span class="nav-unread" aria-label="<?= (int) $item['badge'] ?> <?= e($item['badgeLabel'] ?? 'unread') ?>"><?= (int) $item['badge'] ?></span>
                 <?php endif; ?>
             </a>
         <?php endforeach; ?>
+        <?php if ($user !== null): ?>
         <button type="button" class="mnav-more" data-action="bottomMoreToggle"
                 aria-expanded="false" aria-controls="bottom-more-sheet">
             <span class="mnav-ico"><?= $icon('menu') ?></span>
             <span class="mnav-label">More</span>
         </button>
+        <?php endif; ?>
     </nav>
+    <?php if ($user !== null): ?>
     <div class="media-bottom-sheet" id="bottom-more-sheet" hidden>
         <div class="mbs-head">
             <strong>More</strong>
@@ -397,6 +433,7 @@ if (!empty($_SESSION['impersonator_id'])) {
             </li>
         </ul>
     </div>
+    <?php endif; ?>
     <?php endif; ?>
     <?php if ($user !== null && !\App\Core\Auth::isAdmin()): ?>
     <aside id="member-onboarding" class="member-onboarding" hidden role="dialog" aria-modal="true" aria-labelledby="member-onboarding-title">

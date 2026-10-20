@@ -668,6 +668,102 @@ class SmokeChecks
                 : $bad('the <=768px rules must keep .rail-identity.rail-guest visible, and the rail must offer a sign-in link for guests');
         });
 
+        $add('smoke.ui.nav_single_source', 'Smoke · UI', 'The phone nav is derived from the rail, not written out twice', static function () use ($root, $ok, $bad): array {
+            // The bottom bar used to be a second hand-written copy of the nav
+            // (its own labels, icons and active flags), so a nav change had to
+            // be made twice and the two drifted. It is now taken from the
+            // rail's definition.
+            $layout = (string) @file_get_contents($root . '/views/layout.php');
+            $problems = [];
+            if (strpos($layout, '$bottomPrimaryKeys') === false) {
+                $problems[] = 'the layout must pick the bottom bar\'s primary entries by key';
+            }
+            if (strpos($layout, '$navByKey') === false) {
+                $problems[] = 'the layout must flatten the rail groups into one list';
+            }
+            // A literal entry means somebody wrote the nav out a second time.
+            if (preg_match("/\['href' => '\//", $layout) === 1) {
+                $problems[] = 'the layout still writes nav entries out by hand';
+            }
+            if (strpos($layout, '$guestNavItems') === false) {
+                $problems[] = 'the guest nav must be one list too';
+            }
+            return $problems === []
+                ? $ok('the rail, the phone bar and the guest nav come from one definition')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.ui.guest_bottom_nav', 'Smoke · UI', 'A guest on a phone gets the bottom nav', static function () use ($root, $ok, $bad): array {
+            // The bottom bar was member-only, so a guest browsing the
+            // galleries on a phone had no navigation at all: the listing pages
+            // keep the rail (which hides its links on a phone) and the top
+            // hamburger only exists on the pages that do not.
+            $layout = (string) @file_get_contents($root . '/views/layout.php');
+            $problems = [];
+            if (strpos($layout, '$sidebarNav && $user !== null') !== false) {
+                $problems[] = 'the bottom bar must not be member-only';
+            }
+            if (strpos($layout, '$user !== null ? $bottomPrimary : $guestNavItems') === false) {
+                $problems[] = 'the bottom bar must render the guest entries for a guest';
+            }
+            foreach (['/login', '/signup'] as $href) {
+                if (strpos($layout, "'href' => '" . $href . "'") === false) {
+                    $problems[] = 'the guest nav must offer ' . $href;
+                }
+            }
+            return $problems === []
+                ? $ok('a guest gets Galleries, Sign in and Join in the phone nav')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.ui.wall_paginated', 'Smoke · UI', 'The wall feed is paged, so the older posts are reachable', static function () use ($root, $ok, $bad): array {
+            $controller = (string) @file_get_contents($root . '/app/Controllers/WallController.php');
+            $model     = (string) @file_get_contents($root . '/app/Models/WallPost.php');
+            $view      = (string) @file_get_contents($root . '/views/wall.php');
+            $problems = [];
+            if (strpos($model, 'countPublished') === false) {
+                $problems[] = 'WallPost must be able to count the published posts';
+            }
+            if (strpos($model, 'OFFSET') === false) {
+                $problems[] = 'WallPost::allPublished() must take an offset';
+            }
+            if (strpos($controller, "'paginator'") === false) {
+                $problems[] = 'the wall must hand a paginator to the view';
+            }
+            if (strpos($view, 'partials/pagination.php') === false) {
+                $problems[] = 'the wall must render the shared pager';
+            }
+            return $problems === []
+                ? $ok('the wall feed pages through the shared pager')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.ui.tour_dialog', 'Smoke · UI', 'The site tour is a dialog that does not re-arm', static function () use ($root, $ok, $bad): array {
+            // The tour cleared its "seen" flag the moment it started, so it
+            // came back in every new tab until the member skipped it, and its
+            // card was a floating div with no dialog semantics.
+            $tour = (string) @file_get_contents($root . '/public/assets/js/tour.js');
+            $problems = [];
+            if (strpos($tour, "setAttribute('role', 'dialog')") === false) {
+                $problems[] = 'the tour card must be a dialog';
+            }
+            if (strpos($tour, "aria-modal") === false) {
+                $problems[] = 'the tour card must be announced as modal';
+            }
+            if (strpos($tour, "e.key === 'Escape'") === false) {
+                $problems[] = 'Escape must close the tour';
+            }
+            // start() must not clear the flag; only the explicit replay does.
+            $start = substr($tour, (int) strpos($tour, 'function start()'));
+            $start = substr($start, 0, (int) strpos($start, '}'));
+            if (strpos($start, 'clearSeen') !== false) {
+                $problems[] = 'start() must not clear the seen flag, or the tour re-arms in every tab';
+            }
+            return $problems === []
+                ? $ok('the tour is a dialog and it stays away once it has been seen')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.ui.no_inline_style_blocks', 'Smoke · UI', 'No view carries its own <style> block', static function () use ($root, $ok, $bad): array {
             // Documents that deliberately stand alone (their own <html>, their
             // own CSP) keep their own CSS, and the admin shell injects the

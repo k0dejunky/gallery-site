@@ -130,10 +130,15 @@
     var card = document.createElement('div');
     card.id = 'tour-card';
     card.className = 'tour-card';
+    // A dialog, not a floating box: the screen reader announces it, the
+    // keyboard stays inside it and Escape closes it.
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-modal', 'true');
+    card.setAttribute('aria-labelledby', 'tour-title-id');
     var n = idx + 1, total = list.length;
     card.innerHTML =
       '<div class="tour-body">' +
-        '<strong class="tour-title">' + esc(step.title) + '</strong>' +
+        '<strong class="tour-title" id="tour-title-id">' + esc(step.title) + '</strong>' +
         '<p class="tour-text">' + esc(step.body) + '</p>' +
       '</div>' +
       '<div class="tour-actions">' +
@@ -172,6 +177,29 @@
       else if(t === 'next'){ idx++; goToStep(idx); }
       else if(t === 'back'){ idx--; goToStep(idx); }
     });
+
+    // The dialog takes the focus, keeps it (Tab cycles inside it) and hands
+    // it back when it closes. Escape skips the tour, like the button.
+    var previousFocus = document.activeElement;
+    var onKey = function(e){
+      if(e.key === 'Escape'){ e.preventDefault(); markSeen(); finish(); return; }
+      if(e.key !== 'Tab') return;
+      var items = Array.prototype.slice.call(
+        card.querySelectorAll('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')
+      ).filter(function(el){ return el.offsetParent !== null; });
+      if(!items.length) return;
+      var first = items[0], last = items[items.length - 1];
+      if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKey, true);
+    cleanupFns.push(function(){
+      document.removeEventListener('keydown', onKey, true);
+      if(previousFocus && previousFocus.focus && document.contains(previousFocus)) previousFocus.focus();
+    });
+
+    var firstButton = card.querySelector('[data-t="next"], [data-t="done"]');
+    if(firstButton) firstButton.focus();
   }
 
   function goToStep(i){
@@ -187,6 +215,9 @@
   }
 
   function finish(){
+    // Every way out of the tour records that it has been seen, so it does
+    // not start again in the next tab.
+    markSeen();
     cleanup();
     clearActive();
   }
@@ -194,12 +225,15 @@
   function markSeen(){ try{ localStorage.setItem(SEEN, '1'); }catch(e){} }
   function clearSeen(){ try{ localStorage.removeItem(SEEN); }catch(e){} }
 
+  // Start the tour. The "seen" flag is NOT cleared here: it used to be, which
+  // made the tour come back in every new tab until the member skipped it.
+  // Only the explicit "replay the tour" button in the member area clears it
+  // (window.startSiteTour calls clearSeen() first).
   function start(){
     if(location.search.indexOf('se=') !== -1) return;
     if(!document.body || document.body.dataset.user !== '1') return;
     list = visible();
     if(list.length === 0) return;
-    clearSeen();
     goToStep(0);
   }
 
