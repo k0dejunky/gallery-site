@@ -29,8 +29,8 @@ smoke check that locks it in travels in the same commit).
 
 | Phase | What | Status | Commit |
 |---|---|---|---|
-| 0 | The plan anchor (this file) | done | - |
-| 1 | Contrast and focus | in progress | - |
+| 0 | The plan anchor (this file) | **done** | `6257c30` |
+| 1 | Contrast and focus | **done** | `76e6aa0`, `2d0ba04`, `ab75dc0`, `8a0e512`, `5a45259`, `3b79b14` |
 | 2 | Broken code that already shipped | pending | - |
 | 3 | Token coherence | pending | - |
 | 4 | The component layer | pending | - |
@@ -39,9 +39,9 @@ smoke check that locks it in travels in the same commit).
 
 ### Baseline
 
-- **local** `/media/webdev/Media/gallery-full` - `main` @ `2d8a098`, clean, in
-  sync with `origin/main`.
-- `php tests/smoke.php` -> **937 checks, all passed**.
+- **local** `/media/webdev/Media/gallery-full` - `main`, clean, in sync with
+  `origin/main`.
+- `php tests/smoke.php` -> **941 checks, all passed** (937 at the start).
 - `php _suite_runner.php` -> 1006 tests with the **6 known environment-only
   failures** (4 orphan photos, the example.com routes, the missing Twitter
   key, the missing cron directory). Nothing here may add a seventh.
@@ -74,14 +74,14 @@ numbers are the ones the browser actually paints.
 
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| 1.1 | The paywall headline is **1.60:1** - effectively invisible, and it is the upsell surface for 163 of the 165 published galleries | `views/partials/membership_gate.php` | pending | - |
-| 1.2 | The global focus ring is **2.83:1** on the page background (WCAG 1.4.11 wants 3:1 for a non-text indicator) - and the `--focus-ring` token that would fix it already exists | `public/assets/css/user.css` | pending | - |
-| 1.3 | `.btn:hover` (0,3,1) outranks `.btn-danger` (0,2,1), so hovering a destructive button paints the pink gradient under the danger text: **1.88:1** | `public/assets/css/user.css` | pending | - |
-| 1.4 | The chat online/away status is **3.93:1** at 12.8px (needs 4.5) | `views/chat/index.php` | pending | - |
-| 1.5 | The guest teaser statistic is **1.71:1** on the login and signup pages | `public/assets/css/user.css` | pending | - |
-| 1.6 | `.chip input[type="checkbox"] { display: none }` makes every e-mail-notification toggle and every favourite-category chip **unreachable by keyboard**, with no focus indicator | `app/Core/theme_base.css` | pending | - |
-| 1.7 | Semantics: an `aria-label` on a role-less `<span>`, `aria-disabled` on a `<span>`, a `role="dialog"` consent banner with no `aria-modal` and no focus handling, a duplicate `nonce` attribute on the JSON-LD scripts, and an inline `oncontextmenu` that the site's own CSP blocks | `views/partials/star_rating.php`, `views/partials/media_nav.php`, `views/partials/consent_banner.php`, `views/layout.php`, `views/chat/index.php` | pending | - |
-| 1.8 | The check that locks the whole phase in: `smoke.ui.contrast_floor` reads the palette out of `Theme.php` and **computes** every text-on-surface ratio, so it can never regress | `app/Core/SmokeChecks.php` | pending | - |
+| 1.1 | The paywall headline is **1.60:1** - effectively invisible, and it is the upsell surface for 163 of the 165 published galleries | `views/partials/membership_gate.php` | done | 76e6aa0 |
+| 1.2 | The global focus ring is **2.83:1** on the page background (WCAG 1.4.11 wants 3:1 for a non-text indicator) - and the `--focus-ring` token that would fix it already exists | `public/assets/css/user.css` | done | 2d0ba04 |
+| 1.3 | `.btn:hover` (0,3,1) outranks `.btn-danger` (0,2,1), so hovering a destructive button paints the pink gradient under the danger text: **1.88:1** | `public/assets/css/user.css` | done | ab75dc0 |
+| 1.4 | The chat online/away status is **3.93:1** at 12.8px (needs 4.5) | `views/chat/index.php` | done | 8a0e512 |
+| 1.5 | The guest teaser statistic is **1.71:1** on the login and signup pages | `public/assets/css/user.css` | done | 8a0e512 |
+| 1.6 | `.chip input[type="checkbox"] { display: none }` makes every e-mail-notification toggle and every favourite-category chip **unreachable by keyboard**, with no focus indicator | `app/Core/theme_base.css` | done | 5a45259 |
+| 1.7 | Semantics: an `aria-label` on a role-less `<span>`, `aria-disabled` on a `<span>`, a `role="dialog"` consent banner with no `aria-modal` and no focus handling, a duplicate `nonce` attribute on the JSON-LD scripts, and an inline `oncontextmenu` that the site's own CSP blocks | `views/partials/star_rating.php`, `views/partials/media_nav.php`, `views/partials/consent_banner.php`, `views/layout.php`, `views/chat/index.php` | done | 3b79b14 |
+| 1.8 | The check that locks the whole phase in: `smoke.ui.contrast_floor` reads the palette out of `Theme.php` and **computes** every text-on-surface ratio, so it can never regress | `app/Core/SmokeChecks.php` | done | 76e6aa0 |
 
 ### The evidence
 
@@ -125,6 +125,30 @@ A contrast script that reads the shipped palette, plus a CDP keyboard run at
 390x844: Tab through the settings page and confirm every chip toggle takes
 focus and shows a ring; hover a danger button and confirm it stays the danger
 colour; open a locked gallery and confirm the gate headline is legible.
+
+### What phase 1 changed
+
+Six measured failures, all of them real:
+
+| pair | before | after |
+|---|---|---|
+| the paywall headline | 1.60:1 | 15.93:1 |
+| the focus ring (a non-text indicator) | 2.83:1 | 7.47:1 |
+| a danger button on hover | 1.88:1 | 10.73:1 |
+| the chat presence line | 3.93:1 | 11.32:1 / 11.82:1 |
+| the guest teaser statistic | 1.71:1 | 15.53:1 |
+| the chip checkboxes | unreachable | focusable, with a ring |
+
+The check that holds them, `smoke.ui.contrast_floor`, **computes** the ratio
+out of the palette the site ships and also asserts the declaration in the
+view, so neither a palette change nor a view regression can slip through.
+It grew an optional "must come after" needle, because the danger button was
+a cascade bug and not a missing colour.
+
+Phase 1 also found, while measuring, that `<button>` does not inherit the
+font: the UA sets a font shorthand, so every button on the site was
+rendering in Arial while its anchor twin rendered in the page font. `.btn`
+now sets `font-family` and `line-height`.
 
 ---
 
@@ -232,5 +256,5 @@ restore the fix. A check that has never failed is not a check.
    a shorter timeout kills a healthy deploy and rolls it back).
 6. Prod smoke runs as `www-data` and needs `sudo rm -rf /tmp/gallery-analytics-rot`
    first, or `smoke.analytics.rotated_discovery` fails on a root-owned dir.
-7. `php tests/smoke.php` -> 937 checks at the start of this programme. The
-   count may only go up.
+7. `php tests/smoke.php` -> 937 checks at the start of this programme and
+   941 after phase 1. The count may only go up.
