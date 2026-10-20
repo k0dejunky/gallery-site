@@ -1324,6 +1324,49 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.chips_reachable', 'Smoke · UI', 'A chip that carries a checkbox is reachable by keyboard', static function () use ($root, $ok, $bad): array {
+            // .chip input[type="checkbox"] { display: none } took the
+            // e-mail-notification toggles and the favourite-category chips
+            // out of the tab order entirely, with no focus indicator. The
+            // input has to stay in the focus order - hidden visually, not
+            // removed - and the chip has to show the ring.
+            $base = (string) @file_get_contents($root . '/app/Core/theme_base.css');
+            $problems = [];
+
+            if (preg_match('/\.chip input\[type="checkbox"\]\s*\{([^}]*)\}/', $base, $m) !== 1) {
+                $problems[] = 'the chip checkbox rule is missing';
+            } else {
+                $body = $m[1];
+                if (preg_match('/display\s*:\s*none/', $body) === 1) {
+                    $problems[] = 'the chip checkbox is still display:none, so it cannot be reached by keyboard';
+                }
+                if (preg_match('/position\s*:\s*absolute/', $body) !== 1) {
+                    $problems[] = 'the chip checkbox must be taken out of the flow, not removed';
+                }
+                if (preg_match('/clip-path\s*:\s*inset\(50%\)/', $body) !== 1) {
+                    $problems[] = 'the chip checkbox must be hidden visually with the clip pattern';
+                }
+            }
+
+            if (strpos($base, '.chip:focus-within') === false) {
+                $problems[] = 'a chip that holds the focus must show a focus ring';
+            }
+            if (strpos($base, 'var(--focus-ring)') === false) {
+                $problems[] = 'the chip focus ring must use the --focus-ring token';
+            }
+            // The two views that carry these toggles.
+            foreach (['views/settings.php'] as $file) {
+                $src = (string) @file_get_contents($root . '/' . $file);
+                if ($src === '' || strpos($src, 'name="categories[]"') === false) {
+                    $problems[] = $file . ' no longer carries the category checkboxes - keep one view that exercises the chip';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the chip checkboxes are hidden but reachable, and the chip shows the focus ring')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

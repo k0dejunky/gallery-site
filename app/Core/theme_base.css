@@ -64,8 +64,24 @@
         .chip.active:hover { background: var(--filter-hover-bg); }
         .chip .star { color: var(--purple-500); font-size: var(--font-size-sm); cursor: pointer; }
         .chip.active .star { color: var(--purple-900); }
-        .chip:has(input[type="checkbox"]) { cursor: pointer; }
-        .chip input[type="checkbox"] { display: none; }
+        .chip:has(input[type="checkbox"]) { cursor: pointer; position: relative; }
+        /* The checkbox was display:none, which took the e-mail-notification
+           toggles and the favourite-category chips out of the tab order
+           entirely: a keyboard user could not reach them at all. It is
+           hidden visually now, but it keeps its place in the focus order,
+           and the chip shows the focus ring while the input inside holds
+           the focus. */
+        .chip input[type="checkbox"] {
+            position: absolute;
+            width: 1px; height: 1px;
+            margin: -1px; padding: 0;
+            overflow: hidden;
+            clip: rect(0 0 0 0);
+            clip-path: inset(50%);
+            white-space: nowrap;
+            border: 0;
+        }
+        .chip:focus-within { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
         .chip:has(input[type="checkbox"]:checked) { background: var(--purple-300); border-color: var(--purple-400); color: var(--purple-900); }
         .favorite-option.selected { background: var(--purple-300); border-color: var(--purple-400); color: var(--purple-900); }
         .fav-section { margin-top: var(--spacing-xl); }
