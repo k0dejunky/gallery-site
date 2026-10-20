@@ -1,0 +1,236 @@
+# Round 3: the site-wide UI plan (member + admin)
+
+**This file is the recovery anchor for the 2026-10-20 third UI programme.** It
+holds the full item list, the evidence for every item and a status table, so a
+crashed session can resume by reading the first `pending` row without
+re-analysing a single line of code.
+
+Companion documents: `docs/UI-UPGRADE-PLAN.md` (the 2026-10-19 refactor,
+phases 0-7, shipped) and `docs/SCAN-PLAN.md` (the 2026-10-20 deep scan,
+batches A-E, shipped). **Both are closed.** This is round 3: what is left.
+
+Origin: the user asked "what UI changes should be made to the whole site user
+and admin sides" on 2026-10-20 and then "do it all".
+
+**Decisions taken (2026-10-20):**
+- Scope: **all five phases**, including the product gaps.
+- The member site stays **dark only**. No light theme, no `prefers-color-scheme`.
+- **System sans stays.** No web font, no `@font-face`. The type *scale* is
+  still unified (item 3.9) - that is a token job, not a font job.
+
+**Sequencing:** fix the measurable defects -> unify the tokens -> extract the
+component layer -> the two product gaps. Verification follows the house rule
+every time: **local -> dev -> prod -> commit last** (one commit per item, the
+smoke check that locks it in travels in the same commit).
+
+---
+
+## Where the work stands (updated 2026-10-20)
+
+| Phase | What | Status | Commit |
+|---|---|---|---|
+| 0 | The plan anchor (this file) | done | - |
+| 1 | Contrast and focus | in progress | - |
+| 2 | Broken code that already shipped | pending | - |
+| 3 | Token coherence | pending | - |
+| 4 | The component layer | pending | - |
+| 5 | Member product UX | pending | - |
+| Final | local smoke/unit -> dev -> prod verify -> commit + push | pending | - |
+
+### Baseline
+
+- **local** `/media/webdev/Media/gallery-full` - `main` @ `2d8a098`, clean, in
+  sync with `origin/main`.
+- `php tests/smoke.php` -> **937 checks, all passed**.
+- `php _suite_runner.php` -> 1006 tests with the **6 known environment-only
+  failures** (4 orphan photos, the example.com routes, the missing Twitter
+  key, the missing cron directory). Nothing here may add a seventh.
+
+### The numbers this programme is measured against
+
+| Measure | At the start |
+|---|---|
+| Inline `style=` attributes in the views | **850** (the ratchet limit is 853 - zero headroom) |
+| Hardcoded hex colours in the views | **577** (189 member + 388 admin) |
+| Distinct palettes in one product | **4** (member dark, admin light `--adm-*`, site-editor IDE, admin login page) |
+| Member classes used in views but never defined | **13** |
+| Admin classes used in views but never defined | **16** |
+| Admin views using the shared component layer | **6 of ~40** |
+
+**THE RATCHET (read this before touching a view).**
+`smoke.ui.inline_style_ratchet` counts `style="` across `views/*.php` and
+`views/*/*.php` (the `emails/` directory is exempt) and fails over **853**. It
+is currently at **850**. So *any* new inline style fails the suite. Item 3.0
+re-baselines it downward; until that lands, every style goes into a
+stylesheet.
+
+---
+
+## Phase 1 - contrast and focus
+
+Six measured contrast failures and one keyboard trap. The colours are read out
+of the shipped member palette (`app/Models/Theme.php`, `MEMBER_COLORS`), so the
+numbers are the ones the browser actually paints.
+
+| id | what | files | status | commit |
+|---|---|---|---|---|
+| 1.1 | The paywall headline is **1.60:1** - effectively invisible, and it is the upsell surface for 163 of the 165 published galleries | `views/partials/membership_gate.php` | pending | - |
+| 1.2 | The global focus ring is **2.83:1** on the page background (WCAG 1.4.11 wants 3:1 for a non-text indicator) - and the `--focus-ring` token that would fix it already exists | `public/assets/css/user.css` | pending | - |
+| 1.3 | `.btn:hover` (0,3,1) outranks `.btn-danger` (0,2,1), so hovering a destructive button paints the pink gradient under the danger text: **1.88:1** | `public/assets/css/user.css` | pending | - |
+| 1.4 | The chat online/away status is **3.93:1** at 12.8px (needs 4.5) | `views/chat/index.php` | pending | - |
+| 1.5 | The guest teaser statistic is **1.71:1** on the login and signup pages | `public/assets/css/user.css` | pending | - |
+| 1.6 | `.chip input[type="checkbox"] { display: none }` makes every e-mail-notification toggle and every favourite-category chip **unreachable by keyboard**, with no focus indicator | `app/Core/theme_base.css` | pending | - |
+| 1.7 | Semantics: an `aria-label` on a role-less `<span>`, `aria-disabled` on a `<span>`, a `role="dialog"` consent banner with no `aria-modal` and no focus handling, a duplicate `nonce` attribute on the JSON-LD scripts, and an inline `oncontextmenu` that the site's own CSP blocks | `views/partials/star_rating.php`, `views/partials/media_nav.php`, `views/partials/consent_banner.php`, `views/layout.php`, `views/chat/index.php` | pending | - |
+| 1.8 | The check that locks the whole phase in: `smoke.ui.contrast_floor` reads the palette out of `Theme.php` and **computes** every text-on-surface ratio, so it can never regress | `app/Core/SmokeChecks.php` | pending | - |
+
+### The evidence
+
+**1.1** - `views/partials/membership_gate.php:15`
+```php
+<h2 style="margin:0 0 .5rem;color:var(--purple-800);">
+```
+`--purple-800` is `#581c87` and the panel's own background is `--pink-100`
+= `#2b1123` (the member palette is dark, `Theme.php:119-253`). Contrast
+**1.60:1**. The fix is `--heading-color` (`#fdf2f8`) -> **15.93:1**.
+
+**1.2** - `public/assets/css/user.css:45`
+```css
+:where(a,button,input,textarea,select):focus-visible{outline:3px solid var(--purple-600)}
+```
+`--purple-600` is `#7e22ce` on `--page-bg` `#120711` -> **2.83:1**. The member
+palette already defines `--focus-ring: #c084fc` (`Theme.php:229`) and it is
+**7.47:1** on the page background and 7.05:1 on a card.
+
+**1.3** - `public/assets/css/user.css:665` and `:675`
+```css
+body:not(.admin-theme) .btn:hover { background: linear-gradient(...); }   /* (0,3,1) */
+body:not(.admin-theme) .btn-danger { background: var(--btn-danger-bg); }  /* (0,2,1) */
+```
+The hover rule wins, so a danger button becomes `#fecdd3` text on `#f472b6` ->
+**1.88:1**. Affected: `views/settings.php` (Log out everywhere, Disable
+two-factor), `views/layout.php` (Logout).
+
+**1.6** - `app/Core/theme_base.css:68`
+```css
+.chip input[type="checkbox"] { display: none; }
+```
+There is no override anywhere, and the `<label class="chip">` wrapper is not
+focusable either. Affected: `views/settings.php:45-53` (the three e-mail
+notification toggles) and `views/settings.php:290-293` (every favourite
+category).
+
+### Verify
+
+A contrast script that reads the shipped palette, plus a CDP keyboard run at
+390x844: Tab through the settings page and confirm every chip toggle takes
+focus and shows a ring; hover a danger button and confirm it stays the danger
+colour; open a locked gallery and confirm the gate headline is legible.
+
+---
+
+## Phase 2 - broken code that already shipped
+
+| id | what | files | status | commit |
+|---|---|---|---|---|
+| 2.1 | `window.GalleryNav` is defined **twice** - `views/layout.php:513` (toggle/close) and `public/assets/js/user.js:1484` (advanceNext) - and the second **overwrites** the first, so `window.GalleryNav.toggle()` no longer exists and the guest hamburger is dead | `views/layout.php`, `public/assets/js/user.js` | pending | - |
+| 2.2 | The share bar's "Copy link" uses only `navigator.clipboard`; the shell already has `window.__copyText` with an `execCommand` fallback at `views/layout.php:640`. On plain HTTP (the dev box) the button silently does nothing | `views/partials/share-bar.php` | pending | - |
+| 2.3 | `fitGrids()` in the guest teaser is a no-op: it reads `getComputedStyle(grid).maxHeight`, which is `none` -> `parseFloat('none')` is `NaN` -> it returns early. `$guestMaxRows` is set by no controller either | `views/partials/guest_teaser.php` | pending | - |
+| 2.4 | `.collection-order` is defined **only** inside `@media(max-width:820px)`, so the desktop reorder buttons in `views/collections/show.php` are unstyled | `public/assets/css/user.css` | pending | - |
+| 2.5 | `table td:nth-child(1){overflow-wrap:anywhere;word-break:break-word}` is a **global** rule that hits every table on the member site - it was written for the category table | `public/assets/css/user.css` | pending | - |
+| 2.6 | The image right-click / dragstart / Ctrl+S blocker applies to **every** image on the site, is not scoped and announces nothing; it breaks a legitimate "Save image as" | `public/assets/js/user.js` | pending | - |
+
+---
+
+## Phase 3 - token coherence
+
+The member site stays dark only, so `app/Core/theme_base.css` (authored
+**light**) plus the 145-line `body:not(.admin-theme)` patch block in
+`public/assets/css/user.css:620-764` is pure structural debt. **The fix is to
+invert it: make the dark stylesheet the base.**
+
+| id | what | files | status | commit |
+|---|---|---|---|---|
+| 3.0 | Re-baseline `smoke.ui.inline_style_ratchet` **downward** (it is at 850 of a 853 limit, so there is no headroom for any new inline style) | `app/Core/SmokeChecks.php` | pending | - |
+| 3.1 | Extract the 22 `u-*` utilities into a new `public/assets/css/utilities.css` loaded by both shells. They are `body .x`-scoped and scope-agnostic. 30 of the ~40 admin views use them (96 times `u-right` alone) | `public/assets/css/utilities.css`, both layouts | pending | - |
+| 3.2 | **Stop loading `user.css` in the admin.** Move the Support Desk block (`public/assets/css/user.css:68-80`) into `admin.css` - the entire admin Support Desk is currently styled by the *member* stylesheet, wearing light-palette fallbacks by accident | `views/admin/layout.php`, `public/assets/css/admin.css`, `public/assets/css/user.css` | pending | - |
+| 3.3 | Remap `--table-border` / `--table-header-bg` for the admin scope. Unmapped, they stay `#f472b6` - **the System page's table headers are bright pink in a neutral grey console** | `public/assets/css/admin.css` | pending | - |
+| 3.4 | Re-order the theme block so the **Theme editor's admin surface controls actually work**. `admin.css` loads *after* the inline theme block at equal specificity, so `--card-bg`, `--pink-100/200/300/400`, `--stat-bg` can never change | `views/admin/layout.php` | pending | - |
+| 3.5 | One radius scale. `.sys-card` is 10px (`--adm-radius`) but `.page-system .sys-card` is **8px** (`var(--border-radius)`) - measured in headless Chrome | `public/assets/css/admin.css` | pending | - |
+| 3.6 | Delete `public/assets/admin-shared.css` (19 lines, ~90% dead - every rule is re-declared with different values in `admin.css`) | `public/assets/admin-shared.css` | pending | - |
+| 3.7 | Move the 577 hardcoded hexes in the views onto tokens, and delete the light-palette fallback literals (`var(--pink-100,#fdf4ff)`) that flash white on the dark skin | the views | pending | - |
+| 3.8 | `app/Core/theme_base.css:5` centres **every** h1-h6. The member skin never overrides it, so ~15 `text-align:left` opt-outs in CSS and 7 inline in views fight it. Set the alignment in the base and delete the opt-outs | `app/Core/theme_base.css`, `public/assets/css/user.css`, the views | pending | - |
+| 3.9 | One type scale. The 6-step `u-fs-*` scale (hard-coded rem) duplicates `--font-size-*` with *different* values (`u-fs-085` = .85rem vs `--font-size-md` = .95rem). The system sans itself stays | `public/assets/css/user.css`, `app/Models/Theme.php` | pending | - |
+
+**3.2 is the load-bearing one** - it removes a whole class of leak bugs in a
+single move. It is also the one that can bite: it changes the admin's entire
+surface, so it gets its own commit and a visual diff over every admin page.
+
+---
+
+## Phase 4 - the component layer
+
+| id | what | files | status | commit |
+|---|---|---|---|---|
+| 4.1 | Extend `AdminTable` (410 lines, used by only **6 of ~40** admin views) to every admin list view, and settle on **one** empty state - `admin_empty()` exists, 7 views use it, 14 hand-roll their own | `app/Core/AdminTable.php`, the admin views | pending | - |
+| 4.2 | Fix the **nested `.stat-cards` grid** on the admin dashboard: the outer grid's flex child is itself a grid, so the KPI band lays out wrong | `views/admin/dashboard.php` | pending | - |
+| 4.3 | Split `views/admin/settings.php` (2 lines that `require` the **member** settings page - a second `<h1>`, member CSS classes, and a "Back to dashboard" link to `/account` inside the admin) into a real admin view | `views/admin/settings.php` | pending | - |
+| 4.4 | Give `views/admin/logs.php` the `.adm-section` / `.sys-card` structure every other admin page has | `views/admin/logs.php` | pending | - |
+| 4.5 | Member side: one card partial (3 near-identical hand-rolled templates today), one button/form kit, and de-duplicate the wall comment thread (`views/wall.php:203-273` re-implements `views/partials/comments.php` verbatim) | `views/partials/`, `views/wall.php`, `views/collections/` | pending | - |
+| 4.6 | Define or delete the **dead classes**: 13 member (`.btn-link`, `.settings-form`, `.home-section`, `.home-hero`, `.home-upsell`, `.hero-kicker`, `.site-footer`, `.membership-gate`, `.share-bar`, `.star-rating`, `.page-gap`, `.security-card`, `.player-retry`) and 16 admin (`.table-responsive`, `.stats-period`, `.text-muted`, `.adm-kpi-band`, `.mg-check`, `.mg-import-settings`, `.mg-scheduled`, `.type-switch*`, `.adm-field-label`, `.emoji-btn`, `.user-check`, `.ts-cbx`, `.ts-table`, `.ts-grp-pass`, `.ap-row`, `.ap-countdown`) | the views, the stylesheets | pending | - |
+
+**New checks:** `smoke.ui.admin_classes_defined` and
+`smoke.ui.member_classes_defined`, mirroring the existing
+`smoke.ui.utility_classes_defined`.
+
+---
+
+## Phase 5 - member product UX
+
+The admin has a global search **and** a `Ctrl K` command palette. The member
+site has neither - search only exists on `/galleries` and the category pages.
+
+| id | what | files | status | commit |
+|---|---|---|---|---|
+| 5.1 | **Member global search** - a field in the rail, in the phone "More" sheet, and a `/` keyboard shortcut, pointing at `GET /galleries?q=`. The endpoint and the `q` parameter already exist (`GalleryController@index`) | `views/layout.php`, `public/assets/js/user.js` | pending | - |
+| 5.2 | A member results view - the query, the filters and a clear-all. Today the header drops straight into the listing | `views/gallery/index.php` | pending | - |
+| 5.3 | Home hero cleanup: 19 inline styles, 4 classes with **no CSS at all**, and the same flex section-header row copy-pasted 4 times | `views/home.php` | pending | - |
+| 5.4 | Mobile nav parity - the guest and the member rail/bottom-bar paths still differ, and the member's bottom bar has no way back to the full nav on a tablet | `views/layout.php` | pending | - |
+| 5.5 | The 10 dead member classes from 4.6, with the home hero | the views, the stylesheets | pending | - |
+
+---
+
+## New smoke checks (the house style: source-text assertions)
+
+`smoke.ui.contrast_floor`, `smoke.ui.focus_visible`, `smoke.ui.chips_reachable`,
+`smoke.ui.guest_hamburger_works`, `smoke.ui.clipboard_fallback`,
+`smoke.ui.nav_globals_unique`, `smoke.ui.no_user_css_in_admin`,
+`smoke.ui.theme_tokens_live`, `smoke.ui.admin_classes_defined`,
+`smoke.ui.member_classes_defined`, `smoke.ui.member_search`.
+
+**Every new check must be proven to bite**: revert the fix, watch it fail,
+restore the fix. A check that has never failed is not a check.
+
+---
+
+## How to resume after a crash
+
+1. `git -C /media/webdev/Media/gallery-full status` + `git log --oneline -5` -
+   the uncommitted files are the work in flight, never throw them away.
+2. Read the status table above and update it.
+3. `/tmp/opencode` is **wiped by every reboot** - the CDP harness, `login.sh`
+   and the probe scripts have to be recreated. The pattern: headless Chrome
+   with `--remote-debugging-port`, driven by node 24 (which has `fetch` and
+   `WebSocket` built in), using `Network.setCookie` (with `domain` and
+   `path: '/'` - a URL-only cookie sets the path to that URL's path and the
+   server reads the wrong cookie), `Input.dispatchTouchEvent` for real taps
+   (`.click()` does not honour overlays) and `Page.captureScreenshot`.
+4. Never `pkill -f <pattern>` from the ssh command line: the pattern matches
+   the shell's own command line and kills the shell. Put the pattern in a
+   `.sh`/`.bat` on the box instead.
+5. The deploy script needs `DEPLOY_HOST`, `DEPLOY_PASS` and `DEPLOY_ROOT`, and
+   it must run with a **>= 5 minute** timeout (a dev deploy takes 2-3 minutes;
+   a shorter timeout kills a healthy deploy and rolls it back).
+6. Prod smoke runs as `www-data` and needs `sudo rm -rf /tmp/gallery-analytics-rot`
+   first, or `smoke.analytics.rotated_discovery` fails on a root-owned dir.
+7. `php tests/smoke.php` -> 937 checks at the start of this programme. The
+   count may only go up.
