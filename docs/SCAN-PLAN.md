@@ -43,13 +43,13 @@ verified on dev + prod. `shipped` - done and pushed to GitHub.
 
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| A1 | A moderator can mint a full admin (`Auth::isAdmin()` is true for every admin role) | `app/Controllers/UserController.php`, `app/Core/Auth.php` | todo | - |
-| A2 | The mail-server admin (a root script) is reachable by a `viewer` | `app/Controllers/EmailController.php`, `config/routes.php` | todo | - |
-| A3 | The money actions (gift codes, mark-a-purchase-paid, unlock codes) are gated on `dashboard` | `app/Controllers/ModerationController.php`, `app/Core/Auth.php`, `config/routes.php` | todo | - |
-| A4 | The site-wide creator profile is writable by a viewer; the avatar takes any URL | `app/Controllers/CreatorProfileController.php` | todo | - |
-| A5 | A moderator can flip the maintenance flag (503 for every guest) or the age gate | `app/Controllers/SystemController.php`, `config/routes.php` | todo | - |
-| A6 | A replayed payment webhook re-activates a cancelled subscription with a fresh period | `app/Models/Subscription.php`, `app/Controllers/WebhookController.php` | todo | - |
-| A7 | The styled modal drops the form submitter (latent: a button's `formaction`/`name` would be lost) | `views/admin/layout.php` | todo | - |
+| A1 | A moderator can mint a full admin (`Auth::isAdmin()` is true for every admin role) | `app/Controllers/UserController.php`, `app/Core/Auth.php` | done | `b998499` |
+| A2 | The mail-server admin (a root script) is reachable by a `viewer` | `app/Controllers/EmailController.php`, `config/routes.php` | done | `41f399d` |
+| A3 | The money actions (gift codes, mark-a-purchase-paid, unlock codes) are gated on `dashboard` | `app/Controllers/ModerationController.php`, `app/Core/Auth.php`, `config/routes.php` | done | `18cc516` |
+| A4 | The site-wide creator profile is writable by a viewer; the avatar takes any URL | `app/Controllers/CreatorProfileController.php` | done | `baf642a` |
+| A5 | A moderator can flip the maintenance flag (503 for every guest) or the age gate | `app/Controllers/SystemController.php`, `config/routes.php` | done | `5218707` |
+| A6 | A replayed payment webhook re-activates a cancelled subscription with a fresh period | `app/Models/Subscription.php`, `app/Controllers/WebhookController.php` | done | `f0a5ddc` |
+| A7 | The styled modal drops the form submitter (latent: a button's `formaction`/`name` would be lost) | `views/admin/layout.php` | done | `abdcb9e` |
 
 ### Batch B - the member-visible bugs
 
