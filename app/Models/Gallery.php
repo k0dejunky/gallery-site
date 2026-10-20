@@ -938,6 +938,33 @@ class Gallery
      * per-gallery display order), fetched with a MIN(position) subquery so a
      * listing of N galleries scans only N cover rows instead of every photo.
      */
+    /**
+     * The cover photo and the categories of a set of galleries, in two
+     * queries instead of two per gallery.
+     *
+     * The card partial used to fall back to a query per card when the
+     * caller did not hand it the data, which made the guest home page run
+     * 24 queries for 12 cards.
+     *
+     * @return array{covers: array<int, array>, categories: array<int, array>}
+     */
+    public static function preloadCards(array $galleries): array
+    {
+        $ids = array_values(array_unique(array_filter(
+            array_map(static fn ($g): int => is_array($g) ? (int) ($g['id'] ?? 0) : (int) $g, $galleries),
+            static fn (int $id): bool => $id > 0
+        )));
+
+        if ($ids === []) {
+            return ['covers' => [], 'categories' => []];
+        }
+
+        return [
+            'covers'     => self::firstPhotos($ids),
+            'categories' => self::categoriesBulk($ids),
+        ];
+    }
+
     public static function firstPhotos(array $galleryIds): array
     {
         $galleryIds = array_values($galleryIds);

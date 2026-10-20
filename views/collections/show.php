@@ -91,8 +91,8 @@ $mediaCount = count((array) ($videos ?? [])) + count((array) ($images ?? [])) + 
                 <div class="collection-gallery-cell">
                     <?php
                     $gid = (int) $gallery['id'];
-                    $cover = $gallery['first_photo'] ?? null;
-                    $galleryCategories = \App\Models\Gallery::categoriesBulk([$gid])[$gid] ?? [];
+                    $cover = $cardCovers['covers'][$gid] ?? null;
+                    $galleryCategories = $cardCovers['categories'][$gid] ?? [];
                     $coverFetchPriority = empty($coverFetchPriority) ? 'high' : '';
                     require __DIR__ . '/../partials/gallery_card.php';
                     ?>

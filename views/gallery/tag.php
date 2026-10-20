@@ -29,10 +29,10 @@ require __DIR__ . '/../partials/breadcrumbs.php';
     </div>
 <?php else: ?>
     <div class="grid">
-        <?php echo \App\Core\PageCache::fragment('tag.' . md5(json_encode([$tag['id'] ?? 0, array_column($galleries, 'id')])), 120, static function () use ($galleries, $viewedIds, $favoriteGalleryIds, $currentUser, $hasActive): void {
+        <?php echo \App\Core\PageCache::fragment('tag.' . md5(json_encode([$tag['id'] ?? 0, array_column($galleries, 'id')])), 120, static function () use ($galleries, $viewedIds, $favoriteGalleryIds, $currentUser, $hasActive, $cardCovers): void {
             foreach ($galleries as $gallery) {
-                $cover = null;
-                $galleryCategories = null;
+                $cover = $cardCovers['covers'][(int) $gallery['id']] ?? null;
+                $galleryCategories = $cardCovers['categories'][(int) $gallery['id']] ?? [];
                 require __DIR__ . '/../partials/gallery_card.php';
             }
         }); ?>

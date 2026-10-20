@@ -151,7 +151,11 @@ require __DIR__ . '/../partials/share-bar.php';
         <h2>Related galleries</h2>
         <div class="grid">
             <?php foreach ($related as $gallery): ?>
-                <?php $cover = null; $galleryCategories = null; require __DIR__ . '/../partials/gallery_card.php'; ?>
+                <?php
+                $cover = $relatedCovers[(int) $gallery['id']] ?? null;
+                $galleryCategories = $relatedCategories[(int) $gallery['id']] ?? [];
+                require __DIR__ . '/../partials/gallery_card.php';
+                ?>
             <?php endforeach; ?>
         </div>
     </section>

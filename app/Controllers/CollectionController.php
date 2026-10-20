@@ -58,6 +58,8 @@ class CollectionController extends Controller
             'hasActive' => Auth::hasActiveSubscription(),
             'viewedIds' => Gallery::viewedByIds($userId, array_map('intval', array_column($galleries, 'id'))),
             'favoriteGalleryIds' => Gallery::favoriteIds($userId, array_map('intval', array_column($galleries, 'id'))),
+            // The card data in two queries, not two per gallery.
+            'cardCovers' => Gallery::preloadCards($galleries),
         ]);
     }
 

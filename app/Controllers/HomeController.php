@@ -70,7 +70,7 @@ class HomeController extends Controller
             }
         }
 
-$featured  = Gallery::featured(6);
+        $featured  = Gallery::featured(6);
         $trending  = Gallery::trending(7, 6);
 
         // LCP preload: the first visible card (featured, then trending) is the
@@ -93,10 +93,15 @@ $featured  = Gallery::featured(6);
             static fn (array $g): bool => !in_array((int) $g['id'], $featuredIds, true)
         ));
 
+        // The card data for every strip on the page, in two queries instead
+        // of two per card (the card partial no longer queries for itself).
+        $cardCovers = Gallery::preloadCards(array_merge($featured, $trending, $galleries));
+
         $this->view('home', [
             'galleries'      => $galleries,
             'featured'       => $featured,
             'trending'       => $trending,
+            'cardCovers'     => $cardCovers,
             'tags'           => \App\Models\Tag::withCounts(),
             'covers'         => $covers,
             'categories'     => $categories,

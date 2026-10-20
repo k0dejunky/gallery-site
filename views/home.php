@@ -61,10 +61,11 @@ $tags            = (array) ($tags ?? []);
             <a class="btn btn-sm btn-link" href="<?= url('/galleries') ?>">View all &rarr;</a>
         </div>
         <div class="grid u-mt-075">
-            <?php echo \App\Core\PageCache::fragment('home.featured.' . md5(json_encode(array_column($featured, 'id'))), 120, static function () use ($featured): void {
+            <?php echo \App\Core\PageCache::fragment('home.featured.' . md5(json_encode(array_column($featured, 'id'))), 120, static function () use ($featured, $cardCovers): void {
                 foreach ($featured as $g) {
                     $gallery = $g;
-                    $cover = null;
+                    $cover = $cardCovers['covers'][(int) $g['id']] ?? null;
+                    $galleryCategories = $cardCovers['categories'][(int) $g['id']] ?? [];
                     require __DIR__ . '/partials/gallery_card.php';
                 }
             }); ?>
@@ -79,10 +80,11 @@ $tags            = (array) ($tags ?? []);
             <a class="btn btn-sm btn-link" href="<?= url('/galleries') ?>">View all &rarr;</a>
         </div>
         <div class="grid u-mt-075">
-            <?php echo \App\Core\PageCache::fragment('home.trending.' . md5(json_encode(array_column($trending, 'id'))), 120, static function () use ($trending): void {
+            <?php echo \App\Core\PageCache::fragment('home.trending.' . md5(json_encode(array_column($trending, 'id'))), 120, static function () use ($trending, $cardCovers): void {
                 foreach ($trending as $g) {
                     $gallery = $g;
-                    $cover = null;
+                    $cover = $cardCovers['covers'][(int) $g['id']] ?? null;
+                    $galleryCategories = $cardCovers['categories'][(int) $g['id']] ?? [];
                     require __DIR__ . '/partials/gallery_card.php';
                 }
             }); ?>

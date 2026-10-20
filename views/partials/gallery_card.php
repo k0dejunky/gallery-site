@@ -1,7 +1,9 @@
 <?php
-$cover = $cover ?? \App\Models\Gallery::firstPhoto((int) $gallery['id']);
+// The cover and the categories come from the caller (Gallery::preloadCards):
+// a per-card query here cost the guest home page 24 queries for 12 cards.
+$cover = $cover ?? null;
 $coverSize = \App\Core\Auth::check() ? 'thumb' : 'blur';
-$galleryCategories = $galleryCategories ?? \App\Models\Gallery::categories((int) $gallery['id']);
+$galleryCategories = $galleryCategories ?? [];
 $galleryUrl  = url('/galleries/' . (int) $gallery['id']) . (!empty($listingReturnTo) ? '?' . http_build_query(['return_to' => $listingReturnTo]) : '');
 $isVideoCard = $cover !== null && is_video($cover['filename']);
 $viewedIds   = $viewedIds ?? [];

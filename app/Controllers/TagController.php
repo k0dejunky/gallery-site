@@ -45,6 +45,7 @@ class TagController extends Controller
             'viewedIds' => $user !== null ? Gallery::viewedByIds((int) $user['id'], $ids) : [],
             'favoriteGalleryIds' => ($user !== null && Auth::hasActiveSubscription())
                 ? Gallery::favoriteIds((int) $user['id'], $ids) : [],
+            'cardCovers' => Gallery::preloadCards($galleries),
         ]);
     }
 }

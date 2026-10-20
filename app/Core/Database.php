@@ -98,9 +98,17 @@ class Database
      * logged so regressions (e.g. missing indexes, N+1 loops) surface in the
      * System page and the error log.
      */
+    /**
+     * How many queries this request has run. Cheap to keep, and it is the
+     * only honest way to see an N+1 (a page that spends 24 queries on 12
+     * cards does not look like it in the code).
+     */
+    public static int $queryCount = 0;
+
     public static function run(string $sql, array $params = []): \PDOStatement
     {
         $start = microtime(true);
+        self::$queryCount++;
 
         // mysqlnd prints a "Packets out of order" warning while probing a
         // connection the server already dropped; the exception below is what

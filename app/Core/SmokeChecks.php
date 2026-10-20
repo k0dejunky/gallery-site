@@ -1098,6 +1098,41 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.card_queries_nothing', 'Smoke · UI', 'A gallery card does not query the database', static function () use ($root, $ok, $bad): array {
+            // The card partial fell back to a query per card when the caller
+            // did not hand it the cover and the categories: the guest home
+            // page spent 24 queries on 12 cards. The callers now preload
+            // (Gallery::preloadCards) and the card asks for nothing.
+            $card = (string) @file_get_contents($root . '/views/partials/gallery_card.php');
+            $problems = [];
+            if (strpos($card, 'Gallery::firstPhoto(') !== false) {
+                $problems[] = 'the card must not query the cover photo itself';
+            }
+            if (strpos($card, 'Gallery::categories(') !== false) {
+                $problems[] = 'the card must not query the categories itself';
+            }
+            $model = (string) @file_get_contents($root . '/app/Models/Gallery.php');
+            if (strpos($model, 'public static function preloadCards(') === false) {
+                $problems[] = 'the model needs a bulk card preloader';
+            }
+            // Every listing that renders cards must preload.
+            foreach ([
+                'views/home.php'                 => 'the home page',
+                'views/gallery/show.php'         => 'the gallery page',
+                'views/gallery/tag.php'          => 'the tag page',
+                'views/collections/show.php'     => 'the collection page',
+                'views/favorites/index.php'      => 'the favourites page',
+            ] as $file => $what) {
+                $src = (string) @file_get_contents($root . '/' . $file);
+                if (strpos($src, '$cover = null') !== false) {
+                    $problems[] = $what . ' still hands the card a null cover';
+                }
+            }
+            return $problems === []
+                ? $ok('the cards get their data in bulk and query nothing themselves')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.ui.tour_stays_away', 'Smoke · UI', 'The tour does not re-arm and does not run in the admin', static function () use ($root, $ok, $bad): array {
             // The tour used to clear its "seen" flag the moment it started,
             // so it came back in every new tab until the member skipped it;

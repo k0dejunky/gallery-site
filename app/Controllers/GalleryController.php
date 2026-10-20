@@ -567,6 +567,11 @@ class GalleryController extends Controller
             ? Gallery::photosSlice($id, $pageSize, 0)
             : Gallery::photosSlice($id, 8, 0);
 
+        // The related cards get their cover and their categories in two
+        // queries, not two per card.
+        $related        = Gallery::related($id, 6, Auth::effectiveLevel());
+        $relatedCovers  = Gallery::preloadCards($related);
+
         $this->view('gallery/show', [
             'gallery'    => $gallery,
             'photos'     => $photos,
@@ -584,7 +589,9 @@ class GalleryController extends Controller
             'ratingAverage' => GalleryRating::averageFor($id),
             'ratingCount'   => GalleryRating::countFor($id),
             'userRating'    => $userRating,
-            'related'       => Gallery::related($id, 6, Auth::effectiveLevel()),
+            'related'       => $related,
+            'relatedCovers' => $relatedCovers['covers'] ?? [],
+            'relatedCategories' => $relatedCovers['categories'] ?? [],
             'ppvPrice'      => $ppvPrice,
             'galleryUnlocked' => $galleryUnlocked,
         ]);
