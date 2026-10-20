@@ -188,13 +188,38 @@ cookie's path to that URL's path ("/gallery/"), so a guest's host-only cookie
 logged out. Set the cookie with `domain` + `path: '/'` and clear the cookies
 first.
 
-## Phase 7 - accessibility and polish
-- `inert` everywhere it is needed.
-- Colour-only status gets an icon + text.
-- The age gate gets a real focus target.
-- The admin topbar search gets a mobile replacement.
-- ~12 URL-only admin pages get nav affordances.
-- The users CSV export moves next to the user list.
+## Phase 7 - accessibility and polish (IN PROGRESS)
+
+Plan written 2026-10-19 23:40, before touching the code.
+
+### The survey (what is left, and what Phase 1 already did)
+Already done, no change needed:
+- `inert` everywhere it is needed: the age gate and the member-onboarding
+  card make the rest of the document inert, take the focus and trap it
+  (public/assets/js/user.js), and the closed admin drawer is `inert` too
+  (public/assets/js/admin.js).
+- The age gate gets a real focus target: the first focusable inside it is
+  focused when it opens.
+- The URL-only admin pages get nav affordances: the breadcrumb is derived
+  from the sidebar, and every admin GET route matches a sidebar entry (checked
+  with a script over config/routes.php: 80 routes, 0 without a parent).
+
+Still to do:
+1. **A colour-only status.** The gallery card's "you have seen this" is an
+   empty 12px purple dot: no text, no name, no way to tell what it means
+   without guessing the colour. It becomes a check mark with a name, and the
+   card link says it in a visually hidden way too.
+2. The video player's live dot next to the "LIVE" label is decorative and
+   should say so (`aria-hidden`).
+3. **The admin topbar search is hidden on a phone** (`display: none` under
+   960px), so a phone admin cannot search at all. It becomes a second row of
+   the topbar instead of disappearing.
+4. **The users CSV export is on the System page**, far from the user list it
+   belongs to. The link moves next to the list (the System page keeps it).
+
+### New smoke checks
+`smoke.ui.viewed_badge_named`, `smoke.ui.admin_search_on_phone`,
+`smoke.ui.users_export_next_to_list`.
 
 ## New smoke checks (source-text assertions, the house style)
 `smoke.ui.admin_bulk_confirm`, `smoke.ui.css_vars_defined`,
