@@ -1555,6 +1555,43 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.guest_teaser_fits', 'Smoke · UI', 'The guest teaser drops its extra thumbnails', static function () use ($root, $ok, $bad): array {
+            // fitGrids() read the grid's budget from
+            // getComputedStyle(grid).maxHeight. The grid has no max-height
+            // in CSS, so that was "none": parseFloat("none") is NaN, and
+            // the function returned before it touched anything. The teaser
+            // column therefore kept its full content height and forced the
+            // login and signup pages to be as tall as 25 thumbnails.
+            $partial = (string) @file_get_contents($root . '/views/partials/guest_teaser.php');
+            $problems = [];
+
+            if (strpos($partial, 'getBoundingClientRect().height') === false) {
+                $problems[] = 'the fit must fall back to the grid\'s rendered height when it has no max-height';
+            }
+            if (strpos($partial, "cards[i].style.display = 'none'") === false
+                && strpos($partial, 'cards[i].style.display = \'none\'') === false) {
+                $problems[] = 'the fit must drop the extra thumbnails, not only cap the height';
+            }
+            if (strpos($partial, 'gridTemplateColumns') === false) {
+                $problems[] = 'the fit must read the column count, or it drops the wrong number of thumbnails';
+            }
+            // A bare early return on a non-finite budget is the bug itself.
+            // The fallback has to sit BETWEEN reading the budget and giving
+            // up on it.
+            $parseAt = strpos($partial, 'var budget = parseFloat');
+            $fallAt  = strpos($partial, 'budget = grid.getBoundingClientRect().height');
+            $giveAt  = strpos($partial, 'if (!isFinite(budget) || budget <= 0) return;');
+            if ($parseAt === false) {
+                $problems[] = 'the fit must read the budget from the grid';
+            } elseif ($giveAt !== false && ($fallAt === false || $fallAt < $parseAt || $fallAt > $giveAt)) {
+                $problems[] = 'the fit must fall back to the rendered height before it gives up on the budget';
+            }
+
+            return $problems === []
+                ? $ok('the guest teaser fits its grid and drops the extra thumbnails')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

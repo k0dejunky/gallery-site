@@ -55,27 +55,52 @@ foreach ($source as $photo) {
 (function () {
     function fitGrids() {
         document.querySelectorAll('[data-guest-grid]').forEach(function (grid) {
-            var tile = grid.querySelector('.recent-card');
-            if (!tile) return;
+            var cards = Array.prototype.slice.call(grid.children);
+            if (!cards.length) return;
+            // Start from a clean slate: every thumbnail visible again.
+            cards.forEach(function (c) { c.style.display = ''; });
             grid.style.maxHeight = '';
+
             var cs = getComputedStyle(grid);
-            var maxH = parseFloat(cs.maxHeight);
-            if (!isFinite(maxH) || maxH <= 0) return;
-            var gap = parseFloat(cs.rowGap) || 0;
-            // Use the real row pitch (top of the 6th tile minus the 1st, or the
-            // tile height + gap as a fallback) — grid auto-rows can be taller
+            var cols = cs.gridTemplateColumns.split(' ').filter(function (s) { return s !== ''; }).length;
+            if (!cols) cols = 1;
+
+            // The row pitch: the top of the first tile of the second row
+            // minus the top of the first tile. Grid auto-rows can be taller
             // than the tile, which otherwise clips the last visible row.
             var rowH = 0;
-            if (grid.children.length > 5) {
-                var first = grid.children[0].getBoundingClientRect();
-                var sixth = grid.children[5].getBoundingClientRect();
-                rowH = sixth.top - first.top;
+            if (cards.length > cols) {
+                var first = cards[0].getBoundingClientRect();
+                var second = cards[cols].getBoundingClientRect();
+                rowH = second.top - first.top;
             }
-            if (!(rowH > 0)) { rowH = tile.getBoundingClientRect().height + gap; }
-            var rows = Math.max(1, Math.floor(maxH / rowH));
+            if (!(rowH > 0)) {
+                rowH = cards[0].getBoundingClientRect().height + (parseFloat(cs.rowGap) || 0);
+            }
+            if (!(rowH > 0)) return;
+
+            // The budget is the height the teaser column gives the grid. The
+            // column clips it with flex and the grid has no max-height in
+            // CSS, so getComputedStyle().maxHeight was "none": parseFloat
+            // of that is NaN and the old code returned before it did
+            // anything at all. The rendered height is the real budget.
+            var budget = parseFloat(cs.maxHeight);
+            if (!isFinite(budget) || budget <= 0) {
+                budget = grid.getBoundingClientRect().height;
+            }
+            if (!isFinite(budget) || budget <= 0) return;
+
+            var rows = Math.max(1, Math.floor(budget / rowH));
             var maxRows = parseInt(grid.getAttribute('data-max-rows'), 10);
             if (isFinite(maxRows) && maxRows > 0) { rows = Math.min(rows, maxRows); }
-            grid.style.maxHeight = (rows * rowH - gap) + 'px';
+
+            // Drop the extra thumbnails outright, so the last visible row is
+            // a WHOLE row. Capping the height instead left a clipped row
+            // hanging at the bottom - and because the grid centres its
+            // content, a partial row at the top as well.
+            for (var i = rows * cols; i < cards.length; i++) {
+                cards[i].style.display = 'none';
+            }
         });
     }
     if (document.readyState !== 'loading') { fitGrids(); }
