@@ -1524,6 +1524,37 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.clipboard_fallback', 'Smoke · UI', 'Copying works outside a secure context', static function () use ($root, $ok, $bad): array {
+            // The Clipboard API does not exist outside a secure context. The
+            // share bar used it on its own, so on a plain-http setup (the
+            // dev box is http://) the "Copy link" button did nothing and
+            // said nothing either. The shell already publishes __copyText,
+            // which falls back to execCommand.
+            $share = (string) @file_get_contents($root . '/views/partials/share-bar.php');
+            $layout = (string) @file_get_contents($root . '/views/layout.php');
+            $problems = [];
+
+            if (strpos($share, 'window.__copyText') === false) {
+                $problems[] = 'the share bar must copy through window.__copyText, which has the plain-http fallback';
+            }
+            if (strpos($share, 'window.__copied') === false) {
+                $problems[] = 'the share bar must report the result through window.__copied';
+            }
+            if (strpos($layout, 'window.__copyText=function(text){') === false) {
+                $problems[] = 'the shell must publish window.__copyText';
+            }
+            if (strpos($layout, 'execCommand(\'copy\')') === false) {
+                $problems[] = 'window.__copyText must fall back to execCommand for a plain-http setup';
+            }
+            if (preg_match('/navigator\.clipboard\.writeText\(text\)\.then\([a-zA-Z]+,\s*function\s*\(\)\s*\{\s*\}\)/', $share) === 1) {
+                $problems[] = 'the share bar must not swallow a failed copy silently';
+            }
+
+            return $problems === []
+                ? $ok('the share bar copies through the fallback and says what happened')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

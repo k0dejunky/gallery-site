@@ -27,13 +27,23 @@ $shareWaText   = ($shareTitle !== '' ? $shareTitle . ' — ' : '') . $shareWa;
         b._shareBound = 1;
         b.addEventListener('click', function () {
             var text = b.getAttribute('data-share-copy');
-            var done = function () {
+            // The shell publishes __copyText, which uses the Clipboard API
+            // in a secure context and falls back to execCommand on a plain
+            // http setup. The Clipboard API does not EXIST outside a secure
+            // context, so the old code here did nothing at all on http://
+            // and said nothing either - the button just sat there.
+            var say = function (ok) {
+                if (window.__copied) { window.__copied(b, ok); return; }
                 var original = b.textContent;
-                b.textContent = 'Copied!';
+                b.textContent = ok ? 'Copied' : 'Copy failed';
                 setTimeout(function () { b.textContent = original; }, 1500);
             };
+            if (window.__copyText) {
+                window.__copyText(text).then(function () { say(true); }, function () { say(false); });
+                return;
+            }
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).then(done, function () {});
+                navigator.clipboard.writeText(text).then(function () { say(true); }, function () { say(false); });
             }
         });
     });
