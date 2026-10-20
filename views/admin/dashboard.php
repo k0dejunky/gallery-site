@@ -9,7 +9,7 @@
 <?php if ($cronAgeMin !== null && $cronAgeMin > 45): ?>
     <div class="alert alert-warning">
         <b>Housekeeping cron quiet for <?= (int) $cronAgeMin ?> min</b> (expected ~15). Check /etc/cron.d on the server.
-    </p>
+    </div>
 <?php elseif ($cronAgeMin === null): ?>
     <div class="alert alert-warning">
         <b>Housekeeping cron has never run.</b> Install the cron entry from System page instructions.

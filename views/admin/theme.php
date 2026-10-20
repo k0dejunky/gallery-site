@@ -425,8 +425,6 @@ $paletteGrid = [
                 <?php endif; ?>
             </div>
         </details>
-
-        </div>
 </form>
 
 <div class="save-toast" id="save-toast">Theme saved</div>

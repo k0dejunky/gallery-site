@@ -1397,6 +1397,87 @@ class SmokeChecks
                 : $bad('these views carry their own <style> block - move it into public/assets/css: ' . implode(', ', $offenders));
         });
 
+        $add('smoke.ui.balanced_markup', 'Smoke · UI', 'The views open and close the same number of divs', static function () use ($root, $ok, $bad): array {
+            // A <div> closed by </p> (or a missing </div>) makes everything
+            // after it a child of that div, and the page turns into columns:
+            // the admin dashboard was a jumble of five narrow columns because
+            // one alert box was never closed.
+            $offenders = [];
+            $files = array_merge(
+                glob($root . '/views/*.php') ?: [],
+                glob($root . '/views/*/*.php') ?: []
+            );
+            foreach ($files as $file) {
+                $src = (string) @file_get_contents($file);
+                // The PHP blocks are dropped: they can print markup, and
+                // they can hide a branch, so only the literal markup counts.
+                $src = (string) preg_replace('/<\?.*?\?>/s', '', $src);
+                $open  = preg_match_all('/<div\b/i', $src);
+                $close = preg_match_all('#</div>#i', $src);
+                if ($open !== $close) {
+                    $offenders[] = basename($file) . ' (' . $open . ' open, ' . $close . ' closed)';
+                }
+            }
+            return $offenders === []
+                ? $ok('every view balances its divs')
+                : $bad('these views open and close a different number of divs, so the layout collapses: ' . implode(', ', $offenders));
+        });
+
+        $add('smoke.ui.urls_go_through_url', 'Smoke · UI', 'The views build their links with url(), not with a raw path', static function () use ($root, $ok, $bad): array {
+            // A raw '/admin/...' href 404s on a site installed in a
+            // subdirectory (the prod site lives in /gallery): the auto
+            // poster's recent-posts pager sent every page link to the wrong
+            // place, so the pagination did nothing.
+            $offenders = [];
+            $files = array_merge(
+                glob($root . '/views/*.php') ?: [],
+                glob($root . '/views/*/*.php') ?: []
+            );
+            // Every view at once, so a path handed to a partial that builds
+            // the URL is not mistaken for a raw one.
+            $allViews = '';
+            foreach ($files as $file) {
+                $allViews .= (string) @file_get_contents($file);
+            }
+
+            foreach ($files as $file) {
+                $src = (string) @file_get_contents($file);
+                $lines = explode("\n", $src);
+                foreach ($lines as $n => $line) {
+                    // (a) A raw path straight in an href or an action.
+                    if (preg_match_all('/(?:href|action)=["\'](\/[a-zA-Z][^"\']*)["\']/', $line, $m)) {
+                        foreach ($m[1] as $path) {
+                            if (strpos($path, '/assets/') === 0) {
+                                continue;   // the assets are built with asset_url()
+                            }
+                            $offenders[] = basename($file) . ':' . ($n + 1) . ' ' . $path;
+                        }
+                    }
+                    // (b) A path assigned to a variable that is then used as
+                    // a link. If the variable is handed to url() somewhere
+                    // else in the file, it is fine; if it is printed
+                    // straight into an href, it 404s on a subdirectory
+                    // install.
+                    if (preg_match('/\$(\w*(?:path|url|base|link)\w*)\s*=[^;]*?[\'"](\/[a-zA-Z][^\'"]*)[\'"]/i', $line, $m) === 1) {
+                        $var = $m[1];
+                        $built = '/\b(asset_url|url|absolute_url|buildUrl)\s*\(\s*\$?' . preg_quote($var, '/') . '\b/';
+                        // A filesystem path (used for a filemtime) is not a
+                        // URL: it never reaches an href.
+                        $onDisk = '/\b(filemtime|is_file|file_exists|file_get_contents|dirname)\s*\(\s*\$?' . preg_quote($var, '/') . '\b/';
+                        if (preg_match('/\b(asset_url|url|absolute_url|buildUrl)\s*\(/', $line) === 0
+                            && strpos($m[2], '/assets/') !== 0
+                            && preg_match($built, $allViews) === 0
+                            && preg_match($onDisk, $src) === 0) {
+                            $offenders[] = basename($file) . ':' . ($n + 1) . ' ' . $m[2];
+                        }
+                    }
+                }
+            }
+            return $offenders === []
+                ? $ok('every link goes through url()')
+                : $bad('these links use a raw path, so they 404 when the site is installed in a subdirectory: ' . implode(', ', $offenders));
+        });
+
         $add('smoke.ui.admin_js_layer', 'Smoke · UI', 'The admin panel has a confirmation modal, an undo toast and inline editing', static function () use ($root, $ok, $bad): array {
             // The admin panel used to ask every destructive question with
             // window.confirm (a browser dialog with no styling) and to

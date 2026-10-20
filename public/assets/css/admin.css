@@ -1174,16 +1174,27 @@ body.admin-theme {
 .admin-theme .mg-table-wrap th,
 .admin-theme .mg-table-wrap td { padding: .5rem .45rem; vertical-align: middle; overflow-wrap: normal; }
 
-/* Widths sum to ~970px, leaving the title column whatever is left over at
-   1440px. Each is sized to its widest real value, so nothing truncates. */
-.admin-theme .mg-table-wrap th:nth-child(1), .admin-theme .mg-table-wrap td:nth-child(1) { width: 56px; }
-.admin-theme .mg-table-wrap th:nth-child(3), .admin-theme .mg-table-wrap td:nth-child(3) { width: 76px; }
-.admin-theme .mg-table-wrap th:nth-child(4), .admin-theme .mg-table-wrap td:nth-child(4) { width: 132px; }
-.admin-theme .mg-table-wrap th:nth-child(5), .admin-theme .mg-table-wrap td:nth-child(5) { width: 158px; }
-.admin-theme .mg-table-wrap th:nth-child(6), .admin-theme .mg-table-wrap td:nth-child(6) { width: 64px; }
-.admin-theme .mg-table-wrap th:nth-child(7), .admin-theme .mg-table-wrap td:nth-child(7) { width: 118px; }
-.admin-theme .mg-table-wrap th:nth-child(8), .admin-theme .mg-table-wrap td:nth-child(8) { width: 118px; }
-.admin-theme .mg-table-wrap th:nth-child(9), .admin-theme .mg-table-wrap td:nth-child(9) { width: 250px; }
+/* The widths follow the columns of views/admin/galleries.php: 1 checkbox,
+   2 cover, 3 gallery (the flexible one), 4 type, 5 categories, 6 media,
+   7 level, 8 scheduled, 9 created, 10 actions.
+
+   They used to be written for a NINE column table, so every column was off
+   by one: the title got 76px, the media 64px and the actions whatever was
+   left - the cells overflowed into each other and the rows were three lines
+   tall. The fixed widths now sum to ~995px, leaving the title the rest.
+
+   EVERY row is one line: the title is truncated with an ellipsis, the
+   categories stay on one line, and the description rides along in the
+   title's tooltip. */
+.admin-theme .mg-table-wrap th:nth-child(1), .admin-theme .mg-table-wrap td:nth-child(1) { width: 40px; }
+.admin-theme .mg-table-wrap th:nth-child(2), .admin-theme .mg-table-wrap td:nth-child(2) { width: 58px; }
+.admin-theme .mg-table-wrap th:nth-child(4), .admin-theme .mg-table-wrap td:nth-child(4) { width: 78px; }
+.admin-theme .mg-table-wrap th:nth-child(5), .admin-theme .mg-table-wrap td:nth-child(5) { width: 150px; }
+.admin-theme .mg-table-wrap th:nth-child(6), .admin-theme .mg-table-wrap td:nth-child(6) { width: 122px; }
+.admin-theme .mg-table-wrap th:nth-child(7), .admin-theme .mg-table-wrap td:nth-child(7) { width: 86px; }
+.admin-theme .mg-table-wrap th:nth-child(8), .admin-theme .mg-table-wrap td:nth-child(8) { width: 112px; }
+.admin-theme .mg-table-wrap th:nth-child(9), .admin-theme .mg-table-wrap td:nth-child(9) { width: 112px; }
+.admin-theme .mg-table-wrap th:nth-child(10), .admin-theme .mg-table-wrap td:nth-child(10) { width: 236px; }
 
 .admin-theme .mg-table-wrap .mg-cover,
 .admin-theme .mg-table-wrap .mg-cover-empty { width: 50px; height: 38px; }
@@ -1191,11 +1202,12 @@ body.admin-theme {
 
 .admin-theme .mg-table-wrap .mg-categories {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: .2rem;
-    align-content: flex-start;
-    min-width: 9.5rem;
-    max-width: 11rem;
+    align-items: center;
+    overflow: hidden;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .admin-theme .mg-table-wrap .mg-categories .pill {
@@ -1205,7 +1217,7 @@ body.admin-theme {
     white-space: nowrap;
 }
 
-.admin-theme .mg-table-wrap .mg-media { white-space: nowrap; }
+.admin-theme .mg-table-wrap .mg-media { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .admin-theme .mg-table-wrap .mg-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* Timestamps and long text cells in the ordinary card tables (Engagement,
@@ -1219,7 +1231,21 @@ body.admin-theme {
     white-space: nowrap;
 }
 .admin-theme th.num, .admin-theme td.num { text-align: right; font-variant-numeric: tabular-nums; }
-.admin-theme .mg-table-wrap .mg-title { max-width: 100%; }
+/* The title cell: the title truncates, the pills stay next to it, and the
+   row stays one line tall. */
+.admin-theme .mg-table-wrap .mg-title-cell {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+    min-width: 0;
+}
+.admin-theme .mg-table-wrap .mg-title {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 
 .admin-theme .mg-table-wrap td.act,
 .admin-theme .mg-table-wrap th.act { text-align: right; white-space: nowrap; }

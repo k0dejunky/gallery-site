@@ -3,8 +3,12 @@
 // editor fills the entire browser window without the admin sidebar/header.
 $title = 'Video Editor';
 
-$cssPath = dirname($_SERVER['DOCUMENT_ROOT']) . '/gallery/public/assets/video-editor/video-editor.css';
-$jsPath  = dirname($_SERVER['DOCUMENT_ROOT']) . '/gallery/public/assets/video-editor/video-editor.js';
+// The asset directory of THIS install: the old path hard-coded /gallery, so
+// on any other install the version was always "now" and the browser refetched
+// the editor's CSS and JS on every load.
+$assetDir = dirname(__DIR__, 2) . '/public/assets/video-editor';
+$cssPath = $assetDir . '/video-editor.css';
+$jsPath  = $assetDir . '/video-editor.js';
 $cssVer = @filemtime($cssPath) ?: time();
 $jsVer  = @filemtime($jsPath)  ?: time();
 $backGallery = \App\Models\Photo::firstGalleryId((int) $photo['id']);

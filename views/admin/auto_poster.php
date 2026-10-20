@@ -17,7 +17,10 @@ $apFields      = (array) ($platformMeta['fields'] ?? []);
 $apTargetNames = Platforms::targetFieldNames($platform);
 $apIsTitleBody = Platforms::isTitleBody($platform);
 $title         = 'Auto Poster — ' . $platformName;
-$platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/' . $platform;
+// url() adds the install's base path. A raw '/admin/auto-poster' 404s on a
+// site installed in a subdirectory (the prod site lives in /gallery), which
+// is what broke the recent-posts pager: every page link went nowhere.
+$platformPath  = $platform === 'x' ? url('/admin/auto-poster') : url('/admin/auto-poster/' . $platform);
 ?>
 
 <?php // ----- Platform switch: one tab per enabled posting option ----- ?>

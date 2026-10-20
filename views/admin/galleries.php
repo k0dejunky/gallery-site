@@ -296,16 +296,18 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                                 <div class="mg-cover-empty">No&nbsp;media</div>
                             <?php endif; ?>
                         </td>
-                        <td>
-                            <a class="mg-title" href="<?= url('/admin/galleries/' . $gid) ?>" title="<?= e((string) $gallery['title']) ?>"><?= e((string) $gallery['title']) ?></a>
+                        <td class="mg-title-cell">
+                            <?php /* One row per gallery: the title is truncated
+                                and the description rides along in the tooltip
+                                instead of a second line. */ ?>
+                            <a class="mg-title" href="<?= url('/admin/galleries/' . $gid) ?>"
+                               title="<?= e(trim((string) $gallery['title'] . (trim((string) ($gallery['description'] ?? '')) !== '' ? "
+" . (string) $gallery['description'] : ''))) ?>"><?= e((string) $gallery['title']) ?></a>
                             <?php if (!empty($gallery['is_secret'])): ?>
                                 <span class="pill pill-warn">Secret</span>
                             <?php endif; ?>
                             <?php if (!empty($gallery['published_at']) && $gallery['published_at'] > gmdate('Y-m-d H:i:s')): ?>
                                 <span class="pill pill-warn" title="Hidden from the public site until the scheduled time">Scheduled</span>
-                            <?php endif; ?>
-                            <?php if (trim((string) ($gallery['description'] ?? '')) !== ''): ?>
-                                <div class="mg-desc"><?= e((string) $gallery['description']) ?></div>
                             <?php endif; ?>
                         </td>
                         <td>
