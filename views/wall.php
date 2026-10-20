@@ -6,10 +6,19 @@
     <p class="muted">New sets and studio updates, right as they land.</p>
 </div>
 
+<?php /* The inbox (the member's own notifications) and the creator's
+    updates are two different things. The updates lead - they are what the
+    member came for - and the inbox is a collapsed block under them, so a
+    member with 30 notifications does not have to scroll past all of them
+    to reach the studio's news. */ ?>
 <?php if (!empty($notifications)): ?>
     <section class="favorites-section">
+        <details class="wall-inbox"<?= !empty($unreadIds) ? '' : ' open' ?>>
+        <summary>
+            <strong>Inbox</strong>
+            <span class="muted"><?= !empty($unreadIds) ? count($unreadIds) . ' new' : count($notifications) . ' item' . (count($notifications) === 1 ? '' : 's') ?></span>
+        </summary>
         <div class="favorites-heading">
-            <h2>New for you</h2>
             <?php if (!empty($unreadIds)): ?>
                 <form method="post" action="<?= url('/notifications/read-all') ?>">
                     <?= csrf_field() ?>
@@ -99,6 +108,7 @@
                 </article>
             <?php endforeach; ?>
         </div>
+        </details>
     </section>
 <?php endif; ?>
 
@@ -111,10 +121,16 @@
     </div>
 <?php else: ?>
     <?php
-    // One date heading per day, not one per post: the feed used to print
-    // "October 18, 2026" five times in a row.
+    /* One date heading per day, not one per post: the feed used to print
+       "October 18, 2026" five times in a row. */
     $lastDay = null;
     ?>
+    <?php if (!empty($posts)): ?>
+    <section class="favorites-section">
+        <div class="favorites-heading">
+            <h2>Studio updates</h2>
+        </div>
+    <?php endif; ?>
     <?php foreach ($posts as $post): ?>
         <?php $postPreview = $post['preview'] ?? null; ?>
         <?php
@@ -209,6 +225,9 @@
             </details>
         </section>
     <?php endforeach; ?>
+    <?php if (!empty($posts)): ?>
+    </section>
+    <?php endif; ?>
 
     <?php // The wall is paged, so the older posts are reachable. ?>
     <?php require __DIR__ . '/partials/pagination.php'; ?>

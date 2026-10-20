@@ -1027,3 +1027,14 @@ body .u-w-full-mb{width:100% !important;margin-bottom:4px !important}
     font-size:.9rem;
 }
 .card-lock-price{font-size:.72rem;color:var(--muted-color,#c3a6c9)}
+
+/* ---------- The wall's inbox ----------------------------------------------
+   The member's own notifications sit in a collapsed block under the
+   creator's updates: they are two different things, and a member with 30
+   notifications should not have to scroll past all of them. */
+.wall-inbox > summary{
+    display:flex;align-items:center;gap:.5rem;cursor:pointer;
+    padding:.5rem .25rem;font-size:.95rem;
+}
+.wall-inbox > summary:hover strong{text-decoration:underline}
+.wall-inbox[open] > summary{margin-bottom:.5rem}
