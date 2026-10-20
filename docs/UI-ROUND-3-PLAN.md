@@ -32,7 +32,7 @@ smoke check that locks it in travels in the same commit).
 | 0 | The plan anchor (this file) | **done** | `6257c30` |
 | 1 | Contrast and focus | **done** | `76e6aa0`, `2d0ba04`, `ab75dc0`, `8a0e512`, `5a45259`, `3b79b14` |
 | 2 | Broken code that already shipped | **done** | `cfb4ab6`, `35bc5ca`, `c4429dc`, `29fdb9e`, `da0159f`, `ef3186f` |
-| 3 | Token coherence | pending | - |
+| 3 | Token coherence | **done** | `4708322`, `0af1fdc`, `0672771`, `01e8470`, `dede9a4`, `0d7b087`, `bea22ee`, `bb7e3b0`, `9164dd9`, `b028d3e` |
 | 4 | The component layer | pending | - |
 | 5 | Member product UX | pending | - |
 | Final | local smoke/unit -> dev -> prod verify -> commit + push | pending | - |
@@ -41,7 +41,7 @@ smoke check that locks it in travels in the same commit).
 
 - **local** `/media/webdev/Media/gallery-full` - `main`, clean, in sync with
   `origin/main`.
-- `php tests/smoke.php` -> **948 checks, all passed** (937 at the start).
+- `php tests/smoke.php` -> **955 checks, all passed** (937 at the start).
 - `php _suite_runner.php` -> 1006 tests with the **6 known environment-only
   failures** (4 orphan photos, the example.com routes, the missing Twitter
   key, the missing cron directory). Nothing here may add a seventh.
@@ -198,20 +198,50 @@ invert it: make the dark stylesheet the base.**
 
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| 3.0 | Re-baseline `smoke.ui.inline_style_ratchet` **downward** (it is at 850 of a 853 limit, so there is no headroom for any new inline style) | `app/Core/SmokeChecks.php` | pending | - |
-| 3.1 | Extract the 22 `u-*` utilities into a new `public/assets/css/utilities.css` loaded by both shells. They are `body .x`-scoped and scope-agnostic. 30 of the ~40 admin views use them (96 times `u-right` alone) | `public/assets/css/utilities.css`, both layouts | pending | - |
-| 3.2 | **Stop loading `user.css` in the admin.** Move the Support Desk block (`public/assets/css/user.css:68-80`) into `admin.css` - the entire admin Support Desk is currently styled by the *member* stylesheet, wearing light-palette fallbacks by accident | `views/admin/layout.php`, `public/assets/css/admin.css`, `public/assets/css/user.css` | pending | - |
-| 3.3 | Remap `--table-border` / `--table-header-bg` for the admin scope. Unmapped, they stay `#f472b6` - **the System page's table headers are bright pink in a neutral grey console** | `public/assets/css/admin.css` | pending | - |
-| 3.4 | Re-order the theme block so the **Theme editor's admin surface controls actually work**. `admin.css` loads *after* the inline theme block at equal specificity, so `--card-bg`, `--pink-100/200/300/400`, `--stat-bg` can never change | `views/admin/layout.php` | pending | - |
-| 3.5 | One radius scale. `.sys-card` is 10px (`--adm-radius`) but `.page-system .sys-card` is **8px** (`var(--border-radius)`) - measured in headless Chrome | `public/assets/css/admin.css` | pending | - |
-| 3.6 | Delete `public/assets/admin-shared.css` (19 lines, ~90% dead - every rule is re-declared with different values in `admin.css`) | `public/assets/admin-shared.css` | pending | - |
-| 3.7 | Move the 577 hardcoded hexes in the views onto tokens, and delete the light-palette fallback literals (`var(--pink-100,#fdf4ff)`) that flash white on the dark skin | the views | pending | - |
-| 3.8 | `app/Core/theme_base.css:5` centres **every** h1-h6. The member skin never overrides it, so ~15 `text-align:left` opt-outs in CSS and 7 inline in views fight it. Set the alignment in the base and delete the opt-outs | `app/Core/theme_base.css`, `public/assets/css/user.css`, the views | pending | - |
-| 3.9 | One type scale. The 6-step `u-fs-*` scale (hard-coded rem) duplicates `--font-size-*` with *different* values (`u-fs-085` = .85rem vs `--font-size-md` = .95rem). The system sans itself stays | `public/assets/css/user.css`, `app/Models/Theme.php` | pending | - |
+| 3.0 | Re-baseline `smoke.ui.inline_style_ratchet` **downward** (it is at 850 of a 853 limit, so there is no headroom for any new inline style) | `app/Core/SmokeChecks.php` | done | 4708322 |
+| 3.1 | Extract the 22 `u-*` utilities into a new `public/assets/css/utilities.css` loaded by both shells. They are `body .x`-scoped and scope-agnostic. 30 of the ~40 admin views use them (96 times `u-right` alone) | `public/assets/css/utilities.css`, both layouts | done | 0af1fdc |
+| 3.2 | **Stop loading `user.css` in the admin.** Move the Support Desk block (`public/assets/css/user.css:68-80`) into `admin.css` - the entire admin Support Desk is currently styled by the *member* stylesheet, wearing light-palette fallbacks by accident | `views/admin/layout.php`, `public/assets/css/admin.css`, `public/assets/css/user.css` | done | 0672771 |
+| 3.3 | Remap `--table-border` / `--table-header-bg` for the admin scope. Unmapped, they stay `#f472b6` - **the System page's table headers are bright pink in a neutral grey console** | `public/assets/css/admin.css` | done | 01e8470 |
+| 3.4 | Re-order the theme block so the **Theme editor's admin surface controls actually work**. `admin.css` loads *after* the inline theme block at equal specificity, so `--card-bg`, `--pink-100/200/300/400`, `--stat-bg` can never change | `views/admin/layout.php` | done | dede9a4 |
+| 3.5 | One radius scale. `.sys-card` is 10px (`--adm-radius`) but `.page-system .sys-card` is **8px** (`var(--border-radius)`) - measured in headless Chrome | `public/assets/css/admin.css` | done | 0d7b087 |
+| 3.6 | Delete `public/assets/admin-shared.css` (19 lines, ~90% dead - every rule is re-declared with different values in `admin.css`) | `public/assets/admin-shared.css` | done | bea22ee |
+| 3.7 | Move the 577 hardcoded hexes in the views onto tokens, and delete the light-palette fallback literals (`var(--pink-100,#fdf4ff)`) that flash white on the dark skin | the views | done | bb7e3b0 |
+| 3.8 | `app/Core/theme_base.css:5` centres **every** h1-h6. The member skin never overrides it, so ~15 `text-align:left` opt-outs in CSS and 7 inline in views fight it. Set the alignment in the base and delete the opt-outs | `app/Core/theme_base.css`, `public/assets/css/user.css`, the views | done | 9164dd9 |
+| 3.9 | One type scale. The 6-step `u-fs-*` scale (hard-coded rem) duplicates `--font-size-*` with *different* values (`u-fs-085` = .85rem vs `--font-size-md` = .95rem). The system sans itself stays | `public/assets/css/user.css`, `app/Models/Theme.php` | done | b028d3e |
 
 **3.2 is the load-bearing one** - it removes a whole class of leak bugs in a
 single move. It is also the one that can bite: it changes the admin's entire
 surface, so it gets its own commit and a visual diff over every admin page.
+
+### What phase 3 changed
+
+The token layer, in ten commits:
+
+| id | what it did |
+|---|---|
+| 3.0 | the inline-style ratchet re-baselined at 847 (it was 850 of a limit of 853) |
+| 3.1 | the `u-*` utilities moved into `utilities.css`, which both shells load |
+| 3.2 | **the admin console no longer loads the member stylesheet**; the Support Desk became a shared `support.css` |
+| 3.3 | the System page's rows were hot pink; the table tokens are remapped now |
+| 3.4 | **the admin theme editor had 16 dead colour pickers**; the palette carries the console now |
+| 3.5 | the admin had two radius scales; there is one now |
+| 3.6 | the admin console has one stylesheet; `admin-shared.css` is gone |
+| 3.7 | the member views carry no stray colours; two of them were unreadable |
+| 3.8 | the headings were aligned in fifteen places at once |
+| 3.9 | the font sizes come from one scale, so the editor moves them |
+
+Two of these were verified by pixel diffing the dev box before and after
+(phase 3.2), and two by driving the real form in a browser (3.4). The
+rest were measured in headless Chrome.
+
+**A NOTE ON THE 3.2 COMPARISON.** The first pixel diff showed the member
+pages 92% different and the admin 0.0000% different. The member pages
+were a measurement mistake: the scp that reverted the files copied two
+files with the same basename (`layout.php`) into one directory, so the
+ADMIN layout landed in the member slot. The admin result was valid; the
+member one was not. Re-run properly, the member's support page is
+0.0000% identical and the member's gallery listing differs by less than
+two consecutive captures of the same state (it is personalised).
 
 ---
 
@@ -281,4 +311,5 @@ restore the fix. A check that has never failed is not a check.
 6. Prod smoke runs as `www-data` and needs `sudo rm -rf /tmp/gallery-analytics-rot`
    first, or `smoke.analytics.rotated_discovery` fails on a root-owned dir.
 7. `php tests/smoke.php` -> 937 checks at the start of this programme,
-   941 after phase 1 and 948 after phase 2. The count may only go up.
+   941 after phase 1, 948 after phase 2 and 955 after phase 3. The count
+   may only go up.
