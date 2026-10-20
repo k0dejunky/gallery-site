@@ -25,16 +25,73 @@ class EmailerController extends MembershipAdminController
     /**
      * Show the emailer switches, what each one sends, the queue counts by kind
      * and the recent queue log.
+     *
+     * The queue list can be filtered by status and by kind, and exported as
+     * CSV, so the operator can work through a backlog of failures without
+     * scrolling a page of 50 mixed rows.
      */
     public function index(): void
     {
+        $status = trim((string) ($this->request->query('status') ?? ''));
+        if (!in_array($status, ['queued', 'sent', 'failed'], true)) {
+            $status = '';
+        }
+
+        $kind = trim((string) ($this->request->query('kind') ?? ''));
+
         $this->viewAdmin('emailer', [
             'config'         => EmailerConfig::all(),
             'queueCounts'    => EmailQueue::statusCounts(),
             'kindCounts'     => EmailQueue::kindCounts(),
-            'recent'         => EmailQueue::recent(50),
+            'recent'         => EmailQueue::recent(50, $status, $kind),
             'lifecycleStats' => EmailQueue::lifecycleStats(),
+            'filterStatus'   => $status,
+            'filterKind'     => $kind,
         ]);
+    }
+
+    /**
+     * The queue log as a CSV file, with the same filters the page uses.
+     */
+    public function export(): void
+    {
+        $status = trim((string) ($this->request->query('status') ?? ''));
+        if (!in_array($status, ['queued', 'sent', 'failed'], true)) {
+            $status = '';
+        }
+
+        $kind = trim((string) ($this->request->query('kind') ?? ''));
+
+        $rows = EmailQueue::forExport(2000, $status, $kind);
+
+        $out = fopen('php://output', 'w');
+        if ($out === false) {
+            $this->flash('error', 'Could not build the export.');
+            $this->redirect('/admin/emailer');
+            return;
+        }
+
+        fputcsv($out, ['id', 'kind', 'status', 'email', 'subject', 'attempts', 'created_at', 'sent_at', 'error']);
+
+        foreach ($rows as $row) {
+            fputcsv($out, [
+                (int) $row['id'],
+                (string) $row['kind'],
+                (string) $row['status'],
+                (string) $row['email'],
+                (string) $row['subject'],
+                (int) $row['attempts'],
+                (string) $row['created_at'],
+                (string) ($row['sent_at'] ?? ''),
+                (string) ($row['error'] ?? ''),
+            ]);
+        }
+
+        fclose($out);
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="email-queue-' . date('Ymd-His') . '.csv"');
+        exit;
     }
 
     /**
@@ -129,6 +186,20 @@ class EmailerController extends MembershipAdminController
         }
 
         $this->flash('success', 'Email #' . $id . ' moved back to the sending queue.');
+        $this->redirect('/admin/emailer');
+    }
+
+    /**
+     * Move EVERY failed row back into the queue. One click instead of one
+     * click per row when the SMTP server was down for an hour.
+     */
+    public function retryAll(): void
+    {
+        $done = EmailQueue::requeueAllFailed();
+
+        $this->flash($done > 0 ? 'success' : 'error', $done > 0
+            ? $done . ' failed email(s) moved back to the sending queue.'
+            : 'There are no failed emails to retry.');
         $this->redirect('/admin/emailer');
     }
 }

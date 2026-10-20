@@ -165,5 +165,15 @@
         <?php endforeach; ?>
         </tbody>
     </table>
-    <?php $baseUrl = url('/admin/logs'); require __DIR__ . '/../partials/pagination.php'; ?>
+    <?php // The shared admin pager (app/Core/AdminTable.php). ?>
+    <?= \App\Core\AdminTable::pager([
+        'base'   => url('/admin/logs'),
+        'page'   => (int) ($paginator['page'] ?? 1),
+        'pages'  => (int) ($paginator['pages'] ?? 1),
+        'params' => array_filter([
+            'q'      => $filterQ ?? '',
+            'action' => $filterAction ?? '',
+            'entity' => $filterEntity ?? '',
+        ], static fn($v) => $v !== '' && $v !== null),
+    ]) ?>
 <?php endif; ?>

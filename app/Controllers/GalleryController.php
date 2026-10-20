@@ -1849,13 +1849,13 @@ if ($publishAtRaw !== '') {
 
         if ($ids === [] || !in_array($action, ['delete', 'category'], true)) {
             $this->flash('error', 'Nothing to do — select galleries and an action first.');
-            $this->redirect('/admin');
+            $this->redirect('/admin/galleries');
         }
 
         $categoryId = (int) $this->request->post('category_id', 0);
         if ($action === 'category' && $categoryId <= 0) {
             $this->flash('error', 'Pick a category to assign.');
-            $this->redirect('/admin');
+            $this->redirect('/admin/galleries');
         }
 
         $adminId = (int) Auth::user()['id'];
@@ -1891,7 +1891,7 @@ if ($publishAtRaw !== '') {
         }
 
         $this->flash('success', ucfirst($action === 'delete' ? 'Deleted' : 'Recategorized') . " {$done} gallery(ies).");
-        $this->redirect('/admin');
+        $this->redirect('/admin/galleries');
     }
 
     private function guardSecretAdmin(?array $gallery): void

@@ -49,7 +49,7 @@ $cap          = (int) ($config['notification_daily_cap'] ?? 1);
 ?>
 
 <?php // ----- Status ----- ?>
-<div class="stats-grid" style="margin-bottom:1rem;">
+<div class="stats-grid u-mb-1">
     <div class="stats-panel">
         <h2>What this sends</h2>
         <p class="muted" style="margin:.25rem 0;">
@@ -58,13 +58,13 @@ $cap          = (int) ($config['notification_daily_cap'] ?? 1);
         </p>
         <table>
             <thead>
-                <tr><th style="text-align:left;">Email</th><th style="text-align:left;">When</th></tr>
+                <tr><th class="u-left">Email</th><th class="u-left">When</th></tr>
             </thead>
             <tbody>
                 <?php foreach ($mailTypes as $type): ?>
                     <tr>
                         <td style="padding:.35rem .5rem;"><strong><?= e($type['label']) ?></strong></td>
-                        <td style="padding:.35rem .5rem;" class="muted" style="font-size:.85rem;"><?= $type['detail'] ?></td>
+                        <td style="padding:.35rem .5rem;" class="muted"><?= $type['detail'] ?></td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -92,7 +92,7 @@ $cap          = (int) ($config['notification_daily_cap'] ?? 1);
 </div>
 
 <?php // ----- Settings ----- ?>
-<div class="stats-panel" style="margin-bottom:1rem;">
+<div class="stats-panel u-mb-1">
     <h2>Switches</h2>
     <form method="post" action="<?= url('/admin/emailer/save') ?>">
         <?= csrf_field() ?>
@@ -100,7 +100,7 @@ $cap          = (int) ($config['notification_daily_cap'] ?? 1);
         <p>
             <label class="chip"><input type="checkbox" name="enabled" value="1"<?= $broadcastsOn ? ' checked' : '' ?>> Send the broadcast emails (today's new gallery + live start)</label>
         </p>
-        <p class="muted" style="font-size:.8rem;">
+        <p class="muted u-fs-08">
             Off stops those two only. A chat reply, a support answer, a renewal reminder, a win-back and any billing notice are
             transactional and are still delivered.
         </p>
@@ -117,7 +117,7 @@ $cap          = (int) ($config['notification_daily_cap'] ?? 1);
         <p>
             <label class="chip"><input type="checkbox" name="lifecycle_inactive_winbacks" value="1"<?= !empty($config['lifecycle_inactive_winbacks']) ? ' checked' : '' ?>> Win-back members with no membership who haven't visited for 30 days</label>
         </p>
-        <p class="muted" style="font-size:.8rem;">
+        <p class="muted u-fs-08">
             Each lifecycle email is sent at most once per subscription, keyed in <code>subscription_email_log</code>;
             member-level nudges (trial ending, inactive win-back) are once per member in <code>retention_email_log</code>.
         </p>
@@ -126,7 +126,7 @@ $cap          = (int) ($config['notification_daily_cap'] ?? 1);
             <label for="notification_daily_cap">Broadcast emails per member per day</label><br>
             <input type="number" name="notification_daily_cap" id="notification_daily_cap" min="0" max="10" value="<?= $cap ?>" style="width:120px;">
         </p>
-        <p class="muted" style="font-size:.8rem;">
+        <p class="muted u-fs-08">
             Applies to the gallery and live emails separately. At <code>1</code> a member gets one email the day a gallery is
             posted and one when a stream starts — not one per publication. Chat replies and billing mail are never capped.
             Set <code>0</code> to remove the cap.
@@ -137,15 +137,15 @@ $cap          = (int) ($config['notification_daily_cap'] ?? 1);
 </div>
 
 <?php // ----- Lifecycle ----- ?>
-<div class="stats-panel" style="margin-bottom:1rem;">
+<div class="stats-panel u-mb-1">
     <h2>Test a template</h2>
-    <p class="muted" style="font-size:.85rem;">
+    <p class="muted u-fs-085">
         Sends one email to <code><?= e((string) env_value('ADMIN_EMAIL', '(no ADMIN_EMAIL set)')) ?></code> with sample data.
         Nothing is queued and no member is contacted.
     </p>
     <table>
         <thead>
-            <tr><th style="text-align:left;">Email</th><th>Sent</th><th style="text-align:right;">Test to admin</th></tr>
+            <tr><th class="u-left">Email</th><th>Sent</th><th class="u-right">Test to admin</th></tr>
         </thead>
         <tbody>
             <?php
@@ -164,7 +164,7 @@ $cap          = (int) ($config['notification_daily_cap'] ?? 1);
                 <tr>
                     <td><?= e($label) ?></td>
                     <td><?= number_format((int) ($kindCounts[$kindKey] ?? 0)) ?></td>
-                    <td style="text-align:right;">
+                    <td class="u-right">
                         <form class="inline" method="post" action="<?= url('/admin/emailer/test-lifecycle/' . e($kind)) ?>">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-sm btn-outline">Send test</button>
@@ -177,11 +177,63 @@ $cap          = (int) ($config['notification_daily_cap'] ?? 1);
 </div>
 
 <?php // ----- Recent queue ----- ?>
+<?php
+use App\Core\AdminTable;
+
+$filterStatus = $filterStatus ?? '';
+$filterKind   = $filterKind ?? '';
+$queueBase    = url('/admin/emailer');
+?>
 <div class="stats-panel">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
-        <h2 style="margin:0;">Recent emails</h2>
-        <span class="muted" style="font-size:.85rem;">Failed rows can be retried.</span>
+        <h2 class="u-m0">Recent emails</h2>
+        <div class="adm-list-head-aside">
+            <span class="muted u-fs-085">Failed rows can be retried.</span>
+            <?php if ((int) ($queueCounts['failed'] ?? 0) > 0): ?>
+                <form method="post" action="<?= url('/admin/emailer/retry-all') ?>"
+                      data-confirm="Move every failed email back to the queue?">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="btn btn-sm">Retry all failed (<?= (int) $queueCounts['failed'] ?>)</button>
+                </form>
+            <?php endif; ?>
+            <a class="btn btn-sm btn-outline" href="<?= e($queueBase . '/export' . ($filterStatus !== '' || $filterKind !== '' ? '?' . http_build_query(array_filter(['status' => $filterStatus, 'kind' => $filterKind])) : '')) ?>">Export CSV</a>
+        </div>
     </div>
+
+    <?php // The queue filters. They are part of the URL, so the export link
+          // above can carry them and a shared link shows the same list. ?>
+    <?= AdminTable::filterForm([
+        'action' => $queueBase,
+        'filters' => [
+            [
+                'name'       => 'status',
+                'label'      => 'Status',
+                'value'      => $filterStatus,
+                'autosubmit' => true,
+                'options'    => [
+                    ''       => 'All statuses',
+                    'queued' => 'Queued',
+                    'sent'   => 'Sent',
+                    'failed' => 'Failed',
+                ],
+            ],
+            [
+                'name'       => 'kind',
+                'label'      => 'Type',
+                'value'      => $filterKind,
+                'autosubmit' => true,
+                'options'    => ['' => 'All types'] + array_combine(
+                    array_keys($kindLabels),
+                    array_values($kindLabels)
+                ),
+            ],
+        ],
+        'actions' => '<button class="btn btn-sm" type="submit">Apply</button>'
+            . ($filterStatus !== '' || $filterKind !== ''
+                ? ' <a class="btn btn-sm btn-outline" href="' . e($queueBase) . '">Clear</a>'
+                : ''),
+    ]) ?>
+
     <?php if (empty($recent)): ?>
         <p class="muted">Nothing sent yet. Use a test send above to verify the pipeline.</p>
     <?php else: ?>
@@ -195,7 +247,7 @@ $cap          = (int) ($config['notification_daily_cap'] ?? 1);
                     <th>Status</th>
                     <th>Attempts</th>
                     <th>Error / When</th>
-                    <th style="text-align:right;">Actions</th>
+                    <th class="u-right">Actions</th>
                 </tr>
             </thead>
             <tbody>

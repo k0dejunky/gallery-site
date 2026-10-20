@@ -95,48 +95,48 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
             <?= csrf_field() ?>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.75rem 1rem;">
                 <div>
-                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Machine name (host/posted below apply to this machine)</label>
+                    <label class="muted u-label">Machine name (host/posted below apply to this machine)</label>
                     <input type="text" name="import_machine" value="<?= e((string) ($importS['machine_name'] ?? '')) ?>" placeholder="win-box / linux" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
                     <span class="muted" style="font-size:.72rem;">Each machine keeps its own host/posted folders; blank = shared default.</span>
                 </div>
                 <div>
-                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Enabled</label>
+                    <label class="muted u-label">Enabled</label>
                     <label class="chip"><input type="checkbox" name="import_enabled" value="1" <?= !empty($importS['enabled']) ? 'checked' : '' ?>> Run the importer on schedule</label>
                 </div>
                 <div>
-                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Daily schedule (HH:MM, blank = interval only)</label>
+                    <label class="muted u-label">Daily schedule (HH:MM, blank = interval only)</label>
                     <input type="text" name="import_schedule" value="<?= e((string) ($importS['schedule'] ?? '')) ?>" placeholder="06:00" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
                 </div>
                 <div>
-                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Interval (minutes, 0 = off)</label>
+                    <label class="muted u-label">Interval (minutes, 0 = off)</label>
                     <input type="number" name="import_interval_minutes" min="0" value="<?= (int) ($importS['interval_minutes'] ?? 0) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
                 </div>
                 <div>
-                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Host folder (on the Windows box / Ubuntu)</label>
+                    <label class="muted u-label">Host folder (on the Windows box / Ubuntu)</label>
                     <input type="text" name="import_host_folder" value="<?= e((string) ($importS['host_folder'] ?? '')) ?>" placeholder="C:\work\incoming" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
                 </div>
                 <div>
-                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Posted folder (defaults to &lt;host&gt;/posted)</label>
+                    <label class="muted u-label">Posted folder (defaults to &lt;host&gt;/posted)</label>
                     <input type="text" name="import_posted_folder" value="<?= e((string) ($importS['posted_folder'] ?? '')) ?>" placeholder="C:\work\incoming\posted" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
                 </div>
                 <div>
-                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Import token (GALLERY_IMPORT_KEY)</label>
+                    <label class="muted u-label">Import token (GALLERY_IMPORT_KEY)</label>
                     <input type="password" name="import_token" value="" placeholder="<?= empty($importS['import_token']) ? 'set the key' : 'Leave blank to keep the saved key' ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
                 </div>
                 <div>
-                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Spacing (hours between galleries)</label>
+                    <label class="muted u-label">Spacing (hours between galleries)</label>
                     <input type="number" name="import_spacing_hours" min="1" max="168" value="<?= (int) ($importS['spacing_hours'] ?? 24) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
                 </div>
                 <div>
-                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Min membership level</label>
+                    <label class="muted u-label">Min membership level</label>
                     <input type="number" name="import_min_level" min="0" max="3" value="<?= (int) ($importS['min_level'] ?? 0) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
                 </div>
                 <div>
-                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Gallery description</label>
+                    <label class="muted u-label">Gallery description</label>
                     <input type="text" name="import_description" value="<?= e((string) ($importS['description'] ?? '')) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
                 </div>
                 <div>
-                    <label class="muted" style="font-size:.82rem;display:block;margin-bottom:.2rem;">Secret gallery</label>
+                    <label class="muted u-label">Secret gallery</label>
                     <label class="chip"><input type="checkbox" name="import_is_secret" value="1" <?= !empty($importS['is_secret']) ? 'checked' : '' ?>> Imported galleries are secret</label>
                 </div>
             </div>
@@ -155,7 +155,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
     <details style="border:1px solid var(--pink-300);border-radius:var(--card-radius,8px);padding:1rem 1.25rem;background:var(--pink-100);margin-bottom:1rem;">
         <summary style="cursor:pointer;font-weight:600;" id="dup-galleries-summary">Duplicate galleries (<?= count($duplicateReport['exact'] ?? []) ?> group<?= count($duplicateReport['exact'] ?? []) === 1 ? '' : 's' ?>)</summary>
         <div style="margin-top:.75rem;">
-            <p class="muted" style="font-size:.85rem;">
+            <p class="muted u-fs-085">
                 Galleries that reference the same media, sometimes under different names (re-imports).
                 Scanned <?= e((string) ($duplicateReport['scanned_at'] ?? 'never')) ?> —
                 <?= (int) ($duplicateReport['total_galleries'] ?? 0) ?> galleries. Removing a copy soft-deletes
@@ -226,7 +226,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                     <h4 style="margin:.9rem 0 .4rem;font-size:.9rem;">Contained (one gallery inside another)</h4>
                     <ul style="margin:0;padding-left:1.2rem;">
                         <?php foreach (array_slice($contained, 0, 8) as $pair): ?>
-                            <li class="muted" style="font-size:.85rem;">
+                            <li class="muted u-fs-085">
                                 <a href="<?= url('/admin/galleries/' . (int) $pair['a']['id']) ?>"><?= e((string) $pair['a']['title']) ?></a>
                                 fully inside
                                 <a href="<?= url('/admin/galleries/' . (int) $pair['b']['id']) ?>"><?= e((string) $pair['b']['title']) ?></a>
@@ -244,10 +244,33 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
             <a class="btn btn-sm" href="<?= url('/admin/galleries') ?>">Clear filters</a>
         </div>
     <?php else: ?>
+    <?php // The bulk bar: delete the selected galleries or assign them a
+          // category. The backend (POST /admin/galleries/bulk) existed with
+          // no way to reach it, so this is that UI. ?>
+    <form class="adm-bulk-form" id="mg-bulk-form" method="post" action="<?= url('/admin/galleries/bulk') ?>"
+          data-confirm="Apply this action to the selected galleries?">
+        <?= csrf_field() ?>
+        <div class="adm-bulk">
+            <strong>With selected:</strong>
+            <div class="adm-bulk-controls">
+                <select name="action" id="mg-bulk-action">
+                    <option value="category">Set category</option>
+                    <option value="delete">Delete</option>
+                </select>
+                <select name="category_id" id="mg-bulk-category">
+                    <option value="">Choose a category…</option>
+                    <?php foreach (($categories ?? []) as $cat): ?>
+                        <option value="<?= (int) $cat['id'] ?>"><?= e((string) $cat['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="submit" class="btn btn-sm">Apply</button>
+            </div>
+        </div>
     <div class="mg-table-wrap">
         <table id="mg-table">
             <thead>
                 <tr>
+                    <th><input type="checkbox" id="mg-check-all" title="Select all"></th>
                     <th>Cover</th>
                     <th>Gallery</th>
                     <th>Type</th>
@@ -265,6 +288,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                     <?php $cover = $covers[$gid] ?? null; ?>
                     <?php $level = (int) ($gallery['min_level'] ?? 0); ?>
                     <tr data-gallery-id="<?= $gid ?>">
+                        <td><input type="checkbox" name="ids[]" value="<?= $gid ?>" class="mg-check"></td>
                         <td>
                             <?php if ($cover !== null): ?>
                                 <img class="mg-cover" src="<?= e(file_url((string) $cover['filename'], 'thumb')) ?>" alt="" loading="lazy">
@@ -345,8 +369,32 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
             </tbody>
         </table>
     </div>
+    </form>
     <?php endif; ?>
 <?php endif; ?>
+<script nonce="<?= csp_nonce() ?>">
+// The bulk bar: select-all, and the category select only matters for the
+// "set category" action.
+(function () {
+    var all = document.getElementById('mg-check-all');
+    if (all) {
+        all.addEventListener('change', function () {
+            document.querySelectorAll('.mg-check').forEach(function (c) { c.checked = all.checked; });
+        });
+    }
+    var action = document.getElementById('mg-bulk-action');
+    var category = document.getElementById('mg-bulk-category');
+    if (action && category) {
+        var sync = function () {
+            var isCategory = action.value === 'category';
+            category.disabled = !isCategory;
+            category.style.opacity = isCategory ? '' : '.5';
+        };
+        action.addEventListener('change', sync);
+        sync();
+    }
+})();
+</script>
 <script nonce="<?= csp_nonce() ?>">
 // Remove a duplicate gallery without reloading the page: the collapsible
 // section stays open and the scroll position is preserved. On success the

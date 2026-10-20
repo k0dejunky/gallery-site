@@ -147,6 +147,8 @@ class AdminController extends Controller
             'queuedGalleries' => Gallery::queuedForPublishing(Auth::isSuperAdmin()),
             'importSettings'  => \App\Models\ImportSettings::all(),
             'duplicateReport' => \App\Core\DuplicateGalleries::report(),
+            // The bulk bar can assign a category, so it needs the list.
+            'categories'  => \App\Models\Category::all(),
         ]);
     }
 

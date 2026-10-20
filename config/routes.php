@@ -490,7 +490,9 @@ return [
     // The scheduled digest is gone - every email this site sends is queued by
     // the event that causes it, so there is no "send now" or digest schedule.
     ['GET', '/admin/emailer', 'EmailerController@index', 'membership'],
+    ['GET', '/admin/emailer/export', 'EmailerController@export', 'membership'],
     ['POST', '/admin/emailer/save', 'EmailerController@save', 'membership'],
     ['POST', '/admin/emailer/test-lifecycle/{kind}', 'EmailerController@testLifecycle', 'membership'],
     ['POST', '/admin/emailer/retry', 'EmailerController@retry', 'membership'],
+    ['POST', '/admin/emailer/retry-all', 'EmailerController@retryAll', 'membership'],
 ];

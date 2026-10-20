@@ -63,12 +63,15 @@
         </tbody>
     </table>
 
-    <?php
-    $query = [];
-    if ($filterQ !== '') $query['q'] = $filterQ;
-    if ($filterAction !== '') $query['action'] = $filterAction;
-    if ($filterUserId > 0) $query['user'] = $filterUserId;
-    $baseUrl = url('/admin/user-monitor') . ($query ? '?' . http_build_query($query) : '');
-    require __DIR__ . '/../partials/pagination.php';
-    ?>
+    <?php // The shared admin pager (app/Core/AdminTable.php). ?>
+    <?= \App\Core\AdminTable::pager([
+        'base'   => url('/admin/user-monitor'),
+        'page'   => (int) ($paginator['page'] ?? 1),
+        'pages'  => (int) ($paginator['pages'] ?? 1),
+        'params' => array_filter([
+            'q'      => $filterQ ?? '',
+            'action' => $filterAction ?? '',
+            'user'   => ($filterUserId ?? 0) > 0 ? (string) $filterUserId : '',
+        ], static fn($v) => $v !== '' && $v !== null),
+    ]) ?>
 <?php endif; ?>

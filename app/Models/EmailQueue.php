@@ -596,14 +596,56 @@ class EmailQueue
 
     /**
      * The most recent queue rows, newest first, for the admin list.
+     *
+     * $status and $kind narrow the list; $limit caps it. The admin queue view
+     * filters on both (the queue fills up and the interesting rows are the
+     * failures).
      */
-    public static function recent(int $limit = 50): array
+    public static function recent(int $limit = 50, string $status = '', string $kind = ''): array
     {
         $limit = max(1, min(500, $limit));
 
-        return Database::run(
-            'SELECT * FROM email_queue ORDER BY id DESC LIMIT ' . (int) $limit
-        )->fetchAll();
+        $where  = [];
+        $params = [];
+
+        if (in_array($status, ['queued', 'sent', 'failed'], true)) {
+            $where[]  = 'status = ?';
+            $params[] = $status;
+        }
+        if ($kind !== '') {
+            $where[]  = 'kind = ?';
+            $params[] = $kind;
+        }
+
+        $sql = 'SELECT * FROM email_queue';
+        if ($where !== []) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
+        }
+        $sql .= ' ORDER BY id DESC LIMIT ' . (int) $limit;
+
+        return Database::run($sql, $params)->fetchAll();
+    }
+
+    /**
+     * Move every failed row back into the queue for another attempt.
+     * Returns how many rows were requeued.
+     */
+    public static function requeueAllFailed(): int
+    {
+        $stmt = Database::run(
+            'UPDATE email_queue SET status = ?, attempts = 0, error = NULL WHERE status = ?',
+            ['queued', 'failed']
+        );
+
+        return $stmt->rowCount();
+    }
+
+    /**
+     * The queue rows for a CSV export, with the same filters as recent().
+     */
+    public static function forExport(int $limit = 2000, string $status = '', string $kind = ''): array
+    {
+        return self::recent($limit, $status, $kind);
     }
 
     /**

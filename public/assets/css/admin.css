@@ -1510,6 +1510,7 @@ body.admin-theme {
    Every element here sets overflow, so its tables use top: 0. */
 .admin-theme .users-table-wrap,
 .admin-theme .table-scroll,
+.admin-theme .adm-list-scroll,
 .admin-theme .mg-table-wrap,
 .admin-theme .sys-card,
 .admin-theme .card,
@@ -1518,6 +1519,7 @@ body.admin-theme {
 
 .admin-theme .users-table-wrap table thead th,
 .admin-theme .table-scroll table thead th,
+.admin-theme .adm-list-scroll table thead th,
 .admin-theme .mg-table-wrap table thead th,
 .admin-theme .sys-card table thead th,
 .admin-theme .card table thead th,
@@ -3113,4 +3115,137 @@ body.admin-theme {
 .page-videos .subhead{display:block}
 .page-videos .subhead-actions{margin-top:.75rem}
 .page-videos .subhead-actions .btn{flex:1;text-align:center}
+}
+
+/* ---------- Shared admin list component ---------------------------------
+   One card for every admin listing: a head (title, count, note), a filter
+   form that keeps its own values, the bulk-action bar, the table, the pager
+   and the empty state. The listings used to hand-roll all of it and they
+   had drifted apart - two different pagers, three empty states, filters
+   that cleared each other. See app/Core/AdminTable.php. */
+
+.admin-theme .adm-list {
+    background: var(--adm-surface);
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius);
+    box-shadow: var(--adm-shadow);
+    padding: 1.1rem 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.admin-theme .adm-list-head {
+    display: flex;
+    align-items: baseline;
+    gap: .6rem 1rem;
+    flex-wrap: wrap;
+    margin-bottom: .85rem;
+}
+
+.admin-theme .adm-list-title { margin: 0; font-size: 1.15rem; }
+.admin-theme .adm-list-count { margin: 0; color: var(--adm-text-dim); font-size: 12.5px; }
+.admin-theme .adm-list-note { margin: 0; flex-basis: 100%; color: var(--adm-text-dim); font-size: 12.5px; }
+.admin-theme .adm-list-head-aside { margin-left: auto; display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+
+/* The filter form: a search box and named selects that keep their values. */
+.admin-theme .adm-list-filters {
+    display: flex;
+    align-items: flex-end;
+    gap: .6rem;
+    flex-wrap: wrap;
+    padding: .85rem 0;
+    margin-bottom: .35rem;
+    border-top: 1px solid var(--adm-border);
+    border-bottom: 1px solid var(--adm-border);
+}
+
+.admin-theme .adm-list-filters .adm-field { display: grid; gap: .25rem; flex: 1 1 190px; min-width: 0; }
+.admin-theme .adm-list-filters .adm-field > span { font-size: 12px; font-weight: 600; color: var(--adm-text-dim); }
+.admin-theme .adm-list-filters .adm-field input,
+.admin-theme .adm-list-filters .adm-field select { width: 100%; box-sizing: border-box; }
+.admin-theme .adm-list-filters .adm-field-search { flex: 2 1 280px; }
+.admin-theme .adm-list-filters .adm-field-actions { display: flex; gap: .4rem; flex: none; align-items: center; }
+
+/* The bulk-action bar. */
+.admin-theme .adm-bulk {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    flex-wrap: wrap;
+    padding: .7rem .8rem;
+    margin: .8rem 0;
+    background: var(--adm-surface-2);
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius);
+}
+
+.admin-theme .adm-bulk > strong { font-size: 12.5px; color: var(--adm-text-dim); }
+.admin-theme .adm-bulk-controls { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.admin-theme .adm-bulk-controls select { width: auto; min-width: 9rem; }
+
+/* The table itself. */
+.admin-theme .adm-list-scroll { overflow-x: auto; }
+.admin-theme .adm-list-table { width: 100%; margin: 0; }
+.admin-theme .adm-list-table th, .admin-theme .adm-list-table td { padding: .6rem .75rem; font-size: 13px; }
+.admin-theme .adm-list-table th.adm-list-th { white-space: nowrap; }
+.admin-theme .adm-list-table th.adm-list-th.num,
+.admin-theme .adm-list-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.admin-theme .adm-list-table th.adm-list-th.act,
+.admin-theme .adm-list-table td.act { text-align: right; white-space: nowrap; }
+.admin-theme .adm-list-table td.truncate { max-width: 22rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The pager, in the footer. */
+.admin-theme .adm-list-foot { display: flex; justify-content: flex-end; margin-top: .85rem; }
+.admin-theme .adm-pager { display: flex; align-items: center; gap: .3rem; flex-wrap: wrap; }
+.admin-theme .adm-pager a,
+.admin-theme .adm-pager span.current {
+    display: inline-block;
+    padding: .3rem .55rem;
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius-sm);
+    background: var(--adm-surface-2);
+    color: var(--adm-text);
+    font-size: 12.5px;
+    text-decoration: none;
+}
+.admin-theme .adm-pager a:hover { background: var(--adm-surface-3); }
+.admin-theme .adm-pager span.current { background: var(--adm-accent); border-color: var(--adm-accent); color: #fff; font-weight: 600; }
+.admin-theme .adm-pager .adm-pager-gap { border: 0; background: transparent; color: var(--adm-text-faint); }
+.admin-theme .adm-pager .adm-pager-count { border: 0; background: transparent; color: var(--adm-text-dim); margin-left: .35rem; }
+
+/* The empty state. */
+.admin-theme .adm-empty {
+    padding: 2.25rem 1rem;
+    text-align: center;
+    color: var(--adm-text-faint);
+    font-size: 13.5px;
+    background: var(--adm-surface);
+    border: 1px dashed var(--adm-border-strong);
+    border-radius: var(--adm-radius);
+}
+.admin-theme .adm-empty p { margin: 0 0 .5rem; }
+
+/* A select that sits inside a table cell (a user's role, a flag). It used to
+   carry its own inline style in the view. */
+.admin-theme .adm-inline-select {
+    display: inline-block;
+    font-size: .75rem;
+    padding: 1px 3px;
+    border: 1px solid var(--adm-border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--adm-text);
+    cursor: pointer;
+}
+
+/* The action cell: the buttons sit in one row instead of stacking. A <form>
+   is a block box by default, so each one would drop onto its own line. */
+.admin-theme form.inline { display: inline-block; margin: 0; }
+.admin-theme td.act { text-align: right; white-space: nowrap; }
+
+    @media (max-width: 720px)
+{
+.admin-theme .adm-list { padding: .85rem .8rem; }
+.admin-theme .adm-list-filters { gap: .45rem; }
+.admin-theme .adm-list-filters .adm-field { flex: 1 1 100%; }
+.admin-theme .adm-list-foot { justify-content: center; }
 }

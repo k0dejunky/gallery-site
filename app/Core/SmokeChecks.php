@@ -481,6 +481,7 @@ class SmokeChecks
             $adminJs = (string) @file_get_contents($root . '/public/assets/js/admin.js');
             $adminLayout = (string) @file_get_contents($root . '/views/admin/layout.php');
             $memberLayout = (string) @file_get_contents($root . '/views/layout.php');
+            $adminTable = (string) @file_get_contents($root . '/app/Core/AdminTable.php');
 
             // The bulk bar calls window.bulkApply. That handler used to live
             // in the MEMBER layout, which the admin never loads - so the
@@ -493,9 +494,14 @@ class SmokeChecks
             $loaded  = strpos($adminLayout, '/assets/js/admin.js') !== false;
             $notInMember = strpos($memberLayout, 'window.bulkApply') === false;
             // And the form carries a data-confirm as a safety net for the
-            // case where admin.js does not load at all.
-            $formGuard = strpos($users, 'id="users-bulk-form"') !== false
-                && preg_match('/id="users-bulk-form"[^>]*data-confirm=/', $users) === 1;
+            // case where admin.js does not load at all. The form is built by
+            // the shared component now, so the guard is either a literal
+            // data-confirm on the form or a 'confirm' handed to the
+            // component (which renders that attribute).
+            $formGuard = (strpos($users, 'id="users-bulk-form"') !== false
+                    && preg_match('/id="users-bulk-form"[^>]*data-confirm=/', $users) === 1)
+                || (strpos($users, "'confirm'") !== false
+                    && strpos($adminTable, 'data-confirm=') !== false);
 
             return $handler && $loaded && $notInMember && $formGuard
                 ? $ok('bulk actions are handled by the admin JS and guarded by a confirm')
@@ -556,6 +562,96 @@ class SmokeChecks
             return $missing === []
                 ? $ok('every var() in the stylesheets resolves')
                 : $bad('these CSS variables are used but never defined: ' . implode(', ', $missing));
+        });
+
+        $add('smoke.ui.inline_style_ratchet', 'Smoke · UI', 'The views do not carry their own inline styles', static function () use ($root, $ok, $bad): array {
+            // A ratchet, not a target: the views used to carry 1289 inline
+            // style attributes. The repeated ones became utility classes
+            // (public/assets/css/user.css) and the rest are component styles
+            // that move to the stylesheets as the admin tables are rebuilt.
+            // The number may only go DOWN.
+            $limit = 853;
+            $count = 0;
+            $files = array_merge(glob($root . '/views/*.php') ?: [], glob($root . '/views/*/*.php') ?: []);
+            foreach ($files as $file) {
+                if (str_starts_with(substr($file, strlen($root . '/views/')), 'emails/')) {
+                    continue;   // email clients need their own inline CSS
+                }
+                $count += preg_match_all('/\sstyle="/', (string) @file_get_contents($file));
+            }
+            return $count <= $limit
+                ? $ok($count . ' inline style attributes (limit ' . $limit . ')')
+                : $bad('the views carry ' . $count . ' inline style attributes, over the limit of ' . $limit . ' - move them into public/assets/css');
+        });
+
+        $add('smoke.ui.utility_classes_defined', 'Smoke · UI', 'Every utility class a view uses is actually defined', static function () use ($root, $ok, $bad): array {
+            // A typo in a utility class is silent: the element just renders
+            // unstyled. This catches it.
+            $css = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $defined = [];
+            if (preg_match_all('/\.(u-[a-z0-9-]+)\s*\{/', $css, $m)) {
+                foreach ($m[1] as $name) {
+                    $defined[$name] = true;
+                }
+            }
+            $used = [];
+            $files = array_merge(glob($root . '/views/*.php') ?: [], glob($root . '/views/*/*.php') ?: []);
+            foreach ($files as $file) {
+                if (preg_match_all('/class="([^"]*)"/', (string) @file_get_contents($file), $m)) {
+                    foreach ($m[1] as $attr) {
+                        foreach (preg_split('/\s+/', trim($attr)) as $cls) {
+                            if (str_starts_with($cls, 'u-')) {
+                                $used[$cls] = true;
+                            }
+                        }
+                    }
+                }
+            }
+            $missing = array_values(array_diff(array_keys($used), array_keys($defined)));
+            sort($missing);
+            return $missing === []
+                ? $ok(count($used) . ' utility classes used, all defined')
+                : $bad('these utility classes are used but not defined in user.css: ' . implode(', ', $missing));
+        });
+
+        $add('smoke.ui.admin_tables_paginated', 'Smoke · UI', 'The admin listings use the shared table component', static function () use ($root, $ok, $bad): array {
+            // Every admin listing used to hand-roll its own toolbar, filter
+            // form, bulk bar, pager and empty state, and they had drifted
+            // apart: two hand-rolled pagers, three empty states, and filters
+            // that cleared each other. The shared component is
+            // app/Core/AdminTable.php.
+            //
+            // This is a ratchet, not a target: the count of converted
+            // listings may only go UP.
+            $limit = 5;
+
+            $converted = [];
+            $files = glob($root . '/views/admin/*.php') ?: [];
+            foreach ($files as $file) {
+                $src = (string) @file_get_contents($file);
+                if (strpos($src, 'AdminTable::') !== false) {
+                    $converted[] = basename($file);
+                }
+            }
+
+            // The component itself must keep offering the pieces the listings
+            // rely on, or a converted listing silently renders half a page.
+            $table = (string) @file_get_contents($root . '/app/Core/AdminTable.php');
+            $parts = ['shell', 'filterForm', 'bulkBar', 'pager', 'sortLink', 'pageWindow', 'emptyState'];
+            $missing = [];
+            foreach ($parts as $part) {
+                if (strpos($table, 'function ' . $part . '(') === false) {
+                    $missing[] = $part;
+                }
+            }
+
+            if ($missing !== []) {
+                return $bad('app/Core/AdminTable.php is missing: ' . implode(', ', $missing));
+            }
+
+            return count($converted) >= $limit
+                ? $ok(count($converted) . ' admin listings use the shared component (' . implode(', ', $converted) . ')')
+                : $bad('only ' . count($converted) . ' admin listings use the shared component (need ' . $limit . ') - convert the admin list views');
         });
 
         $add('smoke.ui.guest_mobile_nav', 'Smoke · UI', 'A guest on a phone can still sign in and reach the nav', static function () use ($root, $ok, $bad): array {
