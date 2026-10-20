@@ -173,6 +173,7 @@ foreach ((array) ($playlist ?? []) as $item) {
                 <?php if (is_video($photo['filename'])): ?>
                     <video id="gallery-video-<?= (int) $photo['id'] ?>"
                            data-video-id="<?= (int) $photo['id'] ?>"
+                           data-saved-position="<?= (float) ($savedPosition ?? 0) ?>"
                            data-media-type="video"
                            src="<?= e($src) ?>"
                            <?= $posterUrl !== '' ? 'poster="' . e($posterUrl) . '"' : '' ?>

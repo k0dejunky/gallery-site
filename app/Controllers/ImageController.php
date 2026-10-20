@@ -164,6 +164,12 @@ class ImageController extends Controller
             'comments'      => \App\Models\Comment::forEntity(\App\Models\Comment::TYPE_PHOTO, $id),
             'commentCount'  => \App\Models\Comment::countFor(\App\Models\Comment::TYPE_PHOTO, $id),
             'upNext'        => $upNext,
+            // Where the member stopped on ANOTHER device (the server-side
+            // copy); the player offers to resume from the later of this and
+            // the browser's own position.
+            'savedPosition' => ($user !== null && $requireVideo)
+                ? \App\Models\MediaProgress::position((int) $user['id'], (int) $id)
+                : 0.0,
             'relatedGalleries' => $relatedGalleries,
             'relatedCovers' => $relatedCovers,
         ]);

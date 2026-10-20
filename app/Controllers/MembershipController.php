@@ -11,6 +11,7 @@ use App\Core\Database;
 use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\FavoriteCategory;
+use App\Models\MediaProgress;
 use App\Models\PaymentProcessor;
 use App\Models\Plan;
 use App\Models\Subscription;
@@ -57,6 +58,8 @@ class MembershipController extends Controller
             // one the "recommended for you" strip is empty - and the
             // recommendations are the first thing on the listing now.
             'interestCategories' => $siteEditorPreview ? [] : \App\Models\Category::all(),
+            // What the member was watching, so they can pick it up again.
+            'continueWatching' => $siteEditorPreview ? [] : \App\Models\MediaProgress::recent($userId, 6),
             'interestIds'        => $siteEditorPreview ? [] : array_map(
                 'intval',
                 array_column(\App\Models\FavoriteCategory::forUser($userId), 'category_id')

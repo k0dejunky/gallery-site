@@ -68,6 +68,30 @@ $billingLabels = [
         </section>
     <?php endif; ?>
 
+    <?php /* What the member was watching: the position lives on the server,
+        so it follows them to another device. */ ?>
+    <?php if (!empty($continueWatching)): ?>
+    <section class="dashboard-section" aria-labelledby="continue-watching">
+        <h2 class="section-title" id="continue-watching">Continue watching</h2>
+        <div class="dashboard-grid">
+            <?php foreach ($continueWatching as $cw): ?>
+                <?php
+                $position = (float) ($cw['position_seconds'] ?? 0);
+                $total = (float) ($cw['duration_seconds'] ?? 0);
+                $percent = $total > 0 ? max(1, min(100, (int) round($position / $total * 100))) : 0;
+                ?>
+                <article class="card dashboard-card">
+                    <a href="<?= url('/videos/' . (int) $cw['photo_id'] . '?t=' . (int) $position) ?>">
+                        <img src="<?= e(file_url((string) $cw['filename'], 'thumb')) ?>" alt="" loading="lazy">
+                        <h3><?= e($cw['caption'] !== '' ? (string) $cw['caption'] : 'Video') ?></h3>
+                    </a>
+                    <p class="muted"><?= $percent ?>% watched &middot; <?= gmdate('i:s', (int) $position) ?> in</p>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </section>
+    <?php endif; ?>
+
     <?php /* The member's interests: the categories they want to see. They
         feed the "recommended for you" strip on the listing. */ ?>
     <?php if (!empty($interestCategories)): ?>

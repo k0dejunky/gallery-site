@@ -98,6 +98,10 @@
         scope=document.getElementById('video-player-wrap')||video.closest('figure')||video.parentNode,
         resume=scope.querySelector('.video-resume');
     try{saved=parseFloat(localStorage.getItem(key))||0;}catch(e){}
+    /* The server-side position (this member watched it on another device)
+       wins when it is further along. */
+    var serverSaved=parseFloat(video.getAttribute('data-saved-position'))||0;
+    if(isFinite(serverSaved)&&serverSaved>saved) saved=serverSaved;
     if(saved>0&&isFinite(saved)&&resume){
       resume.hidden=false;
       resume.querySelector('.video-resume-time').textContent=formatTime(saved);
@@ -119,20 +123,50 @@
        on the main thread. Store at most every 5s, and always on the events that
        actually mark where the viewer stopped. */
     var pending=0, lastWrite=0;
-    function persist(){
+    /* The same position goes to the server, so it follows the member to
+       another device and the dashboard can show what they were watching. */
+    var csrf=(document.querySelector('meta[name="csrf-token"]')||{}).content||'',
+        base=(document.body&&document.body.getAttribute('data-base'))||'',
+        photoId=parseInt(video.getAttribute('data-video-id')||'',10)||0,
+        serverPending=false;
+    function postProgress(finished){
+      if(!photoId||!csrf) return;
+      if(serverPending) return;
+      serverPending=true;
+      var fd=new FormData();
+      fd.append('_token',csrf);
+      fd.append('photo_id',String(photoId));
+      fd.append('position',String(video.currentTime||0));
+      fd.append('duration',String(video.duration||0));
+      if(finished) fd.append('finished','1');
+      fetch(base+'/media/progress',{
+        method:'POST',
+        headers:{'X-Requested-With':'XMLHttpRequest'},
+        body:fd
+      }).catch(function(){}).then(function(){serverPending=false;});
+    }
+    function persist(finished){
       lastWrite=Date.now();
-      if(video.currentTime>1&&!video.ended){try{localStorage.setItem(key,video.currentTime);}catch(e){}}
+      if(finished){
+        try{localStorage.removeItem(key);}catch(e){}
+        postProgress(true);
+        return;
+      }
+      if(video.currentTime>1&&!video.ended){
+        try{localStorage.setItem(key,video.currentTime);}catch(e){}
+        postProgress(false);
+      }
     }
     function schedule(){
       if(pending) return;
       pending=setTimeout(function(){pending=0;persist();},5000);
     }
     video.addEventListener('timeupdate',function(){ if(video.currentTime>1&&!video.ended){ schedule(); } });
-    video.addEventListener('pause',function(){ if(pending){clearTimeout(pending);pending=0;} persist(); });
-    video.addEventListener('ended',function(){try{localStorage.removeItem(key);}catch(e){};if(resume)resume.hidden=true;});
+    video.addEventListener('pause',function(){ if(pending){clearTimeout(pending);pending=0;} persist(false); });
+    video.addEventListener('ended',function(){persist(true);if(resume)resume.hidden=true;});
     /* Closing the tab mid-video (mobile especially) fires pagehide, not pause:
        without this the last 5 seconds are lost every time. */
-    window.addEventListener('pagehide', function(){ if(video.isConnected && video.currentTime>1 && !video.ended){ persist(); } });
+    window.addEventListener('pagehide', function(){ if(video.isConnected && video.currentTime>1 && !video.ended){ persist(false); } });
   }
   window.GalleryResume = initVideoResume;
   function formatTime(seconds){var minutes=Math.floor(seconds/60),secs=Math.floor(seconds%60);return minutes+':'+(secs<10?'0':'')+secs;}

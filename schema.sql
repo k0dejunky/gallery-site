@@ -972,6 +972,20 @@ CREATE TABLE IF NOT EXISTS wall_posts (
     FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- Where a member stopped watching: the server-side copy of the resume
+-- position, so it follows them to another device.
+CREATE TABLE IF NOT EXISTS media_progress (
+    user_id          INT UNSIGNED NOT NULL,
+    photo_id         INT UNSIGNED NOT NULL,
+    position_seconds DECIMAL(10,2) NOT NULL DEFAULT 0,
+    duration_seconds DECIMAL(10,2) NULL,
+    updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, photo_id),
+    INDEX idx_media_progress_updated (updated_at),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- Gallery star ratings (1-5). One per user per gallery.
 CREATE TABLE IF NOT EXISTS gallery_ratings (
     gallery_id INT UNSIGNED NOT NULL,

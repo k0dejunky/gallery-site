@@ -32,6 +32,9 @@ return [
     ['GET', '/unsubscribe', 'UnsubscribeController@index'],
     ['GET', '/images/{id}', 'ImageController@show'],
     ['GET', '/videos/{id}', 'VideoController@show'],
+    // Where the member stopped watching (the server-side copy of the resume
+    // position, so it follows them to another device).
+    ['POST', '/media/progress', 'VideoController@progress'],
     ['GET', '/files/{file}', 'StorageController@serve'],
     ['GET', '/previews/{id}', 'StorageController@preview'],
 
