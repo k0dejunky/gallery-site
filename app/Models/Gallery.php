@@ -281,12 +281,13 @@ class Gallery
             }
         }
 
+        // A correlated subquery instead of a LEFT JOIN ... GROUP BY: the
+        // join materialised a temporary table and sorted the whole table.
         return Database::run(
-            'SELECT g.*, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
+            'SELECT g.*, (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count, '
+            . self::videoCountSql() . '
              FROM galleries g
-             LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
              WHERE ' . implode(' AND ', $where) . '
-             GROUP BY g.id
              ORDER BY g.created_at DESC, g.id DESC',
             $params
         )->fetchAll();
@@ -379,6 +380,8 @@ class Gallery
                 'title' => $orderBy = 'g.title ASC',
                 default => $orderBy = 'g.created_at DESC',
             };
+            // A unique tiebreak, or a CSV import (many galleries with the
+            // same created_at second) makes rows skip between pages.
         }
 
         $where[] = self::publishedVisibleSql('g');
@@ -399,13 +402,16 @@ class Gallery
                 $pages  = max(1, (int) ceil($total / $perPage));
                 $offset = ($page - 1) * $perPage;
 
+                // A correlated subquery instead of a LEFT JOIN ... GROUP BY:
+                // the join materialised a temporary table and sorted the
+                // whole galleries table, so the listing could not use its
+                // own index. This is the shape inCategories() already uses.
                 $items = Database::run(
-                    'SELECT g.*, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
-                     FROM galleries g
-                     LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id'
-                     . $whereSql . '
-                     GROUP BY g.id
-                     ORDER BY ' . $orderBy . '
+                    'SELECT g.*, (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count, '
+                    . self::videoCountSql() . '
+                     FROM galleries g'
+                    . $whereSql . '
+                     ORDER BY ' . $orderBy . ', g.id DESC
                      LIMIT ' . (int) $perPage . ' OFFSET ' . (int) $offset,
                     $params
                 )->fetchAll();
@@ -1272,13 +1278,12 @@ class Gallery
         [$accessCondition, $accessParams] = self::userVisibleSql($userId, 'g');
 
         return Database::run(
-            'SELECT g.*, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
+            'SELECT g.*, (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count, '
+            . self::videoCountSql() . '
              FROM gallery_viewers gv
              INNER JOIN galleries g ON g.id = gv.gallery_id
-             LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
              WHERE gv.user_id = ? AND ' . self::publishedVisibleSql('g') . ' AND ' . $accessCondition . '
-             GROUP BY g.id
-             ORDER BY gv.viewed_at DESC
+             ORDER BY gv.viewed_at DESC, gv.gallery_id DESC
              LIMIT ' . (int) $limit,
             array_merge([$userId], $accessParams)
         )->fetchAll();
@@ -1344,13 +1349,12 @@ class Gallery
         [$accessCondition, $accessParams] = self::userVisibleSql($userId, 'g');
 
         $galleries = Database::run(
-            'SELECT g.*, COUNT(gp.photo_id) AS photo_count, ' . self::videoCountSql() . '
+            'SELECT g.*, (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count, '
+            . self::videoCountSql() . '
              FROM gallery_favorites gf
              INNER JOIN galleries g ON g.id = gf.gallery_id
-             LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
              WHERE gf.user_id = ? AND ' . self::publishedVisibleSql('g') . ' AND ' . $accessCondition . '
-             GROUP BY g.id, gf.created_at
-             ORDER BY gf.created_at DESC
+             ORDER BY gf.created_at DESC, gf.gallery_id DESC
              LIMIT ' . max(1, (int) $limit),
             array_merge([$userId], $accessParams)
         )->fetchAll();
