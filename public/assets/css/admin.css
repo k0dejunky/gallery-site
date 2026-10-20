@@ -62,40 +62,21 @@
 }
 
 .admin-theme {
-    /* The admin scope still emits the member theme's surface tokens, and a
+    /* The admin scope emits the member theme's surface tokens, and a
        couple of dozen admin views reference them directly (`background:
        var(--pink-100)`, `var(--card-bg)`). The result was hot-pink panels
        sitting inside an otherwise neutral dashboard - Engagement, Support,
-       Earnings, Email and Gallery Management all rendered that way. Remap the
-       surface tokens to the admin palette here, once, instead of rewriting
-       every view. Colour tokens (--purple-*, --pink-500 and up) are left
-       alone: they are used for text and accents where the member hues are
-       still legible. --sidebar-* and --btn-* are untouched so the theme
-       editor's controls keep working. */
-    --pink-100: var(--adm-surface-2);
-    --pink-200: var(--adm-surface-3);
-    --pink-300: var(--adm-border);
-    --pink-400: var(--adm-border-strong);
-    --card-bg: var(--adm-surface);
-    --card-border: var(--adm-border);
-    --card-title-color: var(--adm-text);
-    --card-text-color: var(--adm-text);
-    --card-placeholder-bg: var(--adm-surface-2);
-    --card-thumb-bg: var(--adm-surface-3);
-    --stat-bg: var(--adm-surface);
-    --stat-border: var(--adm-border);
-    /* The table tokens were not remapped, so they stayed the light
-       palette's #f472b6 - bright pink. The System page's row separators
-       used them, so that one table had hot-pink rows in an otherwise
-       neutral console. */
-    --table-border: var(--adm-border);
-    --table-header-bg: var(--adm-surface-2);
-    --table-header-color: var(--adm-text-dim);
-    --table-text: var(--adm-text);
+       Earnings, Email and Gallery Management all rendered that way.
 
-    /* Status and text aliases. These names are used by the admin styles and by
-       admin-shared.css, but they were never defined anywhere - the rules
-       that used them silently fell back to the inherited colour. */
+       The palette itself now carries the neutral console values (see
+       Theme::COLORS), so the theme editor's admin pickers really change
+       the admin. This block used to re-point those tokens at --adm-* and
+       sat AFTER the inline theme block, so the editor's values were
+       always overridden and the pickers were dead.
+
+       The aliases below are the only ones left: they are NOT palette
+       keys, so no editor control can reach them and they have to be
+       declared here. */
     --success-bg: var(--adm-ok-bg);
     --success-text: var(--adm-ok);
     --danger-bg: var(--adm-err-bg);

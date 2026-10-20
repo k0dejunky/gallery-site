@@ -1734,42 +1734,74 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
-        $add('smoke.ui.admin_tokens_remapped', 'Smoke · UI', 'The admin scope remaps every member surface token', static function () use ($root, $ok, $bad): array {
-            // The admin scope emits the member theme's surface tokens and
-            // remaps the ones its views use. The table tokens were missed,
-            // so they stayed the light palette's #f472b6 - and the System
-            // page's row separators were bright pink in a neutral console.
-            $css = (string) @file_get_contents($root . '/public/assets/css/admin.css');
+        $add('smoke.ui.admin_tokens_remapped', 'Smoke · UI', 'The admin palette carries the console and the editor drives it', static function () use ($root, $ok, $bad): array {
+            // The admin scope used to emit a stale light-PINK palette and
+            // then re-point the surface tokens at the neutral console in
+            // admin.css. The remap sat after the inline theme block, so the
+            // theme editor's admin pickers changed nothing at all.
+            //
+            // Now the palette itself carries the console's neutral values,
+            // admin.css does not re-point them, and the aliases that no
+            // palette key can reach are declared in admin.css.
+            $css   = (string) @file_get_contents($root . '/public/assets/css/admin.css');
+            $theme = (string) @file_get_contents($root . '/app/Models/Theme.php');
             $problems = [];
 
-            // Every member surface token the admin's own rules or views use
-            // has to be remapped in the .admin-theme block. There are two
-            // .admin-theme blocks: the one that defines the --adm-* tokens
-            // and the one that remaps the member's surfaces onto them.
-            $remap = [];
+            // The admin palette, read out of Theme.php.
+            $palette = [];
+            if (preg_match('/private const COLORS = \[(.*?)\n    \];/s', $theme, $m) === 1) {
+                if (preg_match_all("/'([a-z0-9-]+)'\s*=>\s*'(#[0-9a-fA-F]{3,8})'/", $m[1], $t, PREG_SET_ORDER) !== false) {
+                    foreach ($t as $row) {
+                        $palette[$row[1]] = $row[2];
+                    }
+                }
+            } else {
+                $problems[] = 'the admin palette could not be read out of Theme.php';
+            }
+
+            // The surfaces the admin actually renders, with the console's
+            // neutral values.
+            $expect = [
+                'pink-100'         => '#f7f8fc',
+                'pink-200'         => '#eef0f7',
+                'pink-300'         => '#e2e5ee',
+                'pink-400'         => '#cfd4e2',
+                'card-bg'          => '#ffffff',
+                'card-border'      => '#e2e5ee',
+                'card-title-color' => '#1e2330',
+                'card-text-color'  => '#1e2330',
+                'card-placeholder-bg' => '#f7f8fc',
+                'card-thumb-bg'    => '#eef0f7',
+                'stat-bg'          => '#ffffff',
+                'stat-border'      => '#e2e5ee',
+                'table-border'     => '#e2e5ee',
+                'table-header-bg'  => '#f7f8fc',
+                'table-header-color' => '#5c6478',
+                'table-text'       => '#1e2330',
+            ];
+            foreach ($expect as $key => $value) {
+                if (!isset($palette[$key])) {
+                    $problems[] = $key . ' is missing from the admin palette';
+                    continue;
+                }
+                if (strtolower($palette[$key]) !== $value) {
+                    $problems[] = $key . ' is ' . $palette[$key] . ' in the admin palette, it should be ' . $value;
+                }
+            }
+
+            // admin.css must NOT re-point a palette key, or the editor's
+            // value is overridden again.
             if (preg_match_all('/\.admin-theme\s*\{(.*?)\n\}/s', $css, $blocks) !== false) {
                 foreach ($blocks[1] as $block) {
-                    if (strpos($block, '--pink-100:') === false) {
-                        continue;   // this is the --adm-* definition block
-                    }
-                    if (preg_match_all('/(--[a-z0-9-]+)\s*:\s*var\(--adm-/', $block, $t)) {
-                        foreach ($t[1] as $name) {
-                            $remap[$name] = true;
-                        }
+                    if (strpos($block, '--pink-100:') !== false) {
+                        $problems[] = 'admin.css must not re-point a palette key - that is what made the editor dead';
                     }
                 }
             }
-            if ($remap === []) {
-                $problems[] = 'the .admin-theme remap block was not found';
-            }
-            foreach ([
-                '--pink-100', '--pink-200', '--pink-300', '--pink-400',
-                '--card-bg', '--card-border', '--card-title-color', '--card-text-color',
-                '--card-placeholder-bg', '--card-thumb-bg', '--stat-bg', '--stat-border',
-                '--table-border', '--table-header-bg', '--table-text', '--table-header-color',
-            ] as $token) {
-                if (!isset($remap[$token])) {
-                    $problems[] = $token . ' is not remapped for the admin scope';
+            // The aliases no palette key can reach have to be declared.
+            foreach (['--success-bg', '--danger-bg', '--muted-text-color'] as $alias) {
+                if (strpos($css, $alias . ':') === false) {
+                    $problems[] = $alias . ' must be declared in admin.css - no palette key reaches it';
                 }
             }
             // The theme preview is a mock of the member site, so it has to
@@ -1785,7 +1817,7 @@ class SmokeChecks
             }
 
             return $problems === []
-                ? $ok('the admin scope remaps every surface token it uses')
+                ? $ok('the admin palette carries the console and the theme editor drives it')
                 : $bad(implode('; ', $problems));
         });
 
