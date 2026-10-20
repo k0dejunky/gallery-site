@@ -122,20 +122,27 @@ database got migration 072 (the eight indexes).
 
 ### Batch D - data integrity
 
+**Batch D is DONE and shipped (local + dev + prod, 2026-10-20).** Smoke 920 on
+local, dev and prod; the full TestSuite on **prod** is 990 tests with 0
+failures. Migrations 073 (the soft delete, the wall author, the new
+references) and 074 (a sold unlock code survives its gallery) are applied on
+both boxes. The prod backup before the deploy is
+`/var/backups/gallery/pre-data-batchD-20261020-091359.sql.gz`.
+
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| D1 | The unlock redemption is not transactional | `app/Controllers/PurchaseController.php` | todo | - |
-| D2 | `sales.max_subscriptions` is an unlocked COUNT (oversell) and a pending subscription eats the slot | `app/Models/SaleCode.php`, `app/Models/Subscription.php` | todo | - |
-| D3 | Deleting a user cascade-deletes the financial ledger | `app/Models/User.php`, `schema.sql` + a migration | todo | - |
-| D4 | Deleting a gallery cascade-deletes the unlock codes that were sold | `schema.sql` + a migration, `app/Models/Gallery.php` | todo | - |
-| D5 | Missing FKs -> orphan rows (`wall_posts.gallery_id`, `content_views`, `comments`, `subscriptions.sale_id`) | `schema.sql` + a migration | todo | - |
-| D6 | `wall_posts` has no author column (`$userId` is silently dropped) | `app/Models/WallPost.php` + a migration | todo | - |
-| D7 | Retention: `user_activity`, `content_views`, `category_views`, `search_stats` are never pruned | `app/Core/Housekeeping.php` | todo | - |
-| D8 | `Subscription::approve()` grants the period from now, not from the purchase date | `app/Models/Subscription.php` | todo | - |
-| D9 | `schema.sql` re-enables `FOREIGN_KEY_CHECKS` 85 lines before the end of the file | `schema.sql` | todo | - |
-| D10 | `Purchase::settleByReference()` has no status guard | `app/Models/Purchase.php` | todo | - |
-| D11 | `Collection::addPhoto()` is a check-then-insert without a transaction | `app/Models/Collection.php` | todo | - |
-| D12 | `Gallery::movePhoto()` swaps two positions without a transaction | `app/Models/Gallery.php` | todo | - |
+| D1 | The unlock redemption is not transactional | `app/Controllers/PurchaseController.php` | done | `7ab4e58` |
+| D2 | `sales.max_subscriptions` is an unlocked COUNT (oversell) and a pending subscription eats the slot | `app/Models/SaleCode.php`, `app/Models/Subscription.php` | done | `dbb3dc6` |
+| D3 | Deleting a user cascade-deletes the financial ledger | `app/Models/User.php`, `schema.sql` + a migration | done | `dbb3dc6` |
+| D4 | Deleting a gallery cascade-deletes the unlock codes that were sold | `schema.sql` + a migration, `app/Models/Gallery.php` | done | `dbb3dc6` |
+| D5 | Missing FKs -> orphan rows (`wall_posts.gallery_id`, `content_views`, `comments`, `subscriptions.sale_id`) | `schema.sql` + a migration | done | `dbb3dc6` |
+| D6 | `wall_posts` has no author column (`$userId` is silently dropped) | `app/Models/WallPost.php` + a migration | done | `dbb3dc6` |
+| D7 | Retention: `user_activity`, `content_views`, `category_views`, `search_stats` are never pruned | `app/Core/Housekeeping.php` | done | `dbb3dc6` |
+| D8 | `Subscription::approve()` grants the period from now, not from the purchase date | `app/Models/Subscription.php` | done | `e4a1b2c` |
+| D9 | `schema.sql` re-enables `FOREIGN_KEY_CHECKS` 85 lines before the end of the file | `schema.sql` | done | `e4a1b2c` |
+| D10 | `Purchase::settleByReference()` has no status guard | `app/Models/Purchase.php` | done | `e4a1b2c` |
+| D11 | `Collection::addPhoto()` is a check-then-insert without a transaction | `app/Models/Collection.php` | done | `e4a1b2c` |
+| D12 | `Gallery::movePhoto()` swaps two positions without a transaction | `app/Models/Gallery.php` | done | `e4a1b2c` |
 
 ### Batch E - the product upgrades (one commit each)
 
