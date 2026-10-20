@@ -1,4 +1,12 @@
 <?php $title = 'Engagement'; ?>
+<?php
+// The engagement page mixes three levels of power: moderating the wall and
+// the comments, and the money (unlock codes, gift subscriptions, the purchase
+// ledger). The money needs the 'monetisation' permission, so a moderator
+// without it is not shown the controls they may not use.
+$canModerate = \App\Core\Auth::can('membership');
+$canMonetise = \App\Core\Auth::can('monetisation');
+?>
 
 <?php // The three authoring forms are separate cards (the gift form used to
       // share a card with the unlock form under a cramped <h3>), and every
@@ -17,6 +25,7 @@
 
 <section class="adm-section">
     <div class="adm-cols">
+        <?php if ($canModerate): ?>
         <div class="sys-card">
             <h2>New wall post</h2>
             <form method="post" action="<?= url('/admin/engagement/wall') ?>">
@@ -30,6 +39,8 @@
             </form>
         </div>
 
+        <?php endif; ?>
+        <?php if ($canMonetise): ?>
         <div class="sys-card">
             <h2>Unlock code</h2>
             <form method="post" action="<?= url('/admin/engagement/codes') ?>">
@@ -63,6 +74,8 @@
             </form>
         </div>
 
+        <?php endif; ?>
+        <?php if ($canMonetise): ?>
         <div class="sys-card">
             <h2>Gift subscription</h2>
             <p class="muted adm-card-note">A 100%-off code redeemable at signup; grants the chosen tier for free.</p>
@@ -87,6 +100,7 @@
                 </div>
             </form>
         </div>
+        <?php endif; ?>
     </div>
 </section>
 
@@ -115,10 +129,12 @@
                         <td><?= e(mb_substr((string) $post['body'], 0, 160)) ?><?= mb_strlen((string) $post['body']) > 160 ? '…' : '' ?><?= (int) ($post['gallery_id'] ?? 0) > 0 ? ' <span class="chip">Gallery #' . (int) $post['gallery_id'] . '</span>' : '' ?></td>
                         <td class="num"><?= (int) \App\Models\Comment::countFor(\App\Models\Comment::TYPE_WALL, (int) $post['id']) ?></td>
                         <td class="act">
+                            <?php if ($canModerate): ?>
                             <form class="inline" method="post" action="<?= url('/admin/engagement/wall/' . (int) $post['id'] . '/delete') ?>" data-confirm="Remove this wall post?">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                             </form>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -157,6 +173,7 @@
                         <td class="num"><?= (int) $code['used_count'] ?><?= $code['max_uses'] === null ? '' : ' / ' . (int) $code['max_uses'] ?></td>
                         <td><?= !empty($code['active']) ? 'Active' : '<span class="muted">Inactive</span>' ?></td>
                         <td class="act">
+                            <?php if ($canMonetise): ?>
                             <form class="inline" method="post" action="<?= url('/admin/engagement/codes/' . (int) $code['id'] . '/toggle') ?>">
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm"><?= !empty($code['active']) ? 'Disable' : 'Enable' ?></button>
@@ -165,6 +182,7 @@
                                 <?= csrf_field() ?>
                                 <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                             </form>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>

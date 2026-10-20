@@ -31,7 +31,7 @@ class Auth
         // deliberately held by the super admin alone (mail_admin,
         // manage_roles).
         'super_admin' => ['*'],
-        'admin'      => ['dashboard', 'trends', 'galleries', 'videos', 'categories', 'users', 'membership', 'payments', 'theme', 'site_editor', 'logs', 'documentation', 'autoposter', 'support', 'user_monitor', 'traffic', 'chat', 'analytics', 'manage_admins'],
+        'admin'      => ['dashboard', 'trends', 'galleries', 'videos', 'categories', 'users', 'membership', 'payments', 'theme', 'site_editor', 'logs', 'documentation', 'autoposter', 'support', 'user_monitor', 'traffic', 'chat', 'analytics', 'manage_admins', 'monetisation'],
         'editor'     => ['dashboard', 'trends', 'galleries', 'videos', 'categories', 'documentation'],
         'moderator'  => ['dashboard', 'users', 'membership', 'logs', 'documentation', 'user_monitor'],
         'viewer'     => ['dashboard', 'trends', 'documentation'],

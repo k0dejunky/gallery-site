@@ -349,6 +349,53 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.auth.money_needs_permission', 'Smoke · Auth', 'The money actions need the monetisation permission', static function () use ($root, $ok, $bad): array {
+            // Minting an unlock code, creating a 100%-off gift subscription
+            // and marking a purchase paid all grant value for free. They
+            // were gated on 'dashboard', which every admin role holds.
+            $routes      = (string) @file_get_contents($root . '/config/routes.php');
+            $controller  = (string) @file_get_contents($root . '/app/Controllers/ModerationController.php');
+            $auth        = (string) @file_get_contents($root . '/app/Core/Auth.php');
+            $problems    = [];
+
+            $money = [
+                'codeStore'      => '/admin/engagement/codes',
+                'codeToggle'     => '/admin/engagement/codes/{id}/toggle',
+                'codeDelete'     => '/admin/engagement/codes/{id}/delete',
+                'giftStore'      => '/admin/engagement/gift',
+                'purchaseStatus' => '/admin/engagement/purchases/{id}',
+            ];
+            foreach ($money as $action => $path) {
+                if (strpos($routes, "'" . $path . "', 'ModerationController@" . $action . "', 'dashboard'") !== false) {
+                    $problems[] = $path . ' is still gated on dashboard';
+                }
+                $at = strpos($controller, 'function ' . $action . '(');
+                if ($at === false) {
+                    $problems[] = $action . '() is missing';
+                    continue;
+                }
+                $next = strpos($controller, "\n    public function ", $at + 10);
+                $body = $next === false ? substr($controller, $at) : substr($controller, $at, $next - $at);
+                if (strpos($body, "requirePermission('monetisation')") === false) {
+                    $problems[] = $action . '() must require the monetisation permission';
+                }
+            }
+            // The permission must exist, and no low-privilege role may hold it.
+            if (strpos($auth, "'monetisation'") === false) {
+                $problems[] = 'the monetisation permission is not defined';
+            }
+            foreach (['moderator', 'editor', 'viewer'] as $role) {
+                if (preg_match("/'" . $role . "'\s*=>\s*\[([^\]]*)\]/", $auth, $m) === 1
+                    && strpos($m[1], 'monetisation') !== false) {
+                    $problems[] = 'the ' . $role . ' role must not hold monetisation';
+                }
+            }
+
+            return $problems === []
+                ? $ok('unlock codes, gift subscriptions and the purchase ledger need monetisation')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.legal.static_actions', 'Smoke · Legal', 'StaticPageController provides 2257/DMCA/report actions', static function () use ($staticCtrl, $ok, $bad): array {
             return strpos($staticCtrl, 'function notice2257') !== false
                 && strpos($staticCtrl, 'function dmca') !== false

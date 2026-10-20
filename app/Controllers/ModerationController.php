@@ -36,7 +36,7 @@ class ModerationController extends Controller
 
     public function wallStore(): void
     {
-        Auth::requirePermission('dashboard');
+        Auth::requirePermission('membership');
 
         $body   = trim((string) $this->request->post('body', ''));
         $pinned = $this->request->post('pinned') === '1';
@@ -64,7 +64,7 @@ class ModerationController extends Controller
 
     public function wallDelete(int $id): void
     {
-        Auth::requirePermission('dashboard');
+        Auth::requirePermission('membership');
         WallPost::delete($id);
 
         $this->flash('success', 'Wall post removed.');
@@ -73,7 +73,7 @@ class ModerationController extends Controller
 
     public function commentDelete(int $id): void
     {
-        Auth::requirePermission('dashboard');
+        Auth::requirePermission('membership');
         Comment::delete($id);
 
         $this->flash('success', 'Comment removed.');
@@ -82,7 +82,7 @@ class ModerationController extends Controller
 
     public function codeStore(): void
     {
-        Auth::requirePermission('dashboard');
+        Auth::requirePermission('monetisation');
 
         $galleryId = $this->request->post('gallery_id', '');
         $galleryId = $galleryId !== '' && is_numeric($galleryId) ? (int) $galleryId : null;
@@ -106,7 +106,7 @@ class ModerationController extends Controller
 
     public function codeToggle(int $id): void
     {
-        Auth::requirePermission('dashboard');
+        Auth::requirePermission('monetisation');
         UnlockCode::toggle($id);
 
         $this->flash('success', 'Unlock code updated.');
@@ -115,7 +115,7 @@ class ModerationController extends Controller
 
     public function codeDelete(int $id): void
     {
-        Auth::requirePermission('dashboard');
+        Auth::requirePermission('monetisation');
         UnlockCode::delete($id);
 
         $this->flash('success', 'Unlock code deleted.');
@@ -128,7 +128,7 @@ class ModerationController extends Controller
      */
     public function giftStore(): void
     {
-        Auth::requirePermission('dashboard');
+        Auth::requirePermission('monetisation');
 
         $targetLevel = max(1, min(3, (int) $this->request->post('target_level', '1')));
         $maxUses     = (int) $this->request->post('max_uses', '1');
@@ -154,7 +154,7 @@ class ModerationController extends Controller
 
     public function purchaseStatus(int $id): void
     {
-        Auth::requirePermission('dashboard');
+        Auth::requirePermission('monetisation');
 
         $status = (string) $this->request->post('status', '');
         if (!in_array($status, [Purchase::STATUS_PENDING, Purchase::STATUS_PAID, Purchase::STATUS_GRANTED, Purchase::STATUS_REFUNDED], true)) {

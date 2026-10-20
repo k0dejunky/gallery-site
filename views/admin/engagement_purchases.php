@@ -52,6 +52,7 @@
                     <td class="u-pad-04-05"><?= e((string) $purchase['gateway']) ?></td>
                     <td class="u-pad-04-05"><?= e((string) $purchase['status']) ?></td>
                     <td style="padding:.4rem .5rem;text-align:right;">
+                        <?php if (\App\Core\Auth::can('monetisation')): ?>
                         <form class="inline" method="post" action="<?= url('/admin/engagement/purchases/' . (int) $purchase['id']) ?>">
                             <?= csrf_field() ?>
                             <select name="status" style="width:auto;">
@@ -61,6 +62,7 @@
                             </select>
                             <button type="submit" class="btn btn-sm">Save</button>
                         </form>
+                        <?php endif; ?>
                     </td>
                 </tr>
             <?php endforeach; ?>
