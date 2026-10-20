@@ -1107,10 +1107,12 @@ body.admin-theme {
 
 .admin-theme .ap-channels-save { flex: none; align-self: center; }
 
-/* user.css sets `table td:nth-child(1) { overflow-wrap: anywhere; word-break:
-   break-word }` for member-side category names. It leaks into admin and was
-   breaking the status badge mid-word ("SKIPP / ED"), because a badge is short,
-   fixed content that must never wrap. Same for every other status pill. */
+/* A badge is short, fixed content that must never wrap. The member side
+   used to set `table td:nth-child(1) { overflow-wrap: anywhere; word-break:
+   break-word }` for long category names, and it leaked into the admin and
+   broke the status badge mid-word ("SKIPP / ED"). That global rule is
+   gone; this is kept as a guard, because a badge that wraps is worse than
+   a cell that overflows. */
 .admin-theme .ap-pill,
 .admin-theme .status-badge,
 .admin-theme .pill {

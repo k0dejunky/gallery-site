@@ -1630,6 +1630,27 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.no_global_table_rule', 'Smoke · UI', 'No rule reaches into every table on the site', static function () use ($root, $ok, $bad): array {
+            // `table td:nth-child(1) { overflow-wrap: anywhere; word-break:
+            // break-word }` was written for the member category names and
+            // applied to EVERY table on the site. It leaked into the admin
+            // (user.css is loaded there too) and broke the status badges
+            // mid-word, which the admin then had to work around.
+            $css = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $problems = [];
+
+            if (preg_match('/(^|[;{\s])table\s+td:nth-child\(1\)/m', $css) === 1) {
+                $problems[] = 'user.css must not style every table cell in the first column - scope it to the table it was written for';
+            }
+            if (preg_match('/(^|[;{\s])table\s+td\s*\{/m', $css) === 1) {
+                $problems[] = 'user.css must not style bare table cells - scope it to the table it was written for';
+            }
+
+            return $problems === []
+                ? $ok('no rule reaches into every table on the site')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).
