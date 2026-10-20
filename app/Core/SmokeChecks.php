@@ -764,6 +764,53 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.viewed_badge_named', 'Smoke · UI', 'The "seen" mark on a gallery card is not colour-only', static function () use ($root, $ok, $bad): array {
+            // The mark used to be an empty purple dot: colour was the only
+            // thing that said what it meant, and it had no name at all.
+            $card = (string) @file_get_contents($root . '/views/partials/gallery_card.php');
+            $css  = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $problems = [];
+            if (strpos($card, 'viewed-badge') === false) {
+                $problems[] = 'the card must still mark a gallery the member has seen';
+            }
+            if (strpos($card, 'Already viewed') === false) {
+                $problems[] = 'the card must say in words that the gallery was already viewed';
+            }
+            if (strpos($css, '.sr-only') === false) {
+                $problems[] = 'user.css needs a screen-reader-only class';
+            }
+            if (preg_match('/viewed-badge[^}]*\}\s*\n/s', $css, $m) === 1 && strpos($m[0], 'width:12px') !== false) {
+                $problems[] = 'the mark is still an empty 12px dot';
+            }
+            return $problems === []
+                ? $ok('the "seen" mark has a shape and a name')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.ui.admin_search_on_phone', 'Smoke · UI', 'The admin search is reachable on a phone', static function () use ($root, $ok, $bad): array {
+            // The topbar search was display: none under 960px, so a phone
+            // admin could not search at all. It is the second row of the
+            // topbar now.
+            $css = (string) @file_get_contents($root . '/public/assets/css/admin.css');
+            if (strpos($css, '.admin-top-search { display: none; }') !== false) {
+                return $bad('the admin search must not be hidden on a phone');
+            }
+            if (strpos($css, '.admin-theme .admin-topbar .admin-top-search') === false) {
+                return $bad('the admin topbar has no search rule at all');
+            }
+            return strpos($css, 'order: 3') !== false
+                ? $ok('the admin search is the second row of the phone topbar')
+                : $bad('the admin search must be given a row of its own in the phone topbar');
+        });
+
+        $add('smoke.ui.users_export_next_to_list', 'Smoke · UI', 'The users CSV export sits next to the user list', static function () use ($root, $ok, $bad): array {
+            $users = (string) @file_get_contents($root . '/views/admin/users.php');
+            if (strpos($users, '/admin/export/users') === false) {
+                return $bad('the user list must offer the users CSV export');
+            }
+            return $ok('the users list exports itself to CSV');
+        });
+
         $add('smoke.ui.no_inline_style_blocks', 'Smoke · UI', 'No view carries its own <style> block', static function () use ($root, $ok, $bad): array {
             // Documents that deliberately stand alone (their own <html>, their
             // own CSP) keep their own CSS, and the admin shell injects the

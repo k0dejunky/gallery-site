@@ -110,7 +110,12 @@ body.bottom-more-open{overflow:hidden}
 }
 
 /* Viewed badge on gallery cards */
-.card .viewed-badge{position:absolute;top:.5rem;right:.5rem;width:12px;height:12px;background:var(--purple-500);border-radius:50%;border:2px solid var(--card-bg);z-index:2}
+/* The "you have seen this" mark. It used to be an empty purple dot: colour
+   was the only thing that said what it meant. It is a check mark now, and the
+   card link also says it in words for anyone who cannot see the mark. */
+.card .viewed-badge{position:absolute;top:.5rem;right:.5rem;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 .2rem;background:var(--purple-500);color:#fff;border-radius:999px;border:2px solid var(--card-bg);z-index:2;font-size:10px;font-weight:700;line-height:1}
+/* Text for screen readers only. */
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
 .card-cover{position:relative}
 
 /* Compact gallery card */

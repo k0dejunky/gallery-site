@@ -2020,8 +2020,18 @@ body.admin-theme {
 
     .admin-theme .nav-toggle .nav-ico { width: 18px; height: 18px; }
 
-    .admin-theme .admin-topbar { padding: 0 .9rem; gap: .6rem; }
-    .admin-theme .admin-topbar .admin-top-search { display: none; }
+    .admin-theme .admin-topbar { padding: 0 .9rem; gap: .6rem; flex-wrap: wrap; }
+    /* The search used to disappear on a phone (display: none), so a phone
+       admin could not search at all. It is the second row of the topbar now:
+       the toggle and the title stay on the first, the search spans the full
+       width under them. */
+    .admin-theme .admin-topbar .admin-top-search {
+        display: flex;
+        order: 3;
+        flex: 1 0 100%;
+        margin: 0 0 .6rem;
+    }
+    .admin-theme .admin-topbar .top-search-kbd { display: none; }
     .admin-theme .admin-main > *:not(.admin-topbar):not(.flash-stack):not(.palette-overlay):not(.progress-overlay) { padding-left: 1rem; padding-right: 1rem; }
     .admin-theme .admin-topbar .topbar-title { font-size: 15px; }
 }

@@ -170,7 +170,10 @@ echo AdminTable::shell([
         'pages'  => (int) ($totalPages ?? 1),
         'params' => $baseParams,
     ],
-    'foot'     => '<a class="btn" href="' . url('/admin/users/create') . '">Add User</a>',
+    'foot'     => '<a class="btn" href="' . url('/admin/users/create') . '">Add User</a>'
+        // The CSV export belongs next to the list it exports, not on the
+        // System page where it used to hide.
+        . '<a class="btn btn-outline" href="' . url('/admin/export/users') . '">Export CSV</a>',
 ]);
 ?>
 <script nonce="<?= csp_nonce() ?>">

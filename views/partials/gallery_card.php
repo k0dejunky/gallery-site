@@ -34,7 +34,10 @@ $asyncDecodeAttr    = $heroCard ? '' : ' decoding="async"';
                     <circle cx="185" cy="145" r="14" fill="var(--pink-400)"/>
                     <path d="M130 196l42-42 32 30 44-52 52 64" fill="none" stroke="var(--purple-400)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                <?php if ($isViewed): ?><span class="viewed-badge"></span><?php endif; ?>
+                <?php if ($isViewed): ?>
+                    <span class="viewed-badge" title="You have seen this gallery" aria-hidden="true">&#10003;</span>
+                    <span class="sr-only">Already viewed</span>
+                <?php endif; ?>
             </div>
         <?php else: ?>
             <div class="card-cover">
@@ -52,8 +55,11 @@ $asyncDecodeAttr    = $heroCard ? '' : ' decoding="async"';
                         <img src="<?= e(file_url($cover['filename'], 'thumb')) ?>" srcset="<?= e(file_srcset($cover['filename'])) ?>" sizes="(min-width: 800px) 400px, 100vw" alt="" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> data-fallback="<?= e($placeholder) ?>">
                     </picture>
                 <?php endif; ?>
-                <?php if ($isVideoCard): ?><span class="video-badge">&#9654;</span><?php endif; ?>
-                <?php if ($isViewed): ?><span class="viewed-badge"></span><?php endif; ?>
+                <?php if ($isVideoCard): ?><span class="video-badge" aria-hidden="true">&#9654;</span><?php endif; ?>
+                <?php if ($isViewed): ?>
+                    <span class="viewed-badge" title="You have seen this gallery" aria-hidden="true">&#10003;</span>
+                    <span class="sr-only">Already viewed</span>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
         <h2><?= e($gallery['title']) ?></h2>

@@ -774,7 +774,7 @@
     var bar = document.createElement('div');
     bar.className = 'player-bar';
     bar.innerHTML =
-      (isLive ? '<span class="player-live-dot" title="LIVE"></span>' : '') +
+      (isLive ? '<span class="player-live-dot" aria-hidden="true"></span>' : '') +
       '<button type="button" class="player-btn" data-act="play" aria-label="Play or pause">&#9654;</button>' +
       '<div class="player-seek">' +
         '<div class="player-seek-track">' +
