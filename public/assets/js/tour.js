@@ -5,6 +5,10 @@
    cross-page navigation and resumes where it left off. Steps that have no
    reachable target (e.g. no collection with videos yet) are skipped. */
 (function(){
+  // The tour walks the MEMBER pages, so the admin panel must not run it: it
+  // used to share the flag, which meant skipping the tour in the admin
+  // permanently marked the member tour as seen for that browser.
+  var inAdmin = !!(document.body && document.body.classList.contains('admin-theme'));
   var SEEN = 'galleryTourSeen_v2';
   var ACTIVE = 'galleryTourActive_v2';
   var STEP = 'galleryTourStep_v2';
@@ -104,6 +108,7 @@
   function show(){
     cleanup();
     if(idx < 0 || idx >= list.length){ finish(); return; }
+    shown = true;
     var step = list[idx];
 
     if(step.sel && !document.querySelector(step.sel)){
@@ -133,7 +138,9 @@
     // A dialog, not a floating box: the screen reader announces it, the
     // keyboard stays inside it and Escape closes it.
     card.setAttribute('role', 'dialog');
-    card.setAttribute('aria-modal', 'true');
+    // NOT aria-modal: the page behind the card is still live (it scrolls and
+    // the mouse can click it), so claiming the rest is unavailable would be
+    // a lie for a screen reader.
     card.setAttribute('aria-labelledby', 'tour-title-id');
     var n = idx + 1, total = list.length;
     card.innerHTML =
@@ -214,10 +221,15 @@
     setTimeout(show, 400);
   }
 
+  // Whether a step was actually shown. Without it, giving up before the
+  // first card (an empty step list) marked the tour as seen and it never
+  // came back.
+  var shown = false;
+
   function finish(){
-    // Every way out of the tour records that it has been seen, so it does
-    // not start again in the next tab.
-    markSeen();
+    // A tour that showed a step has been seen, so it does not start again
+    // in the next tab. A tour that never showed anything has not.
+    if (shown) { markSeen(); }
     cleanup();
     clearActive();
   }
@@ -230,6 +242,7 @@
   // Only the explicit "replay the tour" button in the member area clears it
   // (window.startSiteTour calls clearSeen() first).
   function start(){
+    if(inAdmin) return;
     if(location.search.indexOf('se=') !== -1) return;
     if(!document.body || document.body.dataset.user !== '1') return;
     list = visible();
@@ -239,6 +252,7 @@
 
   // Resume an in-progress tour after the cross-page navigation.
   function resume(){
+    if(inAdmin) return;
     if(location.search.indexOf('se=') !== -1) return;
     if(!document.body || document.body.dataset.user !== '1') return;
     var active = false;

@@ -929,10 +929,10 @@ body.site-compact .home-layout { grid-template-columns: 224px minmax(0, 1fr); }
     .rail-foot,
     .rail-main { display: none; }
 
-    /* A GUEST has no bottom bar (it is member-only), so their identity block
-       - the only "Sign in or join" they get - must stay. Without it a guest on
-       a phone had no navigation and no way to log in at all. */
-    .rail-identity.rail-guest { display: flex; }
+    /* A guest's bottom bar carries Galleries, Sign in and Join, so the
+       rail's guest block would say the same thing twice on a phone. The
+       block stays for the wide layout (where there is no bottom bar). */
+    .rail-identity.rail-guest { display: none; }
     .rail-identity.rail-guest .rail-identity-text small a { color: var(--sidebar-active-color); text-decoration: underline; }
 
     .rail-scroll {

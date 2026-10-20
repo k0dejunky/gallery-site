@@ -361,7 +361,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                                       data-confirm="Delete gallery &quot;<?= e((string) $gallery['title']) ?>&quot;?"
                                       data-undo-url="<?= url('/admin/galleries/' . $gid . '/restore') ?>"
                                       data-undo-label="&quot;<?= e((string) $gallery['title']) ?>&quot;"
-                                      data-undo-message="Delete gallery &quot;<?= e((string) $gallery['title']) ?>&quot;? It can be undone straight afterwards.">
+                                      data-confirm-detail="Delete gallery &quot;<?= e((string) $gallery['title']) ?>&quot;? It can be undone straight afterwards.">
                                     <?= csrf_field() ?>
                                     <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                                 </form>

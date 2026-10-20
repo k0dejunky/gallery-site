@@ -332,6 +332,10 @@ if (preg_match('#/admin/([a-z0-9-]+)#', (string) ($current ?? ''), $m)) {
             if (!t || t.tagName !== 'FORM') { return; }
             m = t.getAttribute('data-confirm');
             if (!m) { return; }
+            // A form may add a detail to the question ("...and it can be
+            // undone straight afterwards"); the modal shows that, the native
+            // confirm falls back to the plain question.
+            var detail = t.getAttribute('data-confirm-detail');
             // A form that is being re-submitted after the modal was
             // answered: let it through. The flag is cleared as soon as the
             // (synchronous) re-submit returns.
@@ -343,7 +347,7 @@ if (preg_match('#/admin/([a-z0-9-]+)#', (string) ($current ?? ''), $m)) {
             // formaction would post to the form's own action instead.
             var submitter = e.submitter || null;
             e.preventDefault(); e.stopImmediatePropagation();
-            ask(m, { danger: t.hasAttribute('data-confirm-danger'), confirmLabel: t.getAttribute('data-confirm-label') || 'Yes, continue' })
+            ask(detail || m, { danger: t.hasAttribute('data-confirm-danger'), confirmLabel: t.getAttribute('data-confirm-label') || 'Yes, continue' })
                 .then(function (ok) {
                     if (!ok) { return; }
                     t.__admConfirmed = true;

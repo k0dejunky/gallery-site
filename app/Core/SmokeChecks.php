@@ -860,15 +860,17 @@ class SmokeChecks
         $add('smoke.ui.guest_mobile_nav', 'Smoke · UI', 'A guest on a phone can still sign in and reach the nav', static function () use ($root, $ok, $bad): array {
             $css = (string) @file_get_contents($root . '/public/assets/css/user.css');
             $layout = (string) @file_get_contents($root . '/views/layout.php');
-            // The phone hides the rail's identity block and its main links, and
-            // the bottom bar is member-only - so a guest was left with no
-            // navigation and no way to log in.
-            $guestVisible = strpos($css, '.rail-identity.rail-guest') !== false;
-            $hasSignIn    = strpos($layout, "rail-identity rail-guest") !== false
-                && strpos($layout, "url('/login')") !== false;
-            return $guestVisible && $hasSignIn
-                ? $ok('the guest identity block survives on phones')
-                : $bad('the <=768px rules must keep .rail-identity.rail-guest visible, and the rail must offer a sign-in link for guests');
+            // The phone hides the rail's identity block and its main links,
+            // so the nav a guest has on a phone is the bottom bar: it must
+            // carry the sign-in and the join.
+            $guestBar = strpos($layout, '$user !== null ? $bottomPrimary : $guestNavItems') !== false
+                && strpos($layout, "'key' => 'pub-signin'") !== false
+                && strpos($layout, "'key' => 'pub-join'") !== false;
+            $hasSignIn = strpos($layout, "url('/login')") !== false
+                && strpos($layout, "url('/signup')") !== false;
+            return $guestBar && $hasSignIn
+                ? $ok('a guest gets Galleries, Sign in and Join in the phone nav')
+                : $bad('a guest on a phone must get the bottom bar with a sign-in and a join link');
         });
 
         $add('smoke.ui.nav_single_source', 'Smoke · UI', 'The phone nav is derived from the rail, not written out twice', static function () use ($root, $ok, $bad): array {
@@ -1093,6 +1095,34 @@ class SmokeChecks
 
             return $problems === []
                 ? $ok('the raised surfaces use the bubble tokens, not the light pink/dark purple pairing')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.ui.tour_stays_away', 'Smoke · UI', 'The tour does not re-arm and does not run in the admin', static function () use ($root, $ok, $bad): array {
+            // The tour used to clear its "seen" flag the moment it started,
+            // so it came back in every new tab until the member skipped it;
+            // and the admin panel ran the same tour with the same
+            // localStorage key, so skipping it there marked the member tour
+            // as seen for that browser.
+            $tour = (string) @file_get_contents($root . '/public/assets/js/tour.js');
+            $problems = [];
+            if (strpos($tour, "var inAdmin =") === false) {
+                $problems[] = 'the tour must know it is in the admin panel';
+            }
+            if (strpos($tour, 'if(inAdmin) return;') === false) {
+                $problems[] = 'the tour must not start in the admin panel';
+            }
+            // The flag may only be set when a step was actually shown.
+            if (strpos($tour, 'if (shown) { markSeen(); }') === false) {
+                $problems[] = 'the tour must only mark itself seen when it showed a step';
+            }
+            // The card is not a real modal: the page behind it is not inert.
+            if (strpos($tour, "setAttribute('aria-modal'") !== false
+                || strpos($tour, 'aria-modal="true"') !== false) {
+                $problems[] = 'the tour card must not claim to be modal (the page behind it is live)';
+            }
+            return $problems === []
+                ? $ok('the tour stays away once it has been shown, and it stays out of the admin')
                 : $bad(implode('; ', $problems));
         });
 

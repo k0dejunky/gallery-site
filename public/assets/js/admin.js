@@ -365,13 +365,14 @@
     }
 
     function bumpListCount() {
-        // "Showing 20 of 130" must not keep a number that is now wrong.
+        // "Showing 1,200 of 3,400" must not keep a number that is now
+        // wrong - and it must keep its thousands separator.
         var line = document.querySelector('.adm-list-count');
         if (!line) { return; }
         var numbers = line.querySelectorAll('strong');
-        for (var i = 0; i < numbers.length; i++) {
+        for (var i = 0; i < numbers.length && i < 2; i++) {
             var n = parseInt(numbers[i].textContent.replace(/[^0-9]/g, ''), 10);
-            if (!isNaN(n) && n > 0) { numbers[i].textContent = String(n - 1); }
+            if (!isNaN(n) && n > 0) { numbers[i].textContent = (n - 1).toLocaleString(); }
         }
     }
 
@@ -435,6 +436,27 @@
                 return el.closest('td') || form;
             }
 
+            // A change that has not been saved is a change the admin
+            // believes they made. Warn before the page goes away, and put
+            // the value back if it does.
+            function guardUnload(on) {
+                if (on) {
+                    window.addEventListener('beforeunload', warnOnLeave);
+                    window.addEventListener('pagehide', revertPending);
+                } else {
+                    window.removeEventListener('beforeunload', warnOnLeave);
+                    window.removeEventListener('pagehide', revertPending);
+                }
+            }
+            function warnOnLeave(e) {
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            }
+            function revertPending() {
+                el.value = original;
+            }
+
             function showControls(on) {
                 if (on) {
                     if (!controls) {
@@ -464,6 +486,7 @@
                     controls.hidden = true;
                 }
                 cell().classList.toggle('adm-inline-pending', on);
+                guardUnload(on);
             }
 
             function reset() {
