@@ -1,8 +1,11 @@
 <?php if (is_video($photo['filename'])): ?>
     <figure class="gallery-item">
         <a class="video-open" data-gallery-index="<?= $idx ?>" href="<?= e(url('/videos/' . (int) $photo['id']) . '?' . http_build_query(['return_to' => $returnTo])) ?>" title="Play item <?= $idx + 1 ?> of <?= $total ?>">
-            <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>" alt="Video thumbnail for item <?= $idx + 1 ?>" width="400" height="300" loading="lazy" decoding="async">
-            <span class="play-badge">&#9654;</span>
+            <?php /* The caption below is the real label, so the thumbnail
+                itself is decorative: "Video thumbnail for item 3" tells a
+                screen reader nothing. */ ?>
+            <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>" alt="" width="400" height="300" loading="lazy" decoding="async">
+            <span class="play-badge" aria-hidden="true">&#9654;</span>
         </a>
         <figcaption>
             <?php if ($photo['link'] !== ''): ?>

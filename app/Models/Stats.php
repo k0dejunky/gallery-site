@@ -909,6 +909,18 @@ class Stats
      */
     public static function recordMissedSearch(string $term, int $userId): void
     {
+        self::recordSearch($term, $userId, false);
+    }
+
+    /**
+     * Record a search and whether it found anything.
+     *
+     * The table used to hold only the searches that found NOTHING, so the
+     * site could not tell what the members are actually looking for. The
+     * "popular searches" on the empty state are the ones that hit.
+     */
+    public static function recordSearch(string $term, int $userId, bool $found): void
+    {
         $term = trim($term);
 
         if ($term === '') {
@@ -920,9 +932,33 @@ class Stats
         }
 
         Database::run(
-            'INSERT INTO search_stats (term, user_id, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)',
-            [$term, $userId > 0 ? $userId : null]
+            'INSERT INTO search_stats (term, found, user_id, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)',
+            [$term, $found ? 1 : 0, $userId > 0 ? $userId : null]
         );
+    }
+
+    /**
+     * The searches that found something, most popular first - what the
+     * member sees as "Popular searches" when their own search came up
+     * empty.
+     */
+    public static function popularSearches(int $limit = 8): array
+    {
+        $rows = Database::run(
+            'SELECT LOWER(term) AS term_key, MAX(term) AS term, COUNT(*) AS n
+             FROM search_stats
+             WHERE found = 1
+             GROUP BY LOWER(term)
+             ORDER BY n DESC, term ASC
+             LIMIT ' . max(1, (int) $limit)
+        )->fetchAll();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = (string) $row['term'];
+        }
+
+        return $out;
     }
 
     /**

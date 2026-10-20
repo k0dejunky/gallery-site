@@ -17,8 +17,13 @@ if (!empty($gaShowBanner)):
     if (btn) {
         btn.addEventListener('click', function () {
             document.cookie = 'ga_consent=1; path=/; max-age=31536000; SameSite=Lax';
-            banner.style.display = 'none';
-            window.location.reload();
+            // The banner used to reload the page, which threw away the
+            // member's scroll position and re-ran every query. It is hidden
+            // in place instead; the analytics snippet starts with the NEXT
+            // page load, which is what the consent is for.
+            banner.hidden = true;
+            banner.setAttribute('aria-hidden', 'true');
+            try { localStorage.setItem('ga_consent', '1'); } catch (e) {}
         });
     }
 })();

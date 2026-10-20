@@ -176,7 +176,15 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
 
     <?php if (empty($paginator['items'])): ?>
         <div class="empty-state">
-            <p>No galleries found.</p>
+            <p>No galleries found<?= $q !== '' ? ' for &ldquo;' . e($q) . '&rdquo;' : '' ?>.</p>
+            <?php if (!empty($popularSearches)): ?>
+                <p class="muted u-fs-085" style="margin:.5rem 0 .35rem;">Popular searches</p>
+                <div class="chips" style="justify-content:center">
+                    <?php foreach ($popularSearches as $term): ?>
+                        <a class="chip" href="<?= e(url('/galleries?q=' . urlencode($term))) ?>"><?= e($term) ?></a>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
             <a class="btn btn-sm" href="<?= e(url('/galleries')) ?>">Browse all galleries</a>
         </div>
     <?php else: ?>

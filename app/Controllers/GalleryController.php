@@ -342,9 +342,10 @@ class GalleryController extends Controller
             ? Gallery::paginate($page, 24, $filters)
             : ['items' => [], 'total' => 0, 'page' => $page, 'pages' => 1];
 
-        // A search that found nothing is tracked as a missed search.
-        if ($q !== '' && (int) $paginator['total'] === 0 && $user !== null) {
-            Stats::recordMissedSearch($q, (int) $user['id']);
+        // Every search is tracked, with whether it found anything, so the
+        // member facing an empty result can see what others are looking for.
+        if ($q !== '' && $user !== null) {
+            Stats::recordSearch($q, (int) $user['id'], (int) $paginator['total'] > 0);
         }
 
         $viewedIds = [];
@@ -417,6 +418,7 @@ class GalleryController extends Controller
             // member's level. The listing says so instead of quietly
             // pretending the paid categories are empty.
             'lockedTotal'  => \App\Models\Gallery::countLocked($maxLevel),
+            'popularSearches' => $q !== '' && (int) $paginator['total'] === 0 ? Stats::popularSearches(8) : [],
         ]);
     }
 

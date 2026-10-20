@@ -114,6 +114,28 @@ class ImageController extends Controller
         $returnTo = $this->safeReturnTo($this->request->query('return_to', ''))
             ?? ($galleryId !== null ? url('/galleries/' . $galleryId) : url('/galleries'));
 
+        // The "Up next" panel used to be empty when a video was opened on
+        // its own: it only filled from a collection. The gallery's other
+        // videos fill it now, so the panel is never a dead end.
+        $upNext = [];
+        if ($requireVideo && empty($playlist) && $galleryId !== null) {
+            $upNext = \App\Models\Gallery::videosOf($galleryId, 24);
+            // The video being played is not "up next".
+            $upNext = array_values(array_filter(
+                $upNext,
+                static fn (array $item): bool => (int) $item['id'] !== (int) $id
+            ));
+        }
+
+        // A "more like this" rail under the player: the galleries that share
+        // a category with this one (and that the member can actually open).
+        $relatedGalleries = [];
+        $relatedCovers    = [];
+        if ($galleryId !== null) {
+            $relatedGalleries = \App\Models\Gallery::related($galleryId, 8, Auth::effectiveLevel());
+            $relatedCovers    = \App\Models\Gallery::preloadCards($relatedGalleries);
+        }
+
         $inPlaylist = $playlistId > 0 && $playlist !== [];
         $view = $inPlaylist ? 'video/player' : ($requireVideo ? 'video/player' : 'gallery/image_full');
 
@@ -141,6 +163,9 @@ class ImageController extends Controller
             'minimumLevel'  => Photo::minimumGalleryLevel($id),
             'comments'      => \App\Models\Comment::forEntity(\App\Models\Comment::TYPE_PHOTO, $id),
             'commentCount'  => \App\Models\Comment::countFor(\App\Models\Comment::TYPE_PHOTO, $id),
+            'upNext'        => $upNext,
+            'relatedGalleries' => $relatedGalleries,
+            'relatedCovers' => $relatedCovers,
         ]);
     }
 

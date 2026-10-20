@@ -228,6 +228,8 @@ foreach ((array) ($playlist ?? []) as $item) {
             <h3><?= !empty($playlistName) ? e($playlistName) : 'Up next' ?>
                 <?php if (!empty($playlist)): ?>
                     <span class="muted" style="font-weight:400;">(<?= count($playlist) ?><?= $playlistTotal > 0 ? ', ' . e(gmdate('H:i:s', $playlistTotal)) : '' ?>)</span>
+                <?php elseif (!empty($upNext)): ?>
+                    <span class="muted" style="font-weight:400;">(from this gallery)</span>
                 <?php endif; ?>
             </h3>
             <div class="pl-controls" role="group" aria-label="Playback queue">
@@ -247,9 +249,20 @@ foreach ((array) ($playlist ?? []) as $item) {
                             </a>
                         </li>
                     <?php endforeach; ?>
+                <?php elseif (!empty($upNext)): ?>
+                    <?php foreach ($upNext as $item): ?>
+                        <?php if ((int) $item['id'] === (int) $photo['id']) { continue; } ?>
+                        <li class="pl-item" data-video-id="<?= (int) $item['id'] ?>">
+                            <a data-swap href="<?= e(url('/videos/' . (int) $item['id'])) ?>">
+                                <img src="<?= e((string) $item['thumb']) ?>" alt="" loading="lazy">
+                                <span class="pl-title"><?= e($item['caption'] !== '' ? (string) $item['caption'] : 'Video ' . (int) $item['id']) ?></span>
+                                <span class="pl-duration"><?= e(!empty($item['duration_seconds']) ? gmdate('i:s', (int) $item['duration_seconds']) : '') ?></span>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
                 <?php endif; ?>
             </ul>
-            <?php if (empty($playlist)): ?>
+            <?php if (empty($playlist) && empty($upNext)): ?>
                 <p class="pl-empty muted" style="padding:.5rem;margin:.25rem 0 0;font-size:.85rem;">No videos queued. Browse galleries to add to the playlist.</p>
             <?php endif; ?>
             </div>
@@ -272,6 +285,27 @@ foreach ((array) ($playlist ?? []) as $item) {
 $sharePath  = '/videos/' . (int) $photo['id'];
 $shareTitle = $title;
 require __DIR__ . '/../partials/share-bar.php';
+
+// A "more like this" rail: the galleries that share a category with this
+// one, and that the member can actually open.
+if (!empty($relatedGalleries)): ?>
+<?php $currentGallery = $gallery ?? null; ?>
+<section class="fav-section">
+    <h2>More like this</h2>
+    <div class="grid">
+        <?php foreach ($relatedGalleries as $related): ?>
+            <?php
+            $gallery = $related;
+            $cover = $relatedCovers['covers'][(int) $related['id']] ?? null;
+            $galleryCategories = $relatedCovers['categories'][(int) $related['id']] ?? [];
+            require __DIR__ . '/../partials/gallery_card.php';
+            ?>
+        <?php endforeach; ?>
+    </div>
+</section>
+<?php $gallery = $currentGallery; ?>
+<?php endif; ?>
+<?php
 
 $commentableType = 'photo';
 $commentableId   = (int) $photo['id'];

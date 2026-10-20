@@ -315,8 +315,9 @@ class Gallery
         }
 
         if (!empty($filters['q'])) {
-            $like = '%' . $filters['q'] . '%';
-            $ft   = self::fulltextQuery((string) $filters['q']);
+            $like       = '%' . $filters['q'] . '%';
+            $likePrefix = $filters['q'] . '%';
+            $ft         = self::fulltextQuery((string) $filters['q']);
 
             if ($ft !== '') {
                 $where[] = '(MATCH(g.title, g.description) AGAINST (? IN BOOLEAN MODE) OR EXISTS (
@@ -327,14 +328,14 @@ class Gallery
                 $params[] = $ft;
                 $params[] = $ft;
             } else {
-                $where[] = '(g.title LIKE ? OR g.description LIKE ? OR EXISTS (
-                    SELECT 1 FROM gallery_category gc
-                    INNER JOIN categories c ON c.id = gc.category_id
-                    WHERE gc.gallery_id = g.id AND c.name LIKE ?
-                ))';
-                $params[] = $like;
-                $params[] = $like;
-                $params[] = $like;
+                // A term under three characters cannot use the fulltext
+                // index, so it used to fall back to a '%term%' scan over
+                // three columns plus a correlated EXISTS per row - the most
+                // expensive query on the site, for a search that matched
+                // almost everything. A PREFIX match on the title uses the
+                // index instead.
+                $where[] = 'g.title LIKE ?';
+                $params[] = $likePrefix;
             }
         }
 
@@ -1574,6 +1575,32 @@ class Gallery
              LIMIT ' . max(1, (int) $limit),
             [$galleryId, $galleryId]
         )->fetchAll();
+    }
+
+    /**
+     * The videos of a gallery, in the shape the player's queue panel uses
+     * (id, thumb, caption, duration, url).
+     */
+    public static function videosOf(int $galleryId, int $limit = 24): array
+    {
+        $rows = Database::run(
+            'SELECT p.* FROM photos p
+             INNER JOIN gallery_photo gp ON gp.photo_id = p.id
+             WHERE gp.gallery_id = ? AND p.is_video = 1
+             ORDER BY gp.position ASC, p.id ASC
+             LIMIT ' . max(1, (int) $limit),
+            [$galleryId]
+        )->fetchAll();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $row['thumb'] = file_url((string) $row['filename'], 'thumb');
+            $row['web']   = file_url((string) $row['filename'], 'web');
+            $row['url']   = url('/videos/' . (int) $row['id']);
+            $out[] = $row;
+        }
+
+        return $out;
     }
 
     /**
