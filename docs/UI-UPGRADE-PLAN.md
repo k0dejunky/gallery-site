@@ -1,5 +1,10 @@
 # Site-wide UI upgrade plan
 
+**Companion document: `docs/SCAN-PLAN.md`** - the 2026-10-20 deep scan (63
+bugs and upgrades) with its status table, the evidence for every item and the
+resume instructions. That file is the anchor for the next programme.
+
+
 **Status file for the UI refactor.** It is the recovery anchor: if a session dies,
 this file says exactly where the work stopped, what is already shipped, and what
 the next step is. Update it (and commit it) at the end of every phase.
