@@ -292,8 +292,20 @@ class Subscription
     }
 
     /**
+     * The subscription states a payment may still activate.
+     *
+     * A cancelled (or already ended) subscription is FINAL: payment
+     * processors retry postbacks, and without this a replayed
+     * "subscription activated" would resurrect a cancelled membership with a
+     * free billing period.
+     */
+    public const APPROVABLE = ['pending', 'past_due'];
+
+    /**
      * Approve a pending subscription: mark it active and compute its expiry
      * from the plan's billing cycle (lifetime plans never expire).
+     *
+     * A subscription that is not in an approvable state is left alone.
      */
     public static function approve(int $id): void
     {
@@ -309,6 +321,10 @@ class Subscription
             return;
         }
 
+        if (!in_array((string) $row['status'], self::APPROVABLE, true)) {
+            return;
+        }
+
         $expires = null;
         if ($row['billing_cycle'] === 'monthly') {
             $expires = date('Y-m-d H:i:s', strtotime('+1 month'));
@@ -316,11 +332,13 @@ class Subscription
             $expires = date('Y-m-d H:i:s', strtotime('+1 year'));
         }
 
+        // The status is in the WHERE clause as well, so a race between the
+        // read and the write cannot resurrect a cancelled subscription.
         Database::run(
             'UPDATE subscriptions
              SET status = ?, starts_at = CURRENT_TIMESTAMP, expires_at = ?, updated_at = CURRENT_TIMESTAMP
-             WHERE id = ?',
-            ['active', $expires, $id]
+             WHERE id = ? AND status IN (?, ?)',
+            ['active', $expires, $id, 'pending', 'past_due']
         );
     }
 

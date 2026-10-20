@@ -1122,6 +1122,80 @@ class TestSuite
             }
         });
 
+        $add('db.subscription_cancel_is_final', 'Database', 'A cancelled subscription is not resurrected by a replayed payment postback', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                $email = 'subprobe+' . bin2hex(random_bytes(4)) . '@example.invalid';
+                $now   = date('Y-m-d H:i:s');
+
+                try {
+                    Database::run(
+                        "INSERT INTO users (email, password_hash, role, status, email_verified_at, marketing_opt_out, last_seen_at, created_at)
+                         VALUES (?, 'x', 'user', 'active', ?, 0, ?, ?)",
+                        [$email, $now, $now, $now]
+                    );
+                    $userId = (int) Database::connection()->lastInsertId();
+
+                    $planId = (int) Database::run(
+                        'SELECT id FROM plans WHERE active = 1 ORDER BY sort_order ASC, id ASC LIMIT 1'
+                    )->fetchColumn();
+                    if ($planId <= 0) {
+                        return ['pass' => true, 'detail' => 'no active plan fixture; nothing to prove'];
+                    }
+
+                    // A pending subscription that the member then cancels.
+                    Database::run(
+                        "INSERT INTO subscriptions (user_id, plan_id, status, transaction_ref, created_at, updated_at)
+                         VALUES (?, ?, 'pending', ?, ?, ?)",
+                        [$userId, $planId, 'PROBE-' . $userId, $now, $now]
+                    );
+                    $subId = (int) Database::connection()->lastInsertId();
+
+                    // A pending one IS approved.
+                    \App\Models\Subscription::approve($subId);
+                    $approved = (string) Database::run(
+                        'SELECT status FROM subscriptions WHERE id = ?', [$subId]
+                    )->fetchColumn();
+
+                    // Now the cancelled case: the member cancels, and the
+                    // biller retries its postback.
+                    Database::run(
+                        "UPDATE subscriptions SET status = 'cancelled', expires_at = ? WHERE id = ?",
+                        [$now, $subId]
+                    );
+                    \App\Models\Subscription::approve($subId);
+                    \App\Models\Subscription::activateWithTransaction($subId, 'PROBE-RETRY');
+                    $afterRetry = (string) Database::run(
+                        'SELECT status FROM subscriptions WHERE id = ?', [$subId]
+                    )->fetchColumn();
+
+                    return [
+                        'pass'   => $approved === 'active' && $afterRetry === 'cancelled',
+                        'detail' => "pending->$approved, cancelled->$afterRetry (a replayed postback must not resurrect it)",
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                    try {
+                        Database::run('DELETE FROM users WHERE email = ?', [$email]);
+                    } catch (\Throwable $ignored) {
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.autopost_claim', 'Database', 'Auto-poster claim executes (single-table UPDATE, secret guard)', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) === 'mysql') {

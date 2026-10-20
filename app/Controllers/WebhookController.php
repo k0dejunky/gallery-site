@@ -465,8 +465,10 @@ class WebhookController extends Controller
         switch ($kind) {
             case 'subscription_charged_successfully':
             case 'subscription_charged':
-                // Payment succeeded — ensure the subscription is active
-                if ((string) $subscription['status'] !== 'active') {
+                // Payment succeeded - ensure the subscription is active. A
+                // cancelled (or ended) subscription is final: a replayed
+                // postback must not resurrect it with a free period.
+                if (in_array((string) $subscription['status'], Subscription::APPROVABLE, true)) {
                     Subscription::activateWithTransaction($subId, 'BT-' . $btId);
                     $this->notifyPayment('Braintree', $subId, 'BT-' . $btId);
                 }
@@ -682,7 +684,9 @@ class WebhookController extends Controller
             case 'BILLING.SUBSCRIPTION.ACTIVATED':
             case 'BILLING.SUBSCRIPTION.APPROVED':
             case 'PAYMENT.SALE.COMPLETED':
-                if ((string) $subscription['status'] !== 'active') {
+                // Only a subscription that is still approvable is activated:
+                // a cancelled one is final, even if the postback is retried.
+                if (in_array((string) $subscription['status'], Subscription::APPROVABLE, true)) {
                     Subscription::activateWithTransaction($subId, $ref);
                     $this->notifyPayment('PayPal', $subId, $ref);
                 }
