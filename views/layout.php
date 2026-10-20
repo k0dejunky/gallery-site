@@ -510,7 +510,7 @@ if (!empty($_SESSION['impersonator_id'])) {
     <script nonce="<?= csp_nonce() ?>">
         // Accessible mobile nav: track the expanded state on the toggle button
         // and close the dropdown on outside clicks, Escape, or following a link.
-        window.GalleryNav = {
+        window.GalleryTopNav = {
             toggle: function () {
                 var btn = document.getElementById('nav-toggle-id');
                 var links = document.getElementById('nav-links-id');
@@ -530,10 +530,10 @@ if (!empty($_SESSION['impersonator_id'])) {
             var links = document.getElementById('nav-links-id');
             if (!links) return;
             var inside = links.contains(e.target) || (e.target.id && e.target.id === 'nav-toggle-id');
-            if (!inside) window.GalleryNav.close();
+            if (!inside) window.GalleryTopNav.close();
         });
         document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') window.GalleryNav.close();
+            if (e.key === 'Escape') window.GalleryTopNav.close();
         });
     </script>
 <?php if (!empty($_GET['se']) && in_array($_GET['se'], ['1', 'user'], true)): ?>
@@ -618,7 +618,7 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
 //   data-nocontext -> prevents the context menu on the element
 //   data-fallback  -> img error fallback src (applied once)
 //   data-stop-prop -> click does not bubble past the element
-window.galleryNavToggle=function(){ if(window.GalleryNav){window.GalleryNav.toggle();} };
+window.galleryNavToggle=function(){ if(window.GalleryTopNav){window.GalleryTopNav.toggle();} };
 // The phone's "More" sheet (the bottom bar's overflow menu).
 window.bottomMoreToggle=function(){
   var sheet=document.getElementById('bottom-more-sheet');

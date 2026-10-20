@@ -1427,6 +1427,103 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.nav_globals_unique', 'Smoke · UI', 'No two modules define the same window global', static function () use ($root, $ok, $bad): array {
+            // window.GalleryNav was defined twice: the top nav dropdown in
+            // views/layout.php and the media-nav advance in user.js. user.js
+            // loads last, so it overwrote the dropdown and the guest
+            // hamburger's toggle() no longer existed. A global that two
+            // modules of the SAME page both own is a global where one of
+            // them is silently dead.
+            //
+            // The two shells never share a page, so the member group and the
+            // admin group are checked separately. A definition guarded by
+            // "if (!window.X)" is a fallback chain, not a collision.
+            $groups = [
+                'member' => [
+                    'views/layout.php'         => $root . '/views/layout.php',
+                    'public/assets/js/user.js' => $root . '/public/assets/js/user.js',
+                    'public/assets/js/tour.js' => $root . '/public/assets/js/tour.js',
+                ],
+                'admin' => [
+                    'views/admin/layout.php'    => $root . '/views/admin/layout.php',
+                    'public/assets/js/admin.js' => $root . '/public/assets/js/admin.js',
+                    'public/assets/js/tour.js'  => $root . '/public/assets/js/tour.js',
+                ],
+            ];
+            $problems = [];
+            foreach ($groups as $scope => $sources) {
+                $owners = [];
+                foreach ($sources as $label => $path) {
+                    $src = (string) @file_get_contents($path);
+                    if ($src === '') {
+                        continue;
+                    }
+                    if (preg_match_all('/window\.([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*[^=]/', $src, $m) === false) {
+                        continue;
+                    }
+                    foreach (array_unique($m[1]) as $name) {
+                        $owners[$name][] = $label;
+                    }
+                }
+                foreach ($owners as $name => $where) {
+                    if (count($where) < 2) {
+                        continue;
+                    }
+                    sort($where);
+                    // Every definition but the last has to be a guarded
+                    // fallback, or the last one silently wins.
+                    $unguarded = [];
+                    foreach ($where as $label) {
+                        $src = (string) @file_get_contents($sources[$label]);
+                        if (strpos($src, 'if (!window.' . $name . ')') === false) {
+                            $unguarded[] = $label;
+                        }
+                    }
+                    if (count($unguarded) > 1) {
+                        $problems[] = 'window.' . $name . ' is owned by ' . count($unguarded)
+                            . ' modules in the ' . $scope . ' scope: ' . implode(', ', $unguarded)
+                            . ' - the last one wins and the others are dead';
+                    }
+                }
+            }
+            return $problems === []
+                ? $ok('no window global is owned by two modules of the same page')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.ui.guest_hamburger_works', 'Smoke · UI', 'The guest hamburger opens the navigation dropdown', static function () use ($root, $ok, $bad): array {
+            // The dropdown is opened by window.GalleryTopNav.toggle(), which
+            // the toggle button reaches through the data-action delegation.
+            // The two halves have to agree on the name and the class.
+            $layout = (string) @file_get_contents($root . '/views/layout.php');
+            $css    = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $problems = [];
+
+            if (strpos($layout, 'window.GalleryTopNav = {') === false) {
+                $problems[] = 'the top nav must publish window.GalleryTopNav';
+            }
+            if (strpos($layout, 'toggle: function ()') === false || strpos($layout, 'close: function ()') === false) {
+                $problems[] = 'window.GalleryTopNav must have a toggle() and a close()';
+            }
+            if (strpos($layout, 'window.galleryNavToggle=function(){ if(window.GalleryTopNav){window.GalleryTopNav.toggle();} };') === false) {
+                $problems[] = 'the toggle button must reach the top nav through window.GalleryTopNav';
+            }
+            if (strpos($layout, 'data-action="galleryNavToggle"') === false) {
+                $problems[] = 'the hamburger button must carry data-action="galleryNavToggle"';
+            }
+            if (strpos($css, '.nav-links.open{display:flex}') === false) {
+                $problems[] = 'the open state of the nav dropdown must be styled';
+            }
+            // The state has to be announced, not only drawn.
+            if (strpos($layout, "btn.setAttribute('aria-expanded', open ? 'true' : 'false');") === false) {
+                $problems[] = 'the hamburger must set aria-expanded when it opens';
+            }
+
+            return $problems === []
+                ? $ok('the guest hamburger toggles the dropdown and announces its state')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

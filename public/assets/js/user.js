@@ -1077,7 +1077,7 @@
        coming and give the viewer a few seconds to cancel it. */
     var nextUp = null;
     function advanceNow(){
-      if(window.GalleryNav && window.GalleryNav.advanceNext) window.GalleryNav.advanceNext();
+      if(window.GalleryMediaNav && window.GalleryMediaNav.advanceNext) window.GalleryMediaNav.advanceNext();
     }
     function hideNextUp(){
       if(!nextUp) return;
@@ -1481,7 +1481,7 @@ document.addEventListener('leavepictureinpicture', function(){
 
   /* The player's "next up" countdown needs a way to move the queue on when
      the countdown runs out or the viewer presses "Play now". */
-  window.GalleryNav = { advanceNext: advanceNext, nextInfo: nextInfo };
+  window.GalleryMediaNav = { advanceNext: advanceNext, nextInfo: nextInfo };
 })();
 
 /* Playlist queue + in-page gallery browser for the video player.
