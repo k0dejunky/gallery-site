@@ -134,7 +134,7 @@ $icon = static fn (string $name): string => \App\Core\Icon::svg($name);
     <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') . ' Admin' : e(config('app.site_name')) . ' Admin' ?></title>
     <link rel="stylesheet" href="<?= e(asset_url('/assets/admin-shared.css')) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/utilities.css')) ?>">
-    <link rel="stylesheet" href="<?= e(asset_url('/assets/css/user.css')) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('/assets/css/support.css')) ?>">
     <style>
     <?= \App\Models\Theme::css(\App\Models\Theme::SCOPE_ADMIN) ?>
     <?= \App\Models\Theme::cssLayout(\App\Models\Theme::SCOPE_ADMIN) ?>

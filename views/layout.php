@@ -108,6 +108,7 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     <link rel="preload" as="style" href="<?= e(asset_url('/assets/css/user.css')) ?>">
     <link rel="stylesheet" href="<?= e(url('/theme.css') . '?v=' . \App\Models\Theme::themeCssVersion($userThemePreset)) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/utilities.css')) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('/assets/css/support.css')) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/user.css')) ?>">
 </head>
 <?php

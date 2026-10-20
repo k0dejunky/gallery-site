@@ -536,15 +536,27 @@ class SmokeChecks
         $add('smoke.admin.design_system', 'Smoke · Admin UI', 'Admin shell loads its stylesheet after the theme CSS', static function () use ($adminLayout, $adminCss, $ok, $bad): array {
             $adminAt = strpos($adminLayout, '/assets/css/admin.css');
             $themeAt = strpos($adminLayout, 'Theme::css(');
-            $userAt  = strpos($adminLayout, '/assets/css/user.css');
             if ($adminAt === false) {
                 return $bad('admin layout must link /assets/css/admin.css');
             }
-            if ($themeAt === false || $userAt === false) {
-                return $bad('admin layout must still load the theme + user CSS');
+            if ($themeAt === false) {
+                return $bad('admin layout must still load the theme CSS');
             }
-            if ($adminAt < $themeAt || $adminAt < $userAt) {
+            if ($adminAt < $themeAt) {
                 return $bad('admin.css must be linked AFTER the theme CSS so it wins the cascade');
+            }
+            // The admin has its own stylesheet, the shared utilities and the
+            // shared support desk. It must NOT load the member stylesheet:
+            // it used to, and the member's compact-mode rules and the member's
+            // support styles leaked into the console.
+            if (strpos($adminLayout, '/assets/css/utilities.css') === false) {
+                return $bad('the admin layout must load the shared utilities');
+            }
+            if (strpos($adminLayout, '/assets/css/support.css') === false) {
+                return $bad('the admin layout must load the shared support desk');
+            }
+            if (strpos($adminLayout, '/assets/css/user.css') !== false) {
+                return $bad('the admin layout must not load the member stylesheet - it leaks the member rules into the console');
             }
             if (strpos($adminLayout, 'asset_url(') === false) {
                 return $bad('admin.css must be cache-busted through asset_url() (filemtime)');
