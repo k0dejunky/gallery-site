@@ -23,7 +23,7 @@
 
         <div class="live-chat">
             <h2>Live chat <span class="muted" style="font-weight:400;">(everyone watching)</span></h2>
-            <div class="live-chat-messages" id="live-chat-messages"></div>
+            <div class="live-chat-messages" id="live-chat-messages" role="log" aria-live="polite" aria-relevant="additions" aria-label="Live chat"></div>
             <form class="live-chat-form" id="live-chat-form">
                 <?= csrf_field() ?>
                 <input type="text" id="live-chat-input" maxlength="500" placeholder="Say something…" aria-label="Chat message" autocomplete="off">

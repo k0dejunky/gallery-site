@@ -1096,6 +1096,27 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.chat_is_announced', 'Smoke · UI', 'A new chat message is announced to a screen reader', static function () use ($root, $ok, $bad): array {
+            // The chat thread and the live chat had no role and no
+            // aria-live: a reply that arrived over the SSE stream was a
+            // silent change, and a member only found it by scrolling.
+            $chat = (string) @file_get_contents($root . '/views/chat/index.php');
+            $live = (string) @file_get_contents($root . '/views/live.php');
+            $problems = [];
+            if (strpos($chat, 'role="log"') === false) {
+                $problems[] = 'the chat thread must be a log region';
+            }
+            if (strpos($chat, 'aria-live="polite"') === false) {
+                $problems[] = 'the chat thread must announce new messages';
+            }
+            if (strpos($live, 'role="log"') === false) {
+                $problems[] = 'the live chat must be a log region';
+            }
+            return $problems === []
+                ? $ok('the chat and the live chat announce what arrives')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.ui.no_dead_lightbox', 'Smoke · UI', 'The replaced lightbox stays deleted', static function () use ($root, $ok, $bad): array {
             // The grid navigates to the in-page image viewer with the
             // comments (commit ded33e2), but the lightbox's JavaScript and
