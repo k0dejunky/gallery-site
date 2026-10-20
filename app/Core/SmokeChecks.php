@@ -1096,6 +1096,35 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.wall_costs_nothing', 'Smoke · UI', 'The wall does not spend a query per post and clears the badge', static function () use ($root, $ok, $bad): array {
+            // The wall wrote a comment_count that nothing ever read (20
+            // COUNT queries per view) and printed the date heading once per
+            // post, so "October 18, 2026" appeared five times in a row. The
+            // nav badge also stayed lit until every single notification had
+            // been clicked, even though the wall SHOWS them.
+            $controller = (string) @file_get_contents($root . '/app/Controllers/WallController.php');
+            $view       = (string) @file_get_contents($root . '/views/wall.php');
+            $model      = (string) @file_get_contents($root . '/app/Models/Notification.php');
+            $problems   = [];
+
+            if (strpos($controller, 'Comment::countFor') !== false) {
+                $problems[] = 'the wall must not run a COUNT per post';
+            }
+            if (strpos($controller, 'Notification::markManyRead') === false) {
+                $problems[] = 'opening the wall must mark the inbox it shows as read';
+            }
+            if (strpos($model, 'public static function markManyRead(') === false) {
+                $problems[] = 'the notifications model needs a bulk mark-read';
+            }
+            if (strpos($view, '$newDay') === false) {
+                $problems[] = 'the wall must print one date heading per day';
+            }
+
+            return $problems === []
+                ? $ok('the wall is cheap, grouped by day, and clears the badge')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.ui.paywall_is_honest', 'Smoke · UI', 'The site says what is locked instead of pretending it is empty', static function () use ($root, $ok, $bad): array {
             // 163 of the 165 published galleries are paid. The "related" and
             // "recommended" rails ignored the member's level, so they

@@ -48,8 +48,9 @@ class WallController extends Controller
             : $this->buildGalleryPreviews($galleryIds, (int) $user['id']);
 
         foreach ($posts as &$post) {
-            $post['comment_count'] = Comment::countFor(Comment::TYPE_WALL, (int) $post['id']);
-
+            // The view counts the comments from the rows it already fetches
+            // (Comment::forEntity), so a COUNT per post here was 20 wasted
+            // queries on every wall view - and the value was never read.
             $gid = (int) ($post['gallery_id'] ?? 0);
             if ($gid > 0 && isset($previews[$gid])) {
                 $post['preview'] = $previews[$gid];
@@ -67,6 +68,13 @@ class WallController extends Controller
         unset($n);
 
         $notifications = $this->decorateNotifications($notifications, (int) $user['id']);
+
+        // The wall SHOWS the inbox, so opening it is reading it. The nav
+        // badge used to stay lit until the member clicked every single
+        // notification - it now follows the attention.
+        if ($unreadIds ?? []) {
+            Notification::markManyRead($unreadIds, (int) $user['id']);
+        }
 
         $this->view('wall', [
             'posts'         => $posts,

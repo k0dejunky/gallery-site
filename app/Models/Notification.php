@@ -77,6 +77,29 @@ class Notification
         return $row === false ? null : $row;
     }
 
+    /**
+     * Mark a set of notifications read in ONE query.
+     *
+     * The wall SHOWS the inbox, so opening it is reading it: the nav badge
+     * has to follow the attention, not the clicks. Marking them one by one
+     * would be 30 queries on every wall view.
+     */
+    public static function markManyRead(array $ids, int $userId): int
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn (int $id): bool => $id > 0)));
+        if ($ids === [] || $userId <= 0) {
+            return 0;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        return Database::run(
+            'UPDATE notifications SET read_at = COALESCE(read_at, NOW())
+             WHERE id IN (' . $placeholders . ') AND user_id = ? AND read_at IS NULL',
+            array_merge($ids, [$userId])
+        )->rowCount();
+    }
+
     public static function markAllRead(int $userId): void
     {
         Database::run(

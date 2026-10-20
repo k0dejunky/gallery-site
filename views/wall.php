@@ -110,13 +110,26 @@
         </div>
     </div>
 <?php else: ?>
+    <?php
+    // One date heading per day, not one per post: the feed used to print
+    // "October 18, 2026" five times in a row.
+    $lastDay = null;
+    ?>
     <?php foreach ($posts as $post): ?>
         <?php $postPreview = $post['preview'] ?? null; ?>
+        <?php
+        $postDate = new DateTimeImmutable($post['created_at']);
+        $postDay  = $postDate->format('Y-m-d');
+        $newDay   = $postDay !== $lastDay;
+        $lastDay  = $postDay;
+        ?>
         <section class="favorites-section">
+            <?php if ($newDay): ?>
             <div class="favorites-heading">
-                <h2><?php $postDate = new DateTimeImmutable($post['created_at']); echo e($postDate->format('F j, Y')); ?></h2>
-                <?php if (!empty($post['pinned'])): ?><span class="chip">Pinned</span><?php endif; ?>
+                <h2><?= e($postDate->format('F j, Y')) ?></h2>
             </div>
+            <?php endif; ?>
+            <?php if (!empty($post['pinned'])): ?><div class="favorites-heading"><span class="chip">Pinned</span></div><?php endif; ?>
 
             <?php if ($postPreview !== null): ?>
                 <?php
