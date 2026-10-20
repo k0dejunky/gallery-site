@@ -320,11 +320,19 @@ class Gallery
             $ft         = self::fulltextQuery((string) $filters['q']);
 
             if ($ft !== '') {
+                // The caption is the descriptive text of an image, so it is
+                // searched too - a member looking for a word in a caption
+                // used to find nothing.
                 $where[] = '(MATCH(g.title, g.description) AGAINST (? IN BOOLEAN MODE) OR EXISTS (
                     SELECT 1 FROM gallery_category gc
                     INNER JOIN categories c ON c.id = gc.category_id
                     WHERE gc.gallery_id = g.id AND MATCH(c.name) AGAINST (? IN BOOLEAN MODE)
+                ) OR EXISTS (
+                    SELECT 1 FROM gallery_photo gp
+                    INNER JOIN photos p2 ON p2.id = gp.photo_id
+                    WHERE gp.gallery_id = g.id AND MATCH(p2.caption) AGAINST (? IN BOOLEAN MODE)
                 ))';
+                $params[] = $ft;
                 $params[] = $ft;
                 $params[] = $ft;
             } else {

@@ -151,7 +151,10 @@ CREATE TABLE IF NOT EXISTS photos (
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_photos_media_created (is_video, created_at),
     INDEX idx_photos_filename (filename),
-    INDEX idx_photos_views (views)
+    INDEX idx_photos_views (views),
+    -- The caption is the descriptive text of an image, and the search
+    -- covers it.
+    FULLTEXT KEY ft_caption (caption)
 );
 
 CREATE TABLE IF NOT EXISTS gallery_photo (
