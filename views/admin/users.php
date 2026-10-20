@@ -114,17 +114,24 @@ echo AdminTable::shell([
                     <?php endif; ?>
                 </td>
                 <td>
-                    <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/role') ?>" class="inline">
-                        <?= csrf_field() ?>
-                        <select name="role" data-autosubmit="manual" class="adm-inline-select role-badge <?= e($user['role']) ?>">
-                            <?php foreach ($roles as $r): ?>
-                                <option value="<?= e($r) ?>"<?= $user['role'] === $r ? ' selected' : '' ?>><?= e(str_replace('_', ' ', $r)) ?></option>
-                            <?php endforeach; ?>
-                            <?php if (!in_array('user', $roles, true)): ?>
-                                <option value="user"<?= $user['role'] === 'user' ? ' selected' : '' ?>>user</option>
-                            <?php endif; ?>
-                        </select>
-                    </form>
+                    <?php if (in_array($user['role'], $roles, true)): ?>
+                        <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/role') ?>" class="inline">
+                            <?= csrf_field() ?>
+                            <select name="role" data-autosubmit="manual" class="adm-inline-select role-badge <?= e($user['role']) ?>">
+                                <?php foreach ($roles as $r): ?>
+                                    <option value="<?= e($r) ?>"<?= $user['role'] === $r ? ' selected' : '' ?>><?= e(str_replace('_', ' ', $r)) ?></option>
+                                <?php endforeach; ?>
+                                <?php if (!in_array('user', $roles, true)): ?>
+                                    <option value="user"<?= $user['role'] === 'user' ? ' selected' : '' ?>>user</option>
+                                <?php endif; ?>
+                            </select>
+                        </form>
+                    <?php else: ?>
+                        <?php // A role this admin may not assign (an admin seen by
+                            // a moderator): show it, but do not offer a control
+                            // that would be refused. ?>
+                        <span class="adm-inline-select role-badge <?= e($user['role']) ?>" aria-label="Role: <?= e(str_replace('_', ' ', $user['role'])) ?>"><?= e(str_replace('_', ' ', $user['role'])) ?></span>
+                    <?php endif; ?>
                 </td>
                 <td>
                     <?php if (($user['status'] ?? 'active') === 'suspended'): ?>

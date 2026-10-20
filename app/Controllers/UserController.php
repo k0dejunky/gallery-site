@@ -13,13 +13,84 @@ use App\Models\User;
 
 class UserController extends Controller
 {
-    private function requestedRole(): string
+    /**
+     * The roles this admin may assign.
+     *
+     * "admin" used to be in the list for anyone with an admin role, which
+     * meant a moderator could mint a full admin. Granting a role that carries
+     * more power than your own needs its own permission: `manage_admins`
+     * (admin + super admin) for `admin`, `manage_roles` (super admin only)
+     * for `super_admin`.
+     */
+    private function assignableRoles(): array
+    {
+        $allowed = ['user', 'editor', 'moderator', 'viewer'];
+        if (Auth::can('manage_admins')) {
+            $allowed[] = 'admin';
+        }
+        if (Auth::can('manage_roles')) {
+            $allowed[] = 'super_admin';
+        }
+
+        return $allowed;
+    }
+
+    /**
+     * You may only change the role of an account whose CURRENT role you
+     * could also assign - so nobody can demote (or re-role) an account that
+     * is more privileged than they are.
+     */
+    private function canManageRole(string $currentRole): bool
+    {
+        return in_array($currentRole, $this->assignableRoles(), true);
+    }
+
+    /**
+     * Refuse an action on an account that is more privileged than the admin
+     * performing it.
+     *
+     * The `users` permission is enough to reset a password, change an email,
+     * suspend or delete ANY account - including an admin's. That is a
+     * takeover, not user management, so an admin may only act on an account
+     * whose current role they could also assign.
+     *
+     * Returns the account row, or null when the action was refused (the
+     * request has already been answered by then).
+     */
+    private function guardManageable(int $id): ?array
+    {
+        $target = User::find($id);
+
+        if ($target === null) {
+            $this->notFound();
+            return null;
+        }
+
+        if (!$this->canManageRole((string) $target['role'])) {
+            $this->flash('error', 'You do not have permission to manage that account.');
+            $this->redirect('/admin/users');
+            return null;
+        }
+
+        return $target;
+    }
+
+    /**
+     * The role to store for an account.
+     *
+     * A role this admin may not assign is refused - and the account keeps
+     * the role it already has, rather than being silently demoted to
+     * "user" because the submitted value was not in the list.
+     */
+    private function requestedRole(string $currentRole = 'user'): string
     {
         $role = (string) $this->request->input('role');
-        $allowed = ['user', 'editor', 'moderator', 'viewer'];
-        if (Auth::isAdmin()) $allowed[] = 'admin';
-        if (Auth::can('manage_roles')) $allowed[] = 'super_admin';
-        return in_array($role, $allowed, true) ? $role : 'user';
+        $allowed = $this->assignableRoles();
+        if (in_array($role, $allowed, true)) {
+            return $role;
+        }
+
+        return $currentRole;
     }
     /**
      * User management is admin-only.
@@ -103,7 +174,7 @@ class UserController extends Controller
             'totalUsers'     => $totalUsers,
             'activeCount'    => $activeCount,
             'suspendedCount' => $suspendedCount,
-            'roles'          => Auth::ADMIN_ROLES,
+            'roles'          => $this->assignableRoles(),
         ]);
     }
 
@@ -134,7 +205,7 @@ class UserController extends Controller
             $this->redirect('/admin/users');
         }
 
-        if ($action === 'role' && $role === 'admin' && !Auth::isAdmin()) {
+        if ($action === 'role' && $role === 'admin' && !Auth::can('manage_admins')) {
             $this->flash('error', 'You do not have permission to assign the admin role.');
             $this->redirect('/admin/users');
         }
@@ -157,6 +228,13 @@ class UserController extends Controller
                 continue;
             }
 
+            // An admin may only act on an account whose current role they
+            // could also assign (a moderator must not delete or suspend an
+            // admin).
+            if (!$this->canManageRole((string) $user['role'])) {
+                continue;
+            }
+
             if ($action === 'delete') {
                 // Never delete the final admin, mirroring single-user delete.
                 if (in_array($user['role'], Auth::ADMIN_ROLES, true) && User::countAdmins() <= 1) {
@@ -176,6 +254,11 @@ class UserController extends Controller
                     ['status' => $user['status'] ?? null], ['status' => $status]);
                 $done++;
             } else {
+                // You may not re-role an account that is more privileged than
+                // you are (a moderator cannot demote an admin).
+                if (!$this->canManageRole((string) $user['role'])) {
+                    continue;
+                }
                 Database::run('UPDATE users SET role = ? WHERE id = ?', [$role, $id]);
                 AuditLog::record($me, 'update', 'user', $id, 'Bulk role change "' . $user['email'] . '" → ' . $role, ['role' => $user['role']], ['role' => $role]);
                 $done++;
@@ -207,6 +290,13 @@ class UserController extends Controller
 
         if ($target['role'] === 'super_admin' && $me['role'] !== 'super_admin') {
             $this->flash('error', 'Only a super admin can impersonate a super admin.');
+            $this->redirect('/admin/users');
+        }
+
+        // Impersonating an admin IS acting as that admin, so an admin may
+        // only impersonate an account they could also re-role.
+        if (!$this->canManageRole((string) $target['role'])) {
+            $this->flash('error', 'You do not have permission to impersonate that account.');
             $this->redirect('/admin/users');
         }
 
@@ -338,9 +428,7 @@ class UserController extends Controller
     public function updateRole(int $id): void
     {
         $role = (string) $this->request->post('role', '');
-        $allowed = ['user', 'editor', 'moderator', 'viewer'];
-        if (Auth::isAdmin()) $allowed[] = 'admin';
-        if (Auth::can('manage_roles')) $allowed[] = 'super_admin';
+        $allowed = $this->assignableRoles();
 
         if (!in_array($role, $allowed, true)) {
             $this->flash('error', 'Invalid role.');
@@ -351,6 +439,13 @@ class UserController extends Controller
 
         if ($user === null) {
             $this->flash('error', 'User not found.');
+            $this->redirect('/admin/users');
+        }
+
+        // You may not re-role an account that is more privileged than you are:
+        // a moderator must not be able to demote an admin (or the owner).
+        if (!$this->canManageRole((string) $user['role'])) {
+            $this->flash('error', 'You do not have permission to change the role of that account.');
             $this->redirect('/admin/users');
         }
 
@@ -407,11 +502,17 @@ class UserController extends Controller
         Auth::requirePermission('users');
 
         $status = (string) $this->request->post('status', '');
-        $target = User::find($id);
 
-        if (!in_array($status, ['active', 'suspended'], true) || $target === null) {
+        if (!in_array($status, ['active', 'suspended'], true)) {
             $this->flash('error', 'Invalid status change.');
             $this->redirect('/admin/users');
+        }
+
+        // A moderator must not be able to suspend an admin.
+        $target = $this->guardManageable($id);
+
+        if ($target === null) {
+            return;
         }
 
         $me = Auth::user()['id'] ?? 0;
@@ -440,10 +541,11 @@ class UserController extends Controller
     {
         Auth::requirePermission('users');
 
-        $target = User::find($id);
+        // A moderator must not be able to reset an admin's password: the
+        // temporary password is shown to whoever asks for it.
+        $target = $this->guardManageable($id);
 
         if ($target === null) {
-            $this->notFound();
             return;
         }
 
@@ -485,10 +587,10 @@ class UserController extends Controller
     {
         Auth::requirePermission('users');
 
-        $target = User::find($id);
+        // A moderator must not be able to sign an admin out everywhere.
+        $target = $this->guardManageable($id);
 
         if ($target === null) {
-            $this->notFound();
             return;
         }
 
@@ -575,10 +677,10 @@ class UserController extends Controller
      */
     public function destroy(int $id): void
     {
-        $user = User::find($id);
+        // A moderator must not be able to delete an admin.
+        $user = $this->guardManageable($id);
 
         if ($user === null) {
-            $this->notFound();
             return;
         }
 
@@ -626,15 +728,16 @@ class UserController extends Controller
      */
     public function update(int $id): void
     {
-        $user = User::find($id);
+        // A moderator must not be able to edit an admin (the form changes the
+        // email and the password).
+        $user = $this->guardManageable($id);
 
         if ($user === null) {
-            $this->notFound();
             return;
         }
 
         $email    = trim($this->request->input('email'));
-        $role     = $this->requestedRole();
+        $role     = $this->requestedRole((string) ($user['role'] ?? 'user'));
         $password = (string) $this->request->post('password', '');
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {

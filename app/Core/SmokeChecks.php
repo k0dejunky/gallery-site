@@ -261,6 +261,51 @@ class SmokeChecks
         $headersConf = $read("$root/config/gallery-headers.conf");
         $adminLayout = $read("$root/views/admin/layout.php");
         $checkoutView = $read("$root/views/membership/braintree_checkout.php");
+        $add('smoke.auth.no_role_escalation', 'Smoke · Auth', 'A low-privilege admin cannot grant or touch an admin account', static function () use ($root, $ok, $bad): array {
+            // The `users` permission is held by `moderator`, and it is enough
+            // to reset a password, change an email, suspend or delete ANY
+            // account. Granting the `admin` role used to be allowed to
+            // anyone with an admin role, so a moderator could mint a full
+            // admin (and demote the owner).
+            $controller = (string) @file_get_contents($root . '/app/Controllers/UserController.php');
+            $auth       = (string) @file_get_contents($root . '/app/Core/Auth.php');
+            $problems   = [];
+
+            if (strpos($controller, "Auth::isAdmin()) \$allowed[] = 'admin'") !== false) {
+                $problems[] = 'the admin role must not be granted through isAdmin() alone';
+            }
+            if (strpos($controller, 'manage_admins') === false) {
+                $problems[] = 'granting the admin role must go through the manage_admins permission';
+            }
+            foreach (['moderator', 'editor', 'viewer'] as $role) {
+                if (preg_match("/'" . $role . "'\s*=>\s*\[([^\]]*)\]/", $auth, $m) === 1
+                    && strpos($m[1], 'manage_admins') !== false) {
+                    $problems[] = 'the ' . $role . ' role must not hold manage_admins';
+                }
+            }
+            // Every action that changes an account must refuse a target that
+            // is more privileged than the admin performing it.
+            foreach (['resetPassword', 'setStatus', 'destroy', 'impersonate', 'logoutEverywhere', 'update'] as $action) {
+                $at = strpos($controller, 'function ' . $action . '(');
+                if ($at === false) {
+                    continue;
+                }
+                // Only this method's body - not the next one.
+                $next = strpos($controller, "\n    public function ", $at + 10);
+                $body = $next === false ? substr($controller, $at) : substr($controller, $at, $next - $at);
+                if (strpos($body, 'guardManageable') === false && strpos($body, 'canManageRole') === false) {
+                    $problems[] = $action . '() must refuse an account more privileged than the admin';
+                }
+            }
+            if (strpos($controller, 'guardManageable') === false || strpos($controller, 'canManageRole') === false) {
+                $problems[] = 'the account guard is missing';
+            }
+
+            return $problems === []
+                ? $ok('only an admin may grant the admin role, and nobody may act on a more privileged account')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.legal.static_actions', 'Smoke · Legal', 'StaticPageController provides 2257/DMCA/report actions', static function () use ($staticCtrl, $ok, $bad): array {
             return strpos($staticCtrl, 'function notice2257') !== false
                 && strpos($staticCtrl, 'function dmca') !== false
