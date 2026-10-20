@@ -141,11 +141,11 @@ if (!empty($_SESSION['impersonator_id'])) {
 <?php endif; ?>
 <a class="skip-link" href="#main-content">Skip to content</a>
 <?php if (!empty($_SESSION['impersonator_id'])): ?>
-    <div style="background:#7f1d1d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;justify-content:center;border-radius:var(--border-radius);margin-bottom:1rem;">
+    <div style="background:var(--flash-error-bg);color:var(--flash-error-color);padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;justify-content:center;border-radius:var(--border-radius);margin-bottom:1rem;">
         <b>Impersonating — viewing the site as a member.</b>
         <form method="post" action="<?= url('/admin/impersonate/exit') ?>" style="display:inline;">
             <?= csrf_field() ?>
-            <button type="submit" class="btn btn-sm" style="background:#fff;color:#7f1d1d;">Return to admin</button>
+            <button type="submit" class="btn btn-sm" style="background:var(--card-bg);color:var(--flash-error-color);">Return to admin</button>
         </form>
     </div>
     <?php endif; ?>

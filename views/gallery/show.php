@@ -41,7 +41,7 @@ $breadcrumbItems = [
 <?php require __DIR__ . '/../partials/star_rating.php'; ?>
 
 <?php if ($ppvPrice > 0 && empty($galleryUnlocked)): ?>
-    <div class="settings-form" style="border:1px solid var(--purple-400,#a855f7);border-radius:var(--card-radius,8px);padding:1rem;margin:0 0 1rem;background:var(--pink-100,#fdf4ff);">
+    <div class="settings-form" style="border:1px solid var(--purple-400);border-radius:var(--card-radius);padding:1rem;margin:0 0 1rem;background:var(--pink-100);">
         <strong>Premium gallery.</strong> Unlock full access for
         <strong>$<?= e(number_format((float) $ppvPrice, 2)) ?></strong>.
         <?php if (\App\Core\Auth::check()): ?>
@@ -168,7 +168,7 @@ require __DIR__ . '/../partials/comments.php';
 ?>
 
 <?php if (\App\Core\Auth::check()): ?>
-    <section style="margin-top:2rem;border-top:1px solid var(--card-border,#eee);padding-top:1.25rem;">
+    <section style="margin-top:2rem;border-top:1px solid var(--card-border);padding-top:1.25rem;">
         <h2>Leave a tip</h2>
         <p class="muted">Show your appreciation — your note goes straight to the studio.</p>
         <form method="post" action="<?= url('/tip') ?>" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem;">

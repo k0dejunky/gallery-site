@@ -1888,6 +1888,50 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.no_stray_colours', 'Smoke · UI', 'The member views carry no stray colours', static function () use ($root, $ok, $bad): array {
+            // The member views are on the dark skin, so a light literal is
+            // a hole in the page: the paywall headline at 1.60:1 and the
+            // checkout error text at 2.88:1 both came from hard-coded
+            // colours that were never checked against the palette.
+            //
+            // Two kinds are allowed: a page that scopes its OWN palette
+            // (the checkout and the two standalone light pages), and the
+            // SVG placeholder image.
+            $problems = [];
+
+            $allowed = [
+                'views/membership/braintree_checkout.php' => 'it scopes the light checkout palette',
+                'views/auth/step_up.php'                   => 'a standalone light page',
+                'views/unsubscribe.php'                    => 'a standalone light page',
+            ];
+
+            $files = array_merge(glob($root . '/views/*.php') ?: [], glob($root . '/views/*/*.php') ?: []);
+            foreach ($files as $file) {
+                $rel = str_replace($root . '/', '', $file);
+                if (str_starts_with($rel, 'views/admin/') || str_starts_with($rel, 'views/emails/')) {
+                    continue;
+                }
+                if (isset($allowed[$rel])) {
+                    continue;
+                }
+                $src = (string) @file_get_contents($file);
+                // The placeholder image is an SVG in a data-URI, and a
+                // picture is allowed to have colours of its own.
+                $withoutSvg = preg_replace("/'[^']*<svg[^']*'/s", '', $src);
+                // A hex that is not an HTML entity.
+                if (preg_match_all('/(?<!&)#[0-9a-fA-F]{3,8}\b/', (string) $withoutSvg, $m) === false) {
+                    continue;
+                }
+                foreach ($m[0] as $hex) {
+                    $problems[] = $rel . ' carries the colour ' . $hex;
+                }
+            }
+
+            return $problems === []
+                ? $ok('the member views carry no stray colours')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

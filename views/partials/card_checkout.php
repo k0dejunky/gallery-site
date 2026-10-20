@@ -46,9 +46,9 @@ foreach (\App\Models\PaymentProcessor::enabled() as $__pp) {
             <?php endif; ?>
             <?php if ($btLive): ?>
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:stretch;">
-                    <div style="flex:2;min-width:220px;border:1px solid var(--pink-300);border-radius:var(--border-radius-sm);padding:.4rem .5rem;background:#fff;" data-cc-number aria-label="Card number"></div>
-                    <div style="flex:1;min-width:90px;border:1px solid var(--pink-300);border-radius:var(--border-radius-sm);padding:.4rem .5rem;background:#fff;" data-cc-exp aria-label="Expiry"></div>
-                    <div style="flex:1;min-width:80px;border:1px solid var(--pink-300);border-radius:var(--border-radius-sm);padding:.4rem .5rem;background:#fff;" data-cc-cvv aria-label="CVV"></div>
+                    <div style="flex:2;min-width:220px;border:1px solid var(--pink-300);border-radius:var(--border-radius-sm);padding:.4rem .5rem;background:var(--hosted-field-bg);" data-cc-number aria-label="Card number"></div>
+                    <div style="flex:1;min-width:90px;border:1px solid var(--pink-300);border-radius:var(--border-radius-sm);padding:.4rem .5rem;background:var(--hosted-field-bg);" data-cc-exp aria-label="Expiry"></div>
+                    <div style="flex:1;min-width:80px;border:1px solid var(--pink-300);border-radius:var(--border-radius-sm);padding:.4rem .5rem;background:var(--hosted-field-bg);" data-cc-cvv aria-label="CVV"></div>
                 </div>
             <?php else: ?>
                 <p class="muted" style="font-size:.85rem;border:1px dashed var(--pink-300);border-radius:var(--border-radius-sm);padding:.5rem .6rem;">Card payments are coming soon.</p>
@@ -57,7 +57,7 @@ foreach (\App\Models\PaymentProcessor::enabled() as $__pp) {
                 <input type="hidden" name="amount" value="<?= e($ccAmount) ?>">
                 <input type="hidden" name="note" value="Card payment">
             <?php endif; ?>
-            <p class="cc-status muted" style="display:none;font-size:.8rem;color:#b91c1c;"></p>
+            <p class="cc-status muted" style="display:none;font-size:.8rem;color:var(--flash-error-color);"></p>
             <p style="margin:.55rem 0 0;display:flex;gap:.5rem;flex-wrap:wrap;">
                 <button type="submit" class="btn btn-sm" data-cc-pay<?= $btLive ? '' : ' disabled' ?> style="<?= $btLive ? '' : 'opacity:.55;cursor:not-allowed;' ?>"<?= $btLive ? '' : ' aria-label="Pay by card (coming soon)" title="Braintree card checkout is not available yet."' ?>>Pay $<?= e($ccAmount) ?></button>
                 <button type="button" class="btn btn-sm btn-outline" data-cc-paypal>Pay with PayPal</button>

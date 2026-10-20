@@ -40,10 +40,10 @@
                     default    => 'Update',
                 };
                 $notifColor = match ($notifType) {
-                    'gallery'  => '#b42318',
-                    'purchase' => '#0f766e',
-                    'reply'    => '#7c3aed',
-                    default    => '#99618a',
+                    'gallery'  => 'var(--avatar-gallery)',
+                    'purchase' => 'var(--avatar-purchase)',
+                    'reply'    => 'var(--avatar-reply)',
+                    default    => 'var(--avatar-default)',
                 };
                 $hasPreview = !empty($notification['preview']);
                 $openUrl    = url('/notifications/' . (int) $notification['id']);
@@ -154,7 +154,7 @@
                 ?>
                 <article class="wall-post">
                     <header class="wall-post-head">
-                        <span class="wall-post-avatar" style="background:#99618a">N</span>
+                        <span class="wall-post-avatar" style="background:var(--avatar-default)">N</span>
                         <div class="wall-post-meta">
                             <strong>New set</strong>
                             <span class="wall-post-time"><?= e(tzdate('M j, g:ia', (string) $post['created_at'])) ?></span>
@@ -204,7 +204,7 @@
                 <summary style="cursor:pointer;font-size:.9rem;" class="muted"><?= count($postComments) ?> comment<?= count($postComments) === 1 ? '' : 's' ?></summary>
                 <div style="margin-top:.75rem;display:grid;gap:.75rem;">
                     <?php foreach ($postComments as $comment): ?>
-                        <div id="comment-<?= (int) $comment['id'] ?>" style="border-left:3px solid var(--card-border,#ddd);padding-left:.75rem;">
+                        <div id="comment-<?= (int) $comment['id'] ?>" style="border-left:3px solid var(--card-border);padding-left:.75rem;">
                             <p style="margin:0 0 .15rem;">
                                 <strong><?= \App\Models\Comment::isStaff($comment['role']) ? 'Site team' : 'Member' ?></strong>
                                 <span class="muted"> · <?= e(tzdate('M j, g:ia', (string) $comment['created_at'])) ?></span>

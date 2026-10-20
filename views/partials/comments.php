@@ -49,7 +49,7 @@ if (!$hasReplies || !$hasReactions || !$hasMine) {
                 $counts   = $commentReactions[$cid] ?? [];
                 $mine     = $myReactions[$cid] ?? [];
                 ?>
-                <div id="comment-<?= $cid ?>" style="border-left:3px solid var(--card-border,#ddd);padding-left:.75rem;">
+                <div id="comment-<?= $cid ?>" style="border-left:3px solid var(--card-border);padding-left:.75rem;">
                     <p style="margin:0 0 .15rem;">
                         <strong><?= \App\Models\Comment::isStaff((string) ($comment['role'] ?? '')) ? 'Site team' : 'Member' ?></strong>
                         <span class="muted"> &middot; <?= e(tzdate('M j, g:ia', (string) $comment['created_at'])) ?></span>

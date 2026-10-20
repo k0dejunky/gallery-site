@@ -6,7 +6,7 @@
                     <h2 class="section-title" style="margin-bottom:.5rem;">Questionnaires</h2>
                     <?php foreach ($questionnaires as $q): ?>
                         <?php $qAnswered = !empty($q['answered']); ?>
-                        <div id="questionnaire-<?= (int)$q['id'] ?>" style="border:1px solid var(--pink-300,#f9a8d4);border-radius:var(--card-radius,8px);background:var(--pink-100,#fdf2f8);padding:1rem;margin-bottom:.75rem;<?= $qAnswered ? 'opacity:.85;' : '' ?>">
+                        <div id="questionnaire-<?= (int)$q['id'] ?>" style="border:1px solid var(--pink-300);border-radius:var(--card-radius);background:var(--pink-100);padding:1rem;margin-bottom:.75rem;<?= $qAnswered ? 'opacity:.85;' : '' ?>">
                             <strong><?= e((string)$q['title']) ?></strong>
                             <?php if ($qAnswered): ?>
                                 <span class="chat-submitted">✓ Submitted</span>
@@ -76,7 +76,7 @@
     <?php if (empty($eligible)): ?>
         <h1>Chat</h1>
         <?php if (trim((string) $dailyMessage) !== ''): ?>
-            <div style="border:1px solid var(--pink-300,#f9a8d4);border-radius:var(--card-radius,8px);background:var(--pink-100,#fdf2f8);padding:1rem;margin-bottom:1rem;">
+            <div style="border:1px solid var(--pink-300);border-radius:var(--card-radius);background:var(--pink-100);padding:1rem;margin-bottom:1rem;">
                 <strong>Message from the site</strong>
                 <p style="margin:.5rem 0 0;white-space:pre-wrap;"><?= e((string) $dailyMessage) ?></p>
             </div>

@@ -258,6 +258,21 @@ class Theme
         // two hues (green-400 and amber-400).
         'status-online'            => '#4ade80',
         'status-away'              => '#fbbf24',
+        // The wall's notification avatars. These were hard-coded in the
+        // view as a PHP match on the notification type. White on all four
+        // clears 4.5:1.
+        'avatar-gallery'           => '#b42318',
+        'avatar-purchase'          => '#0f766e',
+        'avatar-reply'             => '#7c3aed',
+        'avatar-default'           => '#99618a',
+        // The rating stars.
+        'star-color'               => '#f59e0b',
+        // The Braintree hosted fields render white. They are a payment
+        // field, so white is the norm and it is legible - but it is a hole
+        // in the dark skin, and it was a stray #fff in the view. Making the
+        // field itself match the skin needs Braintree's hosted-field
+        // styles, which can only be verified with a live client token.
+        'hosted-field-bg'          => '#ffffff',
         'age-gate-1'              => '#2a0f22',
         'age-gate-2'              => '#12060e',
         'age-gate-3'              => '#3b1030',
