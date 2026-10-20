@@ -38,11 +38,23 @@ class ServerOptimizations
     }
 
     /**
+     * The settings, read from disk once per request.
+     *
+     * cacheTtl() is called on every cache lookup, and the file was re-read
+     * (is_file + file_get_contents + json_decode) every time.
+     */
+    private static ?array $cached = null;
+
+    /**
      * Load settings, merging stored values over defaults and clamping each
      * value to its safe range so a bad file can never break the server.
      */
     public static function all(): array
     {
+        if (self::$cached !== null) {
+            return self::$cached;
+        }
+
         $defaults = self::defaults();
         $data = [];
 
@@ -54,7 +66,9 @@ class ServerOptimizations
             }
         }
 
-        return self::clamp(array_merge($defaults, $data));
+        self::$cached = self::clamp(array_merge($defaults, $data));
+
+        return self::$cached;
     }
 
     /** A single validated setting value. */

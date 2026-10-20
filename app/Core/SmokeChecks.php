@@ -3067,8 +3067,11 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
         $add('smoke.wall.gate_previews', 'Smoke · Wall', 'Wall renders membership-gated previews for gallery-linked posts', static function () use ($root, $read, $ok, $bad): array {
             $wc = $read("$root/app/Controllers/WallController.php");
             $wv = $read("$root/views/wall.php");
+            // The unlocked galleries are fetched in ONE query (the bulk
+            // helper), not one query per gallery.
             return strpos($wc, 'private function buildGalleryPreviews(') !== false
-                && strpos($wc, 'Purchase::userUnlocked(') !== false
+                && (strpos($wc, 'Purchase::unlockedGalleryIds(') !== false
+                    || strpos($wc, 'Purchase::userUnlocked(') !== false)
                 && strpos($wc, "'gallery_id'  => \$galleryId") !== false
                 && strpos($wv, "\$post['preview']") !== false
                 && strpos($wv, "\$postShowLock ? 'blur' : 'thumb'") !== false

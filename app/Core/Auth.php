@@ -496,7 +496,9 @@ class Auth
             return true;
         }
 
-        return Subscription::isActive((int) $user['id']);
+        // The memoised row, not a fresh join: this is called four times on
+        // every member page (the nav, the controller and the layout).
+        return self::activeSubscriptionFor((int) $user['id']) !== null;
     }
 
     public static function canUseCustomTheme(): bool

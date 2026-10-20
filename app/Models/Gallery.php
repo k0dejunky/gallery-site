@@ -287,7 +287,7 @@ class Gallery
              LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id
              WHERE ' . implode(' AND ', $where) . '
              GROUP BY g.id
-             ORDER BY g.created_at DESC',
+             ORDER BY g.created_at DESC, g.id DESC',
             $params
         )->fetchAll();
     }
@@ -462,7 +462,7 @@ class Gallery
              FROM galleries g
              INNER JOIN gallery_category gc ON gc.gallery_id = g.id
              WHERE gc.category_id IN (' . $placeholders . ') AND ' . self::publishedVisibleSql('g') . $accessCondition . $typeCondition . $levelCondition . '
-             ORDER BY g.created_at DESC',
+             ORDER BY g.created_at DESC, g.id DESC',
             array_merge($ids, $accessParams)
         )->fetchAll();
 
@@ -498,7 +498,7 @@ class Gallery
              FROM galleries g
              WHERE ' . self::publishedVisibleSql('g') . $accessCondition . '
                AND NOT EXISTS (SELECT 1 FROM gallery_category gc WHERE gc.gallery_id = g.id)' . $typeCondition . $levelCondition . '
-             ORDER BY g.created_at DESC',
+             ORDER BY g.created_at DESC, g.id DESC',
             $accessParams
         )->fetchAll();
     }
@@ -639,6 +639,11 @@ class Gallery
             [$id]
         );
         \App\Core\Cache::bump('gallery');
+        // The RENDERED listings (the guest page and the card fragments) live
+        // in the 'listings' bucket with a 120s TTL. Without this a deleted
+        // gallery stayed on the guest page for two minutes - and so did a
+        // restored one.
+        \App\Core\PageCache::invalidate();
         \App\Core\DuplicateGalleries::invalidate();
     }
 
@@ -652,6 +657,11 @@ class Gallery
             [$id]
         );
         \App\Core\Cache::bump('gallery');
+        // The RENDERED listings (the guest page and the card fragments) live
+        // in the 'listings' bucket with a 120s TTL. Without this a deleted
+        // gallery stayed on the guest page for two minutes - and so did a
+        // restored one.
+        \App\Core\PageCache::invalidate();
         \App\Core\DuplicateGalleries::invalidate();
     }
 
@@ -1441,7 +1451,7 @@ class Gallery
                     ' . self::videoCountSql() . '
              FROM galleries g
              WHERE g.featured = 1 AND ' . self::publishedVisibleSql('g') . $accessCondition . '
-             ORDER BY g.created_at DESC
+             ORDER BY g.created_at DESC, g.id DESC
              LIMIT ' . max(1, (int) $limit),
             $accessParams
         )->fetchAll();
@@ -1466,7 +1476,7 @@ class Gallery
                  GROUP BY entity_id
              ) ts ON ts.gid = g.id
              WHERE g.is_secret = 0 AND ' . self::publishedVisibleSql('g') . '
-             ORDER BY trend_n DESC, g.views DESC
+             ORDER BY trend_n DESC, g.views DESC, g.id DESC
              LIMIT ' . max(1, (int) $limit),
             [max(1, (int) $days)]
         )->fetchAll();
@@ -1492,7 +1502,7 @@ class Gallery
                      ON gc2.category_id = gc.category_id
                     AND gc2.gallery_id = ?
              WHERE g.id <> ? AND g.is_secret = 0 AND ' . self::publishedVisibleSql('g') . $levelClause . '
-             ORDER BY g.views DESC, g.created_at DESC
+             ORDER BY g.views DESC, g.created_at DESC, g.id DESC
              LIMIT ' . max(1, (int) $limit),
             [$galleryId, $galleryId]
         )->fetchAll();

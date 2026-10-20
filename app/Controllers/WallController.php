@@ -99,6 +99,8 @@ class WallController extends Controller
         $counts    = Gallery::photoCountsBulk($galleryIds);
 
         $effectiveLevel = Auth::effectiveLevel();
+        // One query for all the galleries, not one per gallery.
+        $unlocked = \App\Models\Purchase::unlockedGalleryIds($userId, $galleryIds);
 
         $result = [];
         foreach ($galleryIds as $galleryId) {
@@ -115,7 +117,7 @@ class WallController extends Controller
                 'description' => (string) ($gallery['description'] ?? ''),
                 'can_view'    => $effectiveLevel >= PHP_INT_MAX
                     || $effectiveLevel >= $minLevel
-                    || \App\Models\Purchase::userUnlocked($userId, $galleryId),
+                    || isset($unlocked[$galleryId]),
                 'count'       => (int) ($counts[$galleryId] ?? count($previews[$galleryId] ?? [])),
                 'photos'      => array_map(static function (array $photo): array {
                     return [

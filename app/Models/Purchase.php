@@ -129,6 +129,42 @@ class Purchase
         return $row !== false;
     }
 
+    /**
+     * Which of these galleries the member has already unlocked.
+     *
+     * The wall asks for a dozen galleries at a time; one query for all of
+     * them beats one per gallery.
+     *
+     * @return array<int, true> the unlocked gallery ids
+     */
+    public static function unlockedGalleryIds(int $userId, array $galleryIds): array
+    {
+        $ids = array_values(array_unique(array_filter(
+            array_map('intval', $galleryIds),
+            static fn (int $id): bool => $id > 0
+        )));
+
+        if ($userId <= 0 || $ids === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        $rows = Database::run(
+            "SELECT item_id FROM purchases
+             WHERE user_id = ? AND item_type = 'gallery' AND item_id IN ($placeholders)
+               AND status IN ('paid', 'granted')",
+            array_merge([$userId], $ids)
+        )->fetchAll();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row['item_id']] = true;
+        }
+
+        return $out;
+    }
+
     /** Index against an unlock code to keep used_count/notes verifiable. */
     public static function forCode(int $codeId): array
     {
