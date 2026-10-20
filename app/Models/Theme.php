@@ -22,6 +22,14 @@ class Theme
      * override is missing.
      */
     private const COLORS = [
+        // A raised surface (the chat bubble, the onboarding card, the
+        // support forms) with its own text colour. These used to borrow
+        // --pink-100 with --purple-800/900, which is a LIGHT pairing: on the
+        // member (dark) skin the same two tokens are near-black on
+        // near-black, and the operator's reply was invisible.
+        'bubble-bg'     => '#fdf2f8',
+        'bubble-text'   => '#4a044e',
+        'bubble-border' => '#f9a8d4',
         'pink-100'   => '#ffd9e8',
         'pink-200'   => '#f9a8d4',
         'pink-300'   => '#f472b6',
@@ -109,6 +117,13 @@ class Theme
      * change them and the member site follows.
      */
     private const MEMBER_COLORS = [
+        // The dark counterpart of the light palette's bubble tokens. The
+        // text on them is the member's text colour, so the contrast is
+        // 14.98:1 instead of the 1.16:1 the old --pink-100/--purple-900
+        // pairing gave.
+        'bubble-bg'                => '#24101f',
+        'bubble-text'              => '#f3e7f1',
+        'bubble-border'            => '#45203a',
         'pink-100'                => '#2b1123',
         'pink-200'                => '#120711',
         'pink-300'                => '#45203a',

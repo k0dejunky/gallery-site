@@ -1033,6 +1033,41 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.member_surfaces_legible', 'Smoke · UI', 'The raised member surfaces are legible on the dark skin', static function () use ($root, $ok, $bad): array {
+            // The chat bubble, the welcome card, the support forms and the
+            // "Silver" badge paired --pink-100 with --purple-800/900. Those
+            // are a LIGHT pairing: on the member (dark) skin the same two
+            // tokens are near-black on near-black, and the operator's reply
+            // was invisible (1.16:1).
+            $theme = (string) @file_get_contents($root . '/app/Models/Theme.php');
+            $css   = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $problems = [];
+
+            foreach (['bubble-bg', 'bubble-text', 'bubble-border'] as $token) {
+                if (substr_count($theme, "'" . $token . "'") < 2) {
+                    $problems[] = 'the ' . $token . ' token must exist in both palettes';
+                }
+            }
+            if (strpos($css, 'var(--bubble-text') === false) {
+                $problems[] = 'the member surfaces must use the bubble tokens';
+            }
+            // No rule may pair a pink-1xx background with a dark text token.
+            if (preg_match_all('/([^{}]+)\{([^{}]*)\}/', $css, $rules, PREG_SET_ORDER) !== false) {
+                foreach ($rules as $rule) {
+                    if (preg_match('/background(?:-color)?\s*:\s*var\(--pink-\d/', $rule[2]) === 1
+                        && preg_match('/color\s*:\s*var\(--purple-(?:800|900)/', $rule[2]) === 1) {
+                        $problems[] = 'this rule pairs a pink surface with a dark text token: '
+                            . trim(preg_replace('/\s+/', ' ', $rule[1])) . ' - use the bubble tokens';
+                        break;
+                    }
+                }
+            }
+
+            return $problems === []
+                ? $ok('the raised surfaces use the bubble tokens, not the light pink/dark purple pairing')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.ui.no_inline_style_blocks', 'Smoke · UI', 'No view carries its own <style> block', static function () use ($root, $ok, $bad): array {
             // Documents that deliberately stand alone (their own <html>, their
             // own CSP) keep their own CSS, and the admin shell injects the
