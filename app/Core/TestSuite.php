@@ -1192,6 +1192,151 @@ class TestSuite
             }
         });
 
+        $add('db.deleted_account_keeps_its_ledger', 'Database', 'Deleting an account does not destroy the financial ledger', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                $email = 'ledgerprobe' . bin2hex(random_bytes(4)) . '@example.invalid';
+
+                try {
+                    Database::run(
+                        "INSERT INTO users (email, password_hash, role, status, email_verified_at, created_at)
+                         VALUES (?, 'x', 'user', 'active', NOW(), NOW())",
+                        [$email]
+                    );
+                    $userId = (int) Database::connection()->lastInsertId();
+
+                    $planId = (int) Database::run('SELECT id FROM plans WHERE active = 1 ORDER BY sort_order ASC, id ASC LIMIT 1')->fetchColumn();
+                    if ($planId <= 0) {
+                        return ['pass' => true, 'detail' => 'no active plan fixture; nothing to prove'];
+                    }
+
+                    Database::run(
+                        "INSERT INTO subscriptions (user_id, plan_id, status, price_paid, created_at)
+                         VALUES (?, ?, 'active', 9.99, NOW())",
+                        [$userId, $planId]
+                    );
+                    Database::run(
+                        "INSERT INTO purchases (user_id, item_type, item_id, amount, gateway, status, created_at)
+                         VALUES (?, 'gallery', 1, 4.99, 'code', 'paid', NOW())",
+                        [$userId]
+                    );
+
+                    \App\Models\User::delete($userId);
+
+                    $subs  = (int) Database::run('SELECT COUNT(*) FROM subscriptions WHERE user_id = ?', [$userId])->fetchColumn();
+                    $purch = (int) Database::run('SELECT COUNT(*) FROM purchases WHERE user_id = ?', [$userId])->fetchColumn();
+                    $row   = Database::run('SELECT email, status, deleted_at FROM users WHERE id = ?', [$userId])->fetch();
+                    $listed = (int) Database::run(
+                        'SELECT COUNT(*) FROM users u WHERE u.deleted_at IS NULL AND u.id = ?',
+                        [$userId]
+                    )->fetchColumn();
+
+                    return [
+                        'pass'   => $subs === 1 && $purch === 1
+                            && $row !== false
+                            && $row['deleted_at'] !== null
+                            && strpos((string) $row['email'], '@deleted.invalid') !== false
+                            && $listed === 0,
+                        'detail' => "subscriptions=$subs purchases=$purch anonymised="
+                            . (($row !== false && $row['deleted_at'] !== null) ? 'yes' : 'no')
+                            . ' out-of-the-list=' . ($listed === 0 ? 'yes' : 'no'),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                    try {
+                        Database::run('DELETE FROM purchases WHERE email = ?', [$email]);
+                        Database::run('DELETE FROM subscriptions WHERE user_id IN (SELECT id FROM users WHERE email = ?)', [$email]);
+                        Database::run('DELETE FROM users WHERE email = ?', [$email]);
+                    } catch (\Throwable $ignored) {
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
+        $add('db.sale_capacity_is_reserved', 'Database', 'A limited sale cannot be sold more times than it allows', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                // No wrapping transaction here: Subscription::create() opens
+                // its own, and MySQL does not nest them.
+                $stamp = bin2hex(random_bytes(4));
+                $userIds = [];
+
+                try {
+                    $planId = (int) Database::run('SELECT id FROM plans WHERE active = 1 ORDER BY sort_order ASC, id ASC LIMIT 1')->fetchColumn();
+                    if ($planId <= 0) {
+                        return ['pass' => true, 'detail' => 'no active plan fixture; nothing to prove'];
+                    }
+
+                    // A sale that may be sold ONCE.
+                    $saleId = \App\Models\Sale::create($planId, 'Probe sale ' . $stamp, 1.00, 1, null, true);
+
+                    $users = [];
+                    foreach ([1, 2] as $i) {
+                        $email = 'saleprobe' . $i . '.' . $stamp . '@example.invalid';
+                        Database::run(
+                            "INSERT INTO users (email, password_hash, role, status, email_verified_at, created_at)
+                             VALUES (?, 'x', 'user', 'active', NOW(), NOW())",
+                            [$email]
+                        );
+                        $userIds[] = (int) Database::connection()->lastInsertId();
+                    }
+
+                    $first = null;
+                    $second = null;
+                    try {
+                        $first = \App\Models\Subscription::create($userIds[0], $planId, null, true);
+                    } catch (\Throwable $ignored) {
+                    }
+                    try {
+                        $second = \App\Models\Subscription::create($userIds[1], $planId, null, true);
+                    } catch (\Throwable $ignored) {
+                    }
+
+                    $sold = (int) Database::run(
+                        'SELECT COUNT(*) FROM subscriptions WHERE sale_id = ?',
+                        [$saleId]
+                    )->fetchColumn();
+
+                    return [
+                        'pass'   => $first !== null && $second === null && $sold === 1,
+                        'detail' => 'first=' . ($first !== null ? 'ok' : 'REFUSED')
+                            . ' second=' . ($second === null ? 'refused (ok)' : 'SOLD TOO')
+                            . ' rows=' . $sold,
+                    ];
+                } finally {
+                    foreach ($userIds as $uid) {
+                        try {
+                            Database::run('DELETE FROM subscriptions WHERE user_id = ?', [$uid]);
+                            Database::run('DELETE FROM users WHERE id = ?', [$uid]);
+                        } catch (\Throwable $ignored) {
+                        }
+                    }
+                    try {
+                        Database::run('DELETE FROM sales WHERE name LIKE ?', ['Probe sale ' . $stamp . '%']);
+                    } catch (\Throwable $ignored) {
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.unlock_code_multi_use', 'Database', 'A multi-use unlock code can be redeemed by more than one member', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

@@ -1098,6 +1098,45 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
+            // Deleting a member used to destroy their subscription history
+            // and every unlock they had paid for (the ledger cascaded).
+            // Deleting a gallery used to destroy the unlock codes that were
+            // sold for it. A wall post had no author at all.
+            $user  = (string) @file_get_contents($root . '/app/Models/User.php');
+            $wall  = (string) @file_get_contents($root . '/app/Models/WallPost.php');
+            $sale  = (string) @file_get_contents($root . '/app/Models/Sale.php');
+            $schema = (string) @file_get_contents($root . '/schema.sql');
+            $house  = (string) @file_get_contents($root . '/app/Core/Housekeeping.php');
+            $problems = [];
+
+            if (strpos($user, "DELETE FROM users WHERE id = ?") !== false) {
+                $problems[] = 'a deleted account must be anonymised, not deleted (the ledger points at it)';
+            }
+            if (strpos($user, 'deleted_at = CURRENT_TIMESTAMP') === false) {
+                $problems[] = 'the deleted account must be marked as deleted';
+            }
+            if (strpos($wall, 'created_by') === false) {
+                $problems[] = 'a wall post must remember its author';
+            }
+            if (strpos($sale, 'public static function reserveSlot(') === false) {
+                $problems[] = 'the sale capacity must be reserved inside the transaction';
+            }
+            if (strpos($sale, 'FOR UPDATE') === false) {
+                $problems[] = 'the sale row must be locked while the capacity is checked';
+            }
+            if (strpos($schema, 'ON DELETE SET NULL') === false) {
+                $problems[] = 'a sold unlock code must survive its gallery';
+            }
+            if (strpos($house, 'pruneVisitHistory') === false) {
+                $problems[] = 'the tables that grow with every visit must be pruned';
+            }
+
+            return $problems === []
+                ? $ok('the ledger, the sold codes and the wall authors survive a deletion')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.ui.no_repeated_queries', 'Smoke · UI', 'The hot paths do not repeat the same query', static function () use ($root, $ok, $bad): array {
             // Four patterns that cost a query each on every page:
             // - a subscription join per call (hasActiveSubscription)

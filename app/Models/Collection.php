@@ -334,26 +334,20 @@ class Collection
             return false;
         }
 
-        $exists = (int) Database::run(
-            'SELECT COUNT(*) FROM collection_items WHERE collection_id = ? AND photo_id = ?',
-            [$collectionId, $photoId]
-        )->fetchColumn();
-
-        if ($exists > 0) {
-            return false;
-        }
-
         $position = (int) Database::run(
             'SELECT COALESCE(MAX(position), 0) + 1 FROM collection_items WHERE collection_id = ?',
             [$collectionId]
         )->fetchColumn();
 
-        Database::run(
-            'INSERT INTO collection_items (collection_id, photo_id, position) VALUES (?, ?, ?)',
+        // INSERT IGNORE instead of a check-then-insert: the unique key decides,
+        // so two concurrent adds cannot both pass a COUNT and then one of
+        // them fails with a duplicate-key error.
+        $added = Database::run(
+            'INSERT IGNORE INTO collection_items (collection_id, photo_id, position) VALUES (?, ?, ?)',
             [$collectionId, $photoId, $position]
-        );
+        )->rowCount();
 
-        return true;
+        return $added > 0;
     }
 
         /**

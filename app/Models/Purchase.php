@@ -60,7 +60,9 @@ class Purchase
         }
 
         $id = (int) $row['id'];
-        Database::run("UPDATE purchases SET status = 'paid', updated_at = NOW() WHERE id = ?", [$id]);
+        // The same guard as settleById(): only a pending purchase is settled,
+        // so two concurrent settlement events cannot both write.
+        Database::run("UPDATE purchases SET status = 'paid', updated_at = NOW() WHERE id = ? AND status = 'pending'", [$id]);
 
         return $id;
     }

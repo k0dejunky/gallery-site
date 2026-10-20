@@ -446,6 +446,9 @@ class Photo
             return;
         }
 
+        // The comments of a deleted photo go with it.
+        \App\Models\Comment::deleteForEntity(\App\Models\Comment::TYPE_PHOTO, $photoId);
+
         $dir = config('app.uploads.dir');
 
         foreach ([$photo['filename'], 'thumb_' . $photo['filename'], 'web_' . $photo['filename']] as $file) {

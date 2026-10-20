@@ -42,9 +42,11 @@ class WallPost
 
     public static function create(int $userId, string $body, bool $pinned): int
     {
+        // The author is stored: the wall used to throw the user id away, so
+        // nobody could say who wrote a post.
         Database::run(
-            'INSERT INTO wall_posts (body, pinned) VALUES (?, ?)',
-            [$body, $pinned ? 1 : 0]
+            'INSERT INTO wall_posts (body, created_by, pinned) VALUES (?, ?, ?)',
+            [$body, $userId > 0 ? $userId : null, $pinned ? 1 : 0]
         );
 
         $id = (int) Database::connection()->lastInsertId();

@@ -851,6 +851,9 @@ class Gallery
         )->fetchAll(), 'photo_id');
 
         Database::run('DELETE FROM gallery_photo WHERE gallery_id = ?', [$id]);
+        // The comments of a deleted gallery go with it (the reference is
+        // polymorphic, so nothing would clean them up).
+        \App\Models\Comment::deleteForEntity(\App\Models\Comment::TYPE_GALLERY, $id);
         Database::run('DELETE FROM galleries WHERE id = ?', [$id]);
 
         foreach ($photoIds as $photoId) {
@@ -1262,14 +1265,48 @@ class Gallery
             return;
         }
 
-        Database::run(
-            'UPDATE gallery_photo SET position = ? WHERE gallery_id = ? AND photo_id = ?',
-            [(int) $neighbor['position'], $galleryId, $photoId]
-        );
-        Database::run(
-            'UPDATE gallery_photo SET position = ? WHERE gallery_id = ? AND photo_id = ?',
-            [$current, $galleryId, (int) $neighbor['photo_id']]
-        );
+        // One transaction, and both rows are parked on a sentinel first:
+        // positions are not unique, so a plain UPDATE swap can transiently
+        // collide with a third row's value and leave two photos sharing a
+        // position (the order then falls back to the id).
+        $pdo = Database::connection();
+        $own = !$pdo->inTransaction();
+        if ($own) {
+            $pdo->beginTransaction();
+        }
+
+        try {
+            $sentinel = (int) Database::run(
+                'SELECT COALESCE(MAX(position), 0) + 1000 FROM gallery_photo WHERE gallery_id = ?',
+                [$galleryId]
+            )->fetchColumn();
+
+            Database::run(
+                'UPDATE gallery_photo SET position = ? WHERE gallery_id = ? AND photo_id = ?',
+                [$sentinel, $galleryId, $photoId]
+            );
+            Database::run(
+                'UPDATE gallery_photo SET position = ? WHERE gallery_id = ? AND photo_id = ?',
+                [$sentinel + 1, $galleryId, (int) $neighbor['photo_id']]
+            );
+            Database::run(
+                'UPDATE gallery_photo SET position = ? WHERE gallery_id = ? AND photo_id = ?',
+                [(int) $neighbor['position'], $galleryId, $photoId]
+            );
+            Database::run(
+                'UPDATE gallery_photo SET position = ? WHERE gallery_id = ? AND photo_id = ?',
+                [$current, $galleryId, (int) $neighbor['photo_id']]
+            );
+
+            if ($own) {
+                $pdo->commit();
+            }
+        } catch (\Throwable $e) {
+            if ($own && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            error_log('[gallery] the photo could not be moved: ' . $e->getMessage());
+        }
     }
 
     /**

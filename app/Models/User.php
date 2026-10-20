@@ -84,6 +84,9 @@ class User
                 )
                 LEFT JOIN plans p ON p.id = s.plan_id';
 
+        // A deleted (anonymised) account is not in the list any more.
+        $where[] = 'u.deleted_at IS NULL';
+
         if ($where !== []) {
             $sql .= ' WHERE ' . implode(' AND ', $where);
         }
@@ -222,9 +225,35 @@ class User
     /**
      * Delete an account.
      */
+    /**
+     * Delete an account WITHOUT destroying its history.
+     *
+     * subscriptions.user_id and purchases.user_id point at the account, so a
+     * hard delete took the member's subscription history and every unlock
+     * they had paid for with it. The account is anonymised and soft-deleted
+     * instead: the personal data goes, the money stays, and the account
+     * leaves every listing (the queries filter deleted_at).
+     */
     public static function delete(int $id): void
     {
-        Database::run('DELETE FROM users WHERE id = ?', [$id]);
+        $id = (int) $id;
+        if ($id <= 0) {
+            return;
+        }
+
+        Database::run(
+            'UPDATE users
+             SET email = ?, password_hash = ?, date_of_birth = NULL,
+                 age_verified = 0, age_verified_at = NULL, email_verified_at = NULL,
+                 email_verification_token = NULL, status = \'suspended\',
+                 session_version = session_version + 1, deleted_at = CURRENT_TIMESTAMP
+             WHERE id = ?',
+            [
+                'deleted-' . $id . '-' . bin2hex(random_bytes(6)) . '@deleted.invalid',
+                password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT),
+                $id,
+            ]
+        );
     }
 
     /**
@@ -266,7 +295,8 @@ class User
     public static function countAdmins(): int
     {
         return (int) Database::run(
-            'SELECT COUNT(*) FROM users WHERE role IN (\'super_admin\', \'admin\', \'editor\', \'moderator\', \'viewer\')',
+            'SELECT COUNT(*) FROM users WHERE deleted_at IS NULL
+               AND role IN (\'super_admin\', \'admin\', \'editor\', \'moderator\', \'viewer\')',
             []
         )->fetchColumn();
     }
@@ -342,7 +372,7 @@ class User
     public static function countByStatus(string $status): int
     {
         return (int) Database::run(
-            'SELECT COUNT(*) FROM users WHERE status = ?',
+            'SELECT COUNT(*) FROM users WHERE status = ? AND deleted_at IS NULL',
             [$status]
         )->fetchColumn();
     }

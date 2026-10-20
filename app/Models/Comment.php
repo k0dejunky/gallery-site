@@ -31,6 +31,26 @@ class Comment
         return (int) Database::connection()->lastInsertId();
     }
 
+    /**
+     * Delete the comments of an entity that is going away.
+     *
+     * comments.commentable_id is polymorphic (it cannot be a foreign key),
+     * so a deleted gallery or photo left its comments behind - and the
+     * gallery's comment count included comments for a gallery that no
+     * longer exists.
+     */
+    public static function deleteForEntity(string $type, int $commentableId): int
+    {
+        if (!in_array($type, self::TYPES, true) || $commentableId <= 0) {
+            return 0;
+        }
+
+        return (int) Database::run(
+            'DELETE FROM comments WHERE commentable_type = ? AND commentable_id = ?',
+            [$type, $commentableId]
+        )->rowCount();
+    }
+
     public static function forEntity(string $type, int $commentableId, int $limit = 50): array
     {
         return Database::run(

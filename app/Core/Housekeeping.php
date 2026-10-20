@@ -36,6 +36,7 @@ class Housekeeping
             'disk_growth_alerted' => false,
             'chat_broadcast' => 0,
             'chat_prunes'   => [],
+            'visit_prunes'  => [],
             'ffmpeg_count'  => 0,
         ];
 
@@ -223,6 +224,7 @@ class Housekeeping
         // background-reply queue from growing without bound. Counts land in
         // $out so the cron log shows what each run removed.
         $out['chat_prunes'] = self::pruneChatRetention();
+        $out['visit_prunes'] = self::pruneVisitHistory();
 
         // Refer-a-friend: +7 free days to referrers whose referred members
         // have become paying.
@@ -340,6 +342,46 @@ class Housekeeping
             "DELETE FROM chat_ai_jobs
               WHERE status IN ('done', 'error')
                 AND updated_at < DATE_SUB(NOW(), INTERVAL 7 DAY)"
+        )->rowCount();
+
+        // Abandoned checkouts: a pending subscription nobody ever paid for
+        // held a slot of a limited sale FOREVER, because nothing ever
+        // removed it. A week is far longer than a checkout takes.
+        $out['abandoned_subscriptions'] = (int) Database::run(
+            "UPDATE subscriptions SET status = 'cancelled', updated_at = NOW()
+              WHERE status = 'pending' AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)"
+        )->rowCount();
+
+        return $out;
+    }
+
+    /**
+     * Prune the tables that grow with every visit.
+     *
+     * user_activity gets a row per gallery view, content_views a row per
+     * (entity, day) and category_views a row per category page view - none of
+     * them was ever pruned, so they grew forever. The windows are far longer
+     * than anything the site reads (the trends chart asks for 7 days, the
+     * member monitor for 30).
+     */
+    private static function pruneVisitHistory(): array
+    {
+        $out = [];
+
+        $out['user_activity'] = (int) Database::run(
+            'DELETE FROM user_activity WHERE created_at < DATE_SUB(NOW(), INTERVAL 90 DAY)'
+        )->rowCount();
+
+        $out['content_views'] = (int) Database::run(
+            'DELETE FROM content_views WHERE view_date < DATE_SUB(CURDATE(), INTERVAL 2 YEAR)'
+        )->rowCount();
+
+        $out['category_views'] = (int) Database::run(
+            'DELETE FROM category_views WHERE view_date < DATE_SUB(CURDATE(), INTERVAL 2 YEAR)'
+        )->rowCount();
+
+        $out['search_stats'] = (int) Database::run(
+            'DELETE FROM search_stats WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 YEAR)'
         )->rowCount();
 
         return $out;

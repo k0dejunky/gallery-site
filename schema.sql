@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     role          ENUM('super_admin', 'admin', 'editor', 'moderator', 'viewer', 'user') NOT NULL DEFAULT 'user',
     status        ENUM('active', 'suspended') NOT NULL DEFAULT 'active',
+    -- A deleted account is anonymised and kept, so the financial ledger
+    -- (subscriptions, purchases) that points at it survives.
+    deleted_at    DATETIME NULL,
     session_version INT UNSIGNED NOT NULL DEFAULT 0,
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login_at DATETIME NULL DEFAULT NULL,
@@ -56,7 +59,8 @@ CREATE TABLE IF NOT EXISTS users (
     recovery_email_sent_at DATETIME NULL,
     INDEX idx_users_email_verification_token (email_verification_token),
     INDEX idx_users_role_status (role, status),
-    INDEX idx_users_created_at (created_at)
+    INDEX idx_users_created_at (created_at),
+    INDEX idx_users_deleted (deleted_at)
 );
 
 CREATE TABLE IF NOT EXISTS support_messages (
@@ -233,6 +237,7 @@ CREATE TABLE IF NOT EXISTS collections (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_collections_user (user_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    INDEX idx_users_deleted (deleted_at),
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS collection_items (
@@ -949,12 +954,15 @@ CREATE TABLE IF NOT EXISTS wall_posts (
     id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     body       TEXT NOT NULL,
     gallery_id INT UNSIGNED NULL,
+    created_by INT UNSIGNED NULL,
     pinned     TINYINT(1) NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at DATETIME NULL,
     INDEX idx_wall_posts_pin_created (pinned, created_at),
     INDEX idx_wall_posts_feed (deleted_at, pinned, created_at, id),
-    INDEX idx_wall_posts_gallery (gallery_id)
+    INDEX idx_wall_posts_gallery (gallery_id),
+    INDEX idx_wall_posts_created_by (created_by),
+    FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Gallery star ratings (1-5). One per user per gallery.
@@ -1010,7 +1018,9 @@ CREATE TABLE IF NOT EXISTS unlock_codes (
     active      TINYINT(1) NOT NULL DEFAULT 1,
     note        VARCHAR(255) NULL,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE
+    -- A code that was sold survives the gallery it was sold for.
+    CONSTRAINT unlock_codes_gallery_fk FOREIGN KEY (gallery_id)
+        REFERENCES galleries(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- One-off ledger: PPV unlocks, tips. Subscriptions stay the main ledger.
@@ -1118,7 +1128,6 @@ CREATE TABLE IF NOT EXISTS gallery_description_suggestions (
     FOREIGN KEY (decided_by) REFERENCES users(id)      ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-SET FOREIGN_KEY_CHECKS = 1;
 
 -- Chat questionnaires: structured multi-question forms sent to all active registered users.
 CREATE TABLE IF NOT EXISTS chat_questionnaires (
@@ -1204,3 +1213,8 @@ CREATE TABLE IF NOT EXISTS video_chapters (
     INDEX idx_chapters_photo (photo_id, position),
     FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Re-enable the foreign-key checks at the very end, so every table in
+-- this file is created with them off (several tables reference tables that
+-- are defined later, and the import order must not matter).
+SET FOREIGN_KEY_CHECKS = 1;

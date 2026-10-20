@@ -192,6 +192,12 @@ class Subscription
                 }
             }
 
+            // The capacity is reserved here, inside the transaction, with the
+            // sale row locked - so the last slot can only be sold once.
+            if ($sale !== null && !Sale::reserveSlot((int) $sale['id'])) {
+                throw new \RuntimeException('That offer has just sold out.');
+            }
+
             $price = $sale !== null ? (float) $sale['sale_price'] : (float) $plan['price'];
             $accessLevel = (int) ($plan['level'] ?? Plan::SILVER_LEVEL);
             if ($saleCode !== null) {
@@ -325,11 +331,15 @@ class Subscription
             return;
         }
 
+        // The period runs from the PURCHASE date, not from the moment the
+        // payment was approved: a subscription that sat in the queue for
+        // three days used to still grant a full 30 days from the approval.
+        $from = !empty($row['created_at']) ? (string) $row['created_at'] : 'now';
         $expires = null;
         if ($row['billing_cycle'] === 'monthly') {
-            $expires = date('Y-m-d H:i:s', strtotime('+1 month'));
+            $expires = date('Y-m-d H:i:s', strtotime('+1 month', strtotime($from)));
         } elseif ($row['billing_cycle'] === 'yearly') {
-            $expires = date('Y-m-d H:i:s', strtotime('+1 year'));
+            $expires = date('Y-m-d H:i:s', strtotime('+1 year', strtotime($from)));
         }
 
         // The status is in the WHERE clause as well, so a race between the
