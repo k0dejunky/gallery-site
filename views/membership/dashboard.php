@@ -68,6 +68,28 @@ $billingLabels = [
         </section>
     <?php endif; ?>
 
+    <?php /* The member's interests: the categories they want to see. They
+        feed the "recommended for you" strip on the listing. */ ?>
+    <?php if (!empty($interestCategories)): ?>
+    <section class="dashboard-section" aria-labelledby="interests">
+        <h2 class="section-title" id="interests">Your interests</h2>
+        <p class="muted">Pick the categories you like and the listing will put them first. You can change this whenever.</p>
+        <div class="chips" style="margin:.5rem 0 0;">
+            <?php foreach ($interestCategories as $cat): ?>
+                <?php $isOn = in_array((int) $cat['id'], $interestIds, true); ?>
+                <form method="post" action="<?= url('/favorites/categories/' . (int) $cat['id'] . '/toggle' . '?return_to=/account') ?>" style="display:inline;">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="chip<?= $isOn ? ' selected' : '' ?>"
+                            aria-pressed="<?= $isOn ? 'true' : 'false' ?>"
+                            title="<?= $isOn ? 'Remove' : 'Add' ?> <?= e((string) $cat['name']) ?>">
+                        <?= $isOn ? '&#9733; ' : '&#9734; ' ?><?= e((string) $cat['name']) ?>
+                    </button>
+                </form>
+            <?php endforeach; ?>
+        </div>
+    </section>
+    <?php endif; ?>
+
     <section class="dashboard-section" aria-labelledby="recent-galleries">
         <h2 class="section-title" id="recent-galleries">Recently viewed galleries</h2>
         <?php if (empty($recentlyViewed)): ?>

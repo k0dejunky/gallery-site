@@ -262,6 +262,11 @@ class GalleryController extends Controller
                 static function () use ($categories, $type, $maxLevel, $user): string {
                     $sections = [];
                     $seen     = [];
+                    // The catalogue is bounded: the listing showed EVERY
+                    // published gallery, so the page (and the cache entry)
+                    // grew with the collection. Each category shows its
+                    // newest 24 and links to the category page for the rest.
+                    $perCategory = 24;
                     $byCategory = Gallery::inCategories(array_column($categories, 'id'), $type, $maxLevel, $user !== null ? (int) $user['id'] : 0);
 
                     foreach ($categories as $cat) {
@@ -274,6 +279,9 @@ class GalleryController extends Controller
 
                             $seen[(int) $gallery['id']] = true;
                             $galleries[]                = $gallery;
+                            if (count($galleries) >= $perCategory) {
+                                break;
+                            }
                         }
 
                         if ($galleries !== []) {
@@ -285,6 +293,10 @@ class GalleryController extends Controller
                         Gallery::withoutCategory($type, $maxLevel, $user !== null ? (int) $user['id'] : 0),
                         static fn (array $gallery): bool => !isset($seen[(int) $gallery['id']])
                     ));
+
+                    if (count($uncategorized) > 24) {
+                        $uncategorized = array_slice($uncategorized, 0, 24);
+                    }
 
                     if ($uncategorized !== []) {
                         $sections[] = ['category' => ['id' => 0, 'name' => 'Uncategorized', 'slug' => ''], 'galleries' => $uncategorized];

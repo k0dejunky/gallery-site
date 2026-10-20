@@ -9,6 +9,8 @@ use App\Core\BraintreeGateway;
 use App\Core\Controller;
 use App\Core\Database;
 use App\Models\AuditLog;
+use App\Models\Category;
+use App\Models\FavoriteCategory;
 use App\Models\PaymentProcessor;
 use App\Models\Plan;
 use App\Models\Subscription;
@@ -51,6 +53,14 @@ class MembershipController extends Controller
             'cardCovers'     => $cardCovers,
             'recentImages'   => $siteEditorPreview ? [] : Photo::recentImages(4),
             'recentVideos'   => $siteEditorPreview ? [] : Photo::recentVideos(4),
+            // The categories a member can pick as their interests. Without
+            // one the "recommended for you" strip is empty - and the
+            // recommendations are the first thing on the listing now.
+            'interestCategories' => $siteEditorPreview ? [] : \App\Models\Category::all(),
+            'interestIds'        => $siteEditorPreview ? [] : array_map(
+                'intval',
+                array_column(\App\Models\FavoriteCategory::forUser($userId), 'category_id')
+            ),
             'sidebarNav'     => true,
             'siteEditorPreview' => $siteEditorPreview,
         ]);

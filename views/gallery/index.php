@@ -86,7 +86,30 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
 <?php endif; ?>
 
 <?php if ($q === ''): ?>
-<?php // Full listing: every gallery grouped by category, unpaginated, never filtered by favourites. ?>
+<?php /* The listing: the newest galleries of every category, each category
+         bounded, and the member's own picks FIRST - the recommendation
+         strip used to sit at the very bottom, under the whole catalogue,
+         and it is empty for a member with no favourites yet. */ ?>
+<?php if (!empty($recommended)): ?>
+<section class="fav-section">
+    <h2>Recommended for you</h2>
+    <p class="muted">Galleries similar to your favourites and recent views.</p>
+    <div class="grid">
+        <?php
+        $recKey = 'recommended.' . md5(json_encode(array_column($recommended, 'id')));
+        echo \App\Core\PageCache::fragment($recKey, 120, static function () use ($recommended, $viewedIds, $favoriteGalleryIds, $currentUser, $hasActive): void {
+            $recCats = \App\Models\Gallery::categoriesBulk(array_map('intval', array_column($recommended, 'id')));
+            foreach ($recommended as $gallery) {
+                $gid = (int) $gallery['id'];
+                $cover = $gallery['first_photo'] ?? null;
+                $galleryCategories = $recCats[$gid] ?? [];
+                require __DIR__ . '/../partials/gallery_card.php';
+            }
+        });
+        ?>
+    </div>
+</section>
+<?php endif; ?>
 <?php if (empty($sections)): ?>
     <div class="empty-state">
         <p class="muted">No galleries yet.</p>
@@ -129,26 +152,6 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
     <?php endforeach; ?>
 <?php endif; ?>
 
-<?php if (!empty($recommended)): ?>
-<section class="fav-section">
-    <h2>Recommended for you</h2>
-    <p class="muted">Galleries similar to your favourites and recent views.</p>
-    <div class="grid">
-        <?php
-        $recKey = 'recommended.' . md5(json_encode(array_column($recommended, 'id')));
-        echo \App\Core\PageCache::fragment($recKey, 120, static function () use ($recommended, $viewedIds, $favoriteGalleryIds, $currentUser, $hasActive): void {
-            $recCats = \App\Models\Gallery::categoriesBulk(array_map('intval', array_column($recommended, 'id')));
-            foreach ($recommended as $gallery) {
-                $gid = (int) $gallery['id'];
-                $cover = $gallery['first_photo'] ?? null;
-                $galleryCategories = $recCats[$gid] ?? [];
-                require __DIR__ . '/../partials/gallery_card.php';
-            }
-        });
-        ?>
-    </div>
-</section>
-<?php endif; ?>
 <?php else: ?>
 <section>
     <h2 class="section-title">Search results</h2>
