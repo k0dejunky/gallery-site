@@ -365,7 +365,7 @@ body.player-theater #video-player-wrap+.media-progress{display:none}
 .guest-grid .recent-card .card-cover{aspect-ratio:1/1;height:auto;margin-bottom:0}
 .guest-grid .recent-card .card-cover img{height:100%}
 .guest-teaser-stats{text-align:center;margin:0 0 var(--spacing-md);font-size:.95rem}
-.guest-teaser-stats strong{color:var(--purple-800)}
+.guest-teaser-stats strong{color:var(--text-color)}
 .recent-card{position:relative}
 .card-blur-note{position:absolute;left:0;right:0;bottom:0;padding:.25rem .5rem;font-size:.72rem;text-align:center;background:rgba(20,8,34,.55);color:#fff;border-radius:0 0 var(--card-radius) var(--card-radius)}
 @media(max-width:1067px){.auth-splash{flex-direction:column}.auth-splash .auth-panel{order:-1}}
@@ -446,6 +446,12 @@ body.site-compact .title-header img { max-width: 380px; }
 /* ---------- Chat ---------------------------------------------------------- */
 
 .chat-page { width: 100%; max-width: none; }
+    /* The presence line. It used to carry a hard-coded #15803d / #b45309
+       in the view, both 3.93:1 on the page background. */
+    .chat-status-online { color: var(--status-online); }
+    .chat-status-away { color: var(--status-away); }
+    /* The "Submitted" badge was a light chip (#dcfce7) on the dark skin. */
+    .chat-submitted { float: right; font-size: .72rem; font-weight: 600; color: var(--flash-success-color); background: var(--flash-success-bg); border: 1px solid var(--flash-success-border); border-radius: 999px; padding: 2px 10px; }
     .chat-thread { display: flex; flex-direction: column; gap: .3rem; padding: .5rem 0; max-height: 60vh; overflow-y: auto; }
     .chat-msg { max-width: 78%; padding: 2px 7px; border-radius: 12px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
     .chat-msg.user { align-self: flex-end; background: var(--purple-600, #9333ea); color: #fff; border-bottom-right-radius: 3px; }

@@ -1228,6 +1228,29 @@ class SmokeChecks
                     'body:not(.admin-theme) .btn-danger:hover {', '',
                     '--btn-danger-color', '--btn-danger-hover-bg', 4.5,
                     'body:not(.admin-theme) .btn:hover'],
+                // The chat presence line. It hard-coded #15803d and #b45309
+                // in the view; both are 3.93:1 on the page background, and
+                // the text is 12.8px.
+                ['views/chat/index.php',
+                    'chat-status-online', '#15803d',
+                    '--status-online', '--page-bg', 4.5],
+                ['public/assets/css/user.css',
+                    'color: var(--status-online)', '',
+                    '--status-online', '--page-bg', 4.5],
+                ['public/assets/css/user.css',
+                    'color: var(--status-away)', '',
+                    '--status-away', '--page-bg', 4.5],
+                // The "Submitted" badge was a light chip (#dcfce7) on the dark
+                // skin, carrying its own hard-coded greens.
+                ['views/chat/index.php',
+                    'chat-submitted', '#dcfce7',
+                    '--flash-success-color', '--flash-success-bg', 4.5],
+                // The guest teaser statistic on the login and signup pages.
+                // --purple-800 on a card is 1.71:1.
+                ['public/assets/css/user.css',
+                    '.guest-teaser-stats strong{color:var(--text-color)}',
+                    '.guest-teaser-stats strong{color:var(--purple-800)}',
+                    '--text-color', '--card-bg', 4.5],
             ];
 
             // The member palette, parsed out of Theme.php.

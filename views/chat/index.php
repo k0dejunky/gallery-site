@@ -9,7 +9,7 @@
                         <div id="questionnaire-<?= (int)$q['id'] ?>" style="border:1px solid var(--pink-300,#f9a8d4);border-radius:var(--card-radius,8px);background:var(--pink-100,#fdf2f8);padding:1rem;margin-bottom:.75rem;<?= $qAnswered ? 'opacity:.85;' : '' ?>">
                             <strong><?= e((string)$q['title']) ?></strong>
                             <?php if ($qAnswered): ?>
-                                <span style="float:right;font-size:.72rem;font-weight:600;color:#15803d;border:1px solid #86efac;background:#dcfce7;border-radius:999px;padding:2px 10px;">✓ Submitted</span>
+                                <span class="chat-submitted">✓ Submitted</span>
                             <?php endif; ?>
                             <?php if (!empty($q['intro'])): ?><p style="margin:.35rem 0 .6rem;white-space:pre-wrap;"><?= e((string)$q['intro']) ?></p><?php endif; ?>
 
@@ -87,9 +87,9 @@
 
         <p class="chat-status">
             <?php if (!empty($operatorOnline)): ?>
-                <span style="color:#15803d;">&#9679; Amethyst is online — you'll get a reply shortly.</span>
+                <span class="chat-status-online">&#9679; Amethyst is online — you'll get a reply shortly.</span>
             <?php else: ?>
-                <span style="color:#b45309;">&#9679; Amethyst is away right now — messages are answered automatically and personally as soon as possible.</span>
+                <span class="chat-status-away">&#9679; Amethyst is away right now — messages are answered automatically and personally as soon as possible.</span>
             <?php endif; ?>
         </p>
 

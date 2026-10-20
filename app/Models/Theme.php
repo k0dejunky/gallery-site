@@ -247,6 +247,12 @@ class Theme
         'flash-success-bg'        => '#1f2a14',
         'flash-success-border'    => '#84cc16',
         'flash-success-color'     => '#d9f99d',
+        // Presence colours. The chat used to hard-code #15803d and #b45309
+        // in the view: both are 3.93:1 on the page background, under the 4.5
+        // that 12.8px text needs. These are the legible steps of the same
+        // two hues (green-400 and amber-400).
+        'status-online'            => '#4ade80',
+        'status-away'              => '#fbbf24',
         'age-gate-1'              => '#2a0f22',
         'age-gate-2'              => '#12060e',
         'age-gate-3'              => '#3b1030',
