@@ -40,6 +40,24 @@ $breadcrumbItems = [
 <?php if (!empty($canViewFull)): ?>
 <?php require __DIR__ . '/../partials/media_nav.php'; ?>
 <?php endif; ?>
+
+<?php // Save this image to a collection (the viewer already loads them). ?>
+<?php if (!empty($canViewFull) && !empty($collections)): ?>
+<form method="post" action="<?= url('/collections/' . (int) $collections[0]['id'] . '/photos') ?>" class="settings-form player-save-form" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.25rem 0 .75rem;">
+    <?= csrf_field() ?>
+    <input type="hidden" name="photo_id" value="<?= (int) $photo['id'] ?>">
+    <label class="muted u-fs-09">Save this image to a collection</label>
+    <select name="collection_id" aria-label="Collection to save this image in" data-col-action="<?= url('/collections') ?>/" data-col-suffix="photos" data-action="collectionActionSelect">
+        <?php foreach ($collections as $c): ?>
+            <option value="<?= (int) $c['id'] ?>"><?= e((string) $c['name']) ?></option>
+        <?php endforeach; ?>
+    </select>
+    <button type="submit" class="btn btn-sm btn-outline">Add to collection</button>
+    <a href="<?= url('/collections') ?>" class="muted" style="font-size:.85rem;">Manage collections</a>
+</form>
+<?php elseif (!empty($canViewFull)): ?>
+<p class="muted" style="font-size:.9rem;margin:.25rem 0 .75rem;"><a href="<?= url('/collections') ?>">Create a collection</a> to save this image.</p>
+<?php endif; ?>
 <?php $reportUrl = url('/support') . '?' . http_build_query(['return_to' => $_SERVER['REQUEST_URI'] ?? url('/galleries')]); ?>
 
 <figure class="paywalled-content" style="margin: 1rem 0; text-align: center;">

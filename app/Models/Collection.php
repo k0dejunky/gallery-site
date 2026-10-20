@@ -330,7 +330,7 @@ class Collection
         }
 
         $photo = \App\Models\Photo::find($photoId);
-        if ($photo === null || !is_video($photo['filename'])) {
+        if ($photo === null) {
             return false;
         }
 
@@ -399,12 +399,23 @@ class Collection
      */
     public static function movePhoto(int $collectionId, int $userId, int $photoId, string $dir): bool
     {
-        if (!self::owns($collectionId, $userId) || $photoId <= 0) {
+        return self::moveItem($collectionId, $userId, 'photo', $photoId, $dir);
+    }
+
+    /**
+     * Move an item (a video, an image or a whole gallery) one slot up or
+     * down in the collection's order.
+     */
+    public static function moveItem(int $collectionId, int $userId, string $kind, int $itemId, string $dir): bool
+    {
+        if (!self::owns($collectionId, $userId) || $itemId <= 0) {
             return false;
         }
 
+        $column = $kind === 'gallery' ? 'gallery_id' : 'photo_id';
+
         $items = Database::run(
-            'SELECT ci.id, ci.photo_id, ci.position
+            'SELECT ci.id, ci.photo_id, ci.gallery_id, ci.position
              FROM collection_items ci
              JOIN collections c ON c.id = ci.collection_id
              WHERE ci.collection_id = ? AND c.user_id = ?
@@ -414,7 +425,7 @@ class Collection
 
         $index = null;
         foreach ($items as $i => $item) {
-            if ((int) $item['photo_id'] === $photoId) {
+            if ((int) ($item[$column] ?? 0) === $itemId) {
                 $index = $i;
                 break;
             }

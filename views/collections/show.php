@@ -8,8 +8,27 @@ foreach ((array) ($videos ?? []) as $v) {
     $totalSeconds += (int) ($v['duration_seconds'] ?? 0);
 }
 $mediaCount = count((array) ($videos ?? [])) + count((array) ($images ?? [])) + count((array) ($galleries ?? []));
+
+// The list of everything in the collection, as plain URLs, so a member can
+// copy it somewhere else.
+$collectionList = [];
+foreach ((array) ($galleries ?? []) as $g) {
+    $collectionList[] = absolute_url('/galleries/' . (int) $g['id']);
+}
+foreach ((array) ($videos ?? []) as $v) {
+    $collectionList[] = absolute_url('/videos/' . (int) $v['id']);
+}
+foreach ((array) ($images ?? []) as $i) {
+    $collectionList[] = absolute_url('/images/' . (int) $i['id']);
+}
+$collectionList = implode("\n", $collectionList);
 ?>
 <h1><?= e((string) ($collection['name'] ?? 'Collection')) ?></h1>
+<?php if ($mediaCount > 0): ?>
+    <?php /* The copy button copies THIS element's value (the copy helper
+        copies an element, not a literal). */ ?>
+    <textarea id="collection-list-text" readonly hidden aria-hidden="true"><?= e($collectionList) ?></textarea>
+<?php endif; ?>
 <p class="muted u-mb-1">
     <a href="<?= url('/collections') ?>">&larr; Back to collections</a>
     <?php if ($mediaCount > 0): ?>
@@ -18,6 +37,11 @@ $mediaCount = count((array) ($videos ?? [])) + count((array) ($images ?? [])) + 
     <?php if (!empty($firstMediaId)): ?>
         &nbsp; &middot; &nbsp;
         <a class="btn btn-sm" href="<?= url(($firstMediaIsVideo ? '/videos/' : '/images/') . (int) $firstMediaId . '?playlist=' . $collectionId) ?>">&#9654; Play collection</a>
+    <?php endif; ?>
+    <?php if ($mediaCount > 0): ?>
+        &nbsp; &middot; &nbsp;
+        <?php /* A member who wants the set somewhere else needs the list. */ ?>
+        <button type="button" class="btn btn-sm btn-outline" data-copy="collection-list-text" data-copy-label="Copy list">Copy the list</button>
     <?php endif; ?>
 </p>
 
@@ -47,6 +71,14 @@ $mediaCount = count((array) ($videos ?? [])) + count((array) ($images ?? [])) + 
                             <h3 style="margin:.4rem 0 .15rem;font-size:.95rem;"><?= e($img['caption'] !== '' ? (string) $img['caption'] : 'Image') ?></h3>
                         </div>
                     </a>
+                    <form method="post" action="<?= url('/collections/' . $collectionId . '/move') ?>" class="collection-order" style="padding:.6rem .6rem 0;">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="kind" value="photo">
+                        <input type="hidden" name="photo_id" value="<?= (int) $img['id'] ?>">
+                        <input type="hidden" name="dir" value="up">
+                        <button type="submit" class="btn btn-sm btn-outline" title="Move up" aria-label="Move <?= e($img['caption'] !== '' ? (string) $img['caption'] : 'this image') ?> up">&#9650; Up</button>
+                        <button type="submit" class="btn btn-sm btn-outline" name="dir" value="down" title="Move down" aria-label="Move <?= e($img['caption'] !== '' ? (string) $img['caption'] : 'this image') ?> down">&#9660; Down</button>
+                    </form>
                     <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/photos/' . (int) $img['id'] . '/delete') ?>" style="padding:.6rem;">
                         <?= csrf_field() ?>
                         <button type="submit" class="btn btn-sm btn-outline u-w-full">Remove image</button>
@@ -70,6 +102,7 @@ $mediaCount = count((array) ($videos ?? [])) + count((array) ($images ?? [])) + 
                     </a>
                     <form method="post" action="<?= url('/collections/' . $collectionId . '/move') ?>" class="collection-order" style="padding:.6rem;">
                         <?= csrf_field() ?>
+                        <input type="hidden" name="kind" value="photo">
                         <input type="hidden" name="photo_id" value="<?= (int) $v['id'] ?>">
                         <input type="hidden" name="dir" value="up">
                         <button type="submit" class="btn btn-sm btn-outline" title="Move up in the playlist" aria-label="Move <?= e($v['caption'] !== '' ? (string) $v['caption'] : 'this video') ?> up">&#9650; Up</button>
@@ -96,6 +129,14 @@ $mediaCount = count((array) ($videos ?? [])) + count((array) ($images ?? [])) + 
                     $coverFetchPriority = empty($coverFetchPriority) ? 'high' : '';
                     require __DIR__ . '/../partials/gallery_card.php';
                     ?>
+                    <form method="post" action="<?= url('/collections/' . $collectionId . '/move') ?>" class="collection-order" style="padding:.6rem .6rem 0;">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="kind" value="gallery">
+                        <input type="hidden" name="gallery_id" value="<?= $gid ?>">
+                        <input type="hidden" name="dir" value="up">
+                        <button type="submit" class="btn btn-sm btn-outline" title="Move up" aria-label="Move <?= e((string) ($gallery['title'] ?? 'this gallery')) ?> up">&#9650; Up</button>
+                        <button type="submit" class="btn btn-sm btn-outline" name="dir" value="down" title="Move down" aria-label="Move <?= e((string) ($gallery['title'] ?? 'this gallery')) ?> down">&#9660; Down</button>
+                    </form>
                     <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/galleries/' . $gid . '/delete') ?>" style="padding:.6rem;">
                         <?= csrf_field() ?>
                         <button type="submit" class="btn btn-sm btn-outline u-w-full">Remove from collection</button>

@@ -7,6 +7,7 @@ use App\Core\Controller;
 use App\Core\Request;
 use App\Models\Collection;
 use App\Models\Gallery;
+use App\Models\Photo;
 
 /**
  * Member collections (gallery playlists): create/rename/delete collections and
@@ -138,12 +139,15 @@ class CollectionController extends Controller
         Auth::requireLogin();
         $photoId = (int) $this->request->post('photo_id', 0);
 
+        $photo = \App\Models\Photo::find($photoId);
+        $what  = $photo !== null && !is_video((string) $photo['filename']) ? 'image' : 'video';
+
         if (Collection::addPhoto($id, (int) $_SESSION['user_id'], $photoId)) {
-            $this->flash('success', 'Added video to collection.');
+            $this->flash('success', 'Added the ' . $what . ' to the collection.');
         } else {
-            $this->flash('error', 'That video is already in the collection, or it was not found.');
+            $this->flash('error', 'That ' . $what . ' is already in the collection, or it was not found.');
         }
-        $this->redirect('/videos/' . $photoId);
+        $this->redirect(($photo !== null && !is_video((string) $photo['filename']) ? '/images/' : '/videos/') . $photoId);
     }
 
         /** Remove an individual video from a collection. */
@@ -164,13 +168,14 @@ class CollectionController extends Controller
     {
         Auth::requireLogin();
 
-        $photoId = (int) $this->request->post('photo_id', 0);
+        $kind = (string) $this->request->post('kind', 'photo') === 'gallery' ? 'gallery' : 'photo';
+        $itemId = (int) $this->request->post($kind . '_id', 0);
         $dir     = (string) $this->request->post('dir', 'up') === 'down' ? 'down' : 'up';
 
-        if (Collection::movePhoto($id, (int) $_SESSION['user_id'], $photoId, $dir)) {
+        if (Collection::moveItem($id, (int) $_SESSION['user_id'], $kind, $itemId, $dir)) {
             $this->flash('success', 'Playlist reordered.');
         } else {
-            $this->flash('error', 'Could not move that video.');
+            $this->flash('error', 'Could not move that item.');
         }
         $this->redirect('/collections/' . $id);
     }
