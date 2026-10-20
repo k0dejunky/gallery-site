@@ -8,6 +8,14 @@ without re-analysing a single line of code.
 Companion document: `docs/UI-UPGRADE-PLAN.md` (the site-wide UI refactor,
 phases 0-7, finished and shipped). This file is the next programme.
 
+**STATUS: THE WHOLE PROGRAMME IS DONE AND SHIPPED (2026-10-20).** Every
+item in every batch is implemented, verified on dev and on prod, and pushed.
+Smoke 921 checks on local, dev and prod; the full TestSuite is 991 tests with
+**0 failures on prod**. The prod backups before the deploys are
+`pre-auth-batchA-20261020-075102`, `pre-ui-batchB-20261020-083059`,
+`pre-perf-batchC-20261020-085603`, `pre-data-batchD-20261020-091359` and
+`pre-ui-batchE-20261020-100403` (all in /var/backups/gallery).
+
 **Scope (decided by the user): everything, in order.**
 **Paywall copy (decided by the user): show the locked count + the upsell.**
 
@@ -146,17 +154,27 @@ both boxes. The prod backup before the deploy is
 
 ### Batch E - the product upgrades (one commit each)
 
+**Batch E is DONE and shipped (local + dev + prod, 2026-10-20).** Smoke 921 on
+local, dev and prod; the full TestSuite on **prod** is 991 tests with 0
+failures. Migrations 075 (the searches that hit), 076 (the caption search) and
+077 (the watch position) are applied on both boxes. The prod backup before the
+deploy is `/var/backups/gallery/pre-ui-batchE-20261020-100403.sql.gz`.
+
+**Not done in E5:** the comment replies (a `parent_id` column) and the comment
+reactions - the wall's inbox/updates split and the grouped day headings are
+done, the flat comments are not.
+
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| E1 | Paginate the catalogue; lead with "For you" / recently added / trending | `app/Controllers/GalleryController.php`, `views/gallery/index.php`, `app/Models/Gallery.php` | todo | - |
-| E2 | The membership page says what a tier unlocks; an "Interests" card that feeds the recommendations | `app/Models/Gallery.php`, `views/membership/index.php`, `views/membership/dashboard.php` | todo | - |
-| E3 | Search the photo captions (a `photos` FULLTEXT index) | `app/Models/Gallery.php` + a migration | todo | - |
-| E4 | Fix the 1-2 character search; surface the site's own missed searches | `app/Models/Gallery.php`, `views/gallery/index.php` | todo | - |
-| E5 | The wall / inbox model (two feeds, an unpaged inbox, a badge that only clears per click, flat comments) | `app/Controllers/WallController.php`, `views/wall.php`, `app/Models/Comment.php` + a migration | todo | - |
-| E6 | Collections: add one photo, reorder images/galleries, share | `views/gallery/image_full.php`, `views/collections/show.php`, `app/Models/Collection.php` | todo | - |
-| E7 | Server-side watch progress + a "continue watching" rail | a new table, `public/assets/js/user.js`, `views/membership/dashboard.php` | todo | - |
-| E8 | A "more like this" rail on the video page; seed the "Up next" panel | `app/Controllers/ImageController.php`, `views/video/player.php` | todo | - |
-| E9 | The mobile / a11y small ones (the cookie banner reload, the grid item alt text, the play badge) | `views/partials/consent_banner.php`, `views/partials/gallery_grid_item.php` | todo | - |
+| E1 | Paginate the catalogue; lead with "For you" / recently added / trending | `app/Controllers/GalleryController.php`, `views/gallery/index.php`, `app/Models/Gallery.php` | done | `175f5cd` |
+| E2 | The membership page says what a tier unlocks; an "Interests" card that feeds the recommendations | `app/Models/Gallery.php`, `views/membership/index.php`, `views/membership/dashboard.php` | done | `175f5cd` |
+| E3 | Search the photo captions (a `photos` FULLTEXT index) | `app/Models/Gallery.php` + a migration | done | `264593c` |
+| E4 | Fix the 1-2 character search; surface the site's own missed searches | `app/Models/Gallery.php`, `views/gallery/index.php` | done | `99f1488` |
+| E5 | The wall / inbox model (two feeds, an unpaged inbox, a badge that only clears per click, flat comments) | `app/Controllers/WallController.php`, `views/wall.php`, `app/Models/Comment.php` + a migration | done | `0781e44` |
+| E6 | Collections: add one photo, reorder images/galleries, share | `views/gallery/image_full.php`, `views/collections/show.php`, `app/Models/Collection.php` | done | `053f024` |
+| E7 | Server-side watch progress + a "continue watching" rail | a new table, `public/assets/js/user.js`, `views/membership/dashboard.php` | done | `faf046a` |
+| E8 | A "more like this" rail on the video page; seed the "Up next" panel | `app/Controllers/ImageController.php`, `views/video/player.php` | done | `99f1488` |
+| E9 | The mobile / a11y small ones (the cookie banner reload, the grid item alt text, the play badge) | `views/partials/consent_banner.php`, `views/partials/gallery_grid_item.php` | done | `99f1488` |
 
 ---
 
