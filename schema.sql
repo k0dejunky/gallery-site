@@ -156,6 +156,7 @@ CREATE TABLE IF NOT EXISTS gallery_photo (
     position   INT UNSIGNED NOT NULL DEFAULT 0,
     PRIMARY KEY (gallery_id, photo_id),
     INDEX idx_gallery_photo_pos (gallery_id, position),
+    INDEX idx_gallery_photo_pos_photo (gallery_id, position, photo_id),
     FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE,
     FOREIGN KEY (photo_id)   REFERENCES photos(id)   ON DELETE CASCADE
 );
@@ -220,6 +221,7 @@ CREATE TABLE IF NOT EXISTS gallery_favorites (
     gallery_id INT UNSIGNED NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, gallery_id),
+    INDEX idx_gallery_favorites_user_created (user_id, created_at),
     FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE,
     FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE
 );
@@ -242,6 +244,7 @@ CREATE TABLE IF NOT EXISTS collection_items (
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_collection_item (collection_id, gallery_id),
     UNIQUE KEY uq_collection_photo (collection_id, photo_id),
+    INDEX idx_collection_items_order (collection_id, position, id),
     FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
     FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE,
     FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE
@@ -253,6 +256,7 @@ CREATE TABLE IF NOT EXISTS gallery_viewers (
     viewed_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, gallery_id),
     INDEX idx_gallery_viewers_user_viewed (user_id, viewed_at),
+    INDEX idx_gallery_viewers_user_viewed_at (user_id, viewed_at, gallery_id),
     FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE,
     FOREIGN KEY (gallery_id) REFERENCES galleries(id) ON DELETE CASCADE
 );
@@ -555,6 +559,7 @@ CREATE TABLE IF NOT EXISTS email_queue (
     scheduled_at DATETIME NULL DEFAULT NULL,
     sent_at    DATETIME NULL,
     INDEX idx_email_queue_status (status),
+    INDEX idx_email_queue_status_id (status, id),
     INDEX idx_email_queue_due (status, scheduled_at, next_attempt_at),
     INDEX idx_email_queue_audience (audience),
     INDEX idx_email_queue_kind (kind, created_at),
@@ -948,6 +953,7 @@ CREATE TABLE IF NOT EXISTS wall_posts (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at DATETIME NULL,
     INDEX idx_wall_posts_pin_created (pinned, created_at),
+    INDEX idx_wall_posts_feed (deleted_at, pinned, created_at, id),
     INDEX idx_wall_posts_gallery (gallery_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -988,6 +994,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     read_at    DATETIME NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_notifications_user_read (user_id, read_at),
+    INDEX idx_notifications_user_created (user_id, created_at, id),
     INDEX idx_notifications_created (created_at),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -1024,6 +1031,7 @@ CREATE TABLE IF NOT EXISTS purchases (
     INDEX idx_purchases_user (user_id, created_at),
     INDEX idx_purchases_item (item_type, item_id),
     INDEX idx_purchases_status (status),
+    INDEX idx_purchases_user_item (user_id, item_type, item_id, status),
     -- One row per (gateway, reference, user, item): a multi-use unlock code
     -- can be redeemed by several members, but one member cannot redeem the
     -- same code for the same gallery twice.
