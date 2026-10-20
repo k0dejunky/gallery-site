@@ -205,7 +205,7 @@
                 html += ' <span class="chat-attachment chat-expired">🔒 Media expired</span>';
             } else if (msg.attachment_thumb_url) {
                 html += ' <a href="' + esc(msg.attachment_url) + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:.4rem;" title="Open full image">' +
-                    ' <img class="chat-image" loading="lazy" src="' + esc(msg.attachment_thumb_url) + '" alt="' + esc(msg.attachment_name) + '" draggable="false" oncontextmenu="return false"></a>';
+                    ' <img class="chat-image" loading="lazy" src="' + esc(msg.attachment_thumb_url) + '" alt="' + esc(msg.attachment_name) + '" draggable="false" data-nocontext></a>';
             } else {
                 html += ' <span class="chat-attachment">📎 ' + esc(msg.attachment_name) + '</span>';
             }

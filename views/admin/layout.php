@@ -175,7 +175,7 @@ if (preg_match('#/admin/([a-z0-9-]+)#', (string) ($current ?? ''), $m)) {
                 <div class="nav-sep" data-se-move-key="nav-sep-top"></div>
             <?php endif; ?>
             <a class="nav-brand" href="<?= url('/admin') ?>" data-se-move-key="nav-brand">
-                <img src="<?= e(\App\Models\Theme::titleImageUrl(\App\Models\Theme::SCOPE_ADMIN)) ?>" alt="<?= e(config('app.site_name')) ?> Admin" onerror="this.remove()">
+                <img src="<?= e(\App\Models\Theme::titleImageUrl(\App\Models\Theme::SCOPE_ADMIN)) ?>" alt="<?= e(config('app.site_name')) ?> Admin" data-hide-on-error>
             </a>
             <div class="nav-scroll">
             <?php foreach ($navGroups as $group): ?>
@@ -405,6 +405,19 @@ if (preg_match('#/admin/([a-z0-9-]+)#', (string) ($current ?? ''), $m)) {
             if (a && window[a]) { if (t.hasAttribute('data-arg')) window[a](t.getAttribute('data-arg'), t); else window[a](t, e); e.preventDefault(); }
             if (t.hasAttribute('data-copy')) { window.copyToClipboard(t.getAttribute('data-copy'), t); e.preventDefault(); }
             if (t.hasAttribute('data-picker')) { window.showPickerOn(t); e.preventDefault(); }
+        }, true);
+        // An image that fails to load hides itself. This used to be an
+        // inline event handler, which the site's own CSP blocks (script-src
+        // has no script-src-attr), so the broken brand image stayed on
+        // screen. The member layout already had this handler.
+        document.addEventListener('error', function (e) {
+            var t = e.target;
+            if (!t || t.tagName !== 'IMG') { return; }
+            if (t.hasAttribute('data-hide-on-error')) { t.style.display = 'none'; return; }
+            if (t.hasAttribute('data-fallback') && !t.getAttribute('data-fb')) {
+                t.setAttribute('data-fb', '1');
+                t.src = t.getAttribute('data-fallback');
+            }
         }, true);
     })();
     </script>

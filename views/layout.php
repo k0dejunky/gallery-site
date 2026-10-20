@@ -89,7 +89,7 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="<?= e(isset($title) ? $title . ' — ' . config('app.site_name') : config('app.site_name')) ?>">
     <meta name="twitter:description" content="<?= e($metaDescription ?? (config('app.site_name') . ' — curated galleries of original photos and videos.')) ?>">
-    <script nonce="<?= csp_nonce() ?>" type="application/ld+json" nonce="<?= csp_nonce() ?>">
+    <script nonce="<?= csp_nonce() ?>" type="application/ld+json">
     {
         "@context": "https://schema.org",
         "@type": "WebSite",
@@ -98,7 +98,7 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     }
     </script>
     <?php if (isset($ldJson) && is_array($ldJson)): ?>
-    <script nonce="<?= csp_nonce() ?>" type="application/ld+json" nonce="<?= csp_nonce() ?>"><?= json_encode($ldJson, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
+    <script nonce="<?= csp_nonce() ?>" type="application/ld+json"><?= json_encode($ldJson, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
     <?php endif; ?>
     <?php if (!empty($lcpPreload)): ?>
     <link rel="preload" as="image" href="<?= e($lcpPreload) ?>" fetchpriority="high">

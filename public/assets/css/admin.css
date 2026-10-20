@@ -642,6 +642,7 @@ body.admin-theme {
     gap: .4rem;
     padding: .45rem .8rem;
     font-size: 13px;
+    font-family: inherit;
     font-weight: 600;
     line-height: 1.2;
     text-decoration: none;

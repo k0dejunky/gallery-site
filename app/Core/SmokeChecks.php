@@ -1367,6 +1367,66 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.no_inline_handlers', 'Smoke · UI', 'No view carries an inline event handler', static function () use ($root, $ok, $bad): array {
+            // The site's own CSP has no script-src-attr, so an inline
+            // onerror / oncontextmenu is blocked by the browser and the
+            // behaviour it was written for silently never happens. The
+            // chat's right-click blocker and the admin's broken-image
+            // guard were both written this way.
+            $problems = [];
+            $files = array_merge(glob($root . '/views/*.php') ?: [], glob($root . '/views/*/*.php') ?: []);
+            foreach ($files as $file) {
+                if (str_starts_with(substr($file, strlen($root . '/views/')), 'emails/')) {
+                    continue;   // email clients need their own inline CSS
+                }
+                $src = (string) @file_get_contents($file);
+                if (preg_match('/\son(click|error|load|contextmenu|mouseover|mouseout|submit|change|input|focus|blur|keydown|keyup)\s*=/i', $src, $m) === 1) {
+                    $problems[] = str_replace($root . '/', '', $file) . ' has an inline ' . $m[1] . ' handler';
+                }
+            }
+            return $problems === []
+                ? $ok('no view carries an inline event handler')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.ui.semantics', 'Smoke · UI', 'The controls that are not what they look like say so', static function () use ($root, $ok, $bad): array {
+            // A role-less <span> with an aria-label is not exposed with
+            // that name; a span with aria-disabled is not a disabled
+            // control; a role="dialog" that is not modal, has no focus
+            // handling and steals no focus is a lie to a screen reader.
+            $problems = [];
+
+            $stars = (string) @file_get_contents($root . '/views/partials/star_rating.php');
+            if (strpos($stars, 'role="img"') === false) {
+                $problems[] = 'the star rating needs role="img" so its aria-label is the name that is announced';
+            }
+
+            $nav = (string) @file_get_contents($root . '/views/partials/media_nav.php');
+            if (strpos($nav, 'aria-disabled') !== false) {
+                $problems[] = 'the media nav must use a real disabled button, not aria-disabled on a span';
+            }
+            if (strpos($nav, 'class="btn btn-disabled" disabled') === false) {
+                $problems[] = 'the media nav must render the disabled state as a disabled button';
+            }
+
+            $consent = (string) @file_get_contents($root . '/views/partials/consent_banner.php');
+            if (strpos($consent, 'role="dialog"') !== false) {
+                $problems[] = 'the consent banner is not a dialog: it is a polite region, not a modal';
+            }
+            if (strpos($consent, 'aria-live="polite"') === false) {
+                $problems[] = 'the consent banner must announce itself politely';
+            }
+
+            $layout = (string) @file_get_contents($root . '/views/layout.php');
+            if (preg_match('/<script[^>]*nonce=[^>]*nonce=/i', $layout) === 1) {
+                $problems[] = 'a script tag carries the nonce attribute twice';
+            }
+
+            return $problems === []
+                ? $ok('the star rating, the media nav, the consent banner and the JSON-LD all say what they are')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

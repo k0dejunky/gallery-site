@@ -5,7 +5,7 @@
 // layout render the GA snippet). Rendered by views/layout.php.
 if (!empty($gaShowBanner)):
 ?>
-<div id="consent-banner" role="dialog" aria-label="Cookie consent">
+<div id="consent-banner" role="region" aria-label="Cookie consent" aria-live="polite">
     <span>We use cookies to keep you signed in and — only with your consent — to measure site traffic. See our <a class="thin-link" href="<?= url('/privacy') ?>">Privacy Policy</a>.</span>
     <button type="button" id="consent-accept" class="btn btn-sm">OK, continue</button>
 </div>

@@ -31,7 +31,7 @@ $nextGalleryUrl = $nextGallery !== null ? url('/galleries/' . (int) $nextGallery
     <?php elseif ($prevGalleryUrl !== null): ?>
         <a class="btn" href="<?= e($prevGalleryUrl) ?>">&larr; Previous gallery</a>
     <?php else: ?>
-        <span class="btn btn-disabled" aria-disabled="true">&larr; Previous</span>
+        <button type="button" class="btn btn-disabled" disabled>&larr; Previous</button>
     <?php endif; ?>
 
     <a class="btn btn-outline" href="<?= e($returnTo) ?>"><?= $backLabel ?></a>
@@ -41,6 +41,6 @@ $nextGalleryUrl = $nextGallery !== null ? url('/galleries/' . (int) $nextGallery
     <?php elseif ($nextGalleryUrl !== null): ?>
         <a class="btn" href="<?= e($nextGalleryUrl) ?>">Next gallery &rarr;</a>
     <?php else: ?>
-        <span class="btn btn-disabled" aria-disabled="true">Next &rarr;</span>
+        <button type="button" class="btn btn-disabled" disabled>Next &rarr;</button>
     <?php endif; ?>
 </div>
