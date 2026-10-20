@@ -436,6 +436,34 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.schema.migrations_are_in_the_schema', 'Smoke · Schema', 'Every column a migration adds is in schema.sql', static function () use ($root, $ok, $bad): array {
+            // schema.sql and database/migrations/ have drifted before: a
+            // fresh install (install.sh imports schema.sql) could not pause
+            // a live stream because live_sessions.paused_at only lived in
+            // migration 044. The migrator now runs after the import, but the
+            // schema file should still carry the column: a fresh install
+            // should not depend on the migration runner.
+            $schema = (string) @file_get_contents($root . '/schema.sql');
+            $files  = glob($root . '/database/migrations/*.sql') ?: [];
+            $missing = [];
+            foreach ($files as $file) {
+                $src = (string) @file_get_contents($file);
+                // ADD COLUMN [IF NOT EXISTS] `col` type
+                if (preg_match_all('/ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s+(?:DATETIME|TIMESTAMP|DATE|INT|BIGINT|TINYINT|SMALLINT|MEDIUMINT|VARCHAR|TEXT|LONGTEXT|DECIMAL|ENUM|JSON|BOOLEAN|BLOB)/i', $src, $m) === false) {
+                    continue;
+                }
+                foreach ($m[1] as $col) {
+                    if (preg_match('/\b' . preg_quote($col, '/') . '\b/', $schema) === 1) {
+                        continue;
+                    }
+                    $missing[] = basename($file) . ' adds ' . $col;
+                }
+            }
+            return $missing === []
+                ? $ok('schema.sql carries every column the migrations add')
+                : $bad('these columns are only in a migration, so a fresh install misses them: ' . implode('; ', $missing));
+        });
+
         $add('smoke.legal.static_actions', 'Smoke · Legal', 'StaticPageController provides 2257/DMCA/report actions', static function () use ($staticCtrl, $ok, $bad): array {
             return strpos($staticCtrl, 'function notice2257') !== false
                 && strpos($staticCtrl, 'function dmca') !== false

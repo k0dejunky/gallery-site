@@ -297,6 +297,15 @@ SQL
 log "Importing database schema..."
 mysql -u root "$DB_NAME" < "$INSTALL_DIR/schema.sql"
 
+# The migrations are the source of truth for anything the schema file missed
+# (schema.sql and database/migrations/ have drifted before: a fresh install
+# could not pause a live stream because live_sessions.paused_at only lived in
+# a migration). Running the migrator after the import makes the two agree.
+log "Applying database migrations..."
+if ! (cd "$INSTALL_DIR" && php scripts/migrate.php); then
+    warn "The migrations could not be applied automatically - run 'php scripts/migrate.php' in $INSTALL_DIR by hand."
+fi
+
 # ---------------------------------------------------------------------------
 # Create the initial admin account with a fresh password. The schema no longer
 # seeds a default admin (no known credential ships), so this always generates

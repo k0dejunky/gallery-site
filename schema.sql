@@ -727,6 +727,8 @@ CREATE TABLE IF NOT EXISTS live_sessions (
     stream_key  CHAR(64) NOT NULL,
     created_by  INT UNSIGNED NOT NULL,
     status      ENUM('pending','live','ended') NOT NULL DEFAULT 'pending',
+    -- The operator can pause a broadcast without ending it; NULL = not paused.
+    paused_at   DATETIME NULL,
     started_at  DATETIME NULL,
     live_notified_at DATETIME NULL,
     ended_at    DATETIME NULL,
