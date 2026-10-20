@@ -42,7 +42,7 @@ body.bottom-more-open{overflow:hidden}
 /* Shared states and keyboard focus */
 .empty-state{padding:var(--spacing-lg);text-align:center;border:1px dashed var(--pink-400);border-radius:var(--card-radius);background:var(--pink-100)}
 .empty-state p{margin-top:0}
-:where(a,button,input,textarea,select):focus-visible{outline:3px solid var(--purple-600);outline-offset:2px}
+:where(a,button,input,textarea,select):focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px}
 .member-onboarding{position:fixed;inset:0;z-index:2000;display:grid;place-items:center;padding:1rem;background:rgba(40,10,50,.55)}
 .member-onboarding[hidden]{display:none}
 .member-onboarding-card{max-width:30rem;padding:1.5rem;background:var(--bubble-bg,#fdf2f8);color:var(--bubble-text,#4a044e);border:2px solid var(--purple-600);border-radius:var(--border-radius-lg);box-shadow:var(--shadow)}

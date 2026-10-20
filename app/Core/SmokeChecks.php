@@ -1209,6 +1209,12 @@ class SmokeChecks
                 ['views/partials/membership_gate.php',
                     'color:var(--heading-color)', 'color:var(--purple-800)',
                     '--heading-color', '--pink-100', 4.5],
+                // The focus ring. --purple-600 on the page background was
+                // 2.83:1, under the 3:1 WCAG 1.4.11 asks of a non-text
+                // indicator. The palette already had --focus-ring for it.
+                ['public/assets/css/user.css',
+                    'outline:3px solid var(--focus-ring)', 'outline:3px solid var(--purple-600)',
+                    '--focus-ring', '--page-bg', 3.0],
             ];
 
             // The member palette, parsed out of Theme.php.
