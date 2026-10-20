@@ -23,7 +23,7 @@ polish. Verification follows the house rule every time:
 | 2 | One design system (theme editor drives the member site) | done, shipped to prod | `7900c97` |
 | 3 | CSS out of the views (no inline `<style>`/style attributes) | done, shipped to prod | `82fc4fa` |
 | 4 | Shared admin table component on every list view | done on dev+prod, local commit only | `08092c8` |
-| 5 | `public/assets/js/admin.js` layer | **IN FLIGHT** (uncommitted, 6 files) | - |
+| 5 | `public/assets/js/admin.js` layer | **done and verified on dev**, not on prod yet | `aad944f`, `76ec2d9` |
 | 6 | Member nav, guest mobile landing, paginated listings | pending | - |
 | 7 | Accessibility polish pass | pending | - |
 | Final | local smoke/unit -> dev -> prod -> commit + push | pending | - |
@@ -96,6 +96,26 @@ delete answers JSON when the request wants JSON.
 inline editor, the CSRF meta, the undo route, the manual role select, and no
 native `confirm()` left in an admin view). Proven to bite: reverting the role
 select to `data-autosubmit` fails the check.
+
+### Phase 5 verified on dev (2026-10-19 23:10)
+CDP (headless Chrome against 192.168.1.110):
+- the modal opens with the right title and text, the focus lands on the answer
+  button, Tab wraps inside the dialog (Cancel -> OK -> Cancel) and Escape
+  cancels it with nothing changed (28 rows);
+- a delete removes the row in place (28 -> 27) and the toast reads
+  `Deleted "Announce me cc8000".` with an Undo button;
+- Undo posts to the restore route and the gallery is back (27 -> 28, and the
+  form for that gallery is in the list again);
+- the role select is `data-autosubmit="manual"`: a change shows Save / Cancel
+  and tints the cell, nothing is written, Cancel puts the value back, and
+  Save really writes it (user -> moderator -> user, confirmed with a fresh
+  page load and with the database).
+- The toast was white on white in the light theme; it now inverts with the
+  theme (dark background, white text).
+
+**Left for later (noted, not done):** the member site still asks with the
+native `confirm()` (views/layout.php). The modal lives in admin.js/admin.css;
+giving the member site the same treatment belongs with Phase 6/7.
 
 ---
 
