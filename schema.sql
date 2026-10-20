@@ -1,5 +1,8 @@
-CREATE DATABASE IF NOT EXISTS gallery_mvc;
-USE gallery_mvc;
+-- Import this file INTO the database you want:
+--     mysql -u root <database> < schema.sql
+-- The database is NOT created or selected here: a hard-coded name meant an
+-- install with a different database name imported into gallery_mvc and left
+-- the new database empty.
 
 -- Allow forward references: several tables carry foreign keys to tables
 -- defined later in this file (e.g. subscriptions -> payment_processors).
@@ -31,6 +34,9 @@ CREATE TABLE IF NOT EXISTS users (
     notify_chat_reply TINYINT(1) NOT NULL DEFAULT 1,
     signup_source_link_id INT UNSIGNED NULL DEFAULT NULL,
     referral_code CHAR(12) NULL DEFAULT NULL,
+    UNIQUE KEY uq_users_referral_code (referral_code),
+    CONSTRAINT fk_users_traffic_link FOREIGN KEY (signup_source_link_id)
+        REFERENCES traffic_links(id) ON DELETE SET NULL,
     referred_by_user_id INT UNSIGNED NULL DEFAULT NULL,
     referred_by_rewarded_at DATETIME NULL DEFAULT NULL,
     utm_source   VARCHAR(120) NULL,
@@ -120,6 +126,8 @@ CREATE TABLE IF NOT EXISTS galleries (
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at   DATETIME NULL,
     INDEX idx_galleries_listing (deleted_at, published_at, created_at),
+    INDEX idx_galleries_secret (is_secret),
+    INDEX idx_galleries_published (published_at),
     INDEX idx_galleries_views (views),
     INDEX idx_galleries_test (is_test, notified_at),
     FULLTEXT KEY ft_search (title, description)
@@ -240,7 +248,6 @@ CREATE TABLE IF NOT EXISTS collections (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_collections_user (user_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    INDEX idx_users_deleted (deleted_at),
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS collection_items (
@@ -459,6 +466,7 @@ CREATE TABLE IF NOT EXISTS video_export_jobs (
     finished_at  DATETIME NULL,
     metadata_json TEXT NULL,
     attempts     TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    INDEX project_id (project_id),
     FOREIGN KEY (project_id) REFERENCES video_projects(id) ON DELETE CASCADE,
     INDEX idx_video_export_status (status)
 );

@@ -2,14 +2,86 @@
 
 declare(strict_types=1);
 
-$statusOnly = in_array('--status', $argv, true);
-$arguments = array_values(array_filter(array_slice($argv, 1), static function (string $argument): bool {
-    return $argument !== '--status';
-}));
+/**
+ * The MySQL errors that mean "the thing this migration adds is already
+ * there".
+ *
+ * A fresh install imports schema.sql FIRST and then runs the migrations, and
+ * schema.sql already carries most of what the migrations add - so the first
+ * migration would fail with "Duplicate column name" and every later one
+ * would never run. These errors are not failures: the intent of the migration
+ * is already satisfied, so the migration is recorded as applied and the run
+ * continues.
+ *
+ *   1050  the table already exists
+ *   1060  the column already exists
+ *   1061  the key/index already exists
+ *   1091  the column/key that was to be dropped is already gone
+ *   1826  the foreign key already exists
+ */
+const ALREADY_THERE = [1050, 1060, 1061, 1091, 1826];
 
-if ($arguments !== []) {
-    fwrite(STDERR, "Usage: php scripts/migrate.php [--status]\n");
+$statusOnly = in_array('--status', $argv, true);
+$database   = null;
+$arguments  = [];
+
+foreach (array_slice($argv, 1) as $argument) {
+    if ($argument === '--status') {
+        continue;
+    }
+    if (strpos($argument, '--database=') === 0) {
+        // A database override, so a fresh install can be rehearsed against a
+        // scratch database instead of the live one.
+        $database = substr($argument, strlen('--database='));
+        continue;
+    }
+    $arguments[] = $argument;
+}
+
+if ($arguments !== [] || ($database !== null && $database === '')) {
+    fwrite(STDERR, "Usage: php scripts/migrate.php [--status] [--database=NAME]\n");
     exit(1);
+}
+
+/**
+ * A short label for a statement, for the log line.
+ */
+function migrationFirstWords(string $statement): string
+{
+    $words = preg_split('/\s+/', trim($statement)) ?: [];
+    $label = implode(' ', array_slice($words, 0, 4));
+
+    return strlen($label) > 70 ? substr($label, 0, 70) . '...' : $label;
+}
+
+/**
+ * Split a migration into its statements.
+ *
+ * The comment lines are dropped (a comment may contain a semicolon) and the
+ * rest is split on the semicolons. None of the migrations has a semicolon
+ * inside a string literal, so this is safe here.
+ *
+ * @return string[]
+ */
+function migrationStatements(string $sql): array
+{
+    $lines = [];
+    foreach (preg_split('/\R/', $sql) ?: [] as $line) {
+        if (preg_match('/^\s*--/', $line) === 1) {
+            continue;
+        }
+        $lines[] = $line;
+    }
+
+    $statements = [];
+    foreach (explode(';', implode("\n", $lines)) as $statement) {
+        $statement = trim($statement);
+        if ($statement !== '') {
+            $statements[] = $statement;
+        }
+    }
+
+    return $statements;
 }
 
 try {
@@ -26,6 +98,9 @@ try {
             $config['database']
         );
         $pdo = new PDO($dsn, $config['username'], $config['password']);
+        if ($database !== null) {
+            $pdo->exec('USE `' . str_replace('`', '', $database) . '`');
+        }
     } else {
         throw new RuntimeException("Unsupported database driver: {$driver}");
     }
@@ -88,7 +163,29 @@ try {
             if ($sql === false) {
                 throw new RuntimeException("Unable to read {$filename}");
             }
-            $pdo->exec($sql);
+
+            // The statements run ONE BY ONE, so a migration whose first
+            // statement is already in the schema does not lose the rest of
+            // its work: each statement that is "already there" is skipped and
+            // the others still run.
+            foreach (migrationStatements($sql) as $statement) {
+                try {
+                    // query() + fetchAll() (not exec()): a statement that
+                    // returns rows must have its result set consumed, or the
+                    // next statement fails with "unbuffered queries active".
+                    $result = $pdo->query($statement);
+                    if ($result !== false) {
+                        $result->fetchAll();
+                        $result->closeCursor();
+                    }
+                } catch (PDOException $error) {
+                    $code = isset($error->errorInfo[1]) ? (int) $error->errorInfo[1] : null;
+                    if ($code === null || !in_array($code, ALREADY_THERE, true)) {
+                        throw $error;
+                    }
+                    fwrite(STDOUT, "  already in the schema, skipped: " . migrationFirstWords($statement) . "\n");
+                }
+            }
             $insert = $pdo->prepare(
                 'INSERT INTO schema_migrations (filename, checksum) VALUES (:filename, :checksum)'
             );
@@ -102,6 +199,25 @@ try {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
+
+            // "The column/key/table is already there" means the schema
+            // already has what this migration adds (a fresh install imports
+            // schema.sql first). That is not a failure: record the migration
+            // as applied and carry on, or no later migration would ever run.
+            $code = null;
+            if ($error instanceof PDOException) {
+                $code = isset($error->errorInfo[1]) ? (int) $error->errorInfo[1] : null;
+            }
+            if ($code !== null && in_array($code, ALREADY_THERE, true)) {
+                $stmt = $pdo->prepare(
+                    'INSERT INTO schema_migrations (filename, checksum) VALUES (:filename, :checksum)
+                     ON DUPLICATE KEY UPDATE checksum = VALUES(checksum)'
+                );
+                $stmt->execute(['filename' => $filename, 'checksum' => $checksum]);
+                fwrite(STDOUT, "Already in the schema, recorded: {$filename}\n");
+                continue;
+            }
+
             throw $error;
         }
         fwrite(STDOUT, "Applied {$filename}\n");
