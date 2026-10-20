@@ -86,12 +86,16 @@
         (initial || []).forEach(addMsg);
     }
 
-    function teardownPlayer() {
+    function teardownHls() {
         if (hls) { try { hls.destroy(); } catch (e) {} hls = null; }
-        if (es) { try { es.close(); } catch (e) {} es = null; }
-        currentKey = '';
         video.removeAttribute('src');
         try { video.load(); } catch (e) {}
+    }
+
+    function teardownPlayer() {
+        teardownHls();
+        if (es) { try { es.close(); } catch (e) {} es = null; }
+        currentKey = '';
         resetPlayerSize();
     }
 
@@ -150,7 +154,8 @@
     }
 
     function buildPlayer(key, token) {
-        teardownPlayer();
+        // Only the stream is replaced: the chat stream stays open.
+        teardownHls();
         currentKey = key;
         function signed(u) { return u + (u.indexOf('?') >= 0 ? '&' : '?') + 't=' + encodeURIComponent(token); }
 
@@ -182,9 +187,16 @@
             h.loadSource(hlsBase + '/' + encodeURIComponent(key) + '/index.m3u8');
             h.attachMedia(video);
             h.on(window.Hls.Events.ERROR, function (evt, data) {
-                if (data && data.fatal) {
-                    if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) h.startLoad();
-                    else if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) h.recoverMediaError();
+                if (!data || !data.fatal) { return; }
+                if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) {
+                    h.startLoad();
+                    // A missing playlist (the publisher stopped for a pause or
+                    // a mute) eventually kills the loader: the player is then
+                    // rebuilt so the live edge is picked up again when the
+                    // stream comes back, instead of freezing until a reload.
+                    if (data.response && data.response.code === 404) { scheduleRebuild(); }
+                } else if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) {
+                    h.recoverMediaError();
                 }
             });
             hls = h;
@@ -207,6 +219,37 @@
 
     var pausedEl = document.getElementById('live-paused');
 
+    /* The stream can be interrupted without the page knowing: the model
+       pauses the broadcast or mutes the camera and the publisher stops, so
+       the playlist stops updating and the picture freezes. The page now
+       watches for that and rebuilds the player, so the feed comes back on
+       its own instead of after a reload. */
+    var rebuildTimer = null;
+    var lastKey = '';
+    var lastToken = '';
+    var wasPaused = <?= json_encode((bool) ($paused ?? false)) ?>;
+    var lastMediaTime = -1;
+    var stallRounds = 0;
+
+    function rebuildPlayer(key, token) {
+        if (!key) { return; }
+        // A counter makes the recovery visible while debugging.
+        window.__liveRebuilds = (window.__liveRebuilds || 0) + 1;
+        lastKey = key;
+        lastToken = token || lastToken;
+        buildPlayer(lastKey, lastToken);
+        lastMediaTime = -1;
+        stallRounds = 0;
+    }
+
+    function scheduleRebuild() {
+        if (rebuildTimer) { return; }
+        rebuildTimer = setTimeout(function () {
+            rebuildTimer = null;
+            if (currentKey) { rebuildPlayer(currentKey, lastToken); }
+        }, 2000);
+    }
+
     function setLiveUI(live, paused) {
         stateLive = live;
         if (badge) {
@@ -215,6 +258,29 @@
         }
         if (offline) offline.style.display = live ? 'none' : 'grid';
         if (pausedEl) pausedEl.style.display = (live && paused) ? 'grid' : 'none';
+    }
+
+    /* A live feed that no longer advances is a dead player (the publisher
+       stopped for a pause or a mute). Three rounds of the poll without any
+       progress mean it is stuck, and the player is rebuilt. */
+    function watchStall(s) {
+        if (!s.live || s.paused || !currentKey || video.paused) {
+            lastMediaTime = -1;
+            stallRounds = 0;
+            return;
+        }
+        var t = video.currentTime || 0;
+        if (lastMediaTime < 0 || t > lastMediaTime + 0.05) {
+            lastMediaTime = t;
+            stallRounds = 0;
+            return;
+        }
+        stallRounds++;
+        if (stallRounds >= 3) {
+            stallRounds = 0;
+            lastMediaTime = -1;
+            rebuildPlayer(currentKey, s.token || lastToken);
+        }
     }
 
     function applyState(s) {
@@ -242,6 +308,17 @@
         } else {
             (s.chatMessages || []).forEach(function (m) { if (m.id > latestId) addMsg(m); });
         }
+
+        // The broadcast was paused and is running again: the stream was
+        // interrupted, so the player is rebuilt to pick up the live edge.
+        if (wasPaused && !paused) {
+            rebuildPlayer(s.streamKey || currentKey, s.token || lastToken);
+        }
+        wasPaused = paused;
+        if (s.token) { lastToken = s.token; }
+        if (s.streamKey) { lastKey = s.streamKey; }
+
+        watchStall(s);
     }
 
     if (chatForm) {
@@ -264,6 +341,7 @@
 
     applyState({
         live: <?= json_encode((bool) $live) ?>,
+        paused: <?= json_encode((bool) ($paused ?? false)) ?>,
         since: <?= json_encode((string) ($since ?? '')) ?>,
         viewers: <?= json_encode((int) ($viewers ?? 0)) ?>,
         streamKey: <?= json_encode((string) ($streamKey ?? ''), JSON_UNESCAPED_SLASHES) ?>,

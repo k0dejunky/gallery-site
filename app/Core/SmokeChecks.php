@@ -641,41 +641,72 @@ class SmokeChecks
             return $ok('no ad-hoc table scrollers');
         });
 
-
-
-
-        $add('smoke.autopost.video_cover', 'Smoke · Autopost', 'Videos post their cover thumbnail, not the video file', static function () use ($root, $ok, $bad): array {
-            $q = (string) @file_get_contents($root . '/app/Models/AutoPostQueue.php');
-            return strpos($q, 'function videoCoverPath') !== false
-                && strpos($q, 'function videoCoverMedia') !== false
-                && strpos($q, 'self::videoCoverMedia((string) $photo[\'filename\']') !== false
-                && strpos($q, "'name'     => 'video-cover.jpg'") !== false
-                ? $ok('cover thumbnail (thumb_<file>) preferred; video file only as a last resort')
-                : $bad('AutoPostQueue must attach the video cover thumbnail (thumb_<file>) instead of uploading the video');
+        $add('smoke.live.viewer_recovers', 'Smoke · Live', 'The live viewer rebuilds a frozen player instead of waiting for a reload', static function () use ($root, $ok, $bad): array {
+            // When the operator pauses the broadcast or mutes the camera the
+            // publisher stops sending frames: the playlist stops updating and
+            // the picture freezes. The page watches for that and rebuilds the
+            // player, so the feed comes back on its own.
+            $live = (string) @file_get_contents("$root/views/live.php");
+            foreach ([
+                'function watchStall'  => 'the stall watchdog',
+                'function rebuildPlayer'=> 'the player rebuild',
+                'function scheduleRebuild' => 'the error rebuild',
+                'function teardownHls'  => 'a stream-only teardown',
+            ] as $needle => $what) {
+                if (strpos($live, $needle) === false) {
+                    return $bad('views/live.php is missing ' . $what . ' (' . $needle . ')');
+                }
+            }
+            // A player rebuild must not close the chat stream.
+            if (strpos($live, 'function buildPlayer') === false
+                || preg_match('/function buildPlayer\([^)]*\)\s*\{\s*\/\/[^
+]*
+\s*teardownHls\(\)/', $live) !== 1) {
+                return $bad('a player rebuild must only replace the stream, not the chat');
+            }
+            // The pause/resume transition has to rebuild the player.
+            if (strpos($live, 'wasPaused && !paused') === false) {
+                return $bad('the live page must rebuild the player when the broadcast resumes');
+            }
+            return $ok('a frozen or dead player is rebuilt on its own');
         });
-        $add('smoke.autopost.image_only_channel_posts_the_cover', 'Smoke · Autopost', 'A channel that takes images but not videos still gets a picture', static function () use ($root, $ok, $bad): array {
-            // Reddit posts the live streams (videos), but the channel takes
-            // images only. Dropping the video left the post as bare text with
-            // no picture at all, so the cover is posted instead.
-            $q = (string) @file_get_contents($root . '/app/Models/AutoPostQueue.php');
-            $platforms = (string) @file_get_contents($root . '/app/Core/Platforms.php');
 
-            if (strpos($q, '$platformTakesImages') === false
-                || strpos($q, "elseif (\$isVideo && \$videoRule === 'none')") === false) {
-                return $bad('AutoPostQueue must post the video cover on a channel with video => none');
-            }
+        $add('smoke.admin.bulk_jobs_stay_on_page', 'Smoke · Admin UI', 'The bulk photo actions update the page in place instead of reloading it', static function () use ($root, $ok, $bad): array {
+            // The manage page used to reload itself every five seconds while a
+            // background job ran, which threw the admin back to the top of a
+            // long gallery. The bulk actions now post in the background and
+            // the page watches the job instead.
+            $view  = (string) @file_get_contents("$root/views/admin/manage.php");
+            $routes = (string) @file_get_contents("$root/config/routes.php");
 
-            // The reddit channel takes one image and no video.
-            if (preg_match("/'reddit'\s*=>\s*\[(.*?)\n        \]/s", $platforms, $m) !== 1) {
-                return $bad('the reddit channel settings are missing');
+            if (preg_match('/window\.location\.reload\(\)/', $view, $m, PREG_OFFSET_CAPTURE)) {
+                $line = substr_count(substr($view, 0, $m[0][1]), "\n") + 1;
+                return $bad('views/admin/manage.php still reloads the page (line ' . $line . '); a background job must not throw away the admin\'s position');
             }
-            $block = $m[1];
-            if (strpos($block, "'media'        => true") === false
-                || strpos($block, "'max_media'    => 1") === false
-                || strpos($block, "'video'        => 'none'") === false) {
-                return $bad('the reddit channel must take one image and no video');
+            foreach ([
+                'form.bulk-photo-form' => 'the bulk form',
+                '/admin/photos/job/'    => 'the job state endpoint',
+                '__manageJobActive'     => 'the busy flag',
+            ] as $needle => $what) {
+                if (strpos($view, $needle) === false) {
+                    return $bad('views/admin/manage.php is missing ' . $what . ' (' . $needle . ')');
+                }
             }
-            return $ok('a video-only item still goes out with its cover picture');
+            if (strpos($routes, "'/admin/photos/job/{id}'") === false) {
+                return $bad('the route /admin/photos/job/{id} is missing, so the page cannot watch a job');
+            }
+            $controller = (string) @file_get_contents("$root/app/Controllers/PhotoController.php");
+            foreach (['bulkRotate', 'bulkCaption', 'bulkDelete', 'bulkWatermark'] as $method) {
+                if (strpos($controller, 'public function ' . $method . '(') === false) {
+                    return $bad('PhotoController::' . $method . '() is missing');
+                }
+            }
+            // Every bulk action answers JSON when the page posts in the
+            // background, so it can update the status line in place.
+            if (substr_count($controller, "\$this->json(['ok' => true, 'job_id' => \$jobId") < 4) {
+                return $bad('the bulk photo actions do not all answer JSON for the background post');
+            }
+            return $ok('the bulk photo actions update the page in place');
         });
 
         $add('smoke.admin.a11y', 'Smoke · Admin UI', 'Admin shell has a skip link, one h1 and aria-current navigation', static function () use ($adminLayout, $root, $ok, $bad): array {
@@ -1876,7 +1907,40 @@ class SmokeChecks
                 ? $ok('video uploads poll STATUS until processed before the tweet')
                 : $bad('TwitterClient::uploadMedia must poll the media STATUS command after FINALIZE for videos (a tweet referencing an unprocessed video fails with "invalid parameters")');
         });
+        $add('smoke.autopost.video_cover', 'Smoke · Autopost', 'Videos post their cover thumbnail, not the video file', static function () use ($root, $ok, $bad): array {
+            $q = (string) @file_get_contents($root . '/app/Models/AutoPostQueue.php');
+            return strpos($q, 'function videoCoverPath') !== false
+                && strpos($q, 'function videoCoverMedia') !== false
+                && strpos($q, 'self::videoCoverMedia((string) $photo[\'filename\']') !== false
+                && strpos($q, "'name'     => 'video-cover.jpg'") !== false
+                ? $ok('cover thumbnail (thumb_<file>) preferred; video file only as a last resort')
+                : $bad('AutoPostQueue must attach the video cover thumbnail (thumb_<file>) instead of uploading the video');
+        });
 
+        $add('smoke.autopost.image_only_channel_posts_the_cover', 'Smoke · Autopost', 'A channel that takes images but not videos still gets a picture', static function () use ($root, $ok, $bad): array {
+            // Reddit posts the live streams (videos), but the channel takes
+            // images only. Dropping the video left the post as bare text with
+            // no picture at all, so the cover is posted instead.
+            $q = (string) @file_get_contents($root . '/app/Models/AutoPostQueue.php');
+            $platforms = (string) @file_get_contents($root . '/app/Core/Platforms.php');
+
+            if (strpos($q, '$platformTakesImages') === false
+                || strpos($q, "elseif (\$isVideo && \$videoRule === 'none')") === false) {
+                return $bad('AutoPostQueue must post the video cover on a channel with video => none');
+            }
+
+            // The reddit channel takes one image and no video.
+            if (preg_match("/'reddit'\s*=>\s*\[(.*?)\n        \]/s", $platforms, $m) !== 1) {
+                return $bad('the reddit channel settings are missing');
+            }
+            $block = $m[1];
+            if (strpos($block, "'media'        => true") === false
+                || strpos($block, "'max_media'    => 1") === false
+                || strpos($block, "'video'        => 'none'") === false) {
+                return $bad('the reddit channel must take one image and no video');
+            }
+            return $ok('a video-only item still goes out with its cover picture');
+        });
 
         // ------------------------- Home-browser worker (share method) -----
         $rbQueue2  = $read("$root/app/Models/AutoPostQueue.php");
