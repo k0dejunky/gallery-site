@@ -2086,6 +2086,50 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.admin_settings_is_its_own', 'Smoke · UI', 'The admin settings page is the admin\'s own', static function () use ($root, $ok, $bad): array {
+            // views/admin/settings.php was two lines that required the MEMBER
+            // settings page. The admin console showed a second page heading,
+            // the member-only sections (favourites, the site tour, the
+            // gallery display, the theme picker) and a "Back to dashboard"
+            // link to /account - the member dashboard, not the admin's. It
+            // also broke when the console stopped loading the member
+            // stylesheet, because the page's classes lived in it.
+            $view = (string) @file_get_contents($root . '/views/admin/settings.php');
+            $problems = [];
+
+            if (strpos($view, "require __DIR__ . '/../settings.php'") !== false) {
+                $problems[] = 'the admin settings page must not require the member settings page';
+            }
+            if (preg_match('/<h1\b/i', $view) === 1) {
+                $problems[] = 'the admin settings page must not emit its own h1 - the topbar owns the page heading';
+            }
+            if (strpos($view, 'Back to dashboard') !== false) {
+                $problems[] = 'the admin settings page must not link back to the member dashboard';
+            }
+            // It has to use the admin's own components.
+            foreach (['adm-section', 'sys-card', 'adm-field-grid'] as $selector) {
+                if (strpos($view, $selector) === false) {
+                    $problems[] = 'the admin settings page must use ' . $selector;
+                }
+            }
+            // And the sections an operator needs.
+            foreach (['Account security', 'Change password', 'Site timezone'] as $section) {
+                if (strpos($view, $section) === false) {
+                    $problems[] = 'the admin settings page is missing the ' . $section . ' section';
+                }
+            }
+            // The member-only sections must not be here.
+            foreach (['Favorite categories', 'Gallery display', 'Site tour'] as $section) {
+                if (strpos($view, '>' . $section . '<') !== false) {
+                    $problems[] = 'the admin settings page still carries the member-only ' . $section . ' section';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the admin settings page is the admin\'s own')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

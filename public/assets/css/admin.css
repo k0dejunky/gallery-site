@@ -2016,6 +2016,8 @@ body.admin-theme {
 }
 
 .admin-theme code { background: var(--adm-surface-3); padding: .1rem .35rem; border-radius: 4px; font-size: .92em; }
+/* A token or a URL that has to wrap rather than be truncated. */
+.admin-theme .adm-clip-wrap { word-break: break-all; }
 .admin-theme .filter-inactive { background: var(--adm-surface-2) !important; border-color: var(--adm-border-strong) !important; color: var(--adm-text-faint) !important; }
 .admin-theme .theme-swatch { background: var(--adm-surface); border: 1px solid var(--adm-border); }
 .admin-theme .pay-secret {

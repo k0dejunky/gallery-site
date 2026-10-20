@@ -309,7 +309,7 @@ dispatched to <code>/admin/users/{id}</code>).</p>
         <code>viewStandalone()</code> renders a full page with no layout (used for the admin login and the video player).</li>
     <li><strong>Video playback</strong> — a gallery's video tile (with a play badge) links to <code>/videos/{id}</code> (<code>VideoController@show</code>), which renders <code>views/video/player.php</code> inside the site layout: a centered player with the caption below.</li>
     <li>Variables passed to a view are extracted as local variables (e.g. <code>$gallery</code>).</li>
-    <li><code>views/admin/settings.php</code> just includes <code>views/settings.php</code>, so the same settings form works in both layouts.</li>
+    <li><code>views/admin/settings.php</code> is the admin's own settings page: the sections that mean something for the operator (account security, the password, two-factor, the profile, the notifications, the timezone and the operator chat bridge). It used to include <code>views/settings.php</code>, which put a second page heading and the member-only sections in the console.</li>
 </ul>
 
 <h2 class="section-title">Home page &amp; favorites</h2>
