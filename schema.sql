@@ -1022,7 +1022,10 @@ CREATE TABLE IF NOT EXISTS purchases (
     INDEX idx_purchases_user (user_id, created_at),
     INDEX idx_purchases_item (item_type, item_id),
     INDEX idx_purchases_status (status),
-    UNIQUE KEY uq_purchases_gateway_ref (gateway, gateway_ref),
+    -- One row per (gateway, reference, user, item): a multi-use unlock code
+    -- can be redeemed by several members, but one member cannot redeem the
+    -- same code for the same gallery twice.
+    UNIQUE KEY uq_purchases_gateway_ref (gateway, gateway_ref, user_id, item_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

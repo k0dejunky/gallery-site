@@ -164,14 +164,17 @@ class PageCache
         // so a guest served a cached page got the PRODUCER's token: their
         // AJAX posts came back 419, and the token of one session leaked to
         // another. The same goes for a data-csrf attribute.
+        // The braces matter: the token is hex and often starts with a
+        // digit, so '$1' + '67bc...' would be read as the group 167 and the
+        // whole tag would be replaced by nothing.
         $html  = (string) preg_replace(
             '/(<meta\s+name="csrf-token"\s+content=")[^"]*(")/',
-            '$1' . $token . '$2',
+            '${1}' . $token . '${2}',
             $html
         );
         $html  = (string) preg_replace(
             '/(data-csrf=")[^"]*(")/',
-            '$1' . $token . '$2',
+            '${1}' . $token . '${2}',
             $html
         );
         // The age-gate overlay and any save-search back-links must return the

@@ -67,34 +67,60 @@ class PurchaseController extends Controller
             return;
         }
 
-        if (!UnlockCode::redeem((int) $valid['id'])) {
-            $this->flash('error', 'That unlock code has already been used.');
-            $this->redirect('/galleries/' . $id);
-            return;
-        }
-
         $amount = $valid['amount'] ?? null;
         if ($amount === null) {
             $amount = $gallery['ppv_price'] ?? 0;
         }
 
-        Purchase::create(
-            (int) $user['id'],
-            Purchase::TYPE_GALLERY,
-            $id,
-            (float) $amount,
-            'code',
-            (string) $valid['id'],
-            'Unlocked "' . $gallery['title'] . '" with code ' . $valid['code']
-        );
+        // The code is consumed and the unlock is written in ONE transaction:
+        // if the purchase insert fails, the use of the code must not be
+        // burnt (the member paid and would get nothing).
+        $pdo = Database::connection();
+        $own = !$pdo->inTransaction();
+        if ($own) {
+            $pdo->beginTransaction();
+        }
 
-        Notification::add(
-            (int) $user['id'],
-            'purchase',
-            'Gallery unlocked',
-            'You unlocked "' . $gallery['title'] . '". Enjoy!',
-            '/galleries/' . $id
-        );
+        try {
+            if (!UnlockCode::redeem((int) $valid['id'])) {
+                if ($own) {
+                    $pdo->rollBack();
+                }
+                $this->flash('error', 'That unlock code has already been used.');
+                $this->redirect('/galleries/' . $id);
+                return;
+            }
+
+            Purchase::create(
+                (int) $user['id'],
+                Purchase::TYPE_GALLERY,
+                $id,
+                (float) $amount,
+                'code',
+                (string) $valid['id'],
+                'Unlocked "' . $gallery['title'] . '" with code ' . $valid['code']
+            );
+
+            Notification::add(
+                (int) $user['id'],
+                'purchase',
+                'Gallery unlocked',
+                'You unlocked "' . $gallery['title'] . '". Enjoy!',
+                '/galleries/' . $id
+            );
+
+            if ($own) {
+                $pdo->commit();
+            }
+        } catch (\Throwable $ex) {
+            if ($own && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            error_log('[unlock] the redemption failed: ' . $ex->getMessage());
+            $this->flash('error', 'That unlock could not be completed. The code has not been used — please try again.');
+            $this->redirect('/galleries/' . $id);
+            return;
+        }
 
         $this->flash('success', 'Gallery unlocked — enjoy full access.');
         $this->redirect('/galleries/' . $id);

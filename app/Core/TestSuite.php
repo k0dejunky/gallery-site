@@ -1122,6 +1122,83 @@ class TestSuite
             }
         });
 
+        $add('db.unlock_code_multi_use', 'Database', 'A multi-use unlock code can be redeemed by more than one member', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                $stamp = bin2hex(random_bytes(4));
+
+                try {
+                    // Two members and a code that may be used three times.
+                    $userIds = [];
+                    foreach ([1, 2] as $i) {
+                        $email = 'unlockprobe' . $i . '.' . $stamp . '@example.invalid';
+                        Database::run(
+                            "INSERT INTO users (email, password_hash, role, status, email_verified_at, marketing_opt_out, last_seen_at, created_at)
+                             VALUES (?, 'x', 'user', 'active', NOW(), 0, NOW(), NOW())",
+                            [$email]
+                        );
+                        $userIds[] = (int) Database::connection()->lastInsertId();
+                    }
+
+                    $galleryId = (int) Database::run('SELECT id FROM galleries WHERE deleted_at IS NULL ORDER BY id ASC LIMIT 1')->fetchColumn();
+                    if ($galleryId <= 0) {
+                        return ['pass' => true, 'detail' => 'no gallery fixture; nothing to prove'];
+                    }
+
+                    $code = 'UNLOCK-' . strtoupper($stamp);
+                    $codeId = \App\Models\UnlockCode::create($code, $galleryId, 5.00, 3, 'probe');
+
+                    // Two different members redeem the SAME code.
+                    $ok1 = \App\Models\UnlockCode::redeem($codeId);
+                    \App\Models\Purchase::create($userIds[0], \App\Models\Purchase::TYPE_GALLERY, $galleryId, 5.00, 'code', (string) $codeId, 'probe 1');
+                    $ok2 = \App\Models\UnlockCode::redeem($codeId);
+                    \App\Models\Purchase::create($userIds[1], \App\Models\Purchase::TYPE_GALLERY, $galleryId, 5.00, 'code', (string) $codeId, 'probe 2');
+
+                    $used = (int) Database::run('SELECT used_count FROM unlock_codes WHERE id = ?', [$codeId])->fetchColumn();
+                    $redemptions = (int) Database::run(
+                        "SELECT COUNT(*) FROM purchases WHERE gateway = 'code' AND gateway_ref = ?",
+                        [(string) $codeId]
+                    )->fetchColumn();
+
+                    // The same member redeeming the same code for the same
+                    // gallery again must not create a second row.
+                    $duplicateBlocked = false;
+                    try {
+                        \App\Models\Purchase::create($userIds[0], \App\Models\Purchase::TYPE_GALLERY, $galleryId, 5.00, 'code', (string) $codeId, 'probe duplicate');
+                    } catch (\Throwable $ignored) {
+                        $duplicateBlocked = true;
+                    }
+
+                    return [
+                        'pass'   => $ok1 && $ok2 && $used === 2 && $redemptions === 2 && $duplicateBlocked,
+                        'detail' => "redeems=$ok1/$ok2 used=$used rows=$redemptions duplicateBlocked="
+                            . ($duplicateBlocked ? 'yes' : 'NO'),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                    foreach ($userIds ?? [] as $uid) {
+                        try {
+                            Database::run('DELETE FROM users WHERE id = ?', [$uid]);
+                        } catch (\Throwable $ignored) {
+                        }
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.subscription_cancel_is_final', 'Database', 'A cancelled subscription is not resurrected by a replayed payment postback', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
