@@ -9,6 +9,11 @@ $cardKeys = ['card-bg', 'card-border', 'card-placeholder-bg', 'card-thumb-bg', '
 $statKeys = ['stat-bg', 'stat-border', 'stat-number-color', 'stat-label-color'];
 $tableKeys = ['table-bg', 'table-border', 'table-header-bg', 'table-header-color', 'table-text', 'pagination-bg', 'pagination-color', 'pagination-hover-bg', 'pagination-active-bg', 'pagination-active-color', 'pagination-border'];
 $promotionKeys = ['promo-card-bg', 'promo-card-border', 'promo-card-title', 'promo-card-text', 'promo-code-bg', 'promo-code-border', 'promo-code-color'];
+// Member-site-only palette keys. They exist in the site scope alone: the
+// admin panel has its own surface tokens and does not use them.
+$memberSurfaceKeys = ['page-bg', 'page-glow', 'surface-2', 'surface-3', 'border-soft', 'border', 'text-color', 'text-muted', 'text-dim', 'muted-color', 'heading-color', 'link-color', 'link-hover', 'brand-1', 'brand-2'];
+$memberControlKeys = ['input-bg', 'input-border', 'input-color', 'input-placeholder', 'focus-ring', 'chip-bg', 'chip-border', 'chip-color', 'chip-hover-bg', 'chip-active-bg', 'chip-active-border', 'chip-active-color', 'btn-gradient-1', 'btn-gradient-2', 'btn-hover-gradient-1', 'btn-hover-gradient-2', 'btn-text', 'outline-border', 'outline-color'];
+$memberNoticeKeys = ['flash-error-bg', 'flash-error-border', 'flash-error-color', 'flash-success-bg', 'flash-success-border', 'flash-success-color', 'age-gate-1', 'age-gate-2', 'age-gate-3'];
 $descriptions = [
     'pink-100' => 'Light surfaces and input backgrounds',
     'pink-200' => 'Main page background and success notices',
@@ -77,6 +82,50 @@ $descriptions = [
     'promo-code-bg'        => 'Promotion code background',
     'promo-code-border'    => 'Promotion code border',
     'promo-code-color'     => 'Promotion code text',
+
+    'page-bg'          => 'Page background',
+    'page-glow'        => 'Page background glow',
+    'surface-2'        => 'Raised surface (chips, panels)',
+    'surface-3'        => 'Hover surface',
+    'border-soft'      => 'Soft card border',
+    'border'           => 'Generic border colour',
+    'text-color'       => 'Body text colour',
+    'text-muted'       => 'Muted body text',
+    'text-dim'         => 'Dimmed captions and counters',
+    'muted-color'      => 'Secondary text',
+    'heading-color'    => 'Heading colour',
+    'link-color'       => 'Link colour',
+    'link-hover'       => 'Link hover colour',
+    'brand-1'          => 'Brand colour 1',
+    'brand-2'          => 'Brand colour 2',
+    'input-bg'         => 'Input background',
+    'input-border'     => 'Input border',
+    'input-color'      => 'Input text',
+    'input-placeholder'=> 'Input placeholder text',
+    'focus-ring'       => 'Focus outline colour',
+    'chip-bg'          => 'Category chip background',
+    'chip-border'      => 'Category chip border',
+    'chip-color'       => 'Category chip text',
+    'chip-hover-bg'    => 'Category chip hover background',
+    'chip-active-bg'  => 'Active category chip background',
+    'chip-active-border' => 'Active category chip border',
+    'chip-active-color'  => 'Active category chip text',
+    'btn-gradient-1'   => 'Button gradient start',
+    'btn-gradient-2'   => 'Button gradient end',
+    'btn-hover-gradient-1' => 'Button hover gradient start',
+    'btn-hover-gradient-2' => 'Button hover gradient end',
+    'btn-text'         => 'Button text colour',
+    'outline-border'   => 'Outline button border',
+    'outline-color'    => 'Outline button text',
+    'flash-error-bg'   => 'Error notice background',
+    'flash-error-border' => 'Error notice accent',
+    'flash-error-color'=> 'Error notice text',
+    'flash-success-bg' => 'Success notice background',
+    'flash-success-border' => 'Success notice accent',
+    'flash-success-color' => 'Success notice text',
+    'age-gate-1'       => 'Age gate gradient start',
+    'age-gate-2'       => 'Age gate gradient middle',
+    'age-gate-3'       => 'Age gate gradient end',
 ];
 $scopes = $themeScopes ?? [
     'site'  => ['label' => 'User theme', 'mock' => 'site'],
@@ -112,6 +161,13 @@ $paletteGrid = [
 
     <div class="theme-editor">
         <div class="theme-preview-label">Live preview</div>
+        <div class="theme-live-bar">
+            <button type="button" id="theme-live-toggle" class="btn btn-sm" aria-expanded="false" aria-controls="theme-live-wrap">Show the real member site</button>
+            <span class="theme-live-hint">The mock above is a sketch. This embeds the actual member site and applies the palette you are editing to it, so you can see the real thing before you save.</span>
+        </div>
+        <div id="theme-live-wrap" hidden>
+            <iframe id="theme-live-frame" title="Live member site preview" src="<?= e(url('/galleries')) ?>" loading="lazy"></iframe>
+        </div>
         <div id="theme-preview">
             <div data-mock="site">
                 <div class="pv-site-header">
@@ -221,7 +277,7 @@ $paletteGrid = [
                     </details>
 
                     <?php
-                    $paletteSections = [
+                    $sharedSections = [
                         'Pink palette'   => $pinkKeys,
                         'Purple palette' => $purpleKeys,
                         'Button colors'  => $buttonKeys,
@@ -230,6 +286,13 @@ $paletteGrid = [
                         'Statistic cards' => $statKeys,
                         'Table colors' => $tableKeys,
                         'Promotion code cards' => $promotionKeys,
+                    ];
+                    // The member site owns the surfaces the public pages are
+                    // built from; the admin panel does not have them.
+                    $paletteSections = $scope === 'admin' ? $sharedSections : $sharedSections + [
+                        'Member site surfaces' => $memberSurfaceKeys,
+                        'Member site controls' => $memberControlKeys,
+                        'Member site notices'  => $memberNoticeKeys,
                     ];
                     $firstOpen = false;
                     ?>
@@ -380,6 +443,10 @@ $paletteGrid = [
     var preview    = document.getElementById('theme-preview');
     var scopeInput = document.getElementById('theme-scope');
     var colorDefs  = <?= json_encode($defaults) ?>;
+    var adminDefs  = <?= json_encode($adminDefaults ?? $defaults) ?>;
+    // Each scope owns its own palette, so the "reset to default" button and
+    // the preset loader have to look the default up in the scope's own map.
+    function defsFor(scope) { return scope === 'admin' ? adminDefs : colorDefs; }
     var layoutDefs = <?= json_encode(array_map(function($m) { return $m['value']; }, $layoutDefaults)) ?>;
 
     /* ── Scope panel switching ── */
@@ -573,6 +640,9 @@ $paletteGrid = [
     function setVar(el, target) {
         var t = target || preview.querySelector('[data-mock="' + scopeInput.value + '"]');
         if (t) t.style.setProperty('--' + keyOf(el), el.value);
+        if (typeof applyScopeToLive === 'function' && scopeInput.value === 'site') {
+            applyScopeToLive('site');
+        }
     }
 
     function applyScopeToMock(scope) {
@@ -588,6 +658,66 @@ $paletteGrid = [
 
     applyScopeToMock('site');
     applyScopeToMock('admin');
+
+    /* ── Live member-site preview ───────────────────────────────────────
+       The mock above is a sketch of the site. The iframe below is the real
+       member site, and the palette being edited is injected into it, so the
+       admin sees the actual page before saving. Same origin, so the parent
+       can write into the frame's document. */
+    var liveFrame = document.getElementById('theme-live-frame');
+    var liveWrap  = document.getElementById('theme-live-wrap');
+    var liveBtn   = document.getElementById('theme-live-toggle');
+    var liveStyle = null;
+    var liveDoc   = null;
+
+    function livePalette(scope) {
+        var prefix = scope + '-';
+        var vars = [];
+        document.querySelectorAll('[data-scope-panel="' + scope + '"] input[type="hidden"], [data-scope-panel="' + scope + '"] input[type="text"]').forEach(function (el) {
+            if (el.name && el.name.indexOf(prefix) === 0 && el.value) {
+                vars.push('--' + keyOf(el) + ':' + el.value);
+            }
+        });
+        return vars.join(';');
+    }
+
+    function applyScopeToLive(scope) {
+        if (!liveFrame || !liveFrame.contentDocument) return;
+        var doc = liveFrame.contentDocument;
+        var head = doc.head || doc.getElementsByTagName('head')[0];
+        if (!head) return;
+        // A navigation replaces the frame's document, so the injected style
+        // has to be re-created for the new one - keeping the old element
+        // would silently write into a detached document.
+        if (!liveStyle || liveDoc !== doc) {
+            liveStyle = doc.createElement('style');
+            liveStyle.setAttribute('data-theme-live', '1');
+            head.appendChild(liveStyle);
+            liveDoc = doc;
+        }
+        liveStyle.textContent = ':root{' + livePalette(scope) + '}';
+    }
+
+    if (liveFrame) {
+        liveFrame.addEventListener('load', function () { applyScopeToLive('site'); });
+        // The frame may already have finished loading by the time this script
+        // runs (it is in the markup with a src), in which case the load event
+        // is long gone and the palette would never be injected.
+        try {
+            if (liveFrame.contentDocument && liveFrame.contentDocument.readyState === 'complete') {
+                applyScopeToLive('site');
+            }
+        } catch (e) { /* cross-origin: the preview just stays unstyled */ }
+    }
+    if (liveBtn && liveWrap) {
+        liveBtn.addEventListener('click', function () {
+            var open = liveWrap.hidden;
+            liveWrap.hidden = !open;
+            liveBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            liveBtn.textContent = open ? 'Hide the real member site' : 'Show the real member site';
+            if (open) applyScopeToLive('site');
+        });
+    }
 
     /* ── Save/restore details state ── */
 
@@ -933,7 +1063,8 @@ $paletteGrid = [
         document.querySelectorAll('[data-scope-panel="' + scope + '"] .cpick').forEach(function (cpick) {
             var hidden = cpick.querySelector('input[type="hidden"]');
             var key = keyOf(hidden);
-            if (colorDefs[key]) setCpickColor(cpick, colorDefs[key]);
+            var defs = defsFor(scope);
+            if (defs[key]) setCpickColor(cpick, defs[key]);
         });
     });
 
@@ -957,9 +1088,10 @@ $paletteGrid = [
         var prefix = scope + '-';
 
         if (data.colors) {
-            Object.keys(colorDefs).forEach(function (key) {
+            var defs = defsFor(scope);
+            Object.keys(defs).forEach(function (key) {
                 var cpick = document.querySelector('[data-scope-panel="' + scope + '"] .cpick input[name="' + prefix + key + '"]');
-                if (cpick) setCpickColor(cpick.closest('.cpick'), data.colors[key] || colorDefs[key]);
+                if (cpick) setCpickColor(cpick.closest('.cpick'), data.colors[key] || defs[key]);
             });
         }
 

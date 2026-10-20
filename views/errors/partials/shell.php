@@ -30,6 +30,11 @@ $siteName     = (string) config('app.site_name');
     <meta name="robots" content="<?= e($errorRobots) ?>">
     <title><?= e($errorTitle) ?></title>
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/user.css')) ?>">
+    <!-- The member skin is driven by the theme's colour tokens, so this
+         standalone page needs the theme stylesheet too - without it the
+         tokens are undefined and the page falls back to the browser's
+         light defaults. -->
+    <link rel="stylesheet" href="<?= e(url('/theme.css') . '?v=' . \App\Models\Theme::themeCssVersion()) ?>">
 </head>
 <body class="error-page">
     <header class="title-header">

@@ -96,37 +96,179 @@ class Theme
     ];
 
     /**
+     * The member palette.
+     *
+     * This is the palette the public site actually renders with. It used to
+     * be a hardcoded block in user.css ("DARK GALLERY SKIN") that re-declared
+     * the design tokens on `body:not(.admin-theme)` with literal colours, so
+     * the theme editor's site-scope controls never reached the member site -
+     * changing a colour in the editor did nothing visible.
+     *
+     * The values below are exactly what the member site rendered before, so
+     * moving them here is lossless. They are now real tokens: the editor can
+     * change them and the member site follows.
+     */
+    private const MEMBER_COLORS = [
+        'pink-100'                => '#2b1123',
+        'pink-200'                => '#120711',
+        'pink-300'                => '#45203a',
+        'pink-400'                => '#6d2b52',
+        'pink-500'                => '#ec4899',
+        'pink-700'                => '#be185d',
+        'pink-800'                => '#9d174d',
+        'pink-900'                => '#831843',
+        'purple-200'              => '#d8b4fe',
+        'purple-300'              => '#c084fc',
+        'purple-400'              => '#a855f7',
+        'purple-500'              => '#9333ea',
+        'purple-600'              => '#7e22ce',
+        'purple-700'              => '#6b21a8',
+        'purple-800'              => '#581c87',
+        'purple-900'              => '#3b0764',
+        'btn-bg'                  => '#7375fa',
+        'btn-color'               => '#faf56e',
+        'btn-hover-bg'            => '#a855f7',
+        'btn-danger-bg'           => '#3b1024',
+        'btn-danger-color'        => '#fecdd3',
+        'btn-danger-hover-bg'     => '#3c58fa',
+        'btn-danger-border'       => '#f43f5e',
+        'filter-bg'               => '#9333ea',
+        'filter-border'           => '#c084fc',
+        'filter-color'            => '#ffffff',
+        'filter-inactive-bg'      => '#24101f',
+        'filter-inactive-border'  => '#45203a',
+        'filter-inactive-color'   => '#f0abfc',
+        'filter-inactive-hover'   => '#3a1830',
+        'filter-hover-bg'         => '#6d2b52',
+        'sidebar-bg'              => '#190a14',
+        'sidebar-border'          => '#45203a',
+        'sidebar-heading'         => '#f9a8d4',
+        'sidebar-link-bg'         => '#2b1123',
+        'sidebar-link-color'      => '#fbe9f4',
+        'sidebar-link-border'     => '#45203a',
+        'sidebar-link-hover'      => '#3a1830',
+        'sidebar-active-bg'       => '#9333ea',
+        'sidebar-active-color'    => '#ffffff',
+        'sidebar-active-border'   => '#c084fc',
+        'card-bg'                 => '#1e0d1a',
+        'card-border'             => '#45203a',
+        'card-placeholder-bg'     => '#2b1123',
+        'card-thumb-bg'           => '#ab8bf0',
+        'card-thumb-color'        => '#d9ed00',
+        'card-title-color'        => '#fbe9f4',
+        'card-text-color'         => '#d9c1d6',
+        'card-cat-link-color'     => '#7e22ce',
+        'stat-bg'                 => '#1e0d1a',
+        'stat-border'             => '#45203a',
+        'stat-number-color'       => '#ffffff',
+        'stat-label-color'        => '#d9c1d6',
+        'table-bg'                => '#1e0d1a',
+        'table-border'            => '#45203a',
+        'table-header-bg'         => '#2b1123',
+        'table-header-color'      => '#fbcfe8',
+        'table-text'              => '#e6d3e3',
+        'promo-card-bg'           => '#1e0d1a',
+        'promo-card-border'       => '#45203a',
+        'promo-card-title'        => '#fbe9f4',
+        'promo-card-text'         => '#d9c1d6',
+        'promo-code-bg'           => '#f9a8d4',
+        'promo-code-border'       => '#db2777',
+        'promo-code-color'        => '#3b0764',
+        'pagination-bg'           => '#24101f',
+        'pagination-color'        => '#f0abfc',
+        'pagination-hover-bg'     => '#3a1830',
+        'pagination-active-bg'    => '#9333ea',
+        'pagination-active-color' => '#ffffff',
+        'pagination-border'       => '#45203a',
+        'page-bg'                 => '#120711',
+        'page-glow'               => '#35123a',
+        'surface-2'               => '#24101f',
+        'surface-3'               => '#3a1830',
+        'border-soft'              => '#34162b',
+        'border'                   => '#45203a',
+        'brand-1'                  => '#9333ea',
+        'brand-2'                  => '#c084fc',
+        'heading-color'           => '#fdf2f8',
+        'muted-color'             => '#c3a6c9',
+        'text-dim'                 => '#b292b9',
+        'text-color'               => '#f3e7f1',
+        'text-muted'               => '#b79fb4',
+        'badge-bg'                 => '#e5e7eb',
+        'badge-text'               => '#1f2937',
+        'badge-active-bg'          => '#166534',
+        'badge-active-text'        => '#ffffff',
+        'badge-pending-bg'         => '#92400e',
+        'badge-pending-text'       => '#ffffff',
+        'badge-danger-bg'          => '#991b1b',
+        'badge-danger-text'        => '#ffffff',
+        'badge-pastdue-bg'         => '#9a3412',
+        'badge-pastdue-text'       => '#ffffff',
+        'unread-bg'                => '#b42318',
+        'unread-text'              => '#ffffff',
+        'link-color'              => '#f0abfc',
+        'link-hover'              => '#fbcfe8',
+        'input-bg'                => '#2b1123',
+        'input-border'            => '#45203a',
+        'input-color'             => '#f3e7f1',
+        'input-placeholder'       => '#9a7c9f',
+        'focus-ring'              => '#c084fc',
+        'chip-bg'                 => '#24101f',
+        'chip-border'             => '#45203a',
+        'chip-color'              => '#f0abfc',
+        'chip-hover-bg'           => '#3a1830',
+        'chip-active-bg'          => '#9333ea',
+        'chip-active-border'      => '#c084fc',
+        'chip-active-color'       => '#ffffff',
+        'btn-gradient-1'          => '#f472b6',
+        'btn-gradient-2'          => '#ec4899',
+        'btn-hover-gradient-1'    => '#f9a8d4',
+        'btn-hover-gradient-2'    => '#f0489a',
+        'btn-text'                => '#15060f',
+        'outline-border'          => '#6d2b52',
+        'outline-color'           => '#f0abfc',
+        'flash-error-bg'          => '#3b1024',
+        'flash-error-border'      => '#f43f5e',
+        'flash-error-color'       => '#fecdd3',
+        'flash-success-bg'        => '#1f2a14',
+        'flash-success-border'    => '#84cc16',
+        'flash-success-color'     => '#d9f99d',
+        'age-gate-1'              => '#2a0f22',
+        'age-gate-2'              => '#12060e',
+        'age-gate-3'              => '#3b1030',
+    ];
+
+    /**
      * Built-in default layout / typography settings. Each key maps to a CSS
      * custom property that is emitted alongside the colour palette.
      */
     private const LAYOUT_DEFAULTS = [
         'border-radius-sm'   => ['value' => '4px',   'label' => 'Small radius',    'section' => 'border'],
         'border-radius'      => ['value' => '8px',   'label' => 'Default radius',  'section' => 'border'],
-        'border-radius-lg'   => ['value' => '12px',  'label' => 'Large radius',    'section' => 'border'],
-        'font-size-xs'       => ['value' => '0.7rem',  'label' => 'Extra small text',  'section' => 'typography'],
-        'font-size-sm'       => ['value' => '0.85rem', 'label' => 'Small text',        'section' => 'typography'],
+        'border-radius-lg'    => ['value' => '8px',  'label' => 'Large radius',    'section' => 'border'],
+        'font-size-xs'        => ['value' => '0.68rem',  'label' => 'Extra small text',  'section' => 'typography'],
+        'font-size-sm'        => ['value' => '0.78rem', 'label' => 'Small text',        'section' => 'typography'],
         'font-size-md'       => ['value' => '0.95rem', 'label' => 'Medium text',       'section' => 'typography'],
-        'font-size-base'     => ['value' => '1rem',    'label' => 'Base font size',    'section' => 'typography'],
-        'font-size-lg'       => ['value' => '1.15rem', 'label' => 'Large text',        'section' => 'typography'],
-        'font-size-xl'       => ['value' => '1.5rem',  'label' => 'Heading size',      'section' => 'typography'],
-        'font-size-h1'       => ['value' => '1.75rem', 'label' => 'H1 size',           'section' => 'typography'],
-        'line-height'        => ['value' => '1.5',     'label' => 'Line height',       'section' => 'typography'],
-        'spacing-xs'         => ['value' => '0.25rem', 'label' => 'Extra small',       'section' => 'spacing'],
-        'spacing-sm'         => ['value' => '0.5rem',  'label' => 'Small',             'section' => 'spacing'],
-        'spacing-md'         => ['value' => '1rem',    'label' => 'Medium',            'section' => 'spacing'],
-        'spacing-lg'         => ['value' => '1.5rem',  'label' => 'Large',             'section' => 'spacing'],
-        'spacing-xl'         => ['value' => '2rem',    'label' => 'Extra large',       'section' => 'spacing'],
+        'font-size-base'      => ['value' => '0.9rem',    'label' => 'Base font size',    'section' => 'typography'],
+        'font-size-lg'        => ['value' => '1.02rem', 'label' => 'Large text',        'section' => 'typography'],
+        'font-size-xl'        => ['value' => '1.2rem',  'label' => 'Heading size',      'section' => 'typography'],
+        'font-size-h1'        => ['value' => '1.45rem', 'label' => 'H1 size',           'section' => 'typography'],
+        'line-height'         => ['value' => '1.45',     'label' => 'Line height',       'section' => 'typography'],
+        'spacing-xs'          => ['value' => '0.17rem', 'label' => 'Extra small',       'section' => 'spacing'],
+        'spacing-sm'          => ['value' => '0.33rem',  'label' => 'Small',             'section' => 'spacing'],
+        'spacing-md'          => ['value' => '0.62rem',    'label' => 'Medium',            'section' => 'spacing'],
+        'spacing-lg'          => ['value' => '0.85rem',  'label' => 'Large',             'section' => 'spacing'],
+        'spacing-xl'          => ['value' => '1.23rem',    'label' => 'Extra large',       'section' => 'spacing'],
         'shadow'             => ['value' => '0 1px 4px rgba(88,28,135,0.15)',  'label' => 'Shadow',         'section' => 'effects'],
-        'btn-padding'        => ['value' => '0.5rem 1rem',   'label' => 'Button padding',    'section' => 'components'],
+        'btn-padding'         => ['value' => '0.36rem 0.7rem',   'label' => 'Button padding',    'section' => 'components'],
         'btn-radius'         => ['value' => '4px',           'label' => 'Button radius',     'section' => 'components'],
-        'btn-font-size'      => ['value' => '0.9rem',        'label' => 'Button font size',  'section' => 'components'],
-        'input-padding'      => ['value' => '0.4rem 0.6rem', 'label' => 'Input padding',     'section' => 'components'],
+        'btn-font-size'       => ['value' => '0.8rem',        'label' => 'Button font size',  'section' => 'components'],
+        'input-padding'       => ['value' => '0.24rem 0.43rem', 'label' => 'Input padding',     'section' => 'components'],
         'input-radius'       => ['value' => '4px',           'label' => 'Input radius',      'section' => 'components'],
         'input-border-width' => ['value' => '1px',           'label' => 'Input border width','section' => 'components'],
         'card-radius'        => ['value' => '8px',           'label' => 'Card radius',       'section' => 'components'],
-        'card-padding'       => ['value' => '0.75rem',       'label' => 'Card padding',      'section' => 'components'],
+        'card-padding'        => ['value' => '0.55rem',       'label' => 'Card padding',      'section' => 'components'],
         'chip-radius'        => ['value' => '999px',         'label' => 'Chip radius',       'section' => 'components'],
-        'chip-padding'       => ['value' => '0.35rem 0.75rem', 'label' => 'Chip padding',   'section' => 'components'],
+        'chip-padding'        => ['value' => '0.22rem 0.58rem', 'label' => 'Chip padding',   'section' => 'components'],
         'table-radius'       => ['value' => '0',             'label' => 'Table radius',      'section' => 'components'],
     ];
 
@@ -150,11 +292,25 @@ class Theme
     }
 
     /**
-     * The default colour palette.
+     * The colour palette keys a scope owns.
+     *
+     * The two scopes are independent: the admin panel has its own palette
+     * (admin-theme.json) and the member site has its own (theme.json). The
+     * keys differ - the member palette carries the page surfaces, the chips
+     * and the flash colours that only the public site uses - so a scope must
+     * never be handed the other scope's keys.
      */
-    public static function defaults(): array
+    public static function palette(string $scope = self::SCOPE_SITE): array
     {
-        return self::COLORS;
+        return $scope === self::SCOPE_ADMIN ? self::COLORS : self::MEMBER_COLORS;
+    }
+
+    /**
+     * The default colour palette for a scope.
+     */
+    public static function defaults(string $scope = self::SCOPE_SITE): array
+    {
+        return self::palette($scope);
     }
 
     /**
@@ -196,7 +352,7 @@ class Theme
         $file  = self::file($scope);
         $saved = is_file($file) ? json_decode((string) file_get_contents($file), true) : [];
 
-        $merged = array_merge(self::COLORS, is_array($saved) ? $saved : []);
+        $merged = array_merge(self::palette($scope), is_array($saved) ? $saved : []);
         // Remove non-color keys that live in the same file but aren't CSS vars
         unset($merged['_title_image']);
         // Remove any values that aren't valid CSS color strings
@@ -274,7 +430,7 @@ class Theme
             $theme['_title_image'] = $saved['_title_image'];
         }
 
-        foreach (self::COLORS as $key => $default) {
+        foreach (self::palette($scope) as $key => $default) {
             $value = trim((string) ($values[$key] ?? ''));
 
             $theme[$key] = preg_match('/^#[0-9a-fA-F]{6}$/', $value)
@@ -385,7 +541,7 @@ class Theme
 
         $colors = is_array($preset['colors'] ?? null) ? $preset['colors'] : [];
         $layout = is_array($preset['layout'] ?? null) ? $preset['layout'] : [];
-        $theme['colors'] = array_merge(self::all(self::SCOPE_SITE), array_intersect_key($colors, self::COLORS));
+        $theme['colors'] = array_merge(self::all(self::SCOPE_SITE), array_intersect_key($colors, self::MEMBER_COLORS));
         $theme['layout'] = array_merge(self::allLayout(self::SCOPE_SITE), array_intersect_key($layout, self::LAYOUT_DEFAULTS));
         $theme['title_image'] = (string) ($preset['title_image'] ?? $theme['title_image']);
 
@@ -530,7 +686,7 @@ class Theme
         }
 
         if (!empty($preset['colors'])) {
-            self::save(array_merge(self::COLORS, array_intersect_key($preset['colors'], self::COLORS)), $scope);
+            self::save(array_merge(self::palette($scope), array_intersect_key($preset['colors'], self::palette($scope))), $scope);
         }
 
         if (!empty($preset['layout'])) {

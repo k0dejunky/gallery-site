@@ -45,7 +45,8 @@ class ThemeController extends Controller
         $this->viewAdmin('theme', [
             'siteTheme'       => Theme::all(Theme::SCOPE_SITE),
             'adminTheme'      => Theme::all(Theme::SCOPE_ADMIN),
-            'defaults'        => Theme::defaults(),
+            'defaults'        => Theme::defaults(Theme::SCOPE_SITE),
+            'adminDefaults'   => Theme::defaults(Theme::SCOPE_ADMIN),
             'siteLayout'      => Theme::allLayout(Theme::SCOPE_SITE),
             'adminLayout'     => Theme::allLayout(Theme::SCOPE_ADMIN),
             'layoutDefaults'  => Theme::layoutDefaults(),
@@ -79,7 +80,7 @@ class ThemeController extends Controller
         $beforeColors = Theme::all($scope);
         $colorValues  = [];
 
-        foreach (Theme::defaults() as $key => $default) {
+        foreach (Theme::defaults($scope) as $key => $default) {
             $colorValues[$key] = (string) $this->request->post($prefix . $key, '');
         }
 
@@ -199,7 +200,7 @@ class ThemeController extends Controller
      */
     private static function savePresetDirect(string $name, string $scope, array $colors, array $layout, string $titleImage): string
     {
-        $colors = array_merge(Theme::defaults(), array_intersect_key($colors, Theme::defaults()));
+        $colors = array_merge(Theme::defaults($scope), array_intersect_key($colors, Theme::defaults($scope)));
         $layoutDefaults = Theme::layoutDefaults();
         $layoutValues = [];
         foreach ($layoutDefaults as $key => $definition) {

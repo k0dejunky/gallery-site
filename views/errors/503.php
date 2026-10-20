@@ -15,6 +15,7 @@
     <meta name="robots" content="noindex">
     <title>Briefly unavailable</title>
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/user.css')) ?>">
+    <link rel="stylesheet" href="<?= e(url('/theme.css') . '?v=' . \App\Models\Theme::themeCssVersion()) ?>">
 </head>
 <body class="error-503">
     <div class="box">

@@ -2808,6 +2808,12 @@ body.admin-theme {
 .page-theme .theme-editor > [data-saved-themes]{ margin-top: -1.25rem; }
 .page-theme .theme-preview-label{ font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--purple-700); margin-bottom: 0.4rem; }
 .page-theme #theme-preview{ border-radius: var(--border-radius-lg); box-shadow: var(--shadow); font-size: var(--font-size-base); line-height: var(--line-height); }
+/* Live member-site preview: the real page in an iframe with the palette
+   being edited injected into it. */
+.page-theme .theme-live-bar{ display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .5rem; }
+.page-theme .theme-live-hint{ font-size: .78rem; color: var(--adm-text-dim); max-width: 46rem; }
+.page-theme #theme-live-wrap{ margin-bottom: .75rem; }
+.page-theme #theme-live-frame{ display: block; width: 100%; height: 620px; border: 1px solid var(--adm-border); border-radius: var(--border-radius-lg); background: var(--adm-surface); }
 .page-theme [data-mock]{ background: var(--pink-200); border: var(--input-border-width, 1px) solid var(--pink-300); border-radius: var(--border-radius-lg); padding: var(--spacing-md); }
 .page-theme #theme-preview a{ color: var(--purple-600); text-decoration: none; transition: color 0.15s; }
 .page-theme #theme-preview a:hover{ color: var(--purple-400); }

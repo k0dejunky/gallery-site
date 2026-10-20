@@ -506,7 +506,7 @@ class SmokeChecks
             $defined = [];
             // Tokens the theme emits: the colour palette and the layout scale.
             $theme = (string) @file_get_contents($root . '/app/Models/Theme.php');
-            foreach (['COLORS', 'LAYOUT_DEFAULTS'] as $constName) {
+            foreach (['COLORS', 'MEMBER_COLORS', 'LAYOUT_DEFAULTS'] as $constName) {
                 $start = strpos($theme, 'const ' . $constName . ' = [');
                 if ($start === false) {
                     continue;
