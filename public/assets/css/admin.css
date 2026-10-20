@@ -698,6 +698,16 @@ body.admin-theme {
 
 .admin-theme .card-head h2, .admin-theme .card-head h3 { margin: 0; }
 
+/* The dashboard's auto-refresh toggle. */
+.admin-theme .qa-live {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+}
+
 /* ---------- KPI / stat cards ------------------------------------------- */
 
 .admin-theme .stat-cards {

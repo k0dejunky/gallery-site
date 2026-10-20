@@ -34,7 +34,7 @@
         <?= csrf_field() ?>
         <button type="submit" class="btn btn-sm btn-outline" aria-label="Create a site backup now">Backup now</button>
     </form>
-    <label class="qa-live" style="margin-left:auto;display:inline-flex;align-items:center;gap:.4rem;font-size:var(--font-size-sm);cursor:pointer;" title="Reload this page automatically every 60 seconds">
+    <label class="qa-live" title="Reload this page automatically every 60 seconds">
         <input type="checkbox" id="qa-live-refresh">
         Auto-refresh (60s)
     </label>
@@ -84,16 +84,16 @@
 <section class="adm-section">
     <div class="adm-section-head"><h2>At a glance</h2></div>
     <?php // Headline stat cards: lifetime totals for the whole site. These are
-         // the numbers an operator checks first, so they lead as hero KPIs. ?>
-    <div class="stat-cards adm-kpi-band">
-    <?php // Headline stat cards: lifetime totals for the whole site. ?>
+         // the numbers an operator checks first, so they lead as hero KPIs.
+         // There used to be a second .stat-cards wrapper around this one, so
+         // the KPI band was a grid inside a grid - the outer grid had a
+         // single child and its own auto-fill did nothing. ?>
     <div class="stat-cards">
         <div class="stat-card kpi"><b><?= number_format($summary['total_views']) ?></b><small>Total Views</small></div>
         <div class="stat-card kpi"><b><?= number_format($summary['galleries']) ?></b><small>Galleries</small></div>
         <div class="stat-card kpi"><b><?= number_format($summary['total_members']) ?></b><small>Members</small></div>
         <div class="stat-card kpi"><b><?= number_format($summary['total_users']) ?></b><small>Users</small></div>
         <div class="stat-card kpi"><b><?= number_format($summary['logged_in_members']) ?></b><small>Logged In Members</small></div>
-    </div>
     </div>
 
     <?php // Membership growth cards: recurring revenue + recent signups. ?>

@@ -2039,6 +2039,53 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.no_nested_grids', 'Smoke · UI', 'A grid is not a grid inside a grid', static function () use ($root, $ok, $bad): array {
+            // The dashboard's KPI band was <div class="stat-cards"><div
+            // class="stat-cards">...</div></div> - a grid inside a grid. The
+            // outer grid had exactly one child, so its own auto-fill did
+            // nothing, and the wrapper carried a class that no stylesheet
+            // defines.
+            $problems = [];
+            $files = array_merge(glob($root . '/views/admin/*.php') ?: [], glob($root . '/views/admin/partials/*.php') ?: []);
+            foreach ($files as $file) {
+                $src = (string) @file_get_contents($file);
+                if (preg_match('/<div class="([^"]*stat-cards[^"]*)"[^>]*>\s*<div class="([^"]*stat-cards[^"]*)"/', $src, $m) === 1) {
+                    $problems[] = str_replace($root . '/', '', $file)
+                        . ' nests a .stat-cards grid inside a .stat-cards grid';
+                }
+            }
+            // A class that no stylesheet defines is a silent no-op.
+            $css = '';
+            foreach (['public/assets/css/admin.css', 'public/assets/css/user.css', 'public/assets/css/utilities.css', 'public/assets/css/support.css'] as $file) {
+                $css .= (string) @file_get_contents($root . '/' . $file);
+            }
+            $dashboard = (string) @file_get_contents($root . '/views/admin/dashboard.php');
+            $classes = [];
+            if (preg_match_all('/class="([^"]*)"/', $dashboard, $m) !== false) {
+                foreach ($m[1] as $attr) {
+                    foreach (preg_split('/\s+/', trim($attr)) as $class) {
+                        // A real class name, not a PHP fragment that the
+                        // attribute happens to contain.
+                        if (preg_match('/^[a-z][a-z0-9_-]*$/', $class) === 1) {
+                            $classes[$class] = true;
+                        }
+                    }
+                }
+            }
+            foreach (array_keys($classes) as $class) {
+                if (str_starts_with($class, 'adm-') || str_starts_with($class, 'u-')) {
+                    continue;
+                }
+                if (preg_match('/\.' . preg_quote($class, '/') . '(?![\w-])/', $css) !== 1) {
+                    $problems[] = 'the dashboard uses the class ' . $class . ', which no stylesheet defines';
+                }
+            }
+
+            return $problems === []
+                ? $ok('no grid is nested inside another grid')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

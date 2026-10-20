@@ -234,14 +234,36 @@ Two of these were verified by pixel diffing the dev box before and after
 (phase 3.2), and two by driving the real form in a browser (3.4). The
 rest were measured in headless Chrome.
 
-**A NOTE ON THE 3.2 COMPARISON.** The first pixel diff showed the member
-pages 92% different and the admin 0.0000% different. The member pages
-were a measurement mistake: the scp that reverted the files copied two
-files with the same basename (`layout.php`) into one directory, so the
-ADMIN layout landed in the member slot. The admin result was valid; the
-member one was not. Re-run properly, the member's support page is
-0.0000% identical and the member's gallery listing differs by less than
-two consecutive captures of the same state (it is personalised).
+**TWO CORRECTIONS TO THE 3.2 VERIFICATION.** Both were found later, in
+phase 4, and both matter.
+
+1. The first pixel diff showed the member pages 92% different and the
+   admin 0.0000% different. The member pages were a measurement
+   mistake: the scp that reverted the files copied two files with the
+   same basename (`layout.php`) into one directory, so the ADMIN layout
+   landed in the member slot. The admin result was valid; the member
+   one was not. Re-run properly, the member's support page is 0.0000%
+   identical and the member's gallery listing differs by less than two
+   consecutive captures of the same state (it is personalised).
+
+2. The claim that "the admin's layout is byte-identical with and
+   without user.css" was **wrong**, and the test that produced it was
+   broken. The test toggled the stylesheet link on the box and measured
+   the page - but it did not reload php-fpm, so the opcache served the
+   OLD layout both times and the two runs measured the same state.
+   Re-run with the reload, the difference is real: the dashboard's
+   table cells were 4.48px 6.08px with user.css and are 8.8px 12px
+   without it. The member stylesheet's `body.site-compact th, td`
+   rule was squeezing the admin's tables denser than the admin's own
+   rule wanted, and the dashboard's tables were the only ones affected
+   (the lists use .adm-list-table, which is more specific and won
+   either way).
+
+   The change is an improvement, not a regression: the admin's own
+   padding is .55rem .75rem, the rest of the admin's tables use
+   .6rem .75rem, and the dashboard's were the outliers. They now
+   match. But the admin dashboard is TALLER than it was, and the
+   original commit message said otherwise.
 
 ---
 
