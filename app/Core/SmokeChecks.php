@@ -1821,6 +1821,37 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.one_radius_scale', 'Smoke · UI', 'The admin uses one radius scale', static function () use ($root, $ok, $bad): array {
+            // The admin has its own radius scale (--adm-radius 10px) and
+            // the theme's (--border-radius 8px). Both were used in the same
+            // console, so a card on the System page had 8px corners and a
+            // card on the Users page had 10px. The theme editor's PREVIEW
+            // mocks the member site, so it keeps the member's tokens.
+            $css = (string) @file_get_contents($root . '/public/assets/css/admin.css');
+            $problems = [];
+
+            $lines = explode("\n", $css);
+            foreach ($lines as $i => $line) {
+                if (strpos($line, '#theme-preview') !== false || strpos($line, '[data-mock]') !== false) {
+                    continue;   // the member mock
+                }
+                if (preg_match('/var\(--(?:border-radius(?:-sm|-lg)?|card-radius)\)/', $line, $m) === 1) {
+                    $problems[] = 'admin.css line ' . ($i + 1) . ' uses the theme radius ' . $m[0]
+                        . ' instead of the admin one';
+                }
+            }
+            // The admin's scale has to be declared.
+            foreach (['--adm-radius', '--adm-radius-sm', '--adm-radius-lg'] as $token) {
+                if (strpos($css, $token . ':') === false) {
+                    $problems[] = $token . ' is not declared';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the admin uses one radius scale, and only the member preview uses the member tokens')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).
