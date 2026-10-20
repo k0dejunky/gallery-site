@@ -146,6 +146,9 @@ class SystemController extends Controller
      */
     public function aiRebuild(): void
     {
+        // Super admin only: this one changes what every visitor
+        // sees (or deletes files, or rebuilds the whole library).
+        Auth::requirePermission('system_ops');
         $result = \App\Core\ChatModel::rebuild();
         if (!empty($result['ok'])) {
             $meta = \App\Core\ChatSettings::all()['finetuned'] ?? [];
@@ -1085,6 +1088,9 @@ class SystemController extends Controller
      */
     public function variantsRegenerate(): void
     {
+        // Super admin only: this one changes what every visitor
+        // sees (or deletes files, or rebuilds the whole library).
+        Auth::requirePermission('system_ops');
         $marker = $this->backupDir . '/.variants';
 
         if (file_exists($marker)) {
@@ -1170,6 +1176,9 @@ PHP;
 
     public function dbOptimize(): void
     {
+        // Super admin only: this one changes what every visitor
+        // sees (or deletes files, or rebuilds the whole library).
+        Auth::requirePermission('system_ops');
         $allowed = array_flip(array_map('strtolower',
             Database::run('SHOW TABLES')->fetchAll(\PDO::FETCH_COLUMN)));
         $target = (string) $this->request->post('table', '');
@@ -1200,6 +1209,9 @@ PHP;
 
     public function maintenanceToggle(): void
     {
+        // Super admin only: this one changes what every visitor
+        // sees (or deletes files, or rebuilds the whole library).
+        Auth::requirePermission('system_ops');
         $flag = $this->storage . '/maintenance.flag';
         $on   = (string) $this->request->post('mode', '');
 
@@ -1221,6 +1233,9 @@ PHP;
      */
     public function saveAgeGate(): void
     {
+        // Super admin only: this one changes what every visitor
+        // sees (or deletes files, or rebuilds the whole library).
+        Auth::requirePermission('system_ops');
         $enabled = (string) $this->request->post('enabled', '') === '1';
 
         \App\Models\SiteConfig::setAgeGateEnabled($enabled);
@@ -1601,6 +1616,9 @@ PHP;
 
     public function cleanupPending(): void
     {
+        // Super admin only: this one changes what every visitor
+        // sees (or deletes files, or rebuilds the whole library).
+        Auth::requirePermission('system_ops');
         $base  = realpath($this->storage . '/uploads/pending');
         $token = (string) $this->request->post('dir', '');
         $removed = 0;
@@ -1626,6 +1644,9 @@ PHP;
 
     public function cleanupOrphans(): void
     {
+        // Super admin only: this one changes what every visitor
+        // sees (or deletes files, or rebuilds the whole library).
+        Auth::requirePermission('system_ops');
         $orphans = $this->orphanFiles();
         $removed = 0;
 
@@ -1814,6 +1835,9 @@ BASH;
 
     public function backupDelete(string $file): void
     {
+        // Super admin only: this one changes what every visitor
+        // sees (or deletes files, or rebuilds the whole library).
+        Auth::requirePermission('system_ops');
         $name = basename($file);
         $path = $this->backupDir . '/' . $name;
 

@@ -1,4 +1,11 @@
 <?php $title = 'System'; ?>
+<?php
+// The system page mixes reading (the disk, the queues, the logs) with
+// operations that change what every visitor sees or delete files. The
+// operations need the 'system_ops' permission, which only the super admin
+// holds, so the page only offers the controls the admin may use.
+$canOperate = \App\Core\Auth::can('system_ops');
+?>
 
 <?php if ($diskFree !== false && !empty($diskTotal) && (float) $diskTotal > 0): ?>
     <?php
@@ -96,11 +103,11 @@
             </td></tr>
             <?php endif; ?>
         </table>
-        <form class="sys-actions" method="post" action="<?= url('/admin/system/ai-rebuild') ?>">
+        <?php if ($canOperate): ?><form class="sys-actions" method="post" action="<?= url('/admin/system/ai-rebuild') ?>">
             <?= csrf_field() ?>
             <button class="btn" type="submit">Rebuild fine-tuned model</button>
             <span class="muted">Re-applies the installed LoRA adapter to the base model and smoke-tests it.</span>
-        </form>
+        </form><?php endif; ?>
     </div>
 
     <!-- Operational diagnostics -->
@@ -172,17 +179,17 @@
         <h2>Site status</h2>
         <?php if (!empty($maintenance)): ?>
             <p><span class="sys-bad">MAINTENANCE MODE ON</span> — visitors see a downtime page; staff can still browse.</p>
-            <form class="sys-actions" method="post" action="<?= url('/admin/system/maintenance') ?>">
+            <?php if ($canOperate): ?><form class="sys-actions" method="post" action="<?= url('/admin/system/maintenance') ?>">
                 <?= csrf_field() ?><input type="hidden" name="mode" value="off">
                 <button class="btn" type="submit">Turn off maintenance mode</button>
-            </form>
+            </form><?php endif; ?>
         <?php else: ?>
             <p class="muted">Site is live for everyone.</p>
-            <form class="sys-actions" method="post" action="<?= url('/admin/system/maintenance') ?>"
+            <?php if ($canOperate): ?><form class="sys-actions" method="post" action="<?= url('/admin/system/maintenance') ?>"
                   data-confirm="Take the site down for everyone except staff?">
                 <?= csrf_field() ?><input type="hidden" name="mode" value="on">
                 <button class="btn btn-danger" type="submit">Enable maintenance mode</button>
-            </form>
+            </form><?php endif; ?>
         <?php endif; ?>
 
         <h2 class="u-mt-1">18+ age gate</h2>
@@ -191,13 +198,13 @@
             browsing; logged-in members are never gated.
             <?= $ageGateEnabled ? '<b>Currently ON.</b>' : '<b>Currently OFF.</b>' ?>
         </p>
-        <form class="sys-actions" method="post" action="<?= url('/admin/system/age-gate') ?>">
+        <?php if ($canOperate): ?><form class="sys-actions" method="post" action="<?= url('/admin/system/age-gate') ?>">
             <?= csrf_field() ?>
             <input type="hidden" name="enabled" value="<?= $ageGateEnabled ? '0' : '1' ?>">
             <button class="btn<?= $ageGateEnabled ? '' : ' btn-outline' ?>" type="submit">
                 <?= $ageGateEnabled ? 'Turn off age gate' : 'Turn on age gate' ?>
             </button>
-        </form>
+        </form><?php endif; ?>
 
         <h2 class="u-mt-1">Scheduled housekeeping</h2>
         <?php $cronState = ($cronAgeMin === null) ? 'never run'
@@ -269,10 +276,10 @@
             missing web copies: <b class="<?= $variants['missing_web'] ? 'sys-bad' : 'sys-ok' ?>"><?= (int) $variants['missing_web'] ?></b> ·
             originals gone: <b class="<?= $variants['broken'] ? 'sys-bad' : 'sys-ok' ?>"><?= (int) $variants['broken'] ?></b>
         </p>
-        <form class="sys-actions" method="post" action="<?= url('/admin/system/variants') ?>">
+        <?php if ($canOperate): ?><form class="sys-actions" method="post" action="<?= url('/admin/system/variants') ?>">
             <?= csrf_field() ?>
             <button class="btn" type="submit"<?= !empty($variants['running']) ? ' disabled' : '' ?>>Regenerate missing</button>
-        </form>
+        </form><?php endif; ?>
         <?php if (!empty($storageTrend['gb'])): ?>
             <h2 class="u-mt-1">Storage growth (GB)</h2>
             <?= \App\Core\Charts::sparkline($storageTrend['gb'], 300, 48, '#0ea5e9') ?>
@@ -484,18 +491,18 @@
                         <td><?= (int) $dir['files'] ?></td>
                         <td><?= number_format($dir['size'] / 1048576, 1) ?> MB</td>
                         <td><?= (int) $dir['age_h'] ?>h</td>
-                        <td><form class="inline" method="post" action="<?= url('/admin/system/cleanup/pending') ?>"
+                        <td><?php if ($canOperate): ?><form class="inline" method="post" action="<?= url('/admin/system/cleanup/pending') ?>"
                                   data-confirm="Delete this staging folder?">
                                 <?= csrf_field() ?><input type="hidden" name="dir" value="<?= e($dir['name']) ?>">
-                                <button class="btn btn-sm btn-danger" type="submit">Delete</button></form></td>
+                                <button class="btn btn-sm btn-danger" type="submit">Delete</button></form><?php endif; ?></td>
                     </tr>
                 <?php endforeach; ?>
             </table>
-            <form class="sys-actions" method="post" action="<?= url('/admin/system/cleanup/pending') ?>"
+            <?php if ($canOperate): ?><form class="sys-actions" method="post" action="<?= url('/admin/system/cleanup/pending') ?>"
                   data-confirm="Delete ALL <?= count($pendingDirs) ?> staging folders?">
                 <?= csrf_field() ?><input type="hidden" name="dir" value="all">
                 <button class="btn btn-danger" type="submit">Delete all</button>
-            </form>
+            </form><?php endif; ?>
         <?php endif; ?>
     </div>
 
@@ -515,11 +522,11 @@
         <?php else: ?>
             <p class="muted" style="margin:.5rem 0;">Click a card to view the full file in a new tab.</p>
             <?php require __DIR__ . '/partials/orphans_grid.php'; ?>
-            <form class="sys-actions" method="post" action="<?= url('/admin/system/cleanup/orphans') ?>"
+            <?php if ($canOperate): ?><form class="sys-actions" method="post" action="<?= url('/admin/system/cleanup/orphans') ?>"
                   data-confirm="Delete all <?= (int) $orphanTotal ?> orphaned files permanently?">
                 <?= csrf_field() ?>
                 <button class="btn btn-danger" type="submit">Delete orphans</button>
-            </form>
+            </form><?php endif; ?>
         <?php endif; ?>
     </div>
 
@@ -614,10 +621,10 @@
                         <td><?= e(tzdate('Y-m-d H:i', $backup['time'])) ?></td>
                         <td style="white-space:nowrap;">
                             <a class="btn btn-sm" href="<?= url('/admin/system/backups/' . rawurlencode($backup['name'])) ?>">Download</a>
-                            <form class="inline" method="post" action="<?= url('/admin/system/backups/' . rawurlencode($backup['name']) . '/delete') ?>"
+                            <?php if ($canOperate): ?><form class="inline" method="post" action="<?= url('/admin/system/backups/' . rawurlencode($backup['name']) . '/delete') ?>"
                                   data-confirm="Delete this backup?">
                                 <?= csrf_field() ?><button class="btn btn-sm btn-danger" type="submit">Delete</button>
-                            </form>
+                            </form><?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -666,17 +673,17 @@
                     <td><code><?= e((string) $table['name']) ?></code></td>
                     <td><?= number_format((float) $table['rows']) ?></td>
                     <td><?= e((string) $table['size_mb']) ?> MB</td>
-                    <td><form class="inline" method="post" action="<?= url('/admin/system/db/optimize') ?>">
+                    <td><?php if ($canOperate): ?><form class="inline" method="post" action="<?= url('/admin/system/db/optimize') ?>">
                             <?= csrf_field() ?><input type="hidden" name="table" value="<?= e((string) $table['name']) ?>">
-                            <button class="btn btn-sm" type="submit">Optimize</button></form></td>
+                            <button class="btn btn-sm" type="submit">Optimize</button></form><?php endif; ?></td>
                 </tr>
             <?php endforeach; ?>
         </table>
-        <form class="sys-actions" method="post" action="<?= url('/admin/system/db/optimize') ?>"
+        <?php if ($canOperate): ?><form class="sys-actions" method="post" action="<?= url('/admin/system/db/optimize') ?>"
               data-confirm="Optimize every table? May take a moment.">
             <?= csrf_field() ?><input type="hidden" name="table" value="__all">
             <button class="btn" type="submit">Optimize all</button>
-        </form>
+        </form><?php endif; ?>
     </div>
 
     <!-- Login security -->

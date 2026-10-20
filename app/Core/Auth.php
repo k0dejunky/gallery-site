@@ -25,7 +25,7 @@ class Auth
      * reach outside the web app: the mail server (a root script) and the
      * role that can make an admin.
      */
-    public const SUPER_ADMIN_ONLY = ['mail_admin', 'manage_roles'];
+    public const SUPER_ADMIN_ONLY = ['mail_admin', 'manage_roles', 'system_ops'];
     public const PERMISSIONS = [
         // '*' covers every permission below, including the ones that are
         // deliberately held by the super admin alone (mail_admin,

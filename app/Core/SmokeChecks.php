@@ -359,6 +359,31 @@ class SmokeChecks
                 $problems[] = 'SiteProfile must filter the avatar and the link URLs';
             }
 
+            // The system operations: maintenance mode answers 503 to every
+            // guest, the age gate changes what every visitor sees, and the
+            // cleanups delete files. The controller used to need 'logs',
+            // which a moderator holds.
+            $system = (string) @file_get_contents($root . '/app/Controllers/SystemController.php');
+            foreach (['maintenanceToggle', 'saveAgeGate', 'cleanupPending', 'cleanupOrphans',
+                      'variantsRegenerate', 'dbOptimize', 'aiRebuild', 'backupDelete'] as $action) {
+                $at = strpos($system, 'function ' . $action . '(');
+                if ($at === false) {
+                    $problems[] = $action . '() is missing';
+                    continue;
+                }
+                $next = strpos($system, "\n    public function ", $at + 10);
+                $body = $next === false ? substr($system, $at) : substr($system, $at, $next - $at);
+                if (strpos($body, "requirePermission('system_ops')") === false) {
+                    $problems[] = $action . '() must require the system_ops permission';
+                }
+            }
+            foreach (['moderator', 'admin', 'editor', 'viewer'] as $role) {
+                if (preg_match("/'" . $role . "'\s*=>\s*\[([^\]]*)\]/", $auth, $m) === 1
+                    && strpos($m[1], 'system_ops') !== false) {
+                    $problems[] = 'the ' . $role . ' role must not hold system_ops';
+                }
+            }
+
             return $problems === []
                 ? $ok('the mail admin, the role grant and the creator profile are properly gated')
                 : $bad(implode('; ', $problems));
