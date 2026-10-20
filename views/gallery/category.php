@@ -87,11 +87,16 @@ $catBase = 'cat.' . md5(json_encode([$category['id'] ?? 0, $category['slug'] ?? 
     <h2>Image Galleries</h2>
     <?php if (empty($imagePaginator['items'])): ?>
         <div class="empty-state">
-            <p class="muted">No image galleries in this category<?= e($searchSuffix) ?>.</p>
-            <?php if ($q !== ''): ?>
-                <a class="btn btn-sm" href="<?= e(url('/galleries/category/' . $category['slug'])) ?>">Clear search</a>
+            <?php if (($lockedCount ?? 0) > 0): ?>
+                <p class="muted"><?= number_format((int) $lockedCount) ?> galleries in this category are above your level.</p>
+                <a class="btn btn-sm" href="<?= e(url('/membership')) ?>">View membership</a>
             <?php else: ?>
-                <a class="btn btn-sm" href="<?= e(url('/galleries')) ?>">Browse all galleries</a>
+                <p class="muted">No image galleries in this category<?= e($searchSuffix) ?>.</p>
+                <?php if ($q !== ''): ?>
+                    <a class="btn btn-sm" href="<?= e(url('/galleries/category/' . $category['slug'])) ?>">Clear search</a>
+                <?php else: ?>
+                    <a class="btn btn-sm" href="<?= e(url('/galleries')) ?>">Browse all galleries</a>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
     <?php else: ?>
@@ -122,11 +127,16 @@ $catBase = 'cat.' . md5(json_encode([$category['id'] ?? 0, $category['slug'] ?? 
     <h2>&#9654; Video Galleries</h2>
     <?php if (empty($videoPaginator['items'])): ?>
         <div class="empty-state">
-            <p class="muted">No video galleries in this category<?= e($searchSuffix) ?>.</p>
-            <?php if ($q !== ''): ?>
-                <a class="btn btn-sm" href="<?= e(url('/galleries/category/' . $category['slug'])) ?>">Clear search</a>
+            <?php if (($lockedCount ?? 0) > 0): ?>
+                <p class="muted"><?= number_format((int) $lockedCount) ?> galleries in this category are above your level.</p>
+                <a class="btn btn-sm" href="<?= e(url('/membership')) ?>">View membership</a>
             <?php else: ?>
-                <a class="btn btn-sm" href="<?= e(url('/galleries')) ?>">Browse all galleries</a>
+                <p class="muted">No video galleries in this category<?= e($searchSuffix) ?>.</p>
+                <?php if ($q !== ''): ?>
+                    <a class="btn btn-sm" href="<?= e(url('/galleries/category/' . $category['slug'])) ?>">Clear search</a>
+                <?php else: ?>
+                    <a class="btn btn-sm" href="<?= e(url('/galleries')) ?>">Browse all galleries</a>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
     <?php else: ?>

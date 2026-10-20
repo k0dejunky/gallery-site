@@ -77,6 +77,14 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
     <?php endforeach; ?>
 </div>
 
+<?php if (($lockedTotal ?? 0) > 0): ?>
+<?php // The paid part of the collection, said out loud. ?>
+<div class="listing-locked-note">
+    <span><?= number_format((int) $lockedTotal) ?> galleries in the collection are above your level.</span>
+    <a class="btn btn-sm" href="<?= e(url('/membership')) ?>">View membership</a>
+</div>
+<?php endif; ?>
+
 <?php if ($q === ''): ?>
 <?php // Full listing: every gallery grouped by category, unpaginated, never filtered by favourites. ?>
 <?php if (empty($sections)): ?>

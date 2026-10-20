@@ -16,6 +16,13 @@ $placeholder = 'data:image/svg+xml;utf8,' . rawurlencode(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" fill="#ffd9e8"/><rect x="130" y="102" width="140" height="96" rx="12" fill="none" stroke="#f472b6" stroke-width="8"/><circle cx="185" cy="145" r="14" fill="#ec4899"/><path d="M130 196l42-42 32 30 44-52 52 64" fill="none" stroke="#9333ea" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 );
 $cardId = 'card-' . (int) $gallery['id'];
+// A gallery the member cannot open yet says so on the card, instead of
+// letting them click through to a blurred wall and an upgrade prompt.
+$memberLevel = \App\Core\Auth::effectiveLevel();
+$isLocked    = $memberLevel < PHP_INT_MAX
+    && (int) ($gallery['min_level'] ?? 0) > $memberLevel
+    && empty($gallery['ppv_price']);
+$lockLevel   = (int) ($gallery['min_level'] ?? 0);
 // First card on a page gets high fetch priority and eager loading (it is the
 // LCP element); all others lazy-load. Reserve the 400x300 cover ratio so the
 // browser can lay out the grid without the "jump" caused by late image sizes.
@@ -63,6 +70,12 @@ $asyncDecodeAttr    = $heroCard ? '' : ' decoding="async"';
             </div>
         <?php endif; ?>
         <h2><?= e($gallery['title']) ?></h2>
+        <?php if ($isLocked): ?>
+            <p class="card-lock-line">
+                <span class="card-lock"><?= e(\App\Models\Subscription::levelLabel($lockLevel)) ?></span>
+                <a class="card-lock-cta" href="<?= e(url('/membership')) ?>">View membership</a>
+            </p>
+        <?php endif; ?>
         <p class="muted card-media-count">
             <?php if ($photoCount > 0): ?><?= number_format($photoCount) ?> photo<?= $photoCount !== 1 ? 's' : '' ?><?php endif; ?>
             <?php if ($photoCount > 0 && $videoCount > 0): ?> &middot; <?php endif; ?>

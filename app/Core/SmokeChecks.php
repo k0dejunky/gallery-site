@@ -1096,6 +1096,53 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.paywall_is_honest', 'Smoke · UI', 'The site says what is locked instead of pretending it is empty', static function () use ($root, $ok, $bad): array {
+            // 163 of the 165 published galleries are paid. The "related" and
+            // "recommended" rails ignored the member's level, so they
+            // advertised galleries the member cannot open; a locked
+            // category said "no galleries in this category"; and the plan
+            // cards never said what a tier unlocks.
+            $model      = (string) @file_get_contents($root . '/app/Models/Gallery.php');
+            $controller = (string) @file_get_contents($root . '/app/Controllers/GalleryController.php');
+            $card       = (string) @file_get_contents($root . '/views/partials/gallery_card.php');
+            $category   = (string) @file_get_contents($root . '/views/gallery/category.php');
+            $listing    = (string) @file_get_contents($root . '/views/gallery/index.php');
+            $membership = (string) @file_get_contents($root . '/views/membership/index.php');
+            $problems   = [];
+
+            if (strpos($model, 'public static function related(int $galleryId, int $limit = 6, int $maxLevel') === false) {
+                $problems[] = 'related() must take the member\'s level';
+            }
+            if (strpos($model, 'public static function countLocked(') === false) {
+                $problems[] = 'the model must be able to count the locked galleries';
+            }
+            if (strpos($model, 'public static function countByLevel(') === false) {
+                $problems[] = 'the model must be able to count the galleries per level';
+            }
+            if (strpos($controller, 'Gallery::related($id, 6, Auth::effectiveLevel())') === false) {
+                $problems[] = 'the related rail must use the member\'s level';
+            }
+            if (strpos($controller, 'recommended((int) $user[\'id\'], $viewedIds, 6, $maxLevel)') === false) {
+                $problems[] = 'the recommendations must use the member\'s level';
+            }
+            if (strpos($card, 'card-lock') === false) {
+                $problems[] = 'a locked gallery must say so on the card';
+            }
+            if (strpos($category, 'lockedCount') === false) {
+                $problems[] = 'a locked category must say how many galleries are above the level';
+            }
+            if (strpos($listing, 'lockedTotal') === false) {
+                $problems[] = 'the listing must say how much of the collection is above the level';
+            }
+            if (strpos($membership, 'levelCounts') === false) {
+                $problems[] = 'the plan cards must say how many galleries the tier opens';
+            }
+
+            return $problems === []
+                ? $ok('the locked content is labelled, counted and filtered by the member\'s level')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.ui.no_inline_style_blocks', 'Smoke · UI', 'No view carries its own <style> block', static function () use ($root, $ok, $bad): array {
             // Documents that deliberately stand alone (their own <html>, their
             // own CSP) keep their own CSS, and the admin shell injects the

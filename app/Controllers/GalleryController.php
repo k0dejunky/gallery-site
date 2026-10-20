@@ -412,7 +412,11 @@ class GalleryController extends Controller
             'recentlyViewed' => $recentlyViewed,
             'favoriteGalleryIds' => $favoriteGalleryIds,
             'favoriteGalleries' => $favoriteGalleries,
-            'recommended'  => $user !== null ? \App\Models\Gallery::recommended((int) $user['id'], $viewedIds, 6) : [],
+            'recommended'  => $user !== null ? \App\Models\Gallery::recommended((int) $user['id'], $viewedIds, 6, $maxLevel) : [],
+            // How many galleries in the whole collection are above the
+            // member's level. The listing says so instead of quietly
+            // pretending the paid categories are empty.
+            'lockedTotal'  => \App\Models\Gallery::countLocked($maxLevel),
         ]);
     }
 
@@ -463,10 +467,16 @@ class GalleryController extends Controller
             $videoPaginator = Gallery::paginate($page, 6, array_merge($filters, ['type' => 'videos']));
         }
 
+        // How many galleries in this category the member cannot open yet.
+        // Without it the page said "no galleries in this category" when the
+        // truth was "they are all above your level".
+        $memberLevel = $user === null ? PHP_INT_MAX : Auth::effectiveLevel();
+
         $this->view('gallery/category', [
             'category'       => $category,
             'imagePaginator' => $imagePaginator,
             'videoPaginator' => $videoPaginator,
+            'lockedCount'    => Gallery::countLocked($memberLevel, (int) ($category['id'] ?? 0)),
             'q'              => $q,
             'type'           => $type,
             'sort'           => $sort,
@@ -574,7 +584,7 @@ class GalleryController extends Controller
             'ratingAverage' => GalleryRating::averageFor($id),
             'ratingCount'   => GalleryRating::countFor($id),
             'userRating'    => $userRating,
-            'related'       => Gallery::related($id, 6),
+            'related'       => Gallery::related($id, 6, Auth::effectiveLevel()),
             'ppvPrice'      => $ppvPrice,
             'galleryUnlocked' => $galleryUnlocked,
         ]);

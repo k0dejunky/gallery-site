@@ -1333,7 +1333,7 @@ class Gallery
      * galleries, excluding anything they have already viewed, favourited, or
      * that is already on the current page. Returns up to $limit with covers.
      */
-    public static function recommended(int $userId, array $excludeIds = [], int $limit = 6): array
+    public static function recommended(int $userId, array $excludeIds = [], int $limit = 6, int $maxLevel = PHP_INT_MAX): array
     {
         if ($userId <= 0 || $limit <= 0) {
             return [];
@@ -1352,7 +1352,9 @@ class Gallery
             return [];
         }
 
-        $byCat = self::inCategories($catIds, '', PHP_INT_MAX, $userId);
+        // The member's own level: recommending a gallery they cannot open
+        // is an upsell that ends in a wall.
+        $byCat = self::inCategories($catIds, '', $maxLevel, $userId);
         $cand = [];
         foreach ($byCat as $galleries) {
             foreach ($galleries as $g) {
@@ -1446,8 +1448,13 @@ class Gallery
     /**
      * Related galleries sharing at least one category, newest/views first.
      */
-    public static function related(int $galleryId, int $limit = 6): array
+    public static function related(int $galleryId, int $limit = 6, int $maxLevel = PHP_INT_MAX): array
     {
+        // The level filter matters: without it the "related galleries" rail
+        // advertised galleries the member cannot open, and every click ended
+        // at the paywall.
+        $levelClause = $maxLevel < PHP_INT_MAX ? ' AND g.min_level <= ' . (int) $maxLevel : '';
+
         return Database::run(
             'SELECT DISTINCT g.*,
                     (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count,
@@ -1457,11 +1464,65 @@ class Gallery
              INNER JOIN gallery_category gc2
                      ON gc2.category_id = gc.category_id
                     AND gc2.gallery_id = ?
-             WHERE g.id <> ? AND g.is_secret = 0 AND ' . self::publishedVisibleSql('g') . '
+             WHERE g.id <> ? AND g.is_secret = 0 AND ' . self::publishedVisibleSql('g') . $levelClause . '
              ORDER BY g.views DESC, g.created_at DESC
              LIMIT ' . max(1, (int) $limit),
             [$galleryId, $galleryId]
         )->fetchAll();
+    }
+
+    /**
+     * How many published galleries each membership level opens.
+     *
+     * The membership page says what a tier actually unlocks ("Silver opens
+     * 42 galleries"), which is the honest answer to "why should I pay?".
+     *
+     * @return array<int, int> level => count
+     */
+    public static function countByLevel(): array
+    {
+        $rows = Database::run(
+            'SELECT g.min_level, COUNT(*) AS c
+             FROM galleries g
+             WHERE g.deleted_at IS NULL AND g.is_secret = 0 AND ' . self::publishedVisibleSql('g') . '
+             GROUP BY g.min_level'
+        )->fetchAll();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row['min_level']] = (int) $row['c'];
+        }
+        ksort($out);
+
+        return $out;
+    }
+
+    /**
+     * How many galleries a member at $maxLevel CANNOT open - in the whole
+     * catalogue, or in one category.
+     *
+     * The category page used to say "no galleries in this category" when
+     * the truth was "they are all above your level".
+     */
+    public static function countLocked(int $maxLevel, ?int $categoryId = null): int
+    {
+        if ($maxLevel >= PHP_INT_MAX) {
+            return 0;
+        }
+
+        $where = 'g.deleted_at IS NULL AND g.is_secret = 0 AND ' . self::publishedVisibleSql('g')
+            . ' AND g.min_level > ' . (int) $maxLevel;
+        $params = [];
+
+        if ($categoryId !== null && $categoryId > 0) {
+            $where .= ' AND EXISTS (SELECT 1 FROM gallery_category gc WHERE gc.gallery_id = g.id AND gc.category_id = ?)';
+            $params[] = (int) $categoryId;
+        }
+
+        return (int) Database::run(
+            'SELECT COUNT(*) FROM galleries g WHERE ' . $where,
+            $params
+        )->fetchColumn();
     }
 
     /**

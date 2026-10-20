@@ -1021,3 +1021,23 @@ body .u-pad-04-05{padding:.4rem .5rem !important}
 body .u-left-pad{text-align:left !important;padding:.4rem .5rem !important}
 body .u-label{font-size:.82rem !important;display:block !important;margin-bottom:.2rem !important}
 body .u-w-full-mb{width:100% !important;margin-bottom:4px !important}
+
+/* ---------- The "locked" mark on a gallery card ---------------------------
+   A gallery the member cannot open yet says so on the card, so the click
+   is not a dead end. The chip carries the tier it needs. */
+.card-lock-line{display:flex;align-items:center;gap:.45rem;margin:.15rem 0 .25rem}
+.card-lock{
+    display:inline-flex;align-items:center;padding:.05rem .4rem;border-radius:999px;
+    background:var(--bubble-border,#f9a8d4);color:var(--bubble-text,#4a044e);
+    font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+}
+.card-lock-cta{font-size:.72rem;color:var(--purple-200,#d8b4fe);text-decoration:underline}
+.card-lock-cta:hover{color:var(--purple-300,#c084fc)}
+
+/* ---------- The listing's "above your level" note ----------------------- */
+.listing-locked-note{
+    display:flex;align-items:center;justify-content:center;gap:.75rem;flex-wrap:wrap;
+    margin:0 0 1.25rem;padding:.7rem 1rem;border:1px solid var(--bubble-border,#f9a8d4);
+    border-radius:var(--card-radius,8px);background:var(--bubble-bg,#fdf2f8);color:var(--bubble-text,#4a044e);
+    font-size:.9rem;
+}

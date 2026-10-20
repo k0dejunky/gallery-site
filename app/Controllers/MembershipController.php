@@ -73,6 +73,9 @@ class MembershipController extends Controller
             'plans' => $plans,
             'paymentProcessors' => PaymentProcessor::enabled(),
             'user' => $user,
+            // How many galleries each tier opens - the plan cards say it, so
+            // the member can see what the money buys.
+            'levelCounts' => Gallery::countByLevel(),
         ];
 
         if ($user === null) {

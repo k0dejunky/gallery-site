@@ -203,6 +203,20 @@ $ldJson = [
                         <?php if (!empty($plan['description'])): ?>
                             <p class="muted"><?= e($plan['description']) ?></p>
                         <?php endif; ?>
+                        <?php // What the tier actually opens. ?>
+                        <?php
+                        $planLevel    = (int) ($plan['level'] ?? 0);
+                        $levelCounts  = $levelCounts ?? [];
+                        $unlocked     = 0;
+                        foreach ($levelCounts as $lvl => $cnt) {
+                            if ((int) $lvl <= $planLevel) {
+                                $unlocked += (int) $cnt;
+                            }
+                        }
+                        ?>
+                        <p class="muted u-fs-085" style="margin:.35rem 0 0;">
+                            <?= number_format($unlocked) ?> <?= $unlocked === 1 ? 'gallery' : 'galleries' ?> included
+                        </p>
                     </div>
                     <?php
                     $planSlug = strtolower((string) ($plan['slug'] ?? $plan['name']));

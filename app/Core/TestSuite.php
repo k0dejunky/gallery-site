@@ -1122,6 +1122,76 @@ class TestSuite
             }
         });
 
+        $add('db.related_respects_the_level', 'Database', 'The related and recommended rails only offer galleries the member can open', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                $stamp = bin2hex(random_bytes(4));
+
+                try {
+                    // A category, a level-2 gallery in it and a level-0 one.
+                    Database::run(
+                        "INSERT INTO categories (name, slug, created_at) VALUES (?, ?, NOW())",
+                        ['Probe cat ' . $stamp, 'probe-cat-' . $stamp]
+                    );
+                    $catId = (int) Database::connection()->lastInsertId();
+
+                    Database::run(
+                        "INSERT INTO galleries (title, description, type, min_level, is_secret, created_at, published_at)
+                         VALUES (?, '', 'images', 2, 0, NOW(), NOW())",
+                        ['Probe locked ' . $stamp]
+                    );
+                    $lockedId = (int) Database::connection()->lastInsertId();
+                    Database::run('INSERT INTO gallery_category (gallery_id, category_id) VALUES (?, ?)', [$lockedId, $catId]);
+
+                    Database::run(
+                        "INSERT INTO galleries (title, description, type, min_level, is_secret, created_at, published_at)
+                         VALUES (?, '', 'images', 0, 0, NOW(), NOW())",
+                        ['Probe free ' . $stamp]
+                    );
+                    $freeId = (int) Database::connection()->lastInsertId();
+                    Database::run('INSERT INTO gallery_category (gallery_id, category_id) VALUES (?, ?)', [$freeId, $catId]);
+
+                    // The related rail of the free gallery, at two levels.
+                    $atFree   = \App\Models\Gallery::related($freeId, 10, 0);
+                    $atGold   = \App\Models\Gallery::related($freeId, 10, 2);
+                    $freeIds  = array_map('intval', array_column($atFree, 'id'));
+                    $goldIds  = array_map('intval', array_column($atGold, 'id'));
+
+                    // The locked count for the category.
+                    $lockedCount = \App\Models\Gallery::countLocked(0, $catId);
+                    $goldCount   = \App\Models\Gallery::countLocked(2, $catId);
+
+                    // The subject gallery is excluded from its own related
+                    // list, so at level 0 the list is empty and at level 2
+                    // it holds the locked gallery.
+                    return [
+                        'pass'   => !in_array($lockedId, $freeIds, true)
+                            && in_array($lockedId, $goldIds, true)
+                            && $lockedCount === 1
+                            && $goldCount === 0,
+                        'detail' => 'level 0 sees ' . count($freeIds) . ' (locked shown: '
+                            . (in_array($lockedId, $freeIds, true) ? 'YES' : 'no') . '), level 2 sees ' . count($goldIds)
+                            . ', locked counts ' . $lockedCount . '/' . $goldCount,
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.unlock_code_multi_use', 'Database', 'A multi-use unlock code can be redeemed by more than one member', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
