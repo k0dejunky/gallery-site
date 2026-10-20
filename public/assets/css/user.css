@@ -677,6 +677,16 @@ body:not(.admin-theme) .btn-danger {
     border-color: var(--btn-danger-border);
     color: var(--btn-danger-color);
 }
+/* The generic .btn:hover is (0,3,1) and the plain .btn-danger is (0,2,1),
+   so hovering a danger button used to paint the pink accent gradient under
+   the danger text: 1.88:1. This rule has to sit BELOW .btn:hover to win
+   the cascade. */
+body:not(.admin-theme) .btn-danger:hover {
+    background: var(--btn-danger-hover-bg);
+    border-color: var(--btn-danger-color);
+    color: var(--btn-danger-color);
+    box-shadow: 0 4px 16px rgba(244,63,94,.32);
+}
 
 /* Auth panel and flashes were light panels with dark-on-dark text. */
 body:not(.admin-theme) .auth-panel {

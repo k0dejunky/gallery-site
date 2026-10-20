@@ -1199,9 +1199,12 @@ class SmokeChecks
             //
             // Each pair is:
             //   [file, the declaration that must be there, the one that must
-            //    not be, the foreground token, the background token, the floor]
+            //    not be, the foreground token, the background token, the floor,
+            //    and optionally a needle the declaration must come AFTER]
             // The floor is 4.5 for body text and 3.0 for a non-text indicator
-            // (WCAG 1.4.11 wants 3:1 for a focus ring).
+            // (WCAG 1.4.11 wants 3:1 for a focus ring). The optional needle
+            // encodes a CASCADE requirement: a rule that must win a
+            // specificity tie has to sit below the rule it beats.
             $pairs = [
                 // The paywall gate. The headline sat on --purple-800 over
                 // --pink-100, which is a LIGHT pairing: 1.60:1 on the dark
@@ -1215,6 +1218,16 @@ class SmokeChecks
                 ['public/assets/css/user.css',
                     'outline:3px solid var(--focus-ring)', 'outline:3px solid var(--purple-600)',
                     '--focus-ring', '--page-bg', 3.0],
+                // A destructive button. .btn:hover is (0,3,1) and .btn-danger
+                // is (0,2,1), so hovering used to paint the pink accent
+                // gradient under the danger text: 1.88:1.
+                ['public/assets/css/user.css',
+                    'body:not(.admin-theme) .btn-danger {', '',
+                    '--btn-danger-color', '--btn-danger-bg', 4.5],
+                ['public/assets/css/user.css',
+                    'body:not(.admin-theme) .btn-danger:hover {', '',
+                    '--btn-danger-color', '--btn-danger-hover-bg', 4.5,
+                    'body:not(.admin-theme) .btn:hover'],
             ];
 
             // The member palette, parsed out of Theme.php.
@@ -1248,7 +1261,9 @@ class SmokeChecks
             };
 
             $problems = [];
-            foreach ($pairs as [$file, $required, $forbidden, $fg, $bg, $floor]) {
+            foreach ($pairs as $pair) {
+                [$file, $required, $forbidden, $fg, $bg, $floor] = $pair;
+                $after = $pair[6] ?? '';
                 $src = (string) @file_get_contents($root . '/' . $file);
                 if ($src === '') {
                     $problems[] = $file . ' could not be read';
@@ -1259,6 +1274,13 @@ class SmokeChecks
                 }
                 if ($forbidden !== '' && strpos($src, $forbidden) !== false) {
                     $problems[] = $file . ' still uses "' . $forbidden . '"';
+                }
+                if ($after !== '' && strpos($src, $required) !== false) {
+                    $requiredAt = strpos($src, $required);
+                    $afterAt    = strpos($src, $after);
+                    if ($afterAt === false || $requiredAt < $afterAt) {
+                        $problems[] = $file . ': "' . $required . '" must come after "' . $after . '" to win the cascade';
+                    }
                 }
                 foreach ([$fg, $bg] as $token) {
                     if (!isset($palette[$token])) {

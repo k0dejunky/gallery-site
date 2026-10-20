@@ -145,7 +145,7 @@ class Theme
         'btn-hover-bg'            => '#a855f7',
         'btn-danger-bg'           => '#3b1024',
         'btn-danger-color'        => '#fecdd3',
-        'btn-danger-hover-bg'     => '#3c58fa',
+        'btn-danger-hover-bg'     => '#4a0e2a',
         'btn-danger-border'       => '#f43f5e',
         'filter-bg'               => '#9333ea',
         'filter-border'           => '#c084fc',
