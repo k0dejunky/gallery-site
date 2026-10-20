@@ -97,18 +97,28 @@ so the whole tag was replaced by nothing, about half the time. The braces
 
 ### Batch C - performance
 
+**Batch C is DONE and shipped (local + dev + prod, 2026-10-20).** Smoke 919 on
+local, dev and prod; TestSuite 983 (6 known environment-only failures).
+Measured on dev: the guest home page is 11 queries for 18 cards (it spent 24
+queries on the card covers alone), the listing 5 for 28. On prod every card
+now has its cover (the favourites page used to show placeholders, because the
+cover was never preloaded). The wall feed and the notification inbox now use a
+backward index scan instead of a filesort. The prod backup before the deploy is
+`/var/backups/gallery/pre-perf-batchC-20261020-085603.sql.gz` and the prod
+database got migration 072 (the eight indexes).
+
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| C1 | The card does 2 queries per card; the guest home page = 24 queries | `views/partials/gallery_card.php`, `views/home.php` | todo | - |
-| C2 | `views/collections/show.php` calls `categoriesBulk()` per gallery | `views/collections/show.php` | todo | - |
-| C3 | `Auth::hasActiveSubscription()` is not memoised (4 identical joins per page); `Notification::unreadCount()` is uncached | `app/Core/Auth.php`, `app/Models/Notification.php` | todo | - |
-| C4 | 7 missing indexes + the `email_queue` due index | a new migration | todo | - |
-| C5 | The hot listing query builds a temp table + filesort (cannot use its index) | `app/Models/Gallery.php` | todo | - |
-| C6 | `softDelete()`/`restore()` do not invalidate the `listings` bucket | `app/Models/Gallery.php` | todo | - |
-| C7 | `Purchase::userUnlocked()` per gallery in the wall loop (twice per page) | `app/Controllers/WallController.php`, `app/Models/Purchase.php` | todo | - |
-| C8 | `ServerOptimizations::all()` re-reads the file on every cache lookup | `app/Models/ServerOptimizations.php` | todo | - |
-| C9 | 5 unbatched writes per gallery view | `app/Models/Gallery.php`, `app/Models/Stats.php` | todo | - |
-| C10 | Unstable `ORDER BY` (no id tiebreak) -> rows skipped/duplicated between pages | `app/Models/Gallery.php` | todo | - |
+| C1 | The card does 2 queries per card; the guest home page = 24 queries | `views/partials/gallery_card.php`, `views/home.php` | done | `0528d64` |
+| C2 | `views/collections/show.php` calls `categoriesBulk()` per gallery | `views/collections/show.php` | done | `0528d64` |
+| C3 | `Auth::hasActiveSubscription()` is not memoised (4 identical joins per page); `Notification::unreadCount()` is uncached | `app/Core/Auth.php`, `app/Models/Notification.php` | done | `f8245c1` |
+| C4 | 7 missing indexes + the `email_queue` due index | a new migration | done | `8fa34fc` |
+| C5 | The hot listing query builds a temp table + filesort (cannot use its index) | `app/Models/Gallery.php` | done | `1145a47` |
+| C6 | `softDelete()`/`restore()` do not invalidate the `listings` bucket | `app/Models/Gallery.php` | done | `f8245c1` |
+| C7 | `Purchase::userUnlocked()` per gallery in the wall loop (twice per page) | `app/Controllers/WallController.php`, `app/Models/Purchase.php` | done | `f8245c1` |
+| C8 | `ServerOptimizations::all()` re-reads the file on every cache lookup | `app/Models/ServerOptimizations.php` | done | `f8245c1` |
+| C9 | 5 unbatched writes per gallery view | `app/Models/Gallery.php`, `app/Models/Stats.php` | done | `4edaa11` |
+| C10 | Unstable `ORDER BY` (no id tiebreak) -> rows skipped/duplicated between pages | `app/Models/Gallery.php` | done | `f8245c1` |
 
 ### Batch D - data integrity
 
