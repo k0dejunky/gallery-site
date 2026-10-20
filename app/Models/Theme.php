@@ -288,6 +288,7 @@ class Theme
         'border-radius-lg'    => ['value' => '8px',  'label' => 'Large radius',    'section' => 'border'],
         'font-size-xs'        => ['value' => '0.68rem',  'label' => 'Extra small text',  'section' => 'typography'],
         'font-size-sm'        => ['value' => '0.78rem', 'label' => 'Small text',        'section' => 'typography'],
+        'font-size-2sm'       => ['value' => '0.85rem', 'label' => 'Small body text',   'section' => 'typography'],
         'font-size-md'       => ['value' => '0.95rem', 'label' => 'Medium text',       'section' => 'typography'],
         'font-size-base'      => ['value' => '0.9rem',    'label' => 'Base font size',    'section' => 'typography'],
         'font-size-lg'        => ['value' => '1.02rem', 'label' => 'Large text',        'section' => 'typography'],

@@ -15,12 +15,15 @@
 body .u-right{text-align:right !important}
 body .u-center{text-align:center !important}
 body .u-left{text-align:left !important}
-body .u-fs-075{font-size:.75rem !important}
-body .u-fs-078{font-size:.78rem !important}
-body .u-fs-08{font-size:.8rem !important}
-body .u-fs-082{font-size:.82rem !important}
-body .u-fs-085{font-size:.85rem !important}
-body .u-fs-09{font-size:.9rem !important}
+/* The font sizes read the THEME's scale, so the theme editor's font-size
+   controls really move the text. They used to be hard-coded rem values
+   that duplicated the scale with different numbers, and 87 elements on
+   the site ignored the editor entirely. */
+body .u-fs-075{font-size:var(--font-size-sm) !important}
+body .u-fs-078{font-size:var(--font-size-sm) !important}
+body .u-fs-08{font-size:var(--font-size-sm) !important}
+body .u-fs-085{font-size:var(--font-size-2sm) !important}
+body .u-fs-09{font-size:var(--font-size-base) !important}
 body .u-m0{margin:0 !important}
 body .u-mt-0{margin-top:0 !important}
 body .u-mt-05{margin-top:.5rem !important}

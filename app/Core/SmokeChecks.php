@@ -1990,6 +1990,55 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.one_type_scale', 'Smoke · UI', 'The font sizes come from one scale', static function () use ($root, $ok, $bad): array {
+            // The u-fs-* utilities were a second type scale: hard-coded rem
+            // values that duplicated the theme's --font-size-* scale with
+            // different numbers, so 87 elements on the site ignored the
+            // theme editor's font-size controls completely.
+            $util = (string) @file_get_contents($root . '/public/assets/css/utilities.css');
+            $theme = (string) @file_get_contents($root . '/app/Models/Theme.php');
+            $problems = [];
+
+            if (preg_match_all('/\.u-fs-[0-9]+\{([^}]*)\}/', $util, $m) === false) {
+                $problems[] = 'the font-size utilities could not be read';
+            }
+            foreach ($m[1] as $i => $body) {
+                if (strpos($body, 'var(--font-size-') === false) {
+                    $problems[] = 'the font-size utility ' . $m[0][$i] . ' does not read the theme scale';
+                }
+                if (preg_match('/font-size:\s*[\d.]+rem/', $body) === 1) {
+                    $problems[] = 'the font-size utility ' . $m[0][$i] . ' has a hard-coded size';
+                }
+            }
+            // Every token the utilities use has to exist in the theme.
+            if (preg_match_all('/var\(--(font-size-[a-z0-9]+)\)/', $util, $t) !== false) {
+                foreach (array_unique($t[1]) as $token) {
+                    if (strpos($theme, "'" . $token . "'") === false) {
+                        $problems[] = $token . ' is used by a utility but is not in the theme scale';
+                    }
+                }
+            }
+            // A utility nobody uses is dead weight.
+            $used = [];
+            $files = array_merge(glob($root . '/views/*.php') ?: [], glob($root . '/views/*/*.php') ?: []);
+            foreach ($files as $file) {
+                if (preg_match_all('/\b(u-fs-[0-9]+)\b/', (string) @file_get_contents($file), $u)) {
+                    foreach ($u[1] as $name) {
+                        $used[$name] = true;
+                    }
+                }
+            }
+            foreach ($m[0] as $rule) {
+                if (preg_match('/\.(u-fs-[0-9]+)/', $rule, $n) === 1 && !isset($used[$n[1]])) {
+                    $problems[] = $n[1] . ' is defined but no view uses it';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the font sizes all come from the theme scale')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).
