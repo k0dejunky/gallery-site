@@ -14,7 +14,7 @@ polish. Verification follows the house rule every time:
 
 ---
 
-## Where the work stands (updated 2026-10-19 23:00)
+## Where the work stands (updated 2026-10-20 05:50)
 
 | Phase | What | Status | Commit |
 |---|---|---|---|
@@ -22,22 +22,30 @@ polish. Verification follows the house rule every time:
 | 1 | Fix what's broken (12 small fixes) | done, shipped to prod | `edcfbcb` |
 | 2 | One design system (theme editor drives the member site) | done, shipped to prod | `7900c97` |
 | 3 | CSS out of the views (no inline `<style>`/style attributes) | done, shipped to prod | `82fc4fa` |
-| 4 | Shared admin table component on every list view | done on dev+prod, local commit only | `08092c8` |
-| 5 | `public/assets/js/admin.js` layer | **done and verified on dev**, not on prod yet | `aad944f`, `76ec2d9` |
-| 6 | Member nav, guest mobile landing, paginated listings | pending | - |
-| 7 | Accessibility polish pass | pending | - |
-| Final | local smoke/unit -> dev -> prod -> commit + push | pending | - |
+| 4 | Shared admin table component on every list view | done, shipped to prod | `08092c8` |
+| 5 | `public/assets/js/admin.js` layer | done, shipped to prod | `aad944f`, `76ec2d9` |
+| 6 | Member nav, guest phone nav, paged wall, tour as a dialog | done, shipped to prod | `91967cc` |
+| 7 | Accessibility polish + the gallery-card state bug | done, shipped to prod | `19c6a11`, `6d512ab` |
+| Final | local smoke/unit -> dev -> prod verify -> commit + push | **done** (smoke 907 on local, dev and prod) | `5a1c4ca` |
 
-### The 22 local commits are NOT pushed yet
-`git log origin/main..main` = 22 commits, latest `08092c8`. The house rule is
-"push last", so the push happens after the prod verification of the last phase.
-If a crash keeps happening, push the already-verified phases sooner - do not
-lose a second day of work to a dead session.
+**Everything is pushed.** `origin/main` is at `5a1c4ca` and the tree is clean.
 
-### Box state
-- **local** `/media/webdev/Media/gallery-full` - `main` @ `08092c8` + 6 modified files (Phase 5).
-- **dev** `192.168.1.110` (`k0dejunky`) - Phase 4 + a **partial, buggy** Phase 5 (deployed 21:22 and 21:33 on 2026-10-19). The delete->undo toast flow does not work there yet (see below).
-- **prod** `amethyst2213.com` (`ubuntu`) - Phase 4 deployed, **no Phase 5**. Prod smoke needs `sudo rm -rf /tmp/gallery-analytics-rot` and must run as `www-data`, otherwise `smoke.analytics.rotated_discovery` fails on a root-owned temp dir.
+### Box state (2026-10-20 05:50)
+- **local** `/media/webdev/Media/gallery-full` - `main` @ `5a1c4ca`, clean, in sync with origin.
+- **dev** `192.168.1.110` (`k0dejunky`) - the whole batch, verified with CDP.
+- **prod** `amethyst2213.com` (`ubuntu`) - the whole batch (25 files), smoke 907
+  all passed as `www-data`, verified with CDP. Pre-deploy backup:
+  `/var/backups/gallery/pre-ui-batch-20261020-054507.sql.gz`.
+
+Prod smoke needs `sudo rm -rf /tmp/gallery-analytics-rot` and must run as
+`www-data`, otherwise `smoke.analytics.rotated_discovery` fails on a
+root-owned temp dir.
+
+### The local test suite
+`php _suite_runner.php`: 971 tests, 6 failed - and all 6 are the known
+environment-only ones (4 orphan photos, the example.com routes, the missing
+Twitter key, the missing cron directory). Nothing in this batch caused a
+failure.
 
 ---
 
