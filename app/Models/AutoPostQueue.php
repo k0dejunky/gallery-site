@@ -1471,6 +1471,52 @@ class AutoPostQueue
     }
 
     /**
+     * The picture to post for a video on a channel that takes images but not
+     * videos: the cover the site already wrote for it (thumb_<file>), falling
+     * back to one frame grabbed with ffmpeg. Without this a channel with
+     * video => 'none' posted the live streams as bare text with no picture.
+     *
+     * @return array{media: array<string, mixed>|null, tmp: array<int, string>}
+     */
+    public static function videoCoverMedia(string $filename, string $path, int $blur = 0): array
+    {
+        $tmp   = [];
+        $frame = self::videoCoverPath($filename);
+
+        if ($frame === null) {
+            $frame = self::videoScreenshots($path, 1)[0] ?? null;
+
+            if ($frame !== null) {
+                // An extracted frame is a temp file - always clean it up.
+                $tmp[] = $frame;
+            }
+        }
+
+        if ($frame === null) {
+            return ['media' => null, 'tmp' => $tmp];
+        }
+
+        if ($blur > 0) {
+            $copy = create_blurred_copy($frame, $blur);
+
+            if ($copy !== null) {
+                $frame = $copy;
+                $tmp[] = $copy;
+            }
+        }
+
+        return [
+            'media' => [
+                'tmp_name' => $frame,
+                'name'     => 'video-cover.jpg',
+                'type'     => 'image/jpeg',
+                'size'     => (int) filesize($frame),
+            ],
+            'tmp' => $tmp,
+        ];
+    }
+
+    /**
      * Whether this queued reddit post should be left for the home-browser
      * worker (the "share-button method") instead of the local worker: reddit
      * rows, browser post enabled on the channel, and no OAuth refresh token
@@ -1809,6 +1855,10 @@ class AutoPostQueue
         $meta      = json_decode((string) ($item['meta'] ?? ''), true);
         $meta      = is_array($meta) ? $meta : [];
 
+        // Does the channel take pictures? A channel with no media support
+        // gets no image either way.
+        $platformTakesImages = (bool) ($tpl['media'] ?? false) && (int) ($tpl['max_media'] ?? 0) > 0;
+
         $media    = [];
         $blurredTmp = [];
         foreach (self::mediaFiles($item) as $photo) {
@@ -1830,38 +1880,38 @@ class AutoPostQueue
                 // at upload), falling back to one frame grabbed with ffmpeg.
                 // A still is a plain image, so the tweet never waits on X's
                 // slow asynchronous video processing.
-                $frame = self::videoCoverPath((string) $photo['filename']);
+                $cover = self::videoCoverMedia((string) $photo['filename'], $path, $blur);
 
-                if ($frame === null) {
-                    $frame = self::videoScreenshots($path, 1)[0] ?? null;
-
-                    if ($frame !== null) {
-                        // Extracted frame is a temp file — always clean it up.
-                        $blurredTmp[] = $frame;
-                    }
+                foreach ($cover['tmp'] as $tmpFile) {
+                    $blurredTmp[] = $tmpFile;
                 }
 
-                if ($frame !== null) {
-                    if ($blur > 0) {
-                        $copy = create_blurred_copy($frame, $blur);
-
-                        if ($copy !== null) {
-                            $frame        = $copy;
-                            $blurredTmp[] = $copy;
-                        }
-                    }
-
-                    $media[] = [
-                        'tmp_name' => $frame,
-                        'name'     => 'video-cover.jpg',
-                        'type'     => 'image/jpeg',
-                        'size'     => (int) filesize($frame),
-                    ];
+                if ($cover['media'] !== null) {
+                    $media[] = $cover['media'];
                     continue;
                 }
 
                 // Nothing could be produced — fall back to attaching the video.
             } elseif ($isVideo && $videoRule === 'none') {
+                // The channel takes images but not videos. Dropping the
+                // video leaves the post with NO picture at all, which is
+                // what the Reddit posts looked like: the live streams
+                // (videos) went out as bare text. The site writes a cover
+                // for every video at upload, so the cover is posted instead
+                // of nothing.
+                if ($platformTakesImages) {
+                    $cover = self::videoCoverMedia((string) $photo['filename'], $path, $blur);
+
+                    foreach ($cover['tmp'] as $tmpFile) {
+                        $blurredTmp[] = $tmpFile;
+                    }
+
+                    if ($cover['media'] !== null) {
+                        $media[] = $cover['media'];
+                        continue;
+                    }
+                }
+
                 continue;
             }
 

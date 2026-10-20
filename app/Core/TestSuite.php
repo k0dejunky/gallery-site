@@ -1957,6 +1957,56 @@ class TestSuite
             }
         });
 
+        $add('autoposter.video_cover_media', 'Auto Poster', 'A video posts its cover picture when the channel takes images but not videos', function () {
+            $uploadDir = rtrim((string) config('app.uploads.dir'), '/');
+            $name      = 'probe_cover_' . substr(md5((string) microtime(true)), 0, 10) . '.mp4';
+            $coverPath = $uploadDir . '/thumb_' . $name;
+            $videoPath = $uploadDir . '/' . $name;
+            $made      = false;
+
+            try {
+                // The site writes a cover (thumb_<file>) for every video.
+                $im = function_exists('imagecreatetruecolor') ? imagecreatetruecolor(60, 40) : null;
+                if ($im === false || $im === null) {
+                    return ['pass' => false, 'detail' => 'GD is not available'];
+                }
+                $fg = imagecolorallocate($im, 12, 90, 200);
+                imagefilledrectangle($im, 0, 0, 59, 39, $fg);
+                $made = imagejpeg($im, $coverPath, 80);
+                imagedestroy($im);
+                if (!$made || !is_file($coverPath)) {
+                    return ['pass' => false, 'detail' => 'the probe cover could not be written'];
+                }
+                // The video file itself does not need to exist: the cover is
+                // what gets posted.
+                file_put_contents($videoPath, 'not a real video');
+
+                $cover = \App\Models\AutoPostQueue::videoCoverMedia($name, $videoPath, 0);
+                $media = $cover['media'];
+
+                $hasMedia   = is_array($media) && $media !== [];
+                $isJpeg     = $hasMedia && ($media['name'] ?? '') === 'video-cover.jpg';
+                $isImage    = $hasMedia && ($media['type'] ?? '') === 'image/jpeg';
+                $fileExists = $hasMedia && is_file((string) $media['tmp_name']);
+                $hasBytes   = $hasMedia && (int) $media['size'] > 0;
+
+                // The reddit channel is exactly the case this covers: it takes
+                // one image and no video.
+                $reddit = \App\Models\AutoPostQueue::templateSettings('reddit');
+                $takesImages = (bool) ($reddit['media'] ?? false) && (int) ($reddit['max_media'] ?? 0) > 0;
+                $skipsVideo  = (string) ($reddit['video'] ?? '') === 'none';
+
+                return ['pass' => $hasMedia && $isJpeg && $isImage && $fileExists && $hasBytes && $takesImages && $skipsVideo,
+                    'detail' => json_encode(['media' => $media === null ? null : basename((string) $media['tmp_name']),
+                                             'takes_images' => $takesImages, 'skips_video' => $skipsVideo])];
+            } catch (\Throwable $e) {
+                return ['pass' => false, 'detail' => $e->getMessage()];
+            } finally {
+                @unlink($coverPath);
+                @unlink($videoPath);
+            }
+        });
+
         $add('autoposter.template', 'Auto Poster', 'Per-platform editable templates control post wording, link and hashtag count', function () {
             try {
                 $default = \App\Models\AutoPostQueue::templateSettings('x');
