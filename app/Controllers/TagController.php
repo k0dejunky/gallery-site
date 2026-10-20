@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Core\Auth;
 use App\Core\Controller;
 use App\Models\Gallery;
 use App\Models\Tag;
@@ -26,6 +27,12 @@ class TagController extends Controller
 
         $next = Gallery::byTag($slug, $limit, $page * $limit) !== [];
 
+        // The per-user state of a gallery card (seen, favourited) belongs to
+        // the member, so the tag page has to hand it to the view like the
+        // listing and the category pages do.
+        $user = Auth::user();
+        $ids  = array_map('intval', array_column($galleries, 'id'));
+
         $this->view('gallery/tag', [
             'title'     => 'Tag: ' . $tag['name'],
             'tag'       => $tag,
@@ -33,6 +40,11 @@ class TagController extends Controller
             'page'      => $page,
             'limit'     => $limit,
             'hasNext'   => $next,
+            'currentUser' => $user,
+            'hasActive' => $user !== null ? Auth::hasActiveSubscription() : false,
+            'viewedIds' => $user !== null ? Gallery::viewedByIds((int) $user['id'], $ids) : [],
+            'favoriteGalleryIds' => ($user !== null && Auth::hasActiveSubscription())
+                ? Gallery::favoriteIds((int) $user['id'], $ids) : [],
         ]);
     }
 }

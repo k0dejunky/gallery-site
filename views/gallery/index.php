@@ -1,4 +1,15 @@
 <?php $title = config('app.site_name'); ?>
+
+<?php
+// The card partial needs the member's own state (seen, favourited). It is
+// rendered inside a fragment closure, so the closure has to be given these
+// explicitly - and they are defaulted here so a page that does not know
+// about them (a tag page, a preview) never trips an undefined variable.
+$viewedIds         = $viewedIds ?? [];
+$favoriteGalleryIds = $favoriteGalleryIds ?? [];
+$currentUser       = $currentUser ?? null;
+$hasActive         = $hasActive ?? false;
+?>
 <?php
 $metaDescription = 'Browse every gallery on ' . config('app.site_name') . ' — original photos and videos across all categories, updated regularly.';
 $canonicalUrl = absolute_url('/galleries');
@@ -96,7 +107,7 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
                     $section['category']['id'] ?? 0,
                     array_column($section['galleries'], 'id'),
                 ]));
-                echo \App\Core\PageCache::fragment($sectionKey, 120, static function () use ($section, $cardCovers): void {
+                echo \App\Core\PageCache::fragment($sectionKey, 120, static function () use ($section, $cardCovers, $viewedIds, $favoriteGalleryIds, $currentUser, $hasActive): void {
                     foreach ($section['galleries'] as $gallery) {
                         $gid = (int) $gallery['id'];
                         $cover = $cardCovers['covers'][$gid] ?? null;
@@ -117,7 +128,7 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
     <div class="grid">
         <?php
         $recKey = 'recommended.' . md5(json_encode(array_column($recommended, 'id')));
-        echo \App\Core\PageCache::fragment($recKey, 120, static function () use ($recommended): void {
+        echo \App\Core\PageCache::fragment($recKey, 120, static function () use ($recommended, $viewedIds, $favoriteGalleryIds, $currentUser, $hasActive): void {
             $recCats = \App\Models\Gallery::categoriesBulk(array_map('intval', array_column($recommended, 'id')));
             foreach ($recommended as $gallery) {
                 $gid = (int) $gallery['id'];
@@ -171,7 +182,7 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
                 (int) ($paginator['page'] ?? 1),
                 array_column($paginator['items'], 'id'),
             ]));
-            echo \App\Core\PageCache::fragment($searchKey, 120, static function () use ($paginator, $cardCovers): void {
+            echo \App\Core\PageCache::fragment($searchKey, 120, static function () use ($paginator, $cardCovers, $viewedIds, $favoriteGalleryIds, $currentUser, $hasActive): void {
                 foreach ($paginator['items'] as $gallery) {
                     $gid = (int) $gallery['id'];
                     $cover = $cardCovers['covers'][$gid] ?? null;

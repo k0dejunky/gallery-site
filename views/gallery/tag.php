@@ -1,4 +1,15 @@
 <?php $title = $tag['name']; ?>
+<?php
+// The card partial needs the member's own state (seen, favourited). It is
+// rendered inside a fragment closure, so the closure has to be given these
+// explicitly - and they are defaulted here so a page that does not know
+// about them (a tag page, a preview) never trips an undefined variable.
+$viewedIds         = $viewedIds ?? [];
+$favoriteGalleryIds = $favoriteGalleryIds ?? [];
+$currentUser       = $currentUser ?? null;
+$hasActive         = $hasActive ?? false;
+?>
+
 
 <?php
 $breadcrumbItems = [
@@ -18,7 +29,7 @@ require __DIR__ . '/../partials/breadcrumbs.php';
     </div>
 <?php else: ?>
     <div class="grid">
-        <?php echo \App\Core\PageCache::fragment('tag.' . md5(json_encode([$tag['id'] ?? 0, array_column($galleries, 'id')])), 120, static function () use ($galleries): void {
+        <?php echo \App\Core\PageCache::fragment('tag.' . md5(json_encode([$tag['id'] ?? 0, array_column($galleries, 'id')])), 120, static function () use ($galleries, $viewedIds, $favoriteGalleryIds, $currentUser, $hasActive): void {
             foreach ($galleries as $gallery) {
                 $cover = null;
                 $galleryCategories = null;

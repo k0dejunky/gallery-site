@@ -54,6 +54,9 @@ class CollectionController extends Controller
             'images'     => $images,
             'firstMediaId' => $media !== [] ? (int) $media[0]['id'] : 0,
             'firstMediaIsVideo' => $media !== [] ? is_video((string) $media[0]['filename']) : false,
+            'currentUser' => Auth::user(),
+            'hasActive' => Auth::hasActiveSubscription(),
+            'viewedIds' => Gallery::viewedByIds($userId, array_map('intval', array_column($galleries, 'id'))),
             'favoriteGalleryIds' => Gallery::favoriteIds($userId, array_map('intval', array_column($galleries, 'id'))),
         ]);
     }

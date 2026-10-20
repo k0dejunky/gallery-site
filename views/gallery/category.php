@@ -1,5 +1,16 @@
 <?php $title = $category['name']; ?>
 <?php
+// The card partial needs the member's own state (seen, favourited). It is
+// rendered inside a fragment closure, so the closure has to be given these
+// explicitly - and they are defaulted here so a page that does not know
+// about them (a tag page, a preview) never trips an undefined variable.
+$viewedIds         = $viewedIds ?? [];
+$favoriteGalleryIds = $favoriteGalleryIds ?? [];
+$currentUser       = $currentUser ?? null;
+$hasActive         = $hasActive ?? false;
+?>
+
+<?php
 $metaDescription = 'Browse the ' . $category['name'] . ' galleries on ' . config('app.site_name') . ' — original photos and videos in this category.';
 $canonicalUrl = absolute_url('/galleries/category/' . e($category['slug']));
 $ldJson = [
@@ -86,7 +97,7 @@ $catBase = 'cat.' . md5(json_encode([$category['id'] ?? 0, $category['slug'] ?? 
     <?php else: ?>
         <div class="grid">
             <?php
-            echo \App\Core\PageCache::fragment($catBase . '.images.' . md5(json_encode([(string) $q, (int) ($imagePaginator['page'] ?? 1), array_column($imagePaginator['items'], 'id')])), 120, static function () use ($imagePaginator, $cardCovers): void {
+            echo \App\Core\PageCache::fragment($catBase . '.images.' . md5(json_encode([(string) $q, (int) ($imagePaginator['page'] ?? 1), array_column($imagePaginator['items'], 'id')])), 120, static function () use ($imagePaginator, $cardCovers, $viewedIds, $favoriteGalleryIds, $currentUser, $hasActive): void {
                 foreach ($imagePaginator['items'] as $gallery) {
                     $gid = (int) $gallery['id'];
                     $cover = $cardCovers['covers'][$gid] ?? null;
@@ -121,7 +132,7 @@ $catBase = 'cat.' . md5(json_encode([$category['id'] ?? 0, $category['slug'] ?? 
     <?php else: ?>
         <div class="grid">
             <?php
-            echo \App\Core\PageCache::fragment($catBase . '.videos.' . md5(json_encode([(string) $q, (int) ($videoPaginator['page'] ?? 1), array_column($videoPaginator['items'], 'id')])), 120, static function () use ($videoPaginator, $cardCovers): void {
+            echo \App\Core\PageCache::fragment($catBase . '.videos.' . md5(json_encode([(string) $q, (int) ($videoPaginator['page'] ?? 1), array_column($videoPaginator['items'], 'id')])), 120, static function () use ($videoPaginator, $cardCovers, $viewedIds, $favoriteGalleryIds, $currentUser, $hasActive): void {
                 foreach ($videoPaginator['items'] as $gallery) {
                     $gid = (int) $gallery['id'];
                     $cover = $cardCovers['covers'][$gid] ?? null;

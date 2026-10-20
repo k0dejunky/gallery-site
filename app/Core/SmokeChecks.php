@@ -811,6 +811,53 @@ class SmokeChecks
             return $ok('the users list exports itself to CSV');
         });
 
+        $add('smoke.ui.card_state_reaches_the_cards', 'Smoke · UI', 'A member can favourite a gallery from any listing', static function () use ($root, $ok, $bad): array {
+            // The card is rendered inside a PageCache::fragment() closure. A
+            // closure only sees what it is given, so the member's own state
+            // (seen, favourited) used to be lost there: the favourite button
+            // and the "seen" mark never appeared on the listing, the category
+            // pages, the tag pages or the search results.
+            $problems = [];
+            $views = [
+                'views/gallery/index.php'    => 'the gallery listing',
+                'views/gallery/category.php' => 'the category page',
+                'views/gallery/tag.php'      => 'the tag page',
+            ];
+            foreach ($views as $file => $what) {
+                $src = (string) @file_get_contents($root . '/' . $file);
+                // Every card is rendered by a closure; the closure's own
+                // `use (...)` list is what decides what the card can see.
+                preg_match_all('/use \(([^)]*)\)/', $src, $matches, PREG_OFFSET_CAPTURE);
+                foreach ($matches[0] as $match) {
+                    // Only the closure that renders the card matters.
+                    $after = substr($src, (int) $match[1]);
+                    if (strpos($after, 'gallery_card.php') === false) {
+                        continue;
+                    }
+                    $before = substr($src, 0, (int) $match[1]);
+                    // The closest `use (` before the card is the one that
+                    // renders it.
+                    $closest = strrpos($before, 'use (');
+                    if ($closest === false) {
+                        continue;
+                    }
+                    $list = substr($before, $closest + 5, (int) $match[1] - $closest - 5);
+                    foreach (['$viewedIds', '$favoriteGalleryIds', '$currentUser', '$hasActive'] as $var) {
+                        if (strpos($list, $var) === false) {
+                            $problems[] = $what . ' (' . $file . ') does not give ' . $var . ' to the card';
+                        }
+                    }
+                }
+            }
+            $tag = (string) @file_get_contents($root . '/app/Controllers/TagController.php');
+            if (strpos($tag, 'favoriteGalleryIds') === false) {
+                $problems[] = 'the tag page must hand the member\'s favourite state to the view';
+            }
+            return $problems === []
+                ? $ok('the member\'s own state reaches the gallery cards everywhere')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.ui.no_inline_style_blocks', 'Smoke · UI', 'No view carries its own <style> block', static function () use ($root, $ok, $bad): array {
             // Documents that deliberately stand alone (their own <html>, their
             // own CSP) keep their own CSS, and the admin shell injects the
