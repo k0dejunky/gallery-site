@@ -1767,7 +1767,48 @@ if ($publishAtRaw !== '') {
 
         Gallery::softDelete($id);
 
+        // The admin panel deletes a row in place and offers an "Undo" in the
+        // toast, so the JavaScript wants a short JSON answer rather than a
+        // redirect that would download the whole listing again.
+        if ($this->request->wantsJson()) {
+            $this->json(['ok' => true, 'id' => $id, 'title' => (string) $gallery['title']]);
+        }
+
         $this->flash('success', 'Gallery deleted. You can restore it from the admin logs.');
+        $this->redirect('/admin/galleries');
+    }
+
+    /**
+     * Put a soft-deleted gallery back. A gallery delete is reversible, and
+     * the admin list offers it as an "Undo" in the toast right after the
+     * delete, so a mis-click does not mean a re-upload.
+     */
+    public function restore(int $id): void
+    {
+        Auth::requirePermission('galleries');
+
+        $gallery = Gallery::findIncludingDeleted($id);
+
+        if ($gallery === null) {
+            $this->notFound();
+            return;
+        }
+
+        $this->guardSecretAdmin($gallery);
+
+        if ($gallery['deleted_at'] === null) {
+            $this->flash('error', 'That gallery is not deleted.');
+            $this->redirect('/admin/galleries');
+            return;
+        }
+
+        Gallery::restore($id);
+
+        AuditLog::record((int) Auth::user()['id'], 'update', 'gallery', $id,
+            'Restored gallery "' . $gallery['title'] . '"',
+            ['title' => $gallery['title'] ?? '']);
+
+        $this->flash('success', 'Gallery "' . $gallery['title'] . '" restored.');
         $this->redirect('/admin/galleries');
     }
 

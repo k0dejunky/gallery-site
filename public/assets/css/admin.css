@@ -3249,3 +3249,117 @@ body.admin-theme {
 .admin-theme .adm-list-filters .adm-field { flex: 1 1 100%; }
 .admin-theme .adm-list-foot { justify-content: center; }
 }
+
+/* ---------- The confirmation modal ---------------------------------------
+   The native window.confirm() was what every destructive admin action used.
+   It is a browser dialog with no styling and no context. This is a styled
+   one: a real dialog, a focus trap, Escape to cancel, and the focus handed
+   back to the button that opened it. */
+
+.adm-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    background: rgba(12, 6, 18, .62);
+    backdrop-filter: blur(2px);
+}
+
+.adm-modal-backdrop[hidden] { display: none; }
+
+body.adm-modal-open { overflow: hidden; }
+
+.admin-theme .adm-modal,
+.adm-modal {
+    width: min(30rem, 100%);
+    background: var(--adm-surface, #fff);
+    color: var(--adm-text, #24152d);
+    border: 1px solid var(--adm-border-strong, #d8c7e3);
+    border-radius: var(--adm-radius, 10px);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .35);
+    padding: 1.25rem 1.4rem 1.1rem;
+}
+
+.adm-modal-title { margin: 0 0 .5rem; font-size: 1.1rem; font-weight: 700; }
+.adm-modal-text { margin: 0 0 1.1rem; font-size: .9rem; line-height: 1.5; color: var(--adm-text-dim, #5b4a63); }
+.adm-modal-actions { display: flex; gap: .5rem; justify-content: flex-end; flex-wrap: wrap; }
+.adm-modal-ok { min-width: 7rem; }
+.adm-modal-ok.btn-danger { background: var(--adm-err, #b3261e); border-color: var(--adm-err, #b3261e); color: #fff; }
+.adm-modal-ok.btn-danger:hover { filter: brightness(1.08); }
+
+/* ---------- The undo toast ---------------------------------------------- */
+
+.adm-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 1.25rem;
+    transform: translate(-50%, 1rem);
+    z-index: 10060;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    max-width: min(34rem, calc(100vw - 2rem));
+    padding: .7rem .9rem;
+    background: var(--adm-surface, #24152d);
+    color: #fff;
+    border: 1px solid var(--adm-border-strong, #6b4a80);
+    border-radius: var(--adm-radius, 10px);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, .35);
+    font-size: .85rem;
+    opacity: 0;
+    transition: opacity .18s ease, transform .18s ease;
+    pointer-events: none;
+}
+
+.adm-toast[hidden] { display: none; }
+.adm-toast.adm-toast-on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.adm-toast-text { flex: 1 1 auto; }
+.adm-toast-action {
+    flex: none;
+    padding: .3rem .6rem;
+    font: inherit;
+    font-weight: 700;
+    color: #fff;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, .45);
+    border-radius: 6px;
+    cursor: pointer;
+}
+.adm-toast-action:hover { background: rgba(255, 255, 255, .14); }
+.adm-toast-close {
+    flex: none;
+    padding: 0 .25rem;
+    font-size: 1.1rem;
+    line-height: 1;
+    color: rgba(255, 255, 255, .75);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+}
+.adm-toast-close:hover { color: #fff; }
+
+/* ---------- Inline row editing -------------------------------------------
+   A cell that holds a select which has not been saved yet says so: the
+   cell is tinted and a Save / Cancel pair appears next to the control.
+   Nothing is written until Save is pressed, so an arrow key on a focused
+   select cannot change a user's role by accident. */
+
+.adm-inline-controls {
+    display: inline-flex;
+    gap: .35rem;
+    margin-left: .5rem;
+    vertical-align: middle;
+}
+
+.adm-inline-controls[hidden] { display: none; }
+.adm-inline-save { min-width: 4rem; }
+.adm-inline-cancel { min-width: 4.5rem; }
+
+td.adm-inline-pending,
+th.adm-inline-pending {
+    background: color-mix(in srgb, var(--adm-accent, #7b3fa0) 14%, transparent);
+    box-shadow: inset 3px 0 0 var(--adm-accent, #7b3fa0);
+}

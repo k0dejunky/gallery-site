@@ -109,13 +109,17 @@
         checks.forEach(function (c) { c.addEventListener('change', updateCount); });
 
         if (resumeBtn && resumeForm) {
-            resumeBtn.addEventListener('click', function () {
+            resumeBtn.addEventListener('click', async function () {
                 var chosen = checks.filter(function (c) { return c.checked; });
                 if (!chosen.length) {
                     alert('Select at least one upload to resume.');
                     return;
                 }
-                if (!confirm('Stage ' + chosen.length + ' upload(s) for a new gallery? You can finish creating it from the next page.')) return;
+                var ok = await window.adminAsk(
+                    'Stage ' + chosen.length + ' upload(s) for a new gallery? You can finish creating it from the next page.',
+                    { confirmLabel: 'Stage them' }
+                );
+                if (!ok) return;
                 chosen.forEach(function (c) {
                     var input = document.createElement('input');
                     input.type = 'hidden';

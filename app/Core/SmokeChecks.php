@@ -700,6 +700,66 @@ class SmokeChecks
                 : $bad('these views carry their own <style> block - move it into public/assets/css: ' . implode(', ', $offenders));
         });
 
+        $add('smoke.ui.admin_js_layer', 'Smoke · UI', 'The admin panel has a confirmation modal, an undo toast and inline editing', static function () use ($root, $ok, $bad): array {
+            // The admin panel used to ask every destructive question with
+            // window.confirm (a browser dialog with no styling) and to
+            // reload the whole listing after a delete. The admin JS layer
+            // replaces that with a styled modal, a toast that can undo the
+            // delete, and an inline editor that does not save a role on a
+            // stray arrow key.
+            $js   = (string) @file_get_contents($root . '/public/assets/js/admin.js');
+            $css  = (string) @file_get_contents($root . '/public/assets/css/admin.css');
+            $shell = (string) @file_get_contents($root . '/views/admin/layout.php');
+            $users = (string) @file_get_contents($root . '/views/admin/users.php');
+            $galleries = (string) @file_get_contents($root . '/views/admin/galleries.php');
+            $routes = (string) @file_get_contents($root . '/config/routes.php');
+
+            $problems = [];
+            foreach ([
+                'AdminConfirm'            => 'the styled confirmation modal',
+                'function initUndoableDeletes' => 'the undoable row delete',
+                'function initInlineEdit'  => 'the inline row editor',
+                'window.adminToast'        => 'the undo toast',
+            ] as $needle => $what) {
+                if (strpos($js, $needle) === false) {
+                    $problems[] = 'admin.js is missing ' . $what . ' (' . $needle . ')';
+                }
+            }
+            foreach (['.adm-modal', '.adm-toast', '.adm-inline-pending'] as $needle) {
+                if (strpos($css, $needle) === false) {
+                    $problems[] = 'admin.css is missing the ' . $needle . ' styles';
+                }
+            }
+            if (strpos($shell, 'meta name="csrf-token"') === false) {
+                $problems[] = 'the admin shell must publish the CSRF token in a meta tag';
+            }
+            if (strpos($galleries, 'data-undo-url') === false) {
+                $problems[] = 'the gallery delete form must carry data-undo-url';
+            }
+            if (strpos($routes, '/admin/galleries/{id}/restore') === false) {
+                $problems[] = 'there must be a route that undoes a gallery delete';
+            }
+            if (strpos($users, 'data-autosubmit="manual"') === false) {
+                $problems[] = 'the role select must wait for a Save, not save on a stray arrow key';
+            }
+            // A native confirm in an admin view is the old behaviour again.
+            $files = glob($root . '/views/admin/*.php') ?: [];
+            foreach ($files as $file) {
+                $src = (string) @file_get_contents($file);
+                if (basename($file) === 'layout.php') {
+                    continue;   // the shell keeps the native fallback
+                }
+                if (preg_match('/(?<![a-zA-Z0-9_.])confirm\s*\(/', $src, $m, PREG_OFFSET_CAPTURE)) {
+                    $line = substr_count(substr($src, 0, $m[0][1]), "\n") + 1;
+                    $problems[] = basename($file) . ' still asks with a native confirm() on line ' . $line;
+                }
+            }
+
+            return $problems === []
+                ? $ok('the confirmation modal, the undo toast and the inline editor are in place')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.legal.consent_banner', 'Smoke · Legal', 'Consent banner wired into the layout', static function () use ($layoutSrc, $ok, $bad): array {
             return strpos($layoutSrc, "require __DIR__ . '/partials/consent_banner.php'") !== false && strpos($layoutSrc, '$gaShowBanner') !== false
                 ? $ok('banner partial included behind $gaShowBanner')

@@ -358,7 +358,10 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                                     <button type="submit" class="btn btn-sm">Recommend</button>
                                 </form>
                                 <form class="inline" method="post" action="<?= url('/admin/galleries/' . $gid . '/delete') ?>"
-                                      data-confirm="Delete gallery &quot;<?= e((string) $gallery['title']) ?>&quot;?">
+                                      data-confirm="Delete gallery &quot;<?= e((string) $gallery['title']) ?>&quot;?"
+                                      data-undo-url="<?= url('/admin/galleries/' . $gid . '/restore') ?>"
+                                      data-undo-label="&quot;<?= e((string) $gallery['title']) ?>&quot;"
+                                      data-undo-message="Delete gallery &quot;<?= e((string) $gallery['title']) ?>&quot;? It can be undone straight afterwards.">
                                     <?= csrf_field() ?>
                                     <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                                 </form>
@@ -401,7 +404,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
 // gallery row disappears from the duplicate list (and the main table) and,
 // when a pair is broken, the whole group block + the summary count update.
 (function () {
-    document.addEventListener('submit', function (e) {
+    document.addEventListener('submit', async function (e) {
         var form = e.target;
         if (!form.classList || !form.classList.contains('dup-remove-form')) { return; }
         e.preventDefault();
@@ -412,7 +415,11 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
         var title = form.getAttribute('data-title') || 'this gallery';
         var btn   = form.querySelector('button[type=submit]');
 
-        if (!window.confirm('Soft-delete "' + title + '" (#' + (form.getAttribute('data-id') || '') + ')? Its photos are shared with the other copies and will not be deleted.')) {
+        var confirmed = await window.adminAsk(
+            'Soft-delete "' + title + '" (#' + (form.getAttribute('data-id') || '') + ')? Its photos are shared with the other copies and will not be deleted.',
+            { danger: true, confirmLabel: 'Soft-delete' }
+        );
+        if (!confirmed) {
             return;
         }
 

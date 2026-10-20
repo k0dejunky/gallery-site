@@ -730,10 +730,13 @@ function attachHandlers(){
 
 /* ── Scope tabs ── */
 document.querySelectorAll('.se-scope-tab').forEach(function(btn){
-  btn.addEventListener('click',function(){
+  btn.addEventListener('click',async function(){
     var newScope=btn.dataset.scope;
     if(newScope===currentScope)return;
-    if(changes.length&&!confirm('Unsaved changes will be lost. Switch scope?'))return;
+    if(changes.length){
+      var go=await window.adminAsk('Unsaved changes will be lost. Switch scope?',{danger:true,confirmLabel:'Lose the changes'});
+      if(!go)return;
+    }
     window.location.href='<?= url('/admin/site-editor') ?>?scope='+newScope;
   });
 });
@@ -805,8 +808,9 @@ document.getElementById('se-undo').addEventListener('click',function(){
   reloadPreview();
   sendState();renderChanges();
 });
-document.getElementById('se-clear').addEventListener('click',function(){
-  if(!confirm('Clear all changes?'))return;
+document.getElementById('se-clear').addEventListener('click',async function(){
+  var ok=await window.adminAsk('Clear all changes?',{danger:true,confirmLabel:'Clear them'});
+  if(!ok)return;
   changes=[];sendState();renderChanges();
   reloadPreview();
 });
@@ -871,7 +875,7 @@ function renderTemplates(){
   }).join('');
   updateActiveLabel();
   el.querySelectorAll('.se-ti').forEach(function(item){
-    item.addEventListener('click',function(e){
+    item.addEventListener('click',async function(e){
       var btn=e.target.closest('[data-a]');if(!btn)return;
       var id=item.dataset.id,a=btn.dataset.a;
       if(a==='load'){
@@ -891,7 +895,8 @@ function renderTemplates(){
         fetch('<?= url('/admin/site-editor/deactivate') ?>',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest','Content-Type':'application/x-www-form-urlencoded'},body:params.toString()})
         .then(function(){loadTemplates();showMsg('Template deactivated');});
       }else if(a==='delete'){
-        if(!confirm('Delete this template?'))return;
+        var del=await window.adminAsk('Delete this template?',{danger:true,confirmLabel:'Delete'});
+        if(!del)return;
         var params=new URLSearchParams();params.append('_token',CSRF);
         fetch('<?= url('/admin/site-editor/delete/') ?>'+id,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest','Content-Type':'application/x-www-form-urlencoded'},body:params.toString()})
         .then(function(){loadTemplates();});

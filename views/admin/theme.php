@@ -1170,8 +1170,11 @@ $paletteGrid = [
         if (saveButton) saveButton.addEventListener('click', savePreset);
 
         document.querySelectorAll('[data-preset-action]').forEach(function (button) {
-            button.addEventListener('click', function () {
-                if (button.dataset.presetAction === 'delete' && !window.confirm('Delete this theme?')) return;
+            button.addEventListener('click', async function () {
+                if (button.dataset.presetAction === 'delete') {
+                    var del = await window.adminAsk('Delete this theme?', { danger: true, confirmLabel: 'Delete' });
+                    if (!del) return;
+                }
                 var card = button.closest('.preset-card');
                 var presetScope = card ? card.getAttribute('data-preset-scope') : scopeInput.value;
                 var form = document.createElement('form');

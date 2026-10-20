@@ -49,48 +49,53 @@ editing, the drawer focus trap, optimistic table updates.
 ### What is already written (uncommitted)
 - `public/assets/js/admin.js` - `AdminConfirm.ask()` (styled modal, focus trap,
   Escape, focus handed back), `adminAsk()` (falls back to the native confirm),
-  `adminToast()` (with an "Undo" action), `postForm()`, `initUndoableDeletes()`.
-- `public/assets/css/admin.css` - the modal + toast styles.
+  `adminToast()` (with an "Undo" action), `postForm()`, `initUndoableDeletes()`,
+  `initInlineEdit()` (a role change waits for a Save).
+- `public/assets/css/admin.css` - the modal, toast and inline-pending styles.
 - `views/admin/layout.php` - the delegation now asks with the modal instead of
-  `window.confirm`; the double-confirm is handled with a `__admConfirmed` flag.
+  `window.confirm`; the double-confirm is handled with a `__admConfirmed` flag;
+  the shell publishes the CSRF token in a `meta` tag and defines a global
+  `adminAsk()` fallback.
 - `views/admin/galleries.php` - the delete form carries `data-undo-url`,
   `data-undo-label`, `data-undo-message`.
-- `app/Controllers/GalleryController.php` - `restore()` (undoes a soft delete).
+- `app/Controllers/GalleryController.php` - `restore()` (undoes a soft delete)
+  and a JSON answer for the delete when the caller wants JSON.
+- `app/Core/Request.php` - `wantsJson()`.
 - `config/routes.php` - `POST /admin/galleries/{id}/restore`.
+- The native `confirm()` calls left in the admin views (abandoned, galleries,
+  site_editor x3, theme) now use the styled modal.
 
-### The bug that was still open when the session died
+### The bug that was open when the session died (FIXED, needs the dev check)
 The CDP run showed: the modal opens and cancels correctly, but **the delete
 never removes the row and no toast appears** (rows stay at 28, "toast: none").
 
 Root cause (confirmed by reading the code, not guessed):
-- The admin layout has **no `<meta name="csrf-token">`**, so
-  `csrfToken()` in `admin.js` returns `''`.
-- `postForm()` therefore posts `_token=` (empty) -> the router's
-  `Csrf::verify($request->post('_token'))` fails -> **419** -> `r.ok` is false
+- The admin layout had **no `<meta name="csrf-token">`**, so
+  `csrfToken()` in `admin.js` returned `''`.
+- `postForm()` therefore posted `_token=` (empty) -> the router's
+  `Csrf::verify($request->post('_token'))` failed -> **419** -> `r.ok` is false
   -> `window.location.reload()` -> the row is back and there is no toast.
-- Second problem: `GalleryController::destroy()` answers with a **302** to
-  `/admin/galleries`. `fetch()` follows it and downloads the whole page (works
-  by accident, wasteful, and it also drops the flash message semantics).
+- Second problem: `GalleryController::destroy()` answered with a **302** to
+  `/admin/galleries`. `fetch()` followed it and downloaded the whole page.
 
-### Fix plan for Phase 5 (do these in order, commit after the checks pass)
-1. Read the CSRF token from the form's own hidden `_token` input
-   (`form.querySelector('input[name="_token"]')`), falling back to the meta tag.
-   Do the same for the toast's Undo post (pass the token through).
-2. Add `<meta name="csrf-token" content="...">` to `views/admin/layout.php`
-   (and the member layout if the member JS ever needs it) so other scripts can
-   use it.
-3. Make `GalleryController::destroy()` answer JSON when the request wants JSON
-   (add a small `wantsJson()` helper on the base `Controller`; there is no
-   `Request::wantsJson()` today) - `{ok:true,id:N}` - and keep the 302 + flash
-   for the plain form post.
-4. Add the inline row editing (the plan's "a role change is not an arrow-key
-   accident"): the users table role cell becomes a select that saves on change
-   instead of a form submit.
-5. Verify on dev with the CDP harness: delete -> row gone -> toast with Undo ->
-   Undo -> row back; the modal traps focus and Escape cancels; inline role
-   edit saves and reloads the row.
-6. `php tests/smoke.php` (898 checks now) + `php _suite_runner.php`, deploy to
+The fix: the token is read from the form's own hidden `_token` input (with the
+meta tag as the fallback), the shell publishes the token in a meta tag, and the
+delete answers JSON when the request wants JSON.
+
+### The rest of the Phase 5 plan
+1. ~~Fix the CSRF + JSON delete~~ (done, see above).
+2. Inline row editing (done): the role select is `data-autosubmit="manual"`,
+   the layout skips the auto-submit for it and the editor asks for a Save.
+3. Verify on dev with the CDP harness: delete -> row gone -> toast with Undo ->
+   Undo -> row back; the modal traps focus and Escape cancels; the inline role
+   edit saves only on Save.
+4. `php tests/smoke.php` (899 checks now) + `php _suite_runner.php`, deploy to
    dev, re-verify, then commit.
+
+**Smoke check added:** `smoke.ui.admin_js_layer` (the modal, the toast, the
+inline editor, the CSRF meta, the undo route, the manual role select, and no
+native `confirm()` left in an admin view). Proven to bite: reverting the role
+select to `data-autosubmit` fails the check.
 
 ---
 

@@ -85,6 +85,22 @@ class Request
     }
 
     /**
+     * Whether the caller asked for a JSON answer. A form post from the admin
+     * panel's JavaScript says so with an Accept header or the
+     * X-Requested-With one; everything else (a plain browser form post) wants
+     * the usual HTML redirect, so the two paths never fight each other.
+     */
+    public function wantsJson(): bool
+    {
+        $accept = (string) $this->header('Accept');
+        if (stripos($accept, 'application/json') !== false) {
+            return true;
+        }
+
+        return strcasecmp((string) $this->header('X-Requested-With'), 'XMLHttpRequest') === 0;
+    }
+
+    /**
      * Read a request header by name (case-insensitive). Returns the value
      * or null when the header is not present.
      */

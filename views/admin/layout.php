@@ -130,6 +130,7 @@ $icon = static fn (string $name): string => \App\Core\Icon::svg($name);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?= e(\App\Core\Csrf::token()) ?>">
     <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') . ' Admin' : e(config('app.site_name')) . ' Admin' ?></title>
     <link rel="stylesheet" href="<?= e(asset_url('/assets/admin-shared.css')) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/user.css')) ?>">
@@ -312,16 +313,48 @@ if (preg_match('#/admin/([a-z0-9-]+)#', (string) ($current ?? ''), $m)) {
         };
         window.showPickerOn = function (el) { if (el) { try { el.showPicker && el.showPicker(); } catch (e) {} } };
 
+        // A confirmation is asked with the styled modal from admin.js when it
+        // is loaded, and with the native confirm when it is not: a
+        // destructive action must never lose its confirmation because a
+        // script failed to load.
+        //
+        // The global fallback is defined here, in the shell, so a view's own
+        // script can call adminAsk() even when admin.js never arrived.
+        if (!window.adminAsk) {
+            window.adminAsk = function (message) { return Promise.resolve(window.confirm(message)); };
+        }
+        function ask(message, options) {
+            return window.adminAsk(message, options);
+        }
+
         document.addEventListener('submit', function (e) {
             var t = e.target, m;
-            if (t && t.tagName === 'FORM' && (m = t.getAttribute('data-confirm')) && !window.confirm(m)) {
-                e.preventDefault(); e.stopImmediatePropagation();
-            }
+            if (!t || t.tagName !== 'FORM') { return; }
+            m = t.getAttribute('data-confirm');
+            if (!m) { return; }
+            // A form that is being re-submitted after the modal was
+            // answered: let it through. The flag is cleared as soon as the
+            // (synchronous) re-submit returns.
+            if (t.__admConfirmed) { return; }
+            e.preventDefault(); e.stopImmediatePropagation();
+            ask(m, { danger: t.hasAttribute('data-confirm-danger'), confirmLabel: t.getAttribute('data-confirm-label') || 'Yes, continue' })
+                .then(function (ok) {
+                    if (!ok) { return; }
+                    t.__admConfirmed = true;
+                    try {
+                        if (typeof t.requestSubmit === 'function') { t.requestSubmit(); } else { t.submit(); }
+                    } finally {
+                        t.__admConfirmed = false;
+                    }
+                });
         }, true);
         document.addEventListener('change', function (e) {
             var t = e.target;
             if (!t || !t.hasAttribute) return;
-            if (t.hasAttribute('data-autosubmit') && t.form) t.form.submit();
+            // "manual" means the change is NOT saved straight away: the
+            // inline editor in admin.js asks for a Save, so an arrow key on a
+            // focused select cannot change a user's role by accident.
+            if (t.hasAttribute('data-autosubmit') && t.getAttribute('data-autosubmit') !== 'manual' && t.form) t.form.submit();
             if (t.hasAttribute('data-action')) { var a = t.getAttribute('data-action'); if (window[a]) window[a](t, e); }
         }, true);
         document.addEventListener('click', function (e) {
@@ -329,7 +362,22 @@ if (preg_match('#/admin/([a-z0-9-]+)#', (string) ($current ?? ''), $m)) {
             if (!t) return;
             if (t.hasAttribute('data-stop-prop')) { e.stopPropagation(); return; }
             var m = t.getAttribute('data-confirm');
-            if (m && t.tagName !== 'FORM' && !window.confirm(m)) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+            if (m && t.tagName !== 'FORM') {
+                // The click is being re-issued after the modal was answered.
+                if (t.__admConfirmed) { return; }
+                e.preventDefault(); e.stopImmediatePropagation();
+                ask(m, { danger: t.hasAttribute('data-confirm-danger'), confirmLabel: t.getAttribute('data-confirm-label') || 'Yes, continue' })
+                    .then(function (ok) {
+                        if (!ok) { return; }
+                        t.__admConfirmed = true;
+                        try {
+                            t.click();
+                        } finally {
+                            t.__admConfirmed = false;
+                        }
+                    });
+                return;
+            }
             var a = t.getAttribute('data-action');
             if (a && window[a]) { if (t.hasAttribute('data-arg')) window[a](t.getAttribute('data-arg'), t); else window[a](t, e); e.preventDefault(); }
             if (t.hasAttribute('data-copy')) { window.copyToClipboard(t.getAttribute('data-copy'), t); e.preventDefault(); }
@@ -828,7 +876,7 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
         })();
     </script>
     <?php require __DIR__ . '/../partials/tour_targets.php'; ?>
-    <script nonce="<?= csp_nonce() ?>" src="<?= e(url('/assets/js/admin.js')) ?>?v=1" defer></script>
+    <script nonce="<?= csp_nonce() ?>" src="<?= e(url('/assets/js/admin.js')) ?>?v=2" defer></script>
     <script nonce="<?= csp_nonce() ?>" src="<?= e(url('/assets/js/tour.js')) ?>?v=9" defer></script>
 </body>
 </html>

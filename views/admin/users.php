@@ -116,7 +116,7 @@ echo AdminTable::shell([
                 <td>
                     <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/role') ?>" class="inline">
                         <?= csrf_field() ?>
-                        <select name="role" data-autosubmit class="adm-inline-select role-badge <?= e($user['role']) ?>">
+                        <select name="role" data-autosubmit="manual" class="adm-inline-select role-badge <?= e($user['role']) ?>">
                             <?php foreach ($roles as $r): ?>
                                 <option value="<?= e($r) ?>"<?= $user['role'] === $r ? ' selected' : '' ?>><?= e(str_replace('_', ' ', $r)) ?></option>
                             <?php endforeach; ?>
