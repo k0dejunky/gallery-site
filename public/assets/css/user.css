@@ -1038,3 +1038,18 @@ body .u-w-full-mb{width:100% !important;margin-bottom:4px !important}
 }
 .wall-inbox > summary:hover strong{text-decoration:underline}
 .wall-inbox[open] > summary{margin-bottom:.5rem}
+
+/* ---------- Comment replies and reactions -------------------------------- */
+.comment-reactions{display:flex;gap:.35rem;margin-top:.35rem;flex-wrap:wrap}
+.comment-reaction{
+    display:inline-flex;align-items:center;gap:.2rem;
+    padding:.1rem .4rem;border:1px solid var(--card-border,#ddd);border-radius:999px;
+    background:transparent;color:inherit;font:inherit;font-size:.82rem;line-height:1.4;cursor:pointer;
+}
+.comment-reaction:hover{background:var(--surface-2,#f3f0f7)}
+.comment-reaction.is-on{border-color:var(--purple-500,#7e22ce);background:var(--surface-3,#efe9f5)}
+.comment-reaction-count{font-size:.75rem;opacity:.75}
+.comment-replies{margin-top:.4rem;padding-left:.75rem;border-left:2px solid var(--card-border,#ddd);display:grid;gap:.35rem}
+.comment-reply{font-size:.92rem}
+.comment-reply-box{margin-top:.35rem}
+.comment-reply-box > summary{cursor:pointer;font-size:.82rem;color:var(--muted-text-color,#6b5b6b)}

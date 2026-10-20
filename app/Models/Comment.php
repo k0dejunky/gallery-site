@@ -58,10 +58,156 @@ class Comment
              FROM comments c
              JOIN users u ON u.id = c.user_id
              WHERE c.commentable_type = ? AND c.commentable_id = ? AND c.deleted_at IS NULL
+               AND c.parent_id IS NULL
              ORDER BY c.created_at ASC, c.id ASC
              LIMIT ' . max(1, (int) $limit),
             [$type, $commentableId]
         )->fetchAll();
+    }
+
+    /**
+     * The replies to one comment, oldest first.
+     */
+    public static function replies(int $commentId): array
+    {
+        return self::repliesFor([$commentId])[$commentId] ?? [];
+    }
+
+    /**
+     * The replies of a set of comments in ONE query.
+     *
+     * @return array<int, list<array>> comment id => the replies
+     */
+    public static function repliesFor(array $commentIds): array
+    {
+        $ids = array_values(array_filter(array_map('intval', $commentIds), static fn (int $id): bool => $id > 0));
+        if ($ids === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $rows = Database::run(
+            'SELECT c.*, u.role
+             FROM comments c
+             JOIN users u ON u.id = c.user_id
+             WHERE c.parent_id IN (' . $placeholders . ') AND c.deleted_at IS NULL
+             ORDER BY c.created_at ASC, c.id ASC',
+            $ids
+        )->fetchAll();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row['parent_id']][] = $row;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Answer a comment. The reply belongs to the same thread, so it goes
+     * to the parent comment's entity.
+     */
+    public static function addReply(int $userId, int $parentId, string $body): int
+    {
+        $parent = Database::run(
+            'SELECT id, commentable_type, commentable_id FROM comments WHERE id = ? AND deleted_at IS NULL',
+            [$parentId]
+        )->fetch();
+
+        if ($parent === false) {
+            throw new \RuntimeException('That comment is gone.');
+        }
+
+        Database::run(
+            'INSERT INTO comments (user_id, commentable_type, commentable_id, parent_id, body, created_at)
+             VALUES (?, ?, ?, ?, ?, NOW())',
+            [$userId, (string) $parent['commentable_type'], (int) $parent['commentable_id'], $parentId, $body]
+        );
+
+        return (int) Database::connection()->lastInsertId();
+    }
+
+    /**
+     * Toggle a member's reaction on a comment. Returns the new state.
+     */
+    public static function toggleReaction(int $userId, int $commentId, string $reaction): bool
+    {
+        $reaction = trim($reaction);
+        if ($userId <= 0 || $commentId <= 0 || $reaction === '' || mb_strlen($reaction) > 16) {
+            return false;
+        }
+
+        $exists = (int) Database::run(
+            'SELECT COUNT(*) FROM comment_reactions WHERE comment_id = ? AND user_id = ? AND reaction = ?',
+            [$commentId, $userId, $reaction]
+        )->fetchColumn();
+
+        if ($exists > 0) {
+            Database::run(
+                'DELETE FROM comment_reactions WHERE comment_id = ? AND user_id = ? AND reaction = ?',
+                [$commentId, $userId, $reaction]
+            );
+            return false;
+        }
+
+        Database::run(
+            'INSERT IGNORE INTO comment_reactions (comment_id, user_id, reaction) VALUES (?, ?, ?)',
+            [$commentId, $userId, $reaction]
+        );
+
+        return true;
+    }
+
+    /**
+     * The reactions of a set of comments: comment id => reaction => count.
+     */
+    public static function reactionsFor(array $commentIds): array
+    {
+        $ids = array_values(array_filter(array_map('intval', $commentIds), static fn (int $id): bool => $id > 0));
+        if ($ids === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $rows = Database::run(
+            'SELECT comment_id, reaction, COUNT(*) AS n
+             FROM comment_reactions
+             WHERE comment_id IN (' . $placeholders . ')
+             GROUP BY comment_id, reaction',
+            $ids
+        )->fetchAll();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row['comment_id']][(string) $row['reaction']] = (int) $row['n'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * The reactions the given member left on a set of comments.
+     */
+    public static function myReactions(int $userId, array $commentIds): array
+    {
+        $ids = array_values(array_filter(array_map('intval', $commentIds), static fn (int $id): bool => $id > 0));
+        if ($userId <= 0 || $ids === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $rows = Database::run(
+            'SELECT comment_id, reaction FROM comment_reactions
+             WHERE user_id = ? AND comment_id IN (' . $placeholders . ')',
+            array_merge([$userId], $ids)
+        )->fetchAll();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row['comment_id']][] = (string) $row['reaction'];
+        }
+
+        return $out;
     }
 
     public static function countFor(string $type, int $commentableId): int

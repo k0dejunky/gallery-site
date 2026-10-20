@@ -1397,6 +1397,36 @@ class SmokeChecks
                 : $bad('these views carry their own <style> block - move it into public/assets/css: ' . implode(', ', $offenders));
         });
 
+        $add('smoke.ui.search_has_its_parts', 'Smoke · UI', 'The member search has every part it needs', static function () use ($root, $ok, $bad): array {
+            // The search was the one path nothing covered: the dev box ran
+            // 910 smoke checks while every member search answered 500 (a
+            // missing migration, a stale model, a missing index).
+            $stats  = (string) @file_get_contents($root . '/app/Models/Stats.php');
+            $model  = (string) @file_get_contents($root . '/app/Models/Gallery.php');
+            $schema = (string) @file_get_contents($root . '/schema.sql');
+            $problems = [];
+
+            if (strpos($stats, 'public static function recordSearch(') === false) {
+                $problems[] = 'the searches are not recorded (Stats::recordSearch)';
+            }
+            if (strpos($stats, 'public static function popularSearches(') === false) {
+                $problems[] = 'the popular searches are never listed (Stats::popularSearches)';
+            }
+            if (strpos($model, 'MATCH(p2.caption)') === false) {
+                $problems[] = 'the photo captions are not searched';
+            }
+            if (strpos($schema, 'ft_caption') === false) {
+                $problems[] = 'the caption fulltext index is missing from schema.sql';
+            }
+            if (strpos($model, 'likePrefix') === false) {
+                $problems[] = 'a short search does not use the indexed prefix path';
+            }
+
+            return $problems === []
+                ? $ok('the search records, lists and matches everything it should')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.ui.balanced_markup', 'Smoke · UI', 'The views open and close the same number of divs', static function () use ($root, $ok, $bad): array {
             // A <div> closed by </p> (or a missing </div>) makes everything
             // after it a child of that div, and the page turns into columns:

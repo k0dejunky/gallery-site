@@ -1122,6 +1122,176 @@ class TestSuite
             }
         });
 
+        $add('db.comment_replies_and_reactions', 'Database', 'A comment can be answered and reacted to', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $userId = (int) Database::run(
+                        "SELECT id FROM users WHERE role = 'user' AND status = 'active' ORDER BY id LIMIT 1"
+                    )->fetchColumn();
+                    $galleryId = (int) Database::run(
+                        'SELECT id FROM galleries WHERE deleted_at IS NULL ORDER BY id LIMIT 1'
+                    )->fetchColumn();
+                    if ($userId <= 0 || $galleryId <= 0) {
+                        return ['pass' => true, 'detail' => 'no user/gallery fixture; nothing to prove'];
+                    }
+
+                    $parentId = \App\Models\Comment::add($userId, 'gallery', $galleryId, 'probe parent');
+                    $replyId  = \App\Models\Comment::addReply($userId, $parentId, 'probe reply');
+                    $replies  = \App\Models\Comment::replies($parentId);
+
+                    $on  = \App\Models\Comment::toggleReaction($userId, $parentId, 'like');
+                    $off = \App\Models\Comment::toggleReaction($userId, $parentId, 'like');
+                    $counts = \App\Models\Comment::reactionsFor([$parentId]);
+                    $mine   = \App\Models\Comment::myReactions($userId, [$parentId]);
+
+                    // The share token: the same collection, two links, and
+                    // clearing it kills the link.
+                    $collectionId = \App\Models\Collection::create($userId, 'probe collection');
+                    $token = \App\Models\Collection::shareToken($collectionId, $userId);
+                    $same  = \App\Models\Collection::shareToken($collectionId, $userId);
+                    $found = \App\Models\Collection::findByShareToken($token);
+                    \App\Models\Collection::clearShareToken($collectionId, $userId);
+                    $gone = \App\Models\Collection::findByShareToken($token);
+
+                    return [
+                        'pass'   => count($replies) === 1
+                            && (int) ($replies[0]['id'] ?? 0) === $replyId
+                            && $on === true && $off === false
+                            && (int) ($counts[$parentId]['like'] ?? 0) === 0
+                            && $mine === []
+                            && $token !== '' && $same === $token
+                            && $found !== null && (int) $found['id'] === $collectionId
+                            && $gone === null,
+                        'detail' => 'replies=' . count($replies)
+                            . ' reaction on/off=' . ($on ? 'yes' : 'no') . '/' . ($off ? 'no' : 'yes')
+                            . ' share=' . ($token !== '' ? 'ok' : 'NO') . '/' . ($gone === null ? 'cleared' : 'STILL LIVE'),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                    try {
+                        Database::run('DELETE FROM comments WHERE body LIKE ?', ['probe %']);
+                    } catch (\Throwable $ignored) {
+                    }
+                    try {
+                        Database::run('DELETE FROM collections WHERE name LIKE ?', ['probe %']);
+                    } catch (\Throwable $ignored) {
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
+        $add('db.member_search_works', 'Database', 'The member search runs and finds a gallery by its title', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                $stamp = bin2hex(random_bytes(4));
+
+                try {
+                    // A COMMITTED gallery: the fulltext index only sees a row
+                    // once its transaction has committed, so a row created
+                    // inside this test's transaction would not be found.
+                    $row = Database::run(
+                        "SELECT id, title FROM galleries
+                         WHERE deleted_at IS NULL AND CHAR_LENGTH(title) > 8
+                         ORDER BY id DESC LIMIT 1"
+                    )->fetch();
+                    if ($row === false) {
+                        return ['pass' => true, 'detail' => 'no gallery fixture; nothing to prove'];
+                    }
+                    $galleryId = (int) $row['id'];
+                    $title    = (string) $row['title'];
+
+                    // A word from that title (three characters or more, so the
+                    // fulltext index can use it).
+                    $word = '';
+                    foreach (preg_split('/\s+/u', $title) as $part) {
+                        if (mb_strlen(trim($part)) >= 4) {
+                            $word = trim($part);
+                            break;
+                        }
+                    }
+                    if ($word === '') {
+                        return ['pass' => true, 'detail' => 'no usable search word in the fixture title'];
+                    }
+
+                    // The search itself: the fulltext path, the caption
+                    // path and the short-term prefix path all have to run
+                    // without a database error.
+                    $hits = \App\Models\Gallery::paginate(1, 50, [
+                        'q'            => $word,
+                        'max_level'    => PHP_INT_MAX,
+                    ]);
+                    $found = false;
+                    foreach ($hits['items'] as $item) {
+                        if ((int) $item['id'] === $galleryId) {
+                            $found = true;
+                        }
+                    }
+
+                    // A term under three characters takes the prefix path
+                    // (the fulltext index cannot use it).
+                    $short = \App\Models\Gallery::paginate(1, 6, [
+                        'q'         => 'pro',
+                        'max_level' => PHP_INT_MAX,
+                    ]);
+
+                    // And the searches are recorded (the "popular searches"
+                    // the member sees when a search comes up empty).
+                    $userId = 0;
+                    $email = 'searchprobe.' . $stamp . '@example.invalid';
+                    Database::run(
+                        "INSERT INTO users (email, password_hash, role, status, email_verified_at, created_at)
+                         VALUES (?, 'x', 'user', 'active', NOW(), NOW())",
+                        [$email]
+                    );
+                    $userId = (int) Database::connection()->lastInsertId();
+                    \App\Models\Stats::recordSearch($word, $userId, true);
+                    $popular = \App\Models\Stats::popularSearches(5);
+                    $isPopular = in_array($word, $popular, true);
+
+                    return [
+                        'pass'   => $found && (int) $short['total'] >= 0 && $isPopular,
+                        'detail' => 'found=' . ($found ? 'yes' : 'NO')
+                            . ' short=' . (int) $short['total']
+                            . ' popular=' . ($isPopular ? 'yes' : 'NO'),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                    try {
+                        Database::run('DELETE FROM users WHERE email LIKE ?', ['searchprobe.%']);
+                    } catch (\Throwable $ignored) {
+                    }
+
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.related_respects_the_level', 'Database', 'The related and recommended rails only offer galleries the member can open', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

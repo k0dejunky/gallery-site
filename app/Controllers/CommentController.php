@@ -98,4 +98,68 @@ class CommentController extends Controller
         $this->flash('success', 'Comment posted.');
         $this->redirect($back . '#comment-' . $id);
     }
+
+    /**
+     * Answer a comment. The reply belongs to the parent's thread.
+     */
+    public function reply(): void
+    {
+        Auth::requireLogin();
+
+        $user     = Auth::user();
+        $parentId = (int) $this->request->post('parent_id', '0');
+        $body     = trim((string) $this->request->post('body', ''));
+        $back     = $this->request->header('HTTP_REFERER') ?: '/';
+
+        if ($parentId <= 0) {
+            $this->flash('error', 'Which comment are you answering?');
+            $this->redirect($back);
+            return;
+        }
+
+        if ($body === '') {
+            $this->flash('error', 'Please write a reply before posting.');
+            $this->redirect($back);
+            return;
+        }
+
+        if (mb_strlen($body) > 2000) {
+            $this->flash('error', 'Replies are limited to 2000 characters.');
+            $this->redirect($back);
+            return;
+        }
+
+        try {
+            $id = Comment::addReply((int) $user['id'], $parentId, $body);
+        } catch (\Throwable $e) {
+            $this->flash('error', 'That comment is gone.');
+            $this->redirect($back);
+            return;
+        }
+
+        $this->flash('success', 'Reply posted.');
+        $this->redirect($back . '#comment-' . $id);
+    }
+
+    /**
+     * Toggle a reaction on a comment.
+     */
+    public function react(): void
+    {
+        Auth::requireLogin();
+
+        $user      = Auth::user();
+        $commentId = (int) $this->request->post('comment_id', '0');
+        $reaction  = trim((string) $this->request->post('reaction', ''));
+        $back      = $this->request->header('HTTP_REFERER') ?: '/';
+
+        if ($commentId <= 0 || $reaction === '') {
+            $this->redirect($back);
+            return;
+        }
+
+        Comment::toggleReaction((int) $user['id'], $commentId, $reaction);
+
+        $this->redirect($back . '#comment-' . $commentId);
+    }
 }

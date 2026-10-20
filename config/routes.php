@@ -98,6 +98,9 @@ return [
     ['GET', '/collections', 'CollectionController@index'],
     ['POST', '/collections', 'CollectionController@create'],
     ['GET', '/collections/{id}', 'CollectionController@show'],
+    // The private share link (no login: the token IS the permission).
+    ['GET', '/collections/{id}/s/{token}', 'CollectionController@share'],
+    ['POST', '/collections/{id}/stop-sharing', 'CollectionController@stopSharing'],
     ['POST', '/collections/{id}/rename', 'CollectionController@rename'],
     ['POST', '/collections/{id}/delete', 'CollectionController@delete'],
     ['POST', '/collections/{id}/galleries', 'CollectionController@addGallery'],
@@ -118,6 +121,8 @@ return [
     // Wall, comments, ratings, notifications (logged in)
     ['GET', '/wall', 'WallController@index'],
     ['POST', '/comments', 'CommentController@store'],
+    ['POST', '/comments/reply', 'CommentController@reply'],
+    ['POST', '/comments/react', 'CommentController@react'],
     ['POST', '/galleries/{id}/rate', 'GalleryRatingController@store'],
     ['POST', '/galleries/{id}/unlock', 'PurchaseController@unlock'],
     ['POST', '/galleries/{id}/unlock-live', 'PurchaseController@unlockLive'],

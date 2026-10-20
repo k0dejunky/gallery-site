@@ -102,6 +102,31 @@ if [[ -n "${DEPLOY_HEALTH_URL:-}" ]]; then
     curl --fail --silent --show-error --location --max-time "${DEPLOY_HEALTH_TIMEOUT:-15}" "$DEPLOY_HEALTH_URL" >/dev/null
 fi
 
+# Verify what actually landed. A deploy that fails half way (or one that is
+# rolled back) can leave the box with a MIX of old and new files, and the
+# symptom is a page that breaks in a way nobody can explain. Every deployed
+# file must match the repo byte for byte.
+echo ">> verifying the deployed files"
+VERIFY_PATHS=""
+for rel in "${FILES[@]}"; do
+    VERIFY_PATHS+=" '$rel'"
+done
+REMOTE_SUMS="$(ssh "$HOST" "cd '$REMOTE_ROOT' && md5sum $VERIFY_PATHS 2>/dev/null" || true)"
+MISMATCHED=0
+while read -r sum path; do
+    [[ -n "${path:-}" ]] || continue
+    local_sum="$(md5sum "$REPO_ROOT/$path" 2>/dev/null | cut -d' ' -f1)"
+    if [[ "$sum" != "$local_sum" ]]; then
+        echo ">> MISMATCH: $path (server $sum, repo ${local_sum:-missing})" >&2
+        MISMATCHED=$((MISMATCHED + 1))
+    fi
+done <<< "$REMOTE_SUMS"
+if [[ $MISMATCHED -gt 0 ]]; then
+    echo ">> $MISMATCHED file(s) do not match the repo - the server is NOT in sync" >&2
+    exit 1
+fi
+echo ">> the deployed files match the repo"
+
 if [[ "${DEPLOY_NO_RELOAD:-0}" != 1 ]]; then
     echo ">> reloading php-fpm"
     remote "systemctl reload php7.4-fpm 2>/dev/null || true

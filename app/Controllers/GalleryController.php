@@ -406,6 +406,13 @@ class GalleryController extends Controller
             }
         }
 
+        // The two strips above the catalogue: the newest galleries and the
+        // ones being looked at this week. The trending one is filtered by
+        // the member's level, so it never advertises a locked gallery.
+        $recentStrip   = \App\Models\Gallery::paginate(1, 8, $filters)['items'];
+        $trendingStrip = \App\Models\Gallery::trending(7, 8, $maxLevel);
+        $stripCovers   = \App\Models\Gallery::preloadCards(array_merge($recentStrip, $trendingStrip));
+
         $this->view('gallery/index', [
             'paginator'     => $q !== '' ? $paginator : null,
             'categories'    => $categories,
@@ -426,6 +433,12 @@ class GalleryController extends Controller
             'favoriteGalleryIds' => $favoriteGalleryIds,
             'favoriteGalleries' => $favoriteGalleries,
             'recommended'  => $user !== null ? \App\Models\Gallery::recommended((int) $user['id'], $viewedIds, 6, $maxLevel) : [],
+            // Two more strips above the catalogue: what is new, and what is
+            // being looked at this week. The trending one is filtered by the
+            // member's level, so it never advertises a locked gallery.
+            'recentStrip'   => $recentStrip,
+            'trendingStrip' => $trendingStrip,
+            'stripCovers'   => $stripCovers,
             // How many galleries in the whole collection are above the
             // member's level. The listing says so instead of quietly
             // pretending the paid categories are empty.

@@ -86,10 +86,10 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
 <?php endif; ?>
 
 <?php if ($q === ''): ?>
-<?php /* The listing: the newest galleries of every category, each category
-         bounded, and the member's own picks FIRST - the recommendation
-         strip used to sit at the very bottom, under the whole catalogue,
-         and it is empty for a member with no favourites yet. */ ?>
+<?php /* The listing: the member's own picks FIRST, then what is new and
+         what is being looked at, and only then the catalogue - the
+         recommendation strip used to sit at the very bottom, under the
+         whole catalogue. */ ?>
 <?php if (!empty($recommended)): ?>
 <section class="fav-section">
     <h2>Recommended for you</h2>
@@ -107,6 +107,42 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
             }
         });
         ?>
+    </div>
+</section>
+<?php endif; ?>
+
+<?php /* Recently added: the newest galleries, whatever their category. */ ?>
+<?php if (!empty($recentStrip)): ?>
+<section class="fav-section">
+    <h2>Recently added</h2>
+    <p class="muted">The newest sets in the collection.</p>
+    <div class="grid">
+        <?php foreach ($recentStrip as $recentGallery): ?>
+            <?php
+            $gallery = $recentGallery;
+            $cover = $stripCovers['covers'][(int) $recentGallery['id']] ?? null;
+            $galleryCategories = $stripCovers['categories'][(int) $recentGallery['id']] ?? [];
+            require __DIR__ . '/../partials/gallery_card.php';
+            ?>
+        <?php endforeach; ?>
+    </div>
+</section>
+<?php endif; ?>
+
+<?php /* Trending this week: what the members are actually looking at. */ ?>
+<?php if (!empty($trendingStrip)): ?>
+<section class="fav-section">
+    <h2>Trending this week</h2>
+    <p class="muted">The sets getting the most views over the last seven days.</p>
+    <div class="grid">
+        <?php foreach ($trendingStrip as $trendingGallery): ?>
+            <?php
+            $gallery = $trendingGallery;
+            $cover = $stripCovers['covers'][(int) $trendingGallery['id']] ?? null;
+            $galleryCategories = $stripCovers['categories'][(int) $trendingGallery['id']] ?? [];
+            require __DIR__ . '/../partials/gallery_card.php';
+            ?>
+        <?php endforeach; ?>
     </div>
 </section>
 <?php endif; ?>

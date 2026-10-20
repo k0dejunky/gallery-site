@@ -45,6 +45,26 @@ $collectionList = implode("\n", $collectionList);
     <?php endif; ?>
 </p>
 
+<?php /* The private share link: somebody else can see the set without an
+      account, and the owner can kill the link. */ ?>
+<?php $shareUrl = !empty($shareToken) ? url('/collections/' . (int) ($collection['id'] ?? 0) . '/s/' . $shareToken) : ''; ?>
+<section class="card" style="padding:1rem;margin-bottom:1.5rem;">
+    <h2 style="margin:0 0 .5rem;font-size:1rem;">Share this collection</h2>
+    <?php if ($shareUrl !== ''): ?>
+        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+            <input type="text" id="collection-share-url" readonly value="<?= e($shareUrl) ?>" aria-label="The share link" style="flex:1;min-width:240px;">
+            <button type="button" class="btn btn-sm" data-copy="collection-share-url" data-copy-label="Copy link">Copy the link</button>
+            <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/stop-sharing') ?>">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-sm btn-outline" data-confirm="Stop sharing? The link will stop working for everybody.">Stop sharing</button>
+            </form>
+        </div>
+        <p class="muted u-fs-085" style="margin:.5rem 0 0;">Anyone with this link can see the collection. Nobody has to sign in.</p>
+    <?php else: ?>
+        <p class="muted">This collection is not shared.</p>
+    <?php endif; ?>
+</section>
+
 <section class="card" style="padding:1rem;margin-bottom:1.5rem;">
     <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/rename') ?>" class="settings-form" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
         <?= csrf_field() ?>

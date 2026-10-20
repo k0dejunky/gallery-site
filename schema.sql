@@ -245,8 +245,12 @@ CREATE TABLE IF NOT EXISTS collections (
     id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id    INT UNSIGNED NOT NULL,
     name       VARCHAR(120) NOT NULL,
+    -- A random token: /collections/{id}/s/{token} shows the set to somebody
+    -- else, and the owner can clear it to kill the link.
+    share_token CHAR(32) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_collections_user (user_id),
+    UNIQUE KEY uq_collections_share_token (share_token),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -1012,11 +1016,27 @@ CREATE TABLE IF NOT EXISTS comments (
     user_id          INT UNSIGNED NOT NULL,
     commentable_type ENUM('gallery','wall_post','photo') NOT NULL,
     commentable_id   INT UNSIGNED NOT NULL,
+    -- A reply belongs to the comment it answers.
+    parent_id        INT UNSIGNED NULL,
     body             TEXT NOT NULL,
     created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at       DATETIME NULL,
     INDEX idx_comments_entity (commentable_type, commentable_id),
     INDEX idx_comments_created (created_at),
+    INDEX idx_comments_parent (parent_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT comments_parent_fk FOREIGN KEY (parent_id) REFERENCES comments(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- One reaction per member per comment.
+CREATE TABLE IF NOT EXISTS comment_reactions (
+    comment_id INT UNSIGNED NOT NULL,
+    user_id    INT UNSIGNED NOT NULL,
+    reaction   VARCHAR(16) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (comment_id, user_id, reaction),
+    INDEX idx_comment_reactions_comment (comment_id),
+    FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

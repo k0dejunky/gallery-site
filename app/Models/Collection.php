@@ -91,6 +91,61 @@ class Collection
         return $row ?: null;
     }
 
+    /**
+     * The share token of a collection, created on the first request.
+     *
+     * The owner keeps it: clearing it kills the link.
+     */
+    public static function shareToken(int $collectionId, int $userId): string
+    {
+        if (!self::owns($collectionId, $userId)) {
+            return '';
+        }
+
+        $row = Database::run(
+            'SELECT share_token FROM collections WHERE id = ? LIMIT 1',
+            [$collectionId]
+        )->fetch();
+
+        $token = (string) ($row['share_token'] ?? '');
+        if ($token !== '') {
+            return $token;
+        }
+
+        $token = bin2hex(random_bytes(16));
+        Database::run(
+            'UPDATE collections SET share_token = ? WHERE id = ? AND user_id = ?',
+            [$token, $collectionId, $userId]
+        );
+
+        return $token;
+    }
+
+    /** Stop sharing a collection: the link stops working. */
+    public static function clearShareToken(int $collectionId, int $userId): bool
+    {
+        return Database::run(
+            'UPDATE collections SET share_token = NULL WHERE id = ? AND user_id = ?',
+            [$collectionId, $userId]
+        )->rowCount() > 0;
+    }
+
+    /** The collection a share token points at, or null. */
+    public static function findByShareToken(string $token): ?array
+    {
+        $token = trim($token);
+        if ($token === '') {
+            return null;
+        }
+
+        $row = Database::run(
+            'SELECT * FROM collections WHERE share_token = ? LIMIT 1',
+            [$token]
+        )->fetch();
+
+        return $row ?: null;
+    }
+
     /** Whether a collection belongs to the given user. */
     public static function owns(int $collectionId, int $userId): bool
     {

@@ -1538,8 +1538,12 @@ class Gallery
      * Trending galleries: most-viewed (by content_views) over the trailing
      * window. Excludes secret galleries so the strip is guest-safe.
      */
-    public static function trending(int $days = 7, int $limit = 6): array
+    public static function trending(int $days = 7, int $limit = 6, int $maxLevel = PHP_INT_MAX): array
     {
+        // The level filter, so the trending strip does not advertise a
+        // gallery the member cannot open.
+        $levelClause = $maxLevel < PHP_INT_MAX ? ' AND g.min_level <= ' . (int) $maxLevel : '';
+
         return Database::run(
             'SELECT g.*,
                     (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count,
@@ -1552,7 +1556,7 @@ class Gallery
                  WHERE entity_type = \'gallery\' AND view_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
                  GROUP BY entity_id
              ) ts ON ts.gid = g.id
-             WHERE g.is_secret = 0 AND ' . self::publishedVisibleSql('g') . '
+             WHERE g.is_secret = 0 AND ' . self::publishedVisibleSql('g') . $levelClause . '
              ORDER BY trend_n DESC, g.views DESC, g.id DESC
              LIMIT ' . max(1, (int) $limit),
             [max(1, (int) $days)]

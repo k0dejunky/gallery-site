@@ -61,7 +61,46 @@ class CollectionController extends Controller
             'favoriteGalleryIds' => Gallery::favoriteIds($userId, array_map('intval', array_column($galleries, 'id'))),
             // The card data in two queries, not two per gallery.
             'cardCovers' => Gallery::preloadCards($galleries),
+            // The private share link (created on the first visit).
+            'shareToken' => Collection::shareToken($id, $userId),
         ]);
+    }
+
+    /**
+     * The private share link: /collections/{id}/s/{token}.
+     *
+     * It shows the set to somebody else without an account, and the owner
+     * can clear the token to kill the link.
+     */
+    public function share(int $id, string $token): void
+    {
+        $collection = Collection::findByShareToken($token);
+
+        if ($collection === null || (int) $collection['id'] !== $id) {
+            $this->notFound();
+            return;
+        }
+
+        $galleries = Collection::galleries($id, (int) $collection['user_id']);
+        $media     = Collection::media($id, (int) $collection['user_id']);
+
+        $this->view('collections/share', [
+            'collection' => $collection,
+            'galleries'  => $galleries,
+            'media'      => $media,
+            'cardCovers' => Gallery::preloadCards($galleries),
+        ]);
+    }
+
+    /** Stop sharing a collection: the link stops working. */
+    public function stopSharing(int $id): void
+    {
+        Auth::requireLogin();
+
+        Collection::clearShareToken($id, (int) $_SESSION['user_id']);
+
+        $this->flash('success', 'The share link no longer works.');
+        $this->redirect('/collections/' . $id);
     }
 
     /** Create a collection. */
