@@ -246,13 +246,16 @@ require __DIR__ . '/partials/upload_client.php';
         <div class="bulk-photo-toolbar">
             <label><input type="checkbox" id="select-all-images"> Select all</label>
             <span class="muted" id="selected-image-count">0 selected</span>
-            <?php if (!empty($activeEditJob) && in_array($activeEditJob['status'], ['queued', 'running'], true)): ?>
-                <span class="muted" id="edit-job-status">
+            <?php /* The status line is ALWAYS there: the bulk actions post in
+                the background now, so the page updates this text in place
+                instead of reloading. */ ?>
+            <span class="muted" id="edit-job-status">
+                <?php if (!empty($activeEditJob) && in_array($activeEditJob['status'], ['queued', 'running'], true)): ?>
                     <?= $activeEditJob['operation'] === 'bulk_watermark' ? 'Watermark in progress' : 'Rotate in progress' ?>:
                     <?= e($activeEditJob['status']) ?>
                     (<?= (int) $activeEditJob['done'] + (int) $activeEditJob['failed'] ?>/<?= (int) $activeEditJob['total'] ?>, <?= (int) $activeEditJob['progress'] ?>%)
-                </span>
-            <?php endif; ?>
+                <?php endif; ?>
+            </span>
             <button type="submit" name="direction" value="left" class="btn btn-sm" disabled data-bulk-rotate>&larr; Rotate left</button>
             <button type="submit" name="direction" value="right" class="btn btn-sm" disabled data-bulk-rotate>Rotate right &rarr;</button>
             <input type="text" name="caption" placeholder="Caption for selected…" style="max-width:170px;" disabled data-bulk-caption-input>
@@ -400,6 +403,125 @@ require __DIR__ . '/partials/upload_client.php';
     </script>
     <script nonce="<?= csp_nonce() ?>">
     (function () {
+        /* The bulk form posts in the BACKGROUND: the page used to reload on
+           every rotation, which threw the admin back to the top of a long
+           gallery and lost their place. Now the request goes out, the
+           "rotation in progress" text updates in place, and the thumbnails
+           refresh when the job is done. Without JS the form still posts
+           normally. */
+        var bulkForm = document.querySelector('form.bulk-photo-form');
+        if (!bulkForm) { return; }
+        var statusEl = document.getElementById('edit-job-status');
+        var base = (document.body && document.body.getAttribute('data-base')) || '';
+        var pollTimer = null;
+
+        function setStatus(text) { if (statusEl) { statusEl.textContent = text; } }
+
+        function refreshThumbs() {
+            document.querySelectorAll('.card-cover img, td img, .media-thumb img').forEach(function (img) {
+                var src = img.getAttribute('src') || '';
+                if (!src) { return; }
+                img.src = src.split('?')[0] + '?size=thumb&v=' + Date.now();
+            });
+        }
+
+        function busy(on) {
+            window.__manageJobActive = on;
+            if (typeof window.__manageUpdateButtons === 'function') { window.__manageUpdateButtons(); }
+        }
+
+        /* A finished watermark job can be undone, so the button appears
+           without a reload. */
+        function showUndo(count) {
+            if (!count) { return; }
+            var toolbar = document.querySelector('.bulk-photo-toolbar');
+            if (!toolbar) { return; }
+            var button = document.getElementById('watermark-undo');
+            if (!button) {
+                button = document.createElement('button');
+                button.type = 'submit';
+                button.id = 'watermark-undo';
+                button.className = 'btn btn-sm btn-outline';
+                button.setAttribute('formaction', toolbar.closest('form').getAttribute('action')
+                    .replace(/\/photos\/bulk-rotate$/, '/watermark-undo'));
+                button.setAttribute('data-confirm', 'Restore the originals saved by the last watermark run for this gallery?');
+                toolbar.appendChild(button);
+            }
+            button.textContent = 'Undo watermark (' + count + ')';
+        }
+
+        function pollJob(jobId) {
+            if (pollTimer) { clearInterval(pollTimer); }
+            pollTimer = setInterval(function () {
+                fetch(base + '/admin/photos/job/' + jobId, { headers: { 'Accept': 'application/json' } })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (!data || !data.ok) { return; }
+                        if (data.active) {
+                            setStatus((data.operation === 'bulk_watermark' ? 'Watermark' : 'Rotation')
+                                + ' in progress: ' + data.done + '/' + data.total + '…');
+                            return;
+                        }
+                        clearInterval(pollTimer);
+                        pollTimer = null;
+                        busy(false);
+                        setStatus(data.failed > 0
+                            ? 'Finished: ' + data.done + ' done, ' + data.failed + ' failed.'
+                            : 'Finished: ' + data.done + ' done.');
+                        refreshThumbs();
+                        showUndo(data.backups);
+                    })
+                    .catch(function () { clearInterval(pollTimer); pollTimer = null; busy(false); });
+            }, 1500);
+        }
+
+        // The other script on this page watches a job that is already running.
+        window.__manageWatchJob = pollJob;
+
+        bulkForm.addEventListener('submit', function (e) {
+            /* The undo-watermark button posts to its own action and is a
+               page-level action: let it submit normally. */
+            var undo = e.submitter && String(e.submitter.id || '') === 'watermark-undo';
+            if (undo) { return; }
+
+            e.preventDefault();
+
+            /* The buttons carry their own formaction (the caption and the
+               delete actions), so the request has to go to the CLICKED
+               button's action, not to the form's. The attribute is read
+               directly: the formAction property falls back to the page URL
+               when a button has no formaction of its own. */
+            var submitter = e.submitter || null;
+            var own = submitter ? submitter.getAttribute('formaction') : null;
+            var action = own ? new URL(own, location.href).href : bulkForm.action;
+            var fd = new FormData(bulkForm);
+            busy(true);
+            setStatus('Queuing…');
+
+            fetch(action, {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-Requested-With': 'fetch', 'Accept': 'application/json' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data || !data.ok) {
+                        busy(false);
+                        setStatus('That did not work: ' + ((data && data.error) || 'unknown error'));
+                        return;
+                    }
+                    setStatus(data.message || 'Queued.');
+                    if (data.job_id) { pollJob(data.job_id); }
+                })
+                .catch(function () {
+                    busy(false);
+                    setStatus('The request failed. Reload the page to try again.');
+                });
+        });
+    }());
+    </script>
+    <script nonce="<?= csp_nonce() ?>">
+    (function () {
         var all = document.getElementById('select-all-images');
         var boxes = Array.prototype.slice.call(document.querySelectorAll('[data-image-select]'));
         var buttons = Array.prototype.slice.call(document.querySelectorAll('[data-bulk-rotate], [data-bulk-caption], [data-bulk-delete]'));
@@ -412,13 +534,17 @@ require __DIR__ . '/partials/upload_client.php';
             if (all) all.disabled = true;
         }
         function update() {
+            // A job queued from this page (the bulk rotate posts in the
+            // background) keeps the buttons off until it is done.
+            var busy = jobActive || window.__manageJobActive === true;
             var selected = boxes.filter(function (box) { return box.checked && !box.disabled; }).length;
             count.textContent = selected + ' selected';
-            buttons.forEach(function (button) { button.disabled = selected === 0 || jobActive; });
-            if (captionInput) captionInput.disabled = selected === 0 || jobActive;
-            if (watermarkButton) watermarkButton.disabled = selected === 0 || jobActive;
+            buttons.forEach(function (button) { button.disabled = selected === 0 || busy; });
+            if (captionInput) captionInput.disabled = selected === 0 || busy;
+            if (watermarkButton) watermarkButton.disabled = selected === 0 || busy;
             if (all) all.checked = boxes.length > 0 && selected === boxes.length;
         }
+        window.__manageUpdateButtons = update;
         if (all) all.addEventListener('change', function () {
             boxes.forEach(function (box) { box.checked = all.checked; });
             update();
@@ -542,11 +668,13 @@ require __DIR__ . '/partials/upload_client.php';
         form.submit();
     });
 
-    // While a job runs, reload the page periodically so the progress line and
-    // the restored item list refresh as the worker updates them.
+    /* A job that is already running when the page opens is watched in place.
+       The page used to reload itself every five seconds while a job ran,
+       which threw the admin back to the top of a long gallery; the progress
+       line and the undo button now update without a reload. */
     var jobRunning = <?php echo (!empty($activeEditJob) && in_array($activeEditJob['status'], ['queued', 'running'], true)) ? 'true' : 'false'; ?>;
-    if (jobRunning) {
-        setTimeout(function () { window.location.reload(); }, 5000);
+    if (jobRunning && typeof window.__manageWatchJob === 'function') {
+        window.__manageWatchJob(<?php echo (int) ($activeEditJob['id'] ?? 0); ?>);
     }
 }());
 </script>

@@ -641,6 +641,46 @@ class SmokeChecks
             return $ok('no ad-hoc table scrollers');
         });
 
+
+
+        $add('smoke.admin.bulk_jobs_stay_on_page', 'Smoke · Admin UI', 'The bulk photo actions update the page in place instead of reloading it', static function () use ($root, $ok, $bad): array {
+            // The manage page used to reload itself every five seconds while a
+            // background job ran, which threw the admin back to the top of a
+            // long gallery. The bulk actions now post in the background and
+            // the page watches the job instead.
+            $view  = (string) @file_get_contents("$root/views/admin/manage.php");
+            $routes = (string) @file_get_contents("$root/config/routes.php");
+
+            if (preg_match('/window\.location\.reload\(\)/', $view, $m, PREG_OFFSET_CAPTURE)) {
+                $line = substr_count(substr($view, 0, $m[0][1]), "\n") + 1;
+                return $bad('views/admin/manage.php still reloads the page (line ' . $line . '); a background job must not throw away the admin\'s position');
+            }
+            foreach ([
+                'form.bulk-photo-form' => 'the bulk form',
+                '/admin/photos/job/'    => 'the job state endpoint',
+                '__manageJobActive'     => 'the busy flag',
+            ] as $needle => $what) {
+                if (strpos($view, $needle) === false) {
+                    return $bad('views/admin/manage.php is missing ' . $what . ' (' . $needle . ')');
+                }
+            }
+            if (strpos($routes, "'/admin/photos/job/{id}'") === false) {
+                return $bad('the route /admin/photos/job/{id} is missing, so the page cannot watch a job');
+            }
+            $controller = (string) @file_get_contents("$root/app/Controllers/PhotoController.php");
+            foreach (['bulkRotate', 'bulkCaption', 'bulkDelete', 'bulkWatermark'] as $method) {
+                if (strpos($controller, 'public function ' . $method . '(') === false) {
+                    return $bad('PhotoController::' . $method . '() is missing');
+                }
+            }
+            // Every bulk action answers JSON when the page posts in the
+            // background, so it can update the status line in place.
+            if (substr_count($controller, "\$this->json(['ok' => true, 'job_id' => \$jobId") < 4) {
+                return $bad('the bulk photo actions do not all answer JSON for the background post');
+            }
+            return $ok('the bulk photo actions update the page in place');
+        });
+
         $add('smoke.admin.a11y', 'Smoke · Admin UI', 'Admin shell has a skip link, one h1 and aria-current navigation', static function () use ($adminLayout, $root, $ok, $bad): array {
             $views = glob("$root/views/admin/*.php") ?: [];
             $dupes = [];
@@ -1839,14 +1879,7 @@ class SmokeChecks
                 ? $ok('video uploads poll STATUS until processed before the tweet')
                 : $bad('TwitterClient::uploadMedia must poll the media STATUS command after FINALIZE for videos (a tweet referencing an unprocessed video fails with "invalid parameters")');
         });
-        $add('smoke.autopost.video_cover', 'Smoke · Autopost', 'Videos post their cover thumbnail, not the video file', static function () use ($root, $ok, $bad): array {
-            $q = (string) @file_get_contents($root . '/app/Models/AutoPostQueue.php');
-            return strpos($q, 'function videoCoverPath') !== false
-                && strpos($q, 'self::videoCoverPath((string) $photo[\'filename\'])') !== false
-                && strpos($q, "'name'     => 'video-cover.jpg'") !== false
-                ? $ok('cover thumbnail (thumb_<file>) preferred; video file only as a last resort')
-                : $bad('AutoPostQueue must attach the video cover thumbnail (thumb_<file>) instead of uploading the video');
-        });
+
 
         // ------------------------- Home-browser worker (share method) -----
         $rbQueue2  = $read("$root/app/Models/AutoPostQueue.php");

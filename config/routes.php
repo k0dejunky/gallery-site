@@ -244,6 +244,8 @@ return [
     ['POST', '/admin/galleries/{galleryId}/photos/bulk-watermark', 'PhotoController@bulkWatermark', 'galleries'],
     ['POST', '/admin/galleries/{galleryId}/watermark-undo', 'PhotoController@watermarkUndo', 'galleries'],
     ['GET', '/admin/photos/{id}/edit', 'PhotoController@edit', 'galleries'],
+    // The state of a background photo job (the page polls it).
+    ['GET', '/admin/photos/job/{id}', 'PhotoController@job', 'galleries'],
     ['POST', '/admin/photos/{id}/edit', 'PhotoController@applyEdit', 'galleries'],
     ['GET', '/admin/videos/{id}/edit', 'VideoEditorController@edit', 'videos'],
     ['POST', '/admin/videos/{id}/filter-colors', 'VideoEditorController@saveFilterColors', 'theme'],

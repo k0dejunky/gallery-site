@@ -244,9 +244,52 @@ class PhotoController extends Controller
             ['direction' => $direction, 'count' => count($selected)]
         );
 
-        $this->flash('success', count($selected) . ' image' . (count($selected) === 1 ? '' : 's')
-            . ' queued for rotation. Processing continues in the background.');
+        $note = count($selected) . ' image' . (count($selected) === 1 ? '' : 's')
+            . ' queued for rotation. Processing continues in the background.';
+
+        // The bulk form posts in the background (the page keeps the admin's
+        // scroll position and the status updates in place), so answer with
+        // the job instead of redirecting and reloading the whole page.
+        if ($this->isAjax()) {
+            $this->json(['ok' => true, 'job_id' => $jobId, 'message' => $note]);
+        }
+
+        $this->flash('success', $note);
         $this->redirect('/admin/galleries/' . $galleryId);
+    }
+
+    /**
+     * The state of a background photo job, so the page can update the
+     * "in progress" text without reloading.
+     */
+    public function job(int $id): void
+    {
+        Auth::requirePermission('galleries');
+
+        $job = PhotoJob::findById($id);
+
+        if ($job === null) {
+            $this->json(['ok' => false, 'error' => 'No such job.'], 404);
+            return;
+        }
+
+        $meta = json_decode((string) ($job['metadata_json'] ?? '{}'), true) ?: [];
+
+        $this->json([
+            'ok'        => true,
+            'id'        => (int) $job['id'],
+            'status'    => (string) $job['status'],
+            'operation' => (string) $job['operation'],
+            'done'      => (int) $job['done'],
+            'failed'    => (int) $job['failed'],
+            'total'     => (int) $job['total'],
+            'progress'  => (int) $job['progress'],
+            'error'     => (string) ($job['error'] ?? ''),
+            'active'    => in_array((string) $job['status'], ['queued', 'running'], true),
+            // A finished watermark job can be undone, so the page offers the
+            // button without a reload.
+            'backups'   => (int) count((array) ($meta['backups'] ?? [])),
+        ]);
     }
 
     /**
@@ -274,7 +317,13 @@ class PhotoController extends Controller
         $jobId  = PhotoJob::createBulkCaption($userId, $galleryId, $caption, $selected);
 
         AuditLog::record($userId, 'update', 'gallery', $galleryId, 'Queued bulk caption (background job #' . $jobId . ')', ['count' => count($selected)]);
-        $this->flash('success', count($selected) . ' photo' . (count($selected) === 1 ? '' : 's') . ' queued for captioning.');
+        $note = count($selected) . ' photo' . (count($selected) === 1 ? '' : 's') . ' queued for captioning.';
+
+        if ($this->isAjax()) {
+            $this->json(['ok' => true, 'job_id' => $jobId, 'message' => $note]);
+        }
+
+        $this->flash('success', $note);
         $this->redirect('/admin/galleries/' . $galleryId);
     }
 
@@ -303,7 +352,13 @@ class PhotoController extends Controller
         $jobId  = PhotoJob::createBulkDelete($userId, $galleryId, $selected);
 
         AuditLog::record($userId, 'update', 'gallery', $galleryId, 'Queued bulk delete (background job #' . $jobId . ')', ['count' => count($selected)]);
-        $this->flash('success', count($selected) . ' photo' . (count($selected) === 1 ? '' : 's') . ' queued for removal.');
+        $note = count($selected) . ' photo' . (count($selected) === 1 ? '' : 's') . ' queued for removal.';
+
+        if ($this->isAjax()) {
+            $this->json(['ok' => true, 'job_id' => $jobId, 'message' => $note]);
+        }
+
+        $this->flash('success', $note);
         $this->redirect('/admin/galleries/' . $galleryId);
     }
 
@@ -474,8 +529,14 @@ class PhotoController extends Controller
             ['count' => count($selected)]
         );
 
-        $this->flash('success', count($selected) . ' item' . (count($selected) === 1 ? '' : 's')
-            . ' queued for watermarking. Originals are backed up and can be restored. Processing continues in the background.');
+        $note = count($selected) . ' item' . (count($selected) === 1 ? '' : 's')
+            . ' queued for watermarking. Originals are backed up and can be restored. Processing continues in the background.';
+
+        if ($this->isAjax()) {
+            $this->json(['ok' => true, 'job_id' => $jobId, 'message' => $note]);
+        }
+
+        $this->flash('success', $note);
         $this->redirect('/admin/galleries/' . $galleryId);
     }
 
