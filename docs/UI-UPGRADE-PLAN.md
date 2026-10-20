@@ -119,11 +119,53 @@ giving the member site the same treatment belongs with Phase 6/7.
 
 ---
 
-## Phase 6 - member nav, mobile and listing scale
-- One nav definition feeding both the rail and the bottom nav.
-- A working guest landing on a phone.
-- Paginating the galleries listing and the wall feed.
-- The tour as a proper dialog that stops re-arming on every tab.
+## Phase 6 - member nav, mobile and listing scale (IN PROGRESS)
+
+Plan written 2026-10-19 23:30, before touching the code.
+
+### What the survey found
+- The member nav exists **twice**: the rail (`$railGroups` in views/layout.php)
+  and the phone's bottom bar (`$bottomPrimary` + `$bottomMore`, written out by
+  hand with its own labels, icons and active flags). A nav change has to be
+  made twice and the two drift.
+- The bottom bar is **member-only** (`$sidebarNav && $user !== null`). A guest
+  on a phone gets the rail's guest block on the listing pages and the top
+  hamburger on the landing page, but on the listing pages there is no
+  hamburger at all (the `.nav` bar only renders when `!$sidebarNav`), so a
+  guest browsing the galleries on a phone cannot reach anything else.
+- The wall feed is `WallPost::allPublished(30)` with no pager: the newest 30
+  posts, and nothing older.
+- The tour clears its "seen" flag the moment it starts (`clearSeen()` inside
+  `start()`), so it re-arms on every new tab until the member skips it, and
+  its card is a floating div with no dialog semantics, no focus handling and
+  no Escape.
+
+### The work
+1. **One nav definition.** Keep `$railGroups` as the source of truth, flatten
+   it once, and derive the phone's bottom bar from it (primary items by key,
+   everything else in the "More" sheet). No second hand-written list.
+2. **A working guest landing on a phone.** A small guest list (Galleries,
+   Sign in, Join) in the same layout, used by BOTH the guest identity block
+   and the guest bottom bar, and the bottom bar renders for guests too. The
+   guest's listing pages then have a real nav on a phone.
+3. **The wall feed gets a pager.** `WallPost::allPublished()` takes an offset
+   and there is a `countPublished()`; the wall uses the shared
+   `views/partials/pagination.php` (the house pager) with `?page=`.
+4. **The tour becomes a dialog and stops re-arming.** The card gets
+   `role="dialog"` + `aria-modal="true"`, the focus moves into it and comes
+   back on close, Escape skips it, and `start()` no longer clears the seen
+   flag - only the explicit "replay the tour" button does.
+
+### New smoke checks
+`smoke.ui.nav_single_source` (the bottom bar is derived from the rail's
+definition, not written out twice), `smoke.ui.guest_bottom_nav`,
+`smoke.ui.wall_paginated`, `smoke.ui.tour_dialog`.
+
+### Verify
+CDP at 390x844 on dev: the guest's bottom bar is there and the items work, the
+member's bottom bar still has the same five entries, the wall pager moves
+between pages, the tour card is a dialog that Escape closes, and the tour does
+not come back in a new tab after it has been skipped.
 
 ## Phase 7 - accessibility and polish
 - `inert` everywhere it is needed.
