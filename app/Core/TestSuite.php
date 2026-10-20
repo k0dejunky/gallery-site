@@ -995,6 +995,14 @@ class TestSuite
 
                     // A gallery with a normal title DOES get announced, so
                     // the check above is not passing for the wrong reason.
+                    // The site sends one gallery announcement a day, so on a
+                    // day when that slot is already gone the second gallery is
+                    // (correctly) not announced - and its marker must stay
+                    // unburned so it goes out the next day.
+                    //
+                    // Whether the slot is taken is read BEFORE the probe, or
+                    // the probe's own email would answer the question.
+                    $slotTaken = \App\Models\EmailQueue::broadcastSentToday('gallery');
                     $realTitle = 'Real gallery ' . bin2hex(random_bytes(3));
                     $realId = \App\Models\Gallery::create($realTitle, 'real', 'images', 0, null, false, false);
                     \App\Models\Gallery::notifyNewGalleryIfUnsent($id);
@@ -1003,13 +1011,18 @@ class TestSuite
                         "SELECT COUNT(*) FROM email_queue WHERE subject LIKE ?",
                         ['%' . $realTitle . '%']
                     )->fetchColumn();
+                    $realNotified = Database::run('SELECT notified_at FROM galleries WHERE id = ?', [$realId])->fetchColumn();
+
+                    // With the day's slot gone, the real gallery must stay
+                    // unmarked (it is announced the next day).
+                    $realOk = $slotTaken ? $realMails === 0 && $realNotified === null : $realMails >= 1;
 
                     return [
                         'pass' => $isTest === 1
                             && $mails === 0
                             && $bells === 0
                             && $notified === null
-                            && $realMails >= 1,
+                            && $realOk,
                         'detail' => sprintf(
                             'is_test=%d, test mails=%d, test bells=%d, notified_at=%s, real gallery mails=%d',
                             $isTest,

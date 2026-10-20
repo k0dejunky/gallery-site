@@ -16,6 +16,11 @@ Smoke 921 checks on local, dev and prod; the full TestSuite is 991 tests with
 `pre-perf-batchC-20261020-085603`, `pre-data-batchD-20261020-091359` and
 `pre-ui-batchE-20261020-100403` (all in /var/backups/gallery).
 
+**THE WHOLE PROGRAMME IS DONE (2026-10-20).** Every item in every batch is
+implemented, verified on dev and on prod, and pushed. The smoke suite is 928
+checks on local, dev and prod, and the full TestSuite is 1000 tests with 0
+failures on prod.
+
 **Scope (decided by the user): everything, in order.**
 
 ## What the audit of this plan found (2026-10-20)
