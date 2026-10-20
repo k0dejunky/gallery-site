@@ -866,7 +866,7 @@ class SmokeChecks
             // (public/assets/css/user.css) and the rest are component styles
             // that move to the stylesheets as the admin tables are rebuilt.
             // The number may only go DOWN.
-            $limit = 853;
+            $limit = 847;
             $count = 0;
             $files = array_merge(glob($root . '/views/*.php') ?: [], glob($root . '/views/*/*.php') ?: []);
             foreach ($files as $file) {
