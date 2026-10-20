@@ -1191,6 +1191,88 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.contrast_floor', 'Smoke · UI', 'Every text colour on the member skin meets its contrast floor', static function () use ($root, $ok, $bad): array {
+            // The ratios are COMPUTED from the palette the site actually ships,
+            // so a change to the palette can never quietly break a pair - and
+            // a view that goes back to a dark token on a dark surface is
+            // caught as well, because the declaration itself is checked.
+            //
+            // Each pair is:
+            //   [file, the declaration that must be there, the one that must
+            //    not be, the foreground token, the background token, the floor]
+            // The floor is 4.5 for body text and 3.0 for a non-text indicator
+            // (WCAG 1.4.11 wants 3:1 for a focus ring).
+            $pairs = [
+                // The paywall gate. The headline sat on --purple-800 over
+                // --pink-100, which is a LIGHT pairing: 1.60:1 on the dark
+                // skin, so the upsell for every locked gallery was invisible.
+                ['views/partials/membership_gate.php',
+                    'color:var(--heading-color)', 'color:var(--purple-800)',
+                    '--heading-color', '--pink-100', 4.5],
+            ];
+
+            // The member palette, parsed out of Theme.php.
+            $theme = (string) @file_get_contents($root . '/app/Models/Theme.php');
+            if (preg_match('/private const MEMBER_COLORS = \[(.*?)\n    \];/s', $theme, $m) !== 1) {
+                return $bad('the member palette could not be read out of app/Models/Theme.php');
+            }
+            $palette = [];
+            if (preg_match_all("/'([a-z0-9-]+)'\s*=>\s*'(#[0-9a-fA-F]{3,8})'/", $m[1], $tokens, PREG_SET_ORDER) !== false) {
+                foreach ($tokens as $t) {
+                    $palette['--' . $t[1]] = $t[2];
+                }
+            }
+
+            $luminance = static function (string $hex): float {
+                $hex = ltrim($hex, '#');
+                if (strlen($hex) === 3) {
+                    $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+                }
+                $sum = [];
+                foreach ([0, 2, 4] as $i) {
+                    $c = hexdec(substr($hex, $i, 2)) / 255;
+                    $sum[] = $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4;
+                }
+                return 0.2126 * $sum[0] + 0.7152 * $sum[1] + 0.0722 * $sum[2];
+            };
+            $ratio = static function (string $a, string $b) use ($luminance): float {
+                $hi = max($luminance($a), $luminance($b));
+                $lo = min($luminance($a), $luminance($b));
+                return ($hi + 0.05) / ($lo + 0.05);
+            };
+
+            $problems = [];
+            foreach ($pairs as [$file, $required, $forbidden, $fg, $bg, $floor]) {
+                $src = (string) @file_get_contents($root . '/' . $file);
+                if ($src === '') {
+                    $problems[] = $file . ' could not be read';
+                    continue;
+                }
+                if (strpos($src, $required) === false) {
+                    $problems[] = $file . ' must use "' . $required . '"';
+                }
+                if ($forbidden !== '' && strpos($src, $forbidden) !== false) {
+                    $problems[] = $file . ' still uses "' . $forbidden . '"';
+                }
+                foreach ([$fg, $bg] as $token) {
+                    if (!isset($palette[$token])) {
+                        $problems[] = $token . ' is not in the member palette';
+                    }
+                }
+                if (!isset($palette[$fg]) || !isset($palette[$bg])) {
+                    continue;
+                }
+                $got = $ratio($palette[$fg], $palette[$bg]);
+                if ($got + 0.005 < $floor) {
+                    $problems[] = $fg . ' on ' . $bg . ' is ' . round($got, 2) . ':1, below the ' . $floor . ':1 floor';
+                }
+            }
+
+            return $problems === []
+                ? $ok(count($pairs) . ' contrast pairs meet their floor')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

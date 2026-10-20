@@ -12,7 +12,7 @@ $gateLabel  = \App\Models\Subscription::levelLabel($gateLevel);
 $gateNoun   = $gateMedia === 'video' ? 'videos' : ($gateMedia === 'image' ? 'full-size photos' : 'galleries');
 ?>
 <div class="membership-gate" style="text-align:center;padding:2rem 1.5rem;margin:1.5rem 0;background:var(--pink-100);border:1px solid var(--pink-300);border-radius:var(--border-radius-lg);box-shadow:var(--shadow);">
-    <h2 style="margin:0 0 .5rem;color:var(--purple-800);"><?= $gateLevel > 0 ? 'This is ' . e($gateLabel) . ' content' : 'Members content' ?></h2>
+    <h2 style="margin:0 0 .5rem;color:var(--heading-color);"><?= $gateLevel > 0 ? 'This is ' . e($gateLabel) . ' content' : 'Members content' ?></h2>
     <p class="muted" style="max-width:520px;margin:0 auto .75rem;">
         <?= $gateLogged
             ? 'Your current membership does not include this content. Upgrade to a ' . e($gateLabel) . ' plan to view these ' . e($gateNoun) . ' in full.'
