@@ -45,7 +45,7 @@ $navGroups = [
             ['key' => 'nav-category-suggestions', 'label' => 'AI Suggestions', 'href' => '/admin/category-suggestions', 'icon' => 'sparkle'],
             ['key' => 'nav-description-suggestions', 'label' => 'AI Descriptions', 'href' => '/admin/description-suggestions', 'icon' => 'sparkle'],
             ['key' => 'nav-video-projects', 'label' => 'Video Projects', 'href' => '/admin/video-projects', 'icon' => 'film'],
-            ['key' => 'nav-profile', 'label' => 'Creator Profile', 'href' => '/admin/profile', 'icon' => 'user'],
+            ['key' => 'nav-profile', 'label' => 'Creator Profile', 'href' => '/admin/profile', 'icon' => 'user', 'perm' => 'site_editor'],
             ['key' => 'nav-theme', 'label' => 'Theme', 'href' => '/admin/theme', 'icon' => 'palette'],
             ['key' => 'nav-site-editor', 'label' => 'Site Editor', 'href' => '/admin/site-editor', 'icon' => 'layout', 'perm' => 'site_editor'],
         ],

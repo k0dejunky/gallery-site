@@ -10,9 +10,12 @@
 
 <section class="favorites-section">
     <?php if (!empty($profile['avatar'])): ?>
-        <?php $avatarUrl = preg_match('#^https?://#i', (string) $profile['avatar'])
-            ? $profile['avatar']
-            : file_url((string) $profile['avatar']); ?>
+        <?php /* Only a safe URL is ever rendered (the model filters it too).
+               The avatar is either a full https:// URL or a stored filename. */ ?>
+        <?php $avatarUrl = \App\Models\SiteProfile::safeUrl((string) $profile['avatar'], ['https']);
+        $avatarUrl = $avatarUrl === ''
+            ? ''
+            : (preg_match('#^https://#i', $avatarUrl) ? $avatarUrl : file_url($avatarUrl)); ?>
         <img src="<?= e($avatarUrl) ?>" alt="" style="max-width:180px;border-radius:12px;margin-bottom:1rem;">
     <?php endif; ?>
 
@@ -25,7 +28,7 @@
     <?php if (!empty($profile['links'])): ?>
         <div class="chips u-mt-1">
             <?php foreach ($profile['links'] as $link): ?>
-                <a class="chip" href="<?= e($link['url']) ?>" rel="noopener nofollow" target="_blank"><?= e($link['label']) ?></a>
+                <a class="chip" href="<?= e(\App\Models\SiteProfile::safeUrl((string) $link['url'])) ?>" rel="noopener nofollow" target="_blank"><?= e($link['label']) ?></a>
             <?php endforeach; ?>
         </div>
     <?php endif; ?>

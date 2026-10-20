@@ -306,7 +306,7 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
-        $add('smoke.auth.super_admin_surfaces', 'Smoke · Auth', 'The surfaces that reach outside the app are super-admin only', static function () use ($root, $ok, $bad): array {
+        $add('smoke.auth.privileged_surfaces', 'Smoke · Auth', 'The surfaces that reach outside the app are super-admin only', static function () use ($root, $ok, $bad): array {
             // The mail admin drives a ROOT script that rewrites the
             // Postfix/Dovecot mailbox files. It used to need the
             // 'dashboard' permission, which EVERY admin role holds - so a
@@ -344,8 +344,23 @@ class SmokeChecks
                 }
             }
 
+            // The public creator profile is site content: it needs the site
+            // editor permission, and the URLs it renders are filtered.
+            $profile = (string) @file_get_contents($root . '/app/Controllers/CreatorProfileController.php');
+            $model   = (string) @file_get_contents($root . '/app/Models/SiteProfile.php');
+            if (strpos($routes, "'/admin/profile', 'CreatorProfileController@edit', 'dashboard'") !== false
+                || strpos($routes, "'/admin/profile', 'CreatorProfileController@save', 'dashboard'") !== false) {
+                $problems[] = 'the creator profile is still gated on dashboard';
+            }
+            if (strpos($profile, "requirePermission('site_editor')") === false) {
+                $problems[] = 'the creator profile must need the site_editor permission';
+            }
+            if (strpos($model, 'function safeUrl(') === false) {
+                $problems[] = 'SiteProfile must filter the avatar and the link URLs';
+            }
+
             return $problems === []
-                ? $ok('the mail admin and the role grant are super-admin only')
+                ? $ok('the mail admin, the role grant and the creator profile are properly gated')
                 : $bad(implode('; ', $problems));
         });
 

@@ -22,7 +22,11 @@ class CreatorProfileController extends Controller
 
     public function edit(): void
     {
-        Auth::requirePermission('dashboard');
+        // The creator profile is public site content (a name, a bio, an
+        // avatar and links on a page every visitor sees). It used to need
+        // 'dashboard', which every admin role holds - a viewer could
+        // rewrite the page.
+        Auth::requirePermission('site_editor');
 
         $this->viewAdmin('creator_profile', [
             'profile' => SiteProfile::all(),
@@ -31,7 +35,7 @@ class CreatorProfileController extends Controller
 
     public function save(): void
     {
-        Auth::requirePermission('dashboard');
+        Auth::requirePermission('site_editor');
         $user = Auth::user();
 
         $labelUrls = $this->request->post('link_label', []);

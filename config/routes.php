@@ -375,8 +375,8 @@ return [
     ['POST', '/admin/traffic/{id}/delete', 'TrafficController@delete', 'traffic'],
 
     // Creator profile (admin only)
-    ['GET', '/admin/profile', 'CreatorProfileController@edit', 'dashboard'],
-    ['POST', '/admin/profile', 'CreatorProfileController@save', 'dashboard'],
+    ['GET', '/admin/profile', 'CreatorProfileController@edit', 'site_editor'],
+    ['POST', '/admin/profile', 'CreatorProfileController@save', 'site_editor'],
 
     // Engagement: wall + comments + codes + gifts + purchases + tags (admin only)
     ['GET', '/admin/engagement', 'ModerationController@index', 'dashboard'],
