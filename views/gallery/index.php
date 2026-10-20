@@ -80,7 +80,7 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
 <?php if (($lockedTotal ?? 0) > 0): ?>
 <?php // The paid part of the collection, said out loud. ?>
 <div class="listing-locked-note">
-    <span><?= number_format((int) $lockedTotal) ?> galleries in the collection are above your level.</span>
+    <span><?= number_format((int) $lockedTotal) ?> <?= (int) $lockedTotal === 1 ? 'gallery' : 'galleries' ?> in the collection <?= (int) $lockedTotal === 1 ? 'is' : 'are' ?> above your level.</span>
     <a class="btn btn-sm" href="<?= e(url('/membership')) ?>">View membership</a>
 </div>
 <?php endif; ?>

@@ -88,7 +88,7 @@ $catBase = 'cat.' . md5(json_encode([$category['id'] ?? 0, $category['slug'] ?? 
     <?php if (empty($imagePaginator['items'])): ?>
         <div class="empty-state">
             <?php if (($lockedCount ?? 0) > 0): ?>
-                <p class="muted"><?= number_format((int) $lockedCount) ?> galleries in this category are above your level.</p>
+                <p class="muted"><?= number_format((int) $lockedCount) ?> <?= (int) $lockedCount === 1 ? 'gallery' : 'galleries' ?> in this category <?= (int) $lockedCount === 1 ? 'is' : 'are' ?> above your level.</p>
                 <a class="btn btn-sm" href="<?= e(url('/membership')) ?>">View membership</a>
             <?php else: ?>
                 <p class="muted">No image galleries in this category<?= e($searchSuffix) ?>.</p>
@@ -128,7 +128,7 @@ $catBase = 'cat.' . md5(json_encode([$category['id'] ?? 0, $category['slug'] ?? 
     <?php if (empty($videoPaginator['items'])): ?>
         <div class="empty-state">
             <?php if (($lockedCount ?? 0) > 0): ?>
-                <p class="muted"><?= number_format((int) $lockedCount) ?> galleries in this category are above your level.</p>
+                <p class="muted"><?= number_format((int) $lockedCount) ?> <?= (int) $lockedCount === 1 ? 'gallery' : 'galleries' ?> in this category <?= (int) $lockedCount === 1 ? 'is' : 'are' ?> above your level.</p>
                 <a class="btn btn-sm" href="<?= e(url('/membership')) ?>">View membership</a>
             <?php else: ?>
                 <p class="muted">No video galleries in this category<?= e($searchSuffix) ?>.</p>

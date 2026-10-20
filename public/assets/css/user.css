@@ -1026,3 +1026,4 @@ body .u-w-full-mb{width:100% !important;margin-bottom:4px !important}
     border-radius:var(--card-radius,8px);background:var(--bubble-bg,#fdf2f8);color:var(--bubble-text,#4a044e);
     font-size:.9rem;
 }
+.card-lock-price{font-size:.72rem;color:var(--muted-color,#c3a6c9)}
