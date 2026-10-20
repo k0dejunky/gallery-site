@@ -1098,6 +1098,52 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.no_repeated_queries', 'Smoke · UI', 'The hot paths do not repeat the same query', static function () use ($root, $ok, $bad): array {
+            // Four patterns that cost a query each on every page:
+            // - a subscription join per call (hasActiveSubscription)
+            // - an uncapped notification badge count
+            // - a LEFT JOIN + GROUP BY that builds a temporary table
+            // - a gallery delete that leaves the rendered listings cached
+            $auth  = (string) @file_get_contents($root . '/app/Core/Auth.php');
+            $notif = (string) @file_get_contents($root . '/app/Models/Notification.php');
+            $model = (string) @file_get_contents($root . '/app/Models/Gallery.php');
+            $wall  = (string) @file_get_contents($root . '/app/Controllers/WallController.php');
+            $problems = [];
+
+            if (strpos($auth, "Subscription::isActive((int) \$user['id'])") !== false) {
+                $problems[] = 'hasActiveSubscription() must use the memoised subscription row';
+            }
+            if (strpos($notif, "Cache::rememberGen('notifications'") === false) {
+                $problems[] = 'the notification badge must be cached';
+            }
+            if (strpos($model, 'LEFT JOIN gallery_photo gp ON gp.gallery_id = g.id') !== false) {
+                $problems[] = 'the listing queries must not build a temporary table (LEFT JOIN + GROUP BY)';
+            }
+            if (strpos($model, 'GROUP BY g.id') !== false) {
+                $problems[] = 'the listing queries must not group by g.id';
+            }
+            if (strpos($wall, 'Purchase::userUnlocked(') !== false) {
+                $problems[] = 'the wall must ask for the unlocked galleries in one query';
+            }
+            // softDelete() and restore() must both invalidate the listings.
+            foreach (['softDelete', 'restore'] as $method) {
+                $at = strpos($model, 'public static function ' . $method . '(');
+                if ($at === false) {
+                    continue;
+                }
+                $next = strpos($model, "
+    public static function ", $at + 10);
+                $body = $next === false ? substr($model, $at) : substr($model, $at, $next - $at);
+                if (strpos($body, 'PageCache::invalidate()') === false) {
+                    $problems[] = $method . '() must invalidate the rendered listings';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the hot paths do not repeat a query')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.ui.card_queries_nothing', 'Smoke · UI', 'A gallery card does not query the database', static function () use ($root, $ok, $bad): array {
             // The card partial fell back to a query per card when the caller
             // did not hand it the cover and the categories: the guest home
