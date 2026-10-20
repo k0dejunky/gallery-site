@@ -31,7 +31,7 @@ smoke check that locks it in travels in the same commit).
 |---|---|---|---|
 | 0 | The plan anchor (this file) | **done** | `6257c30` |
 | 1 | Contrast and focus | **done** | `76e6aa0`, `2d0ba04`, `ab75dc0`, `8a0e512`, `5a45259`, `3b79b14` |
-| 2 | Broken code that already shipped | pending | - |
+| 2 | Broken code that already shipped | **done** | `cfb4ab6`, `35bc5ca`, `c4429dc`, `29fdb9e`, `da0159f`, `ef3186f` |
 | 3 | Token coherence | pending | - |
 | 4 | The component layer | pending | - |
 | 5 | Member product UX | pending | - |
@@ -41,7 +41,7 @@ smoke check that locks it in travels in the same commit).
 
 - **local** `/media/webdev/Media/gallery-full` - `main`, clean, in sync with
   `origin/main`.
-- `php tests/smoke.php` -> **941 checks, all passed** (937 at the start).
+- `php tests/smoke.php` -> **948 checks, all passed** (937 at the start).
 - `php _suite_runner.php` -> 1006 tests with the **6 known environment-only
   failures** (4 orphan photos, the example.com routes, the missing Twitter
   key, the missing cron directory). Nothing here may add a seventh.
@@ -156,12 +156,36 @@ now sets `font-family` and `line-height`.
 
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| 2.1 | `window.GalleryNav` is defined **twice** - `views/layout.php:513` (toggle/close) and `public/assets/js/user.js:1484` (advanceNext) - and the second **overwrites** the first, so `window.GalleryNav.toggle()` no longer exists and the guest hamburger is dead | `views/layout.php`, `public/assets/js/user.js` | pending | - |
-| 2.2 | The share bar's "Copy link" uses only `navigator.clipboard`; the shell already has `window.__copyText` with an `execCommand` fallback at `views/layout.php:640`. On plain HTTP (the dev box) the button silently does nothing | `views/partials/share-bar.php` | pending | - |
-| 2.3 | `fitGrids()` in the guest teaser is a no-op: it reads `getComputedStyle(grid).maxHeight`, which is `none` -> `parseFloat('none')` is `NaN` -> it returns early. `$guestMaxRows` is set by no controller either | `views/partials/guest_teaser.php` | pending | - |
-| 2.4 | `.collection-order` is defined **only** inside `@media(max-width:820px)`, so the desktop reorder buttons in `views/collections/show.php` are unstyled | `public/assets/css/user.css` | pending | - |
-| 2.5 | `table td:nth-child(1){overflow-wrap:anywhere;word-break:break-word}` is a **global** rule that hits every table on the member site - it was written for the category table | `public/assets/css/user.css` | pending | - |
-| 2.6 | The image right-click / dragstart / Ctrl+S blocker applies to **every** image on the site, is not scoped and announces nothing; it breaks a legitimate "Save image as" | `public/assets/js/user.js` | pending | - |
+| 2.1 | `window.GalleryNav` is defined **twice** - `views/layout.php:513` (toggle/close) and `public/assets/js/user.js:1484` (advanceNext) - and the second **overwrites** the first, so `window.GalleryNav.toggle()` no longer exists and the guest hamburger is dead | `views/layout.php`, `public/assets/js/user.js` | done | cfb4ab6 |
+| 2.2 | The share bar's "Copy link" uses only `navigator.clipboard`; the shell already has `window.__copyText` with an `execCommand` fallback at `views/layout.php:640`. On plain HTTP (the dev box) the button silently does nothing | `views/partials/share-bar.php` | done | 35bc5ca |
+| 2.3 | `fitGrids()` in the guest teaser is a no-op: it reads `getComputedStyle(grid).maxHeight`, which is `none` -> `parseFloat('none')` is `NaN` -> it returns early. `$guestMaxRows` is set by no controller either | `views/partials/guest_teaser.php` | done | c4429dc |
+| 2.4 | `.collection-order` is defined **only** inside `@media(max-width:820px)`, so the desktop reorder buttons in `views/collections/show.php` are unstyled | `public/assets/css/user.css` | done | 29fdb9e |
+| 2.5 | `table td:nth-child(1){overflow-wrap:anywhere;word-break:break-word}` is a **global** rule that hits every table on the member site - it was written for the category table | `public/assets/css/user.css` | done | da0159f |
+| 2.6 | The image right-click / dragstart / Ctrl+S blocker applies to **every** image on the site, is not scoped and announces nothing; it breaks a legitimate "Save image as" | `public/assets/js/user.js` | done | ef3186f |
+
+### What phase 2 changed
+
+Six defects that had already shipped:
+
+| id | what it did |
+|---|---|
+| 2.1 | the guest hamburger could not open - two modules owned `window.GalleryNav` |
+| 2.2 | "Copy link" did nothing on a plain-http setup |
+| 2.3 | the guest teaser fit never ran, so the login page was 25 thumbnails tall |
+| 2.4 | the collection reorder buttons had no layout on a desktop |
+| 2.5 | a rule written for the category names reached every table, including the admin's |
+| 2.6 | the image protection blocked the site logo and the creator's avatar |
+
+Every one of them was measured in headless Chrome before and after, not
+read and assumed. The guest teaser is the clearest: the old code hid
+nothing and left the grid at 750px, the new code drops the extra row
+and no row is clipped at any of the four heights measured.
+
+Two of the new checks are positional rather than a plain substring -
+`smoke.ui.guest_teaser_fits` insists the fallback sits BETWEEN reading
+the budget and giving up on it, and `smoke.ui.rules_not_stranded`
+measures the brace depth at a rule's position. Both are the only way to
+catch the bug they were written for.
 
 ---
 
@@ -256,5 +280,5 @@ restore the fix. A check that has never failed is not a check.
    a shorter timeout kills a healthy deploy and rolls it back).
 6. Prod smoke runs as `www-data` and needs `sudo rm -rf /tmp/gallery-analytics-rot`
    first, or `smoke.analytics.rotated_discovery` fails on a root-owned dir.
-7. `php tests/smoke.php` -> 937 checks at the start of this programme and
-   941 after phase 1. The count may only go up.
+7. `php tests/smoke.php` -> 937 checks at the start of this programme,
+   941 after phase 1 and 948 after phase 2. The count may only go up.
