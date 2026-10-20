@@ -84,6 +84,14 @@
     --card-thumb-bg: var(--adm-surface-3);
     --stat-bg: var(--adm-surface);
     --stat-border: var(--adm-border);
+    /* The table tokens were not remapped, so they stayed the light
+       palette's #f472b6 - bright pink. The System page's row separators
+       used them, so that one table had hot-pink rows in an otherwise
+       neutral console. */
+    --table-border: var(--adm-border);
+    --table-header-bg: var(--adm-surface-2);
+    --table-header-color: var(--adm-text-dim);
+    --table-text: var(--adm-text);
 
     /* Status and text aliases. These names are used by the admin styles and by
        admin-shared.css, but they were never defined anywhere - the rules
@@ -2399,6 +2407,10 @@ body.admin-theme {
     --card-thumb-bg: #3b0764;
     --stat-bg: #ffd9e8;
     --stat-border: #f472b6;
+    --table-border: #f472b6;
+    --table-header-bg: #f472b6;
+    --table-header-color: #4a044e;
+    --table-text: #4c1d95;
 }
 
 /* ---------- Gallery create + manage: staged uploads ---------------------- */

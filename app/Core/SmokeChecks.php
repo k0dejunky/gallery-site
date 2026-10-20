@@ -1734,6 +1734,61 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.admin_tokens_remapped', 'Smoke · UI', 'The admin scope remaps every member surface token', static function () use ($root, $ok, $bad): array {
+            // The admin scope emits the member theme's surface tokens and
+            // remaps the ones its views use. The table tokens were missed,
+            // so they stayed the light palette's #f472b6 - and the System
+            // page's row separators were bright pink in a neutral console.
+            $css = (string) @file_get_contents($root . '/public/assets/css/admin.css');
+            $problems = [];
+
+            // Every member surface token the admin's own rules or views use
+            // has to be remapped in the .admin-theme block. There are two
+            // .admin-theme blocks: the one that defines the --adm-* tokens
+            // and the one that remaps the member's surfaces onto them.
+            $remap = [];
+            if (preg_match_all('/\.admin-theme\s*\{(.*?)\n\}/s', $css, $blocks) !== false) {
+                foreach ($blocks[1] as $block) {
+                    if (strpos($block, '--pink-100:') === false) {
+                        continue;   // this is the --adm-* definition block
+                    }
+                    if (preg_match_all('/(--[a-z0-9-]+)\s*:\s*var\(--adm-/', $block, $t)) {
+                        foreach ($t[1] as $name) {
+                            $remap[$name] = true;
+                        }
+                    }
+                }
+            }
+            if ($remap === []) {
+                $problems[] = 'the .admin-theme remap block was not found';
+            }
+            foreach ([
+                '--pink-100', '--pink-200', '--pink-300', '--pink-400',
+                '--card-bg', '--card-border', '--card-title-color', '--card-text-color',
+                '--card-placeholder-bg', '--card-thumb-bg', '--stat-bg', '--stat-border',
+                '--table-border', '--table-header-bg', '--table-text', '--table-header-color',
+            ] as $token) {
+                if (!isset($remap[$token])) {
+                    $problems[] = $token . ' is not remapped for the admin scope';
+                }
+            }
+            // The theme preview is a mock of the member site, so it has to
+            // restore the member values it would otherwise inherit.
+            if (preg_match('/#theme-preview\s*\{(.*?)\n\}/s', $css, $m) === 1) {
+                foreach (['--table-border', '--table-header-bg'] as $token) {
+                    if (strpos($m[1], $token) === false) {
+                        $problems[] = '#theme-preview must restore ' . $token . ', it previews the member site';
+                    }
+                }
+            } else {
+                $problems[] = '#theme-preview was not found';
+            }
+
+            return $problems === []
+                ? $ok('the admin scope remaps every surface token it uses')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).
