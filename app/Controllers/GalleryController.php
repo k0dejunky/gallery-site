@@ -470,7 +470,12 @@ class GalleryController extends Controller
             Stats::recordCategoryView((int) $category['id'], (int) $user['id']);
         }
 
-        $page = (int) $this->request->query('page', 1);
+        // Each section paginates on its own parameter. The category page shows
+        // the image galleries and the video galleries side by side, and
+        // paging one of them must not move the other one.
+        $imagePage = max(1, (int) $this->request->query('page_images', $this->request->query('page', 1)));
+        $videoPage = max(1, (int) $this->request->query('page_videos', $this->request->query('page', 1)));
+
         $q    = trim((string) $this->request->query('q', ''));
         $type = in_array($this->request->query('type', ''), ['images', 'videos'], true)
             ? (string) $this->request->query('type')
@@ -486,12 +491,26 @@ class GalleryController extends Controller
         $imagePaginator = [];
         $videoPaginator = [];
 
+        // A link to a page that does not exist (a stale bookmark, a
+        // hand-made URL) lands on the last page instead of an empty section.
+        $paginateSection = static function (int $page, array $extra) use ($filters): array {
+            $paginator = Gallery::paginate($page, 6, array_merge($filters, $extra));
+            $pages     = max(1, (int) ($paginator['pages'] ?? 1));
+
+            if ($page > $pages) {
+                $page     = $pages;
+                $paginator = Gallery::paginate($page, 6, array_merge($filters, $extra));
+            }
+
+            return [$page, $paginator];
+        };
+
         if ($type === '' || $type === 'images') {
-            $imagePaginator = Gallery::paginate($page, 6, array_merge($filters, ['type' => 'images']));
+            [$imagePage, $imagePaginator] = $paginateSection($imagePage, ['type' => 'images']);
         }
 
         if ($type === '' || $type === 'videos') {
-            $videoPaginator = Gallery::paginate($page, 6, array_merge($filters, ['type' => 'videos']));
+            [$videoPage, $videoPaginator] = $paginateSection($videoPage, ['type' => 'videos']);
         }
 
         // How many galleries in this category the member cannot open yet.
@@ -503,6 +522,8 @@ class GalleryController extends Controller
             'category'       => $category,
             'imagePaginator' => $imagePaginator,
             'videoPaginator' => $videoPaginator,
+            'imagePage'      => $imagePage,
+            'videoPage'      => $videoPage,
             'lockedCount'    => Gallery::countLocked($memberLevel, (int) ($category['id'] ?? 0)),
             'q'              => $q,
             'type'           => $type,

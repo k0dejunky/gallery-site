@@ -8,6 +8,9 @@ if (isset($paginator) && (int) $paginator['pages'] > 1):
     $current = (int) $paginator['page'];
     $totalPages = (int) $paginator['pages'];
     $sep = strpos($baseUrl, '?') !== false ? '&' : '?';
+    // A page with more than one paginated section gives every section its
+    // own query parameter, so paging one section leaves the others alone.
+    $pageParam = isset($pageParam) && (string) $pageParam !== '' ? (string) $pageParam : 'page';
 
     $pages = [];
     for ($p = 1; $p <= $totalPages; $p++) {
@@ -24,7 +27,7 @@ if (isset($paginator) && (int) $paginator['pages'] > 1):
     ?>
     <div class="pagination">
         <?php if ($current > 1): ?>
-            <a href="<?= e($baseUrl) ?><?= $sep ?>page=<?= $current - 1 ?>" rel="prev">&laquo; Prev</a>
+            <a href="<?= e($baseUrl) ?><?= $sep ?><?= e($pageParam) ?>=<?= $current - 1 ?>" rel="prev">&laquo; Prev</a>
         <?php endif; ?>
 
         <?php foreach ($pages as $p): ?>
@@ -33,12 +36,12 @@ if (isset($paginator) && (int) $paginator['pages'] > 1):
             <?php elseif ($p === $current): ?>
                 <span class="current" aria-current="page" aria-label="Page <?= $p ?>"><?= $p ?></span>
             <?php else: ?>
-                <a href="<?= e($baseUrl) ?><?= $sep ?>page=<?= $p ?>" aria-label="Page <?= $p ?>"><?= $p ?></a>
+                <a href="<?= e($baseUrl) ?><?= $sep ?><?= e($pageParam) ?>=<?= $p ?>" aria-label="Page <?= $p ?>"><?= $p ?></a>
             <?php endif; ?>
         <?php endforeach; ?>
 
         <?php if ($current < $totalPages): ?>
-            <a href="<?= e($baseUrl) ?><?= $sep ?>page=<?= $current + 1 ?>" rel="next">Next &raquo;</a>
+            <a href="<?= e($baseUrl) ?><?= $sep ?><?= e($pageParam) ?>=<?= $current + 1 ?>" rel="next">Next &raquo;</a>
         <?php endif; ?>
     </div>
 <?php endif; ?>

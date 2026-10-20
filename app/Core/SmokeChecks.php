@@ -641,6 +641,31 @@ class SmokeChecks
             return $ok('no ad-hoc table scrollers');
         });
 
+        $add('smoke.ui.sections_paginate_separately', 'Smoke · UI', 'Paginated sections on one page page on their own', static function () use ($root, $ok, $bad): array {
+            // The category page shows the image galleries and the video
+            // galleries side by side. Both used the same "page" parameter, so
+            // paging one section moved the other one as well.
+            $partial  = (string) @file_get_contents("$root/views/partials/pagination.php");
+            $view     = (string) @file_get_contents("$root/views/gallery/category.php");
+            $ctrl     = (string) @file_get_contents("$root/app/Controllers/GalleryController.php");
+
+            if (strpos($partial, '$pageParam') === false) {
+                return $bad('the pagination partial must support a per-section page parameter');
+            }
+            if (strpos($partial, "page=") !== false && strpos($partial, '$pageParam') === false) {
+                return $bad('the pagination partial still hard-codes the "page" parameter');
+            }
+            foreach (['page_images', 'page_videos'] as $param) {
+                if (strpos($view, "'" . $param . "'") === false) {
+                    return $bad('the category view must page the sections on ' . $param);
+                }
+                if (strpos($ctrl, "'" . $param . "'") === false) {
+                    return $bad('the category controller must read ' . $param);
+                }
+            }
+            return $ok('every paginated section pages on its own parameter');
+        });
+
         $add('smoke.live.viewer_recovers', 'Smoke · Live', 'The live viewer rebuilds a frozen player instead of waiting for a reload', static function () use ($root, $ok, $bad): array {
             // When the operator pauses the broadcast or mutes the camera the
             // publisher stops sending frames: the playlist stops updating and

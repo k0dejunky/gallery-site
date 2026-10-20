@@ -53,9 +53,13 @@ $query = $q !== '' ? ['q' => $q] : [];
 if (($sort ?? '') !== '') {
     $query['sort'] = $sort;
 }
-$allUrl = $query ? $base . '?' . http_build_query($query) : $base;
-$imgUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'images']));
-$vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos']));
+// Every section has its own page parameter, so the chips carry the page the
+// member was on instead of dropping them back to the first one.
+$imagePage = (int) ($imagePage ?? 1);
+$videoPage = (int) ($videoPage ?? 1);
+$allUrl = $base . '?' . http_build_query(array_merge($query, ['page_images' => $imagePage, 'page_videos' => $videoPage]));
+$imgUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'images', 'page_images' => $imagePage]));
+$vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos', 'page_videos' => $videoPage]));
 ?>
 
 <div class="chips" style="justify-content:center">
@@ -78,6 +82,10 @@ if ($type !== '') $paginationQuery['type'] = $type;
 if (($sort ?? '') !== '') $paginationQuery['sort'] = $sort;
 $searchSuffix = $q !== '' ? ' match your search' : '';
 $sectionBaseUrl = $base . ($paginationQuery ? '?' . http_build_query($paginationQuery) : '');
+// A section's pager link keeps the other section on the page it was on.
+$withParam = static function (string $url, string $key, int $value): string {
+    return $url . (strpos($url, '?') !== false ? '&' : '?') . $key . '=' . $value;
+};
 // Shared fragment-cache namespace for this category (used by both sections).
 $catBase = 'cat.' . md5(json_encode([$category['id'] ?? 0, $category['slug'] ?? '']));
 ?>
@@ -113,9 +121,12 @@ $catBase = 'cat.' . md5(json_encode([$category['id'] ?? 0, $category['slug'] ?? 
             ?>
         </div>
         <?php
-        // Reuse the pagination partial for this section's own pages.
-        $baseUrl = $sectionBaseUrl;
+        // Reuse the pagination partial for this section's own pages. The
+        // section pages on page_images, so the video section stays where it
+        // is.
+        $baseUrl = $withParam($sectionBaseUrl, 'page_videos', $videoPage);
         $paginator = $imagePaginator;
+        $pageParam = 'page_images';
         require __DIR__ . '/../partials/pagination.php';
         ?>
     <?php endif; ?>
@@ -153,8 +164,9 @@ $catBase = 'cat.' . md5(json_encode([$category['id'] ?? 0, $category['slug'] ?? 
             ?>
         </div>
         <?php
-        $baseUrl = $sectionBaseUrl;
+        $baseUrl = $withParam($sectionBaseUrl, 'page_images', $imagePage);
         $paginator = $videoPaginator;
+        $pageParam = 'page_videos';
         require __DIR__ . '/../partials/pagination.php';
         ?>
     <?php endif; ?>
