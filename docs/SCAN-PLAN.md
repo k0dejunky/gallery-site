@@ -65,18 +65,35 @@ everything. The prod backup before the deploy is
 
 ### Batch B - the member-visible bugs
 
+**Batch B is DONE and shipped (local + dev + prod, 2026-10-20).** Smoke 917 on
+local, dev and prod; TestSuite 981 (6 known environment-only failures).
+Verified in the browser on dev and prod: the operator's chat bubble is
+14.98:1 (it was 1.16:1), two different guests now get two different CSRF
+tokens from the cached pages (they used to get the producer's), the plan
+cards say how many galleries a tier opens, the wall prints one date heading
+per day, the chat is a log region, the guest bottom nav carries Sign in and
+Join, and the lock chips and the "above your level" notes appear for a
+member on a low tier. The prod backup before the deploy is
+`/var/backups/gallery/pre-ui-batchB-20261020-083059.sql.gz`, and the prod
+database got migration 071 (the multi-use unlock code).
+
+**Found while doing B3:** the page cache's meta-tag rewrite used `'$1' . $token`
+and a hex token that starts with a digit made PHP read it as the group 167 -
+so the whole tag was replaced by nothing, about half the time. The braces
+(`${1}`) fixed it; the new TestSuite case caught it.
+
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| B1 | The operator's chat bubble is 1.16:1 contrast (invisible); the welcome modal, support form and Silver badge share the defect | `public/assets/css/user.css`, `app/Models/Theme.php` | todo | - |
-| B2 | The page cache hands one guest another guest's CSRF token (the meta tag is not rewritten) | `app/Core/PageCache.php` | todo | - |
-| B3 | A multi-use unlock code can only be redeemed once: the 2nd 500s and burns the use | `app/Controllers/PurchaseController.php`, `app/Models/Purchase.php`, `schema.sql` + a migration | todo | - |
-| B4 | A fresh install cannot pause a live stream (`schema.sql` misses `live_sessions.paused_at`; `install.sh` never runs the migrator) | `schema.sql`, `install.sh` | todo | - |
-| B5 | The site recommends galleries the member cannot open (`related()`/`recommended()` have no level filter) | `app/Models/Gallery.php` | todo | - |
-| B6 | The paywall reads as "empty" -> the locked count + the upsell (copy decided) | `app/Models/Gallery.php`, `views/gallery/category.php`, `views/gallery/index.php`, `views/partials/gallery_card.php`, `views/membership/index.php` | todo | - |
-| B7 | The wall wastes 20 COUNT queries, repeats the date heading per post, and the badge never clears | `app/Controllers/WallController.php`, `views/wall.php` | todo | - |
-| B8 | The lightbox is dead code (every thumbnail is a full page load) | `public/assets/js/user.js`, `public/assets/css/user.css`, `views/partials/gallery_grid_item.php` | todo | - |
-| B9 | The chat and the live chat are silent regions for screen readers | `views/chat/index.php`, `views/live.php` | todo | - |
-| B10 | The leftovers of the 2026-10-19 batch (the duplicated guest nav, the tour's seen flag, the lost inline edit, the dead attribute, the count separator, `aria-modal`) | `public/assets/css/user.css`, `public/assets/js/tour.js`, `public/assets/js/admin.js`, `views/admin/galleries.php` | todo | - |
+| B1 | The operator's chat bubble is 1.16:1 contrast (invisible); the welcome modal, support form and Silver badge share the defect | `public/assets/css/user.css`, `app/Models/Theme.php` | done | `af104af` |
+| B2 | The page cache hands one guest another guest's CSRF token (the meta tag is not rewritten) | `app/Core/PageCache.php` | done | `19800c2` |
+| B3 | A multi-use unlock code can only be redeemed once: the 2nd 500s and burns the use | `app/Controllers/PurchaseController.php`, `app/Models/Purchase.php`, `schema.sql` + a migration | done | `7ab4e58` |
+| B4 | A fresh install cannot pause a live stream (`schema.sql` misses `live_sessions.paused_at`; `install.sh` never runs the migrator) | `schema.sql`, `install.sh` | done | `de54e18` |
+| B5 | The site recommends galleries the member cannot open (`related()`/`recommended()` have no level filter) | `app/Models/Gallery.php` | done | `cbeefa9` |
+| B6 | The paywall reads as "empty" -> the locked count + the upsell (copy decided) | `app/Models/Gallery.php`, `views/gallery/category.php`, `views/gallery/index.php`, `views/partials/gallery_card.php`, `views/membership/index.php` | done | `cbeefa9` |
+| B7 | The wall wastes 20 COUNT queries, repeats the date heading per post, and the badge never clears | `app/Controllers/WallController.php`, `views/wall.php` | done | `c458bff` |
+| B8 | The lightbox is dead code (every thumbnail is a full page load) | `public/assets/js/user.js`, `public/assets/css/user.css`, `views/partials/gallery_grid_item.php` | done | `f72548f` |
+| B9 | The chat and the live chat are silent regions for screen readers | `views/chat/index.php`, `views/live.php` | done | `7d89033` |
+| B10 | The leftovers of the 2026-10-19 batch (the duplicated guest nav, the tour's seen flag, the lost inline edit, the dead attribute, the count separator, `aria-modal`) | `public/assets/css/user.css`, `public/assets/js/tour.js`, `public/assets/js/admin.js`, `views/admin/galleries.php` | done | `e479848` |
 
 ### Batch C - performance
 
