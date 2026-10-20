@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Core;
 
 use App\Models\Category;
+use App\Models\CategoryFeedback;
 use App\Models\CategorySuggestion;
 use App\Models\Gallery;
 use App\Models\Http;
@@ -39,9 +40,27 @@ class CategoryAdvisor
     private const DESCRIBE_IMAGES = 12;
     private const FRAME_WIDTH    = 512;
     private const FRAME_HEIGHT   = 512;
-    // CPU vision on a small box can take minutes for the first (cold) call;
-    // the worker holds the lock the whole time, so a long wait is fine.
-    private const HTTP_TIMEOUT   = 420;
+    // CPU vision on a small box is slow: each image costs about 30 seconds to
+    // encode and the model can write a long answer, so a batch can take
+    // more than seven minutes. The old 420 second timeout cut the call off
+    // and lost the batch; the worker holds the lock the whole time, so a
+    // long wait is fine.
+    private const HTTP_TIMEOUT   = 900;
+
+    /* ---------------- the editor's corrections ---------------- */
+
+    /** Is the learning layer on? CATEGORIZER_LEARN=0 turns it off. */
+    public static function learningEnabled(): bool
+    {
+        return (string) env_value('CATEGORIZER_LEARN', '1') !== '0';
+    }
+
+    /** May the editor's vocabulary for similar galleries be proposed? */
+    public static function retrievalEnabled(): bool
+    {
+        return self::learningEnabled()
+            && (string) env_value('CATEGORIZER_LEARN_RETRIEVE', '1') !== '0';
+    }
 
     /**
      * Which photos of a gallery are shown to the model: 'head' (the first
@@ -168,12 +187,35 @@ class CategoryAdvisor
         $chunks = array_chunk($names, self::CHUNK_SIZE);
         $total  = count($chunks);
 
+        // What the editor has taught us so far: the categories they usually
+        // keep and remove, the ones they took off a gallery, and their
+        // vocabulary for galleries like this one.
+        $learn = ['removed' => [], 'scores' => [], 'vocabulary' => [], 'similar' => []];
+
+        if (self::learningEnabled()) {
+            $learn['removed'] = CategoryFeedback::removedFor($galleryId);
+            $learn['scores']  = CategoryFeedback::scoreMap();
+
+            if (self::retrievalEnabled()) {
+                $limit = max(1, min(20, (int) env_value('CATEGORIZER_LEARN_RETRIEVE_LIMIT', '5')));
+                $learn['similar']   = CategoryFeedback::similarGalleries($galleryId, $limit);
+                $learn['vocabulary'] = CategoryFeedback::vocabularyFor($learn['similar']);
+            }
+        }
+
         $merged   = [];
         $lastErr  = '';
         $answered = 0;
 
         foreach ($chunks as $i => $batch) {
-            $prompt = self::prompt($gallery, $batch, $i, $total, self::mediaNote($images, $description));
+            $prompt = self::prompt(
+                $gallery,
+                $batch,
+                $i,
+                $total,
+                self::mediaNote($images, $description),
+                self::batchLearning($batch, $learn)
+            );
 
             $t0 = microtime(true);
             try {
@@ -186,6 +228,7 @@ class CategoryAdvisor
                 continue;
             }
             $timings['batches'][] = round(microtime(true) - $t0, 1);
+            $answered++;
 
             foreach (self::resolve($text, $batch) as $row) {
                 $cid = $row['category_id'];
@@ -208,7 +251,60 @@ class CategoryAdvisor
             ];
         }
 
-        $suggestions = array_values($merged);
+        // The editor's corrections applied to the model's answer: a category
+        // they keep is worth more, one they took off is not worth proposing
+        // at all.
+        $kept = [];
+
+        foreach ($merged as $cid => $row) {
+            if (in_array((int) $cid, $learn['removed'], true)) {
+                continue;
+            }
+
+            $score = $learn['scores'][$cid] ?? null;
+
+            if ($score !== null
+                && $score['samples'] >= CategoryFeedback::MIN_SAMPLES
+                && $score['score'] <= 0.25) {
+                // The editor rejects this one often enough: do not offer it.
+                continue;
+            }
+
+            $confidence = $row['confidence'];
+            if ($confidence !== null) {
+                $confidence = round((float) $confidence * CategoryFeedback::weight((int) $cid, $learn['scores']), 4);
+            }
+
+            $kept[$cid] = [
+                'category_id' => (int) $cid,
+                'confidence'  => $confidence,
+                'source'      => 'model',
+            ];
+        }
+
+        // The editor's own vocabulary for similar galleries: proposed with a
+        // low confidence, so the editor still approves every one.
+        $minWeight = (float) env_value('CATEGORIZER_LEARN_RETRIEVE_MIN', '0.3');
+
+        foreach ($learn['vocabulary'] as $cid => $weight) {
+            $cid = (int) $cid;
+
+            if (isset($kept[$cid]) || in_array($cid, $learn['removed'], true)) {
+                continue;
+            }
+
+            if ($weight < $minWeight) {
+                continue;
+            }
+
+            $kept[$cid] = [
+                'category_id' => $cid,
+                'confidence'  => round(min(0.45, 0.25 + 0.2 * $weight), 4),
+                'source'      => 'retrieved',
+            ];
+        }
+
+        $suggestions = array_values($kept);
         usort(
             $suggestions,
             static fn (array $a, array $b): int => (float) $b['confidence'] <=> (float) $a['confidence']
@@ -222,6 +318,72 @@ class CategoryAdvisor
             'error'       => '',
             'timings'     => $timings,
         ];
+    }
+
+    /**
+     * A context window big enough for $images images: about 1200 tokens per
+     * image (Ollama resizes every picture up to its pixel budget) plus room
+     * for the prompt and the answer. Rounded to a whole 1024.
+     */
+    public static function contextFor(int $images): int
+    {
+        // About 1030 tokens per image (Ollama resizes every picture up to
+        // its pixel budget) plus the prompt and the answer.
+        $needed = 1100 * max(1, $images) + 600;
+
+        return max(4096, (int) (ceil($needed / 1024) * 1024));
+    }
+
+    /**
+     * The part of the editor's learning that applies to one batch of
+     * candidate categories: the names of the categories in this batch the
+     * editor usually keeps, usually removes, and usually tags a gallery like
+     * this with.
+     */
+    private static function batchLearning(array $batch, array $learn): array
+    {
+        if ($learn === []) {
+            return [];
+        }
+
+        $ids   = [];
+        $names = [];
+
+        foreach ($batch as $name) {
+            $category = Category::findByName((string) $name);
+            if ($category !== null) {
+                $id = (int) $category['id'];
+                $ids[]   = $id;
+                $names[$id] = (string) $category['name'];
+            }
+        }
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $preferences = CategoryFeedback::preferences($ids);
+
+        $keep = [];
+        foreach ($preferences['keep'] as $id => $name) {
+            $keep[] = $name;
+        }
+
+        $remove = [];
+        foreach ($preferences['remove'] as $id => $name) {
+            $remove[] = $name;
+        }
+
+        // The editor's vocabulary for similar galleries, but only the names
+        // this batch is about.
+        $vocabulary = [];
+        foreach ($learn['vocabulary'] as $id => $weight) {
+            if (isset($names[(int) $id])) {
+                $vocabulary[] = $names[(int) $id];
+            }
+        }
+
+        return ['keep' => $keep, 'remove' => $remove, 'vocabulary' => $vocabulary];
     }
 
     /**
@@ -261,7 +423,7 @@ class CategoryAdvisor
 
         $text = $driver === 'api'
             ? self::callApi($prompt, $images)
-            : self::callOllama($prompt, $images);
+            : self::callOllama($prompt, $images, ['num_ctx' => self::contextFor(count($images))]);
 
         return \App\Core\DescriptionAdvisor::parse($text);
     }
@@ -272,7 +434,7 @@ class CategoryAdvisor
      * One batch's prompt: the same gallery context, but only this chunk of
      * candidate categories, asked for exhaustively (every match, not a few).
      */
-    private static function prompt(array $gallery, array $categoryNames, int $batchIndex, int $batchTotal, string $mediaNote): string
+    private static function prompt(array $gallery, array $categoryNames, int $batchIndex, int $batchTotal, string $mediaNote, array $learn = []): string
     {
         $tags = array_map(static fn (array $t): string => (string) $t['name'], Tag::forGallery((int) $gallery['id']));
 
@@ -296,10 +458,33 @@ class CategoryAdvisor
             ? 'This is candidate batch ' . ($batchIndex + 1) . ' of ' . $batchTotal . '.\n'
             : '';
 
+        // What the editor has taught us, limited to the candidates of THIS
+        // batch (the model only ever judges these names).
+        $corrections = '';
+        $keep   = array_values($learn['keep'] ?? []);
+        $remove = array_values($learn['remove'] ?? []);
+        $tags   = array_values($learn['vocabulary'] ?? []);
+
+        if ($keep !== [] || $remove !== [] || $tags !== []) {
+            $lines = [];
+            if ($keep !== []) {
+                $lines[] = 'they usually keep: ' . implode(', ', $keep);
+            }
+            if ($remove !== []) {
+                $lines[] = 'they usually remove: ' . implode(', ', $remove);
+            }
+            if ($tags !== []) {
+                $lines[] = 'they usually tag a gallery like this with: ' . implode(', ', $tags);
+            }
+            $corrections = "The editor has corrected this categorizer before - follow their taste:\n"
+                . implode("\n", $lines) . "\n";
+        }
+
         return "You are categorizing content for an adult gallery site. Judge EACH candidate category below\n"
             . "against this gallery and select EVERY one that fits. Selecting many is expected and correct -\n"
             . "do not stop at one, and do not limit yourself to a few.\n\n"
             . $context . $media . "\n\n"
+            . $corrections
             . $batch
             . "Candidate categories (choose ONLY from this list): $list\n\n"
             . "Reply with ONLY JSON, no prose, in the form:\n"
@@ -383,11 +568,22 @@ class CategoryAdvisor
 
     /* ---------------- drivers ---------------- */
 
-    /** Public: DescriptionAdvisor shares the same driver plumbing. */
-    public static function callOllama(string $prompt, array $images): string
+    /**
+     * Public: DescriptionAdvisor shares the same driver plumbing.
+     *
+     * $options may carry 'num_ctx': Ollama's default context is 4096 tokens
+     * and one image is worth about a thousand of them, so a call with many
+     * images needs a bigger window.
+     */
+    public static function callOllama(string $prompt, array $images, array $options = []): string
     {
         $model = (string) env_value('CATEGORIZER_MODEL', 'qwen2.5vl:3b');
         $url   = rtrim((string) env_value('OLLAMA_URL', 'http://127.0.0.1:11434'), '/') . '/api/generate';
+
+        $numCtx = (int) ($options['num_ctx'] ?? 0);
+        if ($numCtx <= 0 && count($images) > 0) {
+            $numCtx = self::contextFor(count($images));
+        }
 
         $payload = [
             'model'   => $model,
@@ -401,6 +597,12 @@ class CategoryAdvisor
             ],
         ];
 
+        // Only when the default window is too small: a call that fits keeps
+        // Ollama's default and its smaller key-value cache.
+        if ($numCtx > 4096) {
+            $payload['options']['num_ctx'] = $numCtx;
+        }
+
         [$status, , $body] = Http::request($url, [
             'method'  => 'POST',
             'headers' => ['Content-Type: application/json'],
@@ -409,7 +611,7 @@ class CategoryAdvisor
         ]);
 
         if ($status < 200 || $status >= 300) {
-            throw new \RuntimeException("Ollama HTTP $status");
+            throw new \RuntimeException("Ollama HTTP $status: " . mb_substr(trim($body), 0, 200));
         }
 
         $data = json_decode($body, true);

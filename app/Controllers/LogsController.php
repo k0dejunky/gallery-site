@@ -410,7 +410,19 @@ class LogsController extends Controller
                         isset($before['is_secret']) ? !empty($before['is_secret']) : null
                     );
                     if (isset($before['categories'])) {
+                        $restoreBefore = array_map('intval', array_column(
+                            \App\Models\Gallery::categories($entityId),
+                            'id'
+                        ));
                         Gallery::setCategories($entityId, (array) $before['categories']);
+                        // Restoring is an edit too: the categorizer learns
+                        // from it like from any other change.
+                        \App\Models\CategoryFeedback::recordDelta(
+                            $entityId,
+                            $restoreBefore,
+                            array_map('intval', (array) $before['categories']),
+                            (int) \App\Core\Auth::user()['id']
+                        );
                     }
                     $ok = true;
                 }

@@ -3694,6 +3694,10 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
         $czMigr   = $read("$root/database/migrations/055_category_suggestions.sql");
         $czUpload = $read("$root/app/Core/MediaUploader.php");
         $czBench  = $read("$root/bin/categorize_bench.php");
+        $czFeed   = $read("$root/app/Models/CategoryFeedback.php");
+        $czLearn  = $read("$root/database/migrations/080_ai_category_feedback.sql");
+        $czLearnV = $read("$root/views/admin/category_learned.php");
+        $czBack   = $read("$root/bin/categorize_feedback_backfill.php");
         $add('smoke.categorizer.schema', 'Smoke · Categorizer', 'suggestion + job tables in schema.sql and migration 055', static function () use ($czSchema, $czMigr, $ok, $bad): array {
             $okSchema = strpos($czSchema, 'gallery_category_suggestions') !== false
                 && strpos($czSchema, 'gallery_category_jobs') !== false;
@@ -3728,6 +3732,50 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 return $bad('bin/categorize_bench.php must score the runs against the editor tags, log to categorizer-bench.csv and take the categorizer lock');
             }
             return $ok('the sampling variants exist and the default is unchanged');
+        });
+        $add('smoke.categorizer.learns_from_the_admin', 'Smoke · Categorizer', 'the categorizer learns from the editor\'s corrections', static function () use ($read, $root, $czModel, $czSvc, $czFeed, $czLearn, $czLearnV, $czBack, $czSchema, $czCtrl, $czWorker, $ok, $bad): array {
+            // The editor's decisions have to be recorded: an accept, a
+            // dismiss, a category added by hand and a category taken off.
+            foreach (['record', 'recordDelta', 'scoreMap', 'removedFor', 'preferences', 'similarGalleries', 'vocabularyFor', 'summary'] as $needle) {
+                if (strpos($czFeed, 'function ' . $needle . '(') === false) {
+                    return $bad('CategoryFeedback::' . $needle . '() is missing');
+                }
+            }
+            if (strpos($czLearn, 'gallery_category_feedback') === false
+                || strpos($czSchema, 'gallery_category_feedback') === false) {
+                return $bad('the feedback table must be in migration 080 and in schema.sql');
+            }
+            // The decisions are recorded where they happen.
+            if (substr_count($czModel, 'CategoryFeedback::record(') < 3) {
+                return $bad('accept, accept-all and dismiss must record the decision');
+            }
+            $galleryCtrl = $read("$root/app/Controllers/GalleryController.php");
+            if (strpos($galleryCtrl, 'recordDelta') === false) {
+                return $bad('the gallery update must record what the editor did to the categories');
+            }
+            if (strpos($czBack, 'admin_logs') === false || strpos($czBack, 'gallery_category_suggestions') === false) {
+                return $bad('the backfill must seed the feedback from the proposals and the audit log');
+            }
+            // The AI uses what it learned: the prompt carries the editor's
+            // corrections and the answer is filtered by them.
+            if (strpos($czSvc, 'batchLearning') === false
+                || strpos($czSvc, "they usually keep") === false
+                || strpos($czSvc, 'CategoryFeedback::removedFor') === false
+                || strpos($czSvc, "'retrieved'") === false) {
+                return $bad('CategoryAdvisor must show the editor\'s corrections to the model and drop what the editor removed');
+            }
+            if (strpos($czWorker, "source = VALUES(source)") === false) {
+                return $bad('the worker must record where a proposal came from');
+            }
+            // The editor can see what the AI has learned.
+            if (strpos($czLearnV, 'the_kept') === false && strpos($czLearnV, 'Score') === false) {
+                return $bad('the learned page must show the per-category decisions');
+            }
+            $routes = $read("$root/config/routes.php");
+            if (strpos($routes, '/admin/category-suggestions/learned') === false) {
+                return $bad('the route /admin/category-suggestions/learned is missing');
+            }
+            return $ok('the editor\'s corrections are recorded, scored and used');
         });
         $add('smoke.categorizer.merge_not_replace', 'Smoke · Categorizer', 'accept() merges into existing categories (setCategories replaces)', static function () use ($czModel, $ok, $bad): array {
             return strpos($czModel, 'Gallery::categories(') !== false

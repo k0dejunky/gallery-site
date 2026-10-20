@@ -44,11 +44,19 @@ $options = [
     'control_rounds'  => 2,
     'describe_images' => 12,
     'dry_run'         => false,
+    'list'            => false,
+    // 'learn' = 0 measures the sampling on its own (the editor's corrections
+    // switched off), 1 measures the shipping configuration.
+    'learn'           => '1',
 ];
 
 foreach (array_slice($argv, 1) as $arg) {
     if ($arg === '--dry-run') {
         $options['dry_run'] = true;
+        continue;
+    }
+    if ($arg === '--list') {
+        $options['list'] = true;
         continue;
     }
     if (preg_match('/^--([a-z_]+)=(.*)$/', $arg, $m)) {
@@ -58,6 +66,9 @@ foreach (array_slice($argv, 1) as $arg) {
         }
     }
 }
+
+// The editor's corrections are switched off for a pure sampling measurement.
+putenv('CATEGORIZER_LEARN=' . ((string) $options['learn'] === '0' ? '0' : '1'));
 
 $variantMap = [
     'head3'    => ['sample_mode' => 'head',   'sample_max' => 3,  'describe' => false],
@@ -86,6 +97,52 @@ if (!is_dir($logDir)) {
     @mkdir($logDir, 0775, true);
 }
 
+// --list prints the plan (and the ground truth) without calling the model.
+if ($options['list']) {
+    echo "the variants: " . implode(', ', $variants) . "\n";
+    $byId = [];
+    foreach (\App\Models\Category::all() as $c) {
+        $byId[(int) $c['id']] = (string) $c['name'];
+    }
+    $plan = static function (int $galleryId, string $variant) use ($byId, $options): void {
+        $gallery = Gallery::find($galleryId);
+        if ($gallery === null) {
+            echo "  gallery {$galleryId}: NOT FOUND\n";
+            return;
+        }
+        $photos = Gallery::photos($galleryId);
+        $tags   = array_map(static fn (array $c): int => (int) $c['id'], Gallery::categories($galleryId));
+        $names  = [];
+        foreach ($tags as $t) {
+            $names[] = $byId[$t] ?? ('#' . $t);
+        }
+        $max = $variant === 'describe' ? (int) $options['describe_images'] : ($variant === 'spread6' ? 6 : 3);
+        $mode = $variant === 'head3' ? 'head' : 'spread';
+        $pos  = CategoryAdvisor::samplePositions(count($photos), $max, $mode);
+        echo sprintf(
+            "  gallery %d (%s) variant %s: %d photos, the sample at %s, %d editor tags [%s]\n",
+            $galleryId,
+            mb_substr((string) $gallery['title'], 0, 30),
+            $variant,
+            count($photos),
+            implode(',', $pos),
+            count($tags),
+            implode(', ', array_slice($names, 0, 6))
+        );
+    };
+    foreach ($galleryIds as $galleryId) {
+        foreach ($variants as $variant) {
+            $plan($galleryId, $variant);
+        }
+    }
+    foreach ($controlIds as $galleryId) {
+        for ($i = 0; $i < max(1, (int) $options['control_rounds']); $i++) {
+            $plan($galleryId, 'head3 (control run ' . ($i + 1) . ')');
+        }
+    }
+    exit(0);
+}
+
 // The categorizer's own lock: the benchmark and the worker never overlap.
 $lockFile = $logDir . '/categorizer.lock';
 $lock = fopen($lockFile, 'c');
@@ -93,9 +150,16 @@ if ($lock === false) {
     fwrite(STDERR, "unable to open the lock file {$lockFile}\n");
     exit(1);
 }
-if (!flock($lock, LOCK_EX | LOCK_NB)) {
-    fwrite(STDERR, "the categorizer worker is running - try again later\n");
-    exit(0);
+// Wait for the lock instead of giving up: the worker takes it every minute
+// for a short tick, and the benchmark is a long detached run.
+$waited = 0;
+while (!flock($lock, LOCK_EX | LOCK_NB)) {
+    if ($waited >= 900) {
+        fwrite(STDERR, "the categorizer lock is still held after 15 minutes - try again later\n");
+        exit(1);
+    }
+    sleep(10);
+    $waited += 10;
 }
 
 $log = static function (string $line) use ($logFile): void {
@@ -108,7 +172,8 @@ if (!is_file($csvFile)) {
 }
 
 $log('start: variants=' . implode(',', $variants) . ' galleries=' . implode(',', $galleryIds)
-    . ' control=' . implode(',', $controlIds));
+    . ' control=' . implode(',', $controlIds) . ' learn=' . (string) $options['learn']);
+
 
 $run = static function (int $galleryId, string $variant, array $variantMap, int $describeImages, bool $dryRun) use ($log, $csvFile, $jsonFile, $options): void {
     $gallery = Gallery::find($galleryId);

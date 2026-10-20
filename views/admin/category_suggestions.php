@@ -4,6 +4,7 @@
     The AI reviews a gallery's media and proposes categories here. Nothing is applied automatically —
     accept a proposal to merge it into the gallery's categories, or dismiss it. Driver:
     <strong><?= e($driver) ?></strong><?= $driver === 'off' ? ' (analysis disabled in .env)' : '' ?>.
+    <a href="<?= url('/admin/category-suggestions/learned') ?>">What the AI has learned &rarr;</a>
 </p>
 
 <section style="display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;">
@@ -49,6 +50,12 @@
                             <?= e($s['category_name']) ?>
                             <?php if ($s['confidence'] !== null): ?>
                                 <span class="muted" style="font-size:.8em;"><?= (int) round((float) $s['confidence'] * 100) ?>%</span>
+                            <?php endif; ?>
+                            <?php if (($s['source'] ?? 'model') === 'retrieved'): ?>
+                                <span class="muted u-fs-085" title="Not proposed by the model: it comes from the editor's own tags on similar galleries.">from similar galleries</span>
+                            <?php endif; ?>
+                            <?php if (!empty($s['the_usually_removed'])): ?>
+                                <span class="muted u-fs-085" title="The editor has removed this category before.">the editor removes this</span>
                             <?php endif; ?>
                             <form class="inline" method="post" action="<?= url('/admin/category-suggestions/accept') ?>" style="display:inline;">
                                 <?= csrf_field() ?>

@@ -91,10 +91,10 @@ do {
                 // admin already accepted or dismissed stays decided instead
                 // of being re-proposed on every analysis.
                 \App\Core\Database::run(
-                    "INSERT INTO gallery_category_suggestions (gallery_id, category_id, confidence, status, engine)
-                     VALUES (?, ?, ?, 'pending', ?)
-                     ON DUPLICATE KEY UPDATE confidence = VALUES(confidence), engine = VALUES(engine)",
-                    [$galleryId, $s['category_id'], $s['confidence'], $result['engine']]
+                    "INSERT INTO gallery_category_suggestions (gallery_id, category_id, confidence, status, engine, source)
+                     VALUES (?, ?, ?, 'pending', ?, ?)
+                     ON DUPLICATE KEY UPDATE confidence = VALUES(confidence), engine = VALUES(engine), source = VALUES(source)",
+                    [$galleryId, $s['category_id'], $s['confidence'], $result['engine'], $s['source'] ?? 'model']
                 );
                 $suggested++;
             }

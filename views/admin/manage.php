@@ -110,6 +110,12 @@
                 <?php if ($suggestion['confidence'] !== null): ?>
                     <span class="muted" style="font-size:.8em;"><?= (int) round((float) $suggestion['confidence'] * 100) ?>%</span>
                 <?php endif; ?>
+                <?php if (($suggestion['source'] ?? 'model') === 'retrieved'): ?>
+                    <span class="muted u-fs-085" title="Not proposed by the model: it comes from the editor's own tags on similar galleries.">from similar galleries</span>
+                <?php endif; ?>
+                <?php if (!empty($suggestion['the_usually_removed'])): ?>
+                    <span class="muted u-fs-085" title="The editor has removed this category before.">the editor removes this</span>
+                <?php endif; ?>
                 <form class="inline" method="post" action="<?= url('/admin/category-suggestions/accept') ?>" style="display:inline;">
                     <?= csrf_field() ?>
                     <input type="hidden" name="id" value="<?= (int) $suggestion['id'] ?>">

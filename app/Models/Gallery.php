@@ -435,6 +435,16 @@ class Gallery
     }
 
     /**
+     * The fulltext query for a search term (the public face of
+     * fulltextQuery(), so the feedback model can look for similar
+     * galleries with the same rules the search uses).
+     */
+    public static function searchQuery(string $term): string
+    {
+        return self::fulltextQuery($term);
+    }
+
+    /**
      * Galleries belonging to any of the given categories, returned as a map
      * of [category_id => [gallery, ...]]. A gallery appears under every
      * category it belongs to; callers deduplicate across categories. This
@@ -557,7 +567,7 @@ class Gallery
      * wildcard so partial words still match. Returns '' when nothing is
      * usable, which signals the caller to fall back to LIKE.
      */
-    private static function fulltextQuery(string $term): string
+    public static function fulltextQuery(string $term): string
     {
         $clean = (string) preg_replace('/[+\-<>~*"@()]/u', ' ', $term);
         $words = array_values(array_filter(

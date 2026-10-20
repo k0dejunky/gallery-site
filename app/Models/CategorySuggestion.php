@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Core\Database;
+use App\Models\CategoryFeedback;
 
 /**
  * AI category suggestions. Each gallery gets at most one row in
@@ -192,7 +193,7 @@ class CategorySuggestion
     /** Pending proposals for one gallery (manage page chips). */
     public static function pendingFor(int $galleryId): array
     {
-        return Database::run(
+        $rows = Database::run(
             "SELECT s.*, c.name AS category_name
              FROM gallery_category_suggestions s
              INNER JOIN categories c ON c.id = s.category_id
@@ -200,6 +201,46 @@ class CategorySuggestion
              ORDER BY s.confidence DESC, c.name ASC",
             [$galleryId]
         )->fetchAll();
+
+        return self::applyLearning($rows);
+    }
+
+    /**
+     * Re-rank the proposals with what the editor has taught us: a category
+     * they usually keep is worth more, one they usually remove sinks.
+     *
+     * The rows keep the model's own confidence in 'the_confidence' so the
+     * page can show both numbers.
+     */
+    public static function applyLearning(array $rows): array
+    {
+        if ($rows === []) {
+            return [];
+        }
+
+        $scores = CategoryFeedback::scoreMap();
+
+        foreach ($rows as $i => $row) {
+            $cid     = (int) $row['category_id'];
+            $weight  = CategoryFeedback::weight($cid, $scores);
+            $score   = $scores[$cid] ?? null;
+
+            $rows[$i]['the_confidence'] = $row['confidence'] === null ? null : (float) $row['confidence'];
+            $rows[$i]['the_weight']     = $weight;
+            $rows[$i]['confidence']      = $row['confidence'] === null
+                ? null
+                : round((float) $row['confidence'] * $weight, 4);
+            $rows[$i]['the_usually_removed'] = $score !== null
+                && $score['samples'] >= CategoryFeedback::MIN_SAMPLES
+                && $score['score'] <= 0.25;
+        }
+
+        usort(
+            $rows,
+            static fn (array $a, array $b): int => (float) $b['confidence'] <=> (float) $a['confidence']
+        );
+
+        return $rows;
     }
 
     /**
@@ -248,6 +289,11 @@ class CategorySuggestion
         $byGallery = [];
         foreach ($suggestions as $s) {
             $byGallery[(int) $s['gallery_id']][] = $s;
+        }
+
+        // The editor's corrections re-rank the proposals of every gallery.
+        foreach ($byGallery as $gid => $rows) {
+            $byGallery[$gid] = self::applyLearning($rows);
         }
 
         $analyzedAt = [];
@@ -321,6 +367,16 @@ class CategorySuggestion
             ['category_id' => $categoryId]
         );
 
+        // The editor kept this one: the categorizer learns from it.
+        CategoryFeedback::record(
+            (int) $s['gallery_id'],
+            $categoryId,
+            CategoryFeedback::KEPT,
+            'suggestion',
+            $s['confidence'] === null ? null : (float) $s['confidence'],
+            $userId
+        );
+
         return true;
     }
 
@@ -366,6 +422,18 @@ class CategorySuggestion
             ['category_ids' => $added]
         );
 
+        // Every proposal the editor kept is a lesson.
+        foreach ($pending as $s) {
+            CategoryFeedback::record(
+                $galleryId,
+                (int) $s['category_id'],
+                CategoryFeedback::KEPT,
+                'suggestion',
+                $s['confidence'] === null ? null : (float) $s['confidence'],
+                $userId
+            );
+        }
+
         return count($pending);
     }
 
@@ -391,6 +459,16 @@ class CategorySuggestion
             'Dismissed AI category suggestion',
             null,
             ['category_id' => (int) $s['category_id']]
+        );
+
+        // The editor rejected this one: the categorizer learns from it.
+        CategoryFeedback::record(
+            (int) $s['gallery_id'],
+            (int) $s['category_id'],
+            CategoryFeedback::REMOVED,
+            'suggestion',
+            $s['confidence'] === null ? null : (float) $s['confidence'],
+            $userId
         );
 
         return true;

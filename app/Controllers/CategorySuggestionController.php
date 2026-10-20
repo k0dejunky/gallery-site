@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Auth;
+use App\Core\CategoryAdvisor;
 use App\Core\Controller;
 use App\Core\Request;
+use App\Models\CategoryFeedback;
 use App\Models\CategorySuggestion;
 use App\Models\Gallery;
 
@@ -65,6 +67,29 @@ class CategorySuggestionController extends Controller
         $count     = CategorySuggestion::acceptAll($galleryId, (int) Auth::user()['id']);
 
         $this->back($count > 0 ? "Accepted $count suggestion(s)." : 'Nothing pending.');
+    }
+
+    /**
+     * What the AI has learned from the editor's corrections: the categories
+     * they keep, the ones they remove and the ones they add by hand.
+     */
+    public function learned(): void
+    {
+        $this->viewAdmin('category_learned', [
+            'rows'   => CategoryFeedback::summary(),
+            'driver' => CategorySuggestion::driver(),
+            'learn'  => CategoryAdvisor::learningEnabled(),
+        ]);
+    }
+
+    /** Forget everything the AI has learned. */
+    public function forget(): void
+    {
+        $count = CategoryFeedback::forget();
+
+        $this->back($count > 0
+            ? "Forgot $count category decision(s)."
+            : 'There was nothing to forget.');
     }
 
     /**

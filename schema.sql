@@ -1140,6 +1140,9 @@ CREATE TABLE IF NOT EXISTS gallery_category_suggestions (
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     decided_at  DATETIME NULL,
     decided_by  INT UNSIGNED NULL,
+    -- 'model' (the vision model) or 'retrieved' (the editor's vocabulary for
+    -- similar galleries).
+    source      VARCHAR(16)  NOT NULL DEFAULT 'model',
     UNIQUE KEY uq_suggestion_gallery_category (gallery_id, category_id),
     INDEX idx_suggestions_status (status),
     INDEX idx_suggestions_gallery (gallery_id),
@@ -1147,6 +1150,31 @@ CREATE TABLE IF NOT EXISTS gallery_category_suggestions (
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
     FOREIGN KEY (decided_by)  REFERENCES users(id)      ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+-- What the editor did to the proposals: kept, removed or added a category.
+-- The categorizer reads this to learn the editor's vocabulary and taste.
+CREATE TABLE IF NOT EXISTS gallery_category_feedback (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    gallery_id  INT UNSIGNED NOT NULL,
+    category_id INT UNSIGNED NOT NULL,
+    verdict     VARCHAR(10)  NOT NULL,
+    source      VARCHAR(16)  NOT NULL DEFAULT 'suggestion',
+    confidence  DECIMAL(5,4) NULL DEFAULT NULL,
+    -- How often the editor kept, took off or added this category here: the
+    -- counters are what the score is made of.
+    the_kept    INT UNSIGNED NOT NULL DEFAULT 0,
+    the_removed INT UNSIGNED NOT NULL DEFAULT 0,
+    the_added   INT UNSIGNED NOT NULL DEFAULT 0,
+    decided_by  INT UNSIGNED NULL DEFAULT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_cat_feedback (gallery_id, category_id),
+    INDEX idx_cat_feedback_category (category_id),
+    INDEX idx_cat_feedback_verdict (verdict),
+    FOREIGN KEY (gallery_id)  REFERENCES galleries(id)  ON DELETE CASCADE,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+    FOREIGN KEY (decided_by)  REFERENCES users(id)      ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 
 -- AI gallery descriptions: the same job/proposal shape as categories, but
 -- one text per gallery; accept (optionally edited) writes galleries.description.

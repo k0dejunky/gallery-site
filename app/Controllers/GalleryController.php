@@ -9,6 +9,7 @@ use App\Core\ImageEditor;
 use App\Models\AuditLog;
 use App\Models\AutoPostQueue;
 use App\Models\Category;
+use App\Models\CategoryFeedback;
 use App\Models\Comment;
 use App\Models\FavoriteCategory;
 use App\Models\Gallery;
@@ -1714,6 +1715,11 @@ if ($publishAtRaw !== '') {
 
         Gallery::update($id, $title, $description, $type, $minLevel, $publishedAt, $isSecret, $isTest);
         Gallery::setCategories($id, $categoryIds);
+
+        // What the editor just did to the categories is the strongest lesson
+        // the categorizer can get: a category they added by hand or took
+        // off by hand.
+        CategoryFeedback::recordDelta($id, $beforeCategories, $categoryIds, (int) Auth::user()['id']);
         Gallery::setAllowedUsers($id, $isSecret ? $allowedUsers : []);
 
         // Optional community/monetization fields, only touched when the form

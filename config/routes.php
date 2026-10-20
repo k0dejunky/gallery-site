@@ -199,6 +199,8 @@ return [
     ['POST', '/admin/category-suggestions/accept-all', 'CategorySuggestionController@acceptAll', 'categories'],
     ['POST', '/admin/category-suggestions/backfill', 'CategorySuggestionController@backfill', 'categories'],
     ['POST', '/admin/category-suggestions/reanalyze', 'CategorySuggestionController@reanalyze', 'categories'],
+    ['GET', '/admin/category-suggestions/learned', 'CategorySuggestionController@learned', 'categories'],
+    ['POST', '/admin/category-suggestions/forget', 'CategorySuggestionController@forget', 'categories'],
     // AI gallery descriptions: review page + accept/dismiss/backfill actions.
     // Literals only (no {id} wildcards), so ordering vs. other blocks is safe.
     ['GET',  '/admin/description-suggestions', 'DescriptionSuggestionController@index', 'galleries'],

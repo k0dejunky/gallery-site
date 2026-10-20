@@ -806,6 +806,95 @@ class TestSuite
             )];
         });
 
+        $add('db.category_feedback_cycle', 'Database', 'the editor\'s corrections are recorded, scored and applied', function () {
+            $made = [];
+            $galleryId = null;
+            try {
+                // Two categories to argue about.
+                $names = [];
+                foreach (['TmpTasteKeep', 'TmpTasteDrop'] as $name) {
+                    $existing = Database::run('SELECT id FROM categories WHERE name = ?', [$name])->fetch();
+                    if ($existing === false) {
+                        Database::run('INSERT INTO categories (name, slug) VALUES (?, ?)', [$name, strtolower($name)]);
+                        $made[] = $name;
+                    }
+                    $names[$name] = (int) Database::run('SELECT id FROM categories WHERE name = ?', [$name])->fetchColumn();
+                }
+                $keepId = $names['TmpTasteKeep'];
+                $dropId = $names['TmpTasteDrop'];
+
+                Database::run("INSERT INTO galleries (title, type) VALUES ('TmpTasteGallery', 'images')");
+                $galleryId = (int) Database::connection()->lastInsertId();
+
+                // The editor keeps one category twice and drops the other
+                // three times: the second one is the one the AI must learn
+                // to leave alone.
+                \App\Models\CategoryFeedback::record($galleryId, $keepId, 'kept', 'suggestion', 0.8, 0);
+                \App\Models\CategoryFeedback::record($galleryId, $keepId, 'kept', 'suggestion', 0.9, 0);
+                for ($i = 0; $i < 3; $i++) {
+                    \App\Models\CategoryFeedback::record($galleryId, $dropId, 'removed', 'suggestion', 0.7, 0);
+                }
+
+                $scores = \App\Models\CategoryFeedback::scoreMap();
+                $keepScore = $scores[$keepId] ?? null;
+                $dropScore = $scores[$dropId] ?? null;
+
+                $scored = $keepScore !== null && $dropScore !== null
+                    && $keepScore['kept'] === 2 && $keepScore['removed'] === 0
+                    && $dropScore['removed'] === 3 && $dropScore['samples'] === 3;
+
+                // The kept one scores high, the dropped one low, and only
+                // the dropped one is suppressed.
+                $weights = $keepScore['score'] >= 0.75 && $dropScore['score'] <= 0.25
+                    && !\App\Models\CategoryFeedback::suppressed($keepId, $scores)
+                    && \App\Models\CategoryFeedback::suppressed($dropId, $scores);
+
+                // An unknown category sits at the neutral 0.5.
+                $unknown = \App\Models\CategoryFeedback::scoreMap([999999])[999999] ?? null;
+                $neutral = $unknown === null;
+
+                // The preferences the prompt shows.
+                $prefs = \App\Models\CategoryFeedback::preferences([$keepId, $dropId]);
+                $prefsOk = isset($prefs['keep'][$keepId]) && isset($prefs['remove'][$dropId]);
+
+                // A manual edit: the editor adds a category the AI never
+                // proposed and takes the dropped one off for good.
+                $otherId = (int) Database::run('SELECT id FROM categories ORDER BY id ASC LIMIT 1')->fetchColumn();
+                \App\Models\CategoryFeedback::recordDelta($galleryId, [$keepId, $dropId], [$keepId, $otherId], 0);
+
+                $removed = \App\Models\CategoryFeedback::removedFor($galleryId);
+                $removedOk = in_array($dropId, $removed, true);
+                $scores2 = \App\Models\CategoryFeedback::scoreMap([$otherId]);
+                $addedOk = ($scores2[$otherId]['added'] ?? 0) === 1;
+
+                // The editor's vocabulary for similar galleries.
+                Database::run('INSERT INTO gallery_category (gallery_id, category_id) VALUES (?, ?)', [$galleryId, $keepId]);
+                $vocabulary = \App\Models\CategoryFeedback::vocabularyFor([$galleryId]);
+                $vocabOk = isset($vocabulary[$keepId]);
+
+                return ['pass' => $scored && $weights && $neutral && $prefsOk && $removedOk && $addedOk && $vocabOk,
+                    'detail' => json_encode([
+                        'keep_score' => $keepScore['score'] ?? null,
+                        'drop_score' => $dropScore['score'] ?? null,
+                        'removed' => $removed,
+                        'added' => $scores2[$otherId]['added'] ?? 0,
+                    ])];
+            } catch (\Throwable $e) {
+                return ['pass' => false, 'detail' => $e->getMessage()];
+            } finally {
+                if ($galleryId !== null) {
+                    Database::run('DELETE FROM gallery_category_feedback WHERE gallery_id = ?', [$galleryId]);
+                    Database::run('DELETE FROM gallery_category_suggestions WHERE gallery_id = ?', [$galleryId]);
+                    Database::run('DELETE FROM gallery_category WHERE gallery_id = ?', [$galleryId]);
+                    Database::run('DELETE FROM galleries WHERE id = ?', [$galleryId]);
+                }
+                foreach ($made as $name) {
+                    Database::run('DELETE FROM gallery_category_feedback WHERE category_id IN (SELECT id FROM categories WHERE name = ?)', [$name]);
+                    Database::run('DELETE FROM categories WHERE name = ?', [$name]);
+                }
+            }
+        });
+
         $add('categorizer.sampling_positions', 'Categorizer', 'the sampling picks the first photos, or spreads them over the gallery', function () {
             $advisor = 'App\\Core\\CategoryAdvisor';
 
