@@ -221,6 +221,36 @@ Still to do:
 `smoke.ui.viewed_badge_named`, `smoke.ui.admin_search_on_phone`,
 `smoke.ui.users_export_next_to_list`.
 
+### Phase 7 found a real bug: the cards had no member state
+While verifying the "seen" mark, the CDP run showed **no favourite button and
+no seen mark at all** on the member's listing - and the reason was not the
+mark, it was the card:
+
+The card is rendered inside a `PageCache::fragment()` closure, and a closure
+only sees the variables it is given. The listing, the category pages, the tag
+pages and the search results rendered the card through `use ($section,
+$cardCovers)` - so the member's own state (`$viewedIds`,
+`$favoriteGalleryIds`, `$currentUser`, `$hasActive`) never reached it. A
+member could not favourite a gallery from ANY listing, only from the gallery
+page itself. The tag and collection controllers did not pass the state either.
+
+Fixed by handing the state to the closure (and to the views), and the "seen"
+mark is now a check mark with a name.
+
+### Phase 7 done and verified on dev (2026-10-19 23:50)
+Commits `19c6a11`, `6d512ab`. Verified with CDP on dev:
+- the "seen" mark is a check mark with the title "You have seen this gallery"
+  and the card link says "Already viewed";
+- the listing now shows 34 favourite buttons and 20 seen marks for the admin
+  (it showed 0 and 0 before the fix), the search results show 10 and 8, and
+  clicking a favourite really toggles it;
+- the admin search is visible on a phone (361px wide, second row) and Enter
+  takes the admin to /admin/search?q=c.roses with the result;
+- the user list has the "Export CSV" link next to it.
+
+**NOTE:** a CDP click on a favourite button changes real data. The admin's one
+favourite (gallery 59) was toggled off by the test and put back afterwards.
+
 ## New smoke checks (source-text assertions, the house style)
 `smoke.ui.admin_bulk_confirm`, `smoke.ui.css_vars_defined`,
 `smoke.ui.guest_mobile_nav`, `smoke.ui.no_inline_style_blocks`,
