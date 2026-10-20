@@ -20,7 +20,11 @@ class EmailController extends Controller
     public function __construct($request)
     {
         parent::__construct($request);
-        Auth::requirePermission('dashboard');
+        // This controller drives a ROOT script (bin/mail_admin.php) that
+        // rewrites the Postfix/Dovecot mailbox files, so it is super-admin
+        // only. It used to need 'dashboard', which every admin role holds -
+        // a viewer could re-password or delete any mailbox on the server.
+        Auth::requirePermission('mail_admin');
 
         $this->root = dirname(__DIR__, 2);
     }

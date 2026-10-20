@@ -77,7 +77,7 @@ $navGroups = [
         'label' => 'System',
         'items' => [
             ['key' => 'nav-system', 'label' => 'System', 'href' => '/admin/system', 'icon' => 'server'],
-            ['key' => 'nav-mail', 'label' => 'Email', 'href' => '/admin/mail', 'icon' => 'inbox'],
+            ['key' => 'nav-mail', 'label' => 'Email', 'href' => '/admin/mail', 'icon' => 'inbox', 'perm' => 'mail_admin'],
             ['key' => 'nav-logs', 'label' => 'Logs', 'href' => '/admin/logs', 'icon' => 'doc'],
             ['key' => 'nav-error-logs', 'label' => 'Error Logs', 'href' => '/admin/error-logs', 'icon' => 'alert'],
             ['key' => 'nav-user-monitor', 'label' => 'User Monitor', 'href' => '/admin/user-monitor', 'icon' => 'activity', 'perm' => 'user_monitor'],

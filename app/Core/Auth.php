@@ -18,7 +18,18 @@ class Auth
     public const REMEMBER_DAYS = 30;
 
     public const ADMIN_ROLES = ['super_admin', 'admin', 'editor', 'moderator', 'viewer'];
+
+    /**
+     * Permissions only the super admin holds. They are in no other role's
+     * list; the super admin's `*` covers them. They guard the surfaces that
+     * reach outside the web app: the mail server (a root script) and the
+     * role that can make an admin.
+     */
+    public const SUPER_ADMIN_ONLY = ['mail_admin', 'manage_roles'];
     public const PERMISSIONS = [
+        // '*' covers every permission below, including the ones that are
+        // deliberately held by the super admin alone (mail_admin,
+        // manage_roles).
         'super_admin' => ['*'],
         'admin'      => ['dashboard', 'trends', 'galleries', 'videos', 'categories', 'users', 'membership', 'payments', 'theme', 'site_editor', 'logs', 'documentation', 'autoposter', 'support', 'user_monitor', 'traffic', 'chat', 'analytics', 'manage_admins'],
         'editor'     => ['dashboard', 'trends', 'galleries', 'videos', 'categories', 'documentation'],

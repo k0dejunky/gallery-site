@@ -306,6 +306,49 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.auth.super_admin_surfaces', 'Smoke · Auth', 'The surfaces that reach outside the app are super-admin only', static function () use ($root, $ok, $bad): array {
+            // The mail admin drives a ROOT script that rewrites the
+            // Postfix/Dovecot mailbox files. It used to need the
+            // 'dashboard' permission, which EVERY admin role holds - so a
+            // viewer could re-password or delete any mailbox on the server.
+            $routes = (string) @file_get_contents($root . '/config/routes.php');
+            $auth   = (string) @file_get_contents($root . '/app/Core/Auth.php');
+            $mail   = (string) @file_get_contents($root . '/app/Controllers/EmailController.php');
+            $nav    = (string) @file_get_contents($root . '/views/admin/layout.php');
+            $problems = [];
+
+            foreach (['index', 'create', 'delete', 'password', 'smtpTest'] as $action) {
+                if (strpos($routes, "'/admin/mail/$action', 'EmailController@$action', 'dashboard'") !== false) {
+                    $problems[] = 'the /admin/mail/' . $action . ' route is still gated on dashboard';
+                }
+            }
+            if (strpos($mail, "requirePermission('dashboard')") !== false) {
+                $problems[] = 'the mail controller must not need the dashboard permission';
+            }
+            if (strpos($mail, "requirePermission('mail_admin')") === false) {
+                $problems[] = 'the mail controller must require the mail_admin permission';
+            }
+            if (strpos($nav, "'/admin/mail', 'icon' => 'inbox', 'perm' => 'mail_admin'") === false
+                && strpos($nav, "'perm' => 'mail_admin'") === false) {
+                $problems[] = 'the admin nav must hide the Email page from a non super admin';
+            }
+            // The super-admin-only permissions must be in no other role.
+            foreach (['moderator', 'admin', 'editor', 'viewer'] as $role) {
+                if (preg_match("/'" . $role . "'\s*=>\s*\[([^\]]*)\]/", $auth, $m) !== 1) {
+                    continue;
+                }
+                foreach (['mail_admin', 'manage_roles'] as $perm) {
+                    if (strpos($m[1], $perm) !== false) {
+                        $problems[] = 'the ' . $role . ' role must not hold ' . $perm;
+                    }
+                }
+            }
+
+            return $problems === []
+                ? $ok('the mail admin and the role grant are super-admin only')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.legal.static_actions', 'Smoke · Legal', 'StaticPageController provides 2257/DMCA/report actions', static function () use ($staticCtrl, $ok, $bad): array {
             return strpos($staticCtrl, 'function notice2257') !== false
                 && strpos($staticCtrl, 'function dmca') !== false
