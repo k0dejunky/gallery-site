@@ -3303,9 +3303,13 @@ body.adm-modal-open { overflow: hidden; }
     gap: .75rem;
     max-width: min(34rem, calc(100vw - 2rem));
     padding: .7rem .9rem;
-    background: var(--adm-surface, #24152d);
-    color: #fff;
-    border: 1px solid var(--adm-border-strong, #6b4a80);
+    /* The toast floats over the page, so it takes the theme's text colour as
+       its background and the surface colour as its text: it stays legible in
+       the light theme and in the dark one, where a fixed white box would
+       disappear. */
+    background: var(--adm-text, #24152d);
+    color: var(--adm-surface, #fff);
+    border: 1px solid color-mix(in srgb, var(--adm-text, #24152d) 70%, transparent);
     border-radius: var(--adm-radius, 10px);
     box-shadow: 0 14px 40px rgba(0, 0, 0, .35);
     font-size: .85rem;
@@ -3322,24 +3326,26 @@ body.adm-modal-open { overflow: hidden; }
     padding: .3rem .6rem;
     font: inherit;
     font-weight: 700;
-    color: #fff;
+    color: inherit;
     background: transparent;
-    border: 1px solid rgba(255, 255, 255, .45);
+    border: 1px solid currentColor;
     border-radius: 6px;
     cursor: pointer;
+    opacity: .9;
 }
-.adm-toast-action:hover { background: rgba(255, 255, 255, .14); }
+.adm-toast-action:hover { background: color-mix(in srgb, currentColor 16%, transparent); opacity: 1; }
 .adm-toast-close {
     flex: none;
     padding: 0 .25rem;
     font-size: 1.1rem;
     line-height: 1;
-    color: rgba(255, 255, 255, .75);
+    color: inherit;
     background: transparent;
     border: 0;
     cursor: pointer;
+    opacity: .7;
 }
-.adm-toast-close:hover { color: #fff; }
+.adm-toast-close:hover { opacity: 1; }
 
 /* ---------- Inline row editing -------------------------------------------
    A cell that holds a select which has not been saved yet says so: the
