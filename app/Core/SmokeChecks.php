@@ -1852,6 +1852,42 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.one_admin_stylesheet', 'Smoke · UI', 'The admin console has one stylesheet', static function () use ($root, $ok, $bad): array {
+            // public/assets/admin-shared.css was a second file for the same
+            // console. Every rule in it was re-declared in admin.css with
+            // different values, so it was ~90% dead - and the four rules
+            // that were not overridden were the ones that still worked.
+            $layout = (string) @file_get_contents($root . '/views/admin/layout.php');
+            $css    = (string) @file_get_contents($root . '/public/assets/css/admin.css');
+            $problems = [];
+
+            if (strpos($layout, 'admin-shared.css') !== false) {
+                $problems[] = 'the admin layout must not load a second stylesheet';
+            }
+            if (is_file($root . '/public/assets/admin-shared.css')) {
+                $problems[] = 'public/assets/admin-shared.css must be gone - its rules live in admin.css';
+            }
+            // The rules that were still working have to have come over.
+            foreach ([
+                '.admin-theme .users-hero',
+                '.admin-theme .user-email',
+                '.admin-theme .user-date',
+                '.admin-theme .users-footer',
+            ] as $selector) {
+                if (strpos($css, $selector) === false) {
+                    $problems[] = $selector . ' must be defined in admin.css';
+                }
+            }
+            if (strpos($css, '@media (max-width: 760px)') === false
+                && strpos($css, '@media(max-width:760px)') === false) {
+                $problems[] = 'the phone layout for the user list must be in admin.css';
+            }
+
+            return $problems === []
+                ? $ok('the admin console has one stylesheet')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

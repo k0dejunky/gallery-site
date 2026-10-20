@@ -132,7 +132,6 @@ $icon = static fn (string $name): string => \App\Core\Icon::svg($name);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= e(\App\Core\Csrf::token()) ?>">
     <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') . ' Admin' : e(config('app.site_name')) . ' Admin' ?></title>
-    <link rel="stylesheet" href="<?= e(asset_url('/assets/admin-shared.css')) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/utilities.css')) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/support.css')) ?>">
     <style>

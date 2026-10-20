@@ -1587,6 +1587,34 @@ body.admin-theme {
 
 .admin-theme .user-actions { gap: .35rem; }
 
+/* The user list's own bits. These lived in public/assets/admin-shared.css,
+   a second file for the same console: every rule in it was re-declared
+   here with different values, so the file was ~90% dead. The four rules
+   that were not overridden came over. */
+.admin-theme .users-hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+.admin-theme .users-hero h1 { margin-bottom: .25rem; }
+.admin-theme .users-hero p { margin: 0; color: var(--muted-text-color); }
+.admin-theme .user-email { font-weight: 700; color: var(--heading-color); }
+.admin-theme .user-date { white-space: nowrap; color: var(--muted-text-color); font-size: 12px; }
+.admin-theme .user-date-nowrap { white-space: nowrap; }
+.admin-theme .users-footer { margin-top: 1rem; display: flex; justify-content: flex-end; }
+
+@media (max-width: 760px) {
+    .admin-theme .users-hero { display: block; }
+    .admin-theme .users-table { font-size: 12px; }
+    .admin-theme .users-table th,
+    .admin-theme .users-table td { padding: .45rem .35rem; }
+    .admin-theme .user-actions .btn { padding: .35rem .45rem; }
+    .admin-theme .users-footer { justify-content: stretch; }
+    .admin-theme .users-footer .btn { width: 100%; text-align: center; }
+}
+
 /* ---------- Forms ------------------------------------------------------- */
 
 .admin-theme input[type="text"], .admin-theme input[type="email"], .admin-theme input[type="password"],
