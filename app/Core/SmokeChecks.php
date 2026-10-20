@@ -1932,6 +1932,64 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.one_alignment', 'Smoke · UI', 'The headings are aligned in one place', static function () use ($root, $ok, $bad): array {
+            // The base stylesheet centred EVERY heading, and the member site
+            // fought it with about fifteen opt-outs in the stylesheet and
+            // seven more inline in the views. The settings page's headings
+            // were left and the gallery listing's section headings were
+            // centred, for no reason at all.
+            //
+            // The base is the one place that decides it now, and the things
+            // that really want centring say so themselves.
+            $base = (string) @file_get_contents($root . '/app/Core/theme_base.css');
+            $user = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $problems = [];
+
+            if (preg_match('/h1,\s*h2,\s*h3,\s*h4,\s*h5,\s*h6\s*\{[^}]*text-align:\s*center/', $base) === 1) {
+                $problems[] = 'the base must not centre every heading - the site is left aligned and says so once';
+            }
+            if (preg_match('/h1,\s*h2,\s*h3,\s*h4,\s*h5,\s*h6\s*\{[^}]*text-align:\s*left/', $base) !== 1) {
+                $problems[] = 'the base must set the heading alignment once';
+            }
+            // The things that want centring have to say so.
+            foreach (['.hero', '.title-header', '.auth-panel h1'] as $selector) {
+                if (preg_match('/' . preg_quote($selector, '/') . '\s*\{[^}]*text-align:\s*center/', $base) !== 1) {
+                    $problems[] = $selector . ' must say that it is centred';
+                }
+            }
+            // No opt-outs left in the member stylesheet.
+            if (preg_match_all('/text-align:\s*left/', $user, $m) !== false) {
+                foreach ($m[0] as $i => $hit) {
+                    // The left alignings that are not about a heading.
+                    $line = '';
+                    foreach (explode("\n", $user) as $l) {
+                        if (strpos($l, 'text-align:left') !== false) {
+                            $line = $l;
+                            break;
+                        }
+                    }
+                    if (preg_match('/h[1-6][^{]*\{[^}]*text-align:\s*left/', $line) === 1) {
+                        $problems[] = 'a heading opt-out is left in user.css: ' . trim(substr($line, 0, 90));
+                    }
+                }
+            }
+            // And none inline in the views.
+            $files = array_merge(glob($root . '/views/*.php') ?: [], glob($root . '/views/*/*.php') ?: []);
+            foreach ($files as $file) {
+                if (str_starts_with(str_replace($root . '/', '', $file), 'views/admin/')) {
+                    continue;
+                }
+                $src = (string) @file_get_contents($file);
+                if (preg_match('/<h[1-6][^>]*style="[^"]*text-align:\s*left/', $src) === 1) {
+                    $problems[] = str_replace($root . '/', '', $file) . ' has an inline heading alignment';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the headings are aligned in the base and nowhere else')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

@@ -25,7 +25,7 @@ $billingLabels = [
 
     <?php if (!empty($emailUnverified)): ?>
         <section class="card" style="border-left:4px solid var(--purple-500);margin-bottom:var(--spacing-lg);">
-            <h2 style="text-align:left;margin-top:0;">Please verify your email</h2>
+            <h2 style="margin-top:0;">Please verify your email</h2>
             <p>We sent a verification link to <strong><?= e($user['email']) ?></strong>. Verify it to keep your account details current.</p>
             <form method="post" action="<?= url('/verify-email/resend') ?>">
                 <?= csrf_field() ?>
@@ -56,13 +56,13 @@ $billingLabels = [
         </section>
     <?php elseif ($pendingSub !== null): ?>
         <section class="card" style="margin-bottom:var(--spacing-lg);border-left:4px solid var(--purple-500);">
-            <h2 style="text-align:left;margin-top:0;">Membership request pending</h2>
+            <h2 style="margin-top:0;">Membership request pending</h2>
             <p>Your request for <strong><?= e($pendingSub['plan_name']) ?></strong> is awaiting approval. We will update your access once it is processed.</p>
             <a class="btn btn-sm" href="<?= url('/membership/my') ?>">View membership details</a>
         </section>
     <?php else: ?>
         <section class="card" style="margin-bottom:var(--spacing-lg);">
-            <h2 style="text-align:left;margin-top:0;">Choose your membership</h2>
+            <h2 style="margin-top:0;">Choose your membership</h2>
             <p class="muted">Unlock the full gallery collection with a membership plan.</p>
             <a class="btn" href="<?= url('/membership') ?>">View membership plans</a>
         </section>

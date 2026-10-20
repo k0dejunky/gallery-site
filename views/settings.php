@@ -204,7 +204,7 @@
 
 <?php if (!empty($emailUnverified)): ?>
     <section class="card" style="border-left:4px solid var(--purple-500);margin-bottom:var(--spacing-lg);">
-        <h2 style="text-align:left;margin-top:0;">Verify your email address</h2>
+        <h2 style="margin-top:0;">Verify your email address</h2>
         <p>Please verify your email to keep your account details current. Check your inbox for the verification link.</p>
         <form method="post" action="<?= url('/verify-email/resend') ?>">
             <?= csrf_field() ?>
@@ -319,7 +319,7 @@
     <?php if (\App\Core\Auth::isAdmin()): ?>
         <?php $totpEnabled = !empty($user['totp_enabled']); ?>
         <hr style="margin:1rem 0;border:none;border-top:1px solid var(--pink-300);">
-        <h3 style="text-align:left;margin:0 0 .5rem;">Two-factor authentication</h3>
+        <h3 style="margin:0 0 .5rem;">Two-factor authentication</h3>
         <p class="muted">Add a time-based one-time code from an authenticator app to protect admin access.</p>
         <?php if ($totpEnabled): ?>
             <p><span class="pill pill-ok" style="text-transform:none;">Enabled</span></p>

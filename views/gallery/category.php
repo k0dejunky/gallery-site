@@ -37,7 +37,7 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
 <h1 class="section-title">Category: <?= e($category['name']) ?></h1>
 
 <?php // Text search scoped to just this category; it narrows the type sections. ?>
-<div class="hero" style="padding:1.25rem 1.5rem; text-align:left; margin-top:1rem;">
+<div class="hero" style="padding:1.25rem 1.5rem; margin-top:1rem;">
     <form method="get" action="<?= url('/galleries/category/' . e($category['slug'])) ?>">
         <input type="hidden" name="type" value="<?= e($type) ?>">
         <input type="text" name="q" value="<?= e($q) ?>" placeholder="Search within this category…" aria-label="Search within this category">
