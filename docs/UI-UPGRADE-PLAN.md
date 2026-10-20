@@ -167,6 +167,27 @@ member's bottom bar still has the same five entries, the wall pager moves
 between pages, the tour card is a dialog that Escape closes, and the tour does
 not come back in a new tab after it has been skipped.
 
+### Phase 6 done and verified on dev (2026-10-19 23:30)
+Commit `91967cc`. Verified with CDP at 390x844 against 192.168.1.110:
+- a guest on /galleries gets the bottom bar (Galleries, Sign in, Join), the
+  cookie banner sits above it (nav top 801, banner bottom 797, no overlap) and
+  tapping "Sign in" opens /login;
+- a member still gets Galleries, Wall, Chat, Collections + More, and the More
+  sheet holds Dashboard, Favorites, Live, Membership, Support, Settings, Admin
+  and Sign out;
+- the wall is paged (with a temporary per-page of 2 and three probe posts:
+  page 1 showed 2 posts and the pager "1 2 Next", page 2 showed the third and
+  marked 2 as current; the probe posts are deleted and per-page is back to 20);
+- the tour card is a dialog (role=dialog, aria-modal=true, the focus lands on
+  "Next"), Escape closes it, it records itself as seen and it does NOT come
+  back on the next page.
+
+**CDP GOTCHA (cost 20 minutes):** `Network.setCookie` with a `url` sets the
+cookie's path to that URL's path ("/gallery/"), so a guest's host-only cookie
+(path "/") is sent FIRST and the server reads that one - the member looks
+logged out. Set the cookie with `domain` + `path: '/'` and clear the cookies
+first.
+
 ## Phase 7 - accessibility and polish
 - `inert` everywhere it is needed.
 - Colour-only status gets an icon + text.
