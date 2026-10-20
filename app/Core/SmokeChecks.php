@@ -1096,6 +1096,28 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.no_dead_lightbox', 'Smoke · UI', 'The replaced lightbox stays deleted', static function () use ($root, $ok, $bad): array {
+            // The grid navigates to the in-page image viewer with the
+            // comments (commit ded33e2), but the lightbox's JavaScript and
+            // CSS were left behind: ~160 lines of JavaScript that could
+            // never open, and ~15 CSS rules for a box nobody sees.
+            $js  = (string) @file_get_contents($root . '/public/assets/js/user.js');
+            $css = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $problems = [];
+            if (strpos($js, 'GalleryLightbox') !== false) {
+                $problems[] = 'the dead lightbox script is back';
+            }
+            if (strpos($js, 'se-lightbox') !== false) {
+                $problems[] = 'the dead lightbox script is back';
+            }
+            if (strpos($css, '.se-lightbox') !== false) {
+                $problems[] = 'the dead lightbox styles are back';
+            }
+            return $problems === []
+                ? $ok('the lightbox is gone; the in-page image viewer is the viewer')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.ui.wall_costs_nothing', 'Smoke · UI', 'The wall does not spend a query per post and clears the badge', static function () use ($root, $ok, $bad): array {
             // The wall wrote a comment_count that nothing ever read (20
             // COUNT queries per view) and printed the date heading once per
