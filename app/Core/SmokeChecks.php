@@ -3693,6 +3693,7 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
         $czSchema = $read("$root/schema.sql");
         $czMigr   = $read("$root/database/migrations/055_category_suggestions.sql");
         $czUpload = $read("$root/app/Core/MediaUploader.php");
+        $czBench  = $read("$root/bin/categorize_bench.php");
         $add('smoke.categorizer.schema', 'Smoke · Categorizer', 'suggestion + job tables in schema.sql and migration 055', static function () use ($czSchema, $czMigr, $ok, $bad): array {
             $okSchema = strpos($czSchema, 'gallery_category_suggestions') !== false
                 && strpos($czSchema, 'gallery_category_jobs') !== false;
@@ -3701,6 +3702,32 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             return $okSchema && $okMigr
                 ? $ok('schema + migration present')
                 : $bad('schema.sql and database/migrations/055_category_suggestions.sql must both define gallery_category_jobs + gallery_category_suggestions');
+        });
+        $add('smoke.categorizer.sampling_variants', 'Smoke · Categorizer', 'the thumbnail sample can be spread over the gallery, and the default is unchanged', static function () use ($czSvc, $czBench, $ok, $bad): array {
+            // The sampling is what the benchmark measures: 'head' (the first
+            // photos) or 'spread' (evenly over the gallery). The default must
+            // stay 'head' until the measurement says otherwise.
+            foreach (['samplePositions', 'sampleMode', 'sampleMax'] as $needle) {
+                if (strpos($czSvc, 'function ' . $needle . '(') === false) {
+                    return $bad('CategoryAdvisor::' . $needle . '() is missing');
+                }
+            }
+            if (strpos($czSvc, "env_value('CATEGORIZER_SAMPLE', 'head')") === false) {
+                return $bad("the sample mode must default to 'head' (CATEGORIZER_SAMPLE)");
+            }
+            if (strpos($czSvc, 'self::MAX_IMAGES') === false) {
+                return $bad('the sample size must default to the shipped MAX_IMAGES');
+            }
+            if (strpos($czSvc, 'describeGallery') === false) {
+                return $bad('the describe variant (one vision call, many images) is missing');
+            }
+            // The benchmark itself: it must score the runs and never write.
+            if (strpos($czBench, 'categorizer-bench.csv') === false
+                || strpos($czBench, 'categorizer.lock') === false
+                || strpos($czBench, 'Gallery::categories(') === false) {
+                return $bad('bin/categorize_bench.php must score the runs against the editor tags, log to categorizer-bench.csv and take the categorizer lock');
+            }
+            return $ok('the sampling variants exist and the default is unchanged');
         });
         $add('smoke.categorizer.merge_not_replace', 'Smoke · Categorizer', 'accept() merges into existing categories (setCategories replaces)', static function () use ($czModel, $ok, $bad): array {
             return strpos($czModel, 'Gallery::categories(') !== false

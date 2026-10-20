@@ -34,6 +34,9 @@ class CategoryAdvisor
     // gallery; smaller batches make it judge every candidate properly.
     private const CHUNK_SIZE     = 25;
     private const MAX_IMAGES     = 3;
+    // The "describe" variant: one vision call over this many spread images
+    // writes the gallery description the category batches are judged from.
+    private const DESCRIBE_IMAGES = 12;
     private const FRAME_WIDTH    = 512;
     private const FRAME_HEIGHT   = 512;
     // CPU vision on a small box can take minutes for the first (cold) call;
@@ -41,17 +44,82 @@ class CategoryAdvisor
     private const HTTP_TIMEOUT   = 420;
 
     /**
+     * Which photos of a gallery are shown to the model: 'head' (the first
+     * ones) or 'spread' (evenly across the gallery). CATEGORIZER_SAMPLE /
+     * CATEGORIZER_SAMPLE_MAX decide it; the defaults are the behaviour that
+     * has always shipped.
+     */
+    public static function sampleMode(): string
+    {
+        $mode = strtolower(trim((string) env_value('CATEGORIZER_SAMPLE', 'head')));
+
+        return in_array($mode, ['head', 'spread'], true) ? $mode : 'head';
+    }
+
+    public static function sampleMax(): int
+    {
+        $max = (int) env_value('CATEGORIZER_SAMPLE_MAX', (string) self::MAX_IMAGES);
+
+        return max(1, min(24, $max));
+    }
+
+    /**
+     * The photo positions to sample: the pure part of the sampling, so it
+     * can be tested without a model.
+     *
+     * 'head'   - the first $max photos (what the categorizer always did).
+     * 'spread' - $max photos spread evenly over the gallery, the first and
+     *            the last one always included. A gallery of 471 photos
+     *            sampled at the head is 0.6 % of it; spread over 6 it is a
+     *            picture of the whole set.
+     *
+     * @return array<int, int> the zero-based positions, ascending
+     */
+    public static function samplePositions(int $count, int $max, string $mode = 'head'): array
+    {
+        $count = max(0, $count);
+        $max   = max(0, $max);
+
+        if ($count === 0 || $max === 0) {
+            return [];
+        }
+
+        $max = min($max, $count);
+
+        if ($mode !== 'spread' || $max <= 1) {
+            return range(0, $max - 1);
+        }
+
+        if ($max === $count) {
+            return range(0, $count - 1);
+        }
+
+        $last      = $count - 1;
+        $positions = [];
+        for ($i = 0; $i < $max; $i++) {
+            $positions[] = (int) floor($i * $last / ($max - 1));
+        }
+
+        return array_values(array_unique($positions));
+    }
+
+    /**
      * Analyze one gallery. Returns ['ok' => bool, 'engine' => string,
      * 'suggestions' => [['category_id'=>, 'confidence'=>], ...],
-     * 'warnings' => string, 'error' => string] - suggestions are resolved
-     * against the live category table, unknown names silently dropped.
+     * 'warnings' => string, 'error' => string, 'timings' => array] -
+     * suggestions are resolved against the live category table, unknown
+     * names silently dropped.
      *
      * There is NO cap on how many categories fit: every candidate the model
      * matches across every batch is returned (deduped, strongest confidence
      * per category). A batch that fails is skipped as long as at least one
      * batch answered; only a run where every batch failed is an error.
+     *
+     * $options: 'sample_mode' (head|spread), 'sample_max' (int),
+     * 'describe' (bool - one vision call over many images writes the
+     * description the batches are judged from).
      */
-    public static function suggest(int $galleryId): array
+    public static function suggest(int $galleryId, array $options = []): array
     {
         $driver = CategorySuggestion::driver();
         if ($driver === 'off') {
@@ -68,18 +136,46 @@ class CategoryAdvisor
             return ['ok' => false, 'engine' => $driver, 'suggestions' => [], 'warnings' => '', 'error' => 'no categories defined'];
         }
 
-        $images = self::sampleImages($gallery);
+        $sampleMode = (string) ($options['sample_mode'] ?? self::sampleMode());
+        $sampleMax  = (int) ($options['sample_max'] ?? self::sampleMax());
+        $describe   = (bool) ($options['describe'] ?? false);
+        $describeMax = (int) ($options['describe_max'] ?? self::DESCRIBE_IMAGES);
+
+        // The "describe" variant: the images are encoded ONCE (into a short
+        // description) and the category batches are judged from that text.
+        // The batches then run without images, which is what makes many
+        // images affordable.
+        $description = '';
+        $images      = [];
+        $warnings    = [];
+        $timings     = ['batches' => [], 'describe' => null, 'total' => 0];
+        $runStart    = microtime(true);
+
+        if ($describe) {
+            $describeImages = self::sampleImages($gallery, $describeMax, 'spread');
+            $t0 = microtime(true);
+            try {
+                $description = self::describeGallery($driver, $gallery, $describeImages);
+            } catch (\Throwable $e) {
+                $description = '';
+                $warnings[]  = 'the describe call failed: ' . $e->getMessage();
+            }
+            $timings['describe'] = round(microtime(true) - $t0, 1);
+        } else {
+            $images = self::sampleImages($gallery, $sampleMax, $sampleMode);
+        }
+
         $chunks = array_chunk($names, self::CHUNK_SIZE);
         $total  = count($chunks);
 
         $merged   = [];
-        $warnings = [];
         $lastErr  = '';
         $answered = 0;
 
         foreach ($chunks as $i => $batch) {
-            $prompt = self::prompt($gallery, $batch, $i, $total, $images !== []);
+            $prompt = self::prompt($gallery, $batch, $i, $total, self::mediaNote($images, $description));
 
+            $t0 = microtime(true);
             try {
                 $text = $driver === 'api'
                     ? self::callApi($prompt, $images)
@@ -89,8 +185,7 @@ class CategoryAdvisor
                 $warnings[] = sprintf('batch %d/%d failed: %s', $i + 1, $total, $lastErr);
                 continue;
             }
-
-            $answered++;
+            $timings['batches'][] = round(microtime(true) - $t0, 1);
 
             foreach (self::resolve($text, $batch) as $row) {
                 $cid = $row['category_id'];
@@ -100,6 +195,8 @@ class CategoryAdvisor
             }
         }
 
+        $timings['total'] = round(microtime(true) - $runStart, 1);
+
         if ($answered === 0) {
             return [
                 'ok'          => false,
@@ -107,6 +204,7 @@ class CategoryAdvisor
                 'suggestions' => [],
                 'warnings'    => implode('; ', $warnings),
                 'error'       => $lastErr !== '' ? $lastErr : 'every category batch failed',
+                'timings'     => $timings,
             ];
         }
 
@@ -122,7 +220,50 @@ class CategoryAdvisor
             'suggestions' => $suggestions,
             'warnings'    => implode('; ', $warnings),
             'error'       => '',
+            'timings'     => $timings,
         ];
+    }
+
+    /**
+     * The line that tells the model what it is looking at: the images it
+     * was given, or the description a vision pass wrote for it.
+     */
+    private static function mediaNote(array $images, string $description): string
+    {
+        if ($description !== '') {
+            return "A vision model looked at the gallery's images and wrote this description of them:\n\""
+                . $description . "\"\nJudge every candidate category against that description.";
+        }
+
+        return $images !== []
+            ? 'The attached image(s) are sampled from this gallery.'
+            : 'No preview image could be extracted; judge from the text alone.';
+    }
+
+    /**
+     * One vision call over the sampled images: a short description of what
+     * is visible. The category batches are then judged from this text, so
+     * the images are encoded once instead of once per batch.
+     */
+    private static function describeGallery(string $driver, array $gallery, array $images): string
+    {
+        if ($images === []) {
+            return '';
+        }
+
+        $prompt = "You are looking at sample images from an adult photo/video gallery.\n"
+            . "Write ONE short factual description of what is visible: the setting, the outfit, the\n"
+            . "activity, the props, whether other people are present, the style.\n"
+            . "- 1-2 sentences, roughly 140-220 characters.\n"
+            . "- English, present tense. No hashtags, no emoji, no quotation marks.\n"
+            . "- Describe the scene, not explicit anatomy.\n\n"
+            . 'Reply with ONLY JSON, no prose: {"description": "..."}';
+
+        $text = $driver === 'api'
+            ? self::callApi($prompt, $images)
+            : self::callOllama($prompt, $images);
+
+        return \App\Core\DescriptionAdvisor::parse($text);
     }
 
     /* ---------------- prompt + response parsing ---------------- */
@@ -131,7 +272,7 @@ class CategoryAdvisor
      * One batch's prompt: the same gallery context, but only this chunk of
      * candidate categories, asked for exhaustively (every match, not a few).
      */
-    private static function prompt(array $gallery, array $categoryNames, int $batchIndex, int $batchTotal, bool $hasImages): string
+    private static function prompt(array $gallery, array $categoryNames, int $batchIndex, int $batchTotal, string $mediaNote): string
     {
         $tags = array_map(static fn (array $t): string => (string) $t['name'], Tag::forGallery((int) $gallery['id']));
 
@@ -148,9 +289,7 @@ class CategoryAdvisor
             $context .= 'Captions: ' . mb_substr(implode(' | ', array_slice($captions, 0, 3)), 0, 400) . "\n";
         }
 
-        $media = $hasImages
-            ? 'The attached image(s) are sampled from this gallery.'
-            : 'No preview image could be extracted; judge from the text alone.';
+        $media = $mediaNote;
 
         $list = implode(', ', $categoryNames);
         $batch = $batchTotal > 1
@@ -341,13 +480,17 @@ class CategoryAdvisor
      * video's sample clip) plus thumbs of later files. Missing variants are
      * skipped - a text-only analysis still works. Shared with DescriptionAdvisor.
      */
-    public static function sampleImages(array $gallery, int $max = self::MAX_IMAGES): array
+    public static function sampleImages(array $gallery, int $max = self::MAX_IMAGES, string $mode = 'head'): array
     {
         $uploads = rtrim((string) config('app.uploads.dir'), '/');
         $photos  = Gallery::photos((int) $gallery['id']);
 
         $images = [];
-        foreach (array_slice($photos, 0, max(1, $max)) as $photo) {
+        foreach (self::samplePositions(count($photos), max(1, $max), $mode) as $position) {
+            $photo = $photos[$position] ?? null;
+            if ($photo === null) {
+                continue;
+            }
             $filename = (string) $photo['filename'];
 
             // Prefer the generated thumb variant (400x300) - small payload.

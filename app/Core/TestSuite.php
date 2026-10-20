@@ -806,6 +806,41 @@ class TestSuite
             )];
         });
 
+        $add('categorizer.sampling_positions', 'Categorizer', 'the sampling picks the first photos, or spreads them over the gallery', function () {
+            $advisor = 'App\\Core\\CategoryAdvisor';
+
+            // 'head' is what the categorizer has always done.
+            $head = $advisor::samplePositions(471, 3, 'head');
+            $headOk = $head === [0, 1, 2];
+
+            // 'spread' covers the whole gallery, first and last included.
+            $spread3 = $advisor::samplePositions(471, 3, 'spread');
+            $spread6 = $advisor::samplePositions(471, 6, 'spread');
+            $spreadOk = $spread3 === [0, 235, 470]
+                && $spread6 === [0, 94, 188, 282, 376, 470];
+
+            // The edge cases: fewer photos than the sample, exactly as many,
+            // a single photo and no photos at all.
+            $edges = $advisor::samplePositions(3, 6, 'spread') === [0, 1, 2]
+                && $advisor::samplePositions(5, 5, 'spread') === [0, 1, 2, 3, 4]
+                && $advisor::samplePositions(1, 3, 'head') === [0]
+                && $advisor::samplePositions(0, 3, 'head') === []
+                && $advisor::samplePositions(10, 1, 'spread') === [0];
+
+            // A position is never out of range.
+            $inRange = true;
+            foreach ([$spread3, $spread6] as $set) {
+                foreach ($set as $pos) {
+                    if ($pos < 0 || $pos > 470) {
+                        $inRange = false;
+                    }
+                }
+            }
+
+            return ['pass' => $headOk && $spreadOk && $edges && $inRange,
+                'detail' => json_encode(['head' => $head, 'spread3' => $spread3, 'spread6' => $spread6])];
+        });
+
         $add('db.categorizer_advisor_resolve', 'Database', 'resolve() keeps every batch match, drops unknown names, merges deduped', function () {
             $made = [];
             try {
