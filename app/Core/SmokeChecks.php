@@ -882,8 +882,10 @@ class SmokeChecks
 
         $add('smoke.ui.utility_classes_defined', 'Smoke · UI', 'Every utility class a view uses is actually defined', static function () use ($root, $ok, $bad): array {
             // A typo in a utility class is silent: the element just renders
-            // unstyled. This catches it.
-            $css = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            // unstyled. This catches it. The utilities live in their own
+            // file now, because both shells use them.
+            $css = (string) @file_get_contents($root . '/public/assets/css/utilities.css')
+                 . (string) @file_get_contents($root . '/public/assets/css/user.css');
             $defined = [];
             if (preg_match_all('/\.(u-[a-z0-9-]+)\s*\{/', $css, $m)) {
                 foreach ($m[1] as $name) {
@@ -907,7 +909,40 @@ class SmokeChecks
             sort($missing);
             return $missing === []
                 ? $ok(count($used) . ' utility classes used, all defined')
-                : $bad('these utility classes are used but not defined in user.css: ' . implode(', ', $missing));
+                : $bad('these utility classes are used but not defined in utilities.css: ' . implode(', ', $missing));
+        });
+
+        $add('smoke.ui.utilities_shared', 'Smoke · UI', 'The utility classes live in one file and both shells load it', static function () use ($root, $ok, $bad): array {
+            // The u-* utilities are scope-agnostic: 30 of the ~40 admin
+            // views use them (96 times `u-right` alone), and the member
+            // views use them too. They were in user.css, which the admin
+            // shell had to load in full to get them.
+            $problems = [];
+            $util = (string) @file_get_contents($root . '/public/assets/css/utilities.css');
+            $user = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $memberLayout = (string) @file_get_contents($root . '/views/layout.php');
+            $adminLayout  = (string) @file_get_contents($root . '/views/admin/layout.php');
+
+            if (trim($util) === '') {
+                $problems[] = 'public/assets/css/utilities.css is empty';
+            }
+            if (preg_match('/\.(u-[a-z0-9-]+)\s*\{/', $util, $m) !== 1) {
+                $problems[] = 'the utility classes must be defined in utilities.css';
+            }
+            // They must not be defined twice.
+            if (preg_match('/\.(u-[a-z0-9-]+)\s*\{/', $user) === 1) {
+                $problems[] = 'the utility classes are still in user.css as well as utilities.css';
+            }
+            if (strpos($memberLayout, '/assets/css/utilities.css') === false) {
+                $problems[] = 'the member shell must load utilities.css';
+            }
+            if (strpos($adminLayout, '/assets/css/utilities.css') === false) {
+                $problems[] = 'the admin shell must load utilities.css';
+            }
+
+            return $problems === []
+                ? $ok('the utilities are in one file and both shells load it')
+                : $bad(implode('; ', $problems));
         });
 
         $add('smoke.ui.admin_tables_paginated', 'Smoke · UI', 'The admin listings use the shared table component', static function () use ($root, $ok, $bad): array {

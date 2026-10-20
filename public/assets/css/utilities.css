@@ -1,0 +1,38 @@
+/* ---------- Utilities ----------------------------------------------------
+   The inline style attributes the views used to carry. Same declarations,
+   same order, now in one place: a change is one edit instead of forty, and
+   the views stay readable.
+
+   They carry !important on purpose: these replaced INLINE styles, which
+   outrank every stylesheet rule, so a plain class would silently lose to a
+   more specific one (the admin's `.admin-theme th { text-align: left }` beat
+   the utility and left a right-aligned column left-aligned). The
+   !important keeps the old rendering exactly.
+
+   These live in their OWN file because both shells use them: 30 of the ~40
+   admin views reach for them (96 times `u-right` alone), and the admin
+   shell should not have to load the whole member stylesheet to get them. */
+body .u-right{text-align:right !important}
+body .u-center{text-align:center !important}
+body .u-left{text-align:left !important}
+body .u-fs-075{font-size:.75rem !important}
+body .u-fs-078{font-size:.78rem !important}
+body .u-fs-08{font-size:.8rem !important}
+body .u-fs-082{font-size:.82rem !important}
+body .u-fs-085{font-size:.85rem !important}
+body .u-fs-09{font-size:.9rem !important}
+body .u-m0{margin:0 !important}
+body .u-mt-0{margin-top:0 !important}
+body .u-mt-05{margin-top:.5rem !important}
+body .u-mt-075{margin-top:.75rem !important}
+body .u-mt-1{margin-top:1rem !important}
+body .u-mt-15{margin-top:1.5rem !important}
+body .u-mt-lg{margin-top:var(--spacing-lg) !important}
+body .u-mb-1{margin-bottom:1rem !important}
+body .u-w-full{width:100% !important}
+body .u-w-full-box{width:100% !important;box-sizing:border-box !important}
+body .u-inline{display:inline !important}
+body .u-pad-04-05{padding:.4rem .5rem !important}
+body .u-left-pad{text-align:left !important;padding:.4rem .5rem !important}
+body .u-label{font-size:.82rem !important;display:block !important;margin-bottom:.2rem !important}
+body .u-w-full-mb{width:100% !important;margin-bottom:4px !important}
