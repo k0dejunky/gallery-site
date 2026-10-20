@@ -1305,6 +1305,38 @@ class TestSuite
             return ['pass' => $ok, 'detail' => $ok ? 'csrf helpers ok' : 'csrf missing'];
         });
 
+        $add('auth.page_cache_csrf', 'Auth', 'A cached page carries the requester\'s CSRF token, not the producer\'s', function () {
+            // The page cache stores the page as ONE guest rendered it and
+            // re-personalises it for the next requester. It rewrote the
+            // form's _token and the CSP nonce, but NOT the
+            // <meta name="csrf-token"> the member layout publishes - so a
+            // guest served a cached page got the producer's token: their
+            // AJAX posts came back 419 and the token leaked sideways.
+            try {
+                $html = '<html><head><meta name="csrf-token" content="PRODUCERTOKEN123"></head><body>'
+                    . '<form><input type="hidden" name="_token" value="PRODUCERTOKEN123"></form>'
+                    . '<button data-csrf="PRODUCERTOKEN123"></button>'
+                    . '<input type="hidden" name="return_to" value="/old/page">'
+                    . '</body></html>';
+
+                $out = \App\Core\PageCache::pageInject($html);
+                $mine = \App\Core\Csrf::token();
+
+                $leaked = strpos($out, 'PRODUCERTOKEN123') !== false;
+                $hasMine = strpos($out, $mine) !== false;
+                $metaOk = preg_match('/<meta\s+name="csrf-token"\s+content="' . preg_quote($mine, '/') . '"/', $out) === 1;
+
+                return [
+                    'pass'   => !$leaked && $hasMine && $metaOk,
+                    'detail' => $leaked
+                        ? 'the producer token survived the injection'
+                        : ($metaOk ? 'the meta tag carries the requester token' : 'the meta tag was not rewritten'),
+                ];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('auth.totp', 'Auth', 'TOTP generates secrets and verifies codes', function () {
             $secret = \App\Core\Totp::generateSecret();
             $okBase32 = (bool) preg_match('/^[A-Z2-7]{16,64}$/', $secret);

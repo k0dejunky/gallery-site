@@ -153,9 +153,25 @@ class PageCache
     {
         $nonce = defined('CSP_NONCE') ? (string) CSP_NONCE : '';
         $html  = (string) preg_replace('/nonce="[A-Za-z0-9+\/=]+"/', 'nonce="' . $nonce . '"', $html);
+        $token = \App\Core\Csrf::token();
         $html  = (string) preg_replace(
             '/name="_token" value="[^"]*"/',
-            'name="_token" value="' . \App\Core\Csrf::token() . '"',
+            'name="_token" value="' . $token . '"',
+            $html
+        );
+        // The member layout also publishes the session's CSRF token in a
+        // meta tag, and the member JS posts with it. It was NOT rewritten,
+        // so a guest served a cached page got the PRODUCER's token: their
+        // AJAX posts came back 419, and the token of one session leaked to
+        // another. The same goes for a data-csrf attribute.
+        $html  = (string) preg_replace(
+            '/(<meta\s+name="csrf-token"\s+content=")[^"]*(")/',
+            '$1' . $token . '$2',
+            $html
+        );
+        $html  = (string) preg_replace(
+            '/(data-csrf=")[^"]*(")/',
+            '$1' . $token . '$2',
             $html
         );
         // The age-gate overlay and any save-search back-links must return the
