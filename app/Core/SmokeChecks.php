@@ -1107,6 +1107,17 @@ class SmokeChecks
             if (strpos($users, 'data-autosubmit="manual"') === false) {
                 $problems[] = 'the role select must wait for a Save, not save on a stray arrow key';
             }
+            // The modal re-submits the form after the answer. Without the
+            // submitter, requestSubmit() drops the button's formaction and
+            // its name/value - so a "Delete selected" button would post to
+            // the form's own action instead.
+            $adminLayout = (string) @file_get_contents($root . '/views/admin/layout.php');
+            if (strpos($adminLayout, 'e.submitter') === false) {
+                $problems[] = 'the confirmation must keep the button that was clicked';
+            }
+            if (strpos($adminLayout, 'requestSubmit(submitter') === false) {
+                $problems[] = 'the re-submit must pass the submitter to requestSubmit()';
+            }
             // A native confirm in an admin view is the old behaviour again.
             $files = glob($root . '/views/admin/*.php') ?: [];
             foreach ($files as $file) {

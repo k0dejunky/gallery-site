@@ -336,13 +336,32 @@ if (preg_match('#/admin/([a-z0-9-]+)#', (string) ($current ?? ''), $m)) {
             // answered: let it through. The flag is cleared as soon as the
             // (synchronous) re-submit returns.
             if (t.__admConfirmed) { return; }
+            // Keep the button that was clicked. requestSubmit() WITHOUT a
+            // submitter submits the form "as if the submitter were the form
+            // itself", which drops the button's formaction and its
+            // name/value - so a "Delete selected" button with a
+            // formaction would post to the form's own action instead.
+            var submitter = e.submitter || null;
             e.preventDefault(); e.stopImmediatePropagation();
             ask(m, { danger: t.hasAttribute('data-confirm-danger'), confirmLabel: t.getAttribute('data-confirm-label') || 'Yes, continue' })
                 .then(function (ok) {
                     if (!ok) { return; }
                     t.__admConfirmed = true;
                     try {
-                        if (typeof t.requestSubmit === 'function') { t.requestSubmit(); } else { t.submit(); }
+                        if (typeof t.requestSubmit === 'function') {
+                            t.requestSubmit(submitter || undefined);
+                        } else {
+                            // No requestSubmit (an old browser): copy the
+                            // button's name/value into the form by hand.
+                            if (submitter && submitter.name && !t.querySelector('input[name="' + submitter.name + '"]')) {
+                                var hidden = document.createElement('input');
+                                hidden.type = 'hidden';
+                                hidden.name = submitter.name;
+                                hidden.value = submitter.value;
+                                t.appendChild(hidden);
+                            }
+                            t.submit();
+                        }
                     } finally {
                         t.__admConfirmed = false;
                     }
