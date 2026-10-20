@@ -41,6 +41,18 @@ verified on dev + prod. `shipped` - done and pushed to GitHub.
 
 ### Batch A - authorization gates (security)
 
+**Batch A is DONE and shipped (local + dev + prod, 2026-10-20).** Smoke 910 on
+local, dev and prod. Verified on dev with a scratch moderator account (the
+scratch accounts were deleted afterwards): every escalation attempt is refused
+(grant `admin`, demote an admin, reset an admin's password, change an admin's
+email, suspend, delete, impersonate, mint a gift code, mint an unlock code,
+flip the maintenance mode, turn off the age gate, delete the pending uploads,
+grant themselves `super_admin`, create a user as `admin`), the mail page and
+the creator profile are closed to a moderator, and the engagement and the
+system page only show the controls that admin may use. The super admin keeps
+everything. The prod backup before the deploy is
+`/var/backups/gallery/pre-auth-batchA-20261020-075102.sql.gz`.
+
 | id | what | files | status | commit |
 |---|---|---|---|---|
 | A1 | A moderator can mint a full admin (`Auth::isAdmin()` is true for every admin role) | `app/Controllers/UserController.php`, `app/Core/Auth.php` | done | `b998499` |
