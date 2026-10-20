@@ -73,7 +73,7 @@ $ldJson = [
                 All galleries and videos on <?= e(config('app.site_name')) ?> require an active membership.
                 Create an account to subscribe, or log in to manage your membership.
             </p>
-            <p style="text-align:center;">
+            <p class="u-center">
                 <a class="btn" href="<?= url('/signup') ?>">Create an account</a>
                 <a class="btn btn-outline" href="<?= url('/login') ?>">Log in</a>
             </p>
@@ -183,7 +183,7 @@ $ldJson = [
             <?php foreach ($plans as $plan): ?>
                 <div class="card" style="display:flex; flex-direction:column; justify-content:space-between; text-align:center; margin:0;">
                     <div style="order:1;">
-                        <h2 style="margin-top:0;"><?= e($plan['name']) ?></h2>
+                        <h2 class="u-mt-0"><?= e($plan['name']) ?></h2>
                         <p style="font-size:1.5rem; font-weight:bold; margin:0.5rem 0;">
                             <?php if (!empty($plan['sale'])): ?>
                                 <del class="muted" style="font-size:0.95rem;">$<?= number_format((float) $plan['price'], 2) ?></del>
@@ -248,7 +248,7 @@ $ldJson = [
                                     </select>
                                 </div>
                             <?php endif; ?>
-                            <button type="submit" class="btn" style="width:100%;">Subscribe</button>
+                            <button type="submit" class="btn u-w-full">Subscribe</button>
                         </form>
                     <?php endif; ?>
                     <?php if ($braintreeAvailable && !$hasActive && $pendingSub === null && !$isLifetime && !$useBraintreeOnly && !$useOffline): ?>

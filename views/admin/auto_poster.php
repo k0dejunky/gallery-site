@@ -21,7 +21,7 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
 ?>
 
 <?php // ----- Platform switch: one tab per enabled posting option ----- ?>
-<div class="stats-panel" style="margin-bottom:1rem;">
+<div class="stats-panel u-mb-1">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <h2>Auto Poster</h2>
         <?php // 23 channels wrapped into ragged rows as inline-flex. An auto-fill
@@ -56,10 +56,10 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
 </div>
 
 <?php // ----- Platform post template ----- ?>
-<div class="stats-panel" style="margin-bottom:1rem;">
+<div class="stats-panel u-mb-1">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <h2><?= e($platformName) ?> post template</h2>
-        <span class="muted" style="font-size:.85rem;">The blueprint every <?= e($platformName) ?> post is generated from. Auto-loaded defaults are fine as-is; edit the wording, link and hashtag count &mdash; new posts pick it up immediately.</span>
+        <span class="muted u-fs-085">The blueprint every <?= e($platformName) ?> post is generated from. Auto-loaded defaults are fine as-is; edit the wording, link and hashtag count &mdash; new posts pick it up immediately.</span>
     </div>
     <form method="post" action="<?= url('/admin/auto-poster/template/save') ?>" data-ap-template>
         <?= csrf_field() ?>
@@ -73,26 +73,26 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
                     Tokens: <code>{title}</code> &middot; <code>{sep}</code> (a &ldquo;&mdash;&rdquo; only when both title and description exist) &middot; <code>{description}</code> &middot; <code>{hashtags}</code>. Put any link/URL you want in the pattern text itself (e.g. <code>amethyst2213.com</code>).
                 </p>
                 <div style="display:flex;flex-wrap:wrap;gap:.75rem;margin-top:.75rem;">
-                    <label style="font-size:.85rem;"><span class="muted">Hashtags per post:</span><br>
+                    <label class="u-fs-085"><span class="muted">Hashtags per post:</span><br>
                         <input type="number" name="max_tags" min="0" max="60" value="<?= (int) $apTemplate['max_tags'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
-                    <label style="font-size:.85rem;"><span class="muted">Max characters:</span><br>
+                    <label class="u-fs-085"><span class="muted">Max characters:</span><br>
                         <input type="number" name="max_length" min="<?= $apMinLength ?>" max="<?= $apLenCeil ?>" value="<?= (int) $apTemplate['max_length'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
-                    <label style="font-size:.85rem;"><span class="muted">Default schedule (min):</span><br>
+                    <label class="u-fs-085"><span class="muted">Default schedule (min):</span><br>
                         <input type="number" name="schedule_minutes" min="1" max="10080" value="<?= (int) $apTemplate['schedule_minutes'] ?>" style="width:7rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
-                    <label style="font-size:.85rem;"><span class="muted">Recent window (days):</span><br>
+                    <label class="u-fs-085"><span class="muted">Recent window (days):</span><br>
                         <input type="number" name="recent_days" min="1" max="90" value="<?= (int) $apTemplate['recent_days'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
                     <?php if ($apMedia): ?>
-                    <label style="font-size:.85rem;"><span class="muted">Media per post:</span><br>
+                    <label class="u-fs-085"><span class="muted">Media per post:</span><br>
                         <input type="number" name="max_media" min="0" max="<?= $apMediaMax ?>" value="<?= (int) $apTemplate['max_media'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
                     <?php endif; ?>
                     <?php if (($apTemplate['video'] ?? 'none') === 'screenshots'): ?>
-                    <label style="font-size:.85rem;"><span class="muted">Video screenshots:</span><br>
+                    <label class="u-fs-085"><span class="muted">Video screenshots:</span><br>
                         <input type="number" name="screenshots" min="1" max="4" value="<?= (int) $apTemplate['screenshots'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
                     <?php endif; ?>
-                    <label style="font-size:.85rem;"><span class="muted">Preview blur %:</span><br>
+                    <label class="u-fs-085"><span class="muted">Preview blur %:</span><br>
                         <input type="number" name="blur_percent" min="0" max="100" value="<?= (int) $apTemplate['blur_percent'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
                 </div>
-                <p style="margin-top:.75rem;">
+                <p class="u-mt-075">
                     <label class="muted" style="font-size:.85rem;display:block;">Banned words <span style="font-weight:400;">(never appear in a post; comma-separated, optional)</span><br>
                         <input type="text" name="banned_words" value="<?= e(implode(', ', $apTemplate['banned_words'] ?? [])) ?>" placeholder="nipple, nipples" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
                     </label>
@@ -109,7 +109,7 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
                 <p class="muted" style="font-size:.75rem;margin-top:.5rem;">The exact text is baked at queue time from each gallery&rsquo;s real title, description and categories.</p>
             </div>
         </div>
-        <div style="margin-top:.75rem;">
+        <div class="u-mt-075">
             <button type="submit" class="btn">Save template</button>
             <?php if (!empty($templatePreview)): ?><span class="muted" style="font-size:.78rem;margin-left:.5rem;">Current saved result: &ldquo;<?= e((string) $templatePreview) ?>&rdquo;</span><?php endif; ?>
         </div>
@@ -117,25 +117,25 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
 </div>
 
 <?php // ----- Recommended posts: generated from recent uploads (per platform) ----- ?>
-<div class="stats-panel" style="margin-bottom:1rem;">
+<div class="stats-panel u-mb-1">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <h2>Recommended posts</h2>
-        <span class="muted" style="font-size:.85rem;">One post per <?= e($platformName) ?> gallery with uploads in the last <?= (int) ($apTemplate['recent_days'] ?? 14) ?> days, carrying up to <?= (int) ($apTemplate['max_media'] ?? 0) ?> of its newest media. A gallery already handled here&mdash;queued, posted, or dismissed&mdash;isn&rsquo;t offered again. Ordered by post time, next to process first.</span>
+        <span class="muted u-fs-085">One post per <?= e($platformName) ?> gallery with uploads in the last <?= (int) ($apTemplate['recent_days'] ?? 14) ?> days, carrying up to <?= (int) ($apTemplate['max_media'] ?? 0) ?> of its newest media. A gallery already handled here&mdash;queued, posted, or dismissed&mdash;isn&rsquo;t offered again. Ordered by post time, next to process first.</span>
     </div>
-    <div id="ap-rec-body" style="margin-top:.75rem;">
+    <div class="u-mt-075" id="ap-rec-body">
         <?php require __DIR__ . '/partials/recommendations.php'; ?>
     </div>
 </div>
 
 <?php // ----- Pending queue (scoped to this platform) ----- ?>
-<div class="stats-panel" style="margin-bottom:1rem;">
+<div class="stats-panel u-mb-1">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <div style="display:flex;align-items:center;gap:.5rem;">
             <h2>Posting queue</h2>
             <button type="button" class="btn btn-sm ap-queue-toggle" data-target="ap-queue-body" aria-expanded="true">Collapse</button>
         </div>
         <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
-            <span class="muted" style="font-size:.85rem;">
+            <span class="muted u-fs-085">
                 <?= number_format((int) $queueCounts['queued']) ?> queued &middot;
                 <?= number_format((int) $queueCounts['posted']) ?> posted &middot;
                 <?= number_format((int) $queueCounts['failed']) ?> failed &middot;
@@ -169,7 +169,7 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
                     <th>Media</th>
                     <th>Text</th>
                     <th>Scheduled</th>
-                    <th style="text-align:right;">Actions</th>
+                    <th class="u-right">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -232,7 +232,7 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
                                 <div class="muted" style="font-size:.72rem;text-align:right;"><span data-char-count-out="qedit-<?= (int) $item['id'] ?>">0</span>/<?= $apMaxLength ?></div>
                                 </div>
                                 <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
-                                    <label class="muted" style="font-size:.8rem;">Schedule:</label>
+                                    <label class="muted u-fs-08">Schedule:</label>
                                     <input type="datetime-local" name="scheduled_at" value="<?= e(\App\Models\AutoPostQueue::displaySchedule($item['scheduled_at'] ?? null, $platform)) ?>" style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;">
                                     <span class="muted" style="font-size:.72rem;">leave blank to clear the schedule (publish on next worker run)</span>
                                     <span style="flex:1"></span>
@@ -250,10 +250,10 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
 </div>
 
 <?php // ----- Recent posts (scoped to this platform): repost or reschedule ----- ?>
-<div class="stats-panel" style="margin-bottom:1rem;">
+<div class="stats-panel u-mb-1">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
         <h2>Recent <?= e($platformName) ?> posts</h2>
-        <span class="muted" style="font-size:.85rem;">Re-publish a past <?= e($platformName) ?> post now, or schedule it to go out again later.</span>
+        <span class="muted u-fs-085">Re-publish a past <?= e($platformName) ?> post now, or schedule it to go out again later.</span>
     </div>
     <?php if (empty($recentPosts)): ?>
         <p class="muted">No <?= e($platformName) ?> posts recorded yet — posted, failed and skipped items will appear here.</p>
@@ -280,7 +280,7 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
                     <?php $rpEditable = $rpStatus === 'failed'; ?>
                     <tr>
                         <td><span class="ap-pill ap-pill-<?= e($rpPill) ?>"><span class="ap-dot"></span><?= e(ucfirst($rpStatus)) ?></span></td>
-                        <td class="muted" style="font-size:.8rem;"><?= e((string) $rp['gallery_title']) ?></td>
+                        <td class="muted u-fs-08"><?= e((string) $rp['gallery_title']) ?></td>
                         <?php if ($rpEditable): ?>
                             <?php // Failed posts: editable text so the wording can be fixed, then reposted/scheduled. ?>
                             <td style="max-width:340px;font-size:.85rem;" class="rp-edit">
@@ -343,7 +343,7 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
         <?php // Pagination for the recent-posts list (25 per page). ?>
         <?php if (($recentPages ?? 1) > 1): ?>
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-top:.75rem;">
-                <span class="muted" style="font-size:.8rem;">Page <?= (int) ($recentPage ?? 1) ?> of <?= (int) $recentPages ?> &middot; <?= number_format((int) ($recentTotal ?? 0)) ?> recorded post<?= ((int) ($recentTotal ?? 0)) === 1 ? '' : 's' ?></span>
+                <span class="muted u-fs-08">Page <?= (int) ($recentPage ?? 1) ?> of <?= (int) $recentPages ?> &middot; <?= number_format((int) ($recentTotal ?? 0)) ?> recorded post<?= ((int) ($recentTotal ?? 0)) === 1 ? '' : 's' ?></span>
                 <span style="display:flex;gap:.35rem;flex-wrap:wrap;">
                     <?php
                     $recentBase = $platformPath;
@@ -422,19 +422,19 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
                     <?php endforeach; ?>
                 </ul>
             <?php else: ?>
-                <p class="muted" style="font-size:.8rem;">No instances configured yet.</p>
+                <p class="muted u-fs-08">No instances configured yet.</p>
             <?php endif; ?>
             <form method="post" action="<?= url('/admin/auto-poster/channel/instance') ?>">
                 <?= csrf_field() ?>
                 <input type="hidden" name="platform" value="<?= e($platform) ?>">
-                <p><label style="font-size:.85rem;">Instance host</label><br><input type="text" name="instance_host" placeholder="mastodon.social" style="width:100%;box-sizing:border-box;"></p>
-                <p><label style="font-size:.85rem;">Access token</label><br><input type="password" name="instance_token" style="width:100%;box-sizing:border-box;"></p>
+                <p><label class="u-fs-085">Instance host</label><br><input type="text" name="instance_host" placeholder="mastodon.social" style="width:100%;box-sizing:border-box;"></p>
+                <p><label class="u-fs-085">Access token</label><br><input type="password" name="instance_token" style="width:100%;box-sizing:border-box;"></p>
                 <button type="submit" class="btn btn-sm">Add instance</button>
             </form>
         <?php endif; ?>
 
         <?php if ($apOAuth): ?>
-            <p style="margin-top:.75rem;">
+            <p class="u-mt-075">
                 <?php if (!empty($authHealth) && $authHealth['ok']): ?>
                     <span style="color:var(--success,#2e7d32);font-weight:600;">&#10003; Authorized — <?= e((string) ($authHealth['note'] ?? 'connected')) ?></span>
                 <?php elseif (!empty($authHealth)): ?>
@@ -449,7 +449,7 @@ $platformPath  = $platform === 'x' ? '/admin/auto-poster' : '/admin/auto-poster/
                 <?php endif; ?>
             </p>
         <?php elseif (!empty($authHealth)): ?>
-            <p style="margin-top:.75rem;">
+            <p class="u-mt-075">
                 <?php if ($authHealth['ok']): ?>
                     <span style="color:var(--success,#2e7d32);font-weight:600;">&#10003; Connected — <?= e((string) ($authHealth['note'] ?? 'connected')) ?></span>
                 <?php else: ?>

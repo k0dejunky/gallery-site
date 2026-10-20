@@ -10,7 +10,7 @@ foreach ((array) ($videos ?? []) as $v) {
 $mediaCount = count((array) ($videos ?? [])) + count((array) ($images ?? [])) + count((array) ($galleries ?? []));
 ?>
 <h1><?= e((string) ($collection['name'] ?? 'Collection')) ?></h1>
-<p class="muted" style="margin-bottom:1rem;">
+<p class="muted u-mb-1">
     <a href="<?= url('/collections') ?>">&larr; Back to collections</a>
     <?php if ($mediaCount > 0): ?>
         &nbsp; &middot; &nbsp; <?= (int) $mediaCount ?> item<?= $mediaCount === 1 ? '' : 's' ?><?= $totalSeconds > 0 ? ', ' . e(gmdate($totalSeconds >= 3600 ? 'H:i:s' : 'i:s', $totalSeconds)) : '' ?>
@@ -24,7 +24,7 @@ $mediaCount = count((array) ($videos ?? [])) + count((array) ($images ?? [])) + 
 <section class="card" style="padding:1rem;margin-bottom:1.5rem;">
     <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/rename') ?>" class="settings-form" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
         <?= csrf_field() ?>
-        <label class="muted" style="font-size:.9rem;">Rename</label>
+        <label class="muted u-fs-09">Rename</label>
         <input type="text" name="name" required maxlength="120" value="<?= e((string) ($collection['name'] ?? '')) ?>" aria-label="Collection name" style="flex:1;min-width:200px;">
         <button type="submit" class="btn btn-sm">Save name</button>
     </form>
@@ -49,7 +49,7 @@ $mediaCount = count((array) ($videos ?? [])) + count((array) ($images ?? [])) + 
                     </a>
                     <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/photos/' . (int) $img['id'] . '/delete') ?>" style="padding:.6rem;">
                         <?= csrf_field() ?>
-                        <button type="submit" class="btn btn-sm btn-outline" style="width:100%;">Remove image</button>
+                        <button type="submit" class="btn btn-sm btn-outline u-w-full">Remove image</button>
                     </form>
                 </div>
             <?php endforeach; ?>
@@ -77,7 +77,7 @@ $mediaCount = count((array) ($videos ?? [])) + count((array) ($images ?? [])) + 
                     </form>
                     <form method="post" action="<?= url('/collections/' . $collectionId . '/photos/' . (int) $v['id'] . '/delete') ?>" style="padding:0 .6rem .6rem;">
                         <?= csrf_field() ?>
-                        <button type="submit" class="btn btn-sm btn-outline" style="width:100%;">Remove video</button>
+                        <button type="submit" class="btn btn-sm btn-outline u-w-full">Remove video</button>
                     </form>
                 </div>
             <?php endforeach; ?>
@@ -98,7 +98,7 @@ $mediaCount = count((array) ($videos ?? [])) + count((array) ($images ?? [])) + 
                     ?>
                     <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/galleries/' . $gid . '/delete') ?>" style="padding:.6rem;">
                         <?= csrf_field() ?>
-                        <button type="submit" class="btn btn-sm btn-outline" style="width:100%;">Remove from collection</button>
+                        <button type="submit" class="btn btn-sm btn-outline u-w-full">Remove from collection</button>
                     </form>
                 </div>
             <?php endforeach; ?>

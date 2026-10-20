@@ -8,7 +8,7 @@ $lastUpdated  = $lastUpdated ?? 'October 8, 2026';
 ?>
 <div class="card" style="max-width:820px;margin:0 auto;padding:var(--spacing-lg);">
     <h1>Report Abuse</h1>
-    <p class="muted" style="text-align:center;">Last updated: <?= e($lastUpdated) ?></p>
+    <p class="muted u-center">Last updated: <?= e($lastUpdated) ?></p>
 
     <p><?= e($siteName) ?> takes safety and community standards seriously. If you see content
     on the Site that you believe violates our <a href="<?= url('/terms') ?>">Terms of Service</a>,

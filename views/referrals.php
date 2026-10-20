@@ -17,8 +17,8 @@
 <section class="card" style="padding:1rem;">
     <h2 class="section-title">Your referrals</h2>
     <table style="width:100%;max-width:480px;font-size:.9rem;">
-        <tr><th style="text-align:left;">Friends who joined</th><td><?= (int) $referrals ?></td></tr>
-        <tr><th style="text-align:left;">Rewards earned (7 days each)</th><td><?= (int) $rewarded ?> (<?= ((int) $rewarded) * 7 ?> days)</td></tr>
+        <tr><th class="u-left">Friends who joined</th><td><?= (int) $referrals ?></td></tr>
+        <tr><th class="u-left">Rewards earned (7 days each)</th><td><?= (int) $rewarded ?> (<?= ((int) $rewarded) * 7 ?> days)</td></tr>
     </table>
-    <p class="muted" style="font-size:.85rem;">A reward is credited when a referred friend becomes a paying member. A paid trial counts once they upgrade.</p>
+    <p class="muted u-fs-085">A reward is credited when a referred friend becomes a paying member. A paid trial counts once they upgrade.</p>
 </section>

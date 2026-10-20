@@ -38,9 +38,9 @@ $tags            = (array) ($tags ?? []);
 </div>
 
 <?php if ($categories !== []): ?>
-    <section class="home-section" style="margin-top:1.5rem;">
+    <section class="home-section u-mt-15">
         <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
-            <h2 style="margin:0;">Browse by category</h2>
+            <h2 class="u-m0">Browse by category</h2>
             <a class="btn btn-sm btn-link" href="<?= url('/galleries') ?>">Browse all galleries &rarr;</a>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.75rem;">
@@ -57,10 +57,10 @@ $tags            = (array) ($tags ?? []);
 <?php if ($featured !== []): ?>
     <section class="home-section" style="margin-top:1.75rem;">
         <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
-            <h2 style="margin:0;">Featured</h2>
+            <h2 class="u-m0">Featured</h2>
             <a class="btn btn-sm btn-link" href="<?= url('/galleries') ?>">View all &rarr;</a>
         </div>
-        <div class="grid" style="margin-top:.75rem;">
+        <div class="grid u-mt-075">
             <?php echo \App\Core\PageCache::fragment('home.featured.' . md5(json_encode(array_column($featured, 'id'))), 120, static function () use ($featured): void {
                 foreach ($featured as $g) {
                     $gallery = $g;
@@ -75,10 +75,10 @@ $tags            = (array) ($tags ?? []);
 <?php if ($trending !== []): ?>
     <section class="home-section" style="margin-top:1.75rem;">
         <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
-            <h2 style="margin:0;">Trending this week</h2>
+            <h2 class="u-m0">Trending this week</h2>
             <a class="btn btn-sm btn-link" href="<?= url('/galleries') ?>">View all &rarr;</a>
         </div>
-        <div class="grid" style="margin-top:.75rem;">
+        <div class="grid u-mt-075">
             <?php echo \App\Core\PageCache::fragment('home.trending.' . md5(json_encode(array_column($trending, 'id'))), 120, static function () use ($trending): void {
                 foreach ($trending as $g) {
                     $gallery = $g;
@@ -91,7 +91,7 @@ $tags            = (array) ($tags ?? []);
 <?php endif; ?>
 
 <?php if ($tags !== []): ?>
-    <section class="home-section" style="margin-top:1.5rem;">
+    <section class="home-section u-mt-15">
         <h2 style="margin:0 0 .6rem;">Popular tags</h2>
         <div style="display:flex;flex-wrap:wrap;gap:.5rem;">
             <?php foreach (array_slice($tags, 0, 16) as $tag): ?>
@@ -103,13 +103,13 @@ $tags            = (array) ($tags ?? []);
 
 <section class="home-section" style="margin-top:1.75rem;">
     <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
-        <h2 style="margin:0;">Latest uploads</h2>
+        <h2 class="u-m0">Latest uploads</h2>
         <a class="btn btn-sm btn-link" href="<?= url('/galleries') ?>">View all &rarr;</a>
     </div>
     <?php if ($galleries === []): ?>
-        <p class="muted" style="margin-top:1rem;">No galleries published yet — check back soon.</p>
+        <p class="muted u-mt-1">No galleries published yet — check back soon.</p>
     <?php else: ?>
-        <div class="grid" style="margin-top:.75rem;">
+        <div class="grid u-mt-075">
             <?php echo \App\Core\PageCache::fragment('home.latest.' . md5(json_encode(array_column($galleries, 'id'))), 120, static function () use ($galleries, $covers): void {
                 foreach ($galleries as $g) {
                     $gallery = $g;

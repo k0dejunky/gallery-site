@@ -41,7 +41,7 @@
     </div>
     <div class="ud-card">
         <h3>Quick actions</h3>
-        <div class="ud-actions" style="margin:0;">
+        <div class="ud-actions u-m0">
             <?php if (($user['status'] ?? 'active') === 'suspended'): ?>
                 <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/status') ?>">
                     <?= csrf_field() ?><input type="hidden" name="status" value="active">

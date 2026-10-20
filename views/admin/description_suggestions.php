@@ -32,7 +32,7 @@
 <?php endif; ?>
 
 <?php if (empty($listing['rows'])): ?>
-    <p class="muted" style="margin-top:1.5rem;">No pending descriptions. Galleries without a description are analyzed automatically after upload (or use the backfill above).</p>
+    <p class="muted u-mt-15">No pending descriptions. Galleries without a description are analyzed automatically after upload (or use the backfill above).</p>
 <?php else: ?>
     <?php foreach ($listing['rows'] as $row): $g = $row['gallery']; $s = $row['suggestion']; ?>
         <section style="border:1px solid var(--card-border,#ddd);border-radius:8px;padding:1rem;background:var(--card-bg,#fff);margin-bottom:1rem;display:flex;gap:1rem;align-items:flex-start;">
@@ -46,7 +46,7 @@
                     <form method="post" action="<?= url('/admin/description-suggestions/accept') ?>" style="margin-top:.6rem;">
                         <?= csrf_field() ?>
                         <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
-                        <textarea name="text" rows="2" maxlength="600" style="width:100%;" aria-label="Proposed description"><?= e((string) $s['description']) ?></textarea>
+                        <textarea class="u-w-full" name="text" rows="2" maxlength="600" aria-label="Proposed description"><?= e((string) $s['description']) ?></textarea>
                         <div style="margin-top:.5rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;">
                             <button type="submit" class="btn btn-sm">Accept<?= trim((string) ($g['description'] ?? '')) !== '' ? ' (replace current)' : '' ?></button>
                             <span class="muted" style="font-size:.85em;">Edit freely — the textarea is saved as-is.</span>

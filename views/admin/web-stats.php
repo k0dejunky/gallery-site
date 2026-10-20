@@ -162,25 +162,25 @@ $humanShare    = $trafficRows > 0
         <?php else: ?>
             <div class="table-scroll">
                 <table>
-                    <thead><tr><th>Path</th><th style="text-align:right;">Views</th><th style="text-align:right;" title="Sum of the per-day unique addresses that loaded this path, so a visitor who returns counts once per day.">Visitors/day</th><th style="text-align:right;">Data</th></tr></thead>
+                    <thead><tr><th>Path</th><th class="u-right">Views</th><th class="u-right" title="Sum of the per-day unique addresses that loaded this path, so a visitor who returns counts once per day.">Visitors/day</th><th class="u-right">Data</th></tr></thead>
                     <tbody>
                     <?php foreach ($topUrls as $row): ?>
                         <tr>
                             <td><code><?= e($row['url']) ?></code></td>
-                            <td style="text-align:right;"><?= e($num($row['hits'])) ?></td>
-                            <td style="text-align:right;"><?php if ($includeBots): ?>
+                            <td class="u-right"><?= e($num($row['hits'])) ?></td>
+                            <td class="u-right"><?php if ($includeBots): ?>
                                     <span class="muted" title="Visitor addresses are counted for human traffic only.">&mdash;</span>
                                 <?php else: ?>
                                     <?= e($num($row['uniq_ips'])) ?>
                                 <?php endif; ?></td>
-                            <td style="text-align:right;"><?= e(format_bytes($row['bytes'])) ?></td>
+                            <td class="u-right"><?= e(format_bytes($row['bytes'])) ?></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
             <?php if (count($topUrls) >= $tableLimit): ?>
-                <p class="muted" style="font-size:.78rem;">Top <?= (int) $tableLimit ?> of all paths.</p>
+                <p class="muted u-fs-078">Top <?= (int) $tableLimit ?> of all paths.</p>
             <?php endif; ?>
         <?php endif; ?>
     </div>
@@ -192,13 +192,13 @@ $humanShare    = $trafficRows > 0
         <?php else: ?>
             <div class="table-scroll">
                 <table>
-                    <thead><tr><th>Referrer</th><th style="text-align:right;">Hits</th><th style="text-align:right;">Share</th></tr></thead>
+                    <thead><tr><th>Referrer</th><th class="u-right">Hits</th><th class="u-right">Share</th></tr></thead>
                     <tbody>
                     <?php foreach ($referrers as $row): ?>
                         <tr>
                             <td><?= $row['host'] === '' ? '<span class="muted">Direct / no referrer</span>' : e($row['label']) ?></td>
-                            <td style="text-align:right;"><?= e($num($row['hits'])) ?></td>
-                            <td style="text-align:right;"><?= e(rtrim(rtrim(number_format($row['pct'], 1), '0'), '.')) ?>%</td>
+                            <td class="u-right"><?= e($num($row['hits'])) ?></td>
+                            <td class="u-right"><?= e(rtrim(rtrim(number_format($row['pct'], 1), '0'), '.')) ?>%</td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
@@ -218,13 +218,13 @@ $humanShare    = $trafficRows > 0
             <?php else: ?>
                 <div class="table-scroll">
                     <table>
-                        <thead><tr><th>Path</th><th style="text-align:right;">Sessions</th><th style="text-align:right;">Avg time</th></tr></thead>
+                        <thead><tr><th>Path</th><th class="u-right">Sessions</th><th class="u-right">Avg time</th></tr></thead>
                         <tbody>
                         <?php foreach ($rows as $row): ?>
                             <tr>
                                 <td><code><?= e($row['url']) ?></code></td>
-                                <td style="text-align:right;"><?= e($num($row['hits'])) ?></td>
-                                <td style="text-align:right;"><?= $row['avg_duration'] > 0 ? e($hr($row['avg_duration'])) : '<span class="muted">&mdash;</span>' ?></td>
+                                <td class="u-right"><?= e($num($row['hits'])) ?></td>
+                                <td class="u-right"><?= $row['avg_duration'] > 0 ? e($hr($row['avg_duration'])) : '<span class="muted">&mdash;</span>' ?></td>
                             </tr>
                         <?php endforeach; ?>
                         </tbody>
@@ -241,12 +241,12 @@ $humanShare    = $trafficRows > 0
         <h2>Visit quality <span class="muted" style="font-weight:400;font-size:.78rem;">(humans only)</span></h2>
         <table>
             <tbody>
-                <tr><td>Sessions</td><td style="text-align:right;"><?= e($num($quality['visits'])) ?></td></tr>
-                <tr><td>Unique visitors</td><td style="text-align:right;"><?= e($num($quality['visitors'])) ?></td></tr>
-                <tr><td>Average duration</td><td style="text-align:right;"><?= e($hr($quality['avg_duration'])) ?></td></tr>
-                <tr><td>Pages per visit</td><td style="text-align:right;"><?= e(rtrim(rtrim(number_format($quality['avg_pages'], 2), '0'), '.')) ?></td></tr>
-                <tr><td>Longest visit</td><td style="text-align:right;"><?= e($num($quality['max_pages'])) ?> pages</td></tr>
-                <tr><td>Bounced (1 page)</td><td style="text-align:right;"><?= e($num($quality['bounces'])) ?> (<?= e(rtrim(rtrim(number_format($quality['bounce_rate'], 1), '0'), '.')) ?>%)</td></tr>
+                <tr><td>Sessions</td><td class="u-right"><?= e($num($quality['visits'])) ?></td></tr>
+                <tr><td>Unique visitors</td><td class="u-right"><?= e($num($quality['visitors'])) ?></td></tr>
+                <tr><td>Average duration</td><td class="u-right"><?= e($hr($quality['avg_duration'])) ?></td></tr>
+                <tr><td>Pages per visit</td><td class="u-right"><?= e(rtrim(rtrim(number_format($quality['avg_pages'], 2), '0'), '.')) ?></td></tr>
+                <tr><td>Longest visit</td><td class="u-right"><?= e($num($quality['max_pages'])) ?> pages</td></tr>
+                <tr><td>Bounced (1 page)</td><td class="u-right"><?= e($num($quality['bounces'])) ?> (<?= e(rtrim(rtrim(number_format($quality['bounce_rate'], 1), '0'), '.')) ?>%)</td></tr>
             </tbody>
         </table>
     </div>
@@ -258,7 +258,7 @@ $humanShare    = $trafficRows > 0
         <?php else: ?>
             <div class="table-scroll">
                 <table>
-                    <thead><tr><th>IP</th><th style="text-align:right;">Requests</th><th style="text-align:right;">Visits</th><th style="text-align:right;">Data</th></tr></thead>
+                    <thead><tr><th>IP</th><th class="u-right">Requests</th><th class="u-right">Visits</th><th class="u-right">Data</th></tr></thead>
                     <tbody>
                     <?php foreach ($visitors as $row): ?>
                         <tr>
@@ -268,15 +268,15 @@ $humanShare    = $trafficRows > 0
                                     <span class="status-badge pending">bot</span>
                                 <?php endif; ?>
                             </td>
-                            <td style="text-align:right;"><?= e($num($row['hits'])) ?></td>
-                            <td style="text-align:right;"><?= e($num($row['visits'])) ?></td>
-                            <td style="text-align:right;"><?= e(format_bytes($row['bytes'])) ?></td>
+                            <td class="u-right"><?= e($num($row['hits'])) ?></td>
+                            <td class="u-right"><?= e($num($row['visits'])) ?></td>
+                            <td class="u-right"><?= e(format_bytes($row['bytes'])) ?></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
-            <p class="muted" style="font-size:.78rem;">Raw addresses are stored on purpose.</p>
+            <p class="muted u-fs-078">Raw addresses are stored on purpose.</p>
         <?php endif; ?>
     </div>
 </div>
@@ -301,7 +301,7 @@ $humanShare    = $trafficRows > 0
                     <?php foreach (array_slice($rows, 0, 10) as $row): ?>
                         <tr>
                             <td><?= e($row['label']) ?></td>
-                            <td style="text-align:right;"><?= e($num($row['hits'])) ?></td>
+                            <td class="u-right"><?= e($num($row['hits'])) ?></td>
                             <td style="text-align:right;width:5rem;">
                                 <?= Charts::sparkline([(float) $row['pct']], 60, 14, '#7c3aed') ?>
                                 <?= e(rtrim(rtrim(number_format($row['pct'], 1), '0'), '.')) ?>%
@@ -332,8 +332,8 @@ $humanShare    = $trafficRows > 0
             <?php foreach ($mix as $row): ?>
                 <tr>
                     <td><?= e($row['label']) ?></td>
-                    <td style="text-align:right;"><?= e($num($row['value'])) ?></td>
-                    <td style="text-align:right;"><?= e(rtrim(rtrim(number_format($row['pct'], 1), '0'), '.')) ?>%</td>
+                    <td class="u-right"><?= e($num($row['value'])) ?></td>
+                    <td class="u-right"><?= e(rtrim(rtrim(number_format($row['pct'], 1), '0'), '.')) ?>%</td>
                 </tr>
             <?php endforeach; ?>
             </tbody>
@@ -346,20 +346,20 @@ $humanShare    = $trafficRows > 0
             <p class="muted">No data.</p>
         <?php else: ?>
             <table>
-                <thead><tr><th>Code</th><th>Meaning</th><th style="text-align:right;">Hits</th><th style="text-align:right;">Share</th></tr></thead>
+                <thead><tr><th>Code</th><th>Meaning</th><th class="u-right">Hits</th><th class="u-right">Share</th></tr></thead>
                 <tbody>
                 <?php foreach ($statuses as $row): ?>
                     <tr>
                         <td><span class="<?= e($statusClass($row['class'])) ?>"><?= (int) $row['status'] ?></span></td>
                         <td class="muted"><?= e($row['label']) ?></td>
-                        <td style="text-align:right;"><?= e($num($row['hits'])) ?></td>
-                        <td style="text-align:right;"><?= e(rtrim(rtrim(number_format($row['pct'], 1), '0'), '.')) ?>%</td>
+                        <td class="u-right"><?= e($num($row['hits'])) ?></td>
+                        <td class="u-right"><?= e(rtrim(rtrim(number_format($row['pct'], 1), '0'), '.')) ?>%</td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
             </table>
             <?php if ($summary['totals']['status_4xx'] > 0 || $summary['totals']['status_5xx'] > 0): ?>
-                <p class="muted" style="font-size:.78rem;">
+                <p class="muted u-fs-078">
                     <?= e($num($summary['totals']['status_4xx'])) ?> client errors,
                     <?= e($num($summary['totals']['status_5xx'])) ?> server errors.
                 </p>
@@ -373,13 +373,13 @@ $humanShare    = $trafficRows > 0
             <p class="muted">No static files served.</p>
         <?php else: ?>
             <table>
-                <thead><tr><th>Type</th><th style="text-align:right;">Requests</th><th style="text-align:right;">Data</th></tr></thead>
+                <thead><tr><th>Type</th><th class="u-right">Requests</th><th class="u-right">Data</th></tr></thead>
                 <tbody>
                 <?php foreach ($fileTypes as $row): ?>
                     <tr>
                         <td><?= e($row['label']) ?></td>
-                        <td style="text-align:right;"><?= e($num($row['hits'])) ?></td>
-                        <td style="text-align:right;"><?= e(format_bytes($row['bytes'])) ?></td>
+                        <td class="u-right"><?= e($num($row['hits'])) ?></td>
+                        <td class="u-right"><?= e(format_bytes($row['bytes'])) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -399,13 +399,13 @@ $humanShare    = $trafficRows > 0
     <?php else: ?>
         <div class="table-scroll">
             <table>
-                <thead><tr><th>Robot</th><th style="text-align:right;">Requests</th><th style="text-align:right;">Data</th></tr></thead>
+                <thead><tr><th>Robot</th><th class="u-right">Requests</th><th class="u-right">Data</th></tr></thead>
                 <tbody>
                 <?php foreach ($robots as $row): ?>
                     <tr>
                         <td><?= e($row['label']) ?></td>
-                        <td style="text-align:right;"><?= e($num($row['hits'])) ?></td>
-                        <td style="text-align:right;"><?= e(format_bytes($row['bytes'])) ?></td>
+                        <td class="u-right"><?= e($num($row['hits'])) ?></td>
+                        <td class="u-right"><?= e(format_bytes($row['bytes'])) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -417,7 +417,7 @@ $humanShare    = $trafficRows > 0
 <?php // ---- Maintenance: re-parse + rollup health ?>
 <div class="stats-panel" style="margin-bottom:1.5rem;">
     <h2>Log aggregation</h2>
-    <p class="muted" style="font-size:.85rem;">
+    <p class="muted u-fs-085">
         Refreshing <?= e($from) ?> to <?= e($to) ?>, the last
         <?= (int) (count($series)) ?> day(s), and
         <?= e($health['days']) ?> day(s) of history are stored
@@ -441,24 +441,24 @@ $humanShare    = $trafficRows > 0
             <input type="date" id="ws-to" name="to" value="<?= e($to) ?>">
         </div>
         <button type="submit" class="btn btn-sm">Re-parse logs</button>
-        <span class="muted" style="font-size:.78rem;">Up to 31 days at a time.</span>
+        <span class="muted u-fs-078">Up to 31 days at a time.</span>
     </form>
 
     <table>
         <tbody>
-            <tr><td>Requests stored</td><td style="text-align:right;"><?= e($num($health['hits'])) ?></td></tr>
-            <tr><td>Bandwidth accounted</td><td style="text-align:right;"><?= e(format_bytes($health['bytes'])) ?></td></tr>
+            <tr><td>Requests stored</td><td class="u-right"><?= e($num($health['hits'])) ?></td></tr>
+            <tr><td>Bandwidth accounted</td><td class="u-right"><?= e(format_bytes($health['bytes'])) ?></td></tr>
             <tr>
                 <td>Unparsed lines</td>
-                <td style="text-align:right;">
+                <td class="u-right">
                     <?= e($num($health['skipped_lines'])) ?>
                     <?php if ($health['skipped_lines'] > 0): ?>
-                        <span class="muted" style="font-size:.78rem;">&mdash; lines that did not match the log format</span>
+                        <span class="muted u-fs-078">&mdash; lines that did not match the log format</span>
                     <?php endif; ?>
                 </td>
             </tr>
             <?php if ($health['latest_source'] !== ''): ?>
-                <tr><td>Log files read</td><td style="text-align:right;"><code><?= e($health['latest_source']) ?></code></td></tr>
+                <tr><td>Log files read</td><td class="u-right"><code><?= e($health['latest_source']) ?></code></td></tr>
             <?php endif; ?>
         </tbody>
     </table>

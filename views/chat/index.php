@@ -2,7 +2,7 @@
 
 <div class="chat-page">
             <?php if (!empty($questionnaires)): ?>
-                <div class="card" style="margin-bottom:1rem;">
+                <div class="card u-mb-1">
                     <h2 class="section-title" style="margin-bottom:.5rem;">Questionnaires</h2>
                     <?php foreach ($questionnaires as $q): ?>
                         <?php $qAnswered = !empty($q['answered']); ?>
@@ -35,7 +35,7 @@
                                         <?php endif; ?>
                                     </div>
                                 <?php endforeach; ?>
-                                <p class="muted" style="margin:0;"><strong>Submitted.</strong> You can view your answers above; they can't be changed.</p>
+                                <p class="muted u-m0"><strong>Submitted.</strong> You can view your answers above; they can't be changed.</p>
                             <?php elseif ((int)$q['allow_replies'] === 1): ?>
                                 <form method="post" action="<?= url('/chat/questionnaire/' . (int)$q['id'] . '/answer') ?>" style="display:flex;flex-direction:column;gap:.5rem;">
                                     <?= csrf_field() ?>
@@ -96,7 +96,7 @@
         <div class="chat-thread" id="chat-thread">
             <?php if (empty($messages)): ?>
                 <div class="chat-empty empty-state" style="margin:1rem auto;max-width:420px;text-align:center;">
-                    <p class="muted" style="margin-top:0;">No messages yet. Say hello to start chatting.</p>
+                    <p class="muted u-mt-0">No messages yet. Say hello to start chatting.</p>
                     <button type="button" class="btn btn-sm" data-action="chatFocusInput">Say hello</button>
                 </div>
             <?php else: ?>

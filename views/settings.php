@@ -18,7 +18,7 @@
     <p class="muted">Enter these in the Operator Chat Android app to connect as an operator.</p>
     <p><strong>Server URL</strong><br><code style="word-break:break-all;"><?= e((string) $chatBridge['server_url']) ?></code></p>
     <p><strong>Bridge token</strong><br><code style="word-break:break-all;"><?= e((string) $chatBridge['bridge_token']) ?></code></p>
-    <p class="muted" style="font-size:.8rem;">Keep the token private — it grants operator reply and training-data access.</p>
+    <p class="muted u-fs-08">Keep the token private — it grants operator reply and training-data access.</p>
 </section>
 <?php endif; ?>
 
@@ -99,7 +99,7 @@
     <h2 class="section-title">Server optimizations</h2>
     <p class="muted">Tune server-level performance. Save stores the values; "Apply to server" writes the config and reloads services (Apache, PHP-FPM, MySQL) via a scoped root helper. No site functionality or layout changes.</p>
     <?php if (!empty($serverOptStatus) && !empty($serverOptStatus['applied_at'])): ?>
-        <p class="muted" style="font-size:.8rem;">
+        <p class="muted u-fs-08">
             Last applied: <strong><?= e((string) $serverOptStatus['applied_at']) ?></strong>
             <?php if (!empty($serverOptStatus['notes'])): ?>&middot; <?= e(implode(' · ', $serverOptStatus['notes'])) ?><?php endif; ?>
         </p>

@@ -90,23 +90,23 @@
 <details class="create-form-card" style="margin-top:1.5rem;border:1px solid var(--card-border,#ddd);border-radius:var(--card-radius,8px);padding:1.25rem;background:var(--card-bg,#fff);" data-gallery-queue>
     <summary style="cursor:pointer;font-weight:600;">Gallery queue (<?= count($queuedGalleries ?? []) ?>)</summary>
     <?php if (empty($queuedGalleries)): ?>
-        <p class="muted" style="margin-top:.75rem;">No galleries are scheduled for a future publication.</p>
+        <p class="muted u-mt-075">No galleries are scheduled for a future publication.</p>
     <?php else: ?>
         <table style="width:100%;border-collapse:collapse;margin-top:.75rem;">
             <thead>
                 <tr>
-                    <th style="text-align:left;padding:.4rem .5rem;">Gallery</th>
-                    <th style="text-align:left;padding:.4rem .5rem;">Scheduled</th>
+                    <th class="u-left-pad">Gallery</th>
+                    <th class="u-left-pad">Scheduled</th>
                     <th style="text-align:right;padding:.4rem .5rem;">Action</th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach ($queuedGalleries as $queued): ?>
                     <tr>
-                        <td style="padding:.4rem .5rem;">
+                        <td class="u-pad-04-05">
                             <a href="<?= url('/admin/galleries/' . (int) $queued['id']) ?>"><?= e((string) $queued['title']) ?></a>
                         </td>
-                        <td style="padding:.4rem .5rem;" class="muted"><?= e(tzdate('Y-m-d H:i', (string) $queued['published_at'])) ?></td>
+                        <td class="muted u-pad-04-05"><?= e(tzdate('Y-m-d H:i', (string) $queued['published_at'])) ?></td>
                         <td style="padding:.4rem .5rem;text-align:right;">
                             <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $queued['id'] . '/publish-now') ?>">
                                 <?= csrf_field() ?>

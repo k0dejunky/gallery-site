@@ -18,7 +18,7 @@ $gateNoun   = $gateMedia === 'video' ? 'videos' : ($gateMedia === 'image' ? 'ful
             ? 'Your current membership does not include this content. Upgrade to a ' . e($gateLabel) . ' plan to view these ' . e($gateNoun) . ' in full.'
             : 'Create a free account' . ($gateLevel > 0 ? ' and a ' . e($gateLabel) . ' membership' : '') . ' to unlock these ' . e($gateNoun) . ' in full.' ?>
     </p>
-    <p style="margin:0;">
+    <p class="u-m0">
         <?php if (!$gateLogged): ?>
             <a class="btn" href="<?= url('/signup') ?>">Sign up</a>
             <a class="btn btn-outline" href="<?= url('/login') ?>">Log in</a>

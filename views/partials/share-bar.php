@@ -11,7 +11,7 @@ $shareReddit   = \App\Models\Traffic::buildUrl($sharePath, 'share-reddit');
 $shareWaText   = ($shareTitle !== '' ? $shareTitle . ' — ' : '') . $shareWa;
 ?>
 <div class="share-bar" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:1rem 0;">
-    <span class="muted" style="font-size:.85rem;">Share:</span>
+    <span class="muted u-fs-085">Share:</span>
     <a class="btn btn-sm btn-outline" target="_blank" rel="noopener"
        href="https://twitter.com/intent/tweet?url=<?= e(rawurlencode($shareX)) ?><?= $shareTitle !== '' ? '&text=' . e(rawurlencode($shareTitle)) : '' ?>">X</a>
     <a class="btn btn-sm btn-outline" target="_blank" rel="noopener"

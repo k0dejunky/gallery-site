@@ -3,7 +3,7 @@
 <div class="auth-panel">
     <h1>Two-factor verification</h1>
 
-    <p class="muted" style="text-align:center;">
+    <p class="muted u-center">
         Enter the 6-digit code from your authenticator app to finish signing in.
     </p>
 

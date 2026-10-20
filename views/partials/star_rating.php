@@ -10,12 +10,12 @@ $ratingLabel = $ratingCount > 0
     <span aria-label="<?= e($ratingLabel) ?>" title="<?= e($ratingLabel) ?>" style="letter-spacing:.1em;font-size:1.1rem;color:#f59e0b;">
         <?php for ($i = 1; $i <= 5; $i++): ?><?= $i <= $starsFull ? '&#9733;' : '&#9734;' ?><?php endfor; ?>
     </span>
-    <span class="muted" style="font-size:.85rem;"><?= e($ratingLabel) ?></span>
+    <span class="muted u-fs-085"><?= e($ratingLabel) ?></span>
 
     <?php if (\App\Core\Auth::check()): ?>
         <form method="post" action="<?= url('/galleries/' . (int) $gallery['id'] . '/rate') ?>" style="display:inline-flex;align-items:center;gap:.35rem;">
             <?= csrf_field() ?>
-            <label class="muted" for="rate-select" style="font-size:.85rem;">Rate:</label>
+            <label class="muted u-fs-085" for="rate-select">Rate:</label>
             <select name="rating" id="rate-select" style="width:auto;">
                 <?php for ($i = 1; $i <= 5; $i++): ?>
                     <option value="<?= $i ?>"<?= (int) ($userRating ?? 0) === $i ? ' selected' : '' ?>><?= str_repeat('&#9733;', $i) ?> (<?= $i ?>)</option>

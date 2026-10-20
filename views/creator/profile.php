@@ -23,14 +23,14 @@
     <?php endif; ?>
 
     <?php if (!empty($profile['links'])): ?>
-        <div class="chips" style="margin-top:1rem;">
+        <div class="chips u-mt-1">
             <?php foreach ($profile['links'] as $link): ?>
                 <a class="chip" href="<?= e($link['url']) ?>" rel="noopener nofollow" target="_blank"><?= e($link['label']) ?></a>
             <?php endforeach; ?>
         </div>
     <?php endif; ?>
 
-    <div style="margin-top:1.5rem;">
+    <div class="u-mt-15">
         <a class="btn" href="<?= url('/galleries') ?>">Browse the galleries</a>
     </div>
 </section>

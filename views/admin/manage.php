@@ -87,7 +87,7 @@
 // Accept merges into the checkboxes above (the gallery's categories); dismiss
 // only retires the proposal. Nothing here is ever applied automatically. ?>
 <?php if (!empty($suggestions) || (($suggestionJob['status'] ?? '') === 'error') || (($suggestionJob['status'] ?? '') === 'queued') || (($suggestionJob['status'] ?? '') === 'running')): ?>
-<h2 style="margin-top:1.5rem;">AI Suggestions</h2>
+<h2 class="u-mt-15">AI Suggestions</h2>
 <?php if (($suggestionJob['status'] ?? '') === 'error'): ?>
     <p class="muted" style="color:var(--red-600, #b91c1c);">
         Last analysis failed: <?= e($suggestionJob['error'] ?? 'unknown error') ?>
@@ -135,7 +135,7 @@
 // writes galleries.description (optionally after editing); dismiss only
 // retires the proposal. Nothing here is ever applied automatically. ?>
 <?php if (!empty($descriptionSuggestion) || in_array(($descriptionJob['status'] ?? ''), ['error', 'queued', 'running'], true)): ?>
-<h2 style="margin-top:1.5rem;">AI Description</h2>
+<h2 class="u-mt-15">AI Description</h2>
 <?php if (($descriptionJob['status'] ?? '') === 'error'): ?>
     <p class="muted" style="color:var(--red-600, #b91c1c);">
         Last description attempt failed: <?= e($descriptionJob['error'] ?? 'unknown error') ?>
@@ -154,7 +154,7 @@
     <form method="post" action="<?= url('/admin/description-suggestions/accept') ?>">
         <?= csrf_field() ?>
         <input type="hidden" name="id" value="<?= (int) $descriptionSuggestion['id'] ?>">
-        <textarea name="text" rows="2" maxlength="600" style="width:100%;" aria-label="Proposed description"><?= e((string) $descriptionSuggestion['description']) ?></textarea>
+        <textarea class="u-w-full" name="text" rows="2" maxlength="600" aria-label="Proposed description"><?= e((string) $descriptionSuggestion['description']) ?></textarea>
         <div style="margin-top:.5rem;display:flex;gap:.5rem;flex-wrap:wrap;">
             <button type="submit" class="btn btn-sm">Accept description</button>
         </div>
@@ -215,7 +215,7 @@
     $uploadHint      = ($gallery['type'] ?? 'images') === 'videos' ? 'Video files for a video gallery' : 'Image files for an image gallery';
     ob_start();
     ?>
-        <p style="margin-top:1rem;">
+        <p class="u-mt-1">
             <button type="submit" class="btn" id="commit-btn" disabled>Add staged files to this gallery</button>
             <span class="muted">Staged files stay in your session until committed, so a reload won't lose them.</span>
         </p>
@@ -555,23 +555,23 @@ require __DIR__ . '/partials/upload_client.php';
 <details style="margin-top:1.5rem;border:1px solid var(--card-border,#ddd);border-radius:var(--card-radius,8px);padding:1.25rem;background:var(--card-bg,#fff);">
     <summary style="cursor:pointer;font-weight:600;">Gallery queue (<?= count($queuedGalleries ?? []) ?>)</summary>
     <?php if (empty($queuedGalleries)): ?>
-        <p class="muted" style="margin-top:.75rem;">No galleries are scheduled for a future publication.</p>
+        <p class="muted u-mt-075">No galleries are scheduled for a future publication.</p>
     <?php else: ?>
         <table style="width:100%;border-collapse:collapse;margin-top:.75rem;">
             <thead>
                 <tr>
-                    <th style="text-align:left;padding:.4rem .5rem;">Gallery</th>
-                    <th style="text-align:left;padding:.4rem .5rem;">Scheduled</th>
+                    <th class="u-left-pad">Gallery</th>
+                    <th class="u-left-pad">Scheduled</th>
                     <th style="text-align:right;padding:.4rem .5rem;">Action</th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach ($queuedGalleries as $queued): ?>
                     <tr>
-                        <td style="padding:.4rem .5rem;">
+                        <td class="u-pad-04-05">
                             <a href="<?= url('/admin/galleries/' . (int) $queued['id']) ?>"><?= e((string) $queued['title']) ?></a>
                         </td>
-                        <td style="padding:.4rem .5rem;" class="muted"><?= e(tzdate('Y-m-d H:i', (string) $queued['published_at'])) ?></td>
+                        <td class="muted u-pad-04-05"><?= e(tzdate('Y-m-d H:i', (string) $queued['published_at'])) ?></td>
                         <td style="padding:.4rem .5rem;text-align:right;">
                             <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $queued['id'] . '/publish-now') ?>">
                                 <?= csrf_field() ?>

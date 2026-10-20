@@ -33,7 +33,7 @@
 <?php endif; ?>
 
 <?php if (empty($listing['rows'])): ?>
-    <p class="muted" style="margin-top:1.5rem;">No pending suggestions. Galleries are analyzed automatically after upload (or use the backfill above).</p>
+    <p class="muted u-mt-15">No pending suggestions. Galleries are analyzed automatically after upload (or use the backfill above).</p>
 <?php else: ?>
     <?php foreach ($listing['rows'] as $row): $g = $row['gallery']; ?>
         <section style="border:1px solid var(--card-border,#ddd);border-radius:8px;padding:1rem;background:var(--card-bg,#fff);margin-bottom:1rem;display:flex;gap:1rem;align-items:flex-start;">

@@ -4,7 +4,7 @@
 
 <section class="card" style="padding:1rem;margin-bottom:1rem;">
     <h2 class="section-title">Upload a CSV</h2>
-    <p class="muted" style="font-size:.85rem;">Columns (optional header): <code>title, description, type, min_level, is_secret, published_at, categories</code>. Type is <code>images</code> or <code>videos</code>; min_level 0–3; is_secret 0/1; published_at is a site-timezone datetime (blank = publish now); categories are pipe-separated names (existing categories only).</p>
+    <p class="muted u-fs-085">Columns (optional header): <code>title, description, type, min_level, is_secret, published_at, categories</code>. Type is <code>images</code> or <code>videos</code>; min_level 0–3; is_secret 0/1; published_at is a site-timezone datetime (blank = publish now); categories are pipe-separated names (existing categories only).</p>
     <form method="post" action="<?= url('/admin/galleries/import') ?>" enctype="multipart/form-data" class="settings-form" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
         <?= csrf_field() ?>
         <input type="file" name="csv" accept=".csv,text/csv" required>
@@ -43,9 +43,9 @@
             <p class="muted" style="font-size:.85rem;margin-top:.5rem;">Uncheck "Dry run" and upload again to import for real.</p>
         <?php endif; ?>
         <?php if (!empty($errors)): ?>
-            <p class="sys-bad" style="margin-top:.5rem;"><?= e(implode(' ', $errors)) ?></p>
+            <p class="sys-bad u-mt-05"><?= e(implode(' ', $errors)) ?></p>
         <?php endif; ?>
     </section>
 <?php endif; ?>
 
-<p class="muted" style="font-size:.9rem;"><a href="<?= url('/admin/galleries') ?>">&larr; Back to galleries</a></p>
+<p class="muted u-fs-09"><a href="<?= url('/admin/galleries') ?>">&larr; Back to galleries</a></p>

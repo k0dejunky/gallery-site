@@ -7,7 +7,7 @@ $lastUpdated  = $lastUpdated ?? 'October 8, 2026';
 ?>
 <div class="card" style="max-width:820px;margin:0 auto;padding:var(--spacing-lg);">
     <h1>DMCA Takedown Policy</h1>
-    <p class="muted" style="text-align:center;">Last updated: <?= e($lastUpdated) ?></p>
+    <p class="muted u-center">Last updated: <?= e($lastUpdated) ?></p>
 
     <p><?= e($siteName) ?> respects the intellectual property rights of others and complies
     with the Digital Millennium Copyright Act (DMCA). If you believe that material on this

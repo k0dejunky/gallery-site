@@ -43,13 +43,13 @@
 <?php // Failed auto-posts need attention: show the most recent ones here with
      // a one-click retry instead of hiding them in the Auto Poster page. ?>
 <?php if (!empty($autopostFailed)): ?>
-<div class="sys-card" style="margin-top:var(--spacing-lg);">
+<div class="sys-card u-mt-lg">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
-        <h2 style="margin:0;">Auto-poster failures <span class="pill pill-err"><?= count($autopostFailed) ?> need attention</span></h2>
+        <h2 class="u-m0">Auto-poster failures <span class="pill pill-err"><?= count($autopostFailed) ?> need attention</span></h2>
         <a href="<?= url('/admin/auto-poster') ?>" class="btn btn-sm">Auto Poster</a>
     </div>
     <table>
-        <thead><tr><th>#</th><th>Gallery</th><th>Error</th><th style="text-align:right;">Actions</th></tr></thead>
+        <thead><tr><th>#</th><th>Gallery</th><th>Error</th><th class="u-right">Actions</th></tr></thead>
         <tbody>
         <?php foreach ($autopostFailed as $item): ?>
             <tr>
@@ -111,7 +111,7 @@
     <div class="adm-section-head"><h2>Content</h2></div>
 <?php // Media statistics: total, queued (scheduled for future publish) and
     // currently-published photos/videos. ?>
-<div class="sys-card" style="margin-top:var(--spacing-lg);">
+<div class="sys-card u-mt-lg">
     <h2 style="margin:0 0 .75rem;">Media statistics</h2>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;">
         <div class="stat-card"><b><?= number_format($summary['photos']) ?></b><small>Total Photos</small></div>
@@ -124,20 +124,20 @@
 </div>
 
 <?php // Gallery access-level breakdown: how many galleries are behind each tier. ?>
-<div class="sys-card" style="margin-top:var(--spacing-lg);">
+<div class="sys-card u-mt-lg">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
-        <h2 style="margin:0;">Galleries by access level</h2>
+        <h2 class="u-m0">Galleries by access level</h2>
         <a href="<?= url('/admin/galleries/create') ?>" class="btn btn-sm">Gallery Management</a>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:flex-start;margin-top:.75rem;">
         <div style="flex:1 1 320px;min-width:260px;">
             <table>
                 <tbody>
-                    <tr><td><b>Free</b> <span class="muted">(all registered users)</span></td><td style="text-align:right;"><?= number_format($galleryLevels['levels'][0]) ?></td></tr>
-                    <tr><td><b>Silver</b></td><td style="text-align:right;"><?= number_format($galleryLevels['levels'][1]) ?></td></tr>
-                    <tr><td><b>Gold</b></td><td style="text-align:right;"><?= number_format($galleryLevels['levels'][2]) ?></td></tr>
-                    <tr><td><b>Platinum</b></td><td style="text-align:right;"><?= number_format($galleryLevels['levels'][3]) ?></td></tr>
-                    <tr><td><b>Total</b></td><td style="text-align:right;"><?= number_format($galleryLevels['total']) ?></td></tr>
+                    <tr><td><b>Free</b> <span class="muted">(all registered users)</span></td><td class="u-right"><?= number_format($galleryLevels['levels'][0]) ?></td></tr>
+                    <tr><td><b>Silver</b></td><td class="u-right"><?= number_format($galleryLevels['levels'][1]) ?></td></tr>
+                    <tr><td><b>Gold</b></td><td class="u-right"><?= number_format($galleryLevels['levels'][2]) ?></td></tr>
+                    <tr><td><b>Platinum</b></td><td class="u-right"><?= number_format($galleryLevels['levels'][3]) ?></td></tr>
+                    <tr><td><b>Total</b></td><td class="u-right"><?= number_format($galleryLevels['total']) ?></td></tr>
                 </tbody>
             </table>
         </div>
@@ -156,7 +156,7 @@
         <p>AI, storage and access health</p>
     </div>
 <?php // Chat statistics: AI master switch, training queue, base model. ?>
-<div class="stat-cards" style="margin-top:var(--spacing-lg);">
+<div class="stat-cards u-mt-lg">
     <div class="stat-card" style="border-left:4px solid <?= !empty($chatStats['aiEnabled']) ? 'var(--success,#16a34a)' : 'var(--danger,#c62828)' ?>;">
         <b><?= !empty($chatStats['aiEnabled']) ? 'ON' : 'OFF' ?></b>
         <small>AI master switch</small>
@@ -221,10 +221,10 @@
             ['label' => 'OS',               'value' => (float) $disk['os'],           'color' => '#64748b'],
         ], static fn (array $s): bool => (float) $s['value'] > 0));
     ?>
-    <div class="sys-card" style="margin-top:var(--spacing-lg);">
+    <div class="sys-card u-mt-lg">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
-            <h2 style="margin:0;">Disk space</h2>
-            <span class="muted" style="font-size:.85rem;">
+            <h2 class="u-m0">Disk space</h2>
+            <span class="muted u-fs-085">
                 <?= format_bytes((float) $disk['total']) ?> total · <?= format_bytes((float) $disk['free']) ?> free
             </span>
         </div>
@@ -243,7 +243,7 @@
                             </div>
                             <b style="flex:0 0 auto;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;">
                                 <?= format_bytes((float) $slice['value']) ?>
-                                <span class="muted" style="font-size:.78rem;">(<?= number_format((float) $slice['value'] / (float) $disk['total'] * 100, 1) ?>%)</span>
+                                <span class="muted u-fs-078">(<?= number_format((float) $slice['value'] / (float) $disk['total'] * 100, 1) ?>%)</span>
                             </b>
                         </div>
                     <?php endforeach; ?>
@@ -259,7 +259,7 @@
     </div>
 <?php endif; ?>
 
-<div class="stat-cards" style="margin-top:var(--spacing-lg);">
+<div class="stat-cards u-mt-lg">
     <?php if ((int) $security['locked_ips'] > 0 || (int) $security['locked_pairs'] > 0): ?>
         <div class="stat-card" style="background:#fef2f2;">
             <b style="color:#dc2626;font-size:1.3rem;"><?= count($security['locked_ips']) + count($security['locked_pairs']) ?></b>
@@ -281,16 +281,16 @@
 </div>
 
 <?php if (!empty($security['locked_ips']) || !empty($security['locked_pairs'])): ?>
-<div class="sys-card" style="margin-top:var(--spacing-lg);">
+<div class="sys-card u-mt-lg">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
-        <h2 style="margin:0;">Security — active lockouts</h2>
+        <h2 class="u-m0">Security — active lockouts</h2>
         <a href="<?= url('/admin/system') ?>" class="btn btn-sm">System → Security</a>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:1.5rem;margin-top:.75rem;">
         <?php if (!empty($security['locked_ips'])): ?>
             <div style="flex:1 1 200px;">
                 <h3 style="margin:0 0 .35rem;font-size:.9rem;">Locked IPs</h3>
-                <table style="width:100%;">
+                <table class="u-w-full">
                     <tbody>
                     <?php foreach (array_slice($security['locked_ips'], 0, 5) as $row): ?>
                         <tr>
@@ -305,11 +305,11 @@
         <?php if (!empty($security['locked_pairs'])): ?>
             <div style="flex:1 1 200px;">
                 <h3 style="margin:0 0 .35rem;font-size:.9rem;">Locked email + IP pairs</h3>
-                <table style="width:100%;">
+                <table class="u-w-full">
                     <tbody>
                     <?php foreach (array_slice($security['locked_pairs'], 0, 5) as $row): ?>
                         <tr>
-                            <td class="muted" style="font-size:.85rem;"><?= e((string) $row['email']) ?></td>
+                            <td class="muted u-fs-085"><?= e((string) $row['email']) ?></td>
                             <td class="muted" style="font-family:monospace;font-size:.85rem;"><?= e((string) $row['ip']) ?></td>
                             <td style="text-align:right;white-space:nowrap;"><b><?= (int) $row['c'] ?></b></td>
                         </tr>
@@ -350,7 +350,7 @@
         <p>Each panel remembers whether you left it open</p>
     </div>
 <?php // Revenue & churn: monthly bars + trailing totals, all server-rendered SVG. ?>
-<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="finance" open>
+<details class="sys-card u-mt-lg" data-collapse-key="finance" open>
     <summary><h2>Revenue &amp; churn — last 6 months</h2></summary>
     <?php
         $mrrNow = (float) $growth['mrr'];
@@ -388,8 +388,8 @@
 </details>
 
 <?php // Storage growth trend (from housekeeping snapshots), selectable window. ?>
-<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="storage" open id="storage-trend">
-    <summary><h2 style="margin:0;">Storage trend</h2></summary>
+<details class="sys-card u-mt-lg" data-collapse-key="storage" open id="storage-trend">
+    <summary><h2 class="u-m0">Storage trend</h2></summary>
     <div class="storage-periods" role="navigation" aria-label="Storage trend period" style="margin-top:var(--spacing-sm);">
         <?php foreach (['day' => 'Day', 'week' => 'Week', 'month' => 'Month', 'year' => 'Year', 'all' => 'All time'] as $p => $label): ?>
             <a class="btn btn-sm<?= $storagePeriod === $p ? ' storage-period-active' : '' ?>"
@@ -412,14 +412,14 @@
             <div class="stat-card">
                 <span class="muted">Current uploads storage</span>
                 <b style="font-size:1.3rem;"><?= number_format($cur, 2) ?> GB</b>
-                <span class="muted" style="font-size:.8rem;"><?= number_format($photos) ?> photos · <?= number_format($videos) ?> videos tracked</span>
+                <span class="muted u-fs-08"><?= number_format($photos) ?> photos · <?= number_format($videos) ?> videos tracked</span>
             </div>
             <div class="stat-card">
                 <span class="muted">Change over <?= e($winLabels[$storagePeriod] ?? $storagePeriod) ?></span>
                 <b style="font-size:1.3rem;color:<?= $delta > 0 ? '#16a34a' : ($delta < 0 ? '#dc2626' : 'inherit') ?>;">
                     <?= $delta > 0 ? '+' : '' ?><?= number_format($delta, 2) ?> GB
                 </b>
-                <span class="muted" style="font-size:.8rem;"><?= e((string) reset($storageTrend['gb'])) ?> GB → <?= e((string) end($storageTrend['gb'])) ?> GB</span>
+                <span class="muted u-fs-08"><?= e((string) reset($storageTrend['gb'])) ?> GB → <?= e((string) end($storageTrend['gb'])) ?> GB</span>
             </div>
         </div>
         <div style="max-width:760px;">
@@ -443,8 +443,8 @@
     $viewTotals  = array_sum($viewTrends['total']);
     $anyVisits   = $pageVisits['unique_login'] > 0 || $pageVisits['unique_signup'] > 0;
 ?>
-<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="views" open id="view-trends">
-    <summary><h2 style="margin:0;">View trends — <?= e($vtWin) ?></h2></summary>
+<details class="sys-card u-mt-lg" data-collapse-key="views" open id="view-trends">
+    <summary><h2 class="u-m0">View trends — <?= e($vtWin) ?></h2></summary>
     <div class="storage-periods" role="navigation" aria-label="View trends period" style="margin-top:var(--spacing-sm);">
         <?php foreach (['day' => 'Day', 'week' => 'Week', 'month' => 'Month', 'year' => 'Year', 'all' => 'All time'] as $vp => $label): ?>
             <a class="btn btn-sm<?= $viewPeriod === $vp ? ' storage-period-active' : '' ?>"
@@ -502,7 +502,7 @@
 </details>
 
 <?php // Content & membership growth over the trailing months. ?>
-<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="growth" open>
+<details class="sys-card u-mt-lg" data-collapse-key="growth" open>
     <summary><h2>Content &amp; membership growth — last 6 months</h2></summary>
     <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
         <div style="flex:2 1 420px;min-width:320px;">
@@ -518,15 +518,15 @@
         </div>
         <div style="flex:1 1 240px;min-width:220px;">
             <table>
-                <thead><tr><th>Month</th><th style="text-align:right;">Gal.</th><th style="text-align:right;">Photos</th><th style="text-align:right;">Videos</th><th style="text-align:right;">Users</th></tr></thead>
+                <thead><tr><th>Month</th><th class="u-right">Gal.</th><th class="u-right">Photos</th><th class="u-right">Videos</th><th class="u-right">Users</th></tr></thead>
                 <tbody>
                 <?php foreach ($growthSeries['labels'] as $i => $label): ?>
                     <tr>
                         <td><b><?= e($label) ?></b></td>
-                        <td style="text-align:right;"><?= number_format($growthSeries['galleries'][$i]) ?></td>
-                        <td style="text-align:right;"><?= number_format($growthSeries['photos'][$i]) ?></td>
-                        <td style="text-align:right;"><?= number_format($growthSeries['videos'][$i]) ?></td>
-                        <td style="text-align:right;"><?= number_format($growthSeries['users'][$i]) ?></td>
+                        <td class="u-right"><?= number_format($growthSeries['galleries'][$i]) ?></td>
+                        <td class="u-right"><?= number_format($growthSeries['photos'][$i]) ?></td>
+                        <td class="u-right"><?= number_format($growthSeries['videos'][$i]) ?></td>
+                        <td class="u-right"><?= number_format($growthSeries['users'][$i]) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -536,7 +536,7 @@
 </details>
 
 <?php // Top content by views. ?>
-<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="topcontent" open>
+<details class="sys-card u-mt-lg" data-collapse-key="topcontent" open>
     <summary><h2>Top content by views</h2></summary>
     <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
         <div style="flex:1 1 340px;min-width:280px;">
@@ -545,16 +545,16 @@
                 <p class="muted">No galleries yet — <a href="<?= url('/admin/galleries/create') ?>">create one</a>.</p>
             <?php else: ?>
                 <table>
-                    <thead><tr><th>Gallery</th><th style="text-align:right;">Views</th><th style="text-align:right;">Unique</th></tr></thead>
+                    <thead><tr><th>Gallery</th><th class="u-right">Views</th><th class="u-right">Unique</th></tr></thead>
                     <tbody>
                     <?php foreach ($topContentStats['galleries'] as $g): ?>
                         <tr>
                             <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                                 <a href="<?= url('/admin/galleries/' . (int) $g['id']) ?>"><?= e((string) $g['title']) ?></a>
-                                <span class="muted" style="font-size:.8rem;"> · <?= number_format((int) $g['media_count']) ?> media</span>
+                                <span class="muted u-fs-08"> · <?= number_format((int) $g['media_count']) ?> media</span>
                             </td>
-                            <td style="text-align:right;"><?= number_format((int) $g['views']) ?></td>
-                            <td style="text-align:right;"><?= number_format((int) $g['unique_views']) ?></td>
+                            <td class="u-right"><?= number_format((int) $g['views']) ?></td>
+                            <td class="u-right"><?= number_format((int) $g['unique_views']) ?></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
@@ -567,16 +567,16 @@
                 <p class="muted">No photos yet — <a href="<?= url('/admin/galleries') ?>">upload some</a>.</p>
             <?php else: ?>
                 <table>
-                    <thead><tr><th>Photo</th><th style="text-align:right;">Views</th><th style="text-align:right;">Unique</th></tr></thead>
+                    <thead><tr><th>Photo</th><th class="u-right">Views</th><th class="u-right">Unique</th></tr></thead>
                     <tbody>
                     <?php foreach ($topContentStats['photos'] as $p): ?>
                         <tr>
                             <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                                 <a href="<?= url('/admin/photos/' . (int) $p['id'] . '/edit') ?>"><?= e($p['caption'] !== '' ? $p['caption'] : basename((string) $p['filename'])) ?></a>
-                                <span class="muted" style="font-size:.8rem;"> · <?= $p['is_video'] ? 'video' : 'image' ?></span>
+                                <span class="muted u-fs-08"> · <?= $p['is_video'] ? 'video' : 'image' ?></span>
                             </td>
-                            <td style="text-align:right;"><?= number_format((int) $p['views']) ?></td>
-                            <td style="text-align:right;"><?= number_format((int) $p['unique_views']) ?></td>
+                            <td class="u-right"><?= number_format((int) $p['views']) ?></td>
+                            <td class="u-right"><?= number_format((int) $p['unique_views']) ?></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
@@ -587,15 +587,15 @@
 </details>
 
 <?php // Membership plan distribution. ?>
-<details class="sys-card" style="margin-top:var(--spacing-lg);" data-collapse-key="plans" open>
+<details class="sys-card u-mt-lg" data-collapse-key="plans" open>
     <summary>
-        <h2 style="margin:0;">Membership by plan</h2>
+        <h2 class="u-m0">Membership by plan</h2>
         <span class="collapsible-meta"><a href="<?= url('/admin/subscriptions') ?>" class="btn btn-sm">Subscriptions</a></span>
     </summary>
     <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
         <div style="flex:1 1 340px;min-width:280px;">
             <table>
-                <thead><tr><th>Plan</th><th>Tier</th><th style="text-align:right;">Members</th><th style="text-align:right;">MRR</th></tr></thead>
+                <thead><tr><th>Plan</th><th>Tier</th><th class="u-right">Members</th><th class="u-right">MRR</th></tr></thead>
                 <tbody>
                 <?php if (empty($planDistribution['plans'])): ?>
                     <tr><td colspan="4" class="muted">No plans yet — <a href="<?= url('/admin/plans/create') ?>">create a membership plan</a>.</td></tr>
@@ -604,8 +604,8 @@
                     <tr>
                         <td><b><?= e($plan['name']) ?></b></td>
                         <td class="muted"><?= e(\App\Models\Subscription::levelLabel((int) $plan['level'])) ?></td>
-                        <td style="text-align:right;"><?= number_format((int) $plan['members']) ?></td>
-                        <td style="text-align:right;">$<?= number_format((float) $plan['mrr'], 2) ?>/mo</td>
+                        <td class="u-right"><?= number_format((int) $plan['members']) ?></td>
+                        <td class="u-right">$<?= number_format((float) $plan['mrr'], 2) ?>/mo</td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -616,13 +616,13 @@
                 <b style="font-size:1.3rem;"><?= number_format((int) $planDistribution['total_members']) ?></b>
                 <small>Active members</small>
             </div>
-            <table style="margin-top:.75rem;">
+            <table class="u-mt-075">
                 <tbody>
                 <?php foreach ($planDistribution['by_tier'] as $tier => $info): ?>
                     <tr>
                         <td><b><?= e($tier) ?></b></td>
-                        <td style="text-align:right;"><?= number_format((int) $info['members']) ?> members</td>
-                        <td style="text-align:right;">$<?= number_format((float) $info['mrr'], 0) ?>/mo</td>
+                        <td class="u-right"><?= number_format((int) $info['members']) ?> members</td>
+                        <td class="u-right">$<?= number_format((float) $info['mrr'], 0) ?>/mo</td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -635,12 +635,12 @@
 <section class="adm-section">
     <div class="adm-section-head"><h2>Support &amp; activity</h2></div>
 <?php // Support ticket workload. ?>
-<div class="sys-card" style="margin-top:var(--spacing-lg);">
+<div class="sys-card u-mt-lg">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
-        <h2 style="margin:0;">Support</h2>
+        <h2 class="u-m0">Support</h2>
         <a href="<?= url('/admin/support') ?>" class="btn btn-sm">Support inbox</a>
     </div>
-    <div class="stat-cards" style="margin-top:.75rem;">
+    <div class="stat-cards u-mt-075">
         <div class="stat-card"><b><?= number_format((int) $supportStats['open']) ?></b><small>Open tickets</small></div>
         <div class="stat-card"><b><?= number_format((int) $supportStats['closed']) ?></b><small>Resolved</small></div>
         <div class="stat-card"><b><?= number_format((int) $supportStats['new_7d']) ?></b><small>New (7 days)</small></div>
@@ -649,7 +649,7 @@
     </div>
 </div>
 
-<div class="sys-card" style="margin-top:var(--spacing-lg);">
+<div class="sys-card u-mt-lg">
     <h2>Recent activity</h2>
     <?php if (empty($feed)): ?>
         <p class="muted">Nothing recorded yet — activity appears here as actions are taken. See <a href="<?= url('/admin/logs') ?>">Logs</a>.</p>

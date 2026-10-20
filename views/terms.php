@@ -9,7 +9,7 @@ $t = 'var(--purple-800)';
 ?>
 <div class="card" style="max-width:820px;margin:0 auto;padding:var(--spacing-lg);">
     <h1>Terms of Service</h1>
-    <p class="muted" style="text-align:center;">Effective Date: <?= e($lastUpdated) ?></p>
+    <p class="muted u-center">Effective Date: <?= e($lastUpdated) ?></p>
 
     <p>Welcome to <?= e($siteName) ?> ("the Site", "we", "us", "our"). These Terms of Service ("Terms",
     "Agreement") govern your access to and use of the Site, which is an exclusive, membership-based

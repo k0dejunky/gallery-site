@@ -29,7 +29,7 @@ $commentCount    = (int) ($commentCount ?? count($comments));
                             <span class="muted"> &middot; via the Wall</span>
                         <?php endif; ?>
                     </p>
-                    <p style="margin:0;"><?= e($comment['body']) ?></p>
+                    <p class="u-m0"><?= e($comment['body']) ?></p>
                 </div>
             <?php endforeach; ?>
         </div>

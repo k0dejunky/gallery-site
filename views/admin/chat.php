@@ -63,7 +63,7 @@ $operatorIsOnline = !empty($operatorOnline);
                 Download operator app (Android APK v<?= e((string) $latestApk['version']) ?>)
             </a>
         <?php endif; ?>
-        <span class="muted" style="font-size:.85rem;">
+        <span class="muted u-fs-085">
             <?= $operatorIsOnline ? '&#9679;' : '&#9675;' ?>
             While this page is open you are marked online; members get the away auto-response when nobody is.
         </span>
@@ -147,7 +147,7 @@ $operatorIsOnline = !empty($operatorOnline);
         </div>
     </div>
 
-    <div class="sys-card" style="margin-top:1rem;">
+    <div class="sys-card u-mt-1">
         <h2 class="section-title">Member mutes</h2>
         <form class="adm-inline-form" method="post" action="<?= url('/admin/chat/mute') ?>">
             <?= csrf_field() ?>
@@ -178,7 +178,7 @@ $operatorIsOnline = !empty($operatorOnline);
             <div class="users-table-wrap" style="margin-top:.9rem;">
                 <table>
                     <thead>
-                        <tr><th style="text-align:left;">Email</th><th style="text-align:left;">Muted until (site time)</th></tr>
+                        <tr><th class="u-left">Email</th><th class="u-left">Muted until (site time)</th></tr>
                     </thead>
                     <tbody>
                         <?php foreach ($liveChatMutes as $m): ?>
@@ -231,7 +231,7 @@ $operatorIsOnline = !empty($operatorOnline);
         </div>
     </div>
 
-    <div class="sys-card" style="margin-top:1rem;">
+    <div class="sys-card u-mt-1">
         <h2 class="section-title">Daily chat broadcast</h2>
         <form method="post" action="<?= url('/admin/chat/daily-broadcast') ?>">
             <?= csrf_field() ?>
@@ -247,14 +247,14 @@ $operatorIsOnline = !empty($operatorOnline);
         </form>
     </div>
 
-    <h3 class="section-title" style="margin-top:1.5rem;">Daily chat send log</h3>
+    <h3 class="section-title u-mt-15">Daily chat send log</h3>
     <?php if (empty($broadcasts)): ?>
-        <p class="muted" style="margin-top:0;">No daily chat broadcasts yet.</p>
+        <p class="muted u-mt-0">No daily chat broadcasts yet.</p>
     <?php else: ?>
         <div class="users-table-wrap">
             <table>
                 <thead>
-                    <tr><th>#</th><th>Message</th><th>Status</th><th>Scheduled</th><th>Sent</th><th>Recipients</th><th>Created by</th><th style="text-align:right;">Actions</th></tr>
+                    <tr><th>#</th><th>Message</th><th>Status</th><th>Scheduled</th><th>Sent</th><th>Recipients</th><th>Created by</th><th class="u-right">Actions</th></tr>
                 </thead>
                 <tbody>
                     <?php foreach ($broadcasts as $b): ?>
@@ -333,10 +333,10 @@ $operatorIsOnline = !empty($operatorOnline);
     </div>
 
     <?php if (!empty($questionnaires)): ?>
-        <div class="users-table-wrap" style="margin-top:1rem;">
+        <div class="users-table-wrap u-mt-1">
             <table>
                 <thead>
-                    <tr><th>#</th><th>Title</th><th>Status</th><th>Replies</th><th>Notified</th><th>Scheduled</th><th>Sent</th><th style="text-align:right;">Actions</th></tr>
+                    <tr><th>#</th><th>Title</th><th>Status</th><th>Replies</th><th>Notified</th><th>Scheduled</th><th>Sent</th><th class="u-right">Actions</th></tr>
                 </thead>
                 <tbody>
                     <?php foreach ($questionnaires as $q): ?>
@@ -423,12 +423,12 @@ $operatorIsOnline = !empty($operatorOnline);
     </div>
 
     <?php if (empty($tokens)): ?>
-        <p class="muted" style="margin-top:.75rem;">No device tokens yet.</p>
+        <p class="muted u-mt-075">No device tokens yet.</p>
     <?php else: ?>
-        <div class="users-table-wrap" style="margin-top:1rem;">
+        <div class="users-table-wrap u-mt-1">
             <table>
                 <thead>
-                    <tr><th>Label</th><th>Scopes</th><th>Expires</th><th>Last used</th><th>Created by</th><th>Status</th><th style="text-align:right;">Action</th></tr>
+                    <tr><th>Label</th><th>Scopes</th><th>Expires</th><th>Last used</th><th>Created by</th><th>Status</th><th class="u-right">Action</th></tr>
                 </thead>
                 <tbody>
                     <?php foreach ($tokens as $t): ?>
@@ -519,7 +519,7 @@ $operatorIsOnline = !empty($operatorOnline);
             <div class="users-table-wrap">
                 <table>
                     <thead>
-                        <tr><th>#</th><th>User</th><th>Mode</th><th>Status</th><th>Messages</th><th>Updated</th><th style="text-align:center;">Member replies</th><th style="text-align:right;">Actions</th></tr>
+                        <tr><th>#</th><th>User</th><th>Mode</th><th>Status</th><th>Messages</th><th>Updated</th><th class="u-center">Member replies</th><th class="u-right">Actions</th></tr>
                     </thead>
                     <tbody>
                         <?php foreach ($conversations as $c): ?>
@@ -554,7 +554,7 @@ $operatorIsOnline = !empty($operatorOnline);
                                 <td><?= e((string) $c['status']) ?></td>
                                 <td><?= (int) $c['message_count'] ?> (<?= (int) $c['user_count'] ?> user)</td>
                                 <td class="muted"><?= e(tzdate('M j, Y g:i A', (string) $c['updated_at'])) ?></td>
-                                <td style="text-align:center;">
+                                <td class="u-center">
                                     <form class="inline" method="post" action="<?= url('/admin/chat/' . (int) $c['id'] . '/reply-toggle') ?>">
                                         <?= csrf_field() ?>
                                         <button type="submit" class="btn btn-sm <?= $replyEnabled ? '' : 'btn-outline' ?>"

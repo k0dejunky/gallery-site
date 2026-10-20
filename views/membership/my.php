@@ -10,7 +10,7 @@ $user = $user ?? \App\Core\Auth::user();
     <h1>My Membership</h1>
     <p><a class="btn btn-outline" href="<?= e(url('/account')) ?>">&larr; Back to dashboard</a></p>
 
-    <div class="card" style="margin-bottom:1rem;">
+    <div class="card u-mb-1">
         <h2>Account</h2>
         <p><strong>Email:</strong> <?= e($user['email'] ?? '') ?></p>
         <p><strong>First name:</strong> <?= e($user['billing_first_name'] ?? '') ?: '&mdash;' ?></p>
@@ -23,7 +23,7 @@ $user = $user ?? \App\Core\Auth::user();
         </p>
     </div>
 
-    <p style="text-align:center;">
+    <p class="u-center">
         <a href="<?= url('/membership') ?>">View plans</a>
         &middot;
         <a href="<?= url('/galleries') ?>">Browse galleries</a>

@@ -6,7 +6,7 @@ $lastUpdated  = $lastUpdated ?? 'August 31, 2026';
 ?>
 <div class="card" style="max-width:820px;margin:0 auto;padding:var(--spacing-lg);">
     <h1>Privacy Policy</h1>
-    <p class="muted" style="text-align:center;">Effective Date: <?= e($lastUpdated) ?></p>
+    <p class="muted u-center">Effective Date: <?= e($lastUpdated) ?></p>
 
     <p><?= e($siteName) ?> ("we", "us", "our") respects your privacy. This Privacy Policy explains
     what information we collect when you use our Site, how we use and share it, and the choices you

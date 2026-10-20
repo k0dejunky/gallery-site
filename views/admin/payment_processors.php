@@ -144,7 +144,7 @@ $webhookBase = $scheme . '://' . $host . rtrim((string) config('app.base_path'),
             </fieldset>
         <?php endforeach; ?>
 
-        <p style="margin-top:1rem;">
+        <p class="u-mt-1">
             <button type="submit" class="btn"><?= !empty($edit) ? 'Update Processor' : 'Save Processor' ?></button>
             <?php if (!empty($edit)): ?><a class="btn" href="<?= url('/admin/payment-processors') ?>">Cancel</a><?php endif; ?>
         </p>

@@ -11,7 +11,7 @@
         </form>
         <form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/mode') ?>" style="display:flex;align-items:center;gap:.5rem;">
             <?= csrf_field() ?>
-            <label class="muted" style="font-size:.85rem;">AI mode:</label>
+            <label class="muted u-fs-085">AI mode:</label>
             <select name="ai_mode">
                 <option value="retrieval" <?= ($conversation['ai_mode'] ?? '') === 'retrieval' ? 'selected' : '' ?>>Retrieval (AI)</option>
                 <option value="finetuned" <?= ($conversation['ai_mode'] ?? '') === 'finetuned' ? 'selected' : '' ?>>Fine-tuned (AI)</option>
@@ -61,7 +61,7 @@
         <?php endforeach; ?>
     </div>
 
-    <textarea name="message" id="reply-text" rows="3" maxlength="2000" placeholder="Type an operator reply (emojis welcome)…" style="width:100%;box-sizing:border-box;"></textarea>
+    <textarea class="u-w-full-box" name="message" id="reply-text" rows="3" maxlength="2000" placeholder="Type an operator reply (emojis welcome)…"></textarea>
 
     <div style="display:flex;gap:.5rem;margin-top:.5rem;align-items:center;flex-wrap:wrap;">
         <button type="button" class="btn btn-sm btn-outline" id="emoji-toggle">😊 Emoji</button>
@@ -69,11 +69,11 @@
             📎 Attach file
             <input type="file" name="attachment" id="attachment-input" style="display:none;" accept="image/*,video/*,text/*,.pdf,.txt,.csv,.log">
         </label>
-        <span id="attach-name" class="muted" style="font-size:.85rem;"></span>
+        <span id="attach-name" class="muted u-fs-085"></span>
     </div>
 
     <div id="expiry-row" style="display:none;margin-top:.5rem;gap:.75rem;align-items:center;flex-wrap:wrap;">
-        <label class="muted" style="font-size:.85rem;">Expire media after
+        <label class="muted u-fs-085">Expire media after
             <select name="expires_in" id="expires-in" style="margin-left:.3rem;">
                 <option value="0">Never</option>
                 <option value="5">5 minutes</option>
@@ -84,7 +84,7 @@
                 <option value="1440">24 hours</option>
             </select>
         </label>
-        <label class="muted" style="font-size:.85rem;">or after
+        <label class="muted u-fs-085">or after
             <select name="max_views" id="max-views" style="margin-left:.3rem;">
                 <option value="0">Unlimited views</option>
                 <option value="1">1 view</option>
@@ -93,10 +93,10 @@
                 <option value="10">10 views</option>
             </select>
         </label>
-        <span class="muted" style="font-size:.8rem;">(applies to the attached picture/video only)</span>
+        <span class="muted u-fs-08">(applies to the attached picture/video only)</span>
     </div>
 
-    <button type="submit" class="btn" style="margin-top:.5rem;">Send operator reply</button>
+    <button type="submit" class="btn u-mt-05">Send operator reply</button>
 </form>
 
 <script nonce="<?= csp_nonce() ?>">
@@ -206,4 +206,4 @@
 })();
 </script>
 
-<p style="margin-top:.75rem;"><a class="btn btn-sm btn-outline" href="<?= url('/admin/chat') ?>">Back to conversations</a></p>
+<p class="u-mt-075"><a class="btn btn-sm btn-outline" href="<?= url('/admin/chat') ?>">Back to conversations</a></p>

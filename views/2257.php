@@ -8,7 +8,7 @@ $lastUpdated  = $lastUpdated ?? 'October 8, 2026';
 ?>
 <div class="card" style="max-width:820px;margin:0 auto;padding:var(--spacing-lg);">
     <h1>18 U.S.C. § 2257 Record-Keeping Statement</h1>
-    <p class="muted" style="text-align:center;">Last updated: <?= e($lastUpdated) ?></p>
+    <p class="muted u-center">Last updated: <?= e($lastUpdated) ?></p>
 
     <p><?= e($siteName) ?> is fully compliant with the record-keeping requirements of
     18 U.S.C. § 2257 and the associated Federal Regulations (28 C.F.R. Part 75). All

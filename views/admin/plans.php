@@ -116,7 +116,7 @@
     <?php endif; ?>
 </section>
 
-<section class="sales-panel" style="margin-top:1rem;">
+<section class="sales-panel u-mt-1">
     <?php
     $membershipLevels = [];
     foreach ($plans as $plan) {

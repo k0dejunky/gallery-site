@@ -171,7 +171,7 @@
             <?php endif; ?>
 
             <?php $postComments = \App\Models\Comment::forEntity(\App\Models\Comment::TYPE_WALL, (int) $post['id']); ?>
-            <details style="margin-top:.75rem;">
+            <details class="u-mt-075">
                 <summary style="cursor:pointer;font-size:.9rem;" class="muted"><?= count($postComments) ?> comment<?= count($postComments) === 1 ? '' : 's' ?></summary>
                 <div style="margin-top:.75rem;display:grid;gap:.75rem;">
                     <?php foreach ($postComments as $comment): ?>
@@ -180,7 +180,7 @@
                                 <strong><?= \App\Models\Comment::isStaff($comment['role']) ? 'Site team' : 'Member' ?></strong>
                                 <span class="muted"> · <?= e(tzdate('M j, g:ia', (string) $comment['created_at'])) ?></span>
                             </p>
-                            <p style="margin:0;"><?= e($comment['body']) ?></p>
+                            <p class="u-m0"><?= e($comment['body']) ?></p>
                         </div>
                     <?php endforeach; ?>
                     <?php if (\App\Core\Auth::user() !== null): ?>

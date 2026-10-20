@@ -60,7 +60,7 @@
                 </div>
             </form>
 
-            <details class="adm-create" style="margin-top:1rem;">
+            <details class="adm-create u-mt-1">
                 <summary class="btn btn-sm btn-outline">Send a test email</summary>
                 <form method="post" action="<?= url('/admin/mail/test') ?>" style="margin-top:.85rem;">
                     <?= csrf_field() ?>

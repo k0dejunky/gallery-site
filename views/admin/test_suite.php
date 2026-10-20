@@ -22,10 +22,10 @@ $title = 'Test Suite';
 <!-- Past runs (collapsible, shown above the tests) -->
 <details class="sys-card test-runs" id="ts-runs-panel" open>
     <summary>
-        <h2 class="section-title" style="display:inline;">Recent runs</h2>
+        <h2 class="section-title u-inline">Recent runs</h2>
         <span class="collapsible-meta muted" id="ts-runs-count"></span>
     </summary>
-    <p class="muted" style="margin-top:.5rem;">Click a run to view its full per-test results.</p>
+    <p class="muted u-mt-05">Click a run to view its full per-test results.</p>
     <div class="users-table-wrap">
         <table class="users-table" id="ts-runs-table">
             <thead>

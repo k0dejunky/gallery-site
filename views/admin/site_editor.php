@@ -19,7 +19,7 @@
     </div>
     <div style="padding:6px 12px;border-bottom:1px solid #333;">
       <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Add Element</div>
-      <select id="se-add-type" style="width:100%;margin-bottom:4px;">
+      <select class="u-w-full-mb" id="se-add-type">
         <option value="">-- choose --</option>
         <option value="section">Section</option>
         <option value="card">Card</option>
@@ -35,17 +35,17 @@
         <option value="video">Video</option>
         <option value="html">Custom HTML</option>
       </select>
-      <input id="se-add-title" placeholder="Title (optional)" style="width:100%;margin-bottom:4px;" />
+      <input class="u-w-full-mb" id="se-add-title" placeholder="Title (optional)" />
       <textarea id="se-add-content" placeholder="Content / text (one item per line for lists)" rows="3" style="width:100%;margin-bottom:4px;resize:vertical;"></textarea>
-      <input id="se-add-url" placeholder="URL (link/button)" style="width:100%;margin-bottom:4px;" />
-      <input id="se-add-class" placeholder="CSS class (optional)" style="width:100%;margin-bottom:4px;" />
-      <select id="se-add-position" style="width:100%;margin-bottom:4px;">
+      <input class="u-w-full-mb" id="se-add-url" placeholder="URL (link/button)" />
+      <input class="u-w-full-mb" id="se-add-class" placeholder="CSS class (optional)" />
+      <select class="u-w-full-mb" id="se-add-position">
         <option value="append">Place inside target</option>
         <option value="prepend">Place at start of target</option>
         <option value="before">Place before target</option>
         <option value="after">Place after target</option>
       </select>
-      <button id="se-btn-add" class="se-btn-p" style="width:100%;">+ Add</button>
+      <button id="se-btn-add" class="se-btn-p u-w-full">+ Add</button>
     </div>
     <div style="flex:1;overflow-y:auto;padding:6px 12px;">
       <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Changes (<span id="se-cc">0</span>)</div>
@@ -70,9 +70,9 @@
   <div id="se-right-panel" style="width:240px;flex-shrink:0;background:#1e1e1e;color:#ccc;display:flex;flex-direction:column;border-left:1px solid #333;">
     <div id="se-right-head" style="padding:8px 12px;background:#252526;border-bottom:1px solid #333;font-weight:700;font-size:13px;">Templates</div>
     <div style="padding:6px 12px;border-bottom:1px solid #333;">
-      <input id="se-tn" placeholder="Template name" style="width:100%;margin-bottom:4px;" />
-      <input id="se-td" placeholder="Description (optional)" style="width:100%;margin-bottom:4px;" />
-      <button id="se-save" class="se-btn-g" style="width:100%;">Save as Template</button>
+      <input class="u-w-full-mb" id="se-tn" placeholder="Template name" />
+      <input class="u-w-full-mb" id="se-td" placeholder="Description (optional)" />
+      <button id="se-save" class="se-btn-g u-w-full">Save as Template</button>
     </div>
     <div style="flex:1;overflow-y:auto;padding:6px 12px;" id="se-tpl-list"></div>
     <div style="padding:6px 12px;border-top:1px solid #333;">

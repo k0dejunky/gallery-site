@@ -62,7 +62,7 @@ $breadcrumbItems = [
     <form method="post" action="<?= url('/collections/' . (int) $collections[0]['id'] . '/galleries') ?>" class="settings-form" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem;">
         <?= csrf_field() ?>
         <input type="hidden" name="gallery_id" value="<?= (int) $gallery['id'] ?>">
-        <label class="muted" style="font-size:.9rem;">Save to collection</label>
+        <label class="muted u-fs-09">Save to collection</label>
         <select name="collection_id" aria-label="Collection to save this gallery in" data-col-action="<?= url('/collections') ?>/" data-col-suffix="galleries" data-action="collectionActionSelect">
             <?php foreach ($collections as $c): ?>
                 <option value="<?= (int) $c['id'] ?>"><?= e((string) $c['name']) ?></option>

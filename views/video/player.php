@@ -121,7 +121,7 @@ foreach ((array) ($playlist ?? []) as $item) {
     <form method="post" action="<?= url('/collections/' . (int) $collections[0]['id'] . '/photos') ?>" class="settings-form player-save-form" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.25rem 0 .75rem;">
         <?= csrf_field() ?>
         <input type="hidden" name="photo_id" value="<?= (int) $photo['id'] ?>">
-        <label class="muted" style="font-size:.9rem;">Save video to collection</label>
+        <label class="muted u-fs-09">Save video to collection</label>
         <select name="collection_id" aria-label="Collection to save this video in" data-col-action="<?= url('/collections') ?>/" data-col-suffix="photos" data-action="collectionActionSelect">
             <?php foreach ($collections as $c): ?>
                 <option value="<?= (int) $c['id'] ?>"><?= e((string) $c['name']) ?></option>
@@ -255,7 +255,7 @@ foreach ((array) ($playlist ?? []) as $item) {
             </div>
         </aside>
 
-        <div style="text-align:center;">
+        <div class="u-center">
             <button type="button" class="btn btn-sm btn-outline" id="browse-galleries-btn">&#128269; Browse galleries</button>
         </div>
         <div id="player-browse" class="player-browse" hidden data-playlist="<?= (int) $playlistId ?>">

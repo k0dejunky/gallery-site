@@ -32,7 +32,7 @@ foreach (\App\Models\PaymentProcessor::enabled() as $__pp) {
 ?>
 <div class="cc-block" id="cc-<?= e($ccId) ?>" data-cc-live="<?= $btLive ? '1' : '0' ?>" style="margin:.6rem 0;">
     <?php if (!$ccUser): ?>
-        <p class="muted" style="font-size:.85rem;"><a href="<?= url('/login') ?>">Log in</a> to pay by card.</p>
+        <p class="muted u-fs-085"><a href="<?= url('/login') ?>">Log in</a> to pay by card.</p>
     <?php else: ?>
         <form method="post" action="<?= e($ccAction) ?>" data-cc-form>
             <input type="hidden" name="_token" value="<?= e($ccCsrf) ?>">

@@ -132,7 +132,7 @@
                     <tr>
                         <td class="sys-bad"><?= (float) $sq['seconds'] ?>s</td>
                         <td><?= e((string) $sq['at']) ?></td>
-                        <td><code style="font-size:.75rem;"><?= e((string) $sq['sql']) ?></code></td>
+                        <td><code class="u-fs-075"><?= e((string) $sq['sql']) ?></code></td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -185,8 +185,8 @@
             </form>
         <?php endif; ?>
 
-        <h2 style="margin-top:1rem;">18+ age gate</h2>
-        <p class="muted" style="font-size:.85rem;">
+        <h2 class="u-mt-1">18+ age gate</h2>
+        <p class="muted u-fs-085">
             Guests must confirm they are 18 or older once per session before
             browsing; logged-in members are never gated.
             <?= $ageGateEnabled ? '<b>Currently ON.</b>' : '<b>Currently OFF.</b>' ?>
@@ -199,11 +199,11 @@
             </button>
         </form>
 
-        <h2 style="margin-top:1rem;">Scheduled housekeeping</h2>
+        <h2 class="u-mt-1">Scheduled housekeeping</h2>
         <?php $cronState = ($cronAgeMin === null) ? 'never run'
             : (($cronAgeMin > 45) ? '<b style="color:#b45309;">last run ' . (int) $cronAgeMin . ' min ago</b>'
                                   : 'last run ' . (int) $cronAgeMin . ' min ago'); ?>
-        <p class="muted" style="font-size:.85rem;">
+        <p class="muted u-fs-085">
             Expires overdue subscriptions, removes staging folders idle 72h+, keeps the
             <?= (int) $retention ?> newest backups (HOUSEKEEPING_KEEP_BACKUPS), snapshots storage usage.
             Cron endpoint: <b><?= $cronKeySet ? 'configured ✓' : 'GALLERY_CRON_KEY missing in .env' ?></b> ·
@@ -225,7 +225,7 @@
         <?php $dup = $duplicateReport ?? []; ?>
         <?php $dupExact = $dup['exact'] ?? []; ?>
         <?php $dupRedundant = 0; foreach ($dupExact as $g) { $dupRedundant += max(0, count($g['galleries']) - 1); } ?>
-        <p class="muted" style="font-size:.85rem;">
+        <p class="muted u-fs-085">
             Galleries that reference the same media under different names (re-imports).
             Scanned <?= e((string) ($dup['scanned_at'] ?? 'never')) ?> ·
             <?= count($dupExact) ?> identical group<?= count($dupExact) === 1 ? '' : 's' ?> ·
@@ -235,7 +235,7 @@
         <?php if ($dupExact !== []): ?>
             <ul style="margin:0 0 .75rem;padding-left:1.2rem;">
                 <?php foreach (array_slice($dupExact, 0, 6) as $g): ?>
-                    <li style="font-size:.85rem;">
+                    <li class="u-fs-085">
                         <?php foreach ($g['galleries'] as $i => $gg): ?>
                             <?= $i > 0 ? ' <span class="muted">vs</span> ' : '' ?>
                             <a href="<?= url('/admin/galleries/' . (int) $gg['id']) ?>"><?= e((string) $gg['title']) ?></a>
@@ -244,7 +244,7 @@
                     </li>
                 <?php endforeach; ?>
                 <?php if (count($dupExact) > 6): ?>
-                    <li class="muted" style="font-size:.85rem;">… and <?= count($dupExact) - 6 ?> more group<?= count($dupExact) - 6 === 1 ? '' : 's' ?>.</li>
+                    <li class="muted u-fs-085">… and <?= count($dupExact) - 6 ?> more group<?= count($dupExact) - 6 === 1 ? '' : 's' ?>.</li>
                 <?php endif; ?>
             </ul>
         <?php else: ?>
@@ -263,7 +263,7 @@
         <?php if ($variants['running']): ?>
             <p><b style="color:#b45309;">Regeneration in progress… refresh to update.</b></p>
         <?php endif; ?>
-        <p class="muted" style="font-size:.85rem;">
+        <p class="muted u-fs-085">
             <?= (int) $variants['total'] ?> media items ·
             missing thumbs: <b class="<?= $variants['missing_thumb'] ? 'sys-bad' : 'sys-ok' ?>"><?= (int) $variants['missing_thumb'] ?></b> ·
             missing web copies: <b class="<?= $variants['missing_web'] ? 'sys-bad' : 'sys-ok' ?>"><?= (int) $variants['missing_web'] ?></b> ·
@@ -274,7 +274,7 @@
             <button class="btn" type="submit"<?= !empty($variants['running']) ? ' disabled' : '' ?>>Regenerate missing</button>
         </form>
         <?php if (!empty($storageTrend['gb'])): ?>
-            <h2 style="margin-top:1rem;">Storage growth (GB)</h2>
+            <h2 class="u-mt-1">Storage growth (GB)</h2>
             <?= \App\Core\Charts::sparkline($storageTrend['gb'], 300, 48, '#0ea5e9') ?>
             <p class="muted" style="margin:.25rem 0 0;font-size:.8rem;">
                 <?= e((string) reset($storageTrend['gb'])) ?> GB → <b><?= e((string) end($storageTrend['gb'])) ?> GB</b>
@@ -286,7 +286,7 @@
     <!-- CSV exports -->
     <div class="sys-card" id="sys-data">
         <h2>Exports</h2>
-        <p class="muted" style="font-size:.85rem;">Download current data as CSV for spreadsheets and accounting.</p>
+        <p class="muted u-fs-085">Download current data as CSV for spreadsheets and accounting.</p>
         <div class="sys-actions">
             <a class="btn" href="<?= url('/admin/export/users') ?>">Users CSV</a>
             <a class="btn" href="<?= url('/admin/export/subscriptions') ?>">Subscriptions CSV</a>
@@ -298,7 +298,7 @@
         <h2>API health</h2>
         <table class="sys-api-table" style="width:100%;font-size:.85rem;">
             <thead>
-                <tr><th class="ap-integ-col" style="text-align:left;">Integration</th><th class="ap-status-col" style="text-align:left;">Status</th><th class="ap-summary-col" style="text-align:left;">Detail</th><th class="ap-test-col"></th></tr>
+                <tr><th class="ap-integ-col u-left">Integration</th><th class="ap-status-col u-left">Status</th><th class="ap-summary-col u-left">Detail</th><th class="ap-test-col"></th></tr>
             </thead>
             <tbody>
                 <?php foreach ($apiHealth as $api): ?>
@@ -315,7 +315,7 @@
                                 <span class="muted">untested</span>
                             <?php endif; ?>
                         </td>
-                        <td class="ap-summary-col muted" style="font-size:.78rem;"><?= e((string) $api['summary']) ?></td>
+                        <td class="ap-summary-col muted u-fs-078"><?= e((string) $api['summary']) ?></td>
                         <td class="ap-test-col">
                             <form class="inline" method="post" action="<?= url('/admin/system/api-test/' . rawurlencode((string) $api['id'])) ?>">
                                 <?= csrf_field() ?>
@@ -345,7 +345,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;">
             <h2>Scheduled tasks (cron)</h2>
             <?php $cronOkCount = count(array_filter($cronJobs ?? [], fn($j) => !empty($j['ok']))); ?>
-            <span class="muted" style="font-size:.85rem;">
+            <span class="muted u-fs-085">
                 <?= $cronJobs === null || $cronJobs === [] ? 'no cron jobs detected' : (int) $cronOkCount . ' of ' . count($cronJobs) . ' healthy' ?>
             </span>
         </div>
@@ -502,9 +502,9 @@
     <!-- Orphaned files -->
     <div class="sys-card">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;">
-            <h2 style="margin:0;">Orphaned upload files</h2>
+            <h2 class="u-m0">Orphaned upload files</h2>
             <?php if (!empty($orphans)): ?>
-                <span class="muted" style="font-size:.85rem;">
+                <span class="muted u-fs-085">
                     <?= number_format((int) $orphanTotal) ?> file<?= (int) $orphanTotal === 1 ? '' : 's' ?> ·
                     <?= number_format((float) ($orphanBytes ?? 0) / 1048576, 1) ?> MB
                 </span>
@@ -605,7 +605,7 @@
             <?php endif; ?>
         </form>
         <?php if (!empty($backups)): ?>
-            <table style="margin-top:.75rem;">
+            <table class="u-mt-075">
                 <tr><th>File</th><th>Size</th><th>Created</th><th></th></tr>
                 <?php foreach ($backups as $backup): ?>
                     <tr>
@@ -704,7 +704,7 @@
             <?php if (!$security['top_ips']): ?><tr><td colspan="3" class="muted">No failures in the last 24h.</td></tr><?php endif; ?>
         </table>
 
-        <table style="margin-top:.75rem;">
+        <table class="u-mt-075">
             <tr><th>Targeted accounts (24h)</th><th>Fails</th></tr>
             <?php foreach ($security['top_emails'] as $row): ?>
                 <tr><td><?= e((string) $row['email']) ?></td><td><?= number_format((int) $row['c']) ?></td></tr>

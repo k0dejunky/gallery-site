@@ -199,7 +199,7 @@ $conversion = $totalVisits > 0 ? round(($totalSignups / $totalVisits) * 100, 1) 
                             <a href="<?= url('/admin/traffic/' . (int) $link['id']) ?>">Open full detail &rarr;</a>
                         </div>
                         <?php if ($rows === []): ?>
-                            <p class="muted" style="margin:0;">No signups attributed to this link yet<?= $visits > 0 ? ' — it has ' . number_format($visits) . ' visit' . ($visits === 1 ? '' : 's') . ' but no conversions yet' : '' ?>.</p>
+                            <p class="muted u-m0">No signups attributed to this link yet<?= $visits > 0 ? ' — it has ' . number_format($visits) . ' visit' . ($visits === 1 ? '' : 's') . ' but no conversions yet' : '' ?>.</p>
                         <?php else: ?>
                         <table class="tl-sub">
                             <thead>

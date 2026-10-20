@@ -5,7 +5,7 @@
 <section class="card" style="padding:1rem;margin-bottom:1.5rem;">
     <form method="post" action="<?= url('/collections') ?>" class="settings-form" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
         <?= csrf_field() ?>
-        <label class="muted" style="font-size:.9rem;">New collection name</label>
+        <label class="muted u-fs-09">New collection name</label>
         <input type="text" name="name" required maxlength="120" placeholder="e.g. Favourites for later" aria-label="Collection name" style="flex:1;min-width:220px;">
         <button type="submit" class="btn">Create collection</button>
     </form>

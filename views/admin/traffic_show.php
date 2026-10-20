@@ -19,7 +19,7 @@ function trafficCopy(el) {
 </p>
 
 <h3>Share Link</h3>
-<p style="text-align:center;">
+<p class="u-center">
     <code id="traffic-share" style="word-break:break-all;"><?= e($share) ?></code>
     <br><br>
     <button type="button" class="btn" data-link="<?= e($share) ?>" data-action="trafficCopy">Copy Link</button>
@@ -28,16 +28,16 @@ function trafficCopy(el) {
 <h3>Edit Link</h3>
 <form method="post" action="<?= url('/admin/traffic/' . (int) $link['id'] . '/update') ?>" style="max-width:560px; margin:0 auto;">
     <?= csrf_field() ?>
-    <p style="text-align:center;">
+    <p class="u-center">
         <input type="text" name="name" value="<?= e($link['name']) ?>" style="width:100%;" required>
     </p>
-    <p style="text-align:center;">
+    <p class="u-center">
         <input type="text" name="code" value="<?= e($link['code']) ?>" style="width:100%;" required>
     </p>
-    <p style="text-align:center;">
+    <p class="u-center">
         <input type="text" name="target_path" value="<?= e($link['target_path']) ?>" style="width:100%;">
     </p>
-    <p style="text-align:center;">
+    <p class="u-center">
         <button type="submit" class="btn">Save</button>
         <a class="btn btn-sm btn-outline" href="<?= url('/admin/traffic') ?>">Back to links</a>
     </p>
@@ -48,7 +48,7 @@ function trafficCopy(el) {
     $sparkline = static function (array $values, int $width = 160, int $height = 32, string $color = '#0ea5e9'): string {
         if (empty($values)) return '';
         $max = max($values);
-        if ($max <= 0) return '<span class="muted" style="font-size:.75rem;">no data</span>';
+        if ($max <= 0) return '<span class="muted u-fs-075">no data</span>';
         $step = $max / ($height - 4);
         $pts = [];
         $n = count($values);
@@ -71,25 +71,25 @@ function trafficCopy(el) {
     <thead>
         <tr>
             <th>Date</th>
-            <th style="text-align:right;">Visits</th>
-            <th style="text-align:right;">Visitors</th>
-            <th style="text-align:right;">Signups</th>
+            <th class="u-right">Visits</th>
+            <th class="u-right">Visitors</th>
+            <th class="u-right">Signups</th>
         </tr>
     </thead>
     <tbody>
         <?php foreach ($days as $day): ?>
             <tr>
                 <td><?= e($day['date']) ?></td>
-                <td style="text-align:right;"><?= number_format($day['visits']) ?></td>
-                <td style="text-align:right;"><?= number_format($day['visitors']) ?></td>
-                <td style="text-align:right;"><?= number_format($day['signups']) ?></td>
+                <td class="u-right"><?= number_format($day['visits']) ?></td>
+                <td class="u-right"><?= number_format($day['visitors']) ?></td>
+                <td class="u-right"><?= number_format($day['signups']) ?></td>
             </tr>
         <?php endforeach; ?>
         <tr>
             <th>Total (30 days)</th>
-            <th style="text-align:right;"><?= number_format($totals['visits']) ?></th>
-            <th style="text-align:right;"><?= number_format($totals['visitors']) ?></th>
-            <th style="text-align:right;"><?= number_format($totals['signups']) ?></th>
+            <th class="u-right"><?= number_format($totals['visits']) ?></th>
+            <th class="u-right"><?= number_format($totals['visitors']) ?></th>
+            <th class="u-right"><?= number_format($totals['signups']) ?></th>
         </tr>
     </tbody>
 </table>

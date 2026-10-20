@@ -39,7 +39,7 @@
     </div>
     <button type="button" class="btn btn-sm btn-outline" data-action="addLinkRow">Add another link</button>
 
-    <p style="margin-top:1.5rem;">
+    <p class="u-mt-15">
         <button type="submit" class="btn">Save profile</button>
     </p>
 </form>

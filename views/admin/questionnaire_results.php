@@ -5,7 +5,7 @@
     <a class="btn btn-sm btn-outline" href="<?= url('/admin/chat') ?>">&larr; Back to chat</a>
 </div>
 
-<p class="muted" style="margin-top:0;">
+<p class="muted u-mt-0">
     Status <strong><?= e((string) $questionnaire['status']) ?></strong> &middot;
     Replies <?= (int) $questionnaire['allow_replies'] === 1 ? 'ON' : 'OFF' ?> &middot;
     Notified <?= (int) $questionnaire['notified_count'] ?> / <?= (int) $questionnaire['recipients'] ?> &middot;
@@ -19,7 +19,7 @@
 <?php foreach ($results as $r): ?>
     <?php $qq = $r['question']; $rows = $r['rows']; ?>
     <section class="card" style="padding:1rem;margin-bottom:1rem;">
-        <h2 class="section-title" style="margin-top:0;">
+        <h2 class="section-title u-mt-0">
             <?= (int) $qq['position'] ?>. <?= e((string) $qq['prompt']) ?>
             <span class="pill pill-muted"><?= e((string) $qq['qtype']) ?></span>
             <?php if ((int) $qq['required'] === 1): ?><span class="pill">required</span><?php endif; ?>
@@ -27,12 +27,12 @@
 
         <?php if (!empty($r['tally'])): ?>
             <table style="width:100%;max-width:520px;margin-bottom:.75rem;">
-                <thead><tr><th style="text-align:left;">Answer</th><th style="text-align:right;">Count</th></tr></thead>
+                <thead><tr><th class="u-left">Answer</th><th class="u-right">Count</th></tr></thead>
                 <tbody>
                     <?php foreach ($r['tally'] as $answer => $count): ?>
                         <tr>
                             <td><?= e((string) $answer) ?></td>
-                            <td style="text-align:right;"><?= (int) $count ?></td>
+                            <td class="u-right"><?= (int) $count ?></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>

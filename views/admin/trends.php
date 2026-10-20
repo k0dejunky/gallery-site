@@ -26,7 +26,7 @@ $trendBadge = static function (array $trend): string {
 $sparkline = static function (array $values, int $width = 120, int $height = 28, string $color = '#0ea5e9'): string {
     if (empty($values)) return '';
     $max = max($values);
-    if ($max <= 0) return '<span class="muted" style="font-size:.75rem;">no data</span>';
+    if ($max <= 0) return '<span class="muted u-fs-075">no data</span>';
 
     $points = [];
     $n = count($values);
@@ -63,7 +63,7 @@ $sparkline = static function (array $values, int $width = 120, int $height = 28,
     <?php // === COMPARE MODE: multi-period table + sparklines === ?>
     <section class="stats-panel" style="flex:1 1 100%;">
         <h2>Category Trends — Multi-Period Comparison</h2>
-        <p class="muted" style="margin-top:0;">
+        <p class="muted u-mt-0">
             Daily, weekly, and monthly views side-by-side. Columns show current window views and trend direction for each period.
         </p>
         <div class="users-table-wrap"><table class="users-table">
@@ -71,12 +71,12 @@ $sparkline = static function (array $values, int $width = 120, int $height = 28,
                 <tr>
                     <th>Category</th>
                     <th>Galleries</th>
-                    <th style="text-align:right;">24h</th>
-                    <th style="text-align:center;">Trend</th>
-                    <th style="text-align:right;">7 days</th>
-                    <th style="text-align:center;">Trend</th>
-                    <th style="text-align:right;">30 days</th>
-                    <th style="text-align:center;">Trend</th>
+                    <th class="u-right">24h</th>
+                    <th class="u-center">Trend</th>
+                    <th class="u-right">7 days</th>
+                    <th class="u-center">Trend</th>
+                    <th class="u-right">30 days</th>
+                    <th class="u-center">Trend</th>
                     <th>Last 30 days</th>
                 </tr>
             </thead>
@@ -87,8 +87,8 @@ $sparkline = static function (array $values, int $width = 120, int $height = 28,
                         <td><?= number_format($cat['gallery_count']) ?></td>
                         <?php foreach (['daily', 'weekly', 'monthly'] as $pk): ?>
                             <?php $p = $cat['periods'][$pk] ?? ['cur' => 0, 'trend' => ['label' => 'flat', 'pct' => 0]]; ?>
-                            <td style="text-align:right;"><?= number_format($p['cur']) ?></td>
-                            <td style="text-align:center;"><?= $trendBadge($p['trend']) ?></td>
+                            <td class="u-right"><?= number_format($p['cur']) ?></td>
+                            <td class="u-center"><?= $trendBadge($p['trend']) ?></td>
                         <?php endforeach; ?>
                         <td>
                             <?php

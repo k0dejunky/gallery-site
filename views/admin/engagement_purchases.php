@@ -23,34 +23,34 @@
     <table style="width:100%;border-collapse:collapse;">
         <thead>
             <tr>
-                <th style="text-align:left;padding:.4rem .5rem;">ID</th>
-                <th style="text-align:left;padding:.4rem .5rem;">When</th>
-                <th style="text-align:left;padding:.4rem .5rem;">User</th>
-                <th style="text-align:left;padding:.4rem .5rem;">Type</th>
-                <th style="text-align:left;padding:.4rem .5rem;">Item / note</th>
-                <th style="text-align:left;padding:.4rem .5rem;">Amount</th>
-                <th style="text-align:left;padding:.4rem .5rem;">Gateway</th>
-                <th style="text-align:left;padding:.4rem .5rem;">Status</th>
+                <th class="u-left-pad">ID</th>
+                <th class="u-left-pad">When</th>
+                <th class="u-left-pad">User</th>
+                <th class="u-left-pad">Type</th>
+                <th class="u-left-pad">Item / note</th>
+                <th class="u-left-pad">Amount</th>
+                <th class="u-left-pad">Gateway</th>
+                <th class="u-left-pad">Status</th>
                 <th style="text-align:right;padding:.4rem .5rem;">Set status</th>
             </tr>
         </thead>
         <tbody>
             <?php foreach ($purchases as $purchase): ?>
                 <tr>
-                    <td class="muted" style="padding:.4rem .5rem;">#<?= (int) $purchase['id'] ?></td>
+                    <td class="muted u-pad-04-05">#<?= (int) $purchase['id'] ?></td>
                     <td class="muted" style="padding:.4rem .5rem;white-space:nowrap;"><?= e(tzdate('Y-m-d H:i', (string) $purchase['created_at'])) ?></td>
-                    <td style="padding:.4rem .5rem;"><?= e((string) $purchase['user_email']) ?></td>
-                    <td style="padding:.4rem .5rem;"><?= e(ucfirst((string) $purchase['item_type'])) ?></td>
-                    <td style="padding:.4rem .5rem;">
+                    <td class="u-pad-04-05"><?= e((string) $purchase['user_email']) ?></td>
+                    <td class="u-pad-04-05"><?= e(ucfirst((string) $purchase['item_type'])) ?></td>
+                    <td class="u-pad-04-05">
                         <?php if ($purchase['item_type'] === 'gallery'): ?>
                             <a href="<?= url('/galleries/' . (int) $purchase['item_id']) ?>" target="_blank" rel="noopener"><?= e((string) ($purchase['gallery_title'] ?? ('#' . $purchase['item_id']))) ?></a>
                         <?php else: ?>
                             <?= e(mb_substr((string) ($purchase['note'] ?? ''), 0, 80)) ?>
                         <?php endif; ?>
                     </td>
-                    <td style="padding:.4rem .5rem;">$<?= e(number_format((float) $purchase['amount'], 2)) ?></td>
-                    <td style="padding:.4rem .5rem;"><?= e((string) $purchase['gateway']) ?></td>
-                    <td style="padding:.4rem .5rem;"><?= e((string) $purchase['status']) ?></td>
+                    <td class="u-pad-04-05">$<?= e(number_format((float) $purchase['amount'], 2)) ?></td>
+                    <td class="u-pad-04-05"><?= e((string) $purchase['gateway']) ?></td>
+                    <td class="u-pad-04-05"><?= e((string) $purchase['status']) ?></td>
                     <td style="padding:.4rem .5rem;text-align:right;">
                         <form class="inline" method="post" action="<?= url('/admin/engagement/purchases/' . (int) $purchase['id']) ?>">
                             <?= csrf_field() ?>

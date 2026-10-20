@@ -28,7 +28,7 @@ $supportEmail = $supportEmail ?? ('support@' . config('app.site_name') . '.com')
     <p>Questions, feedback, or support? Reach us any time at
     <a href="mailto:<?= e($supportEmail) ?>"><?= e($supportEmail) ?></a>. We read every message.</p>
 
-    <p style="margin-top:1.5rem;">
+    <p class="u-mt-15">
         Read our <a href="<?= url('/terms') ?>">Terms of Service</a> and
         <a href="<?= url('/privacy') ?>">Privacy Policy</a>.
     </p>

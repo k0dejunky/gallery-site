@@ -18,7 +18,7 @@
             Keep me signed in on this device
         </label>
     </p>
-    <p style="text-align:center;">
+    <p class="u-center">
         <button type="submit" class="btn">Login</button>
     </p>
 </form>
