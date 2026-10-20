@@ -675,42 +675,69 @@ class Gallery
      * Record a gallery view for the given user: bump the total counter and,
      * when this user has never viewed the gallery before, the unique counter.
      */
-    public static function recordView(int $galleryId, int $userId): void
+    public static function recordView(int $galleryId, int $userId, ?string $galleryName = null, ?string $ip = null): void
     {
         if ($userId <= 0) {
             return;
         }
 
-        \App\Models\Stats::recordContentView('gallery', $galleryId);
-
-        // Race-safe view counting: try the repeat-view update first; a row
-        // match means the user has seen it before (views +1 only). Otherwise
-        // insert; a duplicate-key exception means a concurrent request won the
-        // race and this is a repeat view (views +1), never a 500.
-        $updated = (int) Database::run(
-            'UPDATE gallery_viewers SET viewed_at = CURRENT_TIMESTAMP WHERE user_id = ? AND gallery_id = ?',
-            [$userId, $galleryId]
-        )->rowCount();
-
-        if ($updated > 0) {
-            Database::run('UPDATE galleries SET views = views + 1 WHERE id = ?', [$galleryId]);
-            return;
+        // The writes of a view (the daily counter, the viewer's row, the
+        // gallery counters and the activity log) are ONE transaction: they
+        // were five round trips on the hottest page of the site.
+        $pdo = Database::connection();
+        $own = !$pdo->inTransaction();
+        if ($own) {
+            $pdo->beginTransaction();
         }
 
         try {
-            Database::run(
-                'INSERT INTO gallery_viewers (user_id, gallery_id, viewed_at) VALUES (?, ?, CURRENT_TIMESTAMP)',
-                [$userId, $galleryId]
-            );
-        } catch (\PDOException $e) {
-            Database::run('UPDATE galleries SET views = views + 1 WHERE id = ?', [$galleryId]);
-            return;
-        }
+            \App\Models\Stats::recordContentView('gallery', $galleryId);
 
-        Database::run(
-            'UPDATE galleries SET views = views + 1, unique_views = unique_views + 1 WHERE id = ?',
-            [$galleryId]
-        );
+            // Race-safe view counting: try the repeat-view update first; a
+            // row match means the user has seen it before (views +1 only).
+            // Otherwise insert; a duplicate-key exception means a concurrent
+            // request won the race and this is a repeat view (views +1),
+            // never a 500.
+            $updated = (int) Database::run(
+                'UPDATE gallery_viewers SET viewed_at = CURRENT_TIMESTAMP WHERE user_id = ? AND gallery_id = ?',
+                [$userId, $galleryId]
+            )->rowCount();
+
+            if ($updated > 0) {
+                Database::run('UPDATE galleries SET views = views + 1 WHERE id = ?', [$galleryId]);
+            } else {
+                try {
+                    Database::run(
+                        'INSERT INTO gallery_viewers (user_id, gallery_id, viewed_at) VALUES (?, ?, CURRENT_TIMESTAMP)',
+                        [$userId, $galleryId]
+                    );
+                    Database::run(
+                        'UPDATE galleries SET views = views + 1, unique_views = unique_views + 1 WHERE id = ?',
+                        [$galleryId]
+                    );
+                } catch (\PDOException $e) {
+                    Database::run('UPDATE galleries SET views = views + 1 WHERE id = ?', [$galleryId]);
+                }
+            }
+
+            \App\Models\UserActivity::record(
+                $userId,
+                \App\Models\UserActivity::ACTION_VIEW,
+                $galleryId,
+                $galleryName,
+                $ip
+            );
+
+            if ($own) {
+                $pdo->commit();
+            }
+        } catch (\Throwable $e) {
+            if ($own && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            // A view that cannot be counted must never break the page.
+            error_log('[gallery] the view could not be recorded: ' . $e->getMessage());
+        }
     }
 
     /**

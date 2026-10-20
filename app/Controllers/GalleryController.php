@@ -546,12 +546,10 @@ class GalleryController extends Controller
         }
 
         if ($user !== null && $canViewFull) {
-            Gallery::recordView($id, (int) $user['id']);
-
-            \App\Models\UserActivity::record(
-                (int) $user['id'],
-                \App\Models\UserActivity::ACTION_VIEW,
+            // The view counters and the activity log are one transaction now.
+            Gallery::recordView(
                 $id,
+                (int) $user['id'],
                 (string) ($gallery['title'] ?? ''),
                 $this->request->ip()
             );
