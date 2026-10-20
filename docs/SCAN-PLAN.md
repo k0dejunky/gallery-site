@@ -657,3 +657,32 @@ and the play badge is not `aria-hidden` (`:5`).
    and it must run with a **>= 5 minute** timeout (a dev deploy takes 2-3
    minutes; a shorter timeout kills a healthy deploy and rolls it back).
 6. Prod smoke must run as `www-data` after `sudo rm -rf /tmp/gallery-analytics-rot`.
+
+---
+
+## AFTER THE PROGRAMME (the reports of Oct 20 2026)
+
+Three bugs the user reported after the deep scan was finished. All three are
+fixed, deployed to dev + prod and pushed (46b253d on main); smoke is 932
+checks on all three boxes, the TestSuite is 1005 tests with the 6 known
+environment-only failures.
+
+| # | The report | The cause | The fix |
+|---|------------|-----------|---------|
+| 1 | The manage page repositions itself on every batch rotation | `views/admin/manage.php` reloaded the page every five seconds while a job ran, and the bulk form was a normal POST that redirected | the bulk actions post in the background, the page watches `GET /admin/photos/job/{id}` and updates the status in place |
+| 2 | The live feed freezes when the operator pauses the video or mutes the mic | the operator app keeps the RTMP connection up but stops sending frames, so the playlist stops updating and the dead hls.js player was never rebuilt | `views/live.php` rebuilds the player on a stall, on a missing playlist and on a pause -> resume |
+| 3 | The Reddit posts have no picture | the reddit channel is `video => 'none'`, so the live-stream videos were dropped and the post went out as bare text | `AutoPostQueue::videoCoverMedia()` posts the video cover to a channel that takes images |
+
+**Traps found while fixing them (do not repeat them):**
+
+- `submitter.formAction` returns the DOCUMENT url when the button has no
+  `formaction` attribute - the background request went to the gallery page
+  instead of the bulk endpoint. Read the attribute instead.
+- The HLS stream is proxied by APACHE (`ProxyPass /gallery/live/hls
+  http://127.0.0.1:8888`), not by PHP: there is no `/live/hls` route, and a
+  route test for it is wrong.
+- A publisher for a test stream must run as ROOT: the `/usr/bin/ffmpeg`
+  wrapper needs the `/run/ffmpeg-limits` locks (0770 root:www-data).
+- `pkill -f <pattern>` from the ssh command line kills the shell - put the
+  pattern in a `.sh` on the box (and use `sudo -S` for the root-owned
+  publisher).
