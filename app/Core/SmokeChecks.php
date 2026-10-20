@@ -1651,6 +1651,42 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.image_protection_scoped', 'Smoke · UI', 'The image protection covers the media, not the chrome', static function () use ($root, $ok, $bad): array {
+            // The right-click / drag / save blocker used to fire on every
+            // image on the site, so it also took the site logo, the
+            // creator's avatar and every other piece of chrome hostage. It
+            // is scoped to the media now, and it says so.
+            $js = (string) @file_get_contents($root . '/public/assets/js/user.js');
+            $problems = [];
+
+            if (strpos($js, "e.target.tagName==='IMG'") !== false) {
+                $problems[] = 'the image protection must not fire on every image on the site';
+            }
+            if (strpos($js, "e.target.closest('img')") !== false) {
+                $problems[] = 'the image protection must not fire on every image on the site';
+            }
+            if (strpos($js, 'var MEDIA =') === false) {
+                $problems[] = 'the image protection must name the media it covers';
+            }
+            foreach (['.gallery-item img', '.card-cover img', '.recent-card img'] as $selector) {
+                if (strpos($js, $selector) === false) {
+                    $problems[] = 'the image protection must cover ' . $selector;
+                }
+            }
+            if (strpos($js, 'img[data-protect]') === false) {
+                $problems[] = 'the image protection must offer an explicit data-protect opt-in';
+            }
+            // It has to announce itself, not just die silently.
+            $grid = (string) @file_get_contents($root . '/views/partials/gallery_grid_item.php');
+            if (strpos($grid, 'Saving is disabled') === false) {
+                $problems[] = 'the media must say that saving is disabled';
+            }
+
+            return $problems === []
+                ? $ok('the image protection covers the media and says so')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

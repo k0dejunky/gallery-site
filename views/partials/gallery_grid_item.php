@@ -4,7 +4,7 @@
             <?php /* The caption below is the real label, so the thumbnail
                 itself is decorative: "Video thumbnail for item 3" tells a
                 screen reader nothing. */ ?>
-            <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>" alt="" width="400" height="300" loading="lazy" decoding="async">
+            <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>" alt="" width="400" height="300" loading="lazy" decoding="async" title="Saving is disabled for members-only content">
             <span class="play-badge" aria-hidden="true">&#9654;</span>
         </a>
         <figcaption>

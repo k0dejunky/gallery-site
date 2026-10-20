@@ -441,16 +441,25 @@
   });
 })();
 
-/* Anti-image-protection: disable right-click, drag, and save shortcuts */
+/* Anti-image-protection: disable right-click, drag, and save shortcuts on
+   the MEDIA. It used to apply to every image on the site, which also took
+   the site logo, the creator's avatar and every other piece of chrome
+   hostage - and it announced nothing, so a right-click just died silently.
+   The media is what is worth protecting; the chrome is not. */
 (function(){
+  var MEDIA = 'img[data-protect], .gallery-item img, .card-cover img, .recent-card img,'
+            + ' .dashboard-card img, #fullsize-img, #slideshow-img, .chat-image';
+  var isMedia = function (node) {
+    return !!(node && node.closest && node.closest(MEDIA));
+  };
   document.addEventListener('contextmenu',function(e){
-    if(e.target.tagName==='IMG'||e.target.closest('img')){
+    if(isMedia(e.target)){
       e.preventDefault();
       return false;
     }
   });
   document.addEventListener('dragstart',function(e){
-    if(e.target.tagName==='IMG'||e.target.closest('img')){
+    if(isMedia(e.target)){
       e.preventDefault();
       return false;
     }
@@ -458,7 +467,7 @@
   document.addEventListener('keydown',function(e){
     if((e.ctrlKey||e.metaKey)&&(e.key==='s'||e.key==='S')){
       var a=document.activeElement;
-      if(a&&(a.tagName==='IMG'||a.closest('img'))){
+      if(a&&a.closest&&a.closest(MEDIA)){
         e.preventDefault();
         return false;
       }
