@@ -2948,6 +2948,13 @@ class SmokeChecks
             if (strpos($view, 'id="live-countdown"') === false) {
                 $problems[] = 'the live page must show the countdown banner';
             }
+            // A view has no namespace, so a bare `LiveShow::` resolves to
+            // the global namespace and the page 500s with
+            // "Class LiveShow not found". The check above only greps the
+            // source, so it cannot see that.
+            if (preg_match('/(?<![\\\\\w])LiveShow::/', $view) === 1) {
+                $problems[] = 'the live page must use the full namespace for LiveShow';
+            }
             if (strpos($view, 'id="live-countdown-text"') === false) {
                 $problems[] = 'the countdown must have a place to show the time';
             }

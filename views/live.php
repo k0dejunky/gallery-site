@@ -4,7 +4,7 @@
 /* The next scheduled show, if the operator scheduled one. The banner is
    rendered server-side so it is there on the first paint, and the JS
    keeps the countdown ticking from the server's clock. */
-$nextShow = LiveShow::toApi(\App\Models\LiveShow::next());
+$nextShow = \App\Models\LiveShow::toApi(\App\Models\LiveShow::next());
 ?>
 
 <div class="live-page">
