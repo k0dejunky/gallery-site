@@ -148,7 +148,10 @@ if (!headers_sent() && defined('CSP_NONCE')) {
         . 'https://www.paypal.com https://www.sandbox.paypal.com '
         . 'https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com; '
         . "frame-src 'self' https://client-analytics.braintreegateway.com https://www.sandbox.paypal.com https://www.paypal.com; "
-        . "frame-ancestors 'self'; report-uri " . url('/webhooks/csp-report')
+        // The report-uri has to be ABSOLUTE: the CSP grammar wants a URI,
+        // and a relative one is not a valid target, so the browser had
+        // nowhere to post the violation reports to.
+        . "frame-ancestors 'self'; report-uri " . absolute_url('/webhooks/csp-report')
     );
 }
 

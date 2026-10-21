@@ -190,14 +190,122 @@ class PageCache
         return 'page:' . md5((string) $identity);
     }
 
-    public static function pageGet(string $key): ?string
+    /**
+     * The cached page and the Link header it asked for.
+     *
+     * The header has to travel with the page: a header() call in a view is
+     * lost when the page is served from the cache, because the action never
+     * runs again. The value is kept next to the bytes instead.
+     *
+     * @return array{html: string, link: string|null}|null
+     */
+    public static function pageGet(string $key): ?array
     {
-        return \App\Core\Cache::get(\App\Core\Cache::genKey('listings', $key));
+        $raw = \App\Core\Cache::get(\App\Core\Cache::genKey('listings', $key));
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        // A page cached before the Link header existed is plain HTML.
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded) || !isset($decoded['h'])) {
+            return ['html' => $raw, 'link' => null];
+        }
+
+        return [
+            'html' => (string) $decoded['h'],
+            'link' => isset($decoded['l']) && (string) $decoded['l'] !== '' ? (string) $decoded['l'] : null,
+        ];
     }
 
-    public static function pagePut(string $key, string $html, int $ttl = 120): void
+    public static function pagePut(string $key, string $html, int $ttl = 120, ?string $link = null): void
     {
-        \App\Core\Cache::set(\App\Core\Cache::genKey('listings', $key), $html, $ttl);
+        $payload = json_encode(['h' => $html, 'l' => $link], JSON_UNESCAPED_SLASHES);
+        \App\Core\Cache::set(
+            \App\Core\Cache::genKey('listings', $key),
+            $payload === false ? $html : $payload,
+            $ttl
+        );
+    }
+
+    /**
+     * The Link header a paginated page wants, carried inside the HTML.
+     *
+     * A header() call in the view is lost when the page comes from the
+     * cache: the cached bytes are echoed and the action never runs, so the
+     * header would only ever appear on the first (uncached) render. The
+     * value travels with the page instead, and the router lifts it out.
+     */
+    public const LINK_MARKER = '<!--page-link:';
+
+    /**
+     * The Link header the current render asked for.
+     *
+     * The view sets it (it is the one that knows the pagination), the
+     * router reads it back so the header can be stored with the cached
+     * page: a header() call alone is lost when the page is served from the
+     * cache.
+     */
+    private static ?string $link = null;
+
+    public static function setLink(?string $link): void
+    {
+        self::$link = $link;
+    }
+
+    public static function link(): ?string
+    {
+        return self::$link;
+    }
+
+    /**
+     * The Link header values the page asked for.
+     *
+     * A page can carry more than one: the category page paginates its
+     * image section and its video section separately, and each one has its
+     * own neighbours.
+     *
+     * @return string[]
+     */
+    public static function pageLinks(string $html): array
+    {
+        $values = [];
+        $offset = 0;
+        $marker = self::LINK_MARKER;
+        $length = strlen($marker);
+
+        while (($start = strpos($html, $marker, $offset)) !== false) {
+            $end = strpos($html, '-->', $start);
+            if ($end === false) {
+                break;
+            }
+            $value = trim(substr($html, $start + $length, $end - $start - $length));
+            if ($value !== '') {
+                $values[] = $value;
+            }
+            $offset = $end + 3;
+        }
+
+        return $values;
+    }
+
+    /** The page with every Link marker taken out of it. */
+    public static function pageStripLink(string $html): string
+    {
+        $offset = 0;
+        $marker = self::LINK_MARKER;
+        $length = strlen($marker);
+
+        while (($start = strpos($html, $marker, $offset)) !== false) {
+            $end = strpos($html, '-->', $start);
+            if ($end === false) {
+                break;
+            }
+            $html = substr($html, 0, $start) . substr($html, $end + 3);
+            $offset = $start;
+        }
+
+        return $html;
     }
 
     /**
@@ -250,6 +358,7 @@ class PageCache
 
     public static function reset(): void
     {
+        self::$link = null;
         self::$claimed = false;
         self::$activeHero = false;
     }

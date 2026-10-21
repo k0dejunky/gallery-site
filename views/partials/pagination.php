@@ -24,6 +24,24 @@ if (isset($paginator) && (int) $paginator['pages'] > 1):
         }
     }
     $pages = array_values(array_unique($pages));
+
+    // The Link header tells a crawler the neighbours of this page without
+    // parsing the HTML. The visible links carry rel="prev"/rel="next" too,
+    // but a crawler that only reads the headers never sees them.
+    $linkBase = absolute_url($baseUrl);
+    $links    = [];
+    if ($current > 1) {
+        $links[] = '<' . $linkBase . $sep . $pageParam . '=' . ($current - 1) . '>; rel="prev"';
+    }
+    if ($current < $totalPages) {
+        $links[] = '<' . $linkBase . $sep . $pageParam . '=' . ($current + 1) . '>; rel="next"';
+    }
+    if ($links !== []) {
+        // The header is carried inside the page, not set here: a cached
+        // page never runs this view again, so a header() call would only
+        // ever appear on the first render. The router lifts the value out.
+        echo \App\Core\PageCache::LINK_MARKER . implode(', ', $links) . '-->';
+    }
     ?>
     <div class="pagination">
         <?php if ($current > 1): ?>

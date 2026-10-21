@@ -7200,6 +7200,66 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
         // --- Behavioural: the parser is pure, so the fixture can be asserted
         //     without a database (the smoke suite must stay DB-free).
         $fixture = "$root/tests/fixtures/access-log.sample";
+        $add('smoke.seo.crawlable_surface', 'Smoke · SEO', 'The crawlable surface is cacheable and announces its neighbours', static function () use ($root, $read, $ok, $bad): array {
+            // Three things a crawler could not use:
+            //  - the CSP report-uri was RELATIVE, so the browser had
+            //    nowhere to post the violation reports to;
+            //  - the feeds and the sitemaps carried "no-store" and a
+            //    session cookie, so no shared cache could keep them;
+            //  - the paginated pages never said which pages are next, so
+            //    a crawler had to parse the HTML to walk the pagination.
+            $index   = (string) $read($root . '/public/index.php');
+            $ctrl    = (string) $read($root . '/app/Core/Controller.php');
+            $static  = (string) $read($root . '/app/Controllers/StaticPageController.php');
+            $router  = (string) $read($root . '/app/Core/Router.php');
+            $partial = (string) $read($root . '/views/partials/pagination.php');
+            $problems = [];
+
+            // The report-uri has to be an absolute URL.
+            if (strpos($index, 'report-uri " . url(') !== false) {
+                $problems[] = 'the CSP report-uri must be absolute, not a relative path';
+            }
+            if (strpos($index, 'report-uri " . absolute_url(') === false) {
+                $problems[] = 'the CSP report-uri must be an absolute URL';
+            }
+
+            // The feeds and the sitemaps are cacheable.
+            if (strpos($ctrl, 'function publicCache(') === false) {
+                $problems[] = 'there must be a way to mark a response as publicly cacheable';
+            }
+            if (strpos($ctrl, "header_remove('Set-Cookie')") === false) {
+                $problems[] = 'a publicly cacheable response must drop the session cookie';
+            }
+            foreach (['videoSitemap', 'sitemap', 'feed'] as $method) {
+                if (strpos($static, 'function ' . $method . '(') === false) {
+                    $problems[] = 'the ' . $method . '() endpoint is missing';
+                    continue;
+                }
+                if (preg_match('/function ' . $method . '\s*\([^)]*\)\s*:\s*void\s*\{(.*?)\n    \}/s', $static, $m) !== 1) {
+                    continue;
+                }
+                if (strpos($m[1], 'publicCache(') === false) {
+                    $problems[] = 'the ' . $method . '() response must be publicly cacheable';
+                }
+            }
+
+            // The pagination announces its neighbours in a Link header, and
+            // the header survives the page cache (a header() call in a view
+            // is lost when the page is served from the cache).
+            if (strpos($partial, 'LINK_MARKER') === false) {
+                $problems[] = 'the pagination must leave its Link header in the markup';
+            }
+            if (strpos($router, 'pageLinks(') === false || strpos($router, 'pagePut(') === false) {
+                $problems[] = 'the router must carry the Link header with the cached page';
+            }
+            if (strpos($ctrl, 'pageLinks(') === false) {
+                $problems[] = 'a rendered page must send its Link header';
+            }
+
+            return $problems === []
+                ? $ok('the crawlable surface is cacheable and announces its neighbours')
+                : $bad(implode('; ', $problems));
+        });
         $add('smoke.analytics.only_the_window_files', 'Smoke · Web analytics', 'The aggregator only reads the log files that can hold the window', static function () use ($root, $ok, $bad): array {
             // The aggregator used to read EVERY rotated log and parse every
             // line in it, then throw away the days outside the window: the

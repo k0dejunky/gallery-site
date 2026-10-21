@@ -46,6 +46,31 @@ class Controller
      * sidebar, so every user page shares the same left navigation (a
      * controller may override it by passing its own navCategories).
      */
+    /**
+     * Mark the response as publicly cacheable.
+     *
+     * PHP's session cache limiter puts "no-store, no-cache, must-revalidate"
+     * (plus an expires date of 1981) on EVERY response, because the session
+     * cookie rides along. For a feed or a sitemap that is wrong: they hold
+     * no session state, no form and no token, and a crawler fetches them
+     * over and over. This replaces the limiter's headers and drops the
+     * session cookie from the response, so a shared cache can keep it.
+     *
+     * Only ever call it for a response that is identical for every visitor.
+     */
+    protected function publicCache(int $seconds = 300): void
+    {
+        if (headers_sent()) {
+            return;
+        }
+        header('Cache-Control: public, max-age=' . max(0, $seconds));
+        header_remove('Expires');
+        header_remove('Pragma');
+        // The session cookie would make every shared cache refuse the
+        // response. Nothing in a feed or a sitemap depends on it.
+        header_remove('Set-Cookie');
+    }
+
     protected function view(string $template, array $data = []): void
     {
         $data['sidebarNav'] = $data['sidebarNav'] ?? Auth::check();
@@ -64,6 +89,20 @@ class Controller
         ob_start();
         require $content;
         $content = ob_get_clean();
+
+        // A paginated view leaves its Link header inside the markup (a
+        // header() call in a view is lost when the page comes from the
+        // cache), so it is lifted out here, sent as a real header and kept
+        // for the router, which stores it with the cached page.
+        $links = \App\Core\PageCache::pageLinks($content);
+        if ($links !== []) {
+            $link = implode(', ', $links);
+            \App\Core\PageCache::setLink($link);
+            if (!headers_sent()) {
+                header('Link: ' . $link);
+            }
+        }
+        $content = \App\Core\PageCache::pageStripLink($content);
 
         require __DIR__ . '/../../views/layout.php';
     }

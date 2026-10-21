@@ -183,7 +183,7 @@ class Router
             $cached = \App\Core\PageCache::pageGet($pageKey);
 
             if ($cached !== null) {
-                echo \App\Core\PageCache::pageInject($cached);
+                $this->sendPage(\App\Core\PageCache::pageInject($cached['html']), $cached['link']);
                 return;
             }
 
@@ -191,15 +191,43 @@ class Router
             $instance->$action(...array_values($params));
             $html = (string) ob_get_clean();
 
+            // The Link header is lifted out of the markup before the page is
+            // cached, so the cached copy carries it as a header of its own.
+            $link = \App\Core\PageCache::link();
+            if ($link === null) {
+                $links = \App\Core\PageCache::pageLinks($html);
+                $link  = $links === [] ? null : implode(', ', $links);
+            }
+            $html = \App\Core\PageCache::pageStripLink($html);
+
             if (http_response_code() < 400 && $html !== '') {
-                \App\Core\PageCache::pagePut($pageKey, $html, 120);
+                \App\Core\PageCache::pagePut($pageKey, $html, 120, $link);
             }
 
-            echo $html;
+            $this->sendPage($html, $link);
             return;
         }
 
         $instance->$action(...array_values($params));
+    }
+
+    /**
+     * Echo a page, lifting the Link header out of the markup.
+     *
+     * The pagination puts its Link header inside the page (a header() call
+     * in a view is lost when the page comes from the cache), so it is
+     * taken out here and sent as a real header.
+     */
+    private function sendPage(string $html, ?string $link = null): void
+    {
+        if ($link === null) {
+            $links = \App\Core\PageCache::pageLinks($html);
+            $link  = $links === [] ? null : implode(', ', $links);
+        }
+        if ($link !== null && !headers_sent()) {
+            header('Link: ' . $link);
+        }
+        echo \App\Core\PageCache::pageStripLink($html);
     }
 
     /**

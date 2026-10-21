@@ -171,6 +171,10 @@ class StaticPageController extends Controller
      */
     public function videoSitemap(): void
     {
+        // A feed and a sitemap hold no session state, so they can be
+        // cached (a crawler fetches them again and again).
+        $this->publicCache(300);
+
         $base = $this->baseUrl();
 
         $rows = \App\Core\Database::run(
@@ -220,6 +224,10 @@ class StaticPageController extends Controller
 
     public function sitemap(): void
     {
+        // A feed and a sitemap hold no session state, so they can be
+        // cached (a crawler fetches them again and again).
+        $this->publicCache(300);
+
         $base = $this->baseUrl();
 
         // Static pages render 200 for guests; content pages now serve a
@@ -294,6 +302,10 @@ class StaticPageController extends Controller
      */
     public function feed(): void
     {
+        // A feed and a sitemap hold no session state, so they can be
+        // cached (a crawler fetches them again and again).
+        $this->publicCache(300);
+
         $base = $this->baseUrl();
         $siteName = (string) config('app.site_name');
 
