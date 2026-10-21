@@ -38,203 +38,215 @@ class Housekeeping
             'chat_prunes'   => [],
             'visit_prunes'  => [],
             'ffmpeg_count'  => 0,
+            'errors'        => [],
         ];
 
-        // ffmpeg runaway guard: if concurrent ffmpeg processes ever spike
-        // (variant/video bursts), alert the admin immediately so a CPU storm
-        // like the one that took the site down is caught before it does.
+        // Every step runs inside a try, and the log is written in a finally.
+        // One failing step must not be able to stop the others, and it must
+        // never be able to stop the log from being written - the log is the
+        // only record that the run happened at all.
         try {
-            $ffmpegCount = (int) trim((string) shell_exec('pgrep -fc ffmpeg 2>/dev/null'));
-            $out['ffmpeg_count'] = $ffmpegCount;
-            if ($ffmpegCount >= 6) {
-                Mailer::adminAlert(
-                    'ffmpeg-burst',
-                    'ffmpeg burst detected',
-                    'Concurrent process count: ' . $ffmpegCount . '. Check ps aux | grep ffmpeg.'
-                );
-            }
-        } catch (\Throwable $e) {
-            $out['ffmpeg_count'] = -1;
-        }
-
-        // Disk-fill guard: a full disk sinks the whole box (uploads, backups,
-        // MySQL). Alert the admin before usage crosses 85% so it is caught
-        // with room to spare rather than after files start failing.
-        try {
-            $diskFree  = @disk_free_space($root);
-            $diskTotal = @disk_total_space($root);
-            if (is_float($diskFree) && is_float($diskTotal) && $diskTotal > 0) {
-                $usedPct                = (int) round((($diskTotal - $diskFree) / $diskTotal) * 100);
-                $out['disk_used_percent'] = $usedPct;
-                $out['disk_free_gb']     = (float) round($diskFree / 1073741824, 1);
-                if ($usedPct >= 85) {
+            // ffmpeg runaway guard: if concurrent ffmpeg processes ever spike
+            // (variant/video bursts), alert the admin immediately so a CPU storm
+            // like the one that took the site down is caught before it does.
+            try {
+                $ffmpegCount = (int) trim((string) shell_exec('pgrep -fc ffmpeg 2>/dev/null'));
+                $out['ffmpeg_count'] = $ffmpegCount;
+                if ($ffmpegCount >= 6) {
                     Mailer::adminAlert(
-                        'disk-fill',
-                        'Disk at ' . $usedPct . '%',
-                        'Filesystem used ' . $usedPct . '% of ' . round($diskTotal / 1073741824, 0)
-                        . ' GB (' . $out['disk_free_gb'] . ' GB free). df -h / to inspect.'
+                        'ffmpeg-burst',
+                        'ffmpeg burst detected',
+                        'Concurrent process count: ' . $ffmpegCount . '. Check ps aux | grep ffmpeg.'
+                    );
+                }
+            } catch (\Throwable $e) {
+                $out['ffmpeg_count'] = -1;
+            }
+
+            // Disk-fill guard: a full disk sinks the whole box (uploads, backups,
+            // MySQL). Alert the admin before usage crosses 85% so it is caught
+            // with room to spare rather than after files start failing.
+            try {
+                $diskFree  = @disk_free_space($root);
+                $diskTotal = @disk_total_space($root);
+                if (is_float($diskFree) && is_float($diskTotal) && $diskTotal > 0) {
+                    $usedPct                = (int) round((($diskTotal - $diskFree) / $diskTotal) * 100);
+                    $out['disk_used_percent'] = $usedPct;
+                    $out['disk_free_gb']     = (float) round($diskFree / 1073741824, 1);
+                    if ($usedPct >= 85) {
+                        Mailer::adminAlert(
+                            'disk-fill',
+                            'Disk at ' . $usedPct . '%',
+                            'Filesystem used ' . $usedPct . '% of ' . round($diskTotal / 1073741824, 0)
+                            . ' GB (' . $out['disk_free_gb'] . ' GB free). df -h / to inspect.'
+                        );
+                    }
+                }
+            } catch (\Throwable $e) {
+                $out['disk_used_percent'] = -1;
+            }
+
+            self::step('backup_sync', fn () => self::watchBackupSync($root), $out);
+            self::step('restore_drill', fn () => self::watchRestoreDrill($root), $out);
+
+            // Orphaned PHP temp files (e.g. interrupted uploads/workers) pile up
+            // in /tmp and /var/tmp; prune anything older than 48h so the disk
+            // never silently fills with leftovers.
+            $out['temp_files_removed'] = self::step('temp_files', fn () => self::cleanupOrphanedTemp(), $out);
+
+            // Alert when media grows unusually fast (a bulk import) so the disk
+            // is not discovered full after the fact.
+            $out['disk_growth_alerted'] = self::step('disk_growth', fn () => self::alertOnDiskGrowth(), $out);
+
+            // Weekly duplicate-gallery report (throttled to once per 7 days
+            // inside sendWeeklyReport) so re-imports never pile up unnoticed.
+            self::step('duplicate_report', fn () => DuplicateGalleries::sendWeeklyReport(), $out);
+
+            // One-off abandoned-signup recovery emails (max once per day).
+            $out['recovery_emails'] = self::step('recovery_emails', fn () => self::sendRecoveryEmails($root), $out);
+
+            // Auto-approve paid PayPal memberships whose webhook was missed.
+            $reconciled = self::step('paypal_reconcile', fn () => self::reconcilePayPalSubscriptions(), $out) ?? ['activated' => 0];
+            $out['paypal_reconciled'] = $reconciled['activated']; // activations are the headline number
+
+            // Subscriptions whose expiry passed while nobody was watching.
+            $expiredRows = self::step('expire_subscriptions', function () {
+                return Database::run(
+                    "SELECT id FROM subscriptions
+                     WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP"
+                )->fetchAll();
+            }, $out) ?? [];
+            $out['expired_subs'] = count($expiredRows);
+            if ($expiredRows !== []) {
+                $ids = array_column($expiredRows, 'id');
+                $marks = implode(',', array_fill(0, count($ids), '?'));
+                Database::run(
+                    "UPDATE subscriptions SET status = 'expired' WHERE id IN ($marks)",
+                    $ids
+                );
+                foreach ($ids as $expiredId) {
+                    Lifecycle::onExpired((int) $expiredId);
+                }
+            }
+
+            // Renewal reminders (7 days out), win-backs (7 days lapsed), trial
+            // endings (3 days out) and inactive-member win-backs (30 days unseen),
+            // gated by the emailer's lifecycle toggles. Each audience is deduped
+            // per subscription/member, so the 15-minute cadence cannot repeat one.
+            $emailerCfg = self::step('emailer_config', fn () => EmailerConfig::all(), $out) ?? [];
+            $out['renewal_reminders'] = self::step('renewal_reminders', fn () => !empty($emailerCfg['lifecycle_renewal_reminders']) ? Lifecycle::runRenewalReminders(7) : 0, $out);
+            $out['winbacks']          = self::step('winbacks', fn () => !empty($emailerCfg['lifecycle_winbacks']) ? Lifecycle::runWinbacks(7) : 0, $out);
+            $out['trial_endings']     = self::step('trial_endings', fn () => !empty($emailerCfg['lifecycle_trial_endings']) ? Lifecycle::runTrialEndings(3) : 0, $out);
+            $out['inactive_winbacks'] = self::step('inactive_winbacks', fn () => !empty($emailerCfg['lifecycle_inactive_winbacks']) ? Lifecycle::runInactiveWinbacks(30) : 0, $out);
+
+            // Staging directories abandoned mid-upload for more than 72 hours.
+            $base = $root . '/storage/uploads/pending';
+
+            foreach (glob($base . '/*', GLOB_ONLYDIR) ?: [] as $dir) {
+                $ageH = (time() - (int) filemtime($dir)) / 3600;
+
+                if ($ageH >= 72) {
+                    self::rrmdir($dir);
+                    $out['pending_dirs']++;
+                }
+            }
+
+            // Keep only the newest backup runs so the disk never fills up. A
+            // run groups everything sharing one timestamp: the split media
+            // archive (.part-NN), its .sha256 checksums and the SQL dump.
+            $backupDir = $root . '/storage/backups';
+            $runs      = [];
+
+            foreach (['*.tar.gz', '*.tar.gz.part-*', '*.tar.gz.sha256', '*.sql.gz'] as $pattern) {
+                foreach ((glob($backupDir . '/' . $pattern) ?: []) as $file) {
+                    $key = 'misc';
+
+                    if (preg_match('/-(\d{8}-\d{6})\./', basename($file), $m)) {
+                        $key = $m[1];
+                    }
+
+                    $runs[$key][] = $file;
+                }
+            }
+
+            if ($backupKeep > 0 && count($runs) > $backupKeep) {
+                $newest = fn (array $files): int => max(array_map(fn (string $f): int => (int) filemtime($f), $files));
+                uasort($runs, fn (array $a, array $b): int => $newest($b) <=> $newest($a));
+
+                foreach (array_slice($runs, $backupKeep, null, true) as $files) {
+                    foreach ($files as $old) {
+                        @unlink($old);
+                        $out['backups_pruned']++;
+                    }
+                }
+            }
+
+            // Storage snapshot for the trending chart + low-disk alert.
+            // photos_count/video_count mirror the dashboard's Photos/Videos
+            // cards (attached, non-deleted media) so the numbers agree.
+            self::step('storage_snapshot', function () use ($root) {
+                $bytes = self::uploadsBytes($root . '/storage/uploads');
+                [$photos, $videos] = self::mediaCounts();
+                Database::run(
+                    'INSERT INTO storage_snapshots (captured_at, uploads_bytes, photos_count, video_count) VALUES (CURRENT_TIMESTAMP, ?, ?, ?)',
+                    [$bytes, $photos, $videos]
+                );
+                Database::run(
+                    'DELETE FROM storage_snapshots WHERE captured_at < ?',
+                    [date('Y-m-d H:i:s', time() - 90 * 86400)]
+                );
+            }, $out);
+
+            $free = @disk_free_space($root);
+
+            if ($free !== false) {
+                $freeGb            = round($free / 1073741824, 1);
+                $out['disk_free_gb'] = $freeGb;
+
+                if ($freeGb <= (float) env_value('DISK_MIN_FREE_GB', '10')) {
+                    Mailer::adminAlert(
+                        'disk-low',
+                        'Low disk space',
+                        sprintf("Only %s GB free on the gallery server (threshold %s GB).\nClean up or extend the volume soon.",
+                            $freeGb, env_value('DISK_MIN_FREE_GB', '10')),
+                        43200
                     );
                 }
             }
-        } catch (\Throwable $e) {
-            $out['disk_used_percent'] = -1;
-        }
 
-        self::watchBackupSync($root);
-        self::watchRestoreDrill($root);
+            // Expiring chat media whose time or view limit has been hit: remove
+            // the stored files so they free storage and are permanently gone.
+            $out['chat_media_purged'] = self::step('chat_media', fn () => \App\Models\ChatMessage::purgeExpiredMedia(), $out);
 
-        // Orphaned PHP temp files (e.g. interrupted uploads/workers) pile up
-        // in /tmp and /var/tmp; prune anything older than 48h so the disk
-        // never silently fills with leftovers.
-        $out['temp_files_removed'] = self::cleanupOrphanedTemp();
+            // New PHP fatals since the last sweep: alert the admin so an outage
+            // (like a runtime type error) is caught immediately, not by users.
+            $out['fatal_alerted'] = self::step('php_fatals', fn () => self::alertOnPhpFatals($root), $out);
 
-        // Alert when media grows unusually fast (a bulk import) so the disk
-        // is not discovered full after the fact.
-        $out['disk_growth_alerted'] = self::alertOnDiskGrowth();
+            // Member notifications: email members once per newly-live gallery
+            // (covers galleries published on schedule, not just "publish now").
+            $out['new_gallery_notified'] = self::step('new_gallery_notified', fn () => self::notifyNewGalleries(), $out);
 
-        // Weekly duplicate-gallery report (throttled to once per 7 days
-        // inside sendWeeklyReport) so re-imports never pile up unnoticed.
-        DuplicateGalleries::sendWeeklyReport();
+            // Automatic daily chat broadcast (once per day) so members get a
+            // fresh attributed link even when no admin scheduled one.
+            $out['chat_broadcast'] = self::step('chat_broadcast', fn () => self::scheduleDailyChatBroadcast(), $out);
 
-        // One-off abandoned-signup recovery emails (max once per day).
-        $out['recovery_emails'] = self::sendRecoveryEmails($root);
+            // Chat retention: keep the idempotency window, the wall inbox and the
+            // background-reply queue from growing without bound. Counts land in
+            // $out so the cron log shows what each run removed.
+            $out['chat_prunes'] = self::step('chat_prunes', fn () => self::pruneChatRetention(), $out);
+            $out['visit_prunes'] = self::step('visit_prunes', fn () => self::pruneVisitHistory(), $out);
 
-        // Auto-approve paid PayPal memberships whose webhook was missed.
-        $reconciled = self::reconcilePayPalSubscriptions();
-        $out['paypal_reconciled'] = $reconciled['activated']; // activations are the headline number
+            // Refer-a-friend: +7 free days to referrers whose referred members
+            // have become paying.
+            $out['referral_rewards'] = self::step('referral_rewards', fn () => self::rewardReferrals(), $out);
 
-        // Subscriptions whose expiry passed while nobody was watching.
-        $expiredRows = Database::run(
-            "SELECT id FROM subscriptions
-             WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP"
-        )->fetchAll();
-        $out['expired_subs'] = count($expiredRows);
-        if ($expiredRows !== []) {
-            $ids = array_column($expiredRows, 'id');
-            $marks = implode(',', array_fill(0, count($ids), '?'));
-            Database::run(
-                "UPDATE subscriptions SET status = 'expired' WHERE id IN ($marks)",
-                $ids
+        } finally {
+            @file_put_contents(
+                $root . '/storage/logs/cron.log',
+                implode(' | ', array_map(fn ($k, $v) => "$k=$v", array_keys($out), $out)) . "\n",
+                FILE_APPEND
             );
-            foreach ($ids as $expiredId) {
-                Lifecycle::onExpired((int) $expiredId);
-            }
         }
-
-        // Renewal reminders (7 days out), win-backs (7 days lapsed), trial
-        // endings (3 days out) and inactive-member win-backs (30 days unseen),
-        // gated by the emailer's lifecycle toggles. Each audience is deduped
-        // per subscription/member, so the 15-minute cadence cannot repeat one.
-        $emailerCfg               = EmailerConfig::all();
-        $out['renewal_reminders'] = !empty($emailerCfg['lifecycle_renewal_reminders']) ? Lifecycle::runRenewalReminders(7) : 0;
-        $out['winbacks']          = !empty($emailerCfg['lifecycle_winbacks']) ? Lifecycle::runWinbacks(7) : 0;
-        $out['trial_endings']     = !empty($emailerCfg['lifecycle_trial_endings']) ? Lifecycle::runTrialEndings(3) : 0;
-        $out['inactive_winbacks'] = !empty($emailerCfg['lifecycle_inactive_winbacks']) ? Lifecycle::runInactiveWinbacks(30) : 0;
-
-        // Staging directories abandoned mid-upload for more than 72 hours.
-        $base = $root . '/storage/uploads/pending';
-
-        foreach (glob($base . '/*', GLOB_ONLYDIR) ?: [] as $dir) {
-            $ageH = (time() - (int) filemtime($dir)) / 3600;
-
-            if ($ageH >= 72) {
-                self::rrmdir($dir);
-                $out['pending_dirs']++;
-            }
-        }
-
-        // Keep only the newest backup runs so the disk never fills up. A
-        // run groups everything sharing one timestamp: the split media
-        // archive (.part-NN), its .sha256 checksums and the SQL dump.
-        $backupDir = $root . '/storage/backups';
-        $runs      = [];
-
-        foreach (['*.tar.gz', '*.tar.gz.part-*', '*.tar.gz.sha256', '*.sql.gz'] as $pattern) {
-            foreach ((glob($backupDir . '/' . $pattern) ?: []) as $file) {
-                $key = 'misc';
-
-                if (preg_match('/-(\d{8}-\d{6})\./', basename($file), $m)) {
-                    $key = $m[1];
-                }
-
-                $runs[$key][] = $file;
-            }
-        }
-
-        if ($backupKeep > 0 && count($runs) > $backupKeep) {
-            $newest = fn (array $files): int => max(array_map(fn (string $f): int => (int) filemtime($f), $files));
-            uasort($runs, fn (array $a, array $b): int => $newest($b) <=> $newest($a));
-
-            foreach (array_slice($runs, $backupKeep, null, true) as $files) {
-                foreach ($files as $old) {
-                    @unlink($old);
-                    $out['backups_pruned']++;
-                }
-            }
-        }
-
-        // Storage snapshot for the trending chart + low-disk alert.
-        // photos_count/video_count mirror the dashboard's Photos/Videos
-        // cards (attached, non-deleted media) so the numbers agree.
-        $bytes = self::uploadsBytes($root . '/storage/uploads');
-        [$photos, $videos] = self::mediaCounts();
-        Database::run(
-            'INSERT INTO storage_snapshots (captured_at, uploads_bytes, photos_count, video_count) VALUES (CURRENT_TIMESTAMP, ?, ?, ?)',
-            [$bytes, $photos, $videos]
-        );
-        Database::run(
-            'DELETE FROM storage_snapshots WHERE captured_at < ?',
-            [date('Y-m-d H:i:s', time() - 90 * 86400)]
-        );
-
-        $free = @disk_free_space($root);
-
-        if ($free !== false) {
-            $freeGb            = round($free / 1073741824, 1);
-            $out['disk_free_gb'] = $freeGb;
-
-            if ($freeGb <= (float) env_value('DISK_MIN_FREE_GB', '10')) {
-                Mailer::adminAlert(
-                    'disk-low',
-                    'Low disk space',
-                    sprintf("Only %s GB free on the gallery server (threshold %s GB).\nClean up or extend the volume soon.",
-                        $freeGb, env_value('DISK_MIN_FREE_GB', '10')),
-                    43200
-                );
-            }
-        }
-
-        // Expiring chat media whose time or view limit has been hit: remove
-        // the stored files so they free storage and are permanently gone.
-        $out['chat_media_purged'] = \App\Models\ChatMessage::purgeExpiredMedia();
-
-        // New PHP fatals since the last sweep: alert the admin so an outage
-        // (like a runtime type error) is caught immediately, not by users.
-        $out['fatal_alerted'] = self::alertOnPhpFatals($root);
-
-        // Member notifications: email members once per newly-live gallery
-        // (covers galleries published on schedule, not just "publish now").
-        $out['new_gallery_notified'] = self::notifyNewGalleries();
-
-        // Automatic daily chat broadcast (once per day) so members get a
-        // fresh attributed link even when no admin scheduled one.
-        $out['chat_broadcast'] = self::scheduleDailyChatBroadcast();
-
-        // Chat retention: keep the idempotency window, the wall inbox and the
-        // background-reply queue from growing without bound. Counts land in
-        // $out so the cron log shows what each run removed.
-        $out['chat_prunes'] = self::pruneChatRetention();
-        $out['visit_prunes'] = self::pruneVisitHistory();
-
-        // Refer-a-friend: +7 free days to referrers whose referred members
-        // have become paying.
-        $out['referral_rewards'] = self::rewardReferrals();
-
-        @file_put_contents(
-            $root . '/storage/logs/cron.log',
-            implode(' | ', array_map(fn ($k, $v) => "$k=$v", array_keys($out), $out)) . "\n",
-            FILE_APPEND
-        );
 
         return $out;
     }
@@ -377,7 +389,7 @@ class Housekeeping
         )->rowCount();
 
         $out['category_views'] = (int) Database::run(
-            'DELETE FROM category_views WHERE view_date < DATE_SUB(CURDATE(), INTERVAL 2 YEAR)'
+            'DELETE FROM category_views WHERE created_at < DATE_SUB(CURDATE(), INTERVAL 2 YEAR)'
         )->rowCount();
 
         $out['search_stats'] = (int) Database::run(
@@ -385,6 +397,31 @@ class Housekeeping
         )->rowCount();
 
         return $out;
+    }
+
+    /**
+     * Run one housekeeping step so that it cannot take the others with it.
+     *
+     * A single bad query used to abort the whole run. The throw landed in
+     * the last 5% of this function, so the refer-a-friend rewards never ran
+     * and - because the log write was AFTER the throw - the cron log
+     * stopped being written at all. Nineteen hours of failure went
+     * unnoticed.
+     *
+     * The error is recorded in $out['errors'] and the run carries on.
+     *
+     * @param mixed[] $out
+     * @return mixed
+     */
+    private static function step(string $name, callable $fn, array &$out)
+    {
+        try {
+            return $fn();
+        } catch (\Throwable $e) {
+            $out['errors'][] = $name . ': ' . $e->getMessage();
+            error_log('[housekeeping] the ' . $name . ' step failed: ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**

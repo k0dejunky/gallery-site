@@ -2345,6 +2345,151 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.housekeeping.columns_exist', 'Smoke · Data', 'Every column a housekeeping query names exists', static function () use ($root, $read, $ok, $bad): array {
+            // The housekeeping cron died for 19 hours because one query named
+            // a column that does not exist: category_views has created_at,
+            // not view_date. The exception was uncaught, so it aborted the
+            // last two steps of a 30-step function - including the cron log
+            // write, which is why nobody noticed.
+            //
+            // This check reads the columns out of schema.sql and the column
+            // names out of the housekeeping queries, and compares them. A
+            // column rename now fails the build instead of the cron.
+            $schema = (string) $read($root . '/schema.sql');
+            $hk     = (string) $read($root . '/app/Core/Housekeeping.php');
+
+            // The columns of each table, from the schema. The statements are
+            // split on ";" because a column can be an ENUM with a ")" in it
+            // - and the comments are stripped first, because a comment can
+            // contain a ";" of its own.
+            $schema = (string) preg_replace('/--[^\n]*/', '', $schema);
+            $columns = [];
+            foreach (explode(';', $schema) as $statement) {
+                if (preg_match('/CREATE TABLE IF NOT EXISTS\s+(\w+)\s*\(/i', $statement, $t) !== 1) {
+                    continue;
+                }
+                $table = strtolower($t[1]);
+                $cols  = [];
+                foreach (preg_split('/\r?\n/', $statement) as $line) {
+                    $line = trim($line);
+                    if ($line === '' || str_starts_with($line, '--') || str_starts_with($line, 'PRIMARY')
+                        || str_starts_with($line, 'UNIQUE') || str_starts_with($line, 'KEY')
+                        || str_starts_with($line, 'INDEX') || str_starts_with($line, 'CONSTRAINT')
+                        || str_starts_with($line, 'FOREIGN')) {
+                        continue;
+                    }
+                    if (preg_match('/^`?([a-z_][a-z0-9_]*)`?\s+/i', $line, $c) === 1) {
+                        $cols[strtolower($c[1])] = true;
+                    }
+                }
+                $columns[$table] = $cols;
+            }
+            if ($columns === []) {
+                return $bad('no tables could be read out of schema.sql');
+            }
+
+            // The SQL keywords and functions that look like column names.
+            $words = ['and', 'or', 'not', 'null', 'interval', 'day', 'days', 'year', 'years',
+                'date_sub', 'curdate', 'now', 'current_timestamp', 'current_date', 'set', 'where',
+                'select', 'from', 'group', 'order', 'by', 'limit', 'count', 'sum', 'max', 'min',
+                'avg', 'distinct', 'as', 'on', 'join', 'inner', 'left', 'desc', 'asc', 'values',
+                'insert', 'into', 'update', 'delete', 'set', 'is', 'in', 'like', 'between', 'exists'];
+
+            // Every column a housekeeping query names, with its table.
+            $problems = [];
+            if (preg_match_all('/\b(?:DELETE FROM|UPDATE)\s+(\w+)([^\'\"]*)/i', $hk, $q, PREG_SET_ORDER) !== false) {
+                foreach ($q as $stmt) {
+                    $table = strtolower($stmt[1]);
+                    if (!isset($columns[$table])) {
+                        $problems[] = 'the housekeeping touches the unknown table ' . $table;
+                        continue;
+                    }
+                    foreach (explode(',', $stmt[2]) as $fragment) {
+                        if (preg_match('/\b([a-z_][a-z0-9_]*)\b\s*(?:=|<|>|<=|>=|<>|!=)/i', $fragment, $c) !== 1) {
+                            continue;
+                        }
+                        $col = strtolower($c[1]);
+                        if (in_array($col, $words, true)) {
+                            continue;
+                        }
+                        if (!isset($columns[$table][$col])) {
+                            $problems[] = $table . ' has no column ' . $col . ' (the housekeeping query names it)';
+                        }
+                    }
+                }
+            }
+
+            return $problems === []
+                ? $ok('every column the housekeeping names exists in the schema')
+                : $bad(implode('; ', array_unique($problems)));
+        });
+
+        $add('smoke.housekeeping.isolated', 'Smoke · Data', 'One failing housekeeping step cannot abort the rest', static function () use ($root, $read, $ok, $bad): array {
+            // The throw in pruneVisitHistory() aborted the last two steps of
+            // a 30-step function: the refer-a-friend rewards and the cron
+            // log write. The log write is why 19 hours of failure went
+            // unnoticed.
+            //
+            // The check is positional, not a word search: a comment that
+            // says "finally" must not satisfy it, and removing ONE step's
+            // wrapper must fail it.
+            $hk = (string) $read($root . '/app/Core/Housekeeping.php');
+            $problems = [];
+
+            // The run() method.
+            $runAt = strpos($hk, 'public static function run(');
+            if ($runAt === false) {
+                return $bad('Housekeeping::run() was not found');
+            }
+            $runEnd = strpos($hk, "
+    }", $runAt);
+            if ($runEnd === false) {
+                return $bad('the end of Housekeeping::run() was not found');
+            }
+            $run = substr($hk, $runAt, $runEnd - $runAt);
+
+            // The log write must be inside a finally, and the finally must
+            // come BEFORE the log write.
+            $logAt    = strpos($run, 'storage/logs/cron.log');
+            $finallyAt = $logAt === false ? false : strrpos(substr($run, 0, $logAt), 'finally {');
+            if ($logAt === false) {
+                $problems[] = 'the housekeeping must write the cron log';
+            } elseif ($finallyAt === false) {
+                $problems[] = 'the cron log write must be inside a finally block, so a failing step still records what happened';
+            } else {
+                // Inside the finally's braces, not merely after it: the
+                // brace depth between the "finally {" and the write must
+                // still be positive.
+                $depth = 0;
+                for ($i = $finallyAt + strlen('finally'); $i < $logAt; $i++) {
+                    if ($run[$i] === '{') { $depth++; }
+                    elseif ($run[$i] === '}') { $depth--; }
+                }
+                if ($depth <= 0) {
+                    $problems[] = 'the cron log write must be INSIDE the finally block, not after it';
+                }
+            }
+
+            // The steps that must be isolated. Removing one wrapper must
+            // fail the check.
+            foreach ([
+                'referral_rewards', 'visit_prunes', 'chat_prunes', 'chat_broadcast',
+                'new_gallery_notified', 'chat_media', 'php_fatals', 'storage_snapshot',
+                'expire_subscriptions', 'paypal_reconcile', 'renewal_reminders',
+                'winbacks', 'trial_endings', 'inactive_winbacks', 'temp_files',
+                'disk_growth', 'recovery_emails', 'duplicate_report', 'backup_sync',
+                'restore_drill',
+            ] as $step) {
+                if (strpos($run, "self::step('" . $step . "'") === false) {
+                    $problems[] = 'the ' . $step . ' step must run through self::step()';
+                }
+            }
+
+            return $problems === []
+                ? $ok('one failing housekeeping step cannot abort the rest')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).
