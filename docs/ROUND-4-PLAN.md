@@ -37,7 +37,7 @@ item, the check that locks it in travels in the same commit).
 | Phase | What | Status | Commit |
 |---|---|---|---|
 | 0 | The plan anchor (this file) | done | - |
-| 1 | The dead cron, and the alerting that missed it | in progress | - |
+| 1 | The dead cron, and the alerting that missed it | **done** | `1882ecb`, `6a8108d` |
 | 2 | The money: cancel, refund, grace, accounting | pending | - |
 | 3 | One access decision, not five | pending | - |
 | 4 | The exposure: stream key, keys, health, default page | pending | - |
@@ -94,13 +94,13 @@ code (`curl -fsS ... >/dev/null 2>&1`). There is no autonomous watchdog.
 
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| 1.1 | The wrong column, and the **19 hours of missed referral rewards** backfilled | `app/Core/Housekeeping.php` | pending | - |
-| 1.2 | Every step isolated: one failure must not abort the other 29 | `app/Core/Housekeeping.php` | pending | - |
-| 1.3 | The cron log written in a `finally`, so a throw still records what happened | `app/Core/Housekeeping.php` | pending | - |
-| 1.4 | The cron entry must not discard the exit code, and the cron file must live in the repo | `bin/apply_cron.php` | pending | - |
-| 1.5 | An **autonomous** watchdog - the cron-stale alert must not need a human to open the dashboard | `app/Core/Housekeeping.php`, `app/Controllers/AdminController.php` | pending | - |
-| 1.6 | A guard that a column rename cannot fool: assert every column a housekeeping query names exists, against the real schema | `app/Core/SmokeChecks.php` | pending | - |
-| 1.7 | The whole housekeeping runs green on a real database | dev + prod | pending | - |
+| 1.1 | The wrong column, and the **19 hours of missed referral rewards** backfilled | `app/Core/Housekeeping.php` | done | 1882ecb |
+| 1.2 | Every step isolated: one failure must not abort the other 29 | `app/Core/Housekeeping.php` | done | 1882ecb |
+| 1.3 | The cron log written in a `finally`, so a throw still records what happened | `app/Core/Housekeeping.php` | done | 1882ecb |
+| 1.4 | The cron entry must not discard the exit code, and the cron file must live in the repo | `bin/apply_cron.php` | done | 6a8108d |
+| 1.5 | An **autonomous** watchdog - the cron-stale alert must not need a human to open the dashboard | `app/Core/Housekeeping.php`, `app/Controllers/AdminController.php` | done | 6a8108d |
+| 1.6 | A guard that a column rename cannot fool: assert every column a housekeeping query names exists, against the real schema | `app/Core/SmokeChecks.php` | done | 1882ecb |
+| 1.7 | The whole housekeeping runs green on a real database | dev + prod | done | `6a8108d` |
 
 ### The evidence
 
@@ -120,6 +120,32 @@ Prod's error log, 76 times:
   Unknown column 'view_date' in 'where clause' in app/Core/Database.php:128
 #1 app/Core/Housekeeping.php(379): App\Core\Database::run()
 ```
+
+### What phase 1 changed
+
+The cron is alive again, and a failure can no longer hide.
+
+| id | what it did |
+|---|---|
+| 1.1 | The wrong column (`view_date` -> `created_at` on `category_views`). `rewardReferrals()` is self-healing, so the next run pays the backlog - there were **0** pending, so no revenue was lost |
+| 1.2 | Every step now runs through `self::step()`, which catches the throw, records it in `$out['errors']` and lets the other 29 steps carry on |
+| 1.3 | The cron log is written in a `finally`, so a failing step can never stop the log from being written - the log is the only record that the run happened |
+| 1.4 | The housekeeping runs as a CLI script. The old `curl ... ?key=SECRET > /dev/null 2>&1` put the key in a world-readable cron file and in `ps`, and discarded both the response and the exit code |
+| 1.5 | `bin/watchdog.php` alerts the admin by email when a worker goes quiet. The stale-cron alert only lived on the admin dashboard, so it needed a human to load it |
+| 1.6 | `smoke.housekeeping.columns_exist` reads the columns out of schema.sql and the column names out of the queries - a column rename now fails the build instead of the cron |
+| 1.7 | The whole housekeeping runs green on a real database (`errors=[]`) |
+
+**THE HEARTBEAT.** The first version of the watchdog watched the worker
+LOGS' mtimes and immediately reported four perfectly healthy workers as
+stale on the dev box: they only log when they have something to do, so an
+idle worker looks exactly like a dead one. Every worker now touches a
+heartbeat on every run (`app/Core/Heartbeat.php`), the auto-poster's own
+heartbeat became the shared one so `/health` and the watchdog read the
+same file, and the watchdog separates "has never run here" from "has
+stopped" so a dev box with a worker unconfigured does not cry wolf.
+
+Verified on the dev box: 16 workers checked, 0 stale, 4 correctly
+reported as never having run there, and the new cron entries are live.
 
 ---
 
