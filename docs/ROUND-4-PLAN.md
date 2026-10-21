@@ -48,7 +48,46 @@ item, the check that locks it in travels in the same commit).
 | 9 | Discoverability | **done** | `c0137e7`, `61ea184` |
 | 10 | The member-facing money | **not started** | - |
 | 11 | Ops hardening | **not started** | - |
-| Final | local smoke/unit -> dev -> prod verify -> commit + push | **in progress** | - |
+| 12 | The operator app, rebuilt | **done** | `40b4039`, `57ba5ff`, `ffa5db8` |
+| Final | local smoke/unit -> dev -> prod verify -> commit + push | **done for phases 1-9 and 12** | - |
+
+### Phase 12 - the operator app, rebuilt (2026-10-21)
+
+The operator app was rebuilt on **Jetpack Compose** and shipped as **v3.0**
+(versionCode 62, sha256 `3fa02e83f0cd1f89bfe44afff03bb347646b4274429dd290b92b6ec18805c85c`,
+signed with the usual key `b6881e87...f89b`, so it installs over v2.50).
+
+**The bugs the rebuild fixed, and why they mattered:**
+
+| what | why it mattered |
+|---|---|
+| The reply field measured **ZERO width** (the XML said `0dp` with no weight) | no reply could be typed at all - the single worst bug in the app |
+| The broadcast lived in the Activity | the stream died when the operator switched apps or locked the phone |
+| A rotation tore the encoder down and rebuilt it in a 400 ms window | the stream usually died, while the screen still said "Rotating…" |
+| The quiet hours never silenced anything | the notification went to an `IMPORTANCE_HIGH` channel, and the CHANNEL decides the sound on Android 8+ |
+| The server address and token could only be READ | a moved server or a rotated token meant reinstalling the app |
+| `site_timezone` was read out of the preferences but never written | every timestamp was in a hardcoded zone |
+| A failed connection still looked live | the operator could not tell a dead broadcast from a live one |
+
+**The new screens:** inbox, conversation, live console, show schedule,
+settings - all Compose, one design system (`ui/theme`, `ui/components`).
+The broadcast is a **foreground service** (`live/LiveBroadcastService`) with
+a real state machine (`live/BroadcastState`) and the encoder owned by the
+service, not the Activity.
+
+**The new server capability (commit `40b4039`):** live-show scheduling with
+a **server-authoritative** countdown on the member's live page, and the
+per-message actions the app never had (pin / unpin / delete a message,
+block a member). Migrations `087_live_shows` and `088_chat_message_actions`.
+The show time is converted to UTC in **one place** (`LiveShow::create()`),
+so a second caller cannot shift it a second time.
+
+**The tests:** the Compose screens are **rendered** in Robolectric (native
+graphics), so the layout is measured and screenshotted instead of parsed as
+XML - `app/src/testDebug/.../ComposerUiTest.kt` asserts the reply field is
+wider than 100dp (the old bug), `ScreenshotTest.kt` writes
+`app/build/screenshots/*.png` for every screen. The suite is **59 tests**
+(55 JVM + 4 Compose UI), all green, `lintRelease` clean.
 
 ### Baseline
 
