@@ -227,7 +227,7 @@ gallery shows as locked.
 
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| 4.1 | **The RTMP publish key must never reach a member.** `/live/state` returns it and the recording is auto-published to a paid gallery | `app/Controllers/LiveController.php` | done | 860ce5e |
+| 4.1 | **The RTMP publish key must never reach a member.** `/live/state` returns it and the recording is auto-published to a paid gallery | `app/Controllers/LiveController.php` | done | 860ce5e, fixed in 8b9a6d7 |
 | 4.2 | The cron key is world-readable in `/etc/cron.d/` (0644) and visible in `ps` | `bin/apply_cron.php` | done | `6a8108d` |
 | 4.3 | `/gallery/health` is public and discloses backup, cron and worker state | `app/Controllers/HealthController.php` | done | a768c6e |
 | 4.4 | `https://amethyst2213.com/index.html` serves the **Apache "It works" default page** | a repo-owned Apache conf | done | a768c6e |
@@ -353,7 +353,12 @@ names must exist in the real schema) · `smoke.housekeeping.isolated` (one
 step cannot abort the rest) · `smoke.braintree.can_cancel` ·
 `smoke.money.ledger` · `smoke.access.one_predicate` ·
 `smoke.access.browse_filtered` · `smoke.access.share_link` ·
-`smoke.live.no_stream_key_for_members` · `smoke.health.not_public` ·
+`smoke.live.no_stream_key_for_members` ·
+`smoke.live.publish_secret_reaches_mediamtx` (the real url builder run
+through a port of the app's URL parser AND MediaMTX's path/query parser:
+the path must stay the bare stream key and the secret must arrive as the
+query - the two parsers between the app and the auth webhook) ·
+`smoke.health.not_public` ·
 `smoke.rate_limits.present` · `smoke.media.cacheable` ·
 `smoke.sitemap.covers_the_site` · `smoke.seo.no_duplicate_titles` ·
 `smoke.seo.alt_text` · `smoke.seo.breadcrumbs` · `smoke.seo.og_images` ·
