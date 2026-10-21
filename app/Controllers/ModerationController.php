@@ -163,6 +163,25 @@ class ModerationController extends Controller
             return;
         }
 
+        // Moving a purchase to "refunded" must refund the MONEY. It used to
+        // only flip the local status, so the member kept their card charge
+        // while the unlock was revoked.
+        if ($status === Purchase::STATUS_REFUNDED) {
+            $gateway = Purchase::refundAtGateway($id);
+            if ($gateway === false) {
+                $this->flash('error', 'The purchase was marked refunded, but the payment processor did not confirm it. Check the processor and retry.');
+                $this->redirect('/admin/engagement/purchases');
+                return;
+            }
+            if ($gateway === null) {
+                $this->flash('success', 'Purchase marked refunded (no money had moved at a processor).');
+            } else {
+                $this->flash('success', 'Purchase refunded at the processor and marked refunded.');
+            }
+            $this->redirect('/admin/engagement/purchases');
+            return;
+        }
+
         Purchase::setStatus($id, $status);
 
         $this->flash('success', 'Purchase updated.');

@@ -68,11 +68,94 @@ class Purchase
     }
 
     /**
+     * The gateways where money actually moved.
+     *
+     * An OFFLINE tip is a member posting an amount and a note - nothing is
+     * charged, and the amount is whatever the member typed (up to $10,000,
+     * five times per ten minutes per IP). An unlock CODE is a comp. Both
+     * used to be counted as revenue, so the earnings dashboard and its CSV
+     * could be inflated by anyone who wanted to make the numbers look
+     * better.
+     *
+     * They are still recorded and still shown, but separately.
+     */
+    public const REVENUE_GATEWAYS = ['braintree', 'paypal'];
+
+    /**
      * Settle a purchase we already identified by id (synchronous card charge).
      */
     public static function settleById(int $id): void
     {
         Database::run("UPDATE purchases SET status = 'paid', updated_at = NOW() WHERE id = ? AND status = 'pending'", [$id]);
+    }
+
+    /**
+     * Refund a purchase AT ITS PAYMENT PROCESSOR.
+     *
+     * The admin's "refund" only flipped the local status, so the member
+     * kept their card charge while the unlock was revoked. Both gateways
+     * could already refund - BraintreeGateway::refund() and
+     * PayPalGateway::refundCapture() - but neither was ever called.
+     *
+     * Returns:
+     *   true  - the processor confirmed the refund
+     *   false - the processor was asked and did not confirm
+     *   null  - there was no money to refund (an unlock code or an offline
+     *           tip: no money ever moved)
+     */
+    public static function refundAtGateway(int $id): ?bool
+    {
+        $row = Database::run(
+            'SELECT * FROM purchases WHERE id = ? LIMIT 1',
+            [$id]
+        )->fetch();
+
+        if ($row === false) {
+            return null;
+        }
+
+        $gateway = (string) ($row['gateway'] ?? 'offline');
+        $ref     = (string) ($row['gateway_ref'] ?? '');
+
+        // An unlock code and an offline tip never moved money, so there is
+        // nothing to refund at a processor.
+        if ($gateway === 'code' || $gateway === 'offline' || $ref === '') {
+            return null;
+        }
+
+        $processor = !empty($row['payment_processor_id'])
+            ? \App\Models\PaymentProcessor::find((int) $row['payment_processor_id'])
+            : null;
+
+        try {
+            if ($gateway === 'braintree') {
+                $client = $processor !== null
+                    ? \App\Core\BraintreeGateway::fromConfig($processor)
+                    : null;
+                if ($client === null) {
+                    error_log('[purchase-refund] no Braintree gateway for purchase ' . $id);
+                    return false;
+                }
+                return $client->refund($ref, (float) $row['amount']);
+            }
+
+            if ($gateway === 'paypal') {
+                $client = $processor !== null
+                    ? \App\Core\PayPalGateway::fromConfig($processor)
+                    : null;
+                if ($client === null) {
+                    error_log('[purchase-refund] no PayPal gateway for purchase ' . $id);
+                    return false;
+                }
+                return $client->refundCapture($ref, (float) $row['amount']);
+            }
+        } catch (\Throwable $e) {
+            error_log('[purchase-refund] the refund failed for purchase ' . $id . ' (' . $gateway . '): ' . $e->getMessage());
+            return false;
+        }
+
+        error_log('[purchase-refund] purchase ' . $id . ' has an unknown gateway "' . $gateway . '"');
+        return false;
     }
 
     /**
@@ -99,15 +182,21 @@ class Purchase
     public static function totalsBetween(string $from, string $to): array
     {
         $rows = Database::run(
-            "SELECT item_type, COALESCE(SUM(amount), 0) AS total FROM purchases
+            "SELECT item_type, gateway, COALESCE(SUM(amount), 0) AS total FROM purchases
              WHERE status IN ('paid', 'granted') AND created_at >= ? AND created_at < ?
-             GROUP BY item_type",
+             GROUP BY item_type, gateway",
             [$from, $to]
         )->fetchAll();
 
-        $result = ['gallery' => 0.0, 'tip' => 0.0, 'total' => 0.0];
+        $result = ['gallery' => 0.0, 'tip' => 0.0, 'total' => 0.0, 'offline' => 0.0];
         foreach ($rows as $row) {
             $v = (float) ($row['total'] ?? 0);
+            $isRevenue = in_array((string) ($row['gateway'] ?? ''), self::REVENUE_GATEWAYS, true);
+            if (!$isRevenue) {
+                // An offline tip or a code redemption: not collected money.
+                $result['offline'] += $v;
+                continue;
+            }
             $result[(string) ($row['item_type'] ?? '') === 'tip' ? 'tip' : 'gallery'] = $v;
             $result['total'] += $v;
         }
@@ -225,7 +314,8 @@ public static function setStatus(int $id, string $status): void
     {
         $row = Database::run(
             'SELECT COALESCE(SUM(amount), 0) AS total FROM purchases
-             WHERE item_type = ? AND status IN (\'paid\', \'granted\')',
+             WHERE item_type = ? AND status IN (\'paid\', \'granted\')
+               AND gateway IN (\'braintree\', \'paypal\')',
             [$itemType]
         )->fetch();
 
@@ -243,6 +333,7 @@ public static function setStatus(int $id, string $status): void
             "SELECT DATE_FORMAT(created_at, '%Y-%m') AS ym, item_type, COALESCE(SUM(amount), 0) AS total
              FROM purchases
              WHERE status IN ('paid', 'granted') AND created_at >= ? AND created_at < ?
+               AND gateway IN ('braintree', 'paypal')
              GROUP BY ym, item_type ORDER BY ym ASC",
             [$from, $to]
         )->fetchAll();

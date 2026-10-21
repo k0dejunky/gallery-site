@@ -47,6 +47,13 @@
             <small>Of which tips</small>
             <b>$<?= number_format($oneOff['tip'], 2) ?></b>
         </div>
+        <?php if (($oneOff['offline'] ?? 0) > 0): ?>
+        <div class="stat-card kpi">
+            <small>Offline tips (not collected)</small>
+            <b>$<?= number_format($oneOff['offline'], 2) ?></b>
+            <small>Posted by members. No money moved, so they are not in the revenue above.</small>
+        </div>
+        <?php endif; ?>
     </div>
 </section>
 

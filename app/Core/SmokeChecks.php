@@ -2649,6 +2649,81 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.money.gateway_refunds', 'Smoke · Money', 'A refund reaches the payment processor', static function () use ($root, $read, $ok, $bad): array {
+            // The admin's "refund" only flipped the local status, so the
+            // member kept their card charge while the unlock was revoked.
+            // Both gateways could already refund - BraintreeGateway::refund()
+            // and PayPalGateway::refundCapture() - and neither was called.
+            $purchase = (string) $read($root . '/app/Models/Purchase.php');
+            $mod      = (string) $read($root . '/app/Controllers/ModerationController.php');
+            $problems = [];
+
+            if (strpos($purchase, 'public static function refundAtGateway(') === false) {
+                $problems[] = 'Purchase must have a refundAtGateway()';
+            }
+            foreach (['braintree', 'paypal'] as $gateway) {
+                if (strpos($purchase, "'" . $gateway . "'") === false) {
+                    $problems[] = 'refundAtGateway() must handle the ' . $gateway . ' gateway';
+                }
+            }
+            if (strpos($purchase, 'BraintreeGateway::fromConfig(') === false) {
+                $problems[] = 'refundAtGateway() must reach Braintree';
+            }
+            if (strpos($purchase, 'PayPalGateway::fromConfig(') === false) {
+                $problems[] = 'refundAtGateway() must reach PayPal';
+            }
+            // And the admin's refund action must call it.
+            if (strpos($mod, 'Purchase::refundAtGateway(') === false) {
+                $problems[] = 'the admin refund action must refund at the processor';
+            }
+
+            return $problems === []
+                ? $ok('a refund reaches the payment processor')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.money.only_real_money_is_revenue', 'Smoke · Money', 'Only collected money counts as revenue', static function () use ($root, $read, $ok, $bad): array {
+            // An OFFLINE tip is a member posting an amount and a note:
+            // nothing is charged and the amount is whatever the member
+            // typed (up to $10,000, five times per ten minutes per IP). It
+            // was counted as revenue, so the earnings dashboard and its CSV
+            // could be inflated by anyone.
+            $purchase = (string) $read($root . '/app/Models/Purchase.php');
+            $problems = [];
+
+            if (strpos($purchase, "REVENUE_GATEWAYS = ['braintree', 'paypal']") === false) {
+                $problems[] = 'Purchase must name the gateways where money actually moved';
+            }
+            // Every revenue aggregate has to exclude the others.
+            foreach (['totalsBetween', 'totalFor', 'seriesBetween'] as $method) {
+                $at = strpos($purchase, 'public static function ' . $method . '(');
+                if ($at === false) {
+                    $problems[] = 'Purchase::' . $method . '() was not found';
+                    continue;
+                }
+                // The method's own body, not the next one: a window that
+                // wide bleeds into the following method and makes the
+                // check pass when it should fail.
+                $end = strpos($purchase, "\n    }\n", $at);
+                $body = substr($purchase, $at, ($end === false ? 1400 : $end - $at));
+                // Either the literal list or the named constant - but one
+                // of them, so the aggregate cannot silently start counting
+                // the offline tips again.
+                $hasList = strpos($body, 'braintree') !== false && strpos($body, 'paypal') !== false;
+                $hasConst = strpos($body, 'REVENUE_GATEWAYS') !== false;
+                if (!$hasList && !$hasConst) {
+                    $problems[] = 'Purchase::' . $method . '() must count only the gateways where money moved';
+                }
+                if ($hasList && $hasConst) {
+                    $problems[] = 'Purchase::' . $method . '() names the gateways twice - keep one list';
+                }
+            }
+
+            return $problems === []
+                ? $ok('only collected money counts as revenue')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).
