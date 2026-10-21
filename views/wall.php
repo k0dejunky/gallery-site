@@ -131,6 +131,7 @@
             <h2>Studio updates</h2>
         </div>
     <?php endif; ?>
+    <?php $postCommentsById = $postComments ?? []; ?>
     <?php foreach ($posts as $post): ?>
         <?php $postPreview = $post['preview'] ?? null; ?>
         <?php
@@ -199,7 +200,7 @@
                 <p style="white-space:pre-line;margin-bottom:.5rem;"><?= e($post['body']) ?></p>
             <?php endif; ?>
 
-            <?php $postComments = \App\Models\Comment::forEntity(\App\Models\Comment::TYPE_WALL, (int) $post['id']); ?>
+            <?php $postComments = $postCommentsById[(int) $post['id']] ?? []; ?>
             <details class="u-mt-075">
                 <summary style="cursor:pointer;font-size:.9rem;" class="muted"><?= count($postComments) ?> comment<?= count($postComments) === 1 ? '' : 's' ?></summary>
                 <div style="margin-top:.75rem;display:grid;gap:.75rem;">

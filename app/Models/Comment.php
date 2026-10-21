@@ -210,6 +210,88 @@ class Comment
         return $out;
     }
 
+    /**
+     * The comments of MANY entities in one query.
+     *
+     * The wall used to call forEntity() once per post - 20 queries for a
+     * 20-post feed - and the admin engagement table called countFor() once
+     * per post. Both now ask once.
+     *
+     * @param int[] $entityIds
+     * @return array<int,array<int,array<string,mixed>>>  [entityId => comments]
+     */
+    public static function forEntities(string $type, array $entityIds, int $limit = 50): array
+    {
+        $entityIds = array_values(array_unique(array_map('intval', $entityIds)));
+        $entityIds = array_values(array_filter($entityIds, static fn (int $id): bool => $id > 0));
+
+        if ($entityIds === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($entityIds), '?'));
+
+        $rows = Database::run(
+            "SELECT c.*, u.role, u.created_at AS user_created
+             FROM comments c
+             JOIN users u ON u.id = c.user_id
+             WHERE c.commentable_type = ? AND c.commentable_id IN ($placeholders)
+               AND c.deleted_at IS NULL AND c.parent_id IS NULL
+             ORDER BY c.commentable_id ASC, c.created_at ASC, c.id ASC",
+            array_merge([$type], $entityIds)
+        )->fetchAll();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row['commentable_id']][] = $row;
+        }
+
+        // The per-entity limit, applied in PHP so one entity cannot take
+        // the whole window.
+        foreach ($out as $id => $list) {
+            if (count($list) > $limit) {
+                $out[$id] = array_slice($list, 0, $limit);
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * The comment count of MANY entities in one query.
+     *
+     * @param int[] $entityIds
+     * @return array<int,int>  [entityId => count]
+     */
+    public static function countsFor(string $type, array $entityIds): array
+    {
+        $entityIds = array_values(array_unique(array_map('intval', $entityIds)));
+        $entityIds = array_values(array_filter($entityIds, static fn (int $id): bool => $id > 0));
+
+        if ($entityIds === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($entityIds), '?'));
+
+        $rows = Database::run(
+            "SELECT commentable_id, COUNT(*) AS n FROM comments
+             WHERE commentable_type = ? AND commentable_id IN ($placeholders) AND deleted_at IS NULL
+             GROUP BY commentable_id",
+            array_merge([$type], $entityIds)
+        )->fetchAll();
+
+        $out = [];
+        foreach ($entityIds as $id) {
+            $out[$id] = 0;
+        }
+        foreach ($rows as $row) {
+            $out[(int) $row['commentable_id']] = (int) $row['n'];
+        }
+
+        return $out;
+    }
+
     public static function countFor(string $type, int $commentableId): int
     {
         $row = Database::run(

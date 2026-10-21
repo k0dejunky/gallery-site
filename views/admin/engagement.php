@@ -127,7 +127,7 @@ $canMonetise = \App\Core\Auth::can('monetisation');
                     <tr>
                         <td class="muted mg-date"><?= e(tzdate('Y-m-d H:i', (string) $post['created_at'])) ?><?= !empty($post['pinned']) ? ' <span class="chip">Pinned</span>' : '' ?></td>
                         <td><?= e(mb_substr((string) $post['body'], 0, 160)) ?><?= mb_strlen((string) $post['body']) > 160 ? '…' : '' ?><?= (int) ($post['gallery_id'] ?? 0) > 0 ? ' <span class="chip">Gallery #' . (int) $post['gallery_id'] . '</span>' : '' ?></td>
-                        <td class="num"><?= (int) \App\Models\Comment::countFor(\App\Models\Comment::TYPE_WALL, (int) $post['id']) ?></td>
+                        <td class="num"><?= (int) (($postComments ?? [])[(int) $post['id']] ?? 0) ?></td>
                         <td class="act">
                             <?php if ($canModerate): ?>
                             <form class="inline" method="post" action="<?= url('/admin/engagement/wall/' . (int) $post['id'] . '/delete') ?>" data-confirm="Remove this wall post?">

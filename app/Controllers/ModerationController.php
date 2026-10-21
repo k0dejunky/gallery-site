@@ -24,8 +24,17 @@ class ModerationController extends Controller
     {
         Auth::requirePermission('dashboard');
 
+        $wallPosts = WallPost::allPublished(30);
+
         $this->viewAdmin('engagement', [
-            'posts'           => WallPost::allPublished(30),
+            'posts'           => $wallPosts,
+            // The comment count of every post in ONE query. The view used
+            // to call countFor() once per post - 30 queries for a 30-post
+            // table.
+            'postComments'    => \App\Models\Comment::countsFor(
+                \App\Models\Comment::TYPE_WALL,
+                array_map(static fn (array $p): int => (int) $p['id'], $wallPosts)
+            ),
             'comments'        => Comment::recent(40),
             'codes'           => UnlockCode::all(),
             'galleries'       => Gallery::all(['include_secret' => Auth::isSuperAdmin()]),

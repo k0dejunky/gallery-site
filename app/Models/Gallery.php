@@ -1516,10 +1516,14 @@ class Gallery
 
         // Categories from favourites + recently-viewed galleries.
         $favCats = array_map('intval', array_column(FavoriteCategory::forUser($userId), 'id'));
+        // ONE query for all of them: this used to call categories() once
+        // per recently-viewed gallery, so the listing spent 8 queries
+        // collecting the same information categoriesBulk() already returns.
         $recentCatIds = [];
-        foreach (self::recentlyViewed($userId, 8) as $g) {
-            foreach (self::categories((int) $g['id']) as $c) {
-                $recentCatIds[] = (int) $c['id'];
+        $recentIds   = array_map(static fn (array $g): int => (int) $g['id'], self::recentlyViewed($userId, 8));
+        foreach (self::categoriesBulk($recentIds) as $forGallery) {
+            foreach ($forGallery as $category) {
+                $recentCatIds[] = (int) $category['id'];
             }
         }
         $catIds = array_values(array_unique(array_filter(array_merge($favCats, $recentCatIds))));

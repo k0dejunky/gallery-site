@@ -78,6 +78,13 @@ class WallController extends Controller
 
         $this->view('wall', [
             'posts'         => $posts,
+            // The comments of every post in ONE query. The view used to
+            // call forEntity() once per post - 20 queries for a 20-post
+            // feed.
+            'postComments'  => \App\Models\Comment::forEntities(
+                \App\Models\Comment::TYPE_WALL,
+                array_map(static fn (array $p): int => (int) $p['id'], $posts)
+            ),
             'notifications' => $notifications,
             'unreadIds'     => $unreadIds ?? [],
             'sidebarNav'    => true,

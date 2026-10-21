@@ -3208,6 +3208,40 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.perf.no_n_plus_one', 'Smoke · Perf', 'The listing pages do not ask one query per row', static function () use ($root, $read, $ok, $bad): array {
+            // Three N+1s that cost 58 queries a page:
+            //   the wall's comments - one per post, 20 for a 20-post feed;
+            //   the recommended galleries' categories - one per recently
+            //   viewed gallery, 8;
+            //   the admin engagement table's comment counts - one per post, 30.
+            $wallView = (string) $read($root . '/views/wall.php');
+            $wallCtrl = (string) $read($root . '/app/Controllers/WallController.php');
+            $gallery  = (string) $read($root . '/app/Models/Gallery.php');
+            $engage   = (string) $read($root . '/views/admin/engagement.php');
+            $engageCtrl = (string) $read($root . '/app/Controllers/ModerationController.php');
+            $problems = [];
+
+            if (strpos($wallView, 'Comment::forEntity(') !== false) {
+                $problems[] = 'the wall must not load each post\'s comments one at a time';
+            }
+            if (strpos($wallCtrl, 'Comment::forEntities(') === false) {
+                $problems[] = 'the wall must load its comments in one query';
+            }
+            if (strpos($gallery, 'foreach (self::categories((int) $g[\'id\']) as $c)') !== false) {
+                $problems[] = 'the recommendations must not load each gallery\'s categories one at a time';
+            }
+            if (strpos($engage, 'Comment::countFor(') !== false) {
+                $problems[] = 'the engagement table must not count each post\'s comments one at a time';
+            }
+            if (strpos($engageCtrl, 'Comment::countsFor(') === false) {
+                $problems[] = 'the engagement table must count its comments in one query';
+            }
+
+            return $problems === []
+                ? $ok('the listing pages do not ask one query per row')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).
