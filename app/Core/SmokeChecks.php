@@ -2178,6 +2178,40 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.admin_pages_have_structure', 'Smoke · UI', 'The admin list pages are built from the shared structure', static function () use ($root, $ok, $bad): array {
+            // views/admin/logs.php was the only admin page with no
+            // .adm-section / .sys-card structure at all: four bare h2s and
+            // four tables, floating in the page.
+            $problems = [];
+            $view = (string) @file_get_contents($root . '/views/admin/logs.php');
+
+            $sections = substr_count($view, '<section class="adm-section">');
+            $cards    = substr_count($view, '<div class="sys-card">');
+            $heads    = substr_count($view, '<div class="adm-section-head">');
+            if ($sections < 4) {
+                $problems[] = 'the logs page must wrap each of its four lists in a .adm-section';
+            }
+            if ($cards !== $sections) {
+                $problems[] = 'every .adm-section on the logs page needs a .sys-card';
+            }
+            if ($heads !== $sections) {
+                $problems[] = 'every .adm-section on the logs page needs a .adm-section-head';
+            }
+            // A heading must live in the head, not loose in the card.
+            if (preg_match('/<div class="sys-card">\s*<h2>/', $view) === 1) {
+                $problems[] = 'a heading is loose in the card - it belongs in the section head';
+            }
+            foreach (['Pending Memberships', 'Deleted Galleries', 'Pending Category Approvals', 'Activity Log'] as $heading) {
+                if (strpos($view, '<h2>' . $heading . '</h2>') === false) {
+                    $problems[] = 'the logs page is missing the ' . $heading . ' section';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the logs page is built from the shared structure')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

@@ -1,7 +1,11 @@
 <?php $title = 'Admin Logs'; ?>
 
 <?php if (!empty($pendingSubs)): ?>
-<h2>Pending Memberships</h2>
+<section class="adm-section">
+    <div class="adm-section-head">
+        <h2>Pending Memberships</h2>
+    </div>
+    <div class="sys-card">
 <table>
     <thead><tr><th>When</th><th>User</th><th>Plan</th><th>Price</th><th>Actions</th></tr></thead>
     <tbody>
@@ -23,11 +27,17 @@
     <?php endforeach; ?>
     </tbody>
 </table>
+    </div>
+</section>
 <?php endif; ?>
 
 <?php if (!empty($pendingDeletes)): ?>
-<h2>Deleted Galleries</h2>
-<p class="muted">Galleries that have been deleted but not restored or permanently purged.</p>
+<section class="adm-section">
+    <div class="adm-section-head">
+        <h2>Deleted Galleries</h2>
+        <p>Galleries that have been deleted but not restored or permanently purged.</p>
+    </div>
+    <div class="sys-card">
 <table>
     <thead><tr><th>When</th><th>Admin</th><th>Gallery</th><th>Actions</th></tr></thead>
     <tbody>
@@ -48,11 +58,17 @@
     <?php endforeach; ?>
     </tbody>
 </table>
+    </div>
+</section>
 <?php endif; ?>
 
 <?php if (!empty($pendingApprovals)): ?>
-<h2>Pending Category Approvals</h2>
-<p class="muted">Frequently missed searches that can be promoted to categories.</p>
+<section class="adm-section">
+    <div class="adm-section-head">
+        <h2>Pending Category Approvals</h2>
+        <p>Frequently missed searches that can be promoted to categories.</p>
+    </div>
+    <div class="sys-card">
 <table>
     <thead><tr><th>Search Term</th><th>Times Searched</th><th>Actions</th></tr></thead>
     <tbody>
@@ -71,11 +87,16 @@
     <?php endforeach; ?>
     </tbody>
 </table>
+    </div>
+</section>
 <?php endif; ?>
 
-<h2>Activity Log</h2>
-<p class="muted">All admin actions are recorded. Create, update and delete actions can be rolled back where data allows. Passwords are never stored.</p>
-
+<section class="adm-section">
+    <div class="adm-section-head">
+        <h2>Activity Log</h2>
+        <p>All admin actions are recorded. Create, update and delete actions can be rolled back where data allows. Passwords are never stored.</p>
+    </div>
+    <div class="sys-card">
 <form method="get" action="<?= url('/admin/logs') ?>" style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:end;margin-bottom:.75rem;">
     <label>Search<br><input type="text" name="q" value="<?= e($filterQ) ?>" placeholder="description or admin email" size="28"></label>
     <label>Action<br>
@@ -165,6 +186,8 @@
         <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
+</section>
     <?php // The shared admin pager (app/Core/AdminTable.php). ?>
     <?= \App\Core\AdminTable::pager([
         'base'   => url('/admin/logs'),
