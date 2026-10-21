@@ -448,7 +448,7 @@ class CategoryFeedback
              FROM gallery_category_feedback f
              INNER JOIN categories c ON c.id = f.category_id
              GROUP BY f.category_id, c.name
-             ORDER BY (the_kept + the_removed) DESC, c.name ASC"
+             ORDER BY (SUM(f.the_kept) + SUM(f.the_removed)) DESC, c.name ASC"
         )->fetchAll();
 
         $out = [];
