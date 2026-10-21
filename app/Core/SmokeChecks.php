@@ -2212,6 +2212,72 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.no_dead_classes', 'Smoke · UI', 'Every class a view uses is styled or scripted', static function () use ($root, $ok, $bad): array {
+            // A class with no style and no script is a typo that renders
+            // silently: the element gets the browser's default and nobody
+            // says anything. There were 51 of them.
+            $css = '';
+            foreach (['public/assets/css/admin.css', 'public/assets/css/user.css', 'public/assets/css/utilities.css', 'public/assets/css/support.css', 'app/Core/theme_base.css'] as $file) {
+                $css .= (string) @file_get_contents($root . '/' . $file);
+            }
+            $js = '';
+            foreach (glob($root . '/public/assets/js/*.js') ?: [] as $file) {
+                $js .= (string) @file_get_contents($file);
+            }
+            // Google's paywall marker: it is a structured-data hook, not a
+            // style hook, and it must survive in the markup.
+            $allowed = ['paywalled-content' => true];
+
+            $problems = [];
+            $files = array_merge(glob($root . '/views/*.php') ?: [], glob($root . '/views/*/*.php') ?: []);
+            foreach ($files as $file) {
+                $rel = str_replace($root . '/', '', $file);
+                if (str_starts_with($rel, 'views/emails/')) {
+                    continue;   // email clients need their own inline CSS
+                }
+                $src = (string) @file_get_contents($file);
+                // A view may scope its own styles and scripts.
+                $own = '';
+                if (preg_match_all('/<style[^>]*>(.*?)<\/style>/s', $src, $sm)) {
+                    $own = implode("\n", $sm[1]);
+                }
+                $ownJs = '';
+                if (preg_match_all('/<script[^>]*>(.*?)<\/script>/s', $src, $jm)) {
+                    $ownJs = implode("\n", $jm[1]);
+                }
+                $allJs = $js . $ownJs;
+                if (preg_match_all('/class="([^"]*)"/', $src, $m) !== false) {
+                    foreach ($m[1] as $attr) {
+                        foreach (preg_split('/\s+/', trim($attr)) as $class) {
+                            if ($class === '' || !preg_match('/^[a-z][a-z0-9_-]*$/', $class)) {
+                                continue;
+                            }
+                            if (isset($allowed[$class])) {
+                                continue;
+                            }
+                            $styled = preg_match('/\.' . preg_quote($class, '/') . '(?![\w-])/', $css) === 1
+                                || preg_match('/\.' . preg_quote($class, '/') . '(?![\w-])/', $own) === 1;
+                            if ($styled) {
+                                continue;
+                            }
+                            $scripted = strpos($allJs, "'" . $class . "'") !== false
+                                || strpos($allJs, '"' . $class . '"') !== false
+                                || strpos($allJs, '.' . $class) !== false
+                                || strpos($allJs, ' ' . $class) !== false;
+                            if ($scripted) {
+                                continue;
+                            }
+                            $problems[] = $rel . ' uses the class ' . $class . ', which nothing styles or scripts';
+                        }
+                    }
+                }
+            }
+
+            return $problems === []
+                ? $ok('every class a view uses is styled or scripted')
+                : $bad(implode('; ', array_slice($problems, 0, 12)));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

@@ -6,7 +6,7 @@ $ratingLabel = $ratingCount > 0
     ? number_format((float) $ratingAverage, 1) . ' / 5 from ' . number_format((int) $ratingCount) . ' rating' . ($ratingCount === 1 ? '' : 's')
     : 'No ratings yet';
 ?>
-<div class="star-rating" style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin:.75rem 0;">
+<div class="star-rating">
     <span role="img" aria-label="<?= e($ratingLabel) ?>" title="<?= e($ratingLabel) ?>" style="letter-spacing:.1em;font-size:1.1rem;color:var(--star-color);">
         <?php for ($i = 1; $i <= 5; $i++): ?><?= $i <= $starsFull ? '&#9733;' : '&#9734;' ?><?php endfor; ?>
     </span>

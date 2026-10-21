@@ -237,7 +237,7 @@ foreach ((array) ($playlist ?? []) as $item) {
                 <button type="button" class="pl-ctl" data-queue="autoplay" aria-pressed="true" title="Play the next video automatically">Autoplay: on</button>
                 <button type="button" class="pl-ctl" data-queue="repeat" aria-pressed="false" title="Repeat this video when it ends">Repeat: off</button>
                 <button type="button" class="pl-ctl" data-queue="shuffle" aria-pressed="false" title="Shuffle the queue order">Shuffle: off</button>
-                <button type="button" class="pl-ctl pl-save" data-save-collection<?= empty($collections) ? ' hidden' : '' ?>>Save queue as collection</button>
+                <button type="button" class="pl-ctl" data-save-collection<?= empty($collections) ? ' hidden' : '' ?>>Save queue as collection</button>
             </div>
             <ul>
                 <?php if (!empty($playlist)): ?>

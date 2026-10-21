@@ -14,7 +14,7 @@ $tags            = (array) ($tags ?? []);
 ?>
 
 <div class="hero home-hero">
-    <p class="hero-kicker" style="color:var(--brand-2);font-variant:small-caps;letter-spacing:.14em;margin:0 0 .5rem;">Adults only</p>
+    <p class="hero-kicker">Adults only</p>
     <h1 style="font-size:clamp(1.8rem, 4vw, 2.6rem);margin:0 0 .4rem;"><?= e(config('app.site_name')) ?></h1>
     <p class="muted" style="max-width:52rem;margin:0 auto 1.5rem;">
         Original photos, videos and live streams — updated regularly. Join for full access;
@@ -38,12 +38,12 @@ $tags            = (array) ($tags ?? []);
 </div>
 
 <?php if ($categories !== []): ?>
-    <section class="home-section u-mt-15">
-        <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+    <section class="home-section">
+        <div class="home-section-head">
             <h2 class="u-m0">Browse by category</h2>
             <a class="btn btn-sm btn-link" href="<?= url('/galleries') ?>">Browse all galleries &rarr;</a>
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.75rem;">
+        <div class="home-chips">
             <?php foreach ($categories as $cat): ?>
                 <a class="chip" href="<?= url('/galleries/category/' . e($cat['slug'])) ?>">
                     <?= e($cat['name']) ?>
@@ -55,8 +55,8 @@ $tags            = (array) ($tags ?? []);
 <?php endif; ?>
 
 <?php if ($featured !== []): ?>
-    <section class="home-section" style="margin-top:1.75rem;">
-        <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+    <section class="home-section home-section-gap">
+        <div class="home-section-head">
             <h2 class="u-m0">Featured</h2>
             <a class="btn btn-sm btn-link" href="<?= url('/galleries') ?>">View all &rarr;</a>
         </div>
@@ -74,8 +74,8 @@ $tags            = (array) ($tags ?? []);
 <?php endif; ?>
 
 <?php if ($trending !== []): ?>
-    <section class="home-section" style="margin-top:1.75rem;">
-        <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+    <section class="home-section home-section-gap">
+        <div class="home-section-head">
             <h2 class="u-m0">Trending this week</h2>
             <a class="btn btn-sm btn-link" href="<?= url('/galleries') ?>">View all &rarr;</a>
         </div>
@@ -93,7 +93,7 @@ $tags            = (array) ($tags ?? []);
 <?php endif; ?>
 
 <?php if ($tags !== []): ?>
-    <section class="home-section u-mt-15">
+    <section class="home-section">
         <h2 style="margin:0 0 .6rem;">Popular tags</h2>
         <div style="display:flex;flex-wrap:wrap;gap:.5rem;">
             <?php foreach (array_slice($tags, 0, 16) as $tag): ?>
@@ -103,8 +103,8 @@ $tags            = (array) ($tags ?? []);
     </section>
 <?php endif; ?>
 
-<section class="home-section" style="margin-top:1.75rem;">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+<section class="home-section home-section-gap">
+    <div class="home-section-head">
         <h2 class="u-m0">Latest uploads</h2>
         <a class="btn btn-sm btn-link" href="<?= url('/galleries') ?>">View all &rarr;</a>
     </div>
@@ -123,9 +123,9 @@ $tags            = (array) ($tags ?? []);
     <?php endif; ?>
 </section>
 
-<section class="home-upsell" style="margin-top:2rem;border:1px solid var(--border);border-radius:var(--border-radius);padding:1.5rem;text-align:center;background:linear-gradient(180deg,color-mix(in srgb,var(--brand-1) 6%,transparent),transparent);">
-    <h2 style="margin:0 0 .35rem;">Unlock everything</h2>
-    <p class="muted" style="max-width:44rem;margin:0 auto .9rem;">
+<section class="home-upsell">
+    <h2 class="home-upsell-title">Unlock everything</h2>
+    <p class="muted home-upsell-text">
         Silver and above unlocks every gallery at full resolution, favorites,
         collections, the members' chat and live streams. New accounts start with
         a <?= (int) \App\Models\SiteConfig::trialDays() ?>-day trial.

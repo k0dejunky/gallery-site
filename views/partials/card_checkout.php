@@ -57,7 +57,7 @@ foreach (\App\Models\PaymentProcessor::enabled() as $__pp) {
                 <input type="hidden" name="amount" value="<?= e($ccAmount) ?>">
                 <input type="hidden" name="note" value="Card payment">
             <?php endif; ?>
-            <p class="cc-status muted" style="display:none;font-size:.8rem;color:var(--flash-error-color);"></p>
+            <p class="cc-status muted"></p>
             <p style="margin:.55rem 0 0;display:flex;gap:.5rem;flex-wrap:wrap;">
                 <button type="submit" class="btn btn-sm" data-cc-pay<?= $btLive ? '' : ' disabled' ?> style="<?= $btLive ? '' : 'opacity:.55;cursor:not-allowed;' ?>"<?= $btLive ? '' : ' aria-label="Pay by card (coming soon)" title="Braintree card checkout is not available yet."' ?>>Pay $<?= e($ccAmount) ?></button>
                 <button type="button" class="btn btn-sm btn-outline" data-cc-paypal>Pay with PayPal</button>

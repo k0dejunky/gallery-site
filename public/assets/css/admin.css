@@ -1727,6 +1727,17 @@ body.admin-theme {
 .admin-theme .status-badge.pending { background: var(--adm-warn-bg); border-color: var(--adm-warn-border); color: var(--adm-warn); }
 .admin-theme .status-badge.cancelled, .admin-theme .status-badge.expired { background: var(--adm-err-bg); border-color: var(--adm-err-border); color: var(--adm-err); }
 
+/* A small badge. .badge-flag is the flagged variant. */
+.admin-theme .badge {
+    display: inline-block;
+    padding: .1rem .4rem;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--adm-surface-3);
+    color: var(--adm-text-dim);
+    vertical-align: middle;
+}
 .admin-theme .badge-flag {
     padding: .1rem .45rem;
     font-size: 10.5px;
@@ -2363,6 +2374,73 @@ body.admin-theme {
     .admin-theme .editor-grid, .admin-theme .theme-choice-layout { grid-template-columns: 1fr; }
     .admin-theme .theme-choice-preview-body { grid-template-columns: 1fr; }
 }
+
+/* ---------- The classes the admin views use ---------------------------
+   These were used in the views and defined nowhere, so the element
+   rendered with the browser's default. */
+
+/* A table that is wider than the page scrolls inside its own box instead
+   of pushing the whole page sideways. */
+.admin-theme .table-responsive {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* The small button. Without it every "small" button rendered at the full
+   size. */
+.admin-theme .btn.small {
+    padding: .25rem .5rem;
+    font-size: 11.5px;
+    border-radius: var(--adm-radius-sm);
+}
+
+/* Muted text. Without it the text inherited the full-strength colour. */
+.admin-theme .text-muted { color: var(--adm-text-dim); }
+
+/* The range filter on the trends and web-analytics pages. */
+.admin-theme .stats-period {
+    display: flex;
+    gap: .75rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 0 0 1rem;
+}
+.admin-theme .stats-period select { width: auto; }
+
+/* The bulk form's wrapper. */
+.admin-theme .adm-bulk-form { margin: 0; }
+/* A field label inside the admin's own field grid. */
+.admin-theme .adm-field-label { font-size: 12px; font-weight: 600; color: var(--adm-text-dim); }
+/* A row of the auto-poster queue, and the row that opens when it is
+   edited. */
+.admin-theme .ap-row td { vertical-align: top; }
+.admin-theme .ap-queue-edit-row { background: var(--adm-surface-2); }
+/* The chip row on the video export page. */
+.admin-theme .chips-justify { justify-content: center; }
+/* The import settings panel on the gallery management page. */
+.admin-theme .mg-import-settings { margin: 0 0 1rem; }
+/* A scheduled gallery in the list. */
+.admin-theme .mg-scheduled { color: var(--adm-text-dim); }
+/* The theme editor's preset buttons. */
+.admin-theme .preset-action { flex: none; }
+.admin-theme .presets-actions { display: flex; gap: var(--spacing-sm); flex-wrap: wrap; margin-bottom: var(--spacing-md); }
+/* The editable cell of a recommended post. */
+.admin-theme .rp-edit { max-width: 340px; font-size: .85rem; }
+/* The gallery type switch on the manage page. */
+.admin-theme .type-switch-track {
+    display: inline-block;
+    width: 2.4rem;
+    height: 1.3rem;
+    border-radius: 999px;
+    background: var(--adm-surface-3);
+    border: 1px solid var(--adm-border-strong);
+    position: relative;
+    vertical-align: middle;
+}
+.admin-theme .type-switch input:checked + .type-switch-track { background: var(--adm-accent); border-color: var(--adm-accent); }
+.admin-theme .type-switch input:focus-visible + .type-switch-track { outline: 2px solid var(--adm-accent-ring); outline-offset: 2px; }
 
 /* ---------- Overflow containment (keep last: it must win) ---------------- */
 

@@ -98,7 +98,7 @@
             member only found the reply by scrolling. */ ?>
         <div class="chat-thread" id="chat-thread" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversation with the studio">
             <?php if (empty($messages)): ?>
-                <div class="chat-empty empty-state" style="margin:1rem auto;max-width:420px;text-align:center;">
+                <div class="chat-empty empty-state">
                     <p class="muted u-mt-0">No messages yet. Say hello to start chatting.</p>
                     <button type="button" class="btn btn-sm" data-action="chatFocusInput">Say hello</button>
                 </div>

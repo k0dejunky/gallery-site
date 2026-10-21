@@ -432,6 +432,110 @@ body.site-compact .home-nav-wrap { flex-basis: 176px; }
 body.site-compact th, body.site-compact td { padding: .28rem .38rem; }
 body.site-compact .title-header img { max-width: 380px; }
 
+/* ---------- The classes the member views use ---------------------------
+   These were used in the views and defined nowhere, so each one rendered
+   with the browser's default and carried its layout in an inline style. */
+.site-footer {
+    border-top: 1px solid var(--pink-300);
+    margin-top: var(--spacing-lg);
+    padding: var(--spacing-md) 0;
+    text-align: center;
+    font-size: var(--font-size-sm);
+    color: var(--muted-color);
+}
+.membership-gate {
+    text-align: center;
+    padding: 2rem 1.5rem;
+    margin: 1.5rem 0;
+    background: var(--pink-100);
+    border: 1px solid var(--pink-300);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow);
+}
+.share-bar {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 1rem 0;
+}
+.star-rating {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+    margin: .75rem 0;
+}
+.card-body { padding: 0 .75rem .75rem; }
+.chat-empty { margin: 1rem auto; max-width: 420px; text-align: center; }
+.chat-expired { opacity: .75; font-size: var(--font-size-sm); }
+.player-retry { margin-top: .4rem; }
+.ch-title { font-size: var(--font-size-sm); }
+.cc-block { margin: .6rem 0; }
+.cc-status { display: none; font-size: .8rem; color: var(--flash-error-color); }
+.pp-select { width: 100%; box-sizing: border-box; }
+/* The gap between two page numbers in the pager. */
+.page-gap { padding: 0 .25rem; color: var(--muted-color); }
+
+/* The gallery type switch on the manage page. */
+.type-switch-track {
+    display: inline-block;
+    width: 2.4rem;
+    height: 1.3rem;
+    border-radius: 999px;
+    background: var(--surface-3);
+    border: 1px solid var(--card-border);
+    position: relative;
+    vertical-align: middle;
+}
+.type-switch input:checked + .type-switch-track { background: var(--purple-500); border-color: var(--purple-500); }
+.type-switch input:focus-visible + .type-switch-track { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* The account security card on the settings page. */
+.security-card { border-left: 4px solid var(--pink-400); }
+
+/* ---------- The home page ------------------------------------------------
+   The home page carried its layout in inline styles: the same flex section
+   header four times, the section spacing four times, and five classes
+   that no stylesheet had ever defined. */
+.home-hero { text-align: center; }
+.hero-kicker {
+    color: var(--brand-2);
+    font-variant: small-caps;
+    letter-spacing: .14em;
+    margin: 0 0 .5rem;
+}
+.home-section { margin: 0 0 1.5rem; }
+.home-section-gap { margin-top: 1.75rem; }
+.home-section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+.home-chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.home-upsell {
+    margin-top: 2rem;
+    border: 1px solid var(--card-border);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    text-align: center;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--brand-1) 6%, transparent), transparent);
+}
+.home-upsell-title { margin: 0 0 .35rem; }
+.home-upsell-text { max-width: 44rem; margin: 0 auto .9rem; }
+/* A quiet link that sits in a button row without looking like a button. */
+.btn-link {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    color: var(--link-color);
+    padding: 0;
+    text-decoration: underline;
+    text-underline-offset: .2em;
+}
+.btn-link:hover { background: none; color: var(--link-hover); }
+
 /* ---------- The site-wide search -----------------------------------------
    The admin console has a global search and a Ctrl+K command palette. The
    member site had neither - the only search was the box on the gallery

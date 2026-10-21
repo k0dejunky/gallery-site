@@ -2,7 +2,7 @@
 // Site-wide footer with legal / compliance links. Included once by
 // views/layout.php for every rendered page.
 ?>
-<footer class="site-footer" style="border-top:1px solid var(--pink-300);margin-top:var(--spacing-lg);padding:var(--spacing-md) 0;text-align:center;font-size:var(--font-size-sm);color:var(--purple-700);">
+<footer class="site-footer">
     <nav aria-label="Legal">
         <a class="thin-link" href="<?= url('/terms') ?>">Terms of Service</a>
         &middot; <a class="thin-link" href="<?= url('/privacy') ?>">Privacy Policy</a>

@@ -56,7 +56,7 @@ $title = 'Test Suite';
             <span class="g-count"><span class="ts-grp-pass" data-group="<?= e($group) ?>">0</span>/<?= $total ?> passed</span>
         </summary>
         <div class="users-table-wrap">
-            <table class="users-table ts-table" data-group="<?= e($group) ?>">
+            <table class="users-table" data-group="<?= e($group) ?>">
                 <thead>
                     <tr>
                         <th class="check-col"><input type="checkbox" class="ts-grp-cbx" data-group="<?= e($group) ?>" data-stop-prop></th>
