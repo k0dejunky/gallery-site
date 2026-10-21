@@ -432,6 +432,47 @@ body.site-compact .home-nav-wrap { flex-basis: 176px; }
 body.site-compact th, body.site-compact td { padding: .28rem .38rem; }
 body.site-compact .title-header img { max-width: 380px; }
 
+/* ---------- The site-wide search -----------------------------------------
+   The admin console has a global search and a Ctrl+K command palette. The
+   member site had neither - the only search was the box on the gallery
+   listing. There are three of them, one per place the member can be:
+   the rail on a desktop, the top bar for a guest, and the More sheet on
+   a phone. */
+.site-search { display: flex; gap: .35rem; align-items: center; }
+.site-search input[type="search"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: .35rem .55rem;
+    font: inherit;
+    font-size: var(--font-size-sm);
+    color: var(--text-color);
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--btn-radius);
+}
+.site-search input[type="search"]::placeholder { color: var(--input-placeholder); }
+.site-search input[type="search"]:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.site-search-go {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 1px solid var(--card-border);
+    border-radius: var(--btn-radius);
+    background: var(--surface-3);
+    color: var(--text-color);
+    cursor: pointer;
+}
+.site-search-go:hover { background: var(--surface-2); }
+.site-search-ico { width: 16px; height: 16px; display: block; }
+.site-search-rail { margin: 0 0 .85rem; }
+.site-search-top { flex: 1 1 22rem; max-width: 26rem; }
+.site-search-sheet { margin: 0 0 .85rem; }
+.site-search-sheet input[type="search"] { font-size: var(--font-size-base); }
+
 /* ---------- Chat ---------------------------------------------------------- */
 
 .chat-page { width: 100%; max-width: none; }

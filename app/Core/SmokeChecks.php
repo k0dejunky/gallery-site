@@ -2130,6 +2130,54 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.member_search', 'Smoke · UI', 'The member site has a site-wide search', static function () use ($root, $ok, $bad): array {
+            // The admin console has a global search and a Ctrl+K command
+            // palette. The member site had neither - the only search was
+            // the box on the gallery listing, so a member could not look
+            // anything up from anywhere else.
+            $layout = (string) @file_get_contents($root . '/views/layout.php');
+            $css    = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $js     = (string) @file_get_contents($root . '/public/assets/js/user.js');
+            $problems = [];
+
+            // One in the rail, one in the guest's top bar, one in the
+            // phone's More sheet.
+            foreach (['site-search-rail', 'site-search-top', 'site-search-sheet'] as $variant) {
+                if (strpos($layout, $variant) === false) {
+                    $problems[] = 'the member site has no ' . $variant . ' search box';
+                }
+            }
+            // They all go to the gallery listing's own search.
+            if (substr_count($layout, 'method="get" action="<?= e(url(\'/galleries\')) ?>"') !== 3) {
+                $problems[] = 'every search box must post to the gallery listing search';
+            }
+            // Each one needs a label, or it is an unlabelled input.
+            if (substr_count($layout, '<label class="sr-only" for="site-search-') !== 3) {
+                $problems[] = 'every search box needs a label';
+            }
+            // And the styles.
+            foreach (['.site-search', '.site-search-rail', '.site-search-top', '.site-search-sheet'] as $selector) {
+                if (strpos($css, $selector) === false) {
+                    $problems[] = $selector . ' has no style';
+                }
+            }
+            // The "/" shortcut.
+            if (strpos($js, "focusSearch") === false) {
+                $problems[] = 'the "/" shortcut is missing';
+            }
+            if (strpos($js, "e.key !== '/'") === false) {
+                $problems[] = 'the "/" shortcut must be bound to the slash key';
+            }
+            // It must not steal the slash from a text box.
+            if (strpos($js, 'if (typing()) return;') === false) {
+                $problems[] = 'the "/" shortcut must not fire while the member is typing';
+            }
+
+            return $problems === []
+                ? $ok('the member site has a site-wide search in the rail, the top bar and the phone sheet')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

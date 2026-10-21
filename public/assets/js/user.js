@@ -1926,3 +1926,36 @@ document.addEventListener('leavepictureinpicture', function(){
     canAdvance: function(){ return prefs.autoplay && !prefs.repeat; }
   };
 })();
+/* The site-wide search: a "/" focuses it, the way it does in every other
+   site. The admin console has the same shortcut. It only fires when the
+   member is not already typing in a field, and it never steals the
+   "/" from a text box. */
+(function () {
+  var inputs = 'input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea, select, [contenteditable]';
+
+  function typing() {
+    var a = document.activeElement;
+    if (!a) return false;
+    if (a.isContentEditable) return true;
+    if (!a.tagName) return false;
+    return a.matches(inputs);
+  }
+
+  function focusSearch() {
+    // The visible one wins: the rail on a desktop, the top bar for a
+    // guest, the More sheet on a phone.
+    var candidates = document.querySelectorAll('.site-search input[type="search"]');
+    for (var i = 0; i < candidates.length; i++) {
+      var box = candidates[i].getBoundingClientRect();
+      if (box.width > 0 && box.height > 0) { candidates[i].focus(); candidates[i].select(); return true; }
+    }
+    return false;
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (typing()) return;
+    if (!focusSearch()) return;
+    e.preventDefault();
+  });
+})();

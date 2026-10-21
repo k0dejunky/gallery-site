@@ -149,12 +149,25 @@ if (!empty($_SESSION['impersonator_id'])) {
         </form>
     </div>
     <?php endif; ?>
+    <?php
+    // The site-wide search. The admin console has a global search and a
+    // Ctrl+K command palette; the member site had neither - the only
+    // search was the box on the gallery listing. The query is read from
+    // the listing's own parameter, so a search box shows what is being
+    // searched for.
+    $siteSearchQuery = isset($q) ? trim((string) $q) : trim((string) ($_GET['q'] ?? ''));
+    ?>
     <header class="title-header">
             <img src="<?= e(url(\App\Models\Theme::userTheme($userThemePreset)['title_image'])) ?>" alt="<?= e(config('app.site_name')) ?>">
     </header>
     <?php if (!$sidebarNav && !$isAuthPage): ?>
     <nav class="nav">
         <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav-links-id" id="nav-toggle-id" data-action="galleryNavToggle">&#9776;</button>
+        <form class="site-search site-search-top" method="get" action="<?= e(url('/galleries')) ?>" role="search">
+            <label class="sr-only" for="site-search-top">Search galleries</label>
+            <input type="search" id="site-search-top" name="q" value="<?= e($siteSearchQuery) ?>" placeholder="Search galleries&hellip;" autocomplete="off">
+            <button type="submit" class="btn btn-sm">Search</button>
+        </form>
         <span class="spacer"></span>
         <div class="nav-links" id="nav-links-id">
         <?php if ($user !== null): ?>
@@ -311,6 +324,13 @@ if (!empty($_SESSION['impersonator_id'])) {
         ];
         ?>
         <nav class="home-nav-actions user-nav" aria-label="Site menu">
+            <form class="site-search site-search-rail" method="get" action="<?= e(url('/galleries')) ?>" role="search">
+                <label class="sr-only" for="site-search-rail">Search galleries</label>
+                <input type="search" id="site-search-rail" name="q" value="<?= e($siteSearchQuery) ?>" placeholder="Search galleries&hellip;" autocomplete="off">
+                <button type="submit" class="site-search-go" aria-label="Search">
+                    <?= \App\Core\Icon::svg('search', 'site-search-ico') ?>
+                </button>
+            </form>
             <?php if ($user !== null): ?>
                 <a class="rail-identity<?= $currentPath === url('/account') ? ' active' : '' ?>" href="<?= url('/account') ?>"
                    data-se-move-key="pub-dashboard" title="<?= e($memberName) ?>">
@@ -416,6 +436,11 @@ if (!empty($_SESSION['impersonator_id'])) {
             <strong>More</strong>
             <button type="button" class="mbs-close" data-action="bottomMoreToggle" aria-label="Close the menu">&times;</button>
         </div>
+        <form class="site-search site-search-sheet" method="get" action="<?= e(url('/galleries')) ?>" role="search">
+            <label class="sr-only" for="site-search-sheet">Search galleries</label>
+            <input type="search" id="site-search-sheet" name="q" value="<?= e($siteSearchQuery) ?>" placeholder="Search galleries&hellip;" autocomplete="off">
+            <button type="submit" class="btn btn-sm">Search</button>
+        </form>
         <ul>
             <?php foreach ($bottomMore as $item): ?>
                 <li>
