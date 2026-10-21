@@ -20,7 +20,27 @@ class Subscription
      */
     public static function activeWhere(string $alias = 's'): string
     {
-        return "$alias.status IN ('active', 'cancelled') AND ($alias.expires_at IS NULL OR $alias.expires_at > CURRENT_TIMESTAMP)";
+        // A PAST DUE subscription keeps its access for a grace period. The
+        // Braintree webhook has always said "flag but don't cancel - give a
+        // grace period", but there was no grace period: the flag was set and
+        // the member lost their access on the first failed card, with no way
+        // to fix the card. The window is measured from past_due_at, so it
+        // starts when the subscription went past due rather than whenever
+        // the row was last touched.
+        return "($alias.status IN ('active', 'cancelled')"
+            . " OR ($alias.status = 'past_due' AND $alias.past_due_at IS NOT NULL"
+            . " AND $alias.past_due_at > DATE_SUB(NOW(), INTERVAL " . self::pastDueGraceDays() . " DAY)))"
+            . " AND ($alias.expires_at IS NULL OR $alias.expires_at > CURRENT_TIMESTAMP)";
+    }
+
+    /**
+     * How many days a past-due subscription keeps its access.
+     *
+     * Zero means no grace, which restores the old behaviour.
+     */
+    public static function pastDueGraceDays(): int
+    {
+        return max(0, (int) env_value('PAST_DUE_GRACE_DAYS', '7'));
     }
 
     /**
@@ -346,7 +366,7 @@ class Subscription
         // read and the write cannot resurrect a cancelled subscription.
         Database::run(
             'UPDATE subscriptions
-             SET status = ?, starts_at = CURRENT_TIMESTAMP, expires_at = ?, updated_at = CURRENT_TIMESTAMP
+             SET status = ?, past_due_at = NULL, starts_at = CURRENT_TIMESTAMP, expires_at = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ? AND status IN (?, ?)',
             ['active', $expires, $id, 'pending', 'past_due']
         );

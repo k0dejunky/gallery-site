@@ -126,11 +126,43 @@ class MembershipController extends Controller
         $userId    = (int) $user['id'];
         $activeSub = Subscription::activeFor($userId);
 
+        // A past-due membership needs a way to fix the card, so the page
+        // needs the Braintree client token for the hosted fields.
+        $pastDueSub = null;
+        $cardToken  = null;
+        foreach (Subscription::forUser($userId) as $sub) {
+            if ((string) ($sub['status'] ?? '') === 'past_due') {
+                $pastDueSub = $sub;
+                break;
+            }
+        }
+        if ($pastDueSub !== null && strpos((string) ($pastDueSub['transaction_ref'] ?? ''), 'BT-') === 0) {
+            try {
+                $processor = $this->braintreeProcessor();
+                $gateway   = $processor !== null ? BraintreeGateway::fromConfig($processor) : null;
+                if ($gateway !== null) {
+                    $customerId = $this->btCustomerIdForUser($userId);
+                    $cardToken  = $gateway->clientToken($customerId);
+                }
+            } catch (\Throwable $e) {
+                error_log('[membership/my] the card token could not be built: ' . $e->getMessage());
+            }
+        }
+
+        // The card-update form loads Braintree's JS from its CDN, so this
+        // page needs the same CSP relaxation the checkout page has. The
+        // header replaces the one the front controller sends.
+        if ($cardToken !== null) {
+            header("Content-Security-Policy: default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://js.braintreegateway.com; font-src 'self' data: https://assets.braintreegateway.com; media-src 'self' blob:; connect-src 'self' https://api.braintreegateway.com; frame-src https://client-analytics.braintreegateway.com https://*.sandbox.paypal.com https://*.paypal.com; frame-ancestors 'self'");
+        }
+
         $this->view('membership/my', [
             'subscriptions' => Subscription::forUser($userId),
             'hasActive'     => $activeSub !== null,
             'activeSub'     => $activeSub,
             'pendingSub'    => Subscription::pendingFor($userId),
+            'pastDueSub'    => $pastDueSub,
+            'cardToken'     => $cardToken,
             'user'          => $user,
         ]);
     }
@@ -191,6 +223,90 @@ class MembershipController extends Controller
      *
      * GET /membership/checkout?plan_id=N
      */
+    /**
+     * Put a new card on a past-due membership.
+     *
+     * A past-due subscription keeps its access for a grace period, and the
+     * past-due email links here - but there was NO WAY to enter a new card
+     * anywhere on the site. The member could only wait, or ask for help.
+     *
+     * The member posts a Braintree payment-method nonce; the card is put on
+     * the subscription at Braintree and the membership goes back to active.
+     */
+    public function braintreeUpdateCard(): void
+    {
+        Auth::requireLogin();
+
+        $subscriptionId = (int) $this->request->post('subscription_id', 0);
+        $subscription   = Subscription::find($subscriptionId);
+
+        if ($subscription === null || (int) $subscription['user_id'] !== (int) Auth::user()['id']) {
+            $this->flash('error', 'That membership was not found.');
+            $this->redirect('/membership/my');
+            return;
+        }
+
+        $ref = (string) ($subscription['transaction_ref'] ?? '');
+        if (strpos($ref, 'BT-') !== 0) {
+            $this->flash('error', 'This membership is not billed by card, so the card cannot be updated here. Please contact support.');
+            $this->redirect('/membership/my');
+            return;
+        }
+
+        $processor = $this->braintreeProcessor();
+        $gateway   = $processor !== null ? BraintreeGateway::fromConfig($processor) : null;
+
+        if ($gateway === null) {
+            $this->flash('error', 'Card payments are not available right now.');
+            $this->redirect('/membership/my');
+            return;
+        }
+
+        $token = (string) ($this->request->post('payment_method_nonce', ''));
+        if ($token === '') {
+            $this->flash('error', 'No card details were received.');
+            $this->redirect('/membership/my');
+            return;
+        }
+
+        try {
+            $customerId = $this->btCustomerIdForUser((int) Auth::user()['id']);
+
+            if ($customerId === null) {
+                $email = (string) Auth::user()['email'];
+                $first = (string) (Auth::user()['billing_first_name'] ?? '');
+                $last  = (string) (Auth::user()['billing_last_name'] ?? '');
+                $customerId = $gateway->createCustomer($email, $first !== '' ? $first : null, $last !== '' ? $last : null);
+            }
+
+            $paymentMethod = $gateway->createPaymentMethod($customerId, $token, true);
+
+            if (!isset($paymentMethod['token']) || (string) $paymentMethod['token'] === '') {
+                throw new \RuntimeException('the card was not accepted');
+            }
+
+            if (!$gateway->updateSubscriptionPaymentMethod(substr($ref, strlen('BT-')), (string) $paymentMethod['token'])) {
+                throw new \RuntimeException('the subscription did not accept the new card');
+            }
+
+            // The subscription is healthy again: clear the past-due marker
+            // and put the access back.
+            Database::run(
+                "UPDATE subscriptions
+                 SET status = 'active', past_due_at = NULL, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ? AND status = 'past_due'",
+                [$subscriptionId]
+            );
+
+            $this->flash('success', 'Your card has been updated. Your membership is active again.');
+        } catch (\Throwable $e) {
+            error_log('[membership/update-card] ' . $e->getMessage());
+            $this->flash('error', 'The card could not be updated. Please check the details and try again.');
+        }
+
+        $this->redirect('/membership/my');
+    }
+
     public function braintreeCheckout(): void
     {
         Auth::requireLogin();

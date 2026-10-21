@@ -430,6 +430,7 @@ return [
     ['POST', '/membership/paypal-approve', 'MembershipController@paypalApprove'],
     ['GET', '/membership/checkout', 'MembershipController@braintreeCheckout'],
     ['GET', '/membership/braintree-token', 'MembershipController@braintreeToken'],
+    ['POST', '/membership/update-card', 'MembershipController@braintreeUpdateCard'],
     ['POST', '/membership/braintree-token', 'MembershipController@braintreeToken'],
 
     // Plans (admin only)

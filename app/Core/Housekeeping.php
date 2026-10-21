@@ -233,6 +233,7 @@ class Housekeeping
             // Chat retention: keep the idempotency window, the wall inbox and the
             // background-reply queue from growing without bound. Counts land in
             // $out so the cron log shows what each run removed.
+            $out['past_due_expired'] = self::step('past_due_expired', fn () => self::expirePastDueSubscriptions(), $out);
             $out['chat_prunes'] = self::step('chat_prunes', fn () => self::pruneChatRetention(), $out);
             $out['visit_prunes'] = self::step('visit_prunes', fn () => self::pruneVisitHistory(), $out);
 
@@ -397,6 +398,43 @@ class Housekeeping
         )->rowCount();
 
         return $out;
+    }
+
+
+    /**
+     * Revoke a past-due subscription whose grace period has run out.
+     *
+     * The grace period keeps a member's access while their card is
+     * retried, but it has to END: a subscription that stays in the grace
+     * window for ever would never be revoked.
+     */
+    private static function expirePastDueSubscriptions(): int
+    {
+        $grace = \App\Models\Subscription::pastDueGraceDays();
+
+        if ($grace <= 0) {
+            return 0;
+        }
+
+        $rows = Database::run(
+            "SELECT id, user_id FROM subscriptions
+             WHERE status = 'past_due' AND past_due_at IS NOT NULL
+               AND past_due_at <= DATE_SUB(NOW(), INTERVAL " . (int) $grace . " DAY)"
+        )->fetchAll();
+
+        $expired = 0;
+        foreach ($rows as $row) {
+            $id = (int) $row['id'];
+            Database::run(
+                "UPDATE subscriptions SET status = 'expired', expires_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ? AND status = 'past_due'",
+                [$id]
+            );
+            \App\Core\Lifecycle::onExpired($id);
+            $expired++;
+        }
+
+        return $expired;
     }
 
     /**

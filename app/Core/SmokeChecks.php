@@ -2724,6 +2724,56 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.money.past_due_grace', 'Smoke · Money', 'A failed card is a bump, not a lockout', static function () use ($root, $read, $ok, $bad): array {
+            // The Braintree webhook has always said "flag but don't cancel -
+            // give a grace period". There was no grace period: the flag was
+            // set and the member lost their access on the first failed card,
+            // with no way to fix the card - the past-due email links to a
+            // page with no payment-method form on it.
+            $sub  = (string) $read($root . '/app/Models/Subscription.php');
+            $hook = (string) $read($root . '/app/Controllers/WebhookController.php');
+            $hk   = (string) $read($root . '/app/Core/Housekeeping.php');
+            $my   = (string) $read($root . '/views/membership/my.php');
+            $ctrl = (string) $read($root . '/app/Controllers/MembershipController.php');
+            $problems = [];
+
+            // The grace window.
+            if (strpos($sub, "status = 'past_due'") === false) {
+                $problems[] = 'the eligibility predicate must keep a past-due subscription eligible during the grace period';
+            }
+            if (strpos($sub, 'past_due_at') === false) {
+                $problems[] = 'the grace window must be measured from past_due_at';
+            }
+            if (strpos($sub, 'pastDueGraceDays()') === false) {
+                $problems[] = 'the grace period must be configurable';
+            }
+            // Both webhooks must stamp it.
+            if (substr_count($hook, 'past_due_at = CURRENT_TIMESTAMP') < 2) {
+                $problems[] = 'both the Braintree and the PayPal past-due webhooks must stamp past_due_at';
+            }
+            // And it must end.
+            if (strpos($hk, 'expirePastDueSubscriptions') === false) {
+                $problems[] = 'the housekeeping must revoke a past-due subscription whose grace has run out';
+            }
+            // And the member must be able to fix the card.
+            if (strpos($my, 'update-card') === false) {
+                $problems[] = 'the membership page must offer a way to update the card';
+            }
+            if (strpos($ctrl, 'braintreeUpdateCard') === false) {
+                $problems[] = 'there must be an action that puts a new card on the subscription';
+            }
+            if (strpos($ctrl, 'updateSubscriptionPaymentMethod') === false) {
+                $problems[] = 'the action must put the new card on the subscription at the processor';
+            }
+            if (strpos($ctrl, "past_due_at = NULL") === false) {
+                $problems[] = 'a successful card update must clear the past-due marker';
+            }
+
+            return $problems === []
+                ? $ok('a failed card is a bump, not a lockout')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

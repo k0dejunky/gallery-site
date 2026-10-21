@@ -230,6 +230,43 @@ class BraintreeGateway
         }
     }
 
+    /**
+     * Put a NEW payment method on an existing subscription.
+     *
+     * This is how a member fixes a card that failed. Without it a past-due
+     * subscription could only be waited out (or the grace period could end),
+     * because there was nowhere on the site to enter a new card.
+     *
+     * Returns true when Braintree accepted the new payment method.
+     */
+    public function updateSubscriptionPaymentMethod(string $btSubscriptionId, string $paymentMethodToken): bool
+    {
+        $btSubscriptionId = trim($btSubscriptionId);
+        $paymentMethodToken = trim($paymentMethodToken);
+
+        if ($btSubscriptionId === '' || $paymentMethodToken === '') {
+            return false;
+        }
+        if (!preg_match('/\A[A-Za-z0-9_-]{4,100}\z/', $btSubscriptionId)) {
+            return false;
+        }
+        if (!preg_match('/\A[A-Za-z0-9_-]{4,255}\z/', $paymentMethodToken)) {
+            return false;
+        }
+
+        try {
+            $this->request(
+                'PATCH',
+                '/merchants/' . $this->merchantId . '/subscriptions/' . rawurlencode($btSubscriptionId),
+                ['xml' => true, 'payload' => ['subscription' => ['payment_method_token' => $paymentMethodToken]]]
+            );
+            return true;
+        } catch (\Throwable $e) {
+            error_log('[braintree-update-card] failed for ' . $btSubscriptionId . ': ' . $e->getMessage());
+            return false;
+        }
+    }
+
     // ------------------------------------------------------------------
     // Plans
     // ------------------------------------------------------------------
@@ -455,6 +492,11 @@ class BraintreeGateway
 
         if ($method === 'POST') {
             $curlOpts[CURLOPT_POST] = true;
+            if ($payload !== null) {
+                $curlOpts[CURLOPT_POSTFIELDS] = json_encode($payload);
+            }
+        } elseif ($method === 'PATCH') {
+            $curlOpts[CURLOPT_CUSTOMREQUEST] = 'PATCH';
             if ($payload !== null) {
                 $curlOpts[CURLOPT_POSTFIELDS] = json_encode($payload);
             }

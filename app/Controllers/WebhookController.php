@@ -491,9 +491,13 @@ class WebhookController extends Controller
                 return;
 
             case 'subscription_went_past_due':
-                // Flag but don't cancel — give a grace period
+                // Flag but don't cancel - the member keeps their access for
+                // the grace period (Subscription::activeWhere), so a failed
+                // card is a bump, not a lockout.
                 Database::run(
-                    "UPDATE subscriptions SET status = 'past_due', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'active'",
+                    "UPDATE subscriptions
+                     SET status = 'past_due', past_due_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                     WHERE id = ? AND status = 'active'",
                     [$subId]
                 );
                 AuditLog::record(
@@ -709,7 +713,9 @@ class WebhookController extends Controller
 
             case 'BILLING.SUBSCRIPTION.SUSPENDED':
                 Database::run(
-                    "UPDATE subscriptions SET status = 'past_due', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'active'",
+                    "UPDATE subscriptions
+                     SET status = 'past_due', past_due_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                     WHERE id = ? AND status = 'active'",
                     [$subId]
                 );
                 AuditLog::record(

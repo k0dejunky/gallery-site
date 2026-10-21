@@ -60,6 +60,68 @@ $user = $user ?? \App\Core\Auth::user();
                 <button type="submit" class="btn btn-sm btn-danger">Cancel membership</button>
             </form>
         </div>
+
+        <?php // A past-due membership: the card failed, and the member needs
+              // somewhere to put a new one. Without this the past-due email
+              // linked here and there was nothing to do. ?>
+        <?php if (!empty($pastDueSub)): ?>
+        <div class="card">
+            <h2>Your payment failed</h2>
+            <p>
+                We could not charge the card on your <strong><?= e((string) ($pastDueSub['plan_name'] ?? 'membership')) ?></strong>
+                membership, so it has been marked past due. You keep your access for
+                <strong><?= (int) \App\Models\Subscription::pastDueGraceDays() ?> days</strong>
+                while the card is retried.
+            </p>
+            <?php if (!empty($cardToken)): ?>
+            <form method="post" action="<?= url('/membership/update-card') ?>" id="update-card-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="subscription_id" value="<?= (int) $pastDueSub['id'] ?>">
+                <input type="hidden" name="payment_method_nonce" id="update-card-nonce">
+                <div id="update-card-fields"></div>
+                <p class="muted" id="update-card-status">Loading the card form&hellip;</p>
+                <button type="submit" class="btn" id="update-card-submit" disabled>Update my card</button>
+            </form>
+            <script nonce="<?= csp_nonce() ?>" src="https://js.braintreegateway.com/web/3.103.0/js/client.min.js"></script>
+            <script nonce="<?= csp_nonce() ?>">
+            (function () {
+                var status = document.getElementById('update-card-status');
+                var submit = document.getElementById('update-card-submit');
+                if (!window.braintree || !status || !submit) { return; }
+                braintree.client.create({ authorization: <?= json_encode((string) $cardToken) ?> }, function (err, client) {
+                    if (err) { status.textContent = 'The card form could not be loaded. Please contact support.'; return; }
+                    var host = document.getElementById('update-card-fields');
+                    client.request({
+                        endpoint: 'payment_methods/credit_cards',
+                        method: 'post',
+                        data: { creditCard: { cardholderName: <?= json_encode((string) ($user['billing_first_name'] ?? '')) ?> } }
+                    }, function (cerr, response) {
+                        if (cerr || !response || !response.creditCards || !response.creditCards.length) {
+                            status.textContent = 'The card form could not be loaded. Please contact support.';
+                            return;
+                        }
+                        var iframe = document.createElement('iframe');
+                        iframe.frameBorder = '0';
+                        iframe.setAttribute('title', 'Card details');
+                        iframe.style.width = '100%';
+                        iframe.style.height = '150px';
+                        iframe.src = response.creditCards[0].url;
+                        host.appendChild(iframe);
+                        document.getElementById('update-card-nonce').value = response.nonce;
+                        status.textContent = 'Enter your new card details below.';
+                        submit.disabled = false;
+                    });
+                });
+            }());
+            </script>
+            <?php else: ?>
+            <p class="muted">
+                This membership is not billed by card, so the card cannot be updated here.
+                Please contact support and we will sort it out.
+            </p>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
     <?php elseif ($pendingSub !== null): ?>
         <div class="card">
             <h2>Pending approval</h2>

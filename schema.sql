@@ -360,6 +360,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     user_id     INT UNSIGNED NOT NULL,
     plan_id     INT UNSIGNED NOT NULL,
     status      ENUM('pending', 'active', 'cancelled', 'expired', 'past_due') NOT NULL DEFAULT 'pending',
+    past_due_at DATETIME NULL,
     starts_at   DATETIME NULL,
     expires_at  DATETIME NULL,
     sale_id     INT UNSIGNED NULL,
