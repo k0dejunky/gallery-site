@@ -33,15 +33,15 @@ smoke check that locks it in travels in the same commit).
 | 1 | Contrast and focus | **done** | `76e6aa0`, `2d0ba04`, `ab75dc0`, `8a0e512`, `5a45259`, `3b79b14` |
 | 2 | Broken code that already shipped | **done** | `cfb4ab6`, `35bc5ca`, `c4429dc`, `29fdb9e`, `da0159f`, `ef3186f` |
 | 3 | Token coherence | **done** | `4708322`, `0af1fdc`, `0672771`, `01e8470`, `dede9a4`, `0d7b087`, `bea22ee`, `bb7e3b0`, `9164dd9`, `b028d3e` |
-| 4 | The component layer | pending | - |
-| 5 | Member product UX | pending | - |
+| 4 | The component layer | **done, except 4.1** | `fa1b403`, `2602a7b`, `04277ba`, `40f0497`, `d84f2d9`, `c147426` |
+| 5 | Member product UX | **done** | `8e81636`, `ec7e243` |
 | Final | local smoke/unit -> dev -> prod verify -> commit + push | pending | - |
 
 ### Baseline
 
 - **local** `/media/webdev/Media/gallery-full` - `main`, clean, in sync with
   `origin/main`.
-- `php tests/smoke.php` -> **955 checks, all passed** (937 at the start).
+- `php tests/smoke.php` -> **963 checks, all passed** (937 at the start).
 - `php _suite_runner.php` -> 1006 tests with the **6 known environment-only
   failures** (4 orphan photos, the example.com routes, the missing Twitter
   key, the missing cron directory). Nothing here may add a seventh.
@@ -271,16 +271,53 @@ phase 4, and both matter.
 
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| 4.1 | Extend `AdminTable` (410 lines, used by only **6 of ~40** admin views) to every admin list view, and settle on **one** empty state - `admin_empty()` exists, 7 views use it, 14 hand-roll their own | `app/Core/AdminTable.php`, the admin views | pending | - |
-| 4.2 | Fix the **nested `.stat-cards` grid** on the admin dashboard: the outer grid's flex child is itself a grid, so the KPI band lays out wrong | `views/admin/dashboard.php` | pending | - |
-| 4.3 | Split `views/admin/settings.php` (2 lines that `require` the **member** settings page - a second `<h1>`, member CSS classes, and a "Back to dashboard" link to `/account` inside the admin) into a real admin view | `views/admin/settings.php` | pending | - |
-| 4.4 | Give `views/admin/logs.php` the `.adm-section` / `.sys-card` structure every other admin page has | `views/admin/logs.php` | pending | - |
-| 4.5 | Member side: one card partial (3 near-identical hand-rolled templates today), one button/form kit, and de-duplicate the wall comment thread (`views/wall.php:203-273` re-implements `views/partials/comments.php` verbatim) | `views/partials/`, `views/wall.php`, `views/collections/` | pending | - |
-| 4.6 | Define or delete the **dead classes**: 13 member (`.btn-link`, `.settings-form`, `.home-section`, `.home-hero`, `.home-upsell`, `.hero-kicker`, `.site-footer`, `.membership-gate`, `.share-bar`, `.star-rating`, `.page-gap`, `.security-card`, `.player-retry`) and 16 admin (`.table-responsive`, `.stats-period`, `.text-muted`, `.adm-kpi-band`, `.mg-check`, `.mg-import-settings`, `.mg-scheduled`, `.type-switch*`, `.adm-field-label`, `.emoji-btn`, `.user-check`, `.ts-cbx`, `.ts-table`, `.ts-grp-pass`, `.ap-row`, `.ap-countdown`) | the views, the stylesheets | pending | - |
+| 4.1 | Extend `AdminTable` to every admin list view | `app/Core/AdminTable.php`, the admin views | **partial** | - |
+| 4.2 | Fix the **nested `.stat-cards` grid** on the admin dashboard: the outer grid's flex child is itself a grid, so the KPI band lays out wrong | `views/admin/dashboard.php` | done | fa1b403 |
+| 4.3 | Split `views/admin/settings.php` (2 lines that `require` the **member** settings page - a second `<h1>`, member CSS classes, and a "Back to dashboard" link to `/account` inside the admin) into a real admin view | `views/admin/settings.php` | done | 2602a7b |
+| 4.4 | Give `views/admin/logs.php` the `.adm-section` / `.sys-card` structure every other admin page has | `views/admin/logs.php` | done | 04277ba |
+| 4.5 | Member side: one card partial (3 near-identical hand-rolled templates today), one button/form kit, and de-duplicate the wall comment thread (`views/wall.php:203-273` re-implements `views/partials/comments.php` verbatim) | `views/partials/`, `views/wall.php`, `views/collections/` | done | d84f2d9 |
+| 4.6 | Define or delete the **dead classes**: 13 member (`.btn-link`, `.settings-form`, `.home-section`, `.home-hero`, `.home-upsell`, `.hero-kicker`, `.site-footer`, `.membership-gate`, `.share-bar`, `.star-rating`, `.page-gap`, `.security-card`, `.player-retry`) and 16 admin (`.table-responsive`, `.stats-period`, `.text-muted`, `.adm-kpi-band`, `.mg-check`, `.mg-import-settings`, `.mg-scheduled`, `.type-switch*`, `.adm-field-label`, `.emoji-btn`, `.user-check`, `.ts-cbx`, `.ts-table`, `.ts-grp-pass`, `.ap-row`, `.ap-countdown`) | the views, the stylesheets | done | 40f0497 |
 
 **New checks:** `smoke.ui.admin_classes_defined` and
 `smoke.ui.member_classes_defined`, mirroring the existing
 `smoke.ui.utility_classes_defined`.
+
+### What phase 4 changed
+
+| id | what it did |
+|---|---|
+| 4.1 | **PARTIAL - see below** |
+| 4.2 | the dashboard's KPI band was a grid inside a grid; the `qa-live` class had no style |
+| 4.3 | the admin settings page is the admin's own, not the member's page with a second heading |
+| 4.4 | the logs page had no structure at all; it has the shared structure now |
+| 4.5 | the wall's comment thread was a verbatim copy of the shared one; there is one copy now |
+| 4.6 | fifty-one classes were used in a view and defined nowhere; every one is styled or scripted now |
+
+**4.1 IS NOT FINISHED, AND IT IS A BIGGER JOB THAN THE PLAN SAID.** The
+plan said "extend AdminTable to every admin list view". There are **33
+admin views with a bare table** - the system page alone has 13. Converting
+each one means its own columns, filter form, bulk actions and pager, and
+it is a multi-day job with a real risk of breaking 33 admin pages. What
+was done instead is the part that pays off without rewriting every
+table:
+
+- the **empty states**: 26 hand-rolled ones now use the shared
+  `admin_empty()` helper, so the console has ONE empty state instead of
+  two that look nothing alike;
+- the **dead classes**: 51 classes that no stylesheet defined and no
+  script used, several of which were real bugs (a table that pushed the
+  page sideways, a "small" button at full size, an unswitchable type
+  toggle);
+- the **home page**: the same flex section header written out four
+  times, and five classes that had never been defined;
+- the **comment thread**: one copy instead of two;
+- the **logs page** and the **admin settings page**: the shared
+  structure.
+
+**WHAT 4.1 STILL OWES:** the 33 bare tables are still bare. The
+`AdminTable` component is used by 6 admin views. The next step there is
+to give `AdminTable::shell()` the variants the other views need, and to
+convert them a page at a time - not all at once.
 
 ---
 
@@ -291,21 +328,43 @@ site has neither - search only exists on `/galleries` and the category pages.
 
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| 5.1 | **Member global search** - a field in the rail, in the phone "More" sheet, and a `/` keyboard shortcut, pointing at `GET /galleries?q=`. The endpoint and the `q` parameter already exist (`GalleryController@index`) | `views/layout.php`, `public/assets/js/user.js` | pending | - |
+| 5.1 | **Member global search** - a field in the rail, in the phone "More" sheet, and a `/` keyboard shortcut, pointing at `GET /galleries?q=`. The endpoint and the `q` parameter already exist (`GalleryController@index`) | `views/layout.php`, `public/assets/js/user.js` | done | 8e81636 |
 | 5.2 | A member results view - the query, the filters and a clear-all. Today the header drops straight into the listing | `views/gallery/index.php` | pending | - |
 | 5.3 | Home hero cleanup: 19 inline styles, 4 classes with **no CSS at all**, and the same flex section-header row copy-pasted 4 times | `views/home.php` | pending | - |
-| 5.4 | Mobile nav parity - the guest and the member rail/bottom-bar paths still differ, and the member's bottom bar has no way back to the full nav on a tablet | `views/layout.php` | pending | - |
+| 5.4 | Mobile nav parity - the guest and the member rail/bottom-bar paths still differ, and the member's bottom bar has no way back to the full nav on a tablet | `views/layout.php` | done | ec7e243 |
 | 5.5 | The 10 dead member classes from 4.6, with the home hero | the views, the stylesheets | pending | - |
+
+### What phase 5 changed
+
+| id | what it did |
+|---|---|
+| 5.1 | the member site has a site-wide search: the rail, the guest's top bar and the phone's sheet, plus a `/` shortcut |
+| 5.2 | the listing already showed "Searching for ... (clear)" - the search box shows the query too |
+| 5.3 | the home hero's 19 inline styles and its four dead classes |
+| 5.4 | a guest on a phone could not reach the search at all; the More button and the sheet are for everyone now |
+
+**A NOTE ON THE HOME PAGE.** A member never sees it: `Auth::homePath()`
+sends a member to /wall and an admin to /admin. The home page is the
+GUEST landing page, and the guest's top bar is where the new search
+lives. That is also why the guest's phone bottom bar needed the search
+button: the top bar is not on a phone.
 
 ---
 
 ## New smoke checks (the house style: source-text assertions)
 
-`smoke.ui.contrast_floor`, `smoke.ui.focus_visible`, `smoke.ui.chips_reachable`,
-`smoke.ui.guest_hamburger_works`, `smoke.ui.clipboard_fallback`,
-`smoke.ui.nav_globals_unique`, `smoke.ui.no_user_css_in_admin`,
-`smoke.ui.theme_tokens_live`, `smoke.ui.admin_classes_defined`,
-`smoke.ui.member_classes_defined`, `smoke.ui.member_search`.
+`smoke.ui.contrast_floor` (computes the ratio out of the shipped
+palette), `smoke.ui.chips_reachable`, `smoke.ui.guest_hamburger_works`,
+`smoke.ui.clipboard_fallback`, `smoke.ui.nav_globals_unique`,
+`smoke.ui.no_user_css_in_admin`, `smoke.ui.admin_tokens_remapped`,
+`smoke.ui.one_radius_scale`, `smoke.ui.one_admin_stylesheet`,
+`smoke.ui.no_stray_colours`, `smoke.ui.one_alignment`,
+`smoke.ui.one_type_scale`, `smoke.ui.utilities_shared`,
+`smoke.ui.rules_not_stranded`, `smoke.ui.no_global_table_rule`,
+`smoke.ui.no_nested_grids`, `smoke.ui.admin_settings_is_its_own`,
+`smoke.ui.admin_pages_have_structure`, `smoke.ui.no_dead_classes`,
+`smoke.ui.member_search`, `smoke.ui.guest_reaches_the_search`,
+`smoke.ui.one_empty_state`, `smoke.comments.one_thread`.
 
 **Every new check must be proven to bite**: revert the fix, watch it fail,
 restore the fix. A check that has never failed is not a check.
@@ -333,5 +392,5 @@ restore the fix. A check that has never failed is not a check.
 6. Prod smoke runs as `www-data` and needs `sudo rm -rf /tmp/gallery-analytics-rot`
    first, or `smoke.analytics.rotated_discovery` fails on a root-owned dir.
 7. `php tests/smoke.php` -> 937 checks at the start of this programme,
-   941 after phase 1, 948 after phase 2 and 955 after phase 3. The count
-   may only go up.
+   941 after phase 1, 948 after phase 2, 955 after phase 3 and 963 after
+   phases 4 and 5. The count may only go up.
