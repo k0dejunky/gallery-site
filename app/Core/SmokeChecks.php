@@ -2814,7 +2814,9 @@ class SmokeChecks
             if (strpos($ctrl, 'bin2hex(random_bytes(24))') === false) {
                 $problems[] = 'a publish secret must be generated per session';
             }
-            if (strpos($ctrl, '?publish=') === false) {
+            // The url builder lives with the session (it owns the key), so
+            // the secret may be added there rather than in the controller.
+            if (strpos($ctrl, '?publish=') === false && strpos($model, '?publish=') === false) {
                 $problems[] = 'the operator RTMP url must carry the publish secret';
             }
             if (strpos($model, 'validPublishSecret(') === false) {
@@ -2831,6 +2833,66 @@ class SmokeChecks
 
             return $problems === []
                 ? $ok('a member cannot publish to the operator stream')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.live.publish_secret_reaches_mediamtx', 'Smoke · Live', 'The publish secret reaches the MediaMTX auth webhook as a query', static function () use ($root, $read, $ok, $bad): array {
+            // The publish secret only protects the stream if it actually
+            // arrives at the auth webhook. It travels in the RTMP url, and
+            // TWO parsers stand between the url and the webhook:
+            //
+            //  * the operator app's RTMP library (RootEncoder 2.6.1) parses
+            //    the url with java.net.URI - which DECODES the path - and
+            //    splits it into an RTMP 'app' name and a play path. With a
+            //    LITERAL '?' it folds the query into the play path, so
+            //    MediaMTX would see the path '<key>/publish=<secret>' and
+            //    NO query at all.
+            //  * MediaMTX (internal/rtmp/conn.go) rebuilds the url from
+            //    app + '/' + playpath and splits THAT into the path name
+            //    and the query it hands to the auth webhook.
+            //
+            // So the site must hand the app a url where the secret ends up
+            // in MediaMTX's query while the PATH stays the bare stream key
+            // (the HLS read path and the recorder's $MTX_PATH).
+            //
+            // This check runs the real url builder through a port of both
+            // parsers, so the shape cannot silently rot again.
+            $ctrl  = (string) $read($root . '/app/Controllers/LiveController.php');
+            $model = (string) $read($root . '/app/Models/LiveSession.php');
+            $problems = [];
+
+            // The controller must use the shared builder, not a hand-rolled url.
+            if (strpos($ctrl, 'LiveSession::rtmpUrl(') === false) {
+                $problems[] = 'the controller must build the RTMP url with LiveSession::rtmpUrl()';
+            }
+            if (strpos($model, 'function rtmpUrl(') === false) {
+                $problems[] = 'the session must own the RTMP url builder';
+            }
+
+            if ($problems === []) {
+                $rawKey    = 'a1b2c3d4e5f6';
+                $rawSecret = 'f6e5d4c3b2a1';
+                $url       = \App\Models\LiveSession::rtmpUrl('h', $rawKey, $rawSecret);
+                $target    = \App\Core\SmokeChecks::rtmpPublishTarget($url);
+
+                if ($target['pathName'] !== $rawKey) {
+                    $problems[] = 'the published path would be "' . $target['pathName'] . '", not the stream key';
+                }
+                if ($target['query'] !== 'publish=' . $rawSecret) {
+                    $problems[] = 'the publish secret would not reach the auth webhook as a query';
+                }
+            }
+
+            // The key the app posts to /live/stop comes out of that url, so
+            // the site has to decode it and strip the secret off it.
+            if (strpos($model, 'rawKeyFromUrl(') === false) {
+                $problems[] = 'the site must normalise the stream key the app posts back';
+            } elseif (strpos($model, 'rawurldecode(') === false) {
+                $problems[] = 'the posted stream key must be url-decoded';
+            }
+
+            return $problems === []
+                ? $ok('the publish secret reaches the MediaMTX auth webhook')
                 : $bad(implode('; ', $problems));
         });
 
@@ -7661,5 +7723,107 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
         $cache = $tests;
 
         return $cache;
+    }
+
+    /**
+     * Where the operator app's RTMP url ends up once the app's RTMP library
+     * and MediaMTX have both parsed it.
+     *
+     * This is a port of two parsers, and it is the reason the publish
+     * secret is percent-encoded in the url:
+     *
+     *  * the app's RTMP library (RootEncoder 2.6.1, com.pedro.common
+     *    .UrlParser) parses the url with java.net.URI - which DECODES the
+     *    path - and splits it into an RTMP 'app' name and a play path.
+     *    With a LITERAL '?' the query is folded into the play path.
+     *  * MediaMTX (v0.23.8, internal/rtmp/conn.go createURL() and
+     *    internal/core/rtmp_conn.go pathNameAndQuery()) rebuilds the url
+     *    from app + '/' + playpath and splits THAT into the path name and
+     *    the query it hands to the auth webhook.
+     *
+     * The port was verified against the real library and the real
+     * MediaMTX source for both url shapes.
+     *
+     * @return array{app:string, play:string, pathName:string, query:string}
+     */
+    public static function rtmpPublishTarget(string $url): array
+    {
+        // ---- 1. java.net.URI + UrlParser ----
+        $schemeEnd = strpos($url, '://');
+        $rest      = substr($url, $schemeEnd + 3);
+        $slash     = strpos($rest, '/');
+        $pathStart = $schemeEnd + 3 + $slash;
+
+        $qpos = strpos($url, '?');
+        if ($qpos === false) {
+            $rawPath = substr($url, $pathStart + 1);
+            $query   = null;
+        } else {
+            $rawPath = substr($url, $pathStart + 1, $qpos - $pathStart - 1);
+            // UrlParser: query = url.substring(url.indexOf(uri.query))
+            $decodedQuery = rawurldecode(substr($url, $qpos + 1));
+            $i = strpos($url, $decodedQuery);
+            $query = ($i === false) ? $url : substr($url, $i);
+        }
+
+        // uri.path is percent-DECODED, then removePrefix("/")
+        $path = rawurldecode($rawPath);
+        if (str_starts_with($path, '/')) {
+            $path = substr($path, 1);
+        }
+
+        // getAppName(): path.ifEmpty { query ?: "" }, then up to the 2nd '/'
+        $app = ($path !== '') ? $path : ($query ?? '');
+        $slashes = [];
+        $off = 0;
+        while (($p = strpos($app, '/', $off)) !== false) {
+            $slashes[] = $p;
+            $off = $p + 1;
+        }
+        if (count($slashes) === 0) {
+            $appName = $app;
+        } elseif (count($slashes) === 1) {
+            $appName = substr($app, 0, $slashes[0]);
+        } else {
+            $appName = substr($app, 0, $slashes[1]);
+        }
+
+        // getFullPath(): "$path" + (query == null ? "" : "?$query"), removePrefix("?")
+        $fullPath = ($query === null) ? $path : $path . '?' . $query;
+        if (str_starts_with($fullPath, '?')) {
+            $fullPath = substr($fullPath, 1);
+        }
+
+        // getStreamName(): removePrefix(appName), removePrefix("/"), removePrefix("?")
+        $streamName = $fullPath;
+        foreach ([$appName, '/', '?'] as $prefix) {
+            if ($prefix !== '' && str_starts_with($streamName, $prefix)) {
+                $streamName = substr($streamName, strlen($prefix));
+            }
+        }
+
+        // ---- 2. MediaMTX ----
+        // createURL: url.ParseRequestURI("/" + app + "/" + play)
+        $combined = '/' . $appName . '/' . $streamName;
+        $q2 = strpos($combined, '?');
+        $pathRaw  = ($q2 === false) ? $combined : substr($combined, 0, $q2);
+        $queryRaw = ($q2 === false) ? '' : substr($combined, $q2 + 1);
+
+        // u.String() = scheme://host + path + "?" + query, then
+        // pathNameAndQuery: TrimRight(url, "/") and url.Parse() again.
+        $full = 'rtmp://h:1935' . $pathRaw . ($queryRaw !== '' ? '?' . $queryRaw : '');
+        $tmp  = rtrim($full, '/');
+
+        $q3 = strpos($tmp, '?');
+        $finalPath  = ($q3 === false) ? $tmp : substr($tmp, 0, $q3);
+        $finalQuery = ($q3 === false) ? '' : substr($tmp, $q3 + 1);
+        $finalPath  = substr($finalPath, strlen('rtmp://h:1935'));
+
+        return [
+            'app'      => $appName,
+            'play'     => $streamName,
+            'pathName' => ltrim(rawurldecode($finalPath), '/'),
+            'query'    => $finalQuery,
+        ];
     }
 }

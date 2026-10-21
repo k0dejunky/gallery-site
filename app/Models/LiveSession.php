@@ -21,6 +21,26 @@ class LiveSession
         return hash('sha256', $rawKey);
     }
 
+    /**
+     * The raw stream key out of what the operator app posted.
+     *
+     * The app takes the key out of the RTMP url it was given
+     * (rtmpUrl.substringAfterLast('/')), and that url carries the publish
+     * secret percent-encoded ('<key>%3Fpublish%3D<secret>'). So the key
+     * arrives url-encoded, and the secret has to be stripped off it - the
+     * key alone is what identifies the session and the recording.
+     *
+     * A key that is already clean (the orphan importer reads it off the
+     * filesystem) passes through unchanged.
+     */
+    public static function rawKeyFromUrl(string $value): string
+    {
+        $value = trim(rawurldecode(trim($value)));
+        $q = strpos($value, '?');
+
+        return $q === false ? $value : substr($value, 0, $q);
+    }
+
     /** The active (pending or live) session, or null. */
     public static function active(): ?array
     {
@@ -46,6 +66,34 @@ class LiveSession
         );
 
         return (int) Database::connection()->lastInsertId();
+    }
+
+    /**
+     * The RTMP url the operator app publishes to.
+     *
+     * The publish secret travels in the url, because that is how MediaMTX
+     * passes it to the auth webhook. The '?' is PERCENT-ENCODED, and that
+     * is not cosmetic:
+     *
+     * The app's RTMP library (RootEncoder 2.6.1) parses the url with
+     * java.net.URI, which DECODES the path, and then splits it into an
+     * RTMP 'app' name and a play path. With a literal '?' the query would
+     * be folded into the play path, so the client would publish to the
+     * path '<key>/publish=<secret>' and MediaMTX would see NO query at
+     * all - the secret would never reach the auth webhook (the publish
+     * would be denied), the published path would no longer match the HLS
+     * read path, and the recorder's $MTX_PATH would fail its
+     * ^[A-Za-z0-9]+$ check.
+     *
+     * Encoded, the library keeps the whole thing in the app name
+     * ('<key>?publish=<secret>') and MediaMTX splits that back into the
+     * path '<key>' and the query 'publish=<secret>' - which is exactly
+     * what the auth webhook and the HLS read path expect.
+     */
+    public static function rtmpUrl(string $host, string $rawKey, string $rawPublishSecret): string
+    {
+        return 'rtmp://' . $host . ':1935/'
+            . rawurlencode($rawKey . '?publish=' . $rawPublishSecret);
     }
 
     /**

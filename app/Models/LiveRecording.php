@@ -28,6 +28,11 @@ class LiveRecording
      */
     public static function finalize(string $streamKey): ?int
     {
+        // The key may arrive url-encoded with the publish secret attached
+        // (the operator app derives it from the RTMP url it was given), so
+        // it is normalised before it is used as a file name.
+        $streamKey = LiveSession::rawKeyFromUrl($streamKey);
+
         // Re-encoding a long recording can take many minutes. When finalize
         // runs from /live/stop the app's HTTP client gives up after 30s and
         // disconnects; without these, PHP would abort and kill ffmpeg mid-way.

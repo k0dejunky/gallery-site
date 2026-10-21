@@ -137,8 +137,11 @@ class LiveController extends Controller
         $this->json([
             'ok'         => true,
             // The publish secret travels in the URL, because MediaMTX passes
-            // the publish query string to the auth webhook.
-            'rtmp_url'   => 'rtmp://' . $host . ':1935/' . $rawKey . '?publish=' . $rawPublishKey,
+            // the publish query string to the auth webhook. The url is built
+            // by LiveSession::rtmpUrl(), which percent-encodes the query so
+            // it survives the app's URL parser as a QUERY and not as part of
+            // the play path.
+            'rtmp_url'   => LiveSession::rtmpUrl($host, $rawKey, $rawPublishKey),
             'stream_key' => $rawKey,
         ]);
     }
@@ -154,7 +157,9 @@ class LiveController extends Controller
         }
 
         // Import the recording first (the .ts file is finalized once it exists).
-        $streamKey = trim((string) $this->request->post('stream_key', ''));
+        // The app derives the key from the RTMP url it was given, so it
+        // arrives url-encoded with the publish secret attached.
+        $streamKey = LiveSession::rawKeyFromUrl((string) $this->request->post('stream_key', ''));
         if ($streamKey !== '') {
             $galleryId = \App\Models\LiveRecording::finalize($streamKey);
             if ($galleryId !== null) {
