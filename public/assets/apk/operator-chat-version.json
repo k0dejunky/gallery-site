@@ -1,8 +1,8 @@
 {
   "app": "operator-chat",
-  "latestVersion": "2.50",
-  "versionCode": 61,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v2.50.apk",
-  "changelog": "The live broadcast works again. The app now takes the stream key from the server instead of parsing it out of the RTMP address, so ending a broadcast always saves the recording.",
+  "latestVersion": "3.0",
+  "versionCode": 62,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v3.0.apk",
+  "changelog": "The app is rebuilt on Jetpack Compose. The inbox, the conversation, the live console, the show schedule and the settings are new screens; the reply field really works now (it measured zero width, so no reply could be typed), the broadcast lives in a foreground service and survives a rotation or a locked screen, the quiet hours actually silence the notifications, and the server address and token can be changed in the settings.",
   "publishedAt": "2026-10-21"
 }
