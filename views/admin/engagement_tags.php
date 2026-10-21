@@ -19,7 +19,7 @@
 <section class="u-mt-15">
     <h2>Tags (<?= count($tags) ?>)</h2>
     <?php if (empty($tags)): ?>
-        <p class="muted">No tags yet.</p>
+        <?= admin_empty('tag', 'No tags yet', 'Tags you curate here become the vocabulary the categoriser proposes.') ?>
     <?php else: ?>
         <table style="width:100%;border-collapse:collapse;">
             <thead>

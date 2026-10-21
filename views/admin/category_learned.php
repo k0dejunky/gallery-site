@@ -18,7 +18,7 @@
 </p>
 
 <?php if (empty($rows)): ?>
-    <p class="muted">Nothing learned yet. Accept, dismiss, add or remove a category on a gallery and it shows up here.</p>
+    <?= admin_empty('sparkle', 'Nothing learned yet', 'Accept, dismiss, add or remove a category on a gallery and it shows up here.') ?>
 <?php else: ?>
 <table class="users-table-wrap">
     <table>

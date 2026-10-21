@@ -481,7 +481,7 @@ $canOperate = \App\Core\Auth::can('system_ops');
     <div class="sys-card">
         <h2>Pending uploads</h2>
         <?php if (empty($pendingDirs)): ?>
-            <p class="muted">No staging folders. Nothing to clean.</p>
+            <?= admin_empty('upload', 'No staging folders', 'Nothing to clean.') ?>
         <?php else: ?>
             <table>
                 <tr><th>Folder</th><th>Files</th><th>Size</th><th>Age</th><th></th></tr>

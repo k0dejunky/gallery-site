@@ -69,7 +69,7 @@
     </p>
     <?php endif; ?>
     <?php if (empty($categories)): ?>
-        <p class="muted">No categories available.</p>
+        <?= admin_empty('image', 'No categories available', 'Create one in Gallery Management first.') ?>
     <?php else: ?>
         <div class="chips">
             <?php foreach ($categories as $category): ?>

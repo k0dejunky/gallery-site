@@ -2314,6 +2314,37 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.one_empty_state', 'Smoke · UI', 'The admin empty states are the shared one', static function () use ($root, $ok, $bad): array {
+            // Seven admin views use the shared admin_empty() helper and
+            // about twenty hand-roll their own with a <p class="muted">.
+            // The two look nothing alike, and each hand-rolled one had to
+            // be written again.
+            $problems = [];
+            $files = glob($root . '/views/admin/*.php') ?: [];
+            foreach ($files as $file) {
+                $rel = str_replace($root . '/', '', $file);
+                $src = (string) @file_get_contents($file);
+                // The hand-rolled ones: a muted paragraph that says a list
+                // is empty.
+                if (preg_match('/<p class="muted">\s*(No|Nothing|There is nothing)[^<]{0,120}<\/p>/i', $src, $m) === 1) {
+                    $problems[] = $rel . ' hand-rolls an empty state: ' . trim($m[0]);
+                }
+                // The icon has to exist, or the empty state renders a hole.
+                if (preg_match_all("/admin_empty\('([a-z-]+)'/", $src, $u) !== false) {
+                    $iconSrc = (string) @file_get_contents($root . '/app/Core/Icon.php');
+                    foreach ($u[1] as $icon) {
+                        if (strpos($iconSrc, "'" . $icon . "'") === false) {
+                            $problems[] = $rel . ' uses the icon ' . $icon . ', which does not exist';
+                        }
+                    }
+                }
+            }
+
+            return $problems === []
+                ? $ok('the admin empty states are the shared one')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

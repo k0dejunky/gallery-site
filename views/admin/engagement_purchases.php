@@ -18,7 +18,7 @@
 </div>
 
 <?php if (empty($purchases)): ?>
-    <p class="muted">No purchases recorded yet.</p>
+    <?= admin_empty('dollar', 'No purchases yet', 'A member unlocks a gallery or a one-off purchase is marked paid, it appears here.') ?>
 <?php else: ?>
     <table style="width:100%;border-collapse:collapse;">
         <thead>

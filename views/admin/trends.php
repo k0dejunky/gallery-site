@@ -113,7 +113,7 @@ $sparkline = static function (array $values, int $width = 120, int $height = 28,
             <?= $isAllTime ? 'All-time category views.' : 'Category views over the ' . e($rangeLabel) . ' vs. the same period before.' ?>
         </p>
         <?php if (empty($categoryTrends)): ?>
-            <p class="muted">No categories yet.</p>
+            <?= admin_empty('image', 'No categories yet', 'Categories appear once the site has been used a little.') ?>
         <?php else: ?>
             <table>
                 <thead>
@@ -154,7 +154,7 @@ $sparkline = static function (array $values, int $width = 120, int $height = 28,
             Missed searches searched more than <?= (int) $promotionThreshold ?> times. Approve one to create it as a new category, or dismiss it.
         </p>
         <?php if (empty($pendingApprovals)): ?>
-            <p class="muted">Nothing waiting for approval.</p>
+            <?= admin_empty('check', 'Nothing waiting for approval', 'Every suggested category has been dealt with.') ?>
         <?php else: ?>
             <table>
                 <thead>
@@ -197,7 +197,7 @@ $sparkline = static function (array $values, int $width = 120, int $height = 28,
             <?= $isAllTime ? 'All-time missed searches.' : 'Search terms that returned no results over the ' . e($rangeLabel) . ' vs. the same period before.' ?>
         </p>
         <?php if (empty($searchTrends)): ?>
-            <p class="muted">No missed searches yet &mdash; every recent search found something.</p>
+            <?= admin_empty('search', 'No missed searches yet', 'Every recent search found something.') ?>
         <?php else: ?>
             <table>
                 <thead>

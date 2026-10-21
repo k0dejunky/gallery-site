@@ -41,7 +41,7 @@
 
         <p class="muted" style="font-size:.85rem;margin:.25rem 0 .5rem;"><?= count($rows) ?> response(s)</p>
         <?php if (empty($rows)): ?>
-            <p class="muted">No answers yet.</p>
+            <?= admin_empty('chat', 'No answers yet', 'Nobody has answered the questionnaire yet.') ?>
         <?php else: ?>
             <table>
                 <thead><tr><th>User</th><th>Answer</th><th>When</th></tr></thead>

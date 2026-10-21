@@ -114,7 +114,7 @@
     </tbody>
 </table>
 <?php else: ?>
-<p class="muted">No trial links yet.</p>
+<?= admin_empty('external', 'No trial links yet', 'A trial link lets someone start a membership from a link you share.') ?>
 <?php endif; ?>
 <?php endif; ?>
 

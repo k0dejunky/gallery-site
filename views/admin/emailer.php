@@ -80,7 +80,7 @@ $cap          = (int) ($config['notification_daily_cap'] ?? 1);
         <p class="muted" style="margin:.4rem 0;">Delivered by the cron worker every 5 minutes, with retry backoff on a transient SMTP failure.</p>
         <h3 style="margin:.75rem 0 .25rem;">By type</h3>
         <?php if (empty($kindCounts)): ?>
-            <p class="muted">Nothing queued yet. Use a test send below to verify the pipeline.</p>
+            <?= admin_empty('mail', 'Nothing queued yet', 'Use a test send below to verify the pipeline.') ?>
         <?php else: ?>
             <ul style="margin:0;padding-left:1.1rem;">
                 <?php foreach ($kindCounts as $kind => $count): ?>
@@ -235,7 +235,7 @@ $queueBase    = url('/admin/emailer');
     ]) ?>
 
     <?php if (empty($recent)): ?>
-        <p class="muted">Nothing sent yet. Use a test send above to verify the pipeline.</p>
+        <?= admin_empty('send', 'Nothing sent yet', 'Use a test send above to verify the pipeline.') ?>
     <?php else: ?>
         <table>
             <thead>

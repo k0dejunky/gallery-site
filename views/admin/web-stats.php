@@ -158,7 +158,7 @@ $humanShare    = $trafficRows > 0
     <div class="stats-panel">
         <h2>Top pages</h2>
         <?php if ($topUrls === []): ?>
-            <p class="muted">No page views in this range.</p>
+            <?= admin_empty('trend', 'No page views in this range', 'Try a wider date range.') ?>
         <?php else: ?>
             <div class="table-scroll">
                 <table>
@@ -188,7 +188,7 @@ $humanShare    = $trafficRows > 0
     <div class="stats-panel">
         <h2>Where visitors came from</h2>
         <?php if ($referrers === []): ?>
-            <p class="muted">No referrer data yet.</p>
+            <?= admin_empty('external', 'No referrer data yet', 'The access log records where a visit came from.') ?>
         <?php else: ?>
             <div class="table-scroll">
                 <table>
@@ -214,7 +214,7 @@ $humanShare    = $trafficRows > 0
         <div class="stats-panel">
             <h2><?= e($heading) ?></h2>
             <?php if ($rows === []): ?>
-                <p class="muted">No sessions in this range.</p>
+                <?= admin_empty('users', 'No sessions in this range', 'A session is a visit, counted once per person.') ?>
             <?php else: ?>
                 <div class="table-scroll">
                     <table>
@@ -254,7 +254,7 @@ $humanShare    = $trafficRows > 0
     <div class="stats-panel">
         <h2>Busiest visitor addresses</h2>
         <?php if ($visitors === []): ?>
-            <p class="muted">No visitor data yet.</p>
+            <?= admin_empty('users', 'No visitor data yet', 'The access log records the visits it sees.') ?>
         <?php else: ?>
             <div class="table-scroll">
                 <table>
@@ -294,7 +294,7 @@ $humanShare    = $trafficRows > 0
         <div class="stats-panel">
             <h2><?= e($heading) ?></h2>
             <?php if ($rows === []): ?>
-                <p class="muted">No data.</p>
+                <?= admin_empty('trend', 'No data', 'Nothing was recorded in this range.') ?>
             <?php else: ?>
                 <table>
                     <tbody>
@@ -343,7 +343,7 @@ $humanShare    = $trafficRows > 0
     <div class="stats-panel">
         <h2>HTTP status codes <span class="muted" style="font-weight:400;font-size:.78rem;">(all traffic)</span></h2>
         <?php if ($statuses === []): ?>
-            <p class="muted">No data.</p>
+            <?= admin_empty('trend', 'No data', 'Nothing was recorded in this range.') ?>
         <?php else: ?>
             <table>
                 <thead><tr><th>Code</th><th>Meaning</th><th class="u-right">Hits</th><th class="u-right">Share</th></tr></thead>
@@ -370,7 +370,7 @@ $humanShare    = $trafficRows > 0
     <div class="stats-panel">
         <h2>Static file types <span class="muted" style="font-weight:400;font-size:.78rem;">(all traffic)</span></h2>
         <?php if ($fileTypes === []): ?>
-            <p class="muted">No static files served.</p>
+            <?= admin_empty('users', 'No static files served') ?>
         <?php else: ?>
             <table>
                 <thead><tr><th>Type</th><th class="u-right">Requests</th><th class="u-right">Data</th></tr></thead>
@@ -395,7 +395,7 @@ $humanShare    = $trafficRows > 0
         <?= e($humanShare) ?>% human)
     </span></h2>
     <?php if ($robots === []): ?>
-        <p class="muted">No crawler traffic recorded.</p>
+        <?= admin_empty('external', 'No crawler traffic recorded') ?>
     <?php else: ?>
         <div class="table-scroll">
             <table>

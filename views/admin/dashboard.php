@@ -398,7 +398,7 @@
         <?php endforeach; ?>
     </div>
         <?php if (empty($storageTrend['gb'])): ?>
-        <p class="muted">No snapshots yet — the housekeeping cron records one every 15 minutes.</p>
+        <?= admin_empty('activity', 'No snapshots yet', 'The housekeeping cron records one every 15 minutes.') ?>
     <?php else: ?>
         <?php
             $cur    = (float) ($storageTrend['current_gb'] ?? 0);
@@ -453,7 +453,7 @@
         <?php endforeach; ?>
     </div>
     <?php if ($viewTotals <= 0 && !$anyVisits): ?>
-        <p class="muted">No tracked views yet — a logged-in visit to a gallery or photo, and a visit to the login or signup page, record a daily count from now on.</p>
+        <?= admin_empty('image', 'No tracked views yet', 'A logged-in visit to a gallery or photo, and a visit to the login or signup page, record a daily count from now on') ?>
     <?php else: ?>
         <div class="stat-cards" style="margin:.75rem 0;">
             <div class="stat-card"><span class="muted">Views (<?= e($vtSum) ?>)</span><b style="font-size:1.3rem;"><?= number_format($viewTotals) ?></b></div>
@@ -480,7 +480,7 @@
         <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
             <div style="flex:2 1 400px;min-width:300px;">
                 <?php if (!$anyVisits): ?>
-                    <p class="muted">No page visits tracked yet — a visit to the login or signup form records a unique-IP count from now on.</p>
+                    <?= admin_empty('trend', 'No page visits tracked yet', 'A visit to the login or signup form records a unique-IP count from now on.') ?>
                 <?php else: ?>
                     <div style="max-width:640px;">
                         <?= \App\Core\Charts::bars($pageVisits['labels'], $pageVisits['total'], 520, 140, '#2563eb', '%s') ?>

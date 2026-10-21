@@ -96,7 +96,7 @@ function trafficCopy(el) {
 
 <h3>Attributed Signups</h3>
 <?php if (empty($signups)): ?>
-    <p class="muted">No signups attributed to this link yet.</p>
+    <?= admin_empty('users', 'No signups attributed yet', 'Once a visitor arrives through this link and signs up, they appear here.') ?>
 <?php else: ?>
     <p class="muted" style="margin-top:0"><?= count($signups) ?> newest attributed signup<?= count($signups) === 1 ? '' : 's' ?>.</p>
     <table>
@@ -144,7 +144,7 @@ function trafficCopy(el) {
 
 <h3>Recent Visits</h3>
 <?php if (empty($visits)): ?>
-    <p class="muted">No traffic recorded yet.</p>
+    <?= admin_empty('trend', 'No traffic recorded yet', 'The access log records visits as they happen.') ?>
 <?php else: ?>
     <table>
         <thead>

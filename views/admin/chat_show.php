@@ -24,7 +24,7 @@
 
 <div id="chat-thread" style="display:flex;flex-direction:column;gap:.3rem;margin-bottom:1rem;max-height:60vh;overflow-y:auto;padding:.5rem;">
     <?php if (empty($messages)): ?>
-        <p class="muted">No messages yet.</p>
+        <?= admin_empty('chat', 'No messages yet', 'The conversation starts with the first message.') ?>
     <?php else: ?>
         <?php foreach ($messages as $m): ?>
             <div style="align-self:<?= $m['sender_role'] === 'user' ? 'flex-end' : 'flex-start' ?>;max-width:80%;text-align:<?= $m['sender_role'] === 'user' ? 'right' : 'left' ?>;">
