@@ -35,7 +35,32 @@ smoke check that locks it in travels in the same commit).
 | 3 | Token coherence | **done** | `4708322`, `0af1fdc`, `0672771`, `01e8470`, `dede9a4`, `0d7b087`, `bea22ee`, `bb7e3b0`, `9164dd9`, `b028d3e` |
 | 4 | The component layer | **done, except 4.1** | `fa1b403`, `2602a7b`, `04277ba`, `40f0497`, `d84f2d9`, `c147426` |
 | 5 | Member product UX | **done** | `8e81636`, `ec7e243` |
-| Final | local smoke/unit -> dev -> prod verify -> commit + push | pending | - |
+| Final | local smoke/unit -> dev -> prod verify -> commit + push | **done** | `b7d4172` |
+
+### Shipped (2026-10-20, 19:00)
+
+- **local** - `main` @ `b7d4172`, clean, in sync with `origin/main`.
+- **dev** `192.168.1.110` - the whole batch, verified in a real browser:
+  the admin console off the member stylesheet, the member search, the
+  paywall headline at 15.93:1, the dead classes, the comment thread.
+  Smoke 963, all passed.
+- **prod** `amethyst2213.com` - the whole batch (48 files), smoke **963
+  all passed** as `www-data`, 100% md5 parity with the repo, and the
+  admin console and the member site both verified in a browser.
+  The backup before the deploy is
+  `/var/backups/gallery/pre-ui-round3-20261020-185039.sql.gz` (6.2MB,
+  verifies).
+- `public/assets/admin-shared.css` was removed from both boxes by hand -
+  the deploy script copies files but never deletes them.
+
+**A NOTE ON THE COMMIT HISTORY.** Another process worked in this repo at
+the same time. Twice it committed work of mine into its own commits
+(once with its message, once splitting the same content differently), and
+once it pushed first. The final history is the result of a rebase onto
+`origin/main`, which preserved the TREE exactly (verified with
+`git diff` before and after). One commit message was lost in the split:
+the logs page's restructure (item 4.4) is inside a commit titled for the
+categoriser. The code is right and this file records the mapping.
 
 ### Baseline
 
@@ -394,3 +419,7 @@ restore the fix. A check that has never failed is not a check.
 7. `php tests/smoke.php` -> 937 checks at the start of this programme,
    941 after phase 1, 948 after phase 2, 955 after phase 3 and 963 after
    phases 4 and 5. The count may only go up.
+
+**THE NEXT SESSION STARTS HERE.** Everything above is shipped. The one
+item that is NOT done is **4.1**: the 33 bare admin tables. The plan for
+it is in this file, under "4.1 IS NOT FINISHED".
