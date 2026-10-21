@@ -423,6 +423,15 @@ else
     warn "gallery-headers.conf not found; skipping."
 fi
 
+log "Installing the origin-root files (robots.txt at the host root)..."
+if [[ -f "$INSTALL_DIR/config/gallery-root-files.conf" ]]; then
+    cp "$INSTALL_DIR/config/gallery-root-files.conf" /etc/apache2/conf-available/gallery-root-files.conf
+    a2enconf gallery-root-files.conf 2>/dev/null || true
+    ok "robots.txt is served from the host root (that is the only place it is honoured)."
+else
+    warn "gallery-root-files.conf not found; robots.txt will not be served from the host root."
+fi
+
 log "Installing logrotate..."
 if [[ -f "$INSTALL_DIR/config/logrotate-gallery.conf" ]]; then
     cp "$INSTALL_DIR/config/logrotate-gallery.conf" /etc/logrotate.d/gallery

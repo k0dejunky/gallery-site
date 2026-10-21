@@ -2834,6 +2834,61 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.exposure.locked_down', 'Smoke · Ops', 'The operational surface is not public', static function () use ($root, $read, $ok, $bad): array {
+            // /gallery/health was public and returned how old the last
+            // backup is, how long ago the housekeeping ran, how many workers
+            // are stuck and how many log lines the analytics pipeline
+            // skipped - operational information about the box.
+            //
+            // And the domain root served Apache's "It works" default page
+            // at /index.html, which is an indexable boilerplate page on an
+            // adult site.
+            $health = (string) $read($root . '/app/Controllers/HealthController.php');
+            $rootConf = (string) $read($root . '/config/gallery-root-files.conf');
+            $install  = (string) $read($root . '/install.sh');
+            $problems = [];
+
+            // The health endpoint.
+            if (strpos($health, 'wantsDetail()') === false) {
+                $problems[] = 'the health endpoint must gate its detail';
+            }
+            if (strpos($health, 'GALLERY_HEALTH_KEY') === false) {
+                $problems[] = 'the health detail must need a credential';
+            }
+            if (strpos($health, 'hash_equals($expected, $given)') === false) {
+                $problems[] = 'the health credential must be compared in constant time';
+            }
+            // The public part must stay small.
+            $at = strpos($health, "if (!\$detail) {");
+            if ($at === false) {
+                $problems[] = 'the health endpoint must return a small public readiness response';
+            } else {
+                // Only the public block: up to its own return.
+                $ret = strpos($health, 'return;', $at);
+                $public = substr($health, $at, ($ret === false ? 600 : $ret - $at));
+                foreach (['backup', 'workers', 'analytics', 'housekeeping_age_sec'] as $leak) {
+                    if (strpos($public, $leak) !== false) {
+                        $problems[] = 'the public health response must not include ' . $leak;
+                    }
+                }
+            }
+
+            // The origin root.
+            if (strpos($rootConf, 'Alias /robots.txt') === false) {
+                $problems[] = 'robots.txt must be served from the host root - that is the only place it is honoured';
+            }
+            if (strpos($rootConf, 'index\.') === false && strpos($rootConf, 'index\.') === false) {
+                $problems[] = 'the Apache default page must not be served at /index.html';
+            }
+            if (strpos($install, 'gallery-root-files.conf') === false) {
+                $problems[] = 'a fresh install must write the origin-root files config';
+            }
+
+            return $problems === []
+                ? $ok('the operational surface is not public')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

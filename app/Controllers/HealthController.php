@@ -5,11 +5,51 @@ namespace App\Controllers;
 use App\Core\Controller;
 use App\Core\Database;
 
-/** Public, deliberately small liveness/readiness response for monitoring. */
+/**
+ * Liveness and readiness.
+ *
+ * The READINESS part is public and small: whether the database and the
+ * storage are there. A monitor can poll that without a credential.
+ *
+ * The DETAIL - how old the last backup is, how long ago the housekeeping
+ * ran, how many workers are stuck, how many log lines the analytics
+ * pipeline skipped - is operational information about the box, and it was
+ * public. It needs a credential now: GALLERY_HEALTH_KEY from .env, or an
+ * admin session.
+ */
 class HealthController extends Controller
 {
+    /**
+     * Whether the caller may see the operational detail.
+     *
+     * Either an admin session, or the GALLERY_HEALTH_KEY from .env as a
+     * bearer token or a ?key= parameter.
+     */
+    private function wantsDetail(): bool
+    {
+        if (\App\Core\Auth::check() && \App\Core\Auth::isAdmin()) {
+            return true;
+        }
+
+        $expected = (string) env_value('GALLERY_HEALTH_KEY', '');
+
+        if ($expected === '') {
+            // No key configured: the detail is never public.
+            return false;
+        }
+
+        $auth = trim((string) $this->request->header('Authorization', ''));
+        $given = $auth !== '' && stripos($auth, 'bearer ') === 0
+            ? trim(substr($auth, 7))
+            : (string) $this->request->query('key', '');
+
+        return $given !== '' && hash_equals($expected, $given);
+    }
+
     public function show(): void
     {
+        $detail = $this->wantsDetail();
+
         $db = true;
         try {
             Database::run('SELECT 1')->fetchColumn();
@@ -131,6 +171,19 @@ class HealthController extends Controller
         }
 
         header('Cache-Control: no-store');
+
+        // Without a credential, only the readiness is public. The rest is
+        // operational information about the box.
+        if (!$detail) {
+            $this->json([
+                'ok'      => $ok,
+                'app'     => (string) config('app.site_name', 'gallery'),
+                'db'      => $db,
+                'storage' => $storage,
+            ]);
+            return;
+        }
+
         $this->json([
             'ok' => $ok,
             'app' => (string) config('app.site_name', 'gallery'),
