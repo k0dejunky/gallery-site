@@ -890,30 +890,81 @@ class Gallery
      * Used by the gallery viewer's "load more" pagination so large galleries
      * do not ship every item's markup in the initial page response.
      */
-    public static function photosSlice(int $galleryId, int $limit, int $offset): array
+    /**
+     * The level a member needs to open this gallery.
+     *
+     * A gallery's OWN min_level decides it. The photos inside it have their
+     * own rule (Photo::accessLevel, the strictest across every gallery that
+     * holds them), and the gallery's grid is filtered by the member's level
+     * so the two never disagree: a member is never shown a photo whose
+     * bytes they could not fetch.
+     */
+    public static function accessLevel(int $galleryId): int
+    {
+        $row = Database::run(
+            'SELECT min_level FROM galleries WHERE id = ? LIMIT 1',
+            [$galleryId]
+        )->fetchColumn();
+
+        return ($row === false || $row === null) ? 0 : (int) $row;
+    }
+
+    /**
+     * A slice of a gallery's photos.
+     *
+     * $maxLevel filters the grid by the member's level. A photo's bytes are
+     * served at the STRICTEST level across every gallery that holds it
+     * (Photo::accessLevel), so a member must not be shown a photo whose
+     * bytes they could not fetch - the grid and the files have to agree.
+     *
+     * Pass PHP_INT_MAX (the admin, and anyone who may see everything) to
+     * get the whole grid.
+     */
+    public static function photosSlice(int $galleryId, int $limit, int $offset, int $maxLevel = PHP_INT_MAX): array
     {
         $limit  = max(1, (int) $limit);
         $offset = max(0, (int) $offset);
+
+        $levelSql = '';
+        $params   = [$galleryId];
+        if ($maxLevel < PHP_INT_MAX) {
+            $levelSql = ' AND (SELECT MAX(g.min_level) FROM gallery_photo x
+                                  INNER JOIN galleries g ON g.id = x.gallery_id
+                                  WHERE x.photo_id = p.id) <= ?';
+            $params[] = (int) $maxLevel;
+        }
 
         return Database::run(
             'SELECT p.*, gp.position
              FROM photos p
              INNER JOIN gallery_photo gp ON gp.photo_id = p.id
-             WHERE gp.gallery_id = ?
+             WHERE gp.gallery_id = ?' . $levelSql . '
              ORDER BY gp.position ASC, p.id ASC
              LIMIT ' . (int) $limit . ' OFFSET ' . (int) $offset,
-            [$galleryId]
+            $params
         )->fetchAll();
     }
 
     /**
-     * Total number of photos inside a gallery.
+     * Total number of photos inside a gallery, with the same level filter as
+     * photosSlice() so the pager and the grid agree.
      */
-    public static function photoCount(int $galleryId): int
+    public static function photoCount(int $galleryId, int $maxLevel = PHP_INT_MAX): int
     {
+        $levelSql = '';
+        $params   = [$galleryId];
+        if ($maxLevel < PHP_INT_MAX) {
+            $levelSql = ' AND (SELECT MAX(g.min_level) FROM gallery_photo x
+                                  INNER JOIN galleries g ON g.id = x.gallery_id
+                                  WHERE x.photo_id = p.id) <= ?';
+            $params[] = (int) $maxLevel;
+        }
+
         return (int) Database::run(
-            'SELECT COUNT(*) FROM gallery_photo WHERE gallery_id = ?',
-            [$galleryId]
+            'SELECT COUNT(*) FROM photos p
+             INNER JOIN gallery_photo gp ON gp.photo_id = p.id
+             WHERE gp.gallery_id = ?' . $levelSql,
+            $params
         )->fetchColumn();
     }
 

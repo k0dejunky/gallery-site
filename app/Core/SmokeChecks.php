@@ -2889,6 +2889,102 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.access.one_predicate', 'Smoke · Access', 'One place decides what a member can see', static function () use ($root, $read, $ok, $bad): array {
+            // FIVE places decided "can this member see this" and they
+            // disagreed. The gallery page used the gallery's OWN min_level
+            // while the BYTES were served at the minimum across every
+            // gallery that held the photo - so a Silver member was shown
+            // the same video as locked in the Gold gallery and fully open on
+            // its own page. 43 photos are attached to galleries at different
+            // levels, because MediaUploader::commit() attaches an existing
+            // photo (the same content hash) to a new gallery automatically.
+            $photo  = (string) $read($root . '/app/Models/Photo.php');
+            $gallery = (string) $read($root . '/app/Models/Gallery.php');
+            $store  = (string) $read($root . '/app/Controllers/StorageController.php');
+            $image  = (string) $read($root . '/app/Controllers/ImageController.php');
+            $gc     = (string) $read($root . '/app/Controllers/GalleryController.php');
+            $coll   = (string) $read($root . '/app/Models/Collection.php');
+            $problems = [];
+
+            if (strpos($photo, 'public static function accessLevel(') === false) {
+                $problems[] = 'Photo must have an accessLevel()';
+            }
+            if (strpos($gallery, 'public static function accessLevel(') === false) {
+                $problems[] = 'Gallery must have an accessLevel()';
+            }
+            // The files route and the media viewer: the PHOTO's level.
+            if (strpos($store, 'Photo::accessLevel(') === false) {
+                $problems[] = 'the files route must use Photo::accessLevel()';
+            }
+            if (strpos($image, 'Photo::accessLevel(') === false) {
+                $problems[] = 'the media viewer must use Photo::accessLevel()';
+            }
+            // The gallery page and the photos AJAX: the GALLERY's level.
+            if (strpos($gc, 'Gallery::accessLevel(') === false) {
+                $problems[] = 'the gallery page and the photos AJAX must use Gallery::accessLevel()';
+            }
+            // The photo's bytes are served at the STRICTEST level across its
+            // galleries. The minimum used to leak: the bytes of a photo that
+            // also sat in a Silver gallery were served at Silver level even
+            // though the Gold gallery advertised it as Gold content.
+            if (strpos($photo, 'SELECT MAX(g.min_level)') === false) {
+                $problems[] = 'a photo\'s bytes must be served at the STRICTEST level across the galleries that hold it';
+            }
+            // And the grid must be filtered by the member's level, so the
+            // page never shows a photo whose bytes they cannot fetch.
+            if (strpos($gallery, 'photosSlice(int $galleryId, int $limit, int $offset, int $maxLevel') === false) {
+                $problems[] = 'the gallery grid must be filtered by the member level';
+            }
+            if (strpos($gc, '$gridLevel') === false) {
+                $problems[] = 'the gallery page must pass the member level to the grid';
+            }
+            // And no GATE may reach for the raw column any more. (The
+            // admin's own edit form may - that is where the level is set.)
+            foreach ([$store, $image, $gc] as $src) {
+                $at = 0;
+                while (($at = strpos($src, 'requireGalleryLevel(', $at)) !== false) {
+                    $gate = substr($src, $at, 400);
+                    if (strpos($gate, "(\$gallery['min_level'] ?? 0)") !== false) {
+                        $problems[] = 'a gate still uses the gallery row\'s own min_level instead of the access level';
+                    }
+                    $at += 20;
+                }
+            }
+            if (strpos($gc, "\$minLevel  = (int) (\$gallery['min_level'] ?? 0);") !== false) {
+                $problems[] = 'the gallery page still uses the gallery row\'s own min_level instead of the access level';
+            }
+            // The in-player gallery browser had NO level filter at all.
+            $browseAt = strpos($gc, 'public function browseGalleries()');
+            if ($browseAt === false) {
+                $problems[] = 'browseGalleries() was not found';
+            } else {
+                $browse = substr($gc, $browseAt, 2600);
+                if (strpos($browse, 'min_level <=') === false) {
+                    $problems[] = 'the in-player gallery browser must filter by the member level - it listed every premium gallery';
+                }
+            }
+            // And a shared collection must not leak a premium cover. The
+            // check is on addGallery() itself: another method in the file
+            // already used publishedVisibleSql, so a file-wide search would
+            // pass even if this one lost its check.
+            $addAt = strpos($coll, 'public static function addGallery(');
+            if ($addAt === false) {
+                $problems[] = 'Collection::addGallery() was not found';
+            } else {
+                $add = substr($coll, $addAt, 1800);
+                if (strpos($add, 'publishedVisibleSql') === false) {
+                    $problems[] = 'a collection must only accept a published, visible gallery - the share link renders its real cover to anyone';
+                }
+                if (strpos($add, 'is_secret = 0') === false) {
+                    $problems[] = 'a collection must not accept a secret gallery';
+                }
+            }
+
+            return $problems === []
+                ? $ok('one place decides what a member can see')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

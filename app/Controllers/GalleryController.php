@@ -111,7 +111,13 @@ class GalleryController extends Controller
         $limit  = 30;
 
         // Only video galleries make sense to pick from on the video player.
-        $where  = \App\Models\Gallery::publishedVisibleSql('g') . ' AND g.is_secret = 0 AND g.type = \'videos\'';
+        // The level filter was MISSING here: any logged-in member - even one
+        // with no subscription - could enumerate every premium gallery's
+        // title, description, item count and its real 400x300 cover.
+        $maxLevel = Auth::effectiveLevel();
+        $levelSql = $maxLevel >= PHP_INT_MAX ? '' : ' AND g.min_level <= ' . (int) $maxLevel;
+
+        $where  = \App\Models\Gallery::publishedVisibleSql('g') . ' AND g.is_secret = 0 AND g.type = \'videos\'' . $levelSql;
         $params = [];
         if ($q !== '') {
             $where  .= ' AND (g.title LIKE ? OR g.description LIKE ?)';
@@ -182,9 +188,10 @@ class GalleryController extends Controller
             return;
         }
         if (empty($gallery['is_secret'])) {
+            $accessLevel = \App\Models\Gallery::accessLevel($id);
             Auth::requireGalleryLevel(
-                (int) ($gallery['min_level'] ?? 0),
-                'This gallery needs a ' . \App\Models\Subscription::levelLabel((int) ($gallery['min_level'] ?? 0)) . ' membership to view.'
+                $accessLevel,
+                'This gallery needs a ' . \App\Models\Subscription::levelLabel($accessLevel) . ' membership to view.'
             );
         }
 
@@ -569,7 +576,10 @@ class GalleryController extends Controller
             return;
         }
 
-        $minLevel  = (int) ($gallery['min_level'] ?? 0);
+        // The level that decides this gallery: the same rule the BYTES are
+        // served at (Gallery::accessLevel), so the page and the files can
+        // never disagree about one asset.
+        $minLevel  = \App\Models\Gallery::accessLevel($id);
         if ($user === null) {
             $canViewFull = false;
         } elseif (\App\Core\Auth::isSuperAdmin()) {
@@ -607,12 +617,13 @@ class GalleryController extends Controller
         // Paginate the grid so large galleries don't ship every item's markup
         // in the initial response; the remainder loads via "Load more" AJAX.
         $pageSize = max(1, (int) config('app.gallery_page_size', 48));
-        $total    = Gallery::photoCount($id);
+        $gridLevel = Auth::effectiveLevel();
+        $total    = Gallery::photoCount($id, $gridLevel);
         // Full members see the paginated slice; the preview shows only a
         // handful of blurred thumbs (all blur variants are lightweight).
         $photos = $canViewFull
-            ? Gallery::photosSlice($id, $pageSize, 0)
-            : Gallery::photosSlice($id, 8, 0);
+            ? Gallery::photosSlice($id, $pageSize, 0, $gridLevel)
+            : Gallery::photosSlice($id, 8, 0, $gridLevel);
 
         // The related cards get their cover and their categories in two
         // queries, not two per card.
@@ -662,22 +673,24 @@ class GalleryController extends Controller
         }
 
         if (empty($gallery['is_secret'])) {
+            $accessLevel = \App\Models\Gallery::accessLevel($id);
             Auth::requireGalleryLevel(
-                (int) ($gallery['min_level'] ?? 0),
-                'This gallery needs a ' . \App\Models\Subscription::levelLabel((int) ($gallery['min_level'] ?? 0)) . ' membership to view.'
+                $accessLevel,
+                'This gallery needs a ' . \App\Models\Subscription::levelLabel($accessLevel) . ' membership to view.'
             );
         }
 
         $pageSize = max(1, (int) config('app.gallery_page_size', 48));
         $offset   = max(0, (int) $this->request->query('offset', 0));
-        $total    = Gallery::photoCount($id);
+        $gridLevel = Auth::effectiveLevel();
+        $total    = Gallery::photoCount($id, $gridLevel);
 
         if ($offset >= $total) {
             echo '';
             return;
         }
 
-        $photos  = Gallery::photosSlice($id, $pageSize, $offset);
+        $photos  = Gallery::photosSlice($id, $pageSize, $offset, $gridLevel);
         $returnTo = safe_return_to($this->request->query('return_to', '')) ?? url('/galleries/' . $id);
 
         header('Content-Type: text/html; charset=utf-8');

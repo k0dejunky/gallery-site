@@ -68,7 +68,7 @@ class StorageController extends Controller
                     // membership level does not apply.
                 } else {
                     Auth::requireGalleryLevel(
-                        Photo::minimumGalleryLevel((int) $photo['id']),
+                        Photo::accessLevel((int) $photo['id']),
                         'A membership is required to view that file.'
                     );
                 }

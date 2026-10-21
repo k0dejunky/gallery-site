@@ -188,6 +188,35 @@ class Photo
     }
 
     /**
+     * The level a member needs to see this photo's BYTES.
+     *
+     * A photo can live in more than one gallery - MediaUploader::commit()
+     * attaches an existing photo (the same content hash) to a new gallery
+     * automatically - so the level that matters is the STRICTEST across
+     * every gallery that holds it.
+     *
+     * It used to be the MINIMUM, which meant the bytes of a photo that also
+     * sat in a Silver gallery were served at Silver level even though the
+     * Gold gallery advertised it as Gold content: a Silver member who
+     * learned the file URL could fetch it. The gallery page used the
+     * gallery's OWN level while the bytes were served at this minimum, so
+     * the two disagreed about the same asset.
+     *
+     * This is the ONE place that decides it.
+     */
+    public static function accessLevel(int $photoId): int
+    {
+        $level = Database::run(
+            'SELECT MAX(g.min_level) FROM gallery_photo gp
+             INNER JOIN galleries g ON g.id = gp.gallery_id
+             WHERE gp.photo_id = ?',
+            [$photoId]
+        )->fetchColumn();
+
+        return ($level === false || $level === null) ? 0 : (int) $level;
+    }
+
+    /**
      * Staged uploads abandoned mid-upload: files sitting in the session
      * staging area (<code>storage/uploads/pending/&lt;session&gt;/</code>)
      * whose session ended before the gallery was created. Each original

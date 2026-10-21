@@ -355,6 +355,23 @@ class Collection
             return false;
         }
 
+        // The gallery has to be a REAL, published, visible gallery. It used
+        // not to be checked at all, so a member could put a premium gallery
+        // into a collection and share it: the share page needs no login (the
+        // token IS the permission) and it renders the gallery's REAL 400x300
+        // cover, so a premium teaser leaked to anyone with the link.
+        $gallery = Database::run(
+            'SELECT g.id FROM galleries g
+             WHERE g.id = ? AND g.deleted_at IS NULL AND g.is_secret = 0
+               AND ' . Gallery::publishedVisibleSql('g') . '
+             LIMIT 1',
+            [$galleryId]
+        )->fetch();
+
+        if ($gallery === false) {
+            return false;
+        }
+
         $exists = (int) Database::run(
             'SELECT COUNT(*) FROM collection_items WHERE collection_id = ? AND gallery_id = ?',
             [$collectionId, $galleryId]

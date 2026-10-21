@@ -58,7 +58,7 @@ class ImageController extends Controller
                 // the level gate does not apply.
                 $canViewFull = true;
             } else {
-                $canViewFull = Auth::effectiveLevel() >= Photo::minimumGalleryLevel($id);
+                $canViewFull = Auth::effectiveLevel() >= Photo::accessLevel($id);
             }
         }
 
@@ -160,7 +160,7 @@ class ImageController extends Controller
             'chapters'      => $requireVideo ? \App\Models\VideoChapter::forPhoto($id) : [],
             // Level the membership gate asks for, so the panel can say what is
             // actually required instead of always claiming "login only".
-            'minimumLevel'  => Photo::minimumGalleryLevel($id),
+            'minimumLevel'  => Photo::accessLevel($id),
             'comments'      => \App\Models\Comment::forEntity(\App\Models\Comment::TYPE_PHOTO, $id),
             'commentCount'  => \App\Models\Comment::countFor(\App\Models\Comment::TYPE_PHOTO, $id),
             'upNext'        => $upNext,
