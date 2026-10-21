@@ -159,6 +159,65 @@ class StaticPageController extends Controller
      * Individual media pages are intentionally excluded (see the note in the
      * body): they are gated viewers with no crawler-visible content.
      */
+    /**
+     * The video sitemap.
+     *
+     * There was no video sitemap at all: the video pages were in no map,
+     * so the one thing the site has that a search engine can index - the
+     * short public sample clip - was only reachable by following a link.
+     *
+     * The full-length files stay behind the membership gate; the map points
+     * at the sample clip, exactly like the VideoObject does.
+     */
+    public function videoSitemap(): void
+    {
+        $base = $this->baseUrl();
+
+        $rows = \App\Core\Database::run(
+            'SELECT p.id, p.filename, p.caption, p.duration_seconds, p.created_at,
+                    g.title AS gallery_title
+             FROM photos p
+             INNER JOIN gallery_photo gp ON gp.photo_id = p.id
+             INNER JOIN galleries g ON g.id = gp.gallery_id
+             WHERE p.is_video = 1
+               AND g.deleted_at IS NULL AND g.is_secret = 0 AND '
+            . Gallery::publishedVisibleSql('g') . '
+             GROUP BY p.id, p.filename, p.caption, p.duration_seconds, p.created_at, g.title
+             ORDER BY p.created_at DESC
+             LIMIT 5000'
+        )->fetchAll();
+
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
+            . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"'
+            . ' xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">' . "\n";
+
+        foreach ($rows as $row) {
+            $pageUrl = $base . '/videos/' . (int) $row['id'];
+            $clipUrl = $base . '/previews/' . (int) $row['id'];
+            $title = trim((string) ($row['caption'] ?? '')) !== ''
+                ? (string) $row['caption']
+                : (string) ($row['gallery_title'] ?? 'Video');
+
+            $xml .= '  <url>' . "\n"
+                . '    <loc>' . htmlspecialchars($pageUrl, ENT_XML1, 'UTF-8') . '</loc>' . "\n"
+                . '    <video:video>' . "\n"
+                . '      <video:thumbnail_loc>' . htmlspecialchars(absolute_url(url('/files/' . rawurlencode((string) $row['filename']) . '?size=thumb')), ENT_XML1, 'UTF-8') . '</video:thumbnail_loc>' . "\n"
+                . '      <video:title>' . htmlspecialchars($title, ENT_XML1, 'UTF-8') . '</video:title>' . "\n"
+                . '      <video:content_loc>' . htmlspecialchars($clipUrl, ENT_XML1, 'UTF-8') . '</video:content_loc>' . "\n"
+                . '      <video:publication_date>' . date('c', strtotime((string) ($row['created_at'] ?? 'now')) ?: time()) . '</video:publication_date>' . "\n";
+            if (!empty($row['duration_seconds'])) {
+                $xml .= '      <video:duration>' . (int) $row['duration_seconds'] . '</video:duration>' . "\n";
+            }
+            $xml .= '    </video:video>' . "\n"
+                . '  </url>' . "\n";
+        }
+
+        $xml .= '</urlset>' . "\n";
+
+        header('Content-Type: application/xml; charset=utf-8');
+        echo $xml;
+    }
+
     public function sitemap(): void
     {
         $base = $this->baseUrl();
@@ -166,13 +225,26 @@ class StaticPageController extends Controller
         // Static pages render 200 for guests; content pages now serve a
         // public, indexable blurred preview too, so they belong in the map.
         $entries = [];
-        foreach (['/', '/about', '/terms', '/privacy', '/2257', '/dmca', '/report-abuse', '/membership'] as $staticPath) {
+        foreach (['/', '/galleries', '/creator', '/about', '/terms', '/privacy', '/2257', '/dmca', '/report-abuse', '/membership'] as $staticPath) {
             $entries[] = [$staticPath, null];
         }
 
-        $rows = \App\Core\Database::run('SELECT slug FROM categories ORDER BY name')->fetchAll();
+        // ONLY the categories that have a gallery in them. 27 of the 111
+        // category pages had no published gallery, so they were a 200 page
+        // whose whole body was "No image galleries in this category" - a
+        // thin page in the map, and a wasted crawl.
+        $rows = \App\Core\Database::run(
+            "SELECT c.slug, MAX(COALESCE(g.published_at, g.created_at)) AS lastmod
+             FROM categories c
+             INNER JOIN gallery_category gc ON gc.category_id = c.id
+             INNER JOIN galleries g ON g.id = gc.gallery_id
+             WHERE g.deleted_at IS NULL AND g.is_secret = 0 AND "
+            . Gallery::publishedVisibleSql('g') . '
+             GROUP BY c.slug
+             ORDER BY c.name'
+        )->fetchAll();
         foreach ($rows as $row) {
-            $entries[] = ['/galleries/category/' . rawurlencode((string) $row['slug']), null];
+            $entries[] = ['/galleries/category/' . rawurlencode((string) $row['slug']), (string) ($row['lastmod'] ?? '')];
         }
 
         $galleries = \App\Core\Database::run(

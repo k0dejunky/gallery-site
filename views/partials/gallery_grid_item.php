@@ -4,7 +4,7 @@
             <?php /* The caption below is the real label, so the thumbnail
                 itself is decorative: "Video thumbnail for item 3" tells a
                 screen reader nothing. */ ?>
-            <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>" alt="" width="400" height="300" loading="lazy" decoding="async" title="Saving is disabled for members-only content">
+            <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>" alt="<?= e(\App\Models\Photo::altText($photo, (string) ($gallery['title'] ?? ''))) ?>" width="400" height="300" loading="lazy" decoding="async" title="Saving is disabled for members-only content">
             <span class="play-badge" aria-hidden="true">&#9654;</span>
         </a>
         <figcaption>
@@ -23,7 +23,7 @@
                 <source type="image/webp" srcset="<?= e(file_url($photo['filename'], 'thumb', 'webp')) ?>">
                 <source type="image/jpeg" srcset="<?= e(file_url($photo['filename'], 'thumb')) ?>">
                 <img src="<?= e(file_url($photo['filename'], 'thumb')) ?>"
-                     alt="<?= e($photo['caption']) ?>"
+                     alt="<?= e(\App\Models\Photo::altText($photo, (string) ($gallery['title'] ?? ''))) ?>"
                      width="400" height="300" loading="lazy" decoding="async" sizes="(max-width: 640px) 100vw, (max-width: 1000px) 50vw, 220px">
             </picture>
         </a>

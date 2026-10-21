@@ -1,4 +1,8 @@
-<?php $title = $tag['name']; ?>
+<?php
+$title = $tag['name'];
+$canonicalUrl = absolute_url('/galleries/tag/' . rawurlencode((string) $tag['slug']));
+$metaDescription = 'Galleries tagged #' . (string) $tag['name'] . ' on ' . config('app.site_name') . '.';
+?>
 <?php
 // The card partial needs the member's own state (seen, favourited). It is
 // rendered inside a fragment closure, so the closure has to be given these

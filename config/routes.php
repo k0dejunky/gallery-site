@@ -15,6 +15,7 @@ return [
     ['GET', '/dmca', 'StaticPageController@dmca'],
     ['GET', '/report-abuse', 'StaticPageController@reportAbuse'],
     ['GET', '/sitemap.xml', 'StaticPageController@sitemap'],
+    ['GET', '/videositemap.xml', 'StaticPageController@videoSitemap'],
     ['GET', '/theme.css', 'AssetController@themeCss'],
     ['GET', '/feed.xml', 'StaticPageController@feed'],
     ['GET', '/galleries', 'GalleryController@index'],

@@ -3330,6 +3330,81 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.seo.found', 'Smoke · SEO', 'The pages describe themselves', static function () use ($root, $read, $ok, $bad): array {
+            // The site was crawlable but thin: the sitemap covered 178 of
+            // ~2,700 URLs, 27 of its 111 category pages had no gallery in
+            // them, the home page and the listing were both titled
+            // "amethyst2213 - amethyst2213", and NOT ONE of the 7,058 photos
+            // had a caption - so every image had alt="" and every image
+            // page was titled "Full-size image".
+            $layout   = (string) $read($root . '/views/layout.php');
+            $sitemap  = (string) $read($root . '/app/Controllers/StaticPageController.php');
+            $creator  = (string) $read($root . '/views/creator/profile.php');
+            $tag      = (string) $read($root . '/views/gallery/tag.php');
+            $photo    = (string) $read($root . '/app/Models/Photo.php');
+            $card     = (string) $read($root . '/views/partials/gallery_card.php');
+            $grid     = (string) $read($root . '/views/partials/gallery_grid_item.php');
+            $image    = (string) $read($root . '/views/gallery/image_full.php');
+            $video    = (string) $read($root . '/views/video/player.php');
+            $problems = [];
+
+            // The title must not carry the site name twice.
+            if (strpos($layout, '$fullTitle') === false) {
+                $problems[] = 'the layout must build the title once';
+            }
+            // The TITLE, not the description: the description legitimately
+            // names the site.
+            if (preg_match('/\$title\s*=.*config\(\x27app\.site_name\x27\)/', $creator) === 1) {
+                $problems[] = 'the creator page must not put the site name in the title - the layout appends it';
+            }
+            // The og:type must follow the page.
+            if (strpos($layout, '$ogType') === false) {
+                $problems[] = 'the layout must take the og:type from the page';
+            }
+            if (strpos($video, "\$ogType = 'video.other'") === false) {
+                $problems[] = 'a video page must say it is a video';
+            }
+            // The breadcrumb structured data.
+            if (strpos($layout, 'BreadcrumbList') === false) {
+                $problems[] = 'the breadcrumbs must be in the structured data - they are visible on every page';
+            }
+            // The alt text.
+            if (strpos($photo, 'public static function altText(') === false) {
+                $problems[] = 'there must be one place that builds the alt text';
+            }
+            foreach (['gallery_card.php' => $card, 'gallery_grid_item.php' => $grid, 'image_full.php' => $image] as $name => $src) {
+                if (strpos($src, 'alt=""') !== false) {
+                    $problems[] = $name . ' still renders alt=""';
+                }
+                if (strpos($src, 'altText(') === false) {
+                    $problems[] = $name . ' does not use the alt text helper';
+                }
+            }
+            // The canonicals.
+            if (strpos($creator, '$canonicalUrl') === false) {
+                $problems[] = 'the creator page needs a canonical - its og:url fell back to the site root';
+            }
+            if (strpos($tag, '$canonicalUrl') === false) {
+                $problems[] = 'the tag pages need a canonical';
+            }
+            // The sitemap.
+            foreach (["'/galleries'", "'/creator'"] as $path) {
+                if (strpos($sitemap, $path) === false) {
+                    $problems[] = 'the sitemap must list ' . $path;
+                }
+            }
+            if (strpos($sitemap, 'INNER JOIN gallery_category') === false) {
+                $problems[] = 'the sitemap must only list the categories that have a gallery in them';
+            }
+            if (strpos($sitemap, 'videoSitemap') === false) {
+                $problems[] = 'there must be a video sitemap';
+            }
+
+            return $problems === []
+                ? $ok('the pages describe themselves')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

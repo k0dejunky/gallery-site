@@ -11,14 +11,24 @@ $metaDescription = $photo['caption'] !== ''
     : 'A video from ' . ($galleryTitle !== '' ? '"' . $galleryTitle . '"' : 'the gallery') . ' on ' . config('app.site_name') . '.';
 $canonicalUrl = absolute_url('/videos/' . (int) $photo['id']);
 $ogImage = absolute_url(file_url($photo['filename'], 'thumb'));
+// A video page is a video, not a website. Every page said "website".
+$ogType = 'video.other';
+$ogVideo = [
+    'url'       => $canonicalUrl,
+    'type'      => 'video/mp4',
+    'width'     => 1280,
+    'height'    => 720,
+];
 $videoObject = [
     '@context' => 'https://schema.org',
     '@type'    => 'VideoObject',
     'name'     => $title,
     'url'      => $canonicalUrl,
     'description' => $metaDescription,
-    'thumbnailUrl' => file_url($photo['filename'], 'thumb'),
-    'uploadDate' => (string) ($photo['created_at'] ?? ''),
+    'thumbnailUrl' => absolute_url(file_url($photo['filename'], 'thumb')),
+    // ISO 8601. It was the raw MySQL datetime, which is not a valid
+    // dateTime for a search engine.
+    'uploadDate' => date('c', strtotime((string) ($photo['created_at'] ?? 'now')) ?: time()),
     'author'   => ['@type' => 'Organization', 'name' => config('app.site_name'), 'url' => absolute_url('')],
 ];
 $sampleClipUrl = video_sample_url((int) $photo['id'], (string) $photo['filename']);

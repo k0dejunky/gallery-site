@@ -63,7 +63,18 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     <?php if ($gaAllowed ?? false): ?>
     <?php require __DIR__ . '/partials/ga.php'; ?>
     <?php endif; ?>
-    <title><?= isset($title) ? e($title) . ' — ' . config('app.site_name') : e(config('app.site_name')) ?></title>
+    <?php
+    // The site name is appended ONCE. Three views set a title that already
+    // contained it, so the home page and the listing were both titled
+    // "amethyst2213 - amethyst2213" and the creator page
+    // "Amethyst - amethyst2213 - amethyst2213".
+    $siteName = (string) config('app.site_name');
+    $pageTitle = isset($title) && trim((string) $title) !== '' ? trim((string) $title) : $siteName;
+    $fullTitle = ($pageTitle === $siteName || str_ends_with($pageTitle, ' — ' . $siteName))
+        ? $pageTitle
+        : $pageTitle . ' — ' . $siteName;
+    ?>
+    <title><?= e($fullTitle) ?></title>
     <?php if (isset($metaDescription) && $metaDescription !== ''): ?>
         <meta name="description" content="<?= e($metaDescription) ?>">
     <?php else: ?>
@@ -78,27 +89,66 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     <link rel="alternate" type="application/rss+xml" title="<?= e(config('app.site_name')) ?> — latest galleries" href="<?= e(absolute_url('/feed.xml')) ?>">
     <?php if (isset($ogImage) && $ogImage !== ''): ?>
         <meta property="og:image" content="<?= e($ogImage) ?>">
-        <meta property="og:image:alt" content="<?= e(isset($title) ? $title . ' — ' . config('app.site_name') : config('app.site_name')) ?>">
+        <meta property="og:image:alt" content="<?= e($fullTitle) ?>">
         <meta name="twitter:image" content="<?= e($ogImage) ?>">
+        <?php if (isset($ogImageWidth) && isset($ogImageHeight)): ?>
+            <meta property="og:image:width" content="<?= (int) $ogImageWidth ?>">
+            <meta property="og:image:height" content="<?= (int) $ogImageHeight ?>">
+        <?php endif; ?>
     <?php endif; ?>
-    <meta property="og:type" content="website">
+    <?php // The type follows the page: a gallery is an article, a video is
+          // a video. Everything said "website", including the media pages. ?>
+    <meta property="og:type" content="<?= e($ogType ?? 'website') ?>">
+    <meta property="og:site_name" content="<?= e($siteName) ?>">
     <meta property="og:locale" content="en_US">
-    <meta property="og:title" content="<?= e(isset($title) ? $title . ' — ' . config('app.site_name') : config('app.site_name')) ?>">
+    <?php // The video's own tags, so a shared video link previews as a
+          // video with a player rather than a still. ?>
+    <?php foreach (($ogVideo ?? []) as $property => $value): ?>
+        <meta property="og:video:<?= e($property) ?>" content="<?= e((string) $value) ?>">
+    <?php endforeach; ?>
+    <meta property="og:title" content="<?= e($fullTitle) ?>">
     <meta property="og:description" content="<?= e($metaDescription ?? (config('app.site_name') . ' — curated galleries of original photos and videos.')) ?>">
     <meta property="og:url" content="<?= e($canonicalUrl ?? absolute_url('')) ?>">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="<?= e(isset($title) ? $title . ' — ' . config('app.site_name') : config('app.site_name')) ?>">
+    <meta name="twitter:title" content="<?= e($fullTitle) ?>">
     <meta name="twitter:description" content="<?= e($metaDescription ?? (config('app.site_name') . ' — curated galleries of original photos and videos.')) ?>">
     <script nonce="<?= csp_nonce() ?>" type="application/ld+json">
     {
         "@context": "https://schema.org",
         "@type": "WebSite",
-        "name": <?= json_encode(config('app.site_name'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
-        "url": <?= json_encode(absolute_url(''), JSON_UNESCAPED_SLASHES) ?>
+        "name": <?= json_encode($siteName, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+        "url": <?= json_encode(absolute_url(''), JSON_UNESCAPED_SLASHES) ?>,
+        "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+                "@type": "EntryPoint",
+                "urlTemplate": <?= json_encode(absolute_url('/galleries') . '?q={search_term_string}', JSON_UNESCAPED_SLASHES) ?>
+            },
+            "query-input": "required name=search_term_string"
+        }
     }
     </script>
     <?php if (isset($ldJson) && is_array($ldJson)): ?>
     <script nonce="<?= csp_nonce() ?>" type="application/ld+json"><?= json_encode($ldJson, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
+    <?php endif; ?>
+    <?php if (!empty($breadcrumbItems)): ?>
+    <script nonce="<?= csp_nonce() ?>" type="application/ld+json">
+    <?= json_encode([
+        '@context' => 'https://schema.org',
+        '@type'    => 'BreadcrumbList',
+        'itemListElement' => array_values(array_map(static function (array $item, int $i): array {
+            $entry = [
+                '@type'    => 'ListItem',
+                'position' => $i + 1,
+                'name'     => (string) ($item['label'] ?? ''),
+            ];
+            if (!empty($item['url'])) {
+                $entry['item'] = (string) $item['url'];
+            }
+            return $entry;
+        }, $breadcrumbItems, array_keys($breadcrumbItems))),
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>
+    </script>
     <?php endif; ?>
     <?php if (!empty($lcpPreload)): ?>
     <link rel="preload" as="image" href="<?= e($lcpPreload) ?>" fetchpriority="high">

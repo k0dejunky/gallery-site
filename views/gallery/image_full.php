@@ -1,6 +1,10 @@
-<?php $title = $photo['caption'] !== '' ? $photo['caption'] : 'Full-size image'; ?>
 <?php
 $galleryTitle = $gallery !== null ? (string) $gallery['title'] : '';
+// NOT ONE of the 7,058 photos on production had a caption, so every
+// image page was titled "Full-size image" and every image had no alt text.
+// The gallery title is the meaningful fallback.
+$photoAlt   = \App\Models\Photo::altText($photo, $galleryTitle);
+$title      = $photo['caption'] !== '' ? $photo['caption'] : ($galleryTitle !== '' ? $galleryTitle : 'Full-size image');
 $metaDescription = $photo['caption'] !== ''
     ? $photo['caption'] . ($galleryTitle !== '' ? ' — from "' . $galleryTitle . '" on ' . config('app.site_name') . '.' : '')
     : 'An image from ' . ($galleryTitle !== '' ? '"' . $galleryTitle . '"' : 'the gallery') . ' on ' . config('app.site_name') . '.';
@@ -9,7 +13,7 @@ $ogImage = absolute_url(file_url($photo['filename'], 'thumb'));
 $ldJson = [
     '@context' => 'https://schema.org',
     '@type'    => 'ImageObject',
-    'name'     => $photo['caption'] !== '' ? $photo['caption'] : $title,
+    'name'     => $title,
     'url'      => $canonicalUrl,
     'contentUrl' => file_url($photo['filename']),
     'caption'  => $photo['caption'],
@@ -64,7 +68,7 @@ $breadcrumbItems = [
     <?php if (empty($canViewFull)): ?>
         <?php // Blurred, indexable preview for guests and below-level members. ?>
         <img src="<?= e(file_url($photo['filename'], 'blur')) ?>"
-             alt="<?= e($photo['caption']) ?>"
+             alt="<?= e($photoAlt) ?>"
              decoding="async"
              style="max-width:100%;height:auto;border-radius:10px;box-shadow:0 2px 12px rgba(59,7,100,.35);">
         <?php
@@ -82,7 +86,7 @@ $breadcrumbItems = [
          data-full="<?= e(file_url($photo['filename'])) ?>"
          decoding="async"
          fetchpriority="high"
-         alt="<?= e($photo['caption']) ?>"
+         alt="<?= e($photoAlt) ?>"
          style="max-width: 100%; height: auto; border-radius: 10px; box-shadow: 0 2px 12px rgba(59, 7, 100, 0.35);">
     <figcaption class="muted" style="margin-top: 0.75rem">
         <?php if ($photo['caption'] !== ''): ?>

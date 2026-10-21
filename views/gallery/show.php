@@ -5,6 +5,8 @@ $metaDescription = $galleryDescription !== ''
     ? $galleryDescription
     : 'Browse "' . $title . '" — ' . number_format((int) ($total ?? 0)) . ' items on ' . config('app.site_name') . '.';
 $canonicalUrl = absolute_url('/galleries/' . (int) $gallery['id']);
+// A gallery is a collection of work, not a website.
+$ogType = 'article';
 $ogImage = isset($photos[0]['filename']) && $photos[0]['filename'] !== '' ? absolute_url(file_url($photos[0]['filename'], 'thumb')) : '';
 $ldJson = [
     '@context' => 'https://schema.org',

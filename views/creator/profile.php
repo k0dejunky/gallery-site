@@ -1,4 +1,13 @@
-<?php $title = ($profile['display_name'] ?: 'About the creator') . ' — ' . config('app.site_name'); ?>
+<?php
+// The title must NOT carry the site name: the layout appends it, and
+// this one appended it too - "Amethyst - amethyst2213 - amethyst2213".
+$title = ($profile['display_name'] ?: 'About the creator');
+$canonicalUrl = absolute_url('/creator');
+$metaDescription = trim((string) ($profile['tagline'] ?? '')) !== ''
+    ? (string) $profile['tagline'] . ' — ' . config('app.site_name')
+    : (string) config('app.site_name') . ' — curated galleries of original photos and videos.';
+$ogType = 'profile';
+?>
 
 <div class="favorites-hero">
     <p class="eyebrow">Meet the creator</p>

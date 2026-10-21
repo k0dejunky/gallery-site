@@ -188,6 +188,35 @@ class Photo
     }
 
     /**
+     * The alt text for a photo.
+     *
+     * NOT ONE of the 7,058 photos on production had a caption, so every
+     * image on the site rendered alt="" and every /images/{id} page was
+     * titled "Full-size image". A screen reader got nothing, and a search
+     * engine got nothing.
+     *
+     * So: the caption when there is one, otherwise the gallery the photo
+     * belongs to, otherwise the site name. The filename is a hash, so it
+     * says nothing at all.
+     */
+    public static function altText(array $photo, ?string $galleryTitle = null): string
+    {
+        $caption = trim((string) ($photo['caption'] ?? ''));
+
+        if ($caption !== '') {
+            return $caption;
+        }
+
+        $title = trim((string) ($galleryTitle ?? ''));
+
+        if ($title !== '') {
+            return $title;
+        }
+
+        return (string) config('app.site_name', 'gallery');
+    }
+
+    /**
      * The level a member needs to see this photo's BYTES.
      *
      * A photo can live in more than one gallery - MediaUploader::commit()
