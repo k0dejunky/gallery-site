@@ -3056,6 +3056,74 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.money.ledger', 'Smoke · Money', 'Every money movement is in a ledger', static function () use ($root, $read, $ok, $bad): array {
+            // A purchase row was MUTATED in place: pending -> paid ->
+            // refunded, and an admin could set any status on any row. The row
+            // only ever showed the LAST state, so "was this paid and then
+            // refunded, or never paid at all" had no answer, and an admin's
+            // manual change was indistinguishable from a gateway's.
+            $purchase = (string) $read($root . '/app/Models/Purchase.php');
+            $schema   = (string) $read($root . '/schema.sql');
+            $ctrl     = (string) $read($root . '/app/Controllers/ModerationController.php');
+            $problems = [];
+
+            if (strpos($schema, 'CREATE TABLE IF NOT EXISTS purchase_events') === false) {
+                $problems[] = 'there must be a purchase_events ledger table';
+            }
+            if (strpos($schema, 'idx_purchase_events_purchase') === false) {
+                $problems[] = 'the ledger must be indexed by purchase';
+            }
+            if (strpos($purchase, 'public static function recordEvent(') === false) {
+                $problems[] = 'Purchase must have a recordEvent()';
+            }
+            if (strpos($purchase, 'public static function events(') === false) {
+                $problems[] = 'Purchase must be able to read the ledger back';
+            }
+            // Every state change must land in it.
+            foreach ([
+                ["settleById", "paid"],
+                ["settleByReference", "paid"],
+                ["refundByReference", "refunded"],
+            ] as [$method, $event]) {
+                $at = strpos($purchase, 'public static function ' . $method . '(');
+                if ($at === false) {
+                    $problems[] = 'Purchase::' . $method . '() was not found';
+                    continue;
+                }
+                $end = strpos($purchase, "
+    }", $at);
+                $body = substr($purchase, $at, ($end === false ? 1200 : $end - $at));
+                if (strpos($body, 'recordEvent(') === false) {
+                    $problems[] = 'Purchase::' . $method . '() must append to the ledger';
+                }
+            }
+            // The creation and the admin's manual change too.
+            if (strpos($purchase, "'created', [") === false) {
+                $problems[] = 'a new purchase must start in the ledger';
+            }
+            if (strpos($purchase, "'status_changed'") === false) {
+                $problems[] = 'an admin\'s manual status change must be in the ledger';
+            }
+            if (strpos($ctrl, 'setStatus($id, $status, (int) Auth::user()') === false) {
+                $problems[] = 'the admin status change must record WHO made it';
+            }
+            // The parameters must not be swapped. They WERE: "SET status = ?
+            // WHERE id = ?" was given [$id, $status], so the row matched
+            // nothing and the admin's status change never happened.
+            if (strpos($purchase, "UPDATE purchases SET status = ? WHERE id = ?', [\$status, \$id]") === false) {
+                $problems[] = 'the status update must bind the status first and the id second - they were swapped';
+            }
+            // And a refund must mark the local row too, or the unlock stays
+            // open even though the money went back.
+            if (strpos($ctrl, 'Purchase::setStatus($id, Purchase::STATUS_REFUNDED') === false) {
+                $problems[] = 'a refund must mark the local purchase refunded too';
+            }
+
+            return $problems === []
+                ? $ok('every money movement is in a ledger')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

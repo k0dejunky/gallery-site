@@ -455,6 +455,7 @@ class PurchaseController extends Controller
                 "UPDATE purchases SET status = 'refunded', updated_at = NOW() WHERE id = ?",
                 [$purchaseId]
             );
+            Purchase::recordEvent($purchaseId, 'refunded', ['reason' => 'the charge failed']);
             return ['ok' => false, 'error' => 'Payment failed: ' . $e->getMessage()];
         }
     }

@@ -178,11 +178,14 @@ class ModerationController extends Controller
             } else {
                 $this->flash('success', 'Purchase refunded at the processor and marked refunded.');
             }
+            // The local row has to be marked too, or the unlock stays open
+            // even though the money went back.
+            Purchase::setStatus($id, Purchase::STATUS_REFUNDED, (int) Auth::user()['id']);
             $this->redirect('/admin/engagement/purchases');
             return;
         }
 
-        Purchase::setStatus($id, $status);
+        Purchase::setStatus($id, $status, (int) Auth::user()['id']);
 
         $this->flash('success', 'Purchase updated.');
         $this->redirect('/admin/engagement/purchases');

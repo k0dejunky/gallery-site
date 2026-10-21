@@ -38,7 +38,17 @@ class Purchase
             [$userId, $itemType, $itemId, $amount, $currency ?? 'USD', $gateway, $gatewayRef, $paymentProcessorId, $idempotencyKey, $note, $status]
         );
 
-        return (int) Database::connection()->lastInsertId();
+        $id = (int) Database::connection()->lastInsertId();
+
+        // Every purchase starts in the ledger.
+        self::recordEvent($id, 'created', [
+            'amount'   => $amount,
+            'currency' => $currency ?? 'USD',
+            'gateway'  => $gateway,
+            'reason'   => $note,
+        ]);
+
+        return $id;
     }
 
     /**
@@ -96,9 +106,70 @@ class Purchase
         $id = (int) $row['id'];
         // The same guard as settleById(): only a pending purchase is settled,
         // so two concurrent settlement events cannot both write.
-        Database::run("UPDATE purchases SET status = 'paid', updated_at = NOW() WHERE id = ? AND status = 'pending'", [$id]);
+        $stmt = Database::run(
+            "UPDATE purchases SET status = 'paid', updated_at = NOW() WHERE id = ? AND status = 'pending'",
+            [$id]
+        );
+
+        if ($stmt->rowCount() > 0) {
+            self::recordEvent($id, 'paid', ['gateway_ref' => $gatewayRef]);
+        }
 
         return $id;
+    }
+
+    /**
+     * Append a row to the money ledger.
+     *
+     * A purchase row is MUTATED in place: pending -> paid -> refunded, and
+     * an admin can set any status on any row. The row only ever showed
+     * the LAST state, so "was this paid and then refunded, or never paid
+     * at all" had no answer, and an admin's manual change was
+     * indistinguishable from a gateway's.
+     *
+     * The ledger is the record. The purchase row is the current state, a
+     * projection of it.
+     */
+    public static function recordEvent(int $purchaseId, string $event, array $data = []): int
+    {
+        $row = Database::run(
+            'SELECT user_id, amount, currency, gateway, gateway_ref FROM purchases WHERE id = ? LIMIT 1',
+            [$purchaseId]
+        )->fetch();
+
+        if ($row === false) {
+            return 0;
+        }
+
+        Database::run(
+            'INSERT INTO purchase_events
+                (purchase_id, user_id, event, amount, currency, gateway, gateway_ref, actor_id, reason, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
+            [
+                $purchaseId,
+                $row['user_id'] ?? null,
+                $event,
+                $data['amount'] ?? $row['amount'] ?? null,
+                $data['currency'] ?? $row['currency'] ?? null,
+                $data['gateway'] ?? $row['gateway'] ?? null,
+                $data['gateway_ref'] ?? $row['gateway_ref'] ?? null,
+                $data['actor_id'] ?? null,
+                $data['reason'] ?? null,
+            ]
+        );
+
+        return (int) Database::connection()->lastInsertId();
+    }
+
+    /**
+     * The ledger for a purchase, oldest first.
+     */
+    public static function events(int $purchaseId): array
+    {
+        return Database::run(
+            'SELECT * FROM purchase_events WHERE purchase_id = ? ORDER BY id ASC',
+            [$purchaseId]
+        )->fetchAll();
     }
 
     /**
@@ -120,7 +191,14 @@ class Purchase
      */
     public static function settleById(int $id): void
     {
-        Database::run("UPDATE purchases SET status = 'paid', updated_at = NOW() WHERE id = ? AND status = 'pending'", [$id]);
+        $stmt = Database::run(
+            "UPDATE purchases SET status = 'paid', updated_at = NOW() WHERE id = ? AND status = 'pending'",
+            [$id]
+        );
+
+        if ($stmt->rowCount() > 0) {
+            self::recordEvent($id, 'paid');
+        }
     }
 
     /**
@@ -203,6 +281,16 @@ class Purchase
              WHERE gateway = ? AND gateway_ref = ? AND status IN ('paid', 'granted')",
             [$gateway, $gatewayRef]
         );
+
+        if ($stmt->rowCount() > 0) {
+            $id = (int) Database::run(
+                'SELECT id FROM purchases WHERE gateway = ? AND gateway_ref = ? LIMIT 1',
+                [$gateway, $gatewayRef]
+            )->fetchColumn();
+            if ($id) {
+                self::recordEvent((int) $id, 'refunded', ['gateway_ref' => $gatewayRef]);
+            }
+        }
 
         return $stmt->rowCount() > 0;
     }
@@ -315,9 +403,31 @@ class Purchase
         )->fetchAll();
     }
 
-public static function setStatus(int $id, string $status): void
+    /**
+     * An admin's manual status change.
+     *
+     * It goes in the ledger like everything else, with the admin who made
+     * it, so a manual change is never mistaken for a gateway's.
+     */
+    public static function setStatus(int $id, string $status, int $actorId = 0): void
     {
-        Database::run('UPDATE purchases SET status = ? WHERE id = ?', [$id, $status]);
+        $before = Database::run(
+            'SELECT status FROM purchases WHERE id = ? LIMIT 1',
+            [$id]
+        )->fetchColumn();
+
+        // The parameters were SWAPPED: "SET status = ? WHERE id = ?" was
+        // given [$id, $status], so the id went into the status column and
+        // the status into the id. The row matched nothing and the admin's
+        // status change never happened.
+        Database::run('UPDATE purchases SET status = ? WHERE id = ?', [$status, $id]);
+
+        if ($before !== false && (string) $before !== $status) {
+            self::recordEvent($id, 'status_changed', [
+                'actor_id' => $actorId > 0 ? $actorId : null,
+                'reason'    => 'from ' . $before . ' to ' . $status,
+            ]);
+        }
     }
 
     /**
