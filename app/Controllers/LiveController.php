@@ -471,17 +471,12 @@ class LiveController extends Controller
             return ['created_by' => (int) $token['created_by']];
         }
 
-        // Legacy shared key (GALLERY_CHAT_KEY): the app may still be signed in
-        // with it. Attribute the session to the first admin account.
-        $expected = (string) env_value('GALLERY_CHAT_KEY', '');
-        if ($expected !== '' && hash_equals($expected, $given)) {
-            $admin = Database::run(
-                'SELECT id FROM users WHERE role IN (' . implode(',', array_fill(0, count(\App\Core\Auth::ADMIN_ROLES), '?')) . ') ORDER BY id ASC LIMIT 1',
-                \App\Core\Auth::ADMIN_ROLES
-            )->fetch();
-
-            return $admin !== false ? ['created_by' => (int) $admin['id']] : null;
-        }
+        // The legacy shared key (GALLERY_CHAT_KEY) is for the CHAT only. It
+        // used to be accepted here too, which meant a key that is
+        // distributed to every operator's phone could start and stop the
+        // broadcast - and the recording of that broadcast is imported into a
+        // paid gallery and auto-posted to social media. Live control needs a
+        // DEVICE token, so a leaked shared key cannot take the stream.
 
         return null;
     }

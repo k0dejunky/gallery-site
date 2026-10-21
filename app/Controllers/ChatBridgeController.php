@@ -79,6 +79,15 @@ class ChatBridgeController extends Controller
             header('Retry-After: ' . $window);
             $this->json(['ok' => false, 'error' => 'Rate limit exceeded. Try again shortly.'], 429);
         }
+
+        if ($isShared) {
+            // The shared key has no per-device identity, so a use of it
+            // cannot be attributed to a device. Log the caller's address so
+            // a leak is at least traceable, and so a rotation can be
+            // checked against the log.
+            error_log('[chat-bridge] the SHARED key was used from ' . $this->request->ip()
+                . ' for a ' . ($write ? 'write' : 'read') . ' on ' . ($this->request->uri() ?? '?'));
+        }
     }
 
     /**
@@ -1031,6 +1040,11 @@ class ChatBridgeController extends Controller
      */
     public function attachment(): void
     {
+        // This endpoint was the ONLY bridge route with no throttle() call:
+        // an authenticated client could pull every chat attachment at line
+        // speed - and an attachment can be a personal photo a member sent.
+        $this->throttle(false);
+
         $mid = max(0, (int) $this->request->query('message', 0));
         $thumb = (int) $this->request->query('thumb', 0) === 1;
         if ($mid <= 0) {

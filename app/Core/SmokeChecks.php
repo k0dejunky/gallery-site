@@ -3124,6 +3124,53 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.exposure.chat_key_scope', 'Smoke · Ops', 'The shared chat key is not a live-stream credential', static function () use ($root, $read, $ok, $bad): array {
+            // GALLERY_CHAT_KEY is distributed to every operator's phone. It
+            // was accepted for the LIVE CONTROLS too, so a leaked shared
+            // key could start and stop the broadcast - and the recording of
+            // that broadcast is imported into a paid gallery and auto-posted
+            // to social media.
+            $live   = (string) $read($root . '/app/Controllers/LiveController.php');
+            $bridge = (string) $read($root . '/app/Controllers/ChatBridgeController.php');
+            $problems = [];
+
+            // The live controls must accept a DEVICE token only.
+            $at = strpos($live, 'private function operator()');
+            if ($at === false) {
+                $problems[] = 'LiveController::operator() was not found';
+            } else {
+                $body = substr($live, $at, 1800);
+                // The CODE, not the comment: the comment explains why the
+                // key is not accepted here.
+                if (strpos($body, "env_value('GALLERY_CHAT_KEY'") !== false) {
+                    $problems[] = 'the live controls must not accept the shared chat key - it is a chat credential, not a broadcast one';
+                }
+                if (strpos($body, 'OperatorToken::authenticate(') === false) {
+                    $problems[] = 'the live controls must accept a device token';
+                }
+            }
+            // The attachment endpoint was the only bridge route with no
+            // throttle: an authenticated client could pull every chat
+            // attachment - a personal photo - at line speed.
+            $attAt = strpos($bridge, 'public function attachment()');
+            if ($attAt === false) {
+                $problems[] = 'the bridge attachment endpoint was not found';
+            } else {
+                $body = substr($bridge, $attAt, 900);
+                if (strpos($body, 'throttle(') === false) {
+                    $problems[] = 'the bridge attachment endpoint must be throttled';
+                }
+            }
+            // And a use of the shared key must be traceable.
+            if (strpos($bridge, '[chat-bridge] the SHARED key was used from') === false) {
+                $problems[] = 'a use of the shared key must be logged, so a leak is traceable';
+            }
+
+            return $problems === []
+                ? $ok('the shared chat key is not a live-stream credential')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).
