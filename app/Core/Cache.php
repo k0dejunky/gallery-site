@@ -25,11 +25,134 @@ class Cache
             return $hit;
         }
 
-        $value = (string) $callback();
+        // The stampede guard. Without it, N concurrent requests on a cold
+        // cache all run the producer - and the producer for a listing is the
+        // whole catalogue. One of them wins the lock and does the work; the
+        // others wait for it and then read the answer.
+        $lock = self::acquireLock($key, $ttl);
 
-        self::set($key, $value, $ttl);
+        if ($lock === null) {
+            // Another process is producing it. Wait for the answer rather
+            // than doing the work twice.
+            $waited = self::waitFor($key, $ttl);
 
-        return $value;
+            if ($waited !== null) {
+                return $waited;
+            }
+        }
+
+        try {
+            // Re-read: the winner may have finished while we waited.
+            $hit = self::get($key);
+
+            if ($hit !== null) {
+                return $hit;
+            }
+
+            $value = (string) $callback();
+
+            self::set($key, $value, $ttl);
+
+            return $value;
+        } finally {
+            if ($lock !== null) {
+                self::releaseLock($lock);
+            }
+        }
+    }
+
+    /**
+     * Take the producer lock for a key, or null when someone else has it.
+     *
+     * The stampede guard: one process produces the value, the others wait
+     * for it instead of doing the same work.
+     */
+    public static function lock(string $key, int $ttl): ?string
+    {
+        return self::acquireLock($key, $ttl);
+    }
+
+    /**
+     * Give a lock back.
+     */
+    public static function unlock(?string $lock): void
+    {
+        if ($lock !== null) {
+            self::releaseLock($lock);
+        }
+    }
+
+    /**
+     * Wait for another process to produce the value.
+     */
+    public static function wait(string $key, int $ttl): ?string
+    {
+        return self::waitFor($key, $ttl);
+    }
+
+    private static function acquireLock(string $key, int $ttl): ?string
+    {
+        $redis = self::connection();
+
+        if ($redis === null) {
+            return null;
+        }
+
+        $lockKey = self::lockKey($key);
+        $token   = $lockKey . '|' . bin2hex(random_bytes(8));
+
+        // SET NX EX: only one process can take it, and it expires on its
+        // own so a crashed producer cannot wedge the key forever.
+        $won = $redis->set($lockKey, $token, ['NX', 'EX' => max(5, (int) ceil($ttl / 3))]);
+
+        return $won ? $token : null;
+    }
+
+    /**
+     * Give the producer lock back, but only if we are still the holder.
+     */
+    private static function releaseLock(string $token): void
+    {
+        // The lock key is carried in the token so release() can find it
+        // without re-deriving it.
+        [$lockKey, $value] = array_pad(explode('|', $token, 2), 2, '');
+        $redis = self::connection();
+
+        if ($redis === null || $lockKey === '') {
+            return;
+        }
+
+        // Only release our own lock.
+        if ((string) $redis->get($lockKey) === $value) {
+            $redis->del($lockKey);
+        }
+    }
+
+    /**
+     * Wait for another process to finish producing the value.
+     */
+    private static function waitFor(string $key, int $ttl): ?string
+    {
+        $deadline = microtime(true) + min(5.0, max(0.5, $ttl / 10));
+        $sleep    = 50000;   // 50ms
+
+        while (microtime(true) < $deadline) {
+            usleep($sleep);
+            $hit = self::get($key);
+            if ($hit !== null) {
+                return $hit;
+            }
+            if ($sleep < 500000) {
+                $sleep *= 2;
+            }
+        }
+
+        return null;
+    }
+
+    private static function lockKey(string $key): string
+    {
+        return 'lock:' . $key;
     }
 
     /**
@@ -221,18 +344,38 @@ public static function rememberGen(string $bucket, string $key, int $ttl, callab
         return $hit;
     }
 
-    $value = $callback();
+    // The stampede guard, as in remember().
+    $lock = self::acquireLock($cacheKey, $ttl);
 
-    if (is_array($value)) {
-        self::set($arrayKey, json_encode($value, JSON_UNESCAPED_SLASHES) ?: '[]', $ttl);
-
-        return $value;
+    if ($lock === null) {
+        $waited = self::waitFor($cacheKey, $ttl);
+        if ($waited !== null) {
+            $decoded = json_decode($waited, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+            return [];
+        }
     }
 
-    $string = (string) $value;
-    self::set($cacheKey, $string, $ttl);
+    try {
+        $value = $callback();
 
-    return $string;
+        if (is_array($value)) {
+            self::set($arrayKey, json_encode($value, JSON_UNESCAPED_SLASHES) ?: '[]', $ttl);
+
+            return $value;
+        }
+
+        $string = (string) $value;
+        self::set($cacheKey, $string, $ttl);
+
+        return $string;
+    } finally {
+        if ($lock !== null) {
+            self::releaseLock($lock);
+        }
+    }
 }
 
     /**

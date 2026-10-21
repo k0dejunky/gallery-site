@@ -3242,6 +3242,94 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.perf.cache', 'Smoke · Perf', 'The cache cannot stampede and cannot be filled with junk', static function () use ($root, $read, $ok, $bad): array {
+            // Two problems with the cache.
+            //
+            // A STAMPEDE: on a cold cache, N concurrent requests all ran
+            // the producer, and the producer for a listing is the whole
+            // catalogue. Worse, bump('listings') invalidates every listing
+            // fragment and the whole-page cache AT ONCE, so the next wave
+            // of guests all re-rendered everything and wrote the same
+            // 393 KB back.
+            //
+            // AND JUNK KEYS: the page cache key was the RAW query string,
+            // so every tracking parameter (?utm_source, ?fbclid, ...) was
+            // its own cache entry - a whole page each - and Redis has no
+            // maxmemory, so it grew without bound.
+            $cache    = (string) $read($root . '/app/Core/Cache.php');
+            $pageCache = (string) $read($root . '/app/Core/PageCache.php');
+            $router   = (string) $read($root . '/app/Core/Router.php');
+            $problems = [];
+
+            if (strpos($cache, "'NX', 'EX'") === false) {
+                $problems[] = 'the producer lock must be taken with NX and an expiry, so a crashed producer cannot wedge a key';
+            }
+            if (strpos($cache, 'private static function acquireLock(') === false) {
+                $problems[] = 'the cache must have a producer lock';
+            }
+            if (strpos($cache, 'private static function waitFor(') === false) {
+                $problems[] = 'the other processes must be able to wait for the winner';
+            }
+            if (strpos($pageCache, '\App\Core\Cache::lock(') === false) {
+                $problems[] = 'the listing fragments must be guarded against a stampede';
+            }
+            if (strpos($pageCache, 'public static function normaliseQuery(') === false) {
+                $problems[] = 'the page cache key must normalise the query string';
+            }
+            if (strpos($router, 'PageCache::normaliseQuery(') === false) {
+                $problems[] = 'the router must use the normalised query string in the page cache key';
+            }
+            if (strpos($router, "QUERY_STRING'] ?? '')") !== false && strpos($router, 'normaliseQuery') === false) {
+                $problems[] = 'the raw query string is still part of the page cache key';
+            }
+
+            return $problems === []
+                ? $ok('the cache cannot stampede and cannot be filled with junk')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.perf.disk_walk', 'Smoke · Perf', 'The admin dashboard does not walk the disk', static function () use ($root, $read, $ok, $bad): array {
+            // The dashboard walked the whole storage tree on every load: a
+            // filesize() for each of the ~6,800 photos, a glob plus a
+            // filesize for each of the ~15,600 web_ and ~22,000 thumb_
+            // variants, and FOURTEEN recursive directory walks over 47,000
+            // files. strace counted 280,000 stat() calls - 90% of the page's
+            // time, 3.4 to 4.0 seconds, all of it FPM CPU.
+            //
+            // The breakdown is a slow-moving figure, so it is computed in
+            // the BACKGROUND and the dashboard reads the cached copy.
+            $usage   = (string) $read($root . '/app/Core/DiskUsage.php');
+            $ctrl    = (string) $read($root . '/app/Controllers/AdminController.php');
+            $hk      = (string) $read($root . '/app/Core/Housekeeping.php');
+            $problems = [];
+
+            if (strpos($usage, 'public static function compute(') === false) {
+                $problems[] = 'there must be a service that computes the disk breakdown';
+            }
+            if (strpos($usage, 'public static function cached(') === false) {
+                $problems[] = 'there must be a cached copy of the breakdown';
+            }
+            if (strpos($ctrl, 'DiskUsage::cached()') === false) {
+                $problems[] = 'the dashboard must read the cached breakdown, not walk the disk';
+            }
+            if (strpos($ctrl, 'diskBreakdown(') !== false) {
+                $problems[] = 'the dashboard must not walk the disk itself any more';
+            }
+            if (strpos($hk, 'DiskUsage::refresh(') === false) {
+                $problems[] = 'the housekeeping must refresh the breakdown in the background';
+            }
+            // And the model ping, which cost the dashboard 3.4 seconds on a
+            // box with no model.
+            $ai = (string) $read($root . '/app/Core/ChatAi.php');
+            if (strpos($ai, 'private static function cachedPing(') === false) {
+                $problems[] = 'the model ping must be cached, or the dashboard waits out the timeout';
+            }
+
+            return $problems === []
+                ? $ok('the admin dashboard does not walk the disk')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

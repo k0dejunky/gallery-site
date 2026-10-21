@@ -961,6 +961,13 @@ CREATE TABLE IF NOT EXISTS web_visits (
     is_bot TINYINT(1) NOT NULL DEFAULT 0,
     KEY idx_web_visits_day (day, is_bot),
     KEY idx_web_visits_started (started_at),
+    -- The analytics page groups by the entry and the exit URL over a date
+    -- range. Without these it read every row of the table.
+    KEY idx_web_visits_entry_day (day, is_bot, entry_url(120)),
+    KEY idx_web_visits_exit_day (day, is_bot, exit_url(120)),
+    -- The quality and bounce queries read ip, duration, pages and bytes over
+    -- a date range; without them they read every row of the table.
+    KEY idx_web_visits_quality (day, is_bot, ip, duration_sec, pages, bytes),
     KEY idx_web_visits_entry (entry_url(191)),
     KEY idx_web_visits_exit (exit_url(191))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

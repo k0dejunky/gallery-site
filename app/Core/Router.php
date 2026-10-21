@@ -152,8 +152,12 @@ class Router
             // the visitor to the overlay-free cached page instead of re-serving
             // the gated page and looping them back.
             $ageState = empty($_SESSION['age_verified']) ? '0' : '1';
+            // The query string is NORMALISED before it becomes part of the
+            // key. The raw string made every tracking parameter its own
+            // cache entry - a 393 KB page for every ?utm_* and ?fbclid= -
+            // and Redis had no maxmemory, so it grew without bound.
             $pageKey = \App\Core\PageCache::pageKey(
-                $this->request->uri() . '|' . (string) ($_SERVER['QUERY_STRING'] ?? '') . '|age:' . $ageState
+                $this->request->uri() . '|' . \App\Core\PageCache::normaliseQuery((string) ($_SERVER['QUERY_STRING'] ?? '')) . '|age:' . $ageState
             );
             $cached = \App\Core\PageCache::pageGet($pageKey);
 

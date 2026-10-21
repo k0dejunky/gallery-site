@@ -36,6 +36,42 @@ class PageCache
      * The producer closure should echo the fragment; the buffered string is
      * returned so the caller can echo it too if preferred.
      */
+    /**
+     * The query string as a cache key, without the noise.
+     *
+     * The raw query string was part of the page cache key, so every
+     * tracking parameter (?utm_source, ?fbclid, ?gclid, ...) was its own
+     * cache entry - a whole page each - and Redis had no maxmemory. The
+     * parameters that MATTER to a page (the search, the filters, the page
+     * number) are kept; the rest are dropped.
+     *
+     * @var string[] $keep
+     */
+    public static function normaliseQuery(string $query, array $keep = ['q', 'page', 'page_images', 'page_videos', 'type', 'category', 'tag', 'sort', 'period', 'vt']): string
+    {
+        if ($query === '') {
+            return '';
+        }
+
+        $pairs = [];
+        parse_str($query, $parsed);
+
+        foreach ($keep as $name) {
+            if (!array_key_exists($name, $parsed)) {
+                continue;
+            }
+            $value = $parsed[$name];
+            if (is_array($value)) {
+                $value = implode(',', $value);
+            }
+            $pairs[] = $name . '=' . (string) $value;
+        }
+
+        sort($pairs);
+
+        return implode('&', $pairs);
+    }
+
     public static function fragment(string $key, int $ttl, callable $producer): string
     {
         $enabled = (bool) config('app.page_cache')
@@ -60,6 +96,23 @@ class PageCache
             }
         }
 
+        // The stampede guard: one process renders the grid, the others wait
+        // for it. Without it, a cold cache had every concurrent request
+        // render the whole catalogue and write the same 393 KB back.
+        $lock = $enabled ? \App\Core\Cache::lock($cacheKey, $ttl) : null;
+
+        if ($enabled && $lock === null) {
+            $waited = \App\Core\Cache::wait($cacheKey, $ttl);
+            if ($waited !== null) {
+                if ($hero) {
+                    self::$claimed = true;
+                }
+                self::$activeHero = false;
+
+                return $waited;
+            }
+        }
+
         ob_start();
         try {
             $producer();
@@ -74,6 +127,10 @@ class PageCache
 
         if ($enabled && $html !== '') {
             \App\Core\Cache::set($cacheKey, $html, $ttl);
+        }
+
+        if ($lock !== null) {
+            \App\Core\Cache::unlock($lock);
         }
 
         return $html;

@@ -249,6 +249,16 @@ class ChatAi
      */
     public static function ping(): array
     {
+        // The dashboard pings the model on every load. With no model on the
+        // box the request waited out its whole 5 second timeout, so the
+        // dashboard cost 3.4 seconds. The answer changes when a model is
+        // added or removed, which the model list itself already tells us -
+        // so the ping is cached for a minute.
+        $cached = self::cachedPing();
+        if ($cached !== null) {
+            return $cached;
+        }
+
         [$status, , $body] = \App\Models\Http::request(self::baseUrl() . '/api/tags', [
             'method'  => 'GET',
             'timeout' => 5,
@@ -279,5 +289,47 @@ class ChatAi
             'hasBase' => in_array(self::BASE_MODEL, $names, true) || in_array(self::BASE_MODEL . ':latest', $names, true),
             'hasFine' => $hasFine,
         ];
+
+        self::cachePing($result);
+
+        return $result;
+    }
+
+    /**
+     * The cached ping, or null when it has expired.
+     */
+    private static function cachedPing(): ?array
+    {
+        $file = self::pingCacheFile();
+        if (!is_file($file)) {
+            return null;
+        }
+        $decoded = json_decode((string) @file_get_contents($file), true);
+        if (!is_array($decoded) || !isset($decoded['at'])) {
+            return null;
+        }
+        if (time() - (int) $decoded['at'] > 60) {
+            return null;
+        }
+
+        return is_array($decoded['result'] ?? null) ? $decoded['result'] : null;
+    }
+
+    /**
+     * Remember the ping for a minute.
+     */
+    private static function cachePing(array $result): void
+    {
+        $file = self::pingCacheFile();
+        $dir  = dirname($file);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        @file_put_contents($file, json_encode(['at' => time(), 'result' => $result]) . "\n", LOCK_EX);
+    }
+
+    private static function pingCacheFile(): string
+    {
+        return dirname(__DIR__, 2) . '/storage/cache/ollama-ping.json';
     }
 }

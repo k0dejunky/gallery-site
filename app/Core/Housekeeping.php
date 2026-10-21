@@ -234,6 +234,9 @@ class Housekeeping
             // background-reply queue from growing without bound. Counts land in
             // $out so the cron log shows what each run removed.
             $out['past_due_expired'] = self::step('past_due_expired', fn () => self::expirePastDueSubscriptions(), $out);
+            // The disk breakdown is too expensive for a request (280,000 stat() calls), so it is
+            // computed here and the dashboard reads the cached copy.
+            $out['disk_breakdown'] = self::step('disk_breakdown', fn () => \App\Core\DiskUsage::refresh() !== null, $out);
             $out['chat_prunes'] = self::step('chat_prunes', fn () => self::pruneChatRetention(), $out);
             $out['visit_prunes'] = self::step('visit_prunes', fn () => self::pruneVisitHistory(), $out);
 
