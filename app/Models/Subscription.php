@@ -381,6 +381,14 @@ class Subscription
 
         $expires = $row['expires_at'] ?? date('Y-m-d H:i:s');
 
+        $ref = (string) ($row['transaction_ref'] ?? '');
+
+        // Cancel at the GATEWAY first, so the member stops being charged
+        // even if the local update fails. A local cancel that does not
+        // reach the processor is how a member ends up paying for a
+        // membership they cancelled.
+        $gatewayCancelled = self::cancelAtGateway($row, $ref);
+
         Database::run(
             'UPDATE subscriptions
              SET status = ?, expires_at = ?, updated_at = CURRENT_TIMESTAMP
@@ -388,30 +396,79 @@ class Subscription
             ['cancelled', $expires, $id]
         );
 
-        // When the membership is billed through PayPal, cancel it there too so
-        // the member stops being charged (best-effort: a local cancel always
-        // succeeds even if the PayPal call fails — the reconciliation worker
-        // and PayPal webhooks reconcile the remote side later).
-        $ref = (string) ($row['transaction_ref'] ?? '');
+        if ($gatewayCancelled === false) {
+            // The local row is cancelled but the processor may still be
+            // billing. Say so loudly: the reconciliation worker and the
+            // gateway's own webhooks may fix it later, but the operator
+            // has to know it happened.
+            error_log('[subscription-cancel] the gateway did not confirm the cancellation for subscription ' . $id . ' (ref ' . $ref . ')');
+        }
+    }
+
+    /**
+     * Cancel a subscription at its payment processor.
+     *
+     * Returns true when the processor confirmed, false when it could not be
+     * reached, and null when the subscription is not processor-billed at
+     * all (a manual, trial or complimentary membership).
+     *
+     * @return bool|null
+     */
+    private static function cancelAtGateway(array $row, string $ref)
+    {
+        $processor = null;
+        if (!empty($row['payment_processor_id'])) {
+            $processor = \App\Models\PaymentProcessor::find((int) $row['payment_processor_id']);
+        }
+
         if (strpos($ref, 'PAYPAL-') === 0) {
             $paypalId = substr($ref, strlen('PAYPAL-'));
 
             try {
-                $processor = $row['payment_processor_id'] !== null
-                    ? \App\Models\PaymentProcessor::find((int) $row['payment_processor_id'])
-                    : null;
-
                 $gateway = $processor !== null
                     ? \App\Core\PayPalGateway::fromConfig($processor)
                     : null;
 
-                if ($gateway !== null && !$gateway->cancelSubscription($paypalId)) {
-                    error_log('[paypal-cancel] PayPal did not confirm cancellation for ' . $ref);
+                if ($gateway === null) {
+                    error_log('[subscription-cancel] no PayPal gateway for ' . $ref);
+                    return false;
                 }
+
+                if (!$gateway->cancelSubscription($paypalId)) {
+                    error_log('[paypal-cancel] PayPal did not confirm cancellation for ' . $ref);
+                    return false;
+                }
+
+                return true;
             } catch (\Throwable $e) {
                 error_log('[paypal-cancel] PayPal cancellation failed for ' . $ref . ': ' . $e->getMessage());
+                return false;
             }
         }
+
+        if (strpos($ref, 'BT-') === 0) {
+            $btId = substr($ref, strlen('BT-'));
+
+            try {
+                $gateway = $processor !== null
+                    ? \App\Core\BraintreeGateway::fromConfig($processor)
+                    : null;
+
+                if ($gateway === null) {
+                    error_log('[subscription-cancel] no Braintree gateway for ' . $ref);
+                    return false;
+                }
+
+                return $gateway->cancelSubscription($btId);
+            } catch (\Throwable $e) {
+                error_log('[braintree-cancel] cancellation failed for ' . $ref . ': ' . $e->getMessage());
+                return false;
+            }
+        }
+
+        // A trial, a manual grant or a complimentary membership: there is
+        // no processor to cancel.
+        return null;
     }
 
     /**

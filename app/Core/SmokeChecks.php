@@ -2605,6 +2605,50 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.braintree.can_cancel', 'Smoke · Money', 'A cancelled membership stops being charged', static function () use ($root, $read, $ok, $bad): array {
+            // Subscription::cancel() cancelled the local row and called the
+            // gateway ONLY for a PayPal reference. BraintreeGateway had no
+            // cancelSubscription() at all, so a Braintree member clicked
+            // "Cancel membership" and kept being charged.
+            $gw   = (string) $read($root . '/app/Core/BraintreeGateway.php');
+            $sub  = (string) $read($root . '/app/Models/Subscription.php');
+            $problems = [];
+
+            if (strpos($gw, 'public function cancelSubscription(') === false) {
+                $problems[] = 'BraintreeGateway must have a cancelSubscription()';
+            }
+            if (strpos($sub, "strpos(\$ref, 'BT-') === 0") === false) {
+                $problems[] = 'Subscription::cancel() must cancel a Braintree subscription at the gateway';
+            }
+            if (strpos($sub, 'BraintreeGateway::fromConfig(') === false) {
+                $problems[] = 'Subscription::cancel() must reach the Braintree gateway';
+            }
+            if (strpos($sub, "strpos(\$ref, 'PAYPAL-') === 0") === false) {
+                $problems[] = 'Subscription::cancel() must still cancel a PayPal subscription at the gateway';
+            }
+
+            // The gateway call must come BEFORE the local update, so the
+            // member stops being charged even if the local write fails.
+            $cancelAt = strpos($sub, 'public static function cancel(int $id)');
+            $body    = $cancelAt === false ? '' : substr($sub, $cancelAt, 4000);
+            $gwAt    = strpos($body, 'cancelAtGateway(');
+            $updAt   = strpos($body, "UPDATE subscriptions");
+            if ($gwAt === false) {
+                $problems[] = 'Subscription::cancel() must call the gateway';
+            } elseif ($updAt !== false && $gwAt > $updAt) {
+                $problems[] = 'the gateway must be cancelled BEFORE the local row is updated';
+            }
+
+            // And a failure to reach the gateway must be visible, not silent.
+            if (strpos($body, '[subscription-cancel]') === false) {
+                $problems[] = 'a gateway cancellation that fails must be logged';
+            }
+
+            return $problems === []
+                ? $ok('a cancelled membership stops being charged')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

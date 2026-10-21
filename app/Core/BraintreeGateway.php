@@ -193,6 +193,43 @@ class BraintreeGateway
         ];
     }
 
+    /**
+     * Cancel a Braintree subscription, so a member who cancels in the
+     * console actually STOPS BEING CHARGED.
+     *
+     * This method did not exist. Subscription::cancel() cancelled the
+     * local row and called the gateway ONLY for a PayPal reference, so a
+     * Braintree member clicked "Cancel membership" and kept being billed.
+     * Returns true when Braintree confirmed the cancellation.
+     */
+    public function cancelSubscription(string $btSubscriptionId): bool
+    {
+        $btSubscriptionId = trim($btSubscriptionId);
+
+        if ($btSubscriptionId === '' || !preg_match('/\A[A-Za-z0-9_-]{4,100}\z/', $btSubscriptionId)) {
+            return false;
+        }
+
+        try {
+            $xml = $this->request(
+                'POST',
+                '/merchants/' . $this->merchantId . '/subscriptions/' . rawurlencode($btSubscriptionId) . '/cancel',
+                ['xml' => true]
+            );
+
+            // Braintree answers 200 with the subscription, and the status
+            // may still be "Active" for a moment. What matters is that it
+            // did not error.
+            $status = (string) ($xml->status ?? '');
+            error_log('[braintree-cancel] cancelled ' . $btSubscriptionId . ' (status ' . ($status !== '' ? $status : 'unknown') . ')');
+
+            return true;
+        } catch (\Throwable $e) {
+            error_log('[braintree-cancel] failed for ' . $btSubscriptionId . ': ' . $e->getMessage());
+            return false;
+        }
+    }
+
     // ------------------------------------------------------------------
     // Plans
     // ------------------------------------------------------------------
