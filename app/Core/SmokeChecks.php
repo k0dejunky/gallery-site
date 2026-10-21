@@ -2774,6 +2774,66 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.live.no_stream_key_for_members', 'Smoke · Live', 'A member cannot publish to the operator stream', static function () use ($root, $read, $ok, $bad): array {
+            // The stream key was BOTH the HLS playback path and the RTMP
+            // publish credential, and /live/state handed it to every paying
+            // member. A member could therefore push their own video into the
+            // operator's path - and the recording is imported into a paid
+            // gallery and auto-posted to social media.
+            //
+            // The key has to stay in the member's response (it IS the HLS
+            // path), so publishing now needs a SECOND secret that only the
+            // operator app sees.
+            $ctrl  = (string) $read($root . '/app/Controllers/LiveController.php');
+            $model = (string) $read($root . '/app/Models/LiveSession.php');
+            $problems = [];
+
+            // The publish branch must require the secret.
+            $at = strpos($ctrl, "if (\$action === 'publish')");
+            if ($at === false) {
+                $problems[] = 'the MediaMTX auth webhook has no publish branch';
+            } else {
+                $branch = substr($ctrl, $at, 1400);
+                if (strpos($branch, 'validPublishSecret(') === false) {
+                    $problems[] = 'a publish must be checked against the publish secret, not the stream key alone';
+                }
+                // The secret must be the thing COMPARED - comparing the
+                // secret against the key would look right and be useless.
+                if (strpos($branch, 'validPublishSecret($streamKey, $publishSecret)') === false) {
+                    $problems[] = 'the publish check must compare the publish secret, not the stream key';
+                }
+                if (strpos($branch, 'validStreamKey(') !== false) {
+                    $problems[] = 'a publish must not be accepted on the stream key alone';
+                }
+                if (strpos($branch, "['publish']") === false) {
+                    $problems[] = 'the publish secret must be read from the publish query string';
+                }
+            }
+
+            // The secret must be minted per session and only for the operator.
+            if (strpos($ctrl, 'bin2hex(random_bytes(24))') === false) {
+                $problems[] = 'a publish secret must be generated per session';
+            }
+            if (strpos($ctrl, '?publish=') === false) {
+                $problems[] = 'the operator RTMP url must carry the publish secret';
+            }
+            if (strpos($model, 'validPublishSecret(') === false) {
+                $problems[] = 'the session must be able to check the publish secret';
+            }
+            if (strpos($model, 'publish_secret') === false) {
+                $problems[] = 'the session must store the publish secret (hashed)';
+            }
+            // And it must be hashed, like the stream key.
+            if (strpos($model, "self::hashOf(\$rawPublishSecret)") === false
+                && strpos($model, 'hashOf($rawPublishSecret)') === false) {
+                $problems[] = 'the publish secret must be stored hashed';
+            }
+
+            return $problems === []
+                ? $ok('a member cannot publish to the operator stream')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

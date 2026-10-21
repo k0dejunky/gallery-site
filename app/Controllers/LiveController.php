@@ -33,8 +33,17 @@ class LiveController extends Controller
         $query  = (string) ($data['query'] ?? '');
 
         if ($action === 'publish') {
+            // The stream key alone is NOT enough. The key is the HLS
+            // playback path, so it is in every member's hands - a member
+            // could otherwise push their own video into the operator's
+            // path, and the recording is imported into a paid gallery and
+            // auto-posted to social media. Publishing needs a second
+            // secret that only the operator app ever sees.
             $streamKey = strtok($path, '/') ?: '';
-            if ($streamKey !== '' && LiveSession::validStreamKey($streamKey)) {
+            parse_str($query, $q);
+            $publishSecret = (string) ($q['publish'] ?? '');
+
+            if ($streamKey !== '' && LiveSession::validPublishSecret($streamKey, $publishSecret)) {
                 LiveSession::markLive($streamKey);
                 http_response_code(200);
                 echo 'ok';
@@ -115,8 +124,9 @@ class LiveController extends Controller
             LiveSession::markEnded((int) $active['id']);
         }
 
-        $rawKey  = bin2hex(random_bytes(24));
-        LiveSession::create($rawKey, (int) $operator['created_by']);
+        $rawKey        = bin2hex(random_bytes(24));
+        $rawPublishKey = bin2hex(random_bytes(24));
+        LiveSession::create($rawKey, (int) $operator['created_by'], $rawPublishKey);
 
         $host = (string) ($_SERVER['HTTP_HOST'] ?? '');
         if ($host === '') {
@@ -125,7 +135,9 @@ class LiveController extends Controller
 
         $this->json([
             'ok'         => true,
-            'rtmp_url'   => 'rtmp://' . $host . ':1935/' . $rawKey,
+            // The publish secret travels in the URL, because MediaMTX passes
+            // the publish query string to the auth webhook.
+            'rtmp_url'   => 'rtmp://' . $host . ':1935/' . $rawKey . '?publish=' . $rawPublishKey,
             'stream_key' => $rawKey,
         ]);
     }

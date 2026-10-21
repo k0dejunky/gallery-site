@@ -755,6 +755,9 @@ CREATE TABLE IF NOT EXISTS chat_settings (
 CREATE TABLE IF NOT EXISTS live_sessions (
     id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     stream_key  CHAR(64) NOT NULL,
+    -- The publish secret. The stream key is the HLS playback path and is
+    -- handed to every member, so it cannot also be the publish credential.
+    publish_secret CHAR(64) NULL,
     created_by  INT UNSIGNED NOT NULL,
     status      ENUM('pending','live','ended') NOT NULL DEFAULT 'pending',
     -- The operator can pause a broadcast without ending it; NULL = not paused.

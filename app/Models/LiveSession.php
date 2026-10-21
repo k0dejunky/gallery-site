@@ -32,14 +32,42 @@ class LiveSession
         return $row ?: null;
     }
 
-    public static function create(string $rawKey, int $createdBy): int
+    public static function create(string $rawKey, int $createdBy, ?string $rawPublishSecret = null): int
     {
         Database::run(
-            'INSERT INTO ' . self::TABLE . ' (stream_key, created_by, status, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)',
-            [self::hashOf($rawKey), $createdBy, 'pending']
+            'INSERT INTO ' . self::TABLE . ' (stream_key, publish_secret, created_by, status, created_at)
+             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
+            [
+                self::hashOf($rawKey),
+                $rawPublishSecret !== null ? self::hashOf($rawPublishSecret) : null,
+                $createdBy,
+                'pending',
+            ]
         );
 
         return (int) Database::connection()->lastInsertId();
+    }
+
+    /**
+     * Whether a publish request carries this session's publish secret.
+     *
+     * The stream key alone is NOT enough. The key is the HLS playback path,
+     * so it is in every member's hands; publishing needs a second secret
+     * that only the operator app ever sees.
+     */
+    public static function validPublishSecret(string $rawKey, string $rawSecret): bool
+    {
+        if ($rawKey === '' || $rawSecret === '') {
+            return false;
+        }
+
+        $row = Database::run(
+            'SELECT id FROM ' . self::TABLE . '
+             WHERE stream_key = ? AND publish_secret = ? AND status IN (?, ?) LIMIT 1',
+            [self::hashOf($rawKey), self::hashOf($rawSecret), 'pending', 'live']
+        )->fetch();
+
+        return $row !== false;
     }
 
     /** Mark a pending session live (first publisher connected). */
@@ -62,16 +90,6 @@ class LiveSession
     }
 
     /** Whether a raw stream key matches an active session. */
-    public static function validStreamKey(string $rawKey): bool
-    {
-        $row = Database::run(
-            'SELECT id FROM ' . self::TABLE . ' WHERE stream_key = ? AND status IN (?, ?) LIMIT 1',
-            [self::hashOf($rawKey), 'pending', 'live']
-        )->fetch();
-
-        return $row !== false;
-    }
-
     /**
      * Force-close every currently-published MediaMTX path. Used when the
      * operator starts a fresh broadcast: the phone's previous RTMP connection
