@@ -97,6 +97,25 @@ class SystemController extends Controller
      */
     private function aiStatus(): array
     {
+        // The AI panel health-checks the fine-tuned model with a REAL
+        // generation ("Reply with: hi"). On production that took 8.9
+        // seconds - and the model is often busy with the categoriser, so
+        // the probe queued behind it and the page took even longer. It is
+        // cached for five minutes.
+        $cached = $this->cachedValue('ai-status', 300);
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $result = $this->computeAiStatus();
+
+        $this->storeValue('ai-status', $result, 300);
+
+        return $result;
+    }
+
+    private function computeAiStatus(): array
+    {
         $status = [
             'ollama_up' => false,
             'models' => [],
@@ -1053,6 +1072,23 @@ class SystemController extends Controller
 
     private function variantStats(): array
     {
+        // The variant stats stat() every photo three times - 20,500 calls
+        // on production - and the answer only changes when a rendition is
+        // built or removed. It is cached for an hour.
+        $cached = $this->cachedValue('variant-stats', 3600);
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $result = $this->computeVariantStats();
+
+        $this->storeValue('variant-stats', $result, 3600);
+
+        return $result;
+    }
+
+    private function computeVariantStats(): array
+    {
         $rows  = Database::run('SELECT filename, is_video FROM photos')->fetchAll();
         $missingThumb = 0;
         $missingWeb   = 0;
@@ -1879,6 +1915,56 @@ BASH;
      * columns and columns present only in the live DB.
      */
     private function schemaDiff(): array
+    {
+        // The schema diff runs a SHOW COLUMNS for every table in
+        // schema.sql - 83 queries on production - and the answer only
+        // changes when a migration runs. It is cached for an hour, and the
+        // cache is dropped by the housekeeping after every migration.
+        $cached = $this->cachedValue('schema-diff', 3600);
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $result = $this->computeSchemaDiff();
+
+        $this->storeValue('schema-diff', $result, 3600);
+
+        return $result;
+    }
+
+    /**
+     * A cached value for the system page's expensive reads.
+     */
+    private function cachedValue(string $key, int $ttl): ?array
+    {
+        $file = $this->root . '/storage/cache/system-' . preg_replace('/[^a-z0-9_-]/i', '', $key) . '.json';
+        if (!is_file($file)) {
+            return null;
+        }
+        $decoded = json_decode((string) @file_get_contents($file), true);
+        if (!is_array($decoded) || !isset($decoded['at'])) {
+            return null;
+        }
+        if (time() - (int) $decoded['at'] > $ttl) {
+            return null;
+        }
+        return is_array($decoded['value'] ?? null) ? $decoded['value'] : null;
+    }
+
+    private function storeValue(string $key, array $value, int $ttl): void
+    {
+        $dir = $this->root . '/storage/cache';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        @file_put_contents(
+            $dir . '/system-' . preg_replace('/[^a-z0-9_-]/i', '', $key) . '.json',
+            json_encode(['at' => time(), 'value' => $value]) . "\n",
+            LOCK_EX
+        );
+    }
+
+    private function computeSchemaDiff(): array
     {
         $sql = @file_get_contents($this->root . '/schema.sql');
 

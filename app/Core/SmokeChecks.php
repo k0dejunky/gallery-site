@@ -3439,6 +3439,43 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.perf.system_page', 'Smoke · Perf', 'The system page does not re-derive everything on every load', static function () use ($root, $read, $ok, $bad): array {
+            // The system page did three expensive things on every load:
+            // 83 SHOW COLUMNS queries for the schema diff, 20,500 stat()
+            // calls for the variant stats, and a REAL Ollama generation
+            // ("Reply with: hi") to health-check the fine-tuned model -
+            // 8.9 seconds on production, and longer when the model was
+            // busy with the categoriser.
+            $ctrl = (string) $read($root . '/app/Controllers/SystemController.php');
+            $problems = [];
+
+            if (strpos($ctrl, 'private function cachedValue(') === false) {
+                $problems[] = 'the system page must cache its expensive reads';
+            }
+            if (strpos($ctrl, 'private function computeSchemaDiff(') === false) {
+                $problems[] = 'the schema diff must be computed once and cached';
+            }
+            if (strpos($ctrl, 'private function computeVariantStats(') === false) {
+                $problems[] = 'the variant stats must be computed once and cached';
+            }
+            if (strpos($ctrl, 'private function computeAiStatus(') === false) {
+                $problems[] = 'the AI health check must be computed once and cached';
+            }
+            // The health probe must not be in the request path any more.
+            $at = strpos($ctrl, "public function show(");
+            if ($at !== false) {
+                $end  = strpos($ctrl, "\n    }", $at);
+                $body = substr($ctrl, $at, ($end === false ? 4000 : $end - $at));
+                if (strpos($body, "/api/generate") !== false) {
+                    $problems[] = 'the system page must not run a model generation in the request';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the system page does not re-derive everything on every load')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).
