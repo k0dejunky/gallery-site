@@ -203,69 +203,19 @@
             <details class="u-mt-075">
                 <summary style="cursor:pointer;font-size:.9rem;" class="muted"><?= count($postComments) ?> comment<?= count($postComments) === 1 ? '' : 's' ?></summary>
                 <div style="margin-top:.75rem;display:grid;gap:.75rem;">
-                    <?php foreach ($postComments as $comment): ?>
-                        <div id="comment-<?= (int) $comment['id'] ?>" style="border-left:3px solid var(--card-border);padding-left:.75rem;">
-                            <p style="margin:0 0 .15rem;">
-                                <strong><?= \App\Models\Comment::isStaff($comment['role']) ? 'Site team' : 'Member' ?></strong>
-                                <span class="muted"> · <?= e(tzdate('M j, g:ia', (string) $comment['created_at'])) ?></span>
-                            </p>
-                            <p class="u-m0"><?= e($comment['body']) ?></p>
-                            <?php /* The reactions and the replies, like every other comment thread. */ ?>
-                            <?php
-                            $cid    = (int) $comment['id'];
-                            $counts = \App\Models\Comment::reactionsFor([$cid]);
-                            $mine   = \App\Models\Comment::myReactions((int) (\App\Core\Auth::user()['id'] ?? 0), [$cid]);
-                            $replies = \App\Models\Comment::replies($cid);
-                            ?>
-                            <div class="comment-reactions">
-                                <?php foreach (['like' => '&#128077;', 'love' => '&#10084;&#65039;'] as $key => $emoji): ?>
-                                    <?php $on = in_array($key, $mine, true); $n = (int) ($counts[$cid][$key] ?? 0); ?>
-                                    <form method="post" action="<?= url('/comments/react') ?>" class="inline">
-                                        <?= csrf_field() ?>
-                                        <input type="hidden" name="comment_id" value="<?= $cid ?>">
-                                        <input type="hidden" name="reaction" value="<?= e($key) ?>">
-                                        <button type="submit" class="comment-reaction<?= $on ? ' is-on' : '' ?>"
-                                                aria-pressed="<?= $on ? 'true' : 'false' ?>"
-                                                title="<?= $on ? 'Remove your reaction' : 'React' ?>">
-                                            <span aria-hidden="true"><?= $emoji ?></span>
-                                            <span class="comment-reaction-count"><?= $n > 0 ? (int) $n : '' ?></span>
-                                            <span class="sr-only"><?= $on ? 'Remove your reaction' : 'React' ?></span>
-                                        </button>
-                                    </form>
-                                <?php endforeach; ?>
-                            </div>
-                            <?php if (!empty($replies)): ?>
-                                <div class="comment-replies">
-                                    <?php foreach ($replies as $reply): ?>
-                                        <div id="comment-<?= (int) $reply['id'] ?>" class="comment-reply">
-                                            <p style="margin:0 0 .1rem;">
-                                                <strong><?= \App\Models\Comment::isStaff((string) ($reply['role'] ?? '')) ? 'Site team' : 'Member' ?></strong>
-                                                <span class="muted"> &middot; <?= e(tzdate('M j, g:ia', (string) $reply['created_at'])) ?></span>
-                                            </p>
-                                            <p class="u-m0"><?= e($reply['body']) ?></p>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </div>
-                            <?php endif; ?>
-                            <?php if (\App\Core\Auth::check()): ?>
-                                <details class="comment-reply-box">
-                                    <summary>Reply</summary>
-                                    <form method="post" action="<?= url('/comments/reply') ?>" style="display:flex;gap:.5rem;align-items:flex-start;flex-wrap:wrap;margin-top:.4rem;">
-                                        <?= csrf_field() ?>
-                                        <input type="hidden" name="parent_id" value="<?= $cid ?>">
-                                        <textarea name="body" rows="2" aria-label="Your reply" style="flex:1;min-width:200px;" placeholder="Write a reply… (max 2000 chars)" maxlength="2000"></textarea>
-                                        <button type="submit" class="btn btn-sm">Post reply</button>
-                                    </form>
-                                </details>
-                            <?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
+                    <?php
+                    /* The thread is the shared one: this used to be a
+                       verbatim copy of the markup in comments.php, so a
+                       change to a comment had to be made twice. */
+                    $comments = $postComments;
+                    require __DIR__ . '/partials/comment_thread.php';
+                    ?>
                     <?php if (\App\Core\Auth::user() !== null): ?>
                         <form method="post" action="<?= url('/comments') ?>" style="display:flex;gap:.5rem;align-items:flex-start;flex-wrap:wrap;">
                             <?= csrf_field() ?>
                             <input type="hidden" name="commentable_type" value="wall_post">
                             <input type="hidden" name="commentable_id" value="<?= (int) $post['id'] ?>">
-                            <textarea name="body" rows="2" aria-label="Your comment" style="flex:1;min-width:180px;" placeholder="Say something… (max 2000 chars)" maxlength="2000"></textarea>
+                            <textarea name="body" rows="2" aria-label="Your comment" style="flex:1;min-width:180px;" placeholder="Leave a comment" maxlength="2000"></textarea>
                             <button type="submit" class="btn btn-sm">Post comment</button>
                         </form>
                     <?php endif; ?>

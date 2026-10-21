@@ -4444,15 +4444,55 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             $img = $read("$root/views/gallery/image_full.php");
             $pl  = $read("$root/views/video/player.php");
             $pt  = $read("$root/views/partials/comments.php");
+            // The thread itself lives in its own partial now: the wall's
+            // comment thread used to be a verbatim copy of this markup.
+            $th  = $read("$root/views/partials/comment_thread.php");
             return strpos($imageCtrl, 'Comment::TYPE_PHOTO') !== false
                 && strpos($img, 'partials/comments.php') !== false
                 && strpos($pl, 'partials/comments.php') !== false
                 && strpos($pt, 'commentable_type') !== false
-                && strpos($pt, 'Comment::isStaff') !== false
+                && strpos($pt, 'comment_thread.php') !== false
+                && strpos($th, 'Comment::isStaff') !== false
+                && strpos($th, 'comment-reactions') !== false
                 ? $ok('photo comment thread wired into both media views')
                 : $bad('ImageController::showMedia must load TYPE_PHOTO comments and both image_full.php and player.php must render the shared comments partial');
         });
         $commentCtrl = $read("$root/app/Controllers/CommentController.php");
+        $add('smoke.comments.one_thread', 'Smoke · Comments', 'There is one comment thread, not two copies', static function () use ($root, $read, $ok, $bad): array {
+            // The wall's comment thread was a VERBATIM COPY of the markup in
+            // comments.php, so a change to a comment had to be made twice
+            // and the two drifted.
+            $wall = $read("$root/views/wall.php");
+            $pt   = $read("$root/views/partials/comments.php");
+            $th   = $read("$root/views/partials/comment_thread.php");
+            $problems = [];
+
+            if (strpos($wall, "partials/comment_thread.php") === false) {
+                $problems[] = 'the wall must use the shared comment thread';
+            }
+            if (strpos($pt, "comment_thread.php") === false) {
+                $problems[] = 'the comments partial must use the shared comment thread';
+            }
+            // Neither may carry its own copy of the markup.
+            foreach (['wall.php' => $wall, 'comments.php' => $pt] as $name => $src) {
+                if (strpos($src, 'Comment::isStaff') !== false) {
+                    $problems[] = $name . ' still renders its own copy of the comment markup';
+                }
+                if (strpos($src, 'comment-reactions') !== false) {
+                    $problems[] = $name . ' still renders its own copy of the reaction buttons';
+                }
+            }
+            // The shared partial has to be the real thing.
+            foreach (['Comment::isStaff', 'comment-reactions', 'comment-replies', 'comment-reply-box'] as $marker) {
+                if (strpos($th, $marker) === false) {
+                    $problems[] = 'the shared comment thread is missing ' . $marker;
+                }
+            }
+
+            return $problems === []
+                ? $ok('there is one comment thread')
+                : $bad(implode('; ', $problems));
+        });
         $add('smoke.comments.photo_validation', 'Smoke · Comments', 'CommentController validates the photo target and links back to the media', static function () use ($commentCtrl, $ok, $bad): array {
             return strpos($commentCtrl, 'Comment::TYPE_PHOTO') !== false && strpos($commentCtrl, 'Photo::find($target)') !== false
                 && strpos($commentCtrl, "is_video((string) \$photo['filename'])") !== false
