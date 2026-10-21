@@ -29,15 +29,49 @@ class Purchase
         ?string $note = null,
         string $status = self::STATUS_PAID,
         ?int $paymentProcessorId = null,
-        ?string $currency = null
+        ?string $currency = null,
+        ?string $idempotencyKey = null
     ): int {
         Database::run(
-            'INSERT INTO purchases (user_id, item_type, item_id, amount, currency, gateway, gateway_ref, payment_processor_id, note, status, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
-            [$userId, $itemType, $itemId, $amount, $currency ?? 'USD', $gateway, $gatewayRef, $paymentProcessorId, $note, $status]
+            'INSERT INTO purchases (user_id, item_type, item_id, amount, currency, gateway, gateway_ref, payment_processor_id, idempotency_key, note, status, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
+            [$userId, $itemType, $itemId, $amount, $currency ?? 'USD', $gateway, $gatewayRef, $paymentProcessorId, $idempotencyKey, $note, $status]
         );
 
         return (int) Database::connection()->lastInsertId();
+    }
+
+    /**
+     * The purchase a key already made, or null.
+     *
+     * A one-off charge carries a key so a double-click cannot charge
+     * twice. The key is bound to the purchase: the same key with a
+     * different amount or a different item is a client bug or an attempt to
+     * reuse a key, and the caller must refuse it rather than answer with
+     * the wrong purchase.
+     */
+    public static function findByIdempotencyKey(string $key): ?array
+    {
+        if (trim($key) === '') {
+            return null;
+        }
+
+        $row = Database::run(
+            'SELECT * FROM purchases WHERE idempotency_key = ? LIMIT 1',
+            [$key]
+        )->fetch();
+
+        return $row ?: null;
+    }
+
+    /**
+     * Whether a purchase row is the one a key refers to.
+     */
+    public static function idempotencyMatches(array $row, string $itemType, int $itemId, float $amount): bool
+    {
+        return (string) ($row['item_type'] ?? '') === $itemType
+            && (int) ($row['item_id'] ?? 0) === $itemId
+            && abs((float) ($row['amount'] ?? 0) - $amount) < 0.005;
     }
 
     /**

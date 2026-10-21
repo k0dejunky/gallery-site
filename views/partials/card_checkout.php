@@ -38,6 +38,10 @@ foreach (\App\Models\PaymentProcessor::enabled() as $__pp) {
             <input type="hidden" name="_token" value="<?= e($ccCsrf) ?>">
             <input type="hidden" name="provider" value="braintree">
             <input type="hidden" name="payment_method_nonce" data-cc-nonce>
+            <?php // The idempotency key: the same key means the same
+                  // purchase, so a double-click cannot charge twice. It is
+                  // rendered once per form, so both clicks carry it. ?>
+            <input type="hidden" name="idempotency_key" value="<?= e(bin2hex(random_bytes(16))) ?>">
             <?php if ($ccAmountInput): ?>
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem;">
                     <input type="number" step="0.01" min="0.01" name="amount" value="<?= (float) $ccAmount > 0 ? e($ccAmount) : '' ?>" placeholder="Amount" aria-label="Amount in dollars" style="width:130px;" required>

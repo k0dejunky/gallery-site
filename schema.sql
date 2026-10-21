@@ -1087,10 +1087,14 @@ CREATE TABLE IF NOT EXISTS purchases (
     gateway     VARCHAR(40) NOT NULL DEFAULT 'offline',
     gateway_ref VARCHAR(255) NULL,
     payment_processor_id INT UNSIGNED NULL DEFAULT NULL,
+    -- The idempotency key for a one-off charge: the same key means the same
+    -- purchase, so a double-click cannot charge twice.
+    idempotency_key VARCHAR(80) NULL,
     note        TEXT NULL,
     status      ENUM('pending','paid','granted','refunded') NOT NULL DEFAULT 'paid',
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME NULL DEFAULT NULL,
+    UNIQUE KEY uq_purchases_idempotency (idempotency_key),
     INDEX idx_purchases_user (user_id, created_at),
     INDEX idx_purchases_item (item_type, item_id),
     INDEX idx_purchases_status (status),

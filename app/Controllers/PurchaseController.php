@@ -305,7 +305,8 @@ class PurchaseController extends Controller
             $id,
             $amount,
             'PPV unlock "' . $gallery['title'] . '"',
-            $nonce
+            $nonce,
+            $this->idempotencyKey()
         );
 
         if ($result['ok']) {
@@ -366,7 +367,7 @@ class PurchaseController extends Controller
         $nonce = trim((string) $this->request->post('payment_method_nonce', ''));
         $result = $nonce === ''
             ? ['ok' => false, 'error' => 'Payment details are missing.']
-            : $this->chargeCard((int) $user['id'], Purchase::TYPE_TIP, 0, $amount, $note, $nonce);
+            : $this->chargeCard((int) $user['id'], Purchase::TYPE_TIP, 0, $amount, $note, $nonce, $this->idempotencyKey());
 
         $this->respondCheckout($result, $back);
     }
@@ -375,7 +376,7 @@ class PurchaseController extends Controller
      * Charge a PPV/tip amount to a card via Braintree and settle the purchase
      * ledger row. Returns ['ok' => bool, 'error' => ?string].
      */
-    private function chargeCard(int $userId, string $itemType, int $itemId, float $amount, string $note, string $nonce): array
+    private function chargeCard(int $userId, string $itemType, int $itemId, float $amount, string $note, string $nonce, string $idempotencyKey = ''): array
     {
         $gateway = $this->braintreeGateway();
         $processor = $this->enabledProcessor('braintree');
@@ -384,7 +385,36 @@ class PurchaseController extends Controller
             return ['ok' => false, 'error' => 'Card payments are not available right now.'];
         }
 
-        $purchaseId = Purchase::create($userId, $itemType, $itemId, $amount, 'braintree', null, $note, Purchase::STATUS_PENDING, (int) $processor['id']);
+        // A double-click on "Pay" charged TWICE. The key travels with the
+        // form, so the second click of the same button is answered with the
+        // purchase the first click made.
+        if ($idempotencyKey !== '') {
+            $existing = Purchase::findByIdempotencyKey($idempotencyKey);
+
+            if ($existing !== null) {
+                if (!Purchase::idempotencyMatches($existing, $itemType, $itemId, $amount)) {
+                    return ['ok' => false, 'error' => 'This payment has already been made for something else.'];
+                }
+                if ((string) ($existing['status'] ?? '') === Purchase::STATUS_PAID
+                    || (string) ($existing['status'] ?? '') === Purchase::STATUS_GRANTED) {
+                    return ['ok' => true, 'purchase_id' => (int) $existing['id']];
+                }
+            }
+        }
+
+        $purchaseId = Purchase::create(
+            $userId,
+            $itemType,
+            $itemId,
+            $amount,
+            'braintree',
+            null,
+            $note,
+            Purchase::STATUS_PENDING,
+            (int) $processor['id'],
+            null,
+            $idempotencyKey !== '' ? $idempotencyKey : null
+        );
 
         try {
             $customerId = $this->btCustomerIdForUser($userId);
@@ -479,6 +509,20 @@ class PurchaseController extends Controller
             Database::run("UPDATE purchases SET status = 'refunded', updated_at = NOW() WHERE id = ?", [$purchaseId]);
             $this->json(['ok' => false, 'error' => 'PayPal could not start the payment: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * The idempotency key for a one-off charge.
+     *
+     * The form carries one, so the second click of the same button has the
+     * same key. A key that is not a plain hex string is ignored rather
+     * than trusted.
+     */
+    private function idempotencyKey(): string
+    {
+        $key = trim((string) $this->request->post('idempotency_key', ''));
+
+        return preg_match('/\A[a-f0-9]{16,64}\z/', $key) === 1 ? $key : '';
     }
 
     /**

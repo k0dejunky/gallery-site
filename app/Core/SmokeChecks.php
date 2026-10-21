@@ -3016,6 +3016,46 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.money.idempotent_charges', 'Smoke · Money', 'A double-click cannot charge twice', static function () use ($root, $read, $ok, $bad): array {
+            // A double-click on "Pay" created TWO Braintree sales for one
+            // unlock. The rate limit did not help - the two charges are
+            // milliseconds apart.
+            $purchase = (string) $read($root . '/app/Models/Purchase.php');
+            $ctrl     = (string) $read($root . '/app/Controllers/PurchaseController.php');
+            $form     = (string) $read($root . '/views/partials/card_checkout.php');
+            $schema   = (string) $read($root . '/schema.sql');
+            $problems = [];
+
+            if (strpos($schema, 'idempotency_key') === false) {
+                $problems[] = 'purchases must carry an idempotency_key';
+            }
+            if (strpos($schema, 'uq_purchases_idempotency') === false) {
+                $problems[] = 'the idempotency key must be UNIQUE';
+            }
+            if (strpos($purchase, 'findByIdempotencyKey(') === false) {
+                $problems[] = 'Purchase must be able to find the purchase a key made';
+            }
+            if (strpos($purchase, 'idempotencyMatches(') === false) {
+                $problems[] = 'the key must be bound to the purchase - the same key with a different amount is a bug';
+            }
+            if (strpos($purchase, '?string $idempotencyKey = null') === false) {
+                $problems[] = 'Purchase::create() must accept the key';
+            }
+            if (strpos($ctrl, 'findByIdempotencyKey(') === false) {
+                $problems[] = 'the charge must look the key up before it charges';
+            }
+            if (strpos($ctrl, 'idempotencyKey()') === false) {
+                $problems[] = 'the controller must read the key from the request';
+            }
+            if (strpos($form, 'name="idempotency_key"') === false) {
+                $problems[] = 'the card form must carry the key, so both clicks of the same button share it';
+            }
+
+            return $problems === []
+                ? $ok('a double-click cannot charge twice')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).
