@@ -79,11 +79,56 @@ class AnalyticsController extends Controller
     }
 
     /**
+     * Start a re-parse in the BACKGROUND and return whether it was queued.
+     *
+     * The re-parse used to run inside the HTTP request: up to 31 days of
+     * the access log, about five minutes of work, holding one FPM worker
+     * for the whole of it while max_execution_time is an hour. It also had
+     * no lock of its own, so it could run at the same time as the hourly
+     * cron.
+     */
+    private static function queueReparse(string $from, string $to): bool
+    {
+        $lockDir = dirname(__DIR__, 2) . '/storage/logs';
+        if (!is_dir($lockDir)) {
+            @mkdir($lockDir, 0775, true);
+        }
+
+        $lockFile = $lockDir . '/reparse.lock';
+        $lock     = @fopen($lockFile, 'c');
+
+        if ($lock === false) {
+            return false;
+        }
+
+        // One re-parse at a time, and never alongside another one.
+        if (!flock($lock, LOCK_EX | LOCK_NB)) {
+            fclose($lock);
+            return false;
+        }
+
+        $cmd = sprintf(
+            '%s %s --from=%s --to=%s >> %s 2>&1 &',
+            escapeshellarg(PHP_BINARY),
+            escapeshellarg(dirname(__DIR__, 2) . '/bin/aggregate_access_log.php'),
+            escapeshellarg($from),
+            escapeshellarg($to),
+            escapeshellarg($lockDir . '/reparse.log')
+        );
+
+        exec($cmd);
+        flock($lock, LOCK_UN);
+        fclose($lock);
+
+        return true;
+    }
+
+    /**
      * Re-read the access logs for a window and rewrite those days.
      *
-     * Runs inline (the button is right there and the result is the point), with
-     * a file lock so it cannot collide with the hourly cron. An empty window
-     * falls back to the last few days.
+     * Runs in the BACKGROUND: the button is right there, but the work is
+     * five minutes of log parsing and it does not belong in a request. An
+     * empty window falls back to the last few days.
      */
     public function reparse(): void
     {
@@ -100,35 +145,27 @@ class AnalyticsController extends Controller
             $days = self::REPARSE_MAX_DAYS;
         }
 
-        $summary = AccessLogAggregator::run(['from' => $from, 'to' => $to]);
+        // The re-parse used to run INSIDE this HTTP request: up to 31 days
+        // of the access log, about five minutes of work, holding one FPM
+        // worker for the whole of it while max_execution_time is an hour.
+        // It is a background job now, with a lock of its own so it cannot
+        // collide with the hourly cron, and the page says so.
+        $queued = self::queueReparse($from, $to);
 
-        if (!$summary['ok']) {
-            $this->flash('error', 'Re-parse failed: ' . (string) $summary['error']);
-        } elseif ($summary['days_written'] === 0) {
-            $this->flash(
-                'error',
-                'No log lines were found for ' . $from . ' to ' . $to
-                . '. The rotated logs only go back so far.'
-            );
-        } else {
-            $this->flash(
-                'success',
-                sprintf(
-                    'Re-parsed %d day%s (%s to %s): %s lines, %d visits, %d URLs in %ss.',
-                    $summary['days_written'],
-                    $summary['days_written'] === 1 ? '' : 's',
-                    $from,
-                    $to,
-                    number_format((int) $summary['lines']),
-                    (int) $summary['visits'],
-                    (int) $summary['urls'],
-                    (string) $summary['duration_sec']
-                )
-                . ((int) $summary['skipped_lines'] > 0
-                    ? ' ' . number_format((int) $summary['skipped_lines']) . ' lines could not be parsed.'
-                    : '')
-            );
+        if ($queued === false) {
+            $this->flash('error', 'A re-parse is already running. Wait for it to finish.');
+            $this->redirect('/admin/analytics?range=' . rawurlencode((string) $this->request->post('range', '30days')));
+            return;
         }
+
+        $this->flash(
+            'success',
+            sprintf(
+                'The re-parse of %s to %s is running in the background. It takes a few minutes; refresh in a moment to see it.',
+                $from,
+                $to
+            )
+        );
 
         $this->redirect('/admin/analytics?range=' . rawurlencode((string) $this->request->post('range', '30days'))
             . ($this->request->post('bots') === '1' ? '&bots=1' : ''));

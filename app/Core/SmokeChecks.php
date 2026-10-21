@@ -3405,6 +3405,40 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.perf.reparse_is_background', 'Smoke · Perf', 'The admin re-parse is a background job', static function () use ($root, $read, $ok, $bad): array {
+            // The re-parse ran INSIDE the HTTP request: up to 31 days of the
+            // access log, about five minutes of work, holding one FPM worker
+            // for the whole of it while max_execution_time is an hour. It
+            // also had no lock of its own, so it could run at the same time
+            // as the hourly cron.
+            $ctrl = (string) $read($root . '/app/Controllers/AnalyticsController.php');
+            $problems = [];
+
+            if (strpos($ctrl, 'private static function queueReparse(') === false) {
+                $problems[] = 'the re-parse must be queued, not run inline';
+            }
+            if (strpos($ctrl, 'aggregate_access_log.php') === false) {
+                $problems[] = 'the queued re-parse must run the aggregator';
+            }
+            if (strpos($ctrl, 'flock(') === false) {
+                $problems[] = 'the queued re-parse must take a lock, so it cannot collide with the hourly cron';
+            }
+            // And the request must NOT run the aggregator itself.
+            $at = strpos($ctrl, 'public function reparse()');
+            if ($at !== false) {
+                $end  = strpos($ctrl, "
+    }", $at);
+                $body = substr($ctrl, $at, ($end === false ? 3000 : $end - $at));
+                if (strpos($body, 'AccessLogAggregator::run(') !== false) {
+                    $problems[] = 'the request must not run the aggregator itself';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the admin re-parse is a background job')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

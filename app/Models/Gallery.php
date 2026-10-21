@@ -1636,7 +1636,19 @@ class Gallery
         // The level filter matters: without it the "related galleries" rail
         // advertised galleries the member cannot open, and every click ended
         // at the paywall.
-        $levelClause = $maxLevel < PHP_INT_MAX ? ' AND g.min_level <= ' . (int) $maxLevel : '';
+        //
+        // But it must ALSO follow the gallery being viewed, not only the
+        // viewer's level. A guest (level 0) looking at a Gold gallery's
+        // preview was shown the EIGHT free-tier galleries and nothing else,
+        // so the 51 paid galleries were never linked to each other - not for
+        // a crawler and not for a member who later upgraded.
+        $galleryLevel = (int) Database::run(
+            'SELECT min_level FROM galleries WHERE id = ? LIMIT 1',
+            [$galleryId]
+        )->fetchColumn();
+
+        $level = max((int) $maxLevel, (int) ($galleryLevel ?? 0));
+        $levelClause = $level < PHP_INT_MAX ? ' AND g.min_level <= ' . (int) $level : '';
 
         return Database::run(
             'SELECT DISTINCT g.*,
