@@ -2278,6 +2278,42 @@ class SmokeChecks
                 : $bad(implode('; ', array_slice($problems, 0, 12)));
         });
 
+        $add('smoke.ui.guest_reaches_the_search', 'Smoke · UI', 'A guest can reach the search on a phone', static function () use ($root, $ok, $bad): array {
+            // The phone's bottom bar is derived from the rail, and the
+            // sheet holds the search. The sheet was member-only, so a guest
+            // on a phone had no way to reach the search at all - the one
+            // thing the bar is there for.
+            $layout = (string) @file_get_contents($root . '/views/layout.php');
+            $problems = [];
+
+            // The button is not behind a member check.
+            if (preg_match('/<\?php if \(\$user !== null\): \?>\s*<button type="button" class="mnav-more"/', $layout) === 1) {
+                $problems[] = 'the bottom bar\'s search button must not be member-only';
+            }
+            if (strpos($layout, 'class="mnav-more"') === false) {
+                $problems[] = 'the bottom bar has no search button';
+            }
+            // The sheet is not behind a member check either.
+            if (preg_match('/<\?php if \(\$user !== null\): \?>\s*<div class="media-bottom-sheet"/', $layout) === 1) {
+                $problems[] = 'the bottom sheet must not be member-only';
+            }
+            if (strpos($layout, 'id="bottom-more-sheet"') === false) {
+                $problems[] = 'the bottom sheet is missing';
+            }
+            // And it carries the search.
+            if (strpos($layout, 'site-search-sheet') === false) {
+                $problems[] = 'the bottom sheet must carry the search field';
+            }
+            // The sheet focuses the search field, not the close button.
+            if (strpos($layout, "sheet.querySelector('input[type=search]')") === false) {
+                $problems[] = 'the bottom sheet must focus the search field when it opens';
+            }
+
+            return $problems === []
+                ? $ok('a guest can reach the search on a phone')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

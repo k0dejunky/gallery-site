@@ -422,18 +422,17 @@ if (!empty($_SESSION['impersonator_id'])) {
                 <?php endif; ?>
             </a>
         <?php endforeach; ?>
-        <?php if ($user !== null): ?>
+        <?php /* The More button is for a guest too: the sheet is where the
+                 search lives, and a guest needs the search just as much. */ ?>
         <button type="button" class="mnav-more" data-action="bottomMoreToggle"
                 aria-expanded="false" aria-controls="bottom-more-sheet">
-            <span class="mnav-ico"><?= $icon('menu') ?></span>
-            <span class="mnav-label">More</span>
+            <span class="mnav-ico"><?= $icon($user !== null ? 'menu' : 'search') ?></span>
+            <span class="mnav-label"><?= $user !== null ? 'More' : 'Search' ?></span>
         </button>
-        <?php endif; ?>
     </nav>
-    <?php if ($user !== null): ?>
     <div class="media-bottom-sheet" id="bottom-more-sheet" hidden>
         <div class="mbs-head">
-            <strong>More</strong>
+            <strong><?= $user !== null ? 'More' : 'Search' ?></strong>
             <button type="button" class="mbs-close" data-action="bottomMoreToggle" aria-label="Close the menu">&times;</button>
         </div>
         <form class="site-search site-search-sheet" method="get" action="<?= e(url('/galleries')) ?>" role="search">
@@ -441,6 +440,7 @@ if (!empty($_SESSION['impersonator_id'])) {
             <input type="search" id="site-search-sheet" name="q" value="<?= e($siteSearchQuery) ?>" placeholder="Search galleries&hellip;" autocomplete="off">
             <button type="submit" class="btn btn-sm">Search</button>
         </form>
+        <?php if ($user !== null): ?>
         <ul>
             <?php foreach ($bottomMore as $item): ?>
                 <li>
@@ -460,8 +460,8 @@ if (!empty($_SESSION['impersonator_id'])) {
                 </form>
             </li>
         </ul>
+        <?php endif; ?>
     </div>
-    <?php endif; ?>
     <?php endif; ?>
     <?php if ($user !== null && !\App\Core\Auth::isAdmin()): ?>
     <aside id="member-onboarding" class="member-onboarding" hidden role="dialog" aria-modal="true" aria-labelledby="member-onboarding-title">
@@ -656,7 +656,11 @@ window.bottomMoreToggle=function(){
   var btn=document.querySelector('[data-action="bottomMoreToggle"][aria-controls="bottom-more-sheet"]');
   if(btn) btn.setAttribute('aria-expanded', open?'true':'false');
   document.body.classList.toggle('bottom-more-open', open);
-  if(open){ var f=sheet.querySelector('a,button'); if(f) f.focus(); }
+  if(open){
+    // The search field first - for a guest the sheet IS the search.
+    var f=sheet.querySelector('input[type=search]')||sheet.querySelector('a,button');
+    if(f) f.focus();
+  }
 };
 document.addEventListener('keydown',function(e){
   if(e.key!=='Escape') return;
