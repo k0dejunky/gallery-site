@@ -86,22 +86,37 @@ class LiveShow
     /**
      * Schedule a show.
      *
-     * $startsAt is a UTC 'Y-m-d H:i:s' string.
+     * $startsAt is the time the OPERATOR typed, in the site's timezone - the
+     * same string the app shows in the schedule form. The conversion to UTC
+     * happens HERE, in one place: the stored time is always UTC, so the
+     * countdown on every device is the same.
+     *
+     * (A caller that passes an already-converted time would shift it a
+     * second time, which is why the conversion is not done by the caller.)
      */
     public static function create(
         string $title,
         string $startsAt,
         int $createdBy,
         ?string $description = null,
-        int $durationMinutes = self::DEFAULT_DURATION
+        int $durationMinutes = self::DEFAULT_DURATION,
+        ?string $siteTimezone = null
     ): int {
+        $startsAtUtc = self::normaliseStart(
+            $startsAt,
+            $siteTimezone !== null && $siteTimezone !== '' ? $siteTimezone : site_timezone()
+        );
+        if ($startsAtUtc === null) {
+            throw new \InvalidArgumentException('The start time must be in the future.');
+        }
+
         Database::run(
             'INSERT INTO live_shows (title, description, starts_at, duration_minutes, status, created_by)
              VALUES (?, ?, ?, ?, ?, ?)',
             [
                 $title,
                 $description !== null && $description !== '' ? $description : null,
-                $startsAt,
+                $startsAtUtc,
                 max(1, min(self::MAX_DURATION, $durationMinutes)),
                 self::STATUS_SCHEDULED,
                 $createdBy,

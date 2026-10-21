@@ -355,11 +355,10 @@ class LiveController extends Controller
         $duration = (int) $this->request->post('duration', LiveShow::DEFAULT_DURATION);
         $duration = max(1, min(LiveShow::MAX_DURATION, $duration));
 
-        $startsAt = LiveShow::normaliseStart(
-            (string) $this->request->post('starts_at', ''),
-            site_timezone()
-        );
-        if ($startsAt === null) {
+        // The time the operator typed, in the site's timezone. The model
+        // converts it to UTC, so the countdown is the same on every device.
+        $startsAt = (string) $this->request->post('starts_at', '');
+        if (LiveShow::normaliseStart($startsAt, site_timezone()) === null) {
             $this->json(['ok' => false, 'error' => 'Pick a start time in the future.']);
             return;
         }

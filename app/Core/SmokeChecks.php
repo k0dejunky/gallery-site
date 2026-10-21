@@ -2984,6 +2984,32 @@ class SmokeChecks
                 $problems[] = 'the show endpoints must check the operator token';
             }
 
+            // ONE place converts the operator's local time into UTC: the
+            // model. A caller that converted the time first and passed the
+            // result on would shift it a second time, and the show would
+            // start the wrong number of hours later.
+            $createBody = '';
+            $inCreate = false;
+            foreach (explode("\n", $model) as $line) {
+                if (strpos($line, 'function create(') !== false) {
+                    $inCreate = true;
+                }
+                if ($inCreate) {
+                    $createBody .= $line . "\n";
+                    if (strpos($line, 'INSERT INTO live_shows') !== false) {
+                        break;
+                    }
+                }
+            }
+            if (strpos($createBody, 'normaliseStart(') === false) {
+                $problems[] = 'LiveShow::create() must convert the start time to UTC itself';
+            }
+            if (strpos($createBody, 'site_timezone()') === false
+                && strpos($createBody, '$siteTimezone') === false
+            ) {
+                $problems[] = 'LiveShow::create() must know the site timezone';
+            }
+
             return $problems === []
                 ? $ok('a live show can be scheduled and counted down to')
                 : $bad(implode('; ', $problems));
