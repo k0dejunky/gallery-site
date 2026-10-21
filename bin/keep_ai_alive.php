@@ -26,6 +26,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/../app/bootstrap.php';
 
+// The liveness heartbeat: the watchdog reads it to notice when this
+// worker has stopped running.
+\App\Core\Heartbeat::touch('ai-watchdog');
+
 use App\Models\Http;
 
 $logFile  = dirname(__DIR__) . '/storage/logs/ai-watchdog.log';

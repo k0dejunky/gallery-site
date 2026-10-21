@@ -103,8 +103,18 @@ $postFields  = $cronFields($postMin);
 $dcFields    = $cronFields($dcMin);
 $waFields    = $cronFields($waMin);
 $crond       = [];
+// The housekeeping runs as a CLI script, not as an HTTP call. The old
+// entry put GALLERY_CRON_KEY in the cron file (which is world-readable)
+// and in the command line (so it showed up in `ps`), and it threw both
+// the response and the exit code away - a failing run left no trace at
+// all, which is how nineteen hours of failure went unnoticed.
 $crond['gallery-housekeeping'] =
-    "{$everyFields[0]} {$everyFields[1]} * * * www-data curl -fsS \"http://127.0.0.1/gallery/cron/housekeeping?key={$key}\" > /dev/null 2>&1\n";
+    "{$everyFields[0]} {$everyFields[1]} * * * {$php}/bin/housekeeping.php >> " . SITE_ROOT . "/storage/logs/housekeeping-cron.log 2>&1\n";
+// The watchdog: the thing that notices when a background job stops. It
+// runs from its own entry so it does not share a failure with the job it
+// is watching, and it alerts the admin by email.
+$crond['gallery-watchdog'] =
+    "*/5 * * * * {$php}/bin/watchdog.php >> " . SITE_ROOT . "/storage/logs/watchdog-cron.log 2>&1\n";
 $crond['gallery-paypal-reconcile'] =
     "{$ppFields[0]} {$ppFields[1]} * * * {$php}/bin/paypal_reconcile.php >> " . SITE_ROOT . "/storage/logs/paypal-reconcile.log 2>&1\n";
 $crond['gallery-autopost'] =

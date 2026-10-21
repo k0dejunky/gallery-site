@@ -2490,6 +2490,121 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.housekeeping.cron_entry', 'Smoke · Data', 'The housekeeping cron entry cannot lose a failure', static function () use ($root, $read, $ok, $bad): array {
+            // The old entry was:
+            //   curl -fsS "http://127.0.0.1/gallery/cron/housekeeping?key=SECRET" > /dev/null 2>&1
+            // which put the key in a world-readable cron file and in `ps`,
+            // and threw both the response and the exit code away. A failing
+            // run left no trace at all.
+            $cron = (string) $read($root . '/bin/apply_cron.php');
+            $problems = [];
+
+            if (preg_match("/gallery-housekeeping'\\]\\s*=(.*?);/s", $cron, $m) !== 1) {
+                $problems[] = 'the gallery-housekeeping cron entry was not found in apply_cron.php';
+            } else {
+                // The whole statement, because the log path is concatenated
+                // onto SITE_ROOT rather than written inline.
+                $entry = $m[1];
+                if (strpos($entry, 'bin/housekeeping.php') === false) {
+                    $problems[] = 'the housekeeping cron entry must run bin/housekeeping.php';
+                }
+                if (strpos($entry, 'key=') !== false) {
+                    $problems[] = 'the cron entry must not carry the cron key - the cron file is world-readable';
+                }
+                if (strpos($entry, '> /dev/null 2>&1') !== false) {
+                    $problems[] = 'the cron entry must not discard its output - a failing run must leave a trace';
+                }
+                if (strpos($entry, 'storage/logs/') === false) {
+                    $problems[] = 'the cron entry must log to storage/logs/';
+                }
+            }
+            // The CLI entry point has to exist and has to exit non-zero when
+            // a step failed.
+            if (!is_file($root . '/bin/housekeeping.php')) {
+                $problems[] = 'bin/housekeeping.php must exist';
+            } else {
+                $cli = (string) $read($root . '/bin/housekeeping.php');
+                if (strpos($cli, 'exit($failed ? 1 : 0)') === false) {
+                    $problems[] = 'bin/housekeeping.php must exit non-zero when a step failed';
+                }
+                if (strpos($cli, 'flock(') === false) {
+                    $problems[] = 'bin/housekeeping.php must lock, so two runs cannot overlap';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the housekeeping cron entry cannot lose a failure')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.watchdog.exists', 'Smoke · Data', 'Something watches the background jobs', static function () use ($root, $read, $ok, $bad): array {
+            // The housekeeping failed for nineteen hours and nobody knew:
+            // the cron entry discarded the exit code, the log write was
+            // after the step that threw, and the "cron is stale" alert only
+            // fired when a human loaded the admin dashboard.
+            $problems = [];
+
+            if (!is_file($root . '/bin/watchdog.php')) {
+                $problems[] = 'bin/watchdog.php must exist - something has to notice when a job stops';
+            } else {
+                $wd = (string) $read($root . '/bin/watchdog.php');
+                if (strpos($wd, 'Mailer::adminAlert(') === false) {
+                    $problems[] = 'the watchdog must alert the admin when a job goes quiet';
+                }
+                if (strpos($wd, 'Heartbeat::age(') === false) {
+                    $problems[] = 'the watchdog must check the worker HEARTBEATS, not the log mtimes - an idle worker looks dead by mtime';
+                }
+                if (strpos($wd, "'housekeeping'") === false) {
+                    $problems[] = 'the watchdog must watch the housekeeping';
+                }
+                if (strpos($wd, 'Mailer::adminAlert(') === false) {
+                    $problems[] = 'the watchdog must alert the admin when a job goes quiet';
+                }
+            }
+            // Every worker must touch a heartbeat, or the watchdog cannot
+            // tell a stopped worker from an idle one.
+            foreach ([
+                'housekeeping', 'paypal-reconcile', 'emailer', 'autopost', 'daily-chat',
+                'questionnaires', 'chat-ai', 'categorizer', 'describer', 'rendition',
+                'chapters', 'video-samples', 'dimensions', 'web-analytics', 'ai-watchdog',
+                'backup',
+            ] as $worker) {
+                $found = false;
+                foreach (glob($root . '/bin/*.php') ?: [] as $file) {
+                    if (strpos((string) @file_get_contents($file), "Heartbeat::touch('" . $worker . "')") !== false) {
+                        $found = true;
+                        break;
+                    }
+                }
+                if (!$found) {
+                    $problems[] = 'no worker touches the ' . $worker . ' heartbeat';
+                }
+            }
+            if (!is_file($root . '/app/Core/Heartbeat.php')) {
+                $problems[] = 'app/Core/Heartbeat.php must exist';
+            }
+
+            // And it must be scheduled.
+            $cron = (string) $read($root . '/bin/apply_cron.php');
+            if (strpos($cron, 'gallery-watchdog') === false) {
+                $problems[] = 'the watchdog must have its own cron entry, so it does not share a failure with the job it watches';
+            }
+            if (strpos($cron, 'bin/watchdog.php') === false) {
+                $problems[] = 'the watchdog cron entry must run bin/watchdog.php';
+            }
+            // The dashboard's stale-cron card is a useful second signal, but
+            // it needs a human to load it. There has to be one that does
+            // not: the watchdog (above) and the health endpoint.
+            $health = (string) $read($root . '/app/Controllers/HealthController.php');
+            if (strpos($health, 'housekeeping_age_sec') === false) {
+                $problems[] = 'the health endpoint must expose the housekeeping age, so a second signal does not need a human either';
+            }
+
+            return $problems === []
+                ? $ok('something watches the background jobs')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).

@@ -6,6 +6,10 @@ use App\Models\ChatQuestionnaire;
 
 require __DIR__ . '/../app/bootstrap.php';
 
+// The liveness heartbeat: a worker that only logs when it has work
+// would look dead to the watchdog if it were watched by log mtime.
+\App\Core\Heartbeat::touch('questionnaires');
+
 $logDir = __DIR__ . '/../storage/logs';
 if (!is_dir($logDir)) {
     @mkdir($logDir, 0775, true);

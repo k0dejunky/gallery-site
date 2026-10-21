@@ -12,6 +12,10 @@ declare(strict_types=1);
 $root = dirname(__DIR__);
 require $root . '/app/bootstrap.php';
 
+// The liveness heartbeat: the watchdog reads it to notice when this worker
+// has stopped running.
+\App\Core\Heartbeat::touch('backup');
+
 $envFile = $root . '/.env';
 if (!is_file($envFile)) {
     fwrite(STDERR, "ERROR: .env not found at $envFile\n");

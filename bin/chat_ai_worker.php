@@ -16,6 +16,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/../app/bootstrap.php';
 
+// The liveness heartbeat: a worker that only logs when it has work
+// would look dead to the watchdog if it were watched by log mtime.
+\App\Core\Heartbeat::touch('chat-ai');
+
 use App\Models\ChatAiJob;
 
 $logDir = dirname(__DIR__) . '/storage/logs';

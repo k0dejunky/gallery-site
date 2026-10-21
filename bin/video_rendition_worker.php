@@ -32,6 +32,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/../app/bootstrap.php';
 
+// The liveness heartbeat: a worker that only logs when it has work
+// would look dead to the watchdog if it were watched by log mtime.
+\App\Core\Heartbeat::touch('rendition');
+
 $limit  = null; // null = not given yet; 0 = drain the whole backlog
 $budget = 900;  // seconds per tick; stops mid-backfill to leave the box responsive
 $mismatchOnly = false;
