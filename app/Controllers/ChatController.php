@@ -87,6 +87,13 @@ class ChatController extends Controller
             return;
         }
 
+        // A blocked member can still read the conversation, but cannot
+        // write into it.
+        if (ChatMessage::userBlocked($userId)) {
+            $this->json(['ok' => false, 'error' => 'You have been blocked from chatting by the operator.']);
+            return;
+        }
+
         // Per-user send throttle: 12 messages per 60 seconds. Enforced before
         // the synchronous Ollama generation so spam cannot drive model load.
         if (!RateLimiter::allow(['chat_send:' . $userId], 12, 60)) {

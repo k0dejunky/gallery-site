@@ -130,11 +130,17 @@ class ChatBridgeController extends Controller
             'ok'           => true,
             'conversation' => $conv ? (int) $conv['id'] : 0,
             'ai_mode'      => $conv ? (string) $conv['ai_mode'] : 'retrieval',
-            'status'       => $conv ? (string) $conv['status'] : 'closed',
+            'status'      => $conv ? (string) $conv['status'] : 'closed',
             'pending'      => $pending,
             'user_id'      => $conv ? (int) $conv['user_id'] : 0,
             'operator_online' => \App\Core\ChatSettings::operatorOnline(),
             'away_message'    => \App\Core\ChatSettings::operatorAwayMessage(),
+            // The timezone the site's dates are shown in, and the server's
+            // own clock. The app used a hardcoded zone, so every timestamp
+            // it showed could be wrong; with these two it can show the
+            // site's timezone and count down in step with the server.
+            'site_timezone'   => site_timezone(),
+            'server_time'     => gmdate('Y-m-d\TH:i:s\Z'),
         ]);
     }
 
@@ -662,6 +668,86 @@ class ChatBridgeController extends Controller
         ChatMessage::setMemberReply($cid, $enabled);
 
         $this->json(['ok' => true, 'conversation_id' => $cid, 'enabled' => $enabled]);
+    }
+
+    /**
+     * The operator's per-message actions: pin, unpin, delete, and the
+     * pinned list.
+     *
+     * The app had no per-message actions at all: a message could not be
+     * taken down, kept at hand, or copied, and a member could not be
+     * blocked from the regular chat.
+     */
+    public function messageAction(): void
+    {
+        $this->throttle(true);
+        $data = json_decode($this->rawBody(), true);
+        if (!is_array($data)) {
+            $data = [];
+        }
+
+        $action = (string) ($data['action'] ?? '');
+        $id     = (int) ($data['id'] ?? 0);
+        $cid    = (int) ($data['conversation_id'] ?? 0);
+
+        if ($action === 'pinned') {
+            $rows = $cid > 0 ? ChatMessage::pinnedMessages($cid) : [];
+            $this->json(['ok' => true, 'messages' => $rows]);
+            return;
+        }
+
+        if ($id <= 0) {
+            $this->json(['ok' => false, 'error' => 'No message was given.']);
+            return;
+        }
+
+        if ($action === 'pin') {
+            $this->json(['ok' => ChatMessage::setPinned($id, true)]);
+            return;
+        }
+
+        if ($action === 'unpin') {
+            $this->json(['ok' => ChatMessage::setPinned($id, false)]);
+            return;
+        }
+
+        if ($action === 'delete') {
+            $this->json(['ok' => ChatMessage::deleteMessage($id)]);
+            return;
+        }
+
+        $this->json(['ok' => false, 'error' => 'Unknown action.']);
+    }
+
+    /**
+     * Block or unblock a member from the chat.
+     *
+     * hours = 0 means until the operator unblocks them.
+     */
+    public function blockUser(): void
+    {
+        $this->throttle(true);
+        $data = json_decode($this->rawBody(), true);
+        if (!is_array($data)) {
+            $data = [];
+        }
+
+        $userId = (int) ($data['user_id'] ?? 0);
+        $hours  = (int) ($data['hours'] ?? 0);
+        $block  = !array_key_exists('blocked', $data) || (bool) $data['blocked'];
+
+        if ($userId <= 0) {
+            $this->json(['ok' => false, 'error' => 'No member was given.']);
+            return;
+        }
+
+        if ($block) {
+            ChatMessage::blockUser($userId, max(0, $hours));
+        } else {
+            ChatMessage::unblockUser($userId);
+        }
+
+        $this->json(['ok' => true, 'user_id' => $userId, 'blocked' => $block]);
     }
 
     /** Recent conversation + few-shot context (for the app/AI to build a reply). */

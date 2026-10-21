@@ -624,6 +624,19 @@ body.impersonating .title-header { display: none; }
     .live-badge { display: inline-block; padding: .15rem .6rem; border-radius: 999px; font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
     .live-badge.on { background: #dc2626; color: #fff; }
     .live-badge.off { background: var(--card-border, #ddd); color: var(--text-muted, #888); }
+
+    /* The countdown to the next scheduled show. It sits above the player so
+       it is the first thing a member reads. */
+    .live-countdown { display: flex; align-items: center; gap: .75rem; margin-bottom: .75rem; padding: .7rem .9rem; border: 1px solid var(--purple-500, #9333ea); border-radius: var(--card-radius, 12px); background: var(--card-bg, #1e0d1a); }
+    .live-countdown[hidden] { display: none; }
+    .live-countdown-body { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; min-width: 0; }
+    .live-countdown-title { font-weight: 700; color: var(--purple-300, #c084fc); }
+    .live-countdown-text { color: var(--text, #fff); font-variant-numeric: tabular-nums; }
+    .live-countdown-soon .live-countdown-text { font-weight: 700; }
+    .live-countdown-now { border-color: #dc2626; }
+    .live-countdown-now .live-countdown-title { color: #dc2626; }
+    .live-countdown-now .live-countdown-text { font-weight: 700; }
+
     .live-grid { display: grid; grid-template-columns: 1fr 320px; gap: 1rem; align-items: start; }
     @media (max-width: 860px) { .live-grid { grid-template-columns: 1fr; } }
     .live-player-wrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: var(--card-radius, 8px); overflow: hidden; }

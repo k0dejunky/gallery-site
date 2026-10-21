@@ -8,7 +8,9 @@ use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\RateLimiter;
 use App\Core\Database;
+use App\Models\AuditLog;
 use App\Models\LiveSession;
+use App\Models\LiveShow;
 use App\Models\OperatorToken;
 
 /**
@@ -225,6 +227,11 @@ class LiveController extends Controller
                 : '',
             'chatLatest'   => $chatLatest,
             'chatMessages' => $chatMessages,
+            // The show the countdown banner counts down to. The start time
+            // is absolute and in UTC, so every device - in any timezone -
+            // counts down to the same instant.
+            'nextShow'     => LiveShow::toApi(LiveShow::next()),
+            'serverTime'   => gmdate('Y-m-d\TH:i:s\Z'),
         ];
     }
 
@@ -276,6 +283,128 @@ class LiveController extends Controller
                 [(int) $active['id']]
             );
         }
+        $this->json(['ok' => true]);
+    }
+
+    /**
+     * Operator: the shows that are still ahead.
+     *
+     * The app shows this list in its schedule screen. The start times come
+     * back as UTC so the operator's device and the member page agree on
+     * when the show is.
+     */
+    public function shows(): void
+    {
+        $operator = $this->operator();
+        if ($operator === null) {
+            http_response_code(403);
+            $this->json(['ok' => false, 'error' => 'A valid operator token is required.']);
+            return;
+        }
+
+        LiveShow::closeFinished();
+
+        $shows = [];
+        foreach (LiveShow::upcoming(20) as $show) {
+            $api = LiveShow::toApi($show);
+            if ($api !== null) {
+                $shows[] = $api;
+            }
+        }
+
+        $this->json([
+            'ok'     => true,
+            'shows'  => $shows,
+            'next'   => LiveShow::toApi(LiveShow::next()),
+            'server' => gmdate('Y-m-d\TH:i:s\Z'),
+        ]);
+    }
+
+    /**
+     * Operator: schedule a show.
+     *
+     * The start time is typed in the site's display timezone and stored in
+     * UTC, so the countdown on every device counts down to the same
+     * instant. The operator still presses Go Live themselves when the
+     * show is actually starting.
+     */
+    public function scheduleShow(): void
+    {
+        $operator = $this->operator();
+        if ($operator === null) {
+            http_response_code(403);
+            $this->json(['ok' => false, 'error' => 'A valid operator token is required.']);
+            return;
+        }
+
+        $title = trim((string) $this->request->post('title', ''));
+        if ($title === '') {
+            $this->json(['ok' => false, 'error' => 'Give the show a title.']);
+            return;
+        }
+        if (mb_strlen($title) > LiveShow::MAX_TITLE) {
+            $this->json(['ok' => false, 'error' => 'The title is too long.']);
+            return;
+        }
+
+        $description = trim((string) $this->request->post('description', ''));
+        if (mb_strlen($description) > LiveShow::MAX_DESCRIPTION) {
+            $description = mb_substr($description, 0, LiveShow::MAX_DESCRIPTION);
+        }
+
+        $duration = (int) $this->request->post('duration', LiveShow::DEFAULT_DURATION);
+        $duration = max(1, min(LiveShow::MAX_DURATION, $duration));
+
+        $startsAt = LiveShow::normaliseStart(
+            (string) $this->request->post('starts_at', ''),
+            site_timezone()
+        );
+        if ($startsAt === null) {
+            $this->json(['ok' => false, 'error' => 'Pick a start time in the future.']);
+            return;
+        }
+
+        $id = LiveShow::create(
+            $title,
+            $startsAt,
+            (int) $operator['created_by'],
+            $description !== '' ? $description : null,
+            $duration
+        );
+
+        AuditLog::record((int) $operator['created_by'], 'create', 'live_show', $id, 'Scheduled a live show', null, [
+            'title'     => $title,
+            'starts_at' => $startsAt,
+        ]);
+
+        $this->json(['ok' => true, 'show' => LiveShow::toApi(LiveShow::find($id))]);
+    }
+
+    /** Operator: cancel a scheduled show. */
+    public function cancelShow(): void
+    {
+        $operator = $this->operator();
+        if ($operator === null) {
+            http_response_code(403);
+            $this->json(['ok' => false, 'error' => 'A valid operator token is required.']);
+            return;
+        }
+
+        $id      = (int) $this->request->post('id', 0);
+        $show    = $id > 0 ? LiveShow::find($id) : null;
+        if ($show === null) {
+            $this->json(['ok' => false, 'error' => 'That show was not found.']);
+            return;
+        }
+        if (!LiveShow::cancel($id)) {
+            $this->json(['ok' => false, 'error' => 'That show has already started.']);
+            return;
+        }
+
+        AuditLog::record((int) $operator['created_by'], 'update', 'live_show', $id, 'Cancelled a live show', null, [
+            'title' => (string) ($show['title'] ?? ''),
+        ]);
+
         $this->json(['ok' => true]);
     }
 

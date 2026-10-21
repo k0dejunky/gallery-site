@@ -561,6 +561,140 @@ class ChatMessage
         return $id !== false && $id !== null;
     }
 
+    /**
+     * The pinned messages of a conversation, oldest-first.
+     *
+     * The operator pins a message to keep it at hand (a promise, a price,
+     * a correction). The thread shows them above the conversation.
+     */
+    public static function pinnedMessages(int $conversationId): array
+    {
+        return Database::run(
+            'SELECT * FROM chat_messages
+             WHERE conversation_id = ? AND pinned_at IS NOT NULL
+             ORDER BY pinned_at ASC',
+            [$conversationId]
+        )->fetchAll();
+    }
+
+    /**
+     * Pin or unpin a message.
+     *
+     * Only the operator can pin, and only their own conversations may be
+     * touched.
+     */
+    public static function setPinned(int $messageId, bool $pinned): bool
+    {
+        if ($messageId <= 0) {
+            return false;
+        }
+
+        if ($pinned) {
+            return Database::run(
+                'UPDATE chat_messages SET pinned_at = UTC_TIMESTAMP()
+                 WHERE id = ? AND pinned_at IS NULL',
+                [$messageId]
+            )->rowCount() > 0;
+        }
+
+        return Database::run(
+            'UPDATE chat_messages SET pinned_at = NULL WHERE id = ? AND pinned_at IS NOT NULL',
+            [$messageId]
+        )->rowCount() > 0;
+    }
+
+    /**
+     * Delete a message and everything attached to it.
+     *
+     * The operator had no way to take a message down at all: the admin
+     * panel could delete LIVE chat messages, but a regular chat message
+     * could only be deleted by deleting the whole conversation.
+     */
+    public static function deleteMessage(int $messageId): bool
+    {
+        if ($messageId <= 0) {
+            return false;
+        }
+
+        $row = Database::run(
+            'SELECT id, attachment_path FROM chat_messages WHERE id = ? LIMIT 1',
+            [$messageId]
+        )->fetch();
+
+        if ($row === false || $row === null) {
+            return false;
+        }
+
+        $deleted = Database::run(
+            'DELETE FROM chat_messages WHERE id = ?',
+            [$messageId]
+        )->rowCount() > 0;
+
+        if ($deleted) {
+            // The attachment file is left alone: it may be shared with
+            // another message (the same upload in another conversation).
+            \App\Core\Cache::bump('chat');
+        }
+
+        return $deleted;
+    }
+
+    /**
+     * Whether a member is blocked from sending chat messages.
+     */
+    public static function userBlocked(int $userId): bool
+    {
+        if ($userId <= 0) {
+            return false;
+        }
+
+        $until = Database::run(
+            'SELECT chat_blocked_until FROM users WHERE id = ? LIMIT 1',
+            [$userId]
+        )->fetchColumn();
+
+        if ($until === false || $until === null || $until === '') {
+            return false;
+        }
+
+        return strtotime((string) $until . ' UTC') > time();
+    }
+
+    /**
+     * Block a member from sending chat messages, for $hours (0 = forever).
+     */
+    public static function blockUser(int $userId, int $hours = 0): bool
+    {
+        if ($userId <= 0) {
+            return false;
+        }
+
+        if ($hours <= 0) {
+            return Database::run(
+                'UPDATE users SET chat_blocked_until = ? WHERE id = ?',
+                ['2999-12-31 23:59:59', $userId]
+            )->rowCount() >= 0;
+        }
+
+        return Database::run(
+            'UPDATE users SET chat_blocked_until = DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? HOUR)
+             WHERE id = ?',
+            [$hours, $userId]
+        )->rowCount() >= 0;
+    }
+
+    public static function unblockUser(int $userId): bool
+    {
+        if ($userId <= 0) {
+            return false;
+        }
+
+        return Database::run(
+            'UPDATE users SET chat_blocked_until = NULL WHERE id = ?',
+            [$userId]
+        )->rowCount() >= 0;
+    }
+
     public static function latestId(int $conversationId): int
     {
         $id = Database::run(

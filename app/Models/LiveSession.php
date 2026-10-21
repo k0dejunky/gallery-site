@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Core\Cache;
 use App\Core\Database;
 
 /**
@@ -207,6 +208,24 @@ class LiveSession
      * @return array{live:bool, since:?string, viewers:int, stream_key:?string, session_id:?int}
      */
     public static function status(): array
+    {
+        // Every viewer's 5s poll asked MediaMTX for its path list, so N
+        // viewers meant N/5 requests a second, each one blocking a PHP-FPM
+        // worker on a curl to the local API. The answer changes slowly (a
+        // stream is live for minutes), so it is cached for a few seconds.
+        // The cached value still comes from MediaMTX, so the site does not
+        // decide on its own whether a stream is live.
+        $cached = Cache::rememberGen('live', 'status', 3, static function (): array {
+            return self::fetchStatus();
+        });
+
+        return is_array($cached) && $cached !== [] ? $cached : self::fetchStatus();
+    }
+
+    /**
+     * Ask MediaMTX what is being published right now.
+     */
+    private static function fetchStatus(): array
     {
         try {
             [$status, , $body] = Http::request('http://127.0.0.1:9997/v2/paths/list', [

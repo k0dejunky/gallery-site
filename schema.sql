@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS users (
     email_verified_at DATETIME NULL DEFAULT NULL,
     email_verification_token CHAR(64) NULL DEFAULT NULL,
     chat_muted_until DATETIME NULL DEFAULT NULL,
+    -- A blocked member cannot send chat messages. They can still read, and
+    -- the operator can unblock them.
+    chat_blocked_until DATETIME NULL DEFAULT NULL,
     marketing_opt_out TINYINT(1) NOT NULL DEFAULT 0,
     notify_new_gallery TINYINT(1) NOT NULL DEFAULT 1,
     notify_live TINYINT(1) NOT NULL DEFAULT 1,
@@ -737,8 +740,12 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     view_count      INT UNSIGNED NOT NULL DEFAULT 0,
     content_refs    TEXT NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- The operator can pin a message to keep it at hand. The thread shows
+    -- pinned messages separately.
+    pinned_at       DATETIME NULL DEFAULT NULL,
     KEY idx_chat_msg_conv_date (conversation_id, created_at),
     KEY idx_chat_msg_conv_id (conversation_id, id),
+    KEY idx_chat_msg_pinned (conversation_id, pinned_at),
     CONSTRAINT fk_chat_msg_conv FOREIGN KEY (conversation_id)
         REFERENCES chat_conversations(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -781,6 +788,28 @@ CREATE TABLE IF NOT EXISTS live_chat_messages (
     INDEX idx_live_chat_session (session_id, id),
     FOREIGN KEY (session_id) REFERENCES live_sessions(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Scheduled live shows. The operator schedules one from the app and the
+-- member live page shows a countdown banner until it starts. starts_at is
+-- UTC: the boxes disagree about their MySQL session timezone (dev runs 6
+-- hours behind UTC, prod is UTC), so every comparison uses
+-- UTC_TIMESTAMP().
+CREATE TABLE IF NOT EXISTS live_shows (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    title       VARCHAR(160) NOT NULL,
+    description VARCHAR(1000) NULL,
+    starts_at   DATETIME NOT NULL,
+    duration_minutes INT UNSIGNED NOT NULL DEFAULT 60,
+    status      ENUM('scheduled','started','ended','cancelled') NOT NULL DEFAULT 'scheduled',
+    created_by  INT UNSIGNED NOT NULL,
+    started_at  DATETIME NULL,
+    ended_at    DATETIME NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_live_shows_status_start (status, starts_at),
+    INDEX idx_live_shows_creator (created_by),
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS chat_training_pairs (

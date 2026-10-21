@@ -2896,6 +2896,170 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.live.shows_can_be_scheduled', 'Smoke · Live', 'A live show can be scheduled and the member page counts down to it', static function () use ($root, $read, $ok, $bad): array {
+            // The operator schedules a show from the app; the member's live
+            // page shows a countdown to it. The countdown has to be the SAME
+            // on every device, so the start time is stored in UTC and sent
+            // as an absolute timestamp: the client never uses its own clock
+            // to decide what time it is.
+            $model  = (string) $read($root . '/app/Models/LiveShow.php');
+            $ctrl   = (string) $read($root . '/app/Controllers/LiveController.php');
+            $view   = (string) $read($root . '/views/live.php');
+            $schema = (string) $read($root . '/schema.sql');
+            $routes = (string) $read($root . '/config/routes.php');
+            $problems = [];
+
+            // The table, in the schema AND in a migration.
+            if (strpos($schema, 'CREATE TABLE IF NOT EXISTS live_shows') === false) {
+                $problems[] = 'schema.sql must carry the live_shows table';
+            }
+            if (!is_file($root . '/database/migrations/087_live_shows.sql')) {
+                $problems[] = 'the live_shows table needs a migration';
+            }
+
+            // Every time comparison must be UTC: the boxes disagree about
+            // their MySQL session timezone (the dev box runs six hours
+            // behind UTC), so a NOW() comparison would fire hours early on
+            // one of them. (The comment in the model may mention NOW();
+            // only actual SQL is checked here.)
+            if (strpos($model, 'UTC_TIMESTAMP()') === false) {
+                $problems[] = 'the show times must be compared in UTC';
+            }
+            $sql = '';
+            foreach (explode("\n", $model) as $line) {
+                if (stripos(trim($line), '*') === 0) {
+                    continue;
+                }
+                $sql .= $line . "\n";
+            }
+            if (preg_match('/\bNOW\(\)/', $sql) === 1) {
+                $problems[] = 'the show times must not be compared with NOW()';
+            }
+
+            // The API shape the app and the page both rely on.
+            if (strpos($model, "'startsAtUtc'") === false) {
+                $problems[] = 'the show must carry an absolute UTC start time';
+            }
+            if (strpos($model, "'seconds'") === false) {
+                $problems[] = 'the show must carry the seconds remaining';
+            }
+
+            // The member page must show the banner and tick it.
+            if (strpos($view, 'id="live-countdown"') === false) {
+                $problems[] = 'the live page must show the countdown banner';
+            }
+            if (strpos($view, 'id="live-countdown-text"') === false) {
+                $problems[] = 'the countdown must have a place to show the time';
+            }
+            if (strpos($view, 'data-starts-at=') === false) {
+                $problems[] = 'the countdown must be given the server start time';
+            }
+            if (strpos($view, 'tickCountdown') === false) {
+                $problems[] = 'the countdown must tick';
+            }
+            if (strpos($view, "nextShow:") === false) {
+                $problems[] = 'the live page must pass the next show to the script';
+            }
+            if (strpos($view, 'serverTime') === false) {
+                $problems[] = 'the countdown must be based on the server clock';
+            }
+
+            // The endpoints, and they must be operator-only.
+            foreach (['/live/shows', '/live/schedule', '/live/schedule/cancel'] as $route) {
+                if (strpos($routes, "'" . $route . "'") === false) {
+                    $problems[] = 'the ' . $route . ' route is missing';
+                }
+            }
+            if (strpos($ctrl, 'function scheduleShow(') === false) {
+                $problems[] = 'the schedule endpoint is not wired up';
+            }
+            if (strpos($ctrl, 'function cancelShow(') === false) {
+                $problems[] = 'the cancel endpoint is not wired up';
+            }
+            if (strpos($ctrl, 'function shows(') === false) {
+                $problems[] = 'the show list endpoint is not wired up';
+            }
+            // Scheduling is a device-token action, like starting a stream.
+            if (substr_count($ctrl, '$operator = $this->operator();') < 3) {
+                $problems[] = 'the show endpoints must check the operator token';
+            }
+
+            return $problems === []
+                ? $ok('a live show can be scheduled and counted down to')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.live.messages_can_be_acted_on', 'Smoke · Live', 'The operator can pin, delete and block in the chat', static function () use ($root, $read, $ok, $bad): array {
+            // The app had NO per-message actions at all: a message could
+            // not be taken down, kept at hand or copied, and a member could
+            // not be blocked from the regular chat (only muted out of the
+            // live chat).
+            $model  = (string) $read($root . '/app/Models/ChatMessage.php');
+            $ctrl   = (string) $read($root . '/app/Controllers/ChatBridgeController.php');
+            $routes = (string) $read($root . '/config/routes.php');
+            $schema = (string) $read($root . '/schema.sql');
+            $problems = [];
+
+            foreach (['pinnedMessages', 'setPinned', 'deleteMessage', 'blockUser', 'unblockUser', 'userBlocked'] as $fn) {
+                if (strpos($model, 'function ' . $fn . '(') === false) {
+                    $problems[] = 'ChatMessage::' . $fn . '() is missing';
+                }
+            }
+
+            // The columns the actions need.
+            if (strpos($schema, 'pinned_at') === false) {
+                $problems[] = 'chat_messages needs a pinned_at column';
+            }
+            if (strpos($schema, 'chat_blocked_until') === false) {
+                $problems[] = 'users needs a chat_blocked_until column';
+            }
+
+            // The endpoints.
+            foreach (['/webhooks/chat/message-action', '/webhooks/chat/block-user'] as $route) {
+                if (strpos($routes, "'" . $route . "'") === false) {
+                    $problems[] = 'the ' . $route . ' route is missing';
+                }
+            }
+            if (strpos($ctrl, 'function messageAction(') === false) {
+                $problems[] = 'the message-action endpoint is not wired up';
+            }
+            if (strpos($ctrl, 'function blockUser(') === false) {
+                $problems[] = 'the block-user endpoint is not wired up';
+            }
+
+            // A blocked member must not be able to write.
+            $member = (string) $read($root . '/app/Controllers/ChatController.php');
+            if (strpos($member, 'ChatMessage::userBlocked(') === false) {
+                $problems[] = 'a blocked member must not be able to send a message';
+            }
+
+            return $problems === []
+                ? $ok('the operator can act on messages and members')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.chat.app_knows_the_site_timezone', 'Smoke · Chat', 'The app is told the site timezone and the server clock', static function () use ($root, $read, $ok, $bad): array {
+            // The app read 'site_timezone' out of its preferences, but
+            // NOTHING ever wrote it - so every timestamp the app showed was
+            // in a hardcoded America/Denver, whatever the site's timezone
+            // actually was. The app also had no idea what time the server
+            // thought it was, so a countdown could not agree across
+            // devices.
+            $ctrl = (string) $read($root . '/app/Controllers/ChatBridgeController.php');
+            $problems = [];
+
+            if (strpos($ctrl, "'site_timezone'") === false) {
+                $problems[] = 'the chat config must carry the site timezone';
+            }
+            if (strpos($ctrl, "'server_time'") === false) {
+                $problems[] = 'the chat config must carry the server clock';
+            }
+
+            return $problems === []
+                ? $ok('the app is told the site timezone and the server clock')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.exposure.locked_down', 'Smoke · Ops', 'The operational surface is not public', static function () use ($root, $read, $ok, $bad): array {
             // /gallery/health was public and returned how old the last
             // backup is, how long ago the housekeeping ran, how many workers

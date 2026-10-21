@@ -1,5 +1,12 @@
 <?php $title = 'Live'; ?>
 
+<?php
+/* The next scheduled show, if the operator scheduled one. The banner is
+   rendered server-side so it is there on the first paint, and the JS
+   keeps the countdown ticking from the server's clock. */
+$nextShow = LiveShow::toApi(\App\Models\LiveShow::next());
+?>
+
 <div class="live-page">
     <div class="live-top">
         <h1>Live</h1>
@@ -9,6 +16,18 @@
         <span class="muted" id="live-since"></span>
         <span class="muted" id="live-viewers" role="status" aria-live="polite"></span>
     </div>
+
+    <?php if ($nextShow !== null): ?>
+    <div class="live-countdown" id="live-countdown" role="status" aria-live="polite"
+         data-starts-at="<?= e($nextShow['startsAtUtc']) ?>"
+         data-server-now="<?= e(gmdate('Y-m-d\TH:i:s\Z')) ?>"
+         data-title="<?= e($nextShow['title']) ?>">
+        <div class="live-countdown-body">
+            <span class="live-countdown-title" id="live-countdown-title"><?= e($nextShow['title']) ?></span>
+            <span class="live-countdown-text" id="live-countdown-text"></span>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <div class="live-grid">
         <div class="live-player-wrap" data-player data-live data-fullscreen=".live-grid">
@@ -67,6 +86,68 @@
         var t = new Date(String(s == null ? '' : s).replace(' ', 'T') + 'Z');
         if (isNaN(t)) return '';
         return t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    /* ---- the countdown to the next scheduled show ------------------------
+       The start time comes from the server, and so does the server's own
+       clock, so the number every viewer sees is the same on every device
+       in every timezone. Only the ticking is local. */
+    var countdownEl = document.getElementById('live-countdown');
+    var countdownText = document.getElementById('live-countdown-text');
+    var countdownTitle = document.getElementById('live-countdown-title');
+    var countdownAt = null;
+    var serverSkew = 0;
+
+    function parseUtc(s) {
+        var t = new Date(s);
+        return isNaN(t.getTime()) ? null : t;
+    }
+
+    function fmtRemaining(sec) {
+        sec = Math.max(0, Math.floor(sec));
+        var d = Math.floor(sec / 86400);
+        var h = Math.floor((sec % 86400) / 3600);
+        var m = Math.floor((sec % 3600) / 60);
+        var s = sec % 60;
+        if (d > 0) return d + 'd ' + h + 'h ' + m + 'm';
+        if (h > 0) return h + 'h ' + m + 'm ' + s + 's';
+        return m + 'm ' + s + 's';
+    }
+
+    function tickCountdown() {
+        if (!countdownEl || countdownAt === null) return;
+        var now = Date.now() / 1000 + serverSkew;
+        var left = countdownAt.getTime() / 1000 - now;
+
+        if (left <= 0) {
+            countdownEl.classList.remove('live-countdown-soon');
+            countdownEl.classList.add('live-countdown-now');
+            if (countdownText) {
+                countdownText.textContent = countdownTitle && countdownTitle.textContent
+                    ? countdownTitle.textContent + ' is starting now — hang tight.'
+                    : 'Starting now…';
+            }
+            return;
+        }
+
+        if (countdownText) {
+            countdownText.textContent = 'Live in ' + fmtRemaining(left);
+        }
+    }
+
+    function setShow(show) {
+        if (!show || !countdownEl) {
+            if (countdownEl) { countdownEl.hidden = true; }
+            return;
+        }
+        var at = parseUtc(show.startsAtUtc);
+        if (!at) { countdownEl.hidden = true; return; }
+        countdownAt = at;
+        if (countdownTitle) { countdownTitle.textContent = show.title; }
+        countdownEl.hidden = false;
+        countdownEl.classList.remove('live-countdown-now');
+        countdownEl.classList.add('live-countdown-soon');
+        tickCountdown();
     }
 
     function addMsg(m) {
@@ -293,6 +374,15 @@
         if (sinceEl && s.since) sinceEl.textContent = 'since ' + hm(s.since);
         if (viewersEl && s.viewers) viewersEl.textContent = s.viewers + ' watching';
 
+        /* The countdown follows the server's clock, so every viewer sees
+           the same remaining time. */
+        if (s.serverTime) {
+            var st = parseUtc(s.serverTime);
+            if (st) serverSkew = st.getTime() / 1000 - Date.now() / 1000;
+        }
+        if (s.nextShow !== undefined) setShow(s.nextShow);
+        tickCountdown();
+
         if (!s.live) {
             teardownPlayer();
             resetChat([]);
@@ -347,8 +437,14 @@
         streamKey: <?= json_encode((string) ($streamKey ?? ''), JSON_UNESCAPED_SLASHES) ?>,
         token: <?= json_encode((string) ($token ?? ''), JSON_UNESCAPED_SLASHES) ?>,
         chatLatest: <?= json_encode((int) ($chatLatest ?? 0)) ?>,
-        chatMessages: <?= json_encode($chatMessages ?? [], JSON_UNESCAPED_SLASHES) ?>
+        chatMessages: <?= json_encode($chatMessages ?? [], JSON_UNESCAPED_SLASHES) ?>,
+        nextShow: <?= json_encode($nextShow, JSON_UNESCAPED_SLASHES) ?>,
+        serverTime: <?= json_encode(gmdate('Y-m-d\TH:i:s\Z')) ?>
     });
+
+    /* The countdown ticks locally between the 5s polls; the number itself
+       always comes from the server's clock. */
+    setInterval(tickCountdown, 1000);
 
     function poll() {
         fetch(stateUrl, { headers: { 'Accept': 'application/json' } })

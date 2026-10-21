@@ -68,6 +68,11 @@ return [
     ['POST', '/live/stop', 'LiveController@stop'],
     ['POST', '/live/pause', 'LiveController@pause'],
     ['POST', '/live/resume', 'LiveController@resume'],
+    // Scheduling a show. Device-token only (the operator() check), so the
+    // shared GALLERY_CHAT_KEY can never schedule one.
+    ['GET', '/live/shows', 'LiveController@shows'],
+    ['POST', '/live/schedule', 'LiveController@scheduleShow'],
+    ['POST', '/live/schedule/cancel', 'LiveController@cancelShow'],
     ['GET', '/live', 'LiveController@page'],
     ['GET', '/live/status', 'LiveController@status'],
     ['GET', '/live/state', 'LiveController@state'],
@@ -164,6 +169,10 @@ return [
     ['GET', '/webhooks/chat/users', 'ChatBridgeController@users'],
     ['POST', '/webhooks/chat/start', 'ChatBridgeController@start'],
     ['POST', '/webhooks/chat/reply-toggle', 'ChatBridgeController@replyToggle'],
+    // Per-message operator actions (pin/unpin/delete) and blocking a
+    // member from the chat.
+    ['POST', '/webhooks/chat/message-action', 'ChatBridgeController@messageAction'],
+    ['POST', '/webhooks/chat/block-user', 'ChatBridgeController@blockUser'],
     ['POST', '/webhooks/chat/mode', 'ChatBridgeController@mode'],
     ['POST', '/webhooks/chat/read', 'ChatBridgeController@read'],
     ['GET', '/webhooks/chat/context', 'ChatBridgeController@context'],
