@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\RateLimiter;
 use App\Models\Gallery;
 use App\Models\GalleryRating;
 
@@ -15,6 +16,13 @@ class GalleryRatingController extends Controller
     public function store(int $id): void
     {
         Auth::requireLogin();
+
+        // Ratings had no rate limit.
+        if (!RateLimiter::allow(['gallery_rating:' . (int) Auth::user()['id']], 30, 60)) {
+            $this->flash('error', 'You are rating too quickly. Try again in a minute.');
+            $this->redirect('/galleries/' . $id);
+            return;
+        }
 
         $gallery = Gallery::find($id);
         if ($gallery === null) {

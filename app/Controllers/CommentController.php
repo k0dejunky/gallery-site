@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\RateLimiter;
 use App\Models\Comment;
 use App\Models\Gallery;
 use App\Models\Notification;
@@ -19,6 +20,15 @@ class CommentController extends Controller
     public function store(): void
     {
         Auth::requireLogin();
+
+        // Comments, replies and reactions had NO rate limit: a member
+        // could post unlimited comments (and every one writes a
+        // notification for the previous author).
+        if (!RateLimiter::allow(['comment:' . (int) Auth::user()['id']], 10, 60)) {
+            $this->flash('error', 'You are commenting too quickly. Try again in a minute.');
+            $this->redirect($this->request->header('HTTP_REFERER') ?: '/wall');
+            return;
+        }
 
         $user   = Auth::user();
         $type   = (string) $this->request->post('commentable_type', '');
@@ -106,6 +116,12 @@ class CommentController extends Controller
     {
         Auth::requireLogin();
 
+        if (!RateLimiter::allow(['comment_reply:' . (int) Auth::user()['id']], 20, 60)) {
+            $this->flash('error', 'You are replying too quickly. Try again in a minute.');
+            $this->redirect($this->request->header('HTTP_REFERER') ?: '/wall');
+            return;
+        }
+
         $user     = Auth::user();
         $parentId = (int) $this->request->post('parent_id', '0');
         $body     = trim((string) $this->request->post('body', ''));
@@ -147,6 +163,12 @@ class CommentController extends Controller
     public function react(): void
     {
         Auth::requireLogin();
+
+        if (!RateLimiter::allow(['comment_react:' . (int) Auth::user()['id']], 60, 60)) {
+            http_response_code(429);
+            $this->json(['ok' => false, 'error' => 'Slow down a moment.']);
+            return;
+        }
 
         $user      = Auth::user();
         $commentId = (int) $this->request->post('comment_id', '0');

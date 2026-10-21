@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\RateLimiter;
 use App\Core\Database;
 use App\Models\LiveSession;
 use App\Models\OperatorToken;
@@ -283,6 +284,15 @@ class LiveController extends Controller
             return;
         }
         $userId = (int) $user['id'];
+
+        // The live chat had NO rate limit at all: a member could post
+        // unlimited messages, and there is no moderation queue for them
+        // either - live_chat_messages has no admin screen.
+        if (!RateLimiter::allow(['live_chat_send:' . $userId], 30, 60)) {
+            http_response_code(429);
+            $this->json(['ok' => false, 'error' => 'Slow down a moment.']);
+            return;
+        }
 
         $status = LiveSession::status();
         if (!$status['live'] || $status['session_id'] === null) {

@@ -2985,6 +2985,37 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.rate_limits.present', 'Smoke · Abuse', 'The member actions that can be spammed are limited', static function () use ($root, $read, $ok, $bad): array {
+            // The member-facing actions that could be spammed and had NO
+            // limit: the live chat (unlimited messages, and no moderation
+            // queue - live_chat_messages has no admin screen), comments,
+            // replies, reactions and gallery ratings.
+            $live    = (string) $read($root . '/app/Controllers/LiveController.php');
+            $comment = (string) $read($root . '/app/Controllers/CommentController.php');
+            $rating  = (string) $read($root . '/app/Controllers/GalleryRatingController.php');
+            $problems = [];
+
+            if (strpos($live, "RateLimiter::allow(['live_chat_send:") === false) {
+                $problems[] = 'the live chat must be rate limited';
+            }
+            if (strpos($comment, "RateLimiter::allow(['comment:") === false) {
+                $problems[] = 'comments must be rate limited';
+            }
+            if (strpos($comment, "RateLimiter::allow(['comment_reply:") === false) {
+                $problems[] = 'comment replies must be rate limited';
+            }
+            if (strpos($comment, "RateLimiter::allow(['comment_react:") === false) {
+                $problems[] = 'comment reactions must be rate limited';
+            }
+            if (strpos($rating, "RateLimiter::allow(['gallery_rating:") === false) {
+                $problems[] = 'gallery ratings must be rate limited';
+            }
+
+            return $problems === []
+                ? $ok('the member actions that can be spammed are limited')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).
