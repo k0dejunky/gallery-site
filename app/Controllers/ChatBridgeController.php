@@ -337,6 +337,7 @@ class ChatBridgeController extends Controller
         flush();
 
         $start = time();
+        $lastEmit = 0.0;
         while (time() - $start < 30) {
             $new = \App\Models\ChatMessage::decorateMessages(ChatMessage::messages($cid, $since), '/webhooks/chat/attachment');
             if ($new !== []) {
@@ -349,9 +350,20 @@ class ChatBridgeController extends Controller
             // ~3 s; the app hides the indicator 7 s after the last true).
             $typing = ChatMessage::memberTyping($cid);
             if ($new !== [] || $typing !== $lastTyping || $typing) {
-                echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'conversation' => $cid, 'typing' => $typing]) . "\n\n";
-                flush();
+                // The re-emit is rate limited to once a second. The old code
+                // `continue`d straight back to the top of the loop WITHOUT
+                // sleeping, so while a member was typing the loop spun at
+                // the speed of the database - two queries per iteration,
+                // thousands of times in the 30 s window - with a FPM worker
+                // and a database connection pinned the whole time.
+                $now = microtime(true);
+                if ($new !== [] || $typing !== $lastTyping || $now - $lastEmit >= 1.0) {
+                    echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'conversation' => $cid, 'typing' => $typing]) . "\n\n";
+                    flush();
+                    $lastEmit = $now;
+                }
                 $lastTyping = $typing;
+                usleep(300000);
                 continue;
             }
 
@@ -390,6 +402,7 @@ class ChatBridgeController extends Controller
         }
 
         $start = time();
+        $lastEmit = 0.0;
         while (time() - $start < 30) {
             $new = $this->memberEvents($since);
             if ($new !== []) {

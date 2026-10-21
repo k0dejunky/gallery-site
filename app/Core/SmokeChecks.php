@@ -5247,6 +5247,31 @@ class SmokeChecks
             }
             return $ok('writes/reads throttled, shared key grandfathered');
         });
+        $add('smoke.chat_bridge.no_busy_loop', 'Smoke · Chat correctness', 'The SSE stream does not spin on the database', static function () use ($bridgeCtrl, $ok, $bad): array {
+            // The SSE loop `continue`d straight back to the top while the
+            // member was typing, WITHOUT sleeping: two database queries per
+            // iteration, thousands of times in the 30 s window, with a FPM
+            // worker and a database connection pinned the whole time.
+            if (preg_match('/function stream\s*\([^)]*\)\s*:\s*void\s*\{(.*?)\n    \}/s', $bridgeCtrl, $m) !== 1) {
+                return $bad('ChatBridgeController::stream() not found');
+            }
+            $body = $m[1];
+            if (strpos($body, 'while (') === false) {
+                return $bad('the stream must have its poll loop');
+            }
+            // Every path through the loop has to sleep. The keepalive path
+            // sleeps 1.5 s and the typing path 0.3 s.
+            $sleeps = substr_count($body, 'usleep(');
+            if ($sleeps < 2) {
+                return $bad('the SSE loop must sleep on EVERY path (the typing path used to spin)');
+            }
+            // And the re-emit must be rate limited, or the frames are as
+            // frequent as the loop.
+            if (strpos($body, '$lastEmit') === false) {
+                return $bad('the SSE loop must rate limit its frames');
+            }
+            return $ok('the SSE loop sleeps on every path and rate limits its frames');
+        });
         $add('smoke.housekeeping.chat_retention', 'Smoke · Chat correctness', 'Housekeeping prunes chat keys, read notices and finished jobs', static function () use ($read, $root, $ok, $bad): array {
             $hk = $read("$root/app/Core/Housekeeping.php");
             if (strpos($hk, 'pruneChatRetention') === false || strpos($hk, 'chat_prunes') === false) {
