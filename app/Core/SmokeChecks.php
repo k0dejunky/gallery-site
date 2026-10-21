@@ -3402,6 +3402,43 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.exposure.csrf_rotated', 'Smoke · Ops', 'The CSRF token is rotated when the session privileges change', static function () use ($root, $read, $ok, $bad): array {
+            // The token used to be minted once per session and then live for
+            // the whole session: one leaked token was good for EVERY POST
+            // the session could make, including the ones that change the
+            // account. It is rotated whenever the privileges change.
+            $csrf = (string) $read($root . '/app/Core/Csrf.php');
+            $auth = (string) $read($root . '/app/Core/Auth.php');
+            $problems = [];
+
+            if (strpos($csrf, 'public static function rotate(') === false) {
+                $problems[] = 'Csrf must be able to rotate the token';
+            }
+            if (strpos($csrf, "random_bytes(32)") === false) {
+                $problems[] = 'the rotated token must be random';
+            }
+
+            // The three privilege changes: the login, the logout and the
+            // step-up (the password confirmation that unlocks the account
+            // settings).
+            foreach ([
+                'loginUser' => 'the login',
+                'revokeSession' => 'the logout',
+                'markReauthenticated' => 'the password confirmation',
+            ] as $method => $what) {
+                if (preg_match('/function ' . $method . '\s*\([^)]*\)\s*:[^\n]*\n\s*\{(.*?)\n    \}/s', $auth, $m) !== 1) {
+                    $problems[] = 'Auth::' . $method . '() not found';
+                    continue;
+                }
+                if (strpos($m[1], 'Csrf::rotate()') === false) {
+                    $problems[] = $what . ' must rotate the CSRF token';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the CSRF token is rotated on every privilege change')
+                : $bad(implode('; ', $problems));
+        });
         $add('smoke.exposure.xsendfile_scope', 'Smoke · Ops', 'X-Sendfile only covers the trees the app hands over', static function () use ($root, $read, $ok, $bad): array {
             // The whole storage/ tree used to be an XSendfilePath, which also
             // made the error log, the cron log, the database backups and the

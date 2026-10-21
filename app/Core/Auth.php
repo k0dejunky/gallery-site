@@ -229,6 +229,11 @@ class Auth
         $_SESSION['last_activity_at'] = time();
         $_SESSION['remember_me'] = $remember ? 1 : 0;
 
+        // A new session id is not enough: the CSRF token survives the
+        // session regeneration, so a token captured before the login would
+        // still work after it. The token is rotated with the privileges.
+        Csrf::rotate();
+
         $row = User::find($userId);
         $_SESSION['session_version'] = (int) ($row['session_version'] ?? 0);
 
@@ -338,6 +343,9 @@ class Auth
         unset($_SESSION['user_id'], $_SESSION['impersonator_id'], $_SESSION['session_version'], $_SESSION['last_activity_at']);
         self::$userCache = null;
         session_regenerate_id(true);
+        // The token of the session that just ended must not work in the
+        // next one.
+        Csrf::rotate();
     }
 
     /**
@@ -787,6 +795,10 @@ class Auth
     public static function markReauthenticated(): void
     {
         $_SESSION['step_up_at'] = time();
+        // The step-up raised the session's privileges (it can now change
+        // the password, the email, the subscription), so the token that
+        // was floating around before the confirmation is retired.
+        Csrf::rotate();
     }
 
     /**
