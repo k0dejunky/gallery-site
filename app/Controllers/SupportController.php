@@ -127,7 +127,49 @@ public function submit(): void
     public function index(): void
     {
         Auth::requirePermission('support');
-        $this->viewAdmin('support', ['title' => 'Support Messages', 'messages' => SupportMessage::all()]);
+        $this->viewAdmin('support', [
+            'title'        => 'Support Messages',
+            'messages'     => SupportMessage::all(),
+            // The live chat had NO moderation screen at all: a member's
+            // live chat message stayed in the replay for everyone to see and
+            // there was nowhere to look at what was said.
+            'liveMessages' => \App\Models\LiveChatMessage::recent(100),
+            'liveSessions' => \App\Models\LiveChatMessage::sessionsWithChat(25),
+            'liveCount'    => \App\Models\LiveChatMessage::countSince(3600),
+        ]);
+    }
+
+    /**
+     * Delete one live chat message (the moderation action).
+     */
+    public function deleteLiveMessage(int $id): void
+    {
+        Auth::requirePermission('support');
+
+        if (\App\Models\LiveChatMessage::delete($id)) {
+            $this->flash('success', 'The live chat message was removed.');
+        } else {
+            $this->flash('error', 'That message was already gone.');
+        }
+
+        $this->redirect('/admin/support');
+    }
+
+    /**
+     * Remove every message from one member in one live session.
+     */
+    public function deleteLiveMessagesForUser(int $sessionId, int $userId): void
+    {
+        Auth::requirePermission('support');
+
+        $removed = \App\Models\LiveChatMessage::deleteForUser($sessionId, $userId);
+
+        $this->flash($removed > 0 ? 'success' : 'error',
+            $removed > 0
+                ? $removed . ' live chat message(s) removed.'
+                : 'There was nothing to remove.');
+
+        $this->redirect('/admin/support');
     }
 
     public function adminShow(int $id): void

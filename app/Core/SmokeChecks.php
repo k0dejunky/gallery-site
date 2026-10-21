@@ -3171,6 +3171,43 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.live.moderation_queue', 'Smoke · Live', 'The live chat can be moderated', static function () use ($root, $read, $ok, $bad): array {
+            // The live chat had NO admin screen at all: a member's message
+            // stayed in the replay for everyone to see, and there was
+            // nowhere to look at what was said or to take a message down.
+            $model = (string) $read($root . '/app/Models/LiveChatMessage.php');
+            $ctrl  = (string) $read($root . '/app/Controllers/SupportController.php');
+            $view  = (string) $read($root . '/views/admin/support.php');
+            $routes = (string) $read($root . '/config/routes.php');
+            $problems = [];
+
+            if (strpos($model, 'public static function recent(') === false) {
+                $problems[] = 'there must be a way to read the live chat';
+            }
+            if (strpos($model, 'public static function delete(') === false) {
+                $problems[] = 'there must be a way to remove a live chat message';
+            }
+            if (strpos($model, 'deleteForUser(') === false) {
+                $problems[] = 'there must be a way to remove every message from one member in a stream';
+            }
+            if (strpos($ctrl, 'LiveChatMessage::recent(') === false) {
+                $problems[] = 'the support page must show the live chat';
+            }
+            if (strpos($ctrl, 'deleteLiveMessage(') === false) {
+                $problems[] = 'there must be an action that removes a live chat message';
+            }
+            if (strpos($view, 'Live chat') === false) {
+                $problems[] = 'the support page must have a live chat section';
+            }
+            if (strpos($routes, '/admin/support/live-chat/') === false) {
+                $problems[] = 'there must be a route for the live chat moderation';
+            }
+
+            return $problems === []
+                ? $ok('the live chat can be moderated')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.data.integrity', 'Smoke · Data', 'The data that must survive a deletion survives it', static function () use ($root, $ok, $bad): array {
             // Deleting a member used to destroy their subscription history
             // and every unlock they had paid for (the ledger cascaded).
