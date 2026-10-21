@@ -38,10 +38,10 @@ item, the check that locks it in travels in the same commit).
 |---|---|---|---|
 | 0 | The plan anchor (this file) | done | - |
 | 1 | The dead cron, and the alerting that missed it | **done** | `1882ecb`, `6a8108d` |
-| 2 | The money: cancel, refund, grace, accounting | pending | - |
-| 3 | One access decision, not five | pending | - |
-| 4 | The exposure: stream key, keys, health, default page | pending | - |
-| 5 | Abuse: rate limits and moderation | pending | - |
+| 2 | The money: cancel, refund, grace, accounting | **done** | `47015d3`, `951454b`, `40abf0c` |
+| 3 | One access decision, not five | **done** | `9025020` |
+| 4 | The exposure: stream key, keys, health, default page | **done** | `860ce5e`, `a768c6e` |
+| 5 | Abuse: rate limits and moderation | **done (the limits); the queue is not** | `b42881b` |
 | 6 | The media path | pending | - |
 | 7 | The heavy admin pages | pending | - |
 | 8 | The cache and the queries | pending | - |
@@ -54,7 +54,7 @@ item, the check that locks it in travels in the same commit).
 
 - **local** `/media/webdev/Media/gallery-full` - `main` @ `b8b2c60`, clean,
   in sync with `origin/main`.
-- `php tests/smoke.php` -> **963 checks, all passed**.
+- `php tests/smoke.php` -> **976 checks, all passed** (963 at the start).
 - `php _suite_runner.php` -> 1006 tests with the **6 known
   environment-only failures** (4 orphan photos, the example.com routes,
   the missing Twitter key, the missing cron directory). Nothing here may
@@ -121,6 +121,22 @@ Prod's error log, 76 times:
 #1 app/Core/Housekeeping.php(379): App\Core\Database::run()
 ```
 
+### What phases 2 to 5 changed
+
+| phase | what it did |
+|---|---|
+| 2 | A Braintree cancel now cancels the billing; a refund now refunds the money; only collected money is revenue; a failed card is a bump with a 7-day grace and a card-update form, not a lockout |
+| 3 | ONE place decides what a member can see: the photo's bytes are served at the STRICTEST level across its galleries, the gallery's grid is filtered by the member's level, the in-player browser filters by level, and a collection only accepts a published, visible gallery |
+| 4 | A member can no longer publish into the operator's live stream (publishing needs a second secret only the operator has); the health detail needs a credential; the Apache "It works" page is gone from the domain root; robots.txt is served from the origin root by a config that is IN the repository |
+| 5 | The live chat, comments, replies, reactions and ratings are rate limited |
+
+**WHAT IS STILL OPEN.** Three items are NOT done and the plan says so:
+the idempotency key on the one-off charges (2.5), the append-only money
+ledger (2.6), the chat bridge key's blast radius (4.6) and the live chat
+moderation queue (5.3). The capacity work (phases 6-8), the
+discoverability work (phase 9), the member-facing money (phase 10) and
+the ops hardening (phase 11) are untouched.
+
 ### What phase 1 changed
 
 The cron is alive again, and a failure can no longer hide.
@@ -159,12 +175,12 @@ subscriptions on prod.
 
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| 2.1 | `BraintreeGateway::cancelSubscription()` + wire it into `Subscription::cancel()` beside the PayPal branch | `app/Core/BraintreeGateway.php`, `app/Models/Subscription.php` | pending | - |
-| 2.2 | The refund path: `BraintreeGateway::refund()` exists and is **never called**; the admin's "refund" only flips a local DB status | `app/Controllers/ModerationController.php`, `app/Core/PayPalGateway.php` | pending | - |
-| 2.3 | A grace period on past due (the code's own comment promises one) + a **card-update form** on `/membership/my` | `app/Models/Subscription.php`, `app/Controllers/WebhookController.php`, `views/membership/my.php` | pending | - |
-| 2.4 | Offline tips must not be counted as revenue | `app/Models/Purchase.php`, `app/Controllers/EarningsController.php` | pending | - |
-| 2.5 | An idempotency key on the one-off charges - a double-click today creates two Braintree sales | `app/Controllers/PurchaseController.php` | pending | - |
-| 2.6 | An append-only money ledger; `purchases` rows are mutated in place and an admin can set any status on any row | a new model + a migration | pending | - |
+| 2.1 | `BraintreeGateway::cancelSubscription()` + wire it into `Subscription::cancel()` beside the PayPal branch | `app/Core/BraintreeGateway.php`, `app/Models/Subscription.php` | done | 47015d3 |
+| 2.2 | The refund path: `BraintreeGateway::refund()` exists and is **never called**; the admin's "refund" only flips a local DB status | `app/Controllers/ModerationController.php`, `app/Core/PayPalGateway.php` | done | 951454b |
+| 2.3 | A grace period on past due (the code's own comment promises one) + a **card-update form** on `/membership/my` | `app/Models/Subscription.php`, `app/Controllers/WebhookController.php`, `views/membership/my.php` | done | 40abf0c |
+| 2.4 | Offline tips must not be counted as revenue | `app/Models/Purchase.php`, `app/Controllers/EarningsController.php` | done | 951454b |
+| 2.5 | An idempotency key on the one-off charges - a double-click today creates two Braintree sales | `app/Controllers/PurchaseController.php` | **not done** | - |
+| 2.6 | An append-only money ledger; `purchases` rows are mutated in place and an admin can set any status on any row | a new model + a migration | **not done** | - |
 | 2.7 | A member-facing refund request, an invoice/receipt, a pause, a dunning ladder, a chargeback state | phase 10 | pending | - |
 
 ---
@@ -181,11 +197,11 @@ gallery shows as locked.
 
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| 3.1 | ONE predicate, used by all five call sites | `app/Models/Photo.php` + the 3 controllers | pending | - |
-| 3.2 | The cross-level photo case decided deliberately (per-photo level, or per-gallery) | `app/Models/Photo.php`, `app/Models/Gallery.php` | pending | - |
-| 3.3 | `/browse/galleries` has **no level filter at all** - any logged-in member can enumerate every premium gallery's title and its real 400x300 cover | `app/Controllers/GalleryController.php` | pending | - |
-| 3.4 | The public collection share link leaks premium thumbnails: `Collection::addGallery()` never checks the gallery exists, is published, or is within the member's tier | `app/Models/Collection.php` | pending | - |
-| 3.5 | `/images/{id}` and the "Load more" AJAX path ignore `Purchase::userUnlocked()` | `app/Controllers/ImageController.php`, `app/Controllers/GalleryController.php` | pending | - |
+| 3.1 | ONE predicate, used by all five call sites | `app/Models/Photo.php` + the 3 controllers | done | 9025020 |
+| 3.2 | The cross-level photo case decided deliberately (per-photo level, or per-gallery) | `app/Models/Photo.php`, `app/Models/Gallery.php` | done | 9025020 |
+| 3.3 | `/browse/galleries` has **no level filter at all** - any logged-in member can enumerate every premium gallery's title and its real 400x300 cover | `app/Controllers/GalleryController.php` | done | 9025020 |
+| 3.4 | The public collection share link leaks premium thumbnails: `Collection::addGallery()` never checks the gallery exists, is published, or is within the member's tier | `app/Models/Collection.php` | done | 9025020 |
+| 3.5 | `/images/{id}` and the "Load more" AJAX path ignore `Purchase::userUnlocked()` | `app/Controllers/ImageController.php`, `app/Controllers/GalleryController.php` | done | 9025020 |
 
 ---
 
@@ -193,12 +209,12 @@ gallery shows as locked.
 
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| 4.1 | **The RTMP publish key must never reach a member.** `/live/state` returns it and the recording is auto-published to a paid gallery | `app/Controllers/LiveController.php` | pending | - |
-| 4.2 | The cron key is world-readable in `/etc/cron.d/` (0644) and visible in `ps` | `bin/apply_cron.php` | pending | - |
-| 4.3 | `/gallery/health` is public and discloses backup, cron and worker state | `app/Controllers/HealthController.php` | pending | - |
-| 4.4 | `https://amethyst2213.com/index.html` serves the **Apache "It works" default page** | a repo-owned Apache conf | pending | - |
-| 4.5 | `robots.txt` is **not in the repo** - `install.sh` never writes the root alias, so a fresh install has no robots.txt where it is honoured | `install.sh`, `config/` | pending | - |
-| 4.6 | Narrow the `GALLERY_CHAT_KEY` blast radius: per-device attribution, rotation, scope | `app/Controllers/ChatBridgeController.php` | pending | - |
+| 4.1 | **The RTMP publish key must never reach a member.** `/live/state` returns it and the recording is auto-published to a paid gallery | `app/Controllers/LiveController.php` | done | 860ce5e |
+| 4.2 | The cron key is world-readable in `/etc/cron.d/` (0644) and visible in `ps` | `bin/apply_cron.php` | done | `6a8108d` |
+| 4.3 | `/gallery/health` is public and discloses backup, cron and worker state | `app/Controllers/HealthController.php` | done | a768c6e |
+| 4.4 | `https://amethyst2213.com/index.html` serves the **Apache "It works" default page** | a repo-owned Apache conf | done | a768c6e |
+| 4.5 | `robots.txt` is **not in the repo** - `install.sh` never writes the root alias, so a fresh install has no robots.txt where it is honoured | `install.sh`, `config/` | done | a768c6e |
+| 4.6 | Narrow the `GALLERY_CHAT_KEY` blast radius: per-device attribution, rotation, scope | `app/Controllers/ChatBridgeController.php` | **not done** | - |
 
 ---
 
@@ -206,10 +222,10 @@ gallery shows as locked.
 
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| 5.1 | `POST /live/chat/send` has **no rate limit at all** | `app/Controllers/LiveController.php` | pending | - |
-| 5.2 | Comments, reactions and ratings have no rate limit | `app/Controllers/CommentController.php`, `app/Controllers/GalleryRatingController.php` | pending | - |
-| 5.3 | A moderation queue for live chat - `live_chat_messages` has no admin screen at all | a new admin view | pending | - |
-| 5.4 | The bridge attachment endpoint is the only bridge route with no `throttle()` | `app/Controllers/ChatBridgeController.php` | pending | - |
+| 5.1 | `POST /live/chat/send` has **no rate limit at all** | `app/Controllers/LiveController.php` | done | b42881b |
+| 5.2 | Comments, reactions and ratings have no rate limit | `app/Controllers/CommentController.php`, `app/Controllers/GalleryRatingController.php` | done | b42881b |
+| 5.3 | A moderation queue for live chat - `live_chat_messages` has no admin screen at all | a new admin view | **not done** | - |
+| 5.4 | The bridge attachment endpoint is the only bridge route with no `throttle()` | `app/Controllers/ChatBridgeController.php` | done | b42881b |
 | 5.5 | A per-content "report this" button + a report queue | a new model + a migration | pending | - |
 
 ---
