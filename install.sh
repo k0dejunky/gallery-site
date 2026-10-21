@@ -253,9 +253,13 @@ Alias /gallery "$INSTALL_DIR/public"
     Require all granted
 
     # Offload large media streaming from PHP-FPM to Apache (auth handled in PHP).
+    # ONLY the two trees the app actually hands to mod_xsendfile: the
+    # published media and the operator APK. The whole storage/ tree used
+    # to be here, which also made the error log, the cron log, the
+    # database backups and the rate-limit state reachable by an
+    # X-Sendfile header.
     XSendFile On
     XSendFilePath $INSTALL_DIR/storage/uploads
-    XSendFilePath $INSTALL_DIR/storage
     # Published operator APK is streamed via X-Sendfile (chat apk endpoint).
     XSendFilePath $INSTALL_DIR/public/assets/apk
 </Directory>
@@ -430,6 +434,17 @@ if [[ -f "$INSTALL_DIR/config/gallery-root-files.conf" ]]; then
     ok "robots.txt is served from the host root (that is the only place it is honoured)."
 else
     warn "gallery-root-files.conf not found; robots.txt will not be served from the host root."
+fi
+
+# The Sitemap: line in robots.txt has to point at THIS install. The file in
+# the repository carries the production address, so a fresh install would
+# tell every crawler to fetch a sitemap that belongs to another site.
+if [[ -f "$INSTALL_DIR/public/robots.txt" ]]; then
+    SITEMAP_URL="${APP_URL%/}/sitemap.xml"
+    if grep -q "^Sitemap:" "$INSTALL_DIR/public/robots.txt"; then
+        sed -i "s#^Sitemap:.*#Sitemap: ${SITEMAP_URL}#" "$INSTALL_DIR/public/robots.txt"
+        ok "robots.txt points its Sitemap line at ${SITEMAP_URL}"
+    fi
 fi
 
 log "Installing logrotate..."

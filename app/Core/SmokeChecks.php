@@ -3402,6 +3402,44 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.exposure.xsendfile_scope', 'Smoke · Ops', 'X-Sendfile only covers the trees the app hands over', static function () use ($root, $read, $ok, $bad): array {
+            // The whole storage/ tree used to be an XSendfilePath, which also
+            // made the error log, the cron log, the database backups and the
+            // rate-limit state reachable by an X-Sendfile header. Only the
+            // published media and the operator APK are ever handed over.
+            $problems = [];
+            foreach ([
+                $root . '/config/gallery-alias.conf' => "/var/www/gallery/storage\n",
+                $root . '/install.sh'                 => "\$INSTALL_DIR/storage\n",
+            ] as $file => $broad) {
+                if (!is_file($file)) {
+                    continue;
+                }
+                $src = (string) file_get_contents($file);
+                foreach (explode("\n", $src) as $line) {
+                    if (stripos($line, 'XSendFilePath') === false) {
+                        continue;
+                    }
+                    // The narrow paths (uploads, assets/apk) are fine; the
+                    // bare storage tree is not.
+                    if (preg_match('#XSendFilePath\s+.*/storage\s*$#i', $line) === 1) {
+                        $problems[] = basename($file) . ' lets X-Sendfile serve the whole storage tree';
+                    }
+                }
+            }
+            // The two trees the app actually hands over must be there.
+            $conf = (string) $read($root . '/config/gallery-alias.conf');
+            if (strpos($conf, '/var/www/gallery/storage/uploads') === false) {
+                $problems[] = 'the published media must stay an XSendfilePath';
+            }
+            if (strpos($conf, '/var/www/gallery/public/assets/apk') === false) {
+                $problems[] = 'the operator APK must stay an XSendfilePath';
+            }
+
+            return $problems === []
+                ? $ok('X-Sendfile covers only the published media and the APK')
+                : $bad(implode('; ', $problems));
+        });
         $add('smoke.exposure.chat_key_scope', 'Smoke · Ops', 'The shared chat key is not a live-stream credential', static function () use ($root, $read, $ok, $bad): array {
             // GALLERY_CHAT_KEY is distributed to every operator's phone. It
             // was accepted for the LIVE CONTROLS too, so a leaked shared
