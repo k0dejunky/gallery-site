@@ -39,6 +39,14 @@ class StorageController extends Controller
         // gated by a signed media token AND the viewer's gallery level. Files
         // with no photo record (e.g. video exports) keep the subscription
         // gate.
+        // ONE query for everything the access decision needs. The old code
+        // made up to nine per file (findByFilename, hasPublicGallery,
+        // userCanView, accessLevel, unlocksPhoto, ...), and every thumbnail
+        // in a gallery grid is a request.
+        $user      = Auth::user();
+        $userId    = $user === null ? 0 : (int) $user['id'];
+        $access    = Photo::accessInfo($name, $userId);
+
         if ($size !== 'thumb' && $size !== 'blur') {
             // Require a valid HMAC token so raw-URL replay from DevTools is
             // rejected. The token is bound to the original filename plus the
@@ -50,25 +58,24 @@ class StorageController extends Controller
                 return;
             }
 
-            $photo = Photo::findByFilename($name);
-
-            if ($photo === null) {
+            if ($access === null) {
                 Auth::requireSubscription();
             } else {
-                $user = Auth::user();
-                if ($user === null || !Photo::userCanView((int) $photo['id'], (int) $user['id'])) {
+                // A guest never gets here (the media token is bound to a
+                // session), but the rule is kept: an original needs a member.
+                if ($user === null || !$access['can_view']) {
                     $this->notFound();
                     return;
                 }
-                if (!Photo::hasPublicGallery((int) $photo['id'])) {
+                if (!$access['has_public']) {
                     // A secret-only photo is authorized by its allow-list;
                     // membership level never grants access to it.
-                } elseif ($user !== null && \App\Models\Purchase::unlocksPhoto((int) $user['id'], (int) $photo['id'])) {
+                } elseif ($access['unlocked']) {
                     // Paid PPV unlock for the gallery holding this photo:
                     // membership level does not apply.
                 } else {
                     Auth::requireGalleryLevel(
-                        Photo::accessLevel((int) $photo['id']),
+                        (int) $access['access_level'],
                         'A membership is required to view that file.'
                     );
                 }
@@ -76,13 +83,9 @@ class StorageController extends Controller
         }
 
         if (in_array($size, ['thumb', 'blur'], true)) {
-            $photo = Photo::findByFilename($file);
-            if ($photo !== null && !Photo::hasPublicGallery((int) $photo['id'])) {
-                $user = Auth::user();
-                if ($user === null || !Photo::userCanView((int) $photo['id'], (int) $user['id'])) {
-                    $this->notFound();
-                    return;
-                }
+            if ($access !== null && !$access['has_public'] && !$access['can_view']) {
+                $this->notFound();
+                return;
             }
         }
 

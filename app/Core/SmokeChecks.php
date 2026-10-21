@@ -3171,10 +3171,29 @@ class SmokeChecks
             if (strpos($gallery, 'public static function accessLevel(') === false) {
                 $problems[] = 'Gallery must have an accessLevel()';
             }
-            // The files route and the media viewer: the PHOTO's level.
-            if (strpos($store, 'Photo::accessLevel(') === false) {
-                $problems[] = 'the files route must use Photo::accessLevel()';
+            // The files route: the PHOTO's level, and every other fact about
+            // its access, in ONE query. The route used to make up to nine
+            // queries per file (findByFilename, hasPublicGallery,
+            // userCanView, accessLevel, unlocksPhoto, ...), and every
+            // thumbnail in a grid is a request.
+            if (strpos($store, 'Photo::accessInfo(') === false) {
+                $problems[] = 'the files route must use Photo::accessInfo()';
             }
+            if (strpos($photo, 'public static function accessInfo(') === false) {
+                $problems[] = 'Photo must have an accessInfo()';
+            }
+            // The one query must still decide everything: the strictest
+            // level, the public/secret split, the allow-list and the paid
+            // unlock.
+            foreach (['access_level', 'has_public', 'has_secret', 'can_view', 'unlocked'] as $field) {
+                if (strpos($photo, "'" . $field . "'") === false) {
+                    $problems[] = 'Photo::accessInfo() must return ' . $field;
+                }
+            }
+            if (strpos($photo, 'MAX(g.min_level)') === false) {
+                $problems[] = 'accessInfo() must use the STRICTEST level across the galleries that hold the photo';
+            }
+            // The media viewer: the PHOTO's level.
             if (strpos($image, 'Photo::accessLevel(') === false) {
                 $problems[] = 'the media viewer must use Photo::accessLevel()';
             }

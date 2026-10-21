@@ -81,6 +81,81 @@ class Photo
         return $photo ?: null;
     }
 
+    /**
+     * Everything the media controller needs about a file, in ONE query.
+     *
+     * The controller used to make up to nine queries per media request:
+     * findByFilename, hasPublicGallery, userCanView, accessLevel,
+     * unlocksPhoto and the auth checks around them. Every thumbnail in a
+     * gallery grid is a request, so a guest grid of forty photos was up to
+     * 360 queries - all of them for the same handful of facts about one
+     * photo.
+     *
+     * The row:
+     *   photo_id     the photo, or null when the file is not a photo
+     *   access_level the STRICTEST level over the galleries holding it
+     *   has_public   1 when a published, visible, non-secret gallery holds it
+     *   has_secret   1 when a secret gallery holds it
+     *   can_view     1 when the member may see it
+     *   unlocked     1 when the member paid for one of those galleries
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function accessInfo(string $filename, int $userId = 0): ?array
+    {
+        $visible = Gallery::publishedVisibleSql('g');
+        $allowed = '(g.is_secret = 0 OR EXISTS (
+                        SELECT 1 FROM gallery_user_access gua
+                        WHERE gua.gallery_id = g.id AND gua.user_id = ?))';
+
+        $row = Database::run(
+            'SELECT p.id AS photo_id,
+                    COALESCE(MAX(g.min_level), 0) AS access_level,
+                    COALESCE(MAX(CASE WHEN ' . $visible . ' AND g.is_secret = 0 THEN 1 ELSE 0 END), 0) AS has_public,
+                    COALESCE(MAX(CASE WHEN g.is_secret = 1 THEN 1 ELSE 0 END), 0) AS has_secret,
+                    COALESCE(MAX(CASE WHEN ' . $visible . ' AND ' . $allowed . ' THEN 1 ELSE 0 END), 0) AS can_view,
+                    COALESCE(MAX(CASE WHEN EXISTS (
+                        SELECT 1 FROM purchases pu
+                        WHERE pu.item_type = \'gallery\'
+                          AND pu.item_id = g.id
+                          AND pu.user_id = ?
+                          AND pu.status IN (\'paid\', \'granted\')
+                          AND g.ppv_price IS NOT NULL
+                          AND g.deleted_at IS NULL
+                    ) THEN 1 ELSE 0 END), 0) AS unlocked
+             FROM photos p
+             LEFT JOIN gallery_photo gp ON gp.photo_id = p.id
+             LEFT JOIN galleries g ON g.id = gp.gallery_id
+             WHERE p.filename = ?
+             GROUP BY p.id
+             LIMIT 1',
+            [$userId, $userId, $filename]
+        )->fetch();
+
+        if (!$row) {
+            return null;
+        }
+
+        // can_view means exactly what Photo::userCanView() means, so the two
+        // can never disagree: a guest is nobody's viewer (the early return
+        // in userCanView()), and a super admin manages (and reviews) secret
+        // galleries, so they see every photo.
+        if ($userId <= 0) {
+            $row['can_view'] = 0;
+        } elseif (\App\Core\Auth::isSuperAdmin()) {
+            $row['can_view'] = 1;
+        }
+
+        return [
+            'photo_id'     => (int) $row['photo_id'],
+            'access_level' => (int) $row['access_level'],
+            'has_public'   => (int) $row['has_public'] === 1,
+            'has_secret'   => (int) $row['has_secret'] === 1,
+            'can_view'     => (int) $row['can_view'] === 1,
+            'unlocked'     => (int) $row['unlocked'] === 1,
+        ];
+    }
+
     /** Whether the photo belongs to at least one gallery visible to the user. */
     public static function userCanView(int $photoId, int $userId): bool
     {
