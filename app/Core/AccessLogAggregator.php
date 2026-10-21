@@ -139,6 +139,46 @@ class AccessLogAggregator
     }
 
     /**
+     * Only the log files that can hold the window.
+     *
+     * The aggregator used to read EVERY rotated log and parse every line in
+     * it, then throw away the days outside the window: the parser needs the
+     * lines in order to keep the sessions that straddle midnight, so the
+     * days before the window were parsed for nothing. On the production box
+     * that was 300,000 lines read and ~20 s of CPU every hour to store two
+     * days - 7 million lines re-read a day.
+     *
+     * A rotated file's mtime is the moment it was rotated, so every line in
+     * it is OLDER than that mtime. A file whose mtime is before the window
+     * can therefore hold nothing the window needs. The day before the
+     * window is kept: a visit is closed after 30 minutes of silence, so the
+     * only session that can still be open at the window's first request
+     * started inside that day.
+     *
+     * @param string[] $files
+     * @return string[]
+     */
+    public static function filesForWindow(array $files, string $from, \DateTimeZone $timezone): array
+    {
+        try {
+            $cutoff = (new \DateTimeImmutable($from, $timezone))->modify('-1 day')->getTimestamp();
+        } catch (\Throwable $e) {
+            return $files;
+        }
+
+        $kept = [];
+        foreach ($files as $file) {
+            $mtime = @filemtime($file);
+            // An unreadable mtime is not a reason to skip a file.
+            if ($mtime === false || $mtime >= $cutoff) {
+                $kept[] = $file;
+            }
+        }
+
+        return $kept;
+    }
+
+    /**
      * How far a log file has been rotated back: 0 for the live file, 2 for
      * access.log.2(.gz), and so on. Unrecognised names fall back to 0 and rely
      * on mtime plus the path tie-break.
@@ -313,17 +353,22 @@ class AccessLogAggregator
      */
     public static function run(array $options = []): array
     {
-        $timezone = SiteConfig::timezone();
-        $files    = self::discover($options['patterns'] ?? []);
+        $timezoneName = SiteConfig::timezone();
+        $timezone     = new \DateTimeZone($timezoneName);
 
-        $window = self::window($options, $timezone);
+        $window = self::window($options, $timezoneName);
+        $files  = self::filesForWindow(
+            self::discover($options['patterns'] ?? []),
+            $window[0],
+            $timezone
+        );
 
         $summary = [
             'ok'             => false,
             'files'          => $files,
             'from'           => $window[0],
             'to'             => $window[1],
-            'timezone'       => $timezone,
+            'timezone'       => $timezoneName,
             'days_written'   => 0,
             'days_skipped'   => 0,
             'lines'          => 0,
@@ -363,7 +408,7 @@ class AccessLogAggregator
 
         $totals = AccessLogParser::streamByDay(
             self::linesInDayOrder($files, $timezone),
-            ['base_path' => $basePath, 'site_host' => $selfHost, 'include_private' => $keepLocal, 'timezone' => $timezone],
+            ['base_path' => $basePath, 'site_host' => $selfHost, 'include_private' => $keepLocal, 'timezone' => $timezoneName],
             static function (array $day, string $dayKey) use ($from, $to, &$written, $dryRun, $files, &$summary, &$visitsByDay): void {
                 // A chunk carries every session that closed while that day was
                 // being read, including sessions that started on an earlier day.

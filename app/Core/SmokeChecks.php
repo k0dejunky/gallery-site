@@ -7181,6 +7181,56 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
         // --- Behavioural: the parser is pure, so the fixture can be asserted
         //     without a database (the smoke suite must stay DB-free).
         $fixture = "$root/tests/fixtures/access-log.sample";
+        $add('smoke.analytics.only_the_window_files', 'Smoke · Web analytics', 'The aggregator only reads the log files that can hold the window', static function () use ($root, $ok, $bad): array {
+            // The aggregator used to read EVERY rotated log and parse every
+            // line in it, then throw away the days outside the window: the
+            // parser needs the lines in order to keep the sessions that
+            // straddle midnight. On the production box that was 300,000
+            // lines and ~20 s of CPU every hour to store two days.
+            if (!class_exists(\App\Core\AccessLogAggregator::class)) {
+                return $bad('App\Core\AccessLogAggregator must exist');
+            }
+            if (!method_exists(\App\Core\AccessLogAggregator::class, 'filesForWindow')) {
+                return $bad('the aggregator must filter the log files by the window');
+            }
+
+            // The filter is behavioural: a file older than the window is
+            // dropped, a file inside it is kept.
+            $old = tempnam(sys_get_temp_dir(), 'vs-old-log');
+            $new = tempnam(sys_get_temp_dir(), 'vs-new-log');
+            if ($old === false || $new === false) {
+                return $bad('could not create the temporary log files');
+            }
+            file_put_contents($old, "x");
+            file_put_contents($new, "x");
+            // A rotated file's mtime is the moment it was rotated, so every
+            // line in it is older than that.
+            touch($old, time() - 10 * 86400);
+            touch($new, time() - 3600);
+
+            $window = (new \DateTimeImmutable('today', new \DateTimeZone('UTC')))->modify('-1 day')->format('Y-m-d');
+            $kept   = \App\Core\AccessLogAggregator::filesForWindow(
+                [$old, $new],
+                $window,
+                new \DateTimeZone('UTC')
+            );
+            @unlink($old);
+            @unlink($new);
+
+            if (in_array($old, $kept, true)) {
+                return $bad('a log file older than the window must not be read');
+            }
+            if (!in_array($new, $kept, true)) {
+                return $bad('a log file inside the window must be read');
+            }
+
+            // And the run() must actually use it.
+            $src = (string) file_get_contents($root . '/app/Core/AccessLogAggregator.php');
+            if (strpos($src, 'filesForWindow(') === false) {
+                return $bad('the aggregator must use the window filter');
+            }
+            return $ok('only the files that can hold the window are read');
+        });
         $add('smoke.analytics.parser_fixture', 'Smoke · Web analytics', 'Parser folds the fixture into the expected daily numbers', static function () use ($fixture, $ok, $bad): array {
             if (!is_file($fixture)) {
                 return $bad('missing fixture: tests/fixtures/access-log.sample');
