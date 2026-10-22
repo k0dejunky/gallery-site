@@ -187,6 +187,24 @@ class PhotoController extends Controller
             $this->redirect('/admin/galleries/' . $galleryId);
         }
 
+        // A JPEG that carries an EXIF orientation is displayed upright by
+        // every browser (the tag is honoured on display). Rotating the RAW
+        // pixels without baking that tag first made the manage page's rotate
+        // buttons appear to turn the image the WRONG way: the save drops the
+        // tag (GD cannot rewrite EXIF) but the pixels had already been
+        // displayed pre-rotated, so the result looked rotated by 180° instead
+        // of 90°. The photo editor hase always worked on upright pixels
+        // (applyImageEdit normalises first); the manage-page rotation does
+        // the same now. normalize() is idempotent - an upright image is left
+        // exactly as it is, and a non-JPEG keeps its alpha handling.
+        if (!ImageEditor::normalize($path)) {
+            if ($this->isAjax()) {
+                $this->json(['ok' => false, 'error' => 'Could not open image.'], 500);
+            }
+            $this->flash('error', 'Could not open image.');
+            $this->redirect('/admin/galleries/' . $galleryId);
+        }
+
         if (!ImageEditor::rotate($path, $direction)) {
             if ($this->isAjax()) {
                 $this->json(['ok' => false, 'error' => 'Could not rotate image.'], 500);

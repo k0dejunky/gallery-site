@@ -231,7 +231,10 @@ function runBulkRotate(int $jobId, array $job): bool
 
         $path = $config['dir'] . '/' . $photo['filename'];
         try {
-            if (is_file($path) && ImageEditor::rotate($path, $direction)) {
+            // Bake the EXIF orientation into the pixels before rotating (see
+            // PhotoController::rotate): the viewer shows the tag-rotated
+            // image, so a raw-pixel rotation looks like the wrong direction.
+            if (is_file($path) && ImageEditor::normalize($path) && ImageEditor::rotate($path, $direction)) {
                 create_image_variants(
                     $path,
                     $config['dir'] . '/web_' . $photo['filename'],

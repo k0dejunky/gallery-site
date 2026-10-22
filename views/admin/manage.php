@@ -247,7 +247,17 @@ require __DIR__ . '/partials/upload_client.php';
 <?php if (empty($photos)): ?>
     <p>No photos yet.</p>
 <?php else: ?>
-    <form method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/bulk-rotate') ?>" class="bulk-photo-form">
+    <?php /* The bulk form holds the TOOLBAR only. The photo table below is
+        OUTSIDE of it and its checkboxes point at this form with the form=
+        attribute: a form element may not contain another form element (the
+        HTML parser DROPS nested form start tags), so the per-photo caption,
+        move, rotate and remove forms inside this table used to collapse
+        into this form - a row's "Save"/"rotate"/"Remove" button posted THIS
+        form to bulk-rotate, rotating every checked photo the wrong way.
+        data-no-progress: this form's post never navigates (it is a fetch
+        with the job watched in place), so the autoshowing "Saving…"
+        overlay must not come up over the page. */ ?>
+    <form method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/bulk-rotate') ?>" class="bulk-photo-form" id="bulk-photo-form" data-no-progress>
         <?= csrf_field() ?>
         <div class="bulk-photo-toolbar">
             <label><input type="checkbox" id="select-all-images"> Select all</label>
@@ -283,6 +293,7 @@ require __DIR__ . '/partials/upload_client.php';
                 <span class="muted" title="Another job is already processing this gallery.">Buttons disabled while a job runs.</span>
             <?php endif; ?>
         </div>
+    </form>
     <table>
         <thead>
             <tr>
@@ -298,8 +309,11 @@ require __DIR__ . '/partials/upload_client.php';
             <?php foreach ($photos as $photo): ?>
                 <tr>
                     <td>
-                        <?php // Videos are selectable too: the watermark job re-encodes them. ?>
-                        <input type="checkbox" name="photo_ids[]" value="<?= (int) $photo['id'] ?>" data-image-select aria-label="Select <?= is_video($photo['filename']) ? 'video' : 'image' ?> <?= (int) $photo['id'] ?>">
+                        <?php /* Videos are selectable too: the watermark job re-encodes them.
+                            form="bulk-photo-form": the checkbox posts with the TOOLBAR form
+                            (the form= attribute), because this table sits outside that form
+                            and a nested form would be dropped by the parser. */ ?>
+                        <input type="checkbox" name="photo_ids[]" value="<?= (int) $photo['id'] ?>" form="bulk-photo-form" data-image-select aria-label="Select <?= is_video($photo['filename']) ? 'video' : 'image' ?> <?= (int) $photo['id'] ?>">
                     </td>
                     <td>
                         <?php if (is_video($photo['filename'])): ?>
@@ -338,12 +352,15 @@ require __DIR__ . '/partials/upload_client.php';
                             <a class="btn btn-sm btn-outline" href="<?= url('/admin/photos/' . (int) $photo['id'] . '/edit?back=' . (int) $gallery['id']) ?>">Edit</a>
                         <?php endif; ?>
                         <?php if (!is_video($photo['filename'])): ?>
-                            <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/' . (int) $photo['id'] . '/rotate') ?>" data-photo-rotate>
+                            <?php /* data-no-progress: the JS below posts these fetch-style and
+                                refreshes the row's thumbnail; the autoshowing overlay only
+                                flashes on top of the page. */ ?>
+                            <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/' . (int) $photo['id'] . '/rotate') ?>" data-photo-rotate data-no-progress>
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="direction" value="left">
                                 <button type="submit" class="btn btn-sm" title="Rotate left">&larr;</button>
                             </form>
-                            <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/' . (int) $photo['id'] . '/rotate') ?>" data-photo-rotate>
+                            <form class="inline" method="post" action="<?= url('/admin/galleries/' . (int) $gallery['id'] . '/photos/' . (int) $photo['id'] . '/rotate') ?>" data-photo-rotate data-no-progress>
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="direction" value="right">
                                 <button type="submit" class="btn btn-sm" title="Rotate right">&rarr;</button>
@@ -355,12 +372,11 @@ require __DIR__ . '/partials/upload_client.php';
                             <button type="submit" class="btn btn-sm btn-danger">Remove from gallery</button>
                         </form>
                     </td>
-                </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
-    </form>
-    <script nonce="<?= csp_nonce() ?>">
+                 </tr>
+             <?php endforeach; ?>
+         </tbody>
+     </table>
+     <script nonce="<?= csp_nonce() ?>">
     (function () {
         // Per-photo rotate is handled in place via AJAX so the admin keeps
         // their scroll position. Without JS the form still posts normally.
@@ -390,9 +406,18 @@ require __DIR__ . '/partials/upload_client.php';
                     redirect: 'manual'
                 })
                     .then(function (r) {
-                        // The server now answers with JSON (no redirect, no
+                        // The server answers with JSON (no redirect, no
                         // flash), so nothing accumulates in the session and
-                        // there is no body to download. Refresh the preview.
+                        // there is no body to download. A failure (419/404/403
+                        // or a redirect away) must SAY so instead of silently
+                        // leaving the thumbnail as it was: otherwise the
+                        // rotation simply appears to have done nothing.
+                        if (!r.ok) {
+                            if (window.adminToast) {
+                                window.adminToast('That rotation could not be applied. Reload the page and try again.', {});
+                            }
+                            return;
+                        }
                         if (img) {
                             var base = img.src.split('?')[0];
                             img.src = base + '?size=thumb&v=' + Date.now();
@@ -501,6 +526,13 @@ require __DIR__ . '/partials/upload_client.php';
             var own = submitter ? submitter.getAttribute('formaction') : null;
             var action = own ? new URL(own, location.href).href : bulkForm.action;
             var fd = new FormData(bulkForm);
+            /* The submitting button's name/value is NOT part of FormData on
+               its own: without appending it here, the two rotate buttons
+               (name="direction" value="left"/"right") both posted WITHOUT a
+               direction and every bulk rotate read the default "right". */
+            if (submitter && submitter.name) {
+                fd.append(submitter.name, submitter.value);
+            }
             busy(true);
             setStatus('Queuing…');
 
@@ -511,6 +543,13 @@ require __DIR__ . '/partials/upload_client.php';
             })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
+                    /* The layout auto-shows a full-page "Saving…" overlay on
+                       every admin form submit, but this form does NOT leave
+                       the page (the request is a fetch and the job is watched
+                       in the page's own status line): the overlay must be put
+                       away here, or it sits over the whole panel until the
+                       admin presses Escape / clicks it away. */
+                    if (window.AdminProgress) { window.AdminProgress.hide(); }
                     if (!data || !data.ok) {
                         busy(false);
                         setStatus('That did not work: ' + ((data && data.error) || 'unknown error'));
@@ -520,6 +559,7 @@ require __DIR__ . '/partials/upload_client.php';
                     if (data.job_id) { pollJob(data.job_id); }
                 })
                 .catch(function () {
+                    if (window.AdminProgress) { window.AdminProgress.hide(); }
                     busy(false);
                     setStatus('The request failed. Reload the page to try again.');
                 });

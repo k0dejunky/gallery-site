@@ -29,6 +29,13 @@ class Cache
         // cache all run the producer - and the producer for a listing is the
         // whole catalogue. One of them wins the lock and does the work; the
         // others wait for it and then read the answer.
+        // When the store is unavailable the guard CANNOT work: acquireLock
+        // returns null for everyone and waitFor would drain its whole
+        // deadline on every producer, so run the callback directly.
+        if (!self::available()) {
+            return (string) $callback();
+        }
+
         $lock = self::acquireLock($key, $ttl);
 
         if ($lock === null) {
@@ -344,7 +351,19 @@ public static function rememberGen(string $bucket, string $key, int $ttl, callab
         return $hit;
     }
 
-    // The stampede guard, as in remember().
+    // The stampede guard, as in remember(). When the store is unavailable
+    // the guard cannot work (acquireLock fails for everyone and waitFor
+    // would drain its whole deadline per caller), so run the callback now.
+    if (!self::available()) {
+        $value = $callback();
+
+        if (is_array($value)) {
+            return $value;
+        }
+
+        return (string) $value;
+    }
+
     $lock = self::acquireLock($cacheKey, $ttl);
 
     if ($lock === null) {

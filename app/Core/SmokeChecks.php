@@ -602,7 +602,11 @@ class SmokeChecks
                 return $bad('tour.js must vertically centre the target-less card');
             }
             foreach ([$userLayout, $adminLayout] as $layout) {
-                if (preg_match('/tour\.js.*\?v=\d+/', $layout) !== 1) {
+                // A literal ?v=NN or the file's mtime (asset_url()) - the
+                // mtime cannot be forgotten when the script changes.
+                $busted = preg_match('/tour\.js.*\?v=\d+/', $layout) === 1
+                    || strpos($layout, "asset_url('/assets/js/tour.js')") !== false;
+                if (!$busted) {
                     return $bad('tour.js must be loaded cache-busted in both layouts');
                 }
             }
@@ -744,6 +748,85 @@ class SmokeChecks
                 return $bad('the bulk photo actions do not all answer JSON for the background post');
             }
             return $ok('the bulk photo actions update the page in place');
+        });
+
+        $add('smoke.admin.manage_no_nested_forms', 'Smoke · Admin UI', 'The manage page has no form nested inside the bulk photo form', static function () use ($root, $ok, $bad): array {
+            // A form element may not contain another form: the HTML parser
+            // DROPS nested form start tags, so the per-photo caption/move/
+            // rotate/remove forms inside the photo table collapsed into the
+            // bulk form - a row's Save (or rotate, or Remove) submitted the
+            // BULK form to bulk-rotate, rotating every checked photo with the
+            // default direction. The bulk form now holds the toolbar only and
+            // the row checkboxes point at it with the form= attribute.
+            $view = (string) @file_get_contents("$root/views/admin/manage.php");
+            if (strpos($view, 'id="bulk-photo-form"') === false) {
+                return $bad('the bulk photo form has no id, so the table checkboxes cannot point at it');
+            }
+            if (substr_count($view, 'form="bulk-photo-form"') === 0) {
+                return $bad('the photo checkboxes do not reference the bulk form with the form= attribute');
+            }
+            $bulkAt = strpos($view, 'class="bulk-photo-form"');
+            $closeAt = strpos($view, '</form>', (int) $bulkAt);
+            $tableAt = strpos($view, '<table>', (int) $bulkAt);
+            if ($bulkAt === false || $closeAt === false || $tableAt === false || $closeAt > $tableAt) {
+                return $bad('the bulk photo form still wraps the photo table (form tags inside would be DROPPED by the parser)');
+            }
+            // Two row forms (rotate left/right) were also nested in the bulk
+            // form; keep count of forms per table row bounded: after the fix
+            // the table keeps its own caption/move/rotate/remove forms, so a
+            // nested stray form tag inside a td must be gone.
+            $rowExcerpt = substr($view, $tableAt, strpos($view, '</table>', $tableAt) - $tableAt);
+            if (preg_match_all('/<form\b/', $rowExcerpt, $forms) !== false && count($forms[0]) !== substr_count($rowExcerpt, '</form>')) {
+                return $bad('a form inside the photo table is left open (nested-form regression)');
+            }
+            // The overlay auto-shows on every admin submit; the bulk form does
+            // not navigate (it posts fetch-style and the job is watched in
+            // place), so the overlay would sit over the panel until dismissed.
+            if (strpos($view, 'data-no-progress') === false) {
+                return $bad('the manage page does not opt out of the autoshowing "Saving…" overlay on its fetch-based forms');
+            }
+            if (strpos($view, 'fd.append(submitter.name') === false) {
+                return $bad('the bulk post does not carry the clicked button\'s name/value, so both rotate buttons lose their direction');
+            }
+            return $ok('the manage page has no nested forms and its bulk post keeps the clicked direction');
+        });
+
+        $add('smoke.photo.rotate_normalises_exif', 'Smoke · Admin UI', 'Rotate the pixels upright before rotating (EXIF orientation)', static function () use ($root, $ok, $bad): array {
+            // A JPEG with an EXIF orientation is DISPLAYED upright (the tag is
+            // honoured on display), but imagerotate() works on the raw pixels
+            // and the GD save drops the tag - so "rotate right" left the image
+            // looking rotated by 180 (the display transform was applied a
+            // second time). The photo editor has always normalised first; the
+            // manage-page rotate (controller + bulk worker) must do the same.
+            $controller = (string) @file_get_contents("$root/app/Controllers/PhotoController.php");
+            $start = strpos($controller, 'public function rotate(');
+            $end   = strpos($controller, 'public function bulkRotate(');
+            if ($start === false || $end === false || $start >= $end) {
+                return $bad('PhotoController::rotate() could not be located');
+            }
+            $method = substr($controller, $start, $end - $start);
+            if (strpos($method, 'ImageEditor::rotate(') === false) {
+                return $bad('PhotoController::rotate() does not rotate');
+            }
+            if (strpos($method, 'ImageEditor::normalize(') === false
+                || strpos($method, 'ImageEditor::normalize(') > strpos($method, 'ImageEditor::rotate(')) {
+                return $bad('PhotoController::rotate() must normalise the EXIF orientation BEFORE rotating the pixels');
+            }
+            $worker = (string) @file_get_contents("$root/bin/photo_edit_worker.php");
+            $wStart = strpos($worker, 'function runBulkRotate(');
+            $wEnd   = strpos($worker, "\nfunction ", $wStart + 1);
+            if ($wStart === false || $wEnd === false) {
+                return $bad('photo_edit_worker::runBulkRotate() could not be located');
+            }
+            $bulk = substr($worker, $wStart, $wEnd - $wStart);
+            if (strpos($bulk, 'ImageEditor::rotate(') === false) {
+                return $bad('the bulk rotate worker does not rotate');
+            }
+            if (strpos($bulk, 'ImageEditor::normalize(') === false
+                || strpos($bulk, 'ImageEditor::normalize(') > strpos($bulk, 'ImageEditor::rotate(')) {
+                return $bad('the bulk rotate worker must normalise the EXIF orientation BEFORE rotating');
+            }
+            return $ok('rotations normalise the EXIF orientation first');
         });
 
         $add('smoke.admin.a11y', 'Smoke · Admin UI', 'Admin shell has a skip link, one h1 and aria-current navigation', static function () use ($adminLayout, $root, $ok, $bad): array {
@@ -2815,6 +2898,41 @@ class SmokeChecks
             }
 
             return $ok('the operator device tokens have their own page and a place in the navigation');
+        });
+
+        $add('smoke.player.the_seek_bar_is_usable', 'Smoke · Player', 'The video player can be scrubbed', static function () use ($root, $read, $ok, $bad): array {
+            // The seek bar is the control the viewer needs, and it was
+            // collapsing to ZERO width: the bar is crowded, the seek had a
+            // zero flex-basis, and every other control kept its size. The
+            // time ticked and the value moved, but there was nothing to see
+            // and nothing to drag.
+            $css = (string) $read($root . '/public/assets/css/user.css');
+            $js  = (string) $read($root . '/public/assets/js/user.js');
+            $problems = [];
+
+            if (strpos($css, '.player-seek{flex:1 1 0;min-width:') === false) {
+                $problems[] = 'the seek bar must have a minimum width, or it collapses to nothing';
+            }
+            if (strpos($css, '.player-played') === false) {
+                $problems[] = 'the played progress must be drawn, not only the buffered range';
+            }
+            if (strpos($js, "data-played") === false) {
+                $problems[] = 'the player does not draw the played progress';
+            }
+            if (strpos($js, "is-narrow") === false) {
+                $problems[] = 'a narrow player must drop the optional controls, not the seek bar';
+            }
+
+            // The scripts are served immutable, so their version has to
+            // change with the file - the mtime does that by itself.
+            $layout = (string) $read($root . '/views/layout.php');
+            if (strpos($layout, "asset_url('/assets/js/user.js')") === false) {
+                $problems[] = 'the player script is loaded with a fixed version, so a change would never reach the browser';
+            }
+
+            return $problems === []
+                ? $ok('the seek bar has room, the progress is drawn and the scripts are versioned')
+                : $bad(implode('; ', $problems));
         });
 
         $add('smoke.live.no_stream_key_for_members', 'Smoke · Live', 'A member cannot publish to the operator stream', static function () use ($root, $read, $ok, $bad): array {
@@ -7023,9 +7141,15 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             // The PHP short-echo tag splits the attribute, so the tag closes and "?v=17"
             // follows it; match across that split (like the tour.js check)
             // instead of expecting the version next to the filename.
-            return preg_match('#/assets/js/user\.js.*\?v=\d+#', $vLayout) === 1
-                ? $ok('user.js carries a ?v= cache-buster')
-                : $bad('views/layout.php must load /assets/js/user.js with a ?v= cache-buster');
+            // The version may be a literal ?v=NN or the file's mtime
+            // (asset_url()), which is better: a change to the script can
+            // never be published without the cache busting with it, and the
+            // assets are served immutable.
+            $busted = preg_match('#/assets/js/user\.js.*\?v=\d+#', $vLayout) === 1
+                || strpos($vLayout, "asset_url('/assets/js/user.js')") !== false;
+            return $busted
+                ? $ok('user.js is cache-busted')
+                : $bad('views/layout.php must load /assets/js/user.js with a cache-buster');
         });
 
         $add('smoke.video.admin_ranges', 'Smoke · Video player', 'abandoned-upload preview advertises and honours Range', static function () use ($vAdmin, $ok, $bad): array {
