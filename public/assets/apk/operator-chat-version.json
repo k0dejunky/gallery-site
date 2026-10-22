@@ -1,9 +1,9 @@
 {
   "app": "operator-chat",
-  "latestVersion": "3.5",
-  "versionCode": 67,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v3.5.apk",
-  "sha256": "bf22de7ade759038f81e1f5f28a66cb3a9c2ca95e8d82ce1648656ca32171db1",
-  "changelog": "The broadcast works. Two things stopped it: the server read the publish secret with parse_str(), and MediaMTX hands the query over with the publish path glued to it, so the secret was never seen and every publish was refused; and the app's notification poll walked the inbox without a cursor, so it fetched the same fifty conversations over and over - about three hundred requests in a burst - which tripped the rate limiter and left the operator with an empty inbox and a \"Connection failed\" banner. The app also says what is wrong now: a token that cannot broadcast is told so, and granting the camera goes straight on to the broadcast.",
-  "publishedAt": "2026-10-21"
+  "latestVersion": "3.6",
+  "versionCode": 68,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v3.6.apk",
+  "sha256": "8e99de3744bf53e28b57c55b09faf4f890e05dec2e0b9095027da05765610a0f",
+  "changelog": "The camera preview is fixed: it was a black box, because the preview surface arrives before the camera and the encoder are ready and was then wiped by the teardown that precedes them. The surface is kept and attached when the encoder is there, and a failed attach is tried again. The sign-in hint now points at the right place (the admin panel's Operator app page), where the device tokens live.",
+  "publishedAt": "2026-10-22"
 }
