@@ -2805,8 +2805,41 @@ class SmokeChecks
                 if (strpos($branch, 'validStreamKey(') !== false) {
                     $problems[] = 'a publish must not be accepted on the stream key alone';
                 }
-                if (strpos($branch, "['publish']") === false) {
+                $readsSecret = strpos($branch, "['publish']") !== false
+                    || strpos($branch, "MediaQuery::value(\$query, 'publish')") !== false;
+                if (!$readsSecret) {
                     $problems[] = 'the publish secret must be read from the publish query string';
+                }
+            }
+
+            // MediaMTX appends the publish path to the query, so a query the
+            // client sent as "publish=<secret>" arrives as
+            // "publish=<secret>/<key>?publish=<secret>". parse_str() cannot
+            // see the value in that - which is why EVERY publish was denied
+            // and the operator's broadcast never started. The reader has to
+            // cut the value at the first path separator.
+            $reader = $root . '/app/Core/MediaQuery.php';
+            if (!is_file($reader)) {
+                $problems[] = 'there is no MediaQuery reader for the MediaMTX query string';
+            } else {
+                require_once $reader;
+                $glued = \App\Core\MediaQuery::value(
+                    'publish=abc123def456/abc123def456?publish=abc123def456',
+                    'publish'
+                );
+                if ($glued !== 'abc123def456') {
+                    $problems[] = 'the query reader must read a value that MediaMTX glued to the publish path (got ' . $glued . ')';
+                }
+                $plain = \App\Core\MediaQuery::value('publish=abc123def456', 'publish');
+                if ($plain !== 'abc123def456') {
+                    $problems[] = 'the query reader must read a plain query value (got ' . $plain . ')';
+                }
+                $token = \App\Core\MediaQuery::value(
+                    't=12.1700000000.deadbeef/abc123?rec=1',
+                    't'
+                );
+                if ($token !== '12.1700000000.deadbeef') {
+                    $problems[] = 'the query reader must read a playback token with dots in it (got ' . $token . ')';
                 }
             }
 

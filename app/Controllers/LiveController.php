@@ -9,6 +9,7 @@ use App\Core\Controller;
 use App\Core\RateLimiter;
 use App\Core\Database;
 use App\Models\AuditLog;
+use App\Core\MediaQuery;
 use App\Models\LiveSession;
 use App\Models\LiveShow;
 use App\Models\OperatorToken;
@@ -43,8 +44,7 @@ class LiveController extends Controller
             // auto-posted to social media. Publishing needs a second
             // secret that only the operator app ever sees.
             $streamKey = strtok($path, '/') ?: '';
-            parse_str($query, $q);
-            $publishSecret = (string) ($q['publish'] ?? '');
+            $publishSecret = MediaQuery::value($query, 'publish');
 
             if ($streamKey !== '' && LiveSession::validPublishSecret($streamKey, $publishSecret)) {
                 LiveSession::markLive($streamKey);
@@ -68,16 +68,18 @@ class LiveController extends Controller
             }
 
             $streamKey = strtok($path, '/') ?: '';
-            parse_str($query, $q);
-            if (($q['rec'] ?? '') === '1'
-                && !empty($q['recpass'])
-                && hash_equals(hash('sha256', (string) env_value('GALLERY_MEDIA_KEY', '')), (string) $q['recpass'])) {
+            if (MediaQuery::value($query, 'rec') === '1'
+                && MediaQuery::value($query, 'recpass') !== ''
+                && hash_equals(
+                    hash('sha256', (string) env_value('GALLERY_MEDIA_KEY', '')),
+                    MediaQuery::value($query, 'recpass')
+                )) {
                 http_response_code(200);
                 echo 'ok';
                 return;
             }
 
-            $token = (string) ($q['t'] ?? '');
+            $token = MediaQuery::value($query, 't');
             if ($streamKey !== '' && $token !== '' && LiveSession::validPlaybackToken($streamKey, $token)) {
                 http_response_code(200);
                 echo 'ok';

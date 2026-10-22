@@ -1,9 +1,9 @@
 {
   "app": "operator-chat",
-  "latestVersion": "3.4",
-  "versionCode": 66,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v3.4.apk",
-  "sha256": "38a226e544cbdd6b7bac384c9f7348a7e4dfce3b138c6bebf1f9a5282e504d50",
-  "changelog": "The emulator found four things that the test suite could not, all fixed: the settings screen crashed the app the moment it was opened, a failed connection showed an empty inbox with no explanation, every message without an attachment was labelled with the word \"null\", and an update that could not be installed left no way to try again. The update check now also runs as soon as the app knows the server, and it has a ceiling so a server that does not answer cannot hold it up.",
+  "latestVersion": "3.5",
+  "versionCode": 67,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v3.5.apk",
+  "sha256": "bf22de7ade759038f81e1f5f28a66cb3a9c2ca95e8d82ce1648656ca32171db1",
+  "changelog": "The broadcast works. Two things stopped it: the server read the publish secret with parse_str(), and MediaMTX hands the query over with the publish path glued to it, so the secret was never seen and every publish was refused; and the app's notification poll walked the inbox without a cursor, so it fetched the same fifty conversations over and over - about three hundred requests in a burst - which tripped the rate limiter and left the operator with an empty inbox and a \"Connection failed\" banner. The app also says what is wrong now: a token that cannot broadcast is told so, and granting the camera goes straight on to the broadcast.",
   "publishedAt": "2026-10-21"
 }
