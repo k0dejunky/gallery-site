@@ -1,8 +1,9 @@
 {
   "app": "operator-chat",
-  "latestVersion": "3.0",
-  "versionCode": 62,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v3.0.apk",
-  "changelog": "The app is rebuilt on Jetpack Compose. The inbox, the conversation, the live console, the show schedule and the settings are new screens; the reply field really works now (it measured zero width, so no reply could be typed), the broadcast lives in a foreground service and survives a rotation or a locked screen, the quiet hours actually silence the notifications, and the server address and token can be changed in the settings.",
+  "latestVersion": "3.1",
+  "versionCode": 63,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v3.1.apk",
+  "sha256": "dd7de157a272df4ab17a357a29991dfde2ac724bc543e13a722ed7e1b32889b8",
+  "changelog": "Everything the rebuild broke is fixed. Signing in uses the token you type (it was thrown away, so a fresh install could never sign in). The inbox lists every conversation, not only the unanswered ones, and it can be searched, paged and used to start a new conversation with any member. The live broadcast connects on the first try, no longer leaves the camera and the microphone open in the background, keeps the screen awake, and can be saved to the phone as an MP4. The app now finds new versions on its own and offers them in the inbox. The crash paths are gone: a missing camera permission, a bad site timezone and a malformed server address no longer take the app down.",
   "publishedAt": "2026-10-21"
 }
