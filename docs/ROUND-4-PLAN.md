@@ -51,6 +51,23 @@ item, the check that locks it in travels in the same commit).
 | 12 | The operator app, rebuilt | **done** | `40b4039`, `57ba5ff`, `ffa5db8` |
 | Final | local smoke/unit -> dev -> prod verify -> commit + push | **done for phases 1-9 and 12** | - |
 
+### The last sweep (2026-10-21, after phase 12)
+
+Nine more items closed, each with a check that was proven to bite:
+
+| what | the number | commit |
+|---|---|---|
+| The chat SSE loop spun on the database while a member was typing | 2 queries x thousands of iterations per 30 s window | `dc4fd12` |
+| The log aggregator re-read every rotated log to store two days | 304,523 lines -> 85,573 lines, 20.4 s -> 8.6 s | `367d3f7` |
+| The media route asked the database the same five questions per file | 5 queries -> 1, 1.18 ms -> 0.53 ms | `02f8d2f` |
+| The CSP report-uri was relative, the feeds were uncacheable, the pagination said nothing | the crawler had nothing to work with | `4ef42e1` |
+| X-Sendfile could serve the whole storage tree | the error log and the database backups were in reach | `751b30a` |
+| The CSRF token was never rotated | one leaked token was good for every POST | `c5ddb22` |
+| The guest grid could not use AVIF or WebP | 450 blurred covers, 0 modern copies | `4189fd7` |
+| The rate limiter serialised every request on one lock | 16 shards, 300 parallel reads -> 76 x 429 as before | `cd781f9` |
+
+The smoke suite is **1005 checks** (was 989).
+
 ### Phase 12 - the operator app, rebuilt (2026-10-21)
 
 The operator app was rebuilt on **Jetpack Compose** and shipped as **v3.0**
@@ -293,8 +310,8 @@ gallery shows as locked.
 |---|---|---|---|---|
 | 6.1 | **`thumb` and `blur` go straight from Apache**, no PHP hop. A guest `/galleries` view drops from **77 FPM requests to ~5** | `app/Controllers/StorageController.php`, a repo-owned Apache conf | done | 39ee933 |
 | 6.2 | The media token becomes **time-limited, not session-bound** - today every non-thumb URL is unique per session, so the `immutable` header is dead and a new session re-downloads the grid | `app/Core/helpers.php` | done | 56b9738 |
-| 6.3 | 9 DB queries per media request -> 1-2 | `app/Controllers/StorageController.php` | pending | - |
-| 6.4 | Guests get AVIF/WebP/srcset too - members get the `<picture>` block, guests get a plain `<img>` | `views/partials/gallery_card.php` | pending | - |
+| 6.3 | 9 DB queries per media request -> **1** | `app/Controllers/StorageController.php`, `app/Models/Photo.php` | done | `02f8d2f` |
+| 6.4 | Guests get AVIF/WebP too - the blurred cover had **no** modern-format copy at all | `views/partials/gallery_card.php`, `bin/avif_backfill.php` | done | `4189fd7` |
 | 6.5 | The variant ladder backlog: 321 of 15,626 videos have a 480p rung | `bin/video_rendition_worker.php` | pending | - |
 
 ---
@@ -306,7 +323,7 @@ gallery shows as locked.
 | 7.1 | The admin dashboard does **~280,000 `stat()` calls** per load (3.4-4.0s, 3.7-4.0s of FPM CPU) | `app/Controllers/AdminController.php` | pending | - |
 | 7.2 | `/admin/system`: 83 `SHOW COLUMNS` queries + 20,500 file stats + a **synchronous 8.9s Ollama generation** in the request path | `app/Controllers/SystemController.php` | pending | - |
 | 7.3 | The analytics page **full-scans `web_visits` (272,942 rows) four times** - 1.03s of its 1.44s. The covering indexes | `app/Models/WebStats.php` + a migration | done | b73b21f |
-| 7.4 | The log aggregator **re-parses the whole 2-day window every hour** (19s/hour, 6.5M lines/day re-read). It needs an incremental tail | `app/Core/AccessLogAggregator.php` | pending | - |
+| 7.4 | The log aggregator **re-parses the whole 2-day window every hour** (19s/hour, 6.5M lines/day re-read) | `app/Core/AccessLogAggregator.php` | done - the files outside the window are skipped, not re-parsed | `367d3f7` |
 | 7.5 | The admin re-parse runs up to 31 days **inside one HTTP request** (~5 min) with no lock of its own | `app/Controllers/AnalyticsController.php` | done | 61ea184 |
 
 ---
@@ -319,7 +336,7 @@ gallery shows as locked.
 | 8.2 | The page cache is keyed on the **raw query string** - every `?utm_*` is a separate 393 KB entry | `app/Core/Router.php` | done | b73b21f |
 | 8.3 | Redis has **no `maxmemory`** and `noeviction` | the Redis config on the box | pending | - |
 | 8.4 | The N+1s: the wall's comments (20), `Gallery::categories()` inside `recommended()` (8), `Comment::countFor()` per wall post in the admin engagement table (30) | `views/wall.php`, `app/Models/Gallery.php`, `views/admin/engagement.php` | done | 91d9f8b |
-| 8.5 | The operator app's SSE stream has a **busy loop** - the typing path re-queries with no sleep | `app/Controllers/ChatBridgeController.php` | pending | - |
+| 8.5 | The operator app's SSE stream has a **busy loop** - the typing path re-queries with no sleep | `app/Controllers/ChatBridgeController.php` | done | `dc4fd12` |
 | 8.6 | The FPM pool: `pm.max_children=30` and each SSE connection holds a worker for 30s | the FPM pool config | pending | - |
 
 ---
@@ -332,16 +349,16 @@ Index the previews, not the full media. The paywall markup stays as it is.
 |---|---|---|---|---|
 | 9.1 | The sitemap covers **178 of ~2,711 crawlable URLs**. Add `/galleries` and `/creator`, drop the 27 contentless category pages, paginate, and **cache it** (it is `no-store` + `Set-Cookie` today) | `app/Controllers/StaticPageController.php` | done | c0137e7 |
 | 9.2 | The titles: the site name is appended to a title that already has it - "amethyst2213 - amethyst2213" on two pages, "Amethyst - amethyst2213 - amethyst2213" on a third | `views/layout.php`, `views/home.php`, `views/gallery/index.php`, `views/creator/profile.php` | done | c0137e7 |
-| 9.3 | 8 duplicate-title groups over 16 published galleries, and 21 of 59 with no description | the admin gallery form + the listing | pending | - |
+| 9.3 | 8 duplicate-title groups over 16 published galleries, and 21 of 59 with no description | the admin gallery form + the listing | pending - **content**, not code | - |
 | 9.4 | **0 of 7,058 photos have a caption** -> every image is `alt=""` and every `/images/{id}` page is titled "Full-size image". A caption or a filename fallback fixes both | `views/gallery/show.php`, `views/gallery/image_full.php`, `views/partials/gallery_card.php` | done | c0137e7 |
 | 9.5 | `BreadcrumbList` - the breadcrumbs are VISIBLE on every gallery, category, tag, image and video page and none of them are in the JSON-LD | `views/layout.php` | done | c0137e7 |
 | 9.6 | The og tags: `og:type` is "website" everywhere, there are no `og:video` tags, and the og:image is 400x300 under a `summary_large_image` card | `views/layout.php`, `views/video/player.php` | done | c0137e7 |
 | 9.7 | `og:image` is **absent** on `/galleries`, `/galleries/category/*` and `/creator`, and **404s for scrapers** on `/membership` (relative + a session-bound token) | the 4 views | done | c0137e7 |
 | 9.8 | The canonicals: `/creator` has none (so `og:url` falls back to the site root), the tag pages have none, and the category pagination canonicalises to page 1 | `views/creator/profile.php`, `views/gallery/tag.php`, `views/gallery/category.php` | done | c0137e7 |
 | 9.9 | A video sitemap - there is none, and the video pages are in no sitemap at all | `app/Controllers/StaticPageController.php` | done | 61ea184 |
-| 9.10 | The 51 paid galleries need internal links a crawler can follow - a guest's related rail can only reach the **8 free-tier** ones | `app/Models/Gallery.php` | pending | - |
-| 9.11 | `robots.txt` into the repo, `install.sh` writes the root alias, the `Sitemap:` line points at the real URL | `public/robots.txt`, `install.sh` | pending | - |
-| 9.12 | The crawlable surface is uncacheable: every HTML page and both feeds are `no-store` + `Set-Cookie`. Plus a relative CSP `report-uri` and no `Link: rel=prev/next` | `public/index.php`, `app/Core/Router.php` | pending | - |
+| 9.10 | The 51 paid galleries need internal links a crawler can follow | `app/Models/Gallery.php` | done - the rail follows the gallery's own level, verified on prod | `c0137e7` |
+| 9.11 | `robots.txt` into the repo, `install.sh` writes the root alias, the `Sitemap:` line points at the real URL | `public/robots.txt`, `install.sh` | done - the Sitemap line is now rewritten from APP_URL | `751b30a` |
+| 9.12 | The crawlable surface is uncacheable: every HTML page and both feeds are `no-store` + `Set-Cookie`. Plus a relative CSP `report-uri` and no `Link: rel=prev/next` | `public/index.php`, `app/Core/Router.php` | done - the feeds and the sitemaps are public, the report-uri is absolute, the pagination sends `Link` | `4ef42e1` |
 
 ---
 
@@ -371,13 +388,13 @@ The PPV/tip/unlock surface stays dormant. This phase is about the
 
 | id | what | status | commit |
 |---|---|---|---|
-| 11.1 | The CSRF token is **one per session for the session's life**, not per form and not rotated on login. One leaked token is valid for every POST the session can make | pending | - |
-| 11.2 | `XSendfilePath /var/www/gallery/storage` is broader than it needs to be | pending | - |
+| 11.1 | The CSRF token is **one per session for the session's life**, not per form and not rotated on login | `app/Core/Csrf.php`, `app/Core/Auth.php` | done - rotated on the login, the logout and the step-up | `c5ddb22` |
+| 11.2 | `XSendfilePath /var/www/gallery/storage` is broader than it needs to be | `config/gallery-alias.conf`, `install.sh` | done - only the uploads and the APK | `751b30a` |
 | 11.3 | The Braintree checkout page overrides the whole CSP with `unsafe-inline` | pending | - |
 | 11.4 | The title image upload accepts an SVG with no content validation (admin-only, and currently unreachable) | pending | - |
 | 11.5 | The restore-drill script is **not in the repo** - the restore path is partly outside version control | pending | - |
 | 11.6 | `.env` is excluded from the backup - a full-box loss needs the secrets re-supplied by hand | pending | - |
-| 11.7 | `RateLimiter` is a single global JSON file with an exclusive `flock` and a whole-file rewrite per request | pending | - |
+| 11.7 | `RateLimiter` is a single global JSON file with an exclusive `flock` and a whole-file rewrite per request | `app/Core/RateLimiter.php` | done - sharded over 16 files | `cd781f9` |
 | 11.8 | The dashboard's php-fatal alert is throttled to hourly and nobody acted on 76 of them | pending | - |
 
 ---
