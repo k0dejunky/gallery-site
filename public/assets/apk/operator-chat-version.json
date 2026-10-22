@@ -1,9 +1,9 @@
 {
   "app": "operator-chat",
-  "latestVersion": "3.1",
-  "versionCode": 63,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v3.1.apk",
-  "sha256": "dd7de157a272df4ab17a357a29991dfde2ac724bc543e13a722ed7e1b32889b8",
-  "changelog": "Everything the rebuild broke is fixed. Signing in uses the token you type (it was thrown away, so a fresh install could never sign in). The inbox lists every conversation, not only the unanswered ones, and it can be searched, paged and used to start a new conversation with any member. The live broadcast connects on the first try, no longer leaves the camera and the microphone open in the background, keeps the screen awake, and can be saved to the phone as an MP4. The app now finds new versions on its own and offers them in the inbox. The crash paths are gone: a missing camera permission, a bad site timezone and a malformed server address no longer take the app down.",
+  "latestVersion": "3.4",
+  "versionCode": 66,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v3.4.apk",
+  "sha256": "38a226e544cbdd6b7bac384c9f7348a7e4dfce3b138c6bebf1f9a5282e504d50",
+  "changelog": "The emulator found four things that the test suite could not, all fixed: the settings screen crashed the app the moment it was opened, a failed connection showed an empty inbox with no explanation, every message without an attachment was labelled with the word \"null\", and an update that could not be installed left no way to try again. The update check now also runs as soon as the app knows the server, and it has a ceiling so a server that does not answer cannot hold it up.",
   "publishedAt": "2026-10-21"
 }
