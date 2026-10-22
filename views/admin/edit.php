@@ -28,7 +28,7 @@
             <span class="muted">No categories yet — <a href="<?= url('/admin/categories') ?>">add some first</a>.</span>
         <?php else: ?>
             <?php foreach ($categories as $category): ?>
-                <label class="chip">
+                <label class="chip<?= in_array((int) $category['id'], $assigned, true) ? ' selected' : '' ?>">
                     <input type="checkbox" name="categories[]" value="<?= (int) $category['id'] ?>"
                         <?= in_array((int) $category['id'], $assigned, true) ? 'checked' : '' ?>>
                     <?= e($category['name']) ?>

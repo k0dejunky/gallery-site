@@ -913,7 +913,7 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
         })();
     </script>
     <?php require __DIR__ . '/../partials/tour_targets.php'; ?>
-    <script nonce="<?= csp_nonce() ?>" src="<?= e(url('/assets/js/admin.js')) ?>?v=2" defer></script>
+    <script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('/assets/js/admin.js')) ?>" defer></script>
     <script nonce="<?= csp_nonce() ?>" src="<?= e(url('/assets/js/tour.js')) ?>?v=9" defer></script>
 </body>
 </html>

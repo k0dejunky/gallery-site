@@ -809,6 +809,26 @@ class SmokeChecks
                 || strpos($js, "label.classList.toggle('selected', checkbox.checked)") === false) {
                 return $bad('admin.js does not keep the chip state in lockstep with its checkbox');
             }
+            // admin.js is loaded with a HARDCODED "?v=2", so a browser held
+            // the old copy for good and the lockstep script never arrived
+            // ("still broken" with a correct deployment). The stylesheet is
+            // mtime-busted through asset_url(); the script must be too.
+            $layout = (string) @file_get_contents("$root/views/admin/layout.php");
+            if (strpos($layout, "asset_url('/assets/js/admin.js')") === false) {
+                return $bad('the admin layout does not mtime-bust admin.js, so browsers run a stale copy forever');
+            }
+            if (preg_match('#/assets/js/admin\.js[^\n]*\?v=#', $layout) === 1) {
+                return $bad('the admin layout still pins a hardcoded version query on admin.js');
+            }
+            // The edit page must also render the saved state itself: it has
+            // no per-page script, so before the shared script runs (and on
+            // :has()-less browsers) the saved categories must already read
+            // as selected.
+            $edit = (string) @file_get_contents("$root/views/admin/edit.php");
+            if (strpos($edit, "$assigned, true) ? ' selected'") === false
+                || strpos($edit, "$assigned, true) ? 'checked'") === false) {
+                return $bad('the edit page does not server-render the selected state for saved categories');
+            }
             return $ok('the chip state is styled and kept in lockstep by the shared script');
         });
 
