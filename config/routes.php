@@ -377,6 +377,12 @@ return [
     ['POST', '/admin/chat/unmute', 'AdminChatController@unmuteUser', 'chat'],
     ['POST', '/admin/chat/export-training', 'AdminChatController@exportTraining', 'chat'],
     ['POST', '/admin/chat/import-training', 'AdminChatController@importTraining', 'chat'],
+    // The operator app's device tokens. They have a page of their own
+    // (/admin/operator-tokens): a token is needed for every new device,
+    // and they used to be the sixth section of the chat page.
+    ['GET', '/admin/operator-tokens', 'AdminChatController@operatorTokens', 'chat'],
+    ['POST', '/admin/operator-tokens/create', 'AdminChatController@createToken', 'chat'],
+    ['POST', '/admin/operator-tokens/{id}/revoke', 'AdminChatController@revokeToken', 'chat'],
     ['POST', '/admin/chat/tokens', 'AdminChatController@createToken', 'chat'],
     ['POST', '/admin/chat/tokens/{id}/revoke', 'AdminChatController@revokeToken', 'chat'],
     ['GET', '/admin/trends', 'TrendsController@index', 'trends'],

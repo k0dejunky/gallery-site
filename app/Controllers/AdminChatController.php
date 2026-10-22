@@ -103,7 +103,7 @@ class AdminChatController extends Controller
             'trainingCount'=> ChatMessage::trainingPairCount(),
             'cleanedCount' => ChatMessage::cleanedPairCount(),
             'broadcasts'   => ChatBroadcast::log(50),
-            'tokens'       => OperatorToken::all(),
+            'tokenCount'   => count(OperatorToken::all()),
             // The raw value of a token that was just created. It is shown
             // ONCE - only its hash is stored - so it travels through the
             // session and is handed to the page once.
@@ -115,6 +115,26 @@ class AdminChatController extends Controller
                  WHERE chat_muted_until IS NOT NULL
                  ORDER BY chat_muted_until DESC'
             )->fetchAll(),
+        ]);
+    }
+
+    /**
+     * The operator app's device tokens.
+     *
+     * They have a page of their own: a token is needed for every new
+     * device, and they used to be the sixth section of the chat page -
+     * far below the fold on a phone.
+     */
+    public function operatorTokens(): void
+    {
+        $this->viewAdmin('operator_tokens', [
+            'title'     => 'Operator app',
+            'tokens'    => OperatorToken::all(),
+            // The raw value of a token that was just created. It is shown
+            // ONCE - only the hash is stored - so it travels through the
+            // session and is handed to the page once.
+            'newToken'  => $this->takeNewToken(),
+            'latestApk' => $this->latestApkVersion(),
         ]);
     }
 
@@ -652,7 +672,7 @@ class AdminChatController extends Controller
         $_SESSION['operator_token_new'] = ['label' => $label, 'raw' => $raw];
 
         $this->flash('success', 'Token created for "' . $label . '". Copy it now - it is shown only once.');
-        $this->redirect('/admin/chat');
+        $this->redirect('/admin/operator-tokens');
     }
 
     /** Revoke a per-device operator token. */
@@ -678,7 +698,7 @@ class AdminChatController extends Controller
             $this->flash('error', 'That token was already revoked.');
         }
 
-        $this->redirect('/admin/chat');
+        $this->redirect('/admin/operator-tokens');
     }
 
     /**

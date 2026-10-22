@@ -57,6 +57,7 @@ $navGroups = [
             ['key' => 'nav-engagement', 'label' => 'Engagement', 'href' => '/admin/engagement', 'icon' => 'heart'],
             ['key' => 'nav-users', 'label' => 'Users', 'href' => '/admin/users', 'icon' => 'users'],
             ['key' => 'nav-chat', 'label' => 'Chat', 'href' => '/admin/chat', 'icon' => 'chat', 'perm' => 'chat'],
+            ['key' => 'nav-operator-tokens', 'label' => 'Operator app', 'href' => '/admin/operator-tokens', 'icon' => 'phone', 'perm' => 'chat'],
             ['key' => 'nav-support', 'label' => 'Support', 'href' => '/admin/support', 'icon' => 'lifebuoy', 'perm' => 'support'],
             ['key' => 'nav-auto-poster', 'label' => 'Auto Poster', 'href' => '/admin/auto-poster', 'icon' => 'send'],
         ],

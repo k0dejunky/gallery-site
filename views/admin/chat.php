@@ -88,79 +88,23 @@ $operatorIsOnline = !empty($operatorOnline);
 </section>
 
 <?php // ------------------------------------------------- Operator device tokens ?>
-<?php // It sits at the top on purpose: a token is needed for every new device, and it used to be the sixth section of a long page. ?>
+<?php // A pointer, not the section: the tokens have a page of their own. ?>
 <section class="adm-section">
     <div class="adm-section-head">
-        <h2>Operator device tokens</h2>
-        <p>Sign the operator app in with one of these - one token per phone, tablet or device, so a token can be revoked for one device without touching the others. Only the hash is stored, and a token is shown once, when it is created. A device token can also start the live broadcast; the shared chat key cannot.</p>
+        <h2>Operator app</h2>
+        <p>The tokens the operator app signs in with - one per phone, tablet or device.</p>
     </div>
-
-    <?php if (!empty($newToken)): ?>
-        <div class="sys-card" style="border-color:var(--brand);">
-            <h3 style="margin:0 0 .5rem;">Copy this token now - it is shown only once</h3>
-            <p class="muted" style="margin:0 0 .5rem;">
-                Sign the operator app in with this token, on this device or any other.
-                Only its hash is stored, so it cannot be shown again.
-            </p>
-            <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
-                <code id="operator-token-value"
-                      style="font-size:1rem;word-break:break-all;user-select:all;background:var(--card-bg);padding:.5rem .75rem;border-radius:var(--border-radius);"><?= e((string) $newToken['raw']) ?></code>
-                <button type="button" class="btn btn-sm" data-copy="operator-token-value">Copy</button>
-            </div>
-        </div>
-    <?php endif; ?>
 
     <div class="sys-card">
-        <form class="adm-inline-form" method="post" action="<?= url('/admin/chat/tokens') ?>">
-            <?= csrf_field() ?>
-            <label class="adm-field">
-                <span>Device label</span>
-                <input type="text" name="label" placeholder="e.g. Operator phone" required>
-            </label>
-            <label class="adm-field" style="flex:0 1 190px;">
-                <span>Expires in days (0 = never)</span>
-                <input type="number" name="expires_days" min="0" max="3650" value="0">
-            </label>
-            <div class="adm-field-actions">
-                <button type="submit" class="btn btn-sm">Create token</button>
-            </div>
-        </form>
+        <p style="margin:0;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+            <span>
+                <?= (int) $tokenCount ?> device token<?= (int) $tokenCount === 1 ? '' : 's' ?>.
+                A token is needed for every new device, and only a device token can start
+                the live broadcast.
+            </span>
+            <a class="btn btn-sm btn-outline" href="<?= url('/admin/operator-tokens') ?>">Manage the operator app's tokens &rarr;</a>
+        </p>
     </div>
-
-    <?php if (empty($tokens)): ?>
-        <p class="muted u-mt-075">No device tokens yet.</p>
-    <?php else: ?>
-        <div class="users-table-wrap u-mt-1">
-            <table>
-                <thead>
-                    <tr><th>Label</th><th>Scopes</th><th>Expires</th><th>Last used</th><th>Created by</th><th>Status</th><th class="u-right">Action</th></tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($tokens as $t): ?>
-                        <?php $revoked = !empty($t['revoked']); ?>
-                        <tr>
-                            <td><strong><?= e((string) $t['label']) ?></strong></td>
-                            <td class="muted"><?= e((string) $t['scopes']) ?></td>
-                            <td class="muted"><?= !empty($t['expires_at']) ? e(tzdate('M j, Y', (string) $t['expires_at'])) : 'never' ?></td>
-                            <td class="muted"><?= !empty($t['last_used_at']) ? e(tzdate('M j, Y g:i A', (string) $t['last_used_at'])) : 'never' ?></td>
-                            <td class="muted"><?= e((string) ($t['created_by_email'] ?? '—')) ?></td>
-                            <td><span class="pill <?= $revoked ? 'pill-muted' : '' ?>"><?= $revoked ? 'revoked' : 'active' ?></span></td>
-                            <td>
-                                <?php if (!$revoked): ?>
-                                    <form class="inline" method="post" action="<?= url('/admin/chat/tokens/' . (int) $t['id'] . '/revoke') ?>" data-confirm="Revoke token &quot;<?= e((string) $t['label']) ?>&quot;?">
-                                        <?= csrf_field() ?>
-                                        <button type="submit" class="btn btn-sm btn-danger">Revoke</button>
-                                    </form>
-                                <?php else: ?>
-                                    <span class="muted">&mdash;</span>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    <?php endif; ?>
 </section>
 
 <?php // ------------------------------------------------------- AI & moderation ?>
