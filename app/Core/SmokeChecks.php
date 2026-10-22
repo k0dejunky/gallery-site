@@ -3402,6 +3402,54 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ops.rate_limiter_sharded', 'Smoke · Ops', 'The rate limiter does not serialise every request on one lock', static function () use ($root, $read, $ok, $bad): array {
+            // The limiter's state used to live in ONE file that every
+            // rate-limited request locked exclusively, read, changed and
+            // rewrote - so a comment, a rating, a chat message, a login
+            // attempt and a live chat line all serialised on the same lock.
+            $src = (string) $read($root . '/app/Core/RateLimiter.php');
+            $problems = [];
+
+            if (strpos($src, 'SHARDS') === false) {
+                $problems[] = 'the rate limiter state must be sharded';
+            }
+            if (strpos($src, 'security-rate-limit-') === false) {
+                $problems[] = 'the rate limiter must use a sharded state file';
+            }
+            // The single global file must be gone.
+            if (strpos($src, "'/storage/security-rate-limit.json'") !== false) {
+                $problems[] = 'the rate limiter must not use one global state file';
+            }
+            // And it must still fail CLOSED: a limiter that cannot count
+            // must not let the request through.
+            if (strpos($src, 'return false;') === false) {
+                $problems[] = 'the rate limiter must fail closed';
+            }
+
+            // Behaviourally: the limit is still enforced, and a different
+            // identifier is not affected by it.
+            if (!class_exists(\App\Core\RateLimiter::class)) {
+                return $bad('App\Core\RateLimiter must exist');
+            }
+            $id = 'smoke-probe-' . bin2hex(random_bytes(6));
+            $allowed = 0;
+            for ($i = 0; $i < 5; $i++) {
+                if (\App\Core\RateLimiter::allow([$id], 3, 60)) {
+                    $allowed++;
+                }
+            }
+            if ($allowed !== 3) {
+                $problems[] = 'the limiter allowed ' . $allowed . ' of 3 calls';
+            }
+            $other = 'smoke-probe-' . bin2hex(random_bytes(6));
+            if (!\App\Core\RateLimiter::allow([$other], 3, 60)) {
+                $problems[] = 'one identifier must not affect another';
+            }
+
+            return $problems === []
+                ? $ok('the rate limiter is sharded and still enforces its limits')
+                : $bad(implode('; ', $problems));
+        });
         $add('smoke.exposure.csrf_rotated', 'Smoke · Ops', 'The CSRF token is rotated when the session privileges change', static function () use ($root, $read, $ok, $bad): array {
             // The token used to be minted once per session and then live for
             // the whole session: one leaked token was good for EVERY POST
