@@ -1677,7 +1677,12 @@ body.admin-theme {
 }
 
 .admin-theme .chip:hover { background: var(--adm-surface-2); color: var(--adm-text); }
-.admin-theme .chip.active, .admin-theme .chip:has(input[type="checkbox"]:checked) {
+/* ".selected" is what the server renders for assigned categories and what
+   the per-page scripts toggle on click; :has() is the modern twin. Styling
+   the class keeps the tick visible on browsers without :has() support,
+   which used to show NO state at all (the checkbox itself is display:none). */
+.admin-theme .chip.active, .admin-theme .chip.selected,
+.admin-theme .chip:has(input[type="checkbox"]:checked) {
     background: var(--adm-accent-soft);
     border-color: var(--adm-accent);
     color: var(--adm-accent-strong);

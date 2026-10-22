@@ -791,6 +791,27 @@ class SmokeChecks
             return $ok('the manage page has no nested forms and its bulk post keeps the clicked direction');
         });
 
+        $add('smoke.admin.chips_show_selected_state', 'Smoke · Admin UI', 'Category chips are readable in every browser, not only :has() supporting ones', static function () use ($root, $ok, $bad): array {
+            // The ticked-chip look used to live ONLY on
+            // ":has(input[type=checkbox]:checked)" while the server (and the
+            // per-page scripts) surface the state through the "selected"
+            // class. A browser without :has() support therefore showed NO
+            // selected categories anywhere - neither the saved ones nor one
+            // freshly clicked, because the checkbox itself is display:none.
+            $css = (string) @file_get_contents("$root/public/assets/css/admin.css");
+            if (preg_match('/\.admin-theme \.chip\.selected/', $css) !== 1) {
+                return $bad('admin.css does not style .chip.selected, so the tick is invisible on browsers without has() support');
+            }
+            $js = (string) @file_get_contents("$root/public/assets/js/admin.js");
+            // Pages without a per-page script (edit/create) need the shared
+            // fallback that keeps the class in lockstep with the checkbox.
+            if (strpos($js, "querySelectorAll('label.chip > input[type=\"checkbox\"]')") === false
+                || strpos($js, "label.classList.toggle('selected', checkbox.checked)") === false) {
+                return $bad('admin.js does not keep the chip state in lockstep with its checkbox');
+            }
+            return $ok('the chip state is styled and kept in lockstep by the shared script');
+        });
+
         $add('smoke.photo.rotate_normalises_exif', 'Smoke · Admin UI', 'Rotate the pixels upright before rotating (EXIF orientation)', static function () use ($root, $ok, $bad): array {
             // A JPEG with an EXIF orientation is DISPLAYED upright (the tag is
             // honoured on display), but imagerotate() works on the raw pixels

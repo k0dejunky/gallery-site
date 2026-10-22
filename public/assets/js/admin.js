@@ -258,6 +258,23 @@
         rows.appendChild(clone);
     };
 
+    /* --- chip pickers ------------------------------------------------------
+       Every admin chip picker (categories on manage/edit/create) hides its
+       checkbox on purpose and shows the tick through styling. Browsers without
+       :has() saw nothing at all: the JS toggle on the manage page flips the
+       "selected" class, but the stylesheet only keyed the checked state on
+       :has(). Keep the class in lockstep with the checkbox here too, on load
+       and on change, so every page reads as styled-state without :has(). */
+    function initChips() {
+        document.querySelectorAll('label.chip > input[type="checkbox"]').forEach(function (checkbox) {
+            var label = checkbox.closest('label.chip');
+            if (!label) return;
+            function sync() { label.classList.toggle('selected', checkbox.checked); }
+            checkbox.addEventListener('change', sync);
+            sync();
+        });
+    }
+
     /* --- the mobile drawer -----------------------------------------------
        The drawer is a real overlay: it traps focus while open, gives the
        focus back to the button that opened it, and is removed from the tab
@@ -508,10 +525,11 @@
         });
     }
 
-    if (document.readyState !== 'loading') { initDrawer(); initUndoableDeletes(); initInlineEdit(); }
+    if (document.readyState !== 'loading') { initDrawer(); initChips(); initUndoableDeletes(); initInlineEdit(); }
     else {
         document.addEventListener('DOMContentLoaded', function () {
             initDrawer();
+            initChips();
             initUndoableDeletes();
             initInlineEdit();
         });
