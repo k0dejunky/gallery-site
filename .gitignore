@@ -15,6 +15,7 @@
 # Auto Poster API credentials (never commit)
 /storage/autoposter.json
 /storage/security-rate-limit.json
+/storage/security-rate-limit-*.json
 
 # Emailer schedule & audience settings (never commit)
 /storage/emailer.json
