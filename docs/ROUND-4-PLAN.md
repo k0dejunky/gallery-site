@@ -24,15 +24,39 @@ Origin: the user asked "what other site improvements should be done" on
   markup stays as it is.
 - The member site stays dark, the admin stays light, the system font stays.
 
+**Decisions taken (2026-10-22, for phases 13 and 14):**
+- **Scope: both, hardening first.** The hardening pass (phase 13) runs to
+  completion, then the member money (phase 14) in the same programme.
+- **The level numbering:** Yearly and Lifetime are the SAME tier as the
+  monthly plan they extend (a yearly Silver is level 1). They become "a
+  discount, not a tier". The tiers stay 0-3 (Free/Silver/Gold/Platinum),
+  so the gallery `min_level` range and the 0-3 clamps stay valid.
+- **The download claim:** the site stops promising what it cannot deliver.
+  The tooltip and the terms say what is true. No `Content-Disposition`
+  enforcement, no download allowance, no watermark tier.
+- **`.env` stays out of the backup.** The vault stays the single source of
+  truth for the secrets; the restore drill documents re-supplying them.
+- **There is no creator programme.** Payout processing is dropped - no
+  creator balance, no payout ledger, no transfer run. The earnings page
+  keeps saying it does not ship.
+- **There is no tax.** No VAT fields, no tax engine, no jurisdiction. Only
+  the **receipt number** survives, and it is a deterministic
+  `INV-<purchase id>` - no sequence table, no lock, no new concept.
+- **A per-form CSRF token is not adopted.** The synchroniser pattern with
+  a rotation on every privilege change is the OWASP recommendation, and
+  per-form tokens would break every long-lived admin form (a form left
+  open while other requests happen would come back as a 419).
+
 **Sequencing:** the live defects first, on their own -> the media path ->
 the heavy admin pages -> the cache and the queries -> discoverability ->
-the member-facing money -> ops hardening. Verification follows the house
-rule every time: **local -> dev -> prod -> commit last** (one commit per
-item, the check that locks it in travels in the same commit).
+the member-facing money -> ops hardening -> the last hard edges -> the
+member money the member can see. Verification follows the house rule every
+time: **local -> dev -> prod -> commit last** (one commit per item, the
+check that locks it in travels in the same commit).
 
 ---
 
-## Where the work stands (updated 2026-10-21)
+## Where the work stands (updated 2026-10-22)
 
 | Phase | What | Status | Commit |
 |---|---|---|---|
@@ -49,6 +73,8 @@ item, the check that locks it in travels in the same commit).
 | 10 | The member-facing money | **not started** | - |
 | 11 | Ops hardening | **not started** | - |
 | 12 | The operator app, rebuilt | **done** | `40b4039`, `57ba5ff`, `ffa5db8` |
+| 13 | The last hard edges | **planned, not started** | - |
+| 14 | The member money, final scope | **planned, not started** | - |
 | Final | local smoke/unit -> dev -> prod verify -> commit + push | **done for phases 1-9 and 12** | - |
 
 ### The last sweep (2026-10-21, after phase 12)
@@ -108,9 +134,9 @@ wider than 100dp (the old bug), `ScreenshotTest.kt` writes
 
 ### Baseline
 
-- **local** `/media/webdev/Media/gallery-full` - `main` @ `b8b2c60`, clean,
-  in sync with `origin/main`.
-- `php tests/smoke.php` -> **989 checks, all passed** (963 at the start).
+- **local** `/media/webdev/Media/gallery-full` - `main`, clean, in sync with
+  `origin/main`.
+- `php tests/smoke.php` -> **1005 checks, all passed** (963 at the start).
 - `php _suite_runner.php` -> 1006 tests with the **6 known
   environment-only failures** (4 orphan photos, the example.com routes,
   the missing Twitter key, the missing cron directory). Nothing here may
@@ -399,6 +425,201 @@ The PPV/tip/unlock surface stays dormant. This phase is about the
 
 ---
 
+## Phase 13 - the last hard edges
+
+The programme's last hardening pass: seven items, each with a check that
+is proven to bite. Every one of them was measured on the live box first -
+the numbers below are measurements, not guesses.
+
+| id | what | files | status | commit |
+|---|---|---|---|---|
+| 13.1 | The video-rendition worker is **stalled**: it spends ~90 s of every 10-minute tick rebuilding ONE poster and produces nothing else. The poster is a **0-byte file**, so the build "succeeds", the poster is never "padded", and it is rebuilt forever | `app/Core/helpers.php`, `bin/video_rendition_worker.php` | planned | - |
+| 13.2 | The level numbering: prod's Yearly is level 9 and Lifetime level 10 (hand-edited rows), the seed says 1, the tier labels only know 0-3, and **no gallery exceeds `min_level` 3** | `app/Models/Subscription.php`, `app/Models/TrialLink.php`, `app/Models/Stats.php`, `app/Controllers/PlanController.php`, a migration | planned | - |
+| 13.3 | The theme title-image upload is **broken** (the file is served from a path nothing routes, and the watermark silently stops with it), it accepts an **SVG with no validation**, and `update()` is gated on `requireLogin()` - so a **member** can restyle the site | `app/Controllers/ThemeController.php`, `app/Models/Theme.php`, `views/layout.php`, `install.sh` | planned | - |
+| 13.4 | The Braintree pages override the whole CSP with `'unsafe-inline'` and **no nonce** (the nonce the view emits is inert), and both the override AND the site policy are missing `https://assets.braintreegateway.com` from `frame-src` - the Hosted Fields iframe | `public/index.php`, `app/Controllers/MembershipController.php` | planned | - |
+| 13.5 | The tooltip and the terms say saving is disabled; nothing enforces it (the media is served inline, no `Content-Disposition`) | `views/partials/gallery_card.php`, `views/terms.php` | planned | - |
+| 13.6 | The php-fatal alert is mailed once an hour and **nobody acted on 76 of them** - the log is the only record | `app/Core/Housekeeping.php`, `app/Controllers/SystemController.php`, `views/admin/system.php` | planned | - |
+| 13.7 | `.env` stays out of the backup. No code change; the restore drill's output and this plan say so | `scripts/restore-drill.sh` | decided - no change | - |
+
+### 13.1 The worker that is burning the box right now
+
+**Measured on prod (2026-10-22).** Every tick, every ten minutes:
+
+```
+[2026-10-22 00:40:01] AI worker busy (categorizer.lock); skipping this tick
+[2026-10-22 00:30:38] poster g6abc06a18d7f32.79682750.mp4 1440x1920
+[2026-10-22 00:31:29] tick done: built=1 failed=0 skipped=0 candidates=333 seconds=88
+```
+
+and on disk:
+
+```
+-rw-rw-r-- 1 www-data www-data       0 Oct 22 00:50 poster_g6abc06a18d7f32.79682750.mp4
+-rw-rw-r-- 1 www-data www-data 2635918 Sep 29 18:42 g6abc06a18d7f32.79682750.mp4
+-rw-rw-r-- 1 www-data www-data  110822 Sep 19 19:08 web_g6abc06a18d7f32.79682750.mp4
+```
+
+Three defects make one loop:
+
+1. `create_video_frame()` returns success on `is_file($dest)` - a **0-byte**
+   output counts as a built poster (`app/Core/helpers.php:2612`).
+2. `video_poster_is_padded()` cannot read a 0-byte file, so it reports
+   "not padded" - the poster is stale again, so it is rebuilt, so it is
+   0 bytes again (`app/Core/helpers.php:701`).
+3. The tick's whole budget goes into it, so the other 332 candidates are
+   never reached. **The ladder rungs for that video are already complete** -
+   the poster is the only thing left.
+
+The work:
+
+| step | where | what |
+|---|---|---|
+| a | `helpers.php:2612` | the capture must reject an **empty or undecodable** output, and delete the broken file |
+| b | `helpers.php:2423` | `create_video_thumbnail()` must not leave a 0-byte destination behind |
+| c | `video_rendition_worker.php:315-328` | a failed build counts as `failed`, not `built` - and a source that keeps failing is **backed off** (a state file next to `rendition.lock`) so one bad video cannot eat every tick |
+| d | `helpers.php:701` | a 0-byte poster is *broken*, not "not padded" |
+| e | `video_rendition_worker.php:308` | the poster is **JPEG bytes in a `.mp4` name**; a broken one must never reach a member as `video/mp4` |
+
+**One diagnostic run is needed** to see WHY that one capture comes back
+empty. The hardening is certain; the root cause is not, and the plan does
+not pretend otherwise.
+
+### 13.2 The level numbering
+
+**Measured on prod.** The plans are `Silver 1 | Gold 2 | Platinum 3 | Chat
+add-on 1 | Yearly 9 | Lifetime 10`; the galleries are `min_level` 0 x 13,
+1 x 174, 2 x 12, **3 x 3** (nothing above 3); two subscriptions carry
+`access_level` 9 and 10. So a yearly member is seven levels above
+Platinum and can open exactly the same content, and their tier label
+reads "Level 9" (`Subscription::levelLabel()`) or, worse, **"Platinum"**
+(`TrialLink::levelLabel()`'s `default` arm).
+
+There is **no check at all** today pinning the level range, and the plan
+editor's level field has **no upper bound** (`PlanController.php:282-301`
+only rejects a level below 1) - that is how prod got 9 and 10.
+
+Under the decision (Yearly/Lifetime = the same tier as the monthly plan):
+
+| step | where | what |
+|---|---|---|
+| a | a new `089_*.sql` + `schema.sql` | the Yearly and Lifetime plans go to level **1**; the two subscriptions at 9/10 come down to their plan's level. Idempotent SQL - an applied migration's checksum is immutable (`scripts/migrate.php:148-153`) |
+| b | `PlanController.php:282-301` | cap the level at 3, with a message ("tiers are Free/Silver/Gold/Platinum") |
+| c | `TrialLink.php:105-113` | delegate to the canonical `Subscription::levelLabel()`; the second label map is why level 9 reads "Platinum" |
+| d | `Stats.php:101` | `$counts = [0..4]` - a gallery above 4 is invisible in the dashboard |
+| e | the 0-3 clamps (`GalleryController.php:897`, `ImportController.php:118`, `VideoEditorController.php:478`, `ImportSettings.php:149`, `ModerationController.php:142`, `SubscriptionController.php:136`, `TrialLink.php:78`, `Subscription.php:271`) | they stay valid under this decision, but they must agree with (b) |
+
+### 13.3 The title image: broken, an SVG, and a member's reach
+
+Three findings, one item:
+
+- **Broken.** The upload lands in `storage/uploads/` and the layout links
+  `/gallery/storage/uploads/...` - a path **no route and no alias serves**.
+  So an uploaded title image is a 404, and `watermark_logo_path()`
+  (`helpers.php:1855-1874`) resolves it wrongly, so **the watermark
+  silently stops working** the moment a custom title image is set.
+- **An SVG with no validation.** The allowlist at
+  `ThemeController.php:108` takes `svg` with no `finfo`, no
+  `getimagesize` and no size cap. The house precedent is
+  `smoke.sec.upload_no_active_content`, which already asserts that the
+  *other* allowlists (`MediaUploader`, `ChatMessage`) contain no `svg` -
+  this is the one that was missed.
+- **A member can reach it.** `ThemeController`'s constructor only requires
+  `Auth::requireLogin()` (`:17-21`), and a non-admin scope degrades to
+  `site` (`:73-75`), so a logged-in member can POST the theme update and
+  restyle the live site.
+
+The work: require the **theme** permission on `update()`, validate the
+upload, drop `svg`, write to `public/assets/images/` (the directory the
+layout already links), version it with the existing `asset_url()` mtime
+convention so a replaced file is not served stale for 30 days, make that
+directory writable in `install.sh` (nothing writes into `public/` at
+runtime today), and fix `watermark_logo_path()` for the new path.
+
+### 13.4 The Braintree CSP
+
+The override at `MembershipController.php:156` and `:333` is a whole-CSP
+replacement with `'unsafe-inline'` in `script-src` and **no nonce** - so
+the `nonce="<?= csp_nonce() ?>"` the views already emit
+(`braintree_checkout.php:127-130`, `my.php:85-86`) is inert, and the
+`report-uri` is lost.
+
+The bigger finding: **both** the override and the site policy are missing
+`https://assets.braintreegateway.com` from `frame-src`, and that is the
+Hosted Fields iframe. `connect-src` is also missing
+`client-analytics.braintreegateway.com` and `*.braintree-api.com`.
+`views/partials/card_checkout.php:80-81` injects Braintree under the
+STRICT site policy, so the same gap applies there.
+
+The work is therefore in the **site policy** (`public/index.php:137-155`),
+not in a per-controller override: add the origins Braintree actually
+needs, then **delete both overrides** so the pages run on the site's
+strict policy (nonce + `strict-dynamic`) and the `report-uri` survives.
+**Whether the card-update form is broken today is a question this item
+will answer** - it is not assumed either way.
+
+### 13.6 The fatal alert nobody saw
+
+`Housekeeping::alertOnPhpFatals()` (`:520-577`) tails
+`storage/logs/php-error.log` from a byte offset
+(`storage/logs/.php_fatal_alert_offset`), counts the fatals and mails
+`Mailer::adminAlert('php-fatal', ..., 3600)` - once an hour, with the
+throttle state in `storage/logs/alerts.state`. The log is the only
+record, and 76 fatals were mailed and ignored.
+
+The work: a read-only public accessor on `Housekeeping` (the same regex
+as `:558`, **without** advancing the offset - the housekeeping owns the
+offset), cached by the System page's own file cache
+(`storage/cache/system-php-fatals.json`, 300 s - the `aiStatus()` pattern
+at `SystemController.php:98-115`), and a `.sys-card` in the 2-up grid
+(`views/admin/system.php:40-346`, the `:114-129` pattern). "Last alerted
+at" comes for free from `alerts.state`.
+
+---
+
+## Phase 14 - the member money, final scope
+
+The twelve open rows of phase 10, with the rows the 2026-10-22 decisions
+close **removed** rather than left hanging:
+
+| row | fate |
+|---|---|
+| 10.1 refund request | **14a** |
+| 10.2 invoice / receipt | **14a** |
+| 10.3 card update | **14a** |
+| 10.4 membership pause | **14a** |
+| 10.5 dunning ladder | **14b** |
+| 10.6 chargeback / dispute | **14b** |
+| 10.7 gift purchase | **14c** |
+| 10.8 tax / receipt numbering | **the tax half is dropped** (no tax); the receipt number is `INV-<purchase id>` and rides with 14a |
+| 10.9 payout processing | **DROPPED** - there is no creator programme |
+| 10.10 level numbering | **done in 13.2** |
+| 10.11 an honest answer to downloads | **done in 13.5** |
+| 10.12 a download allowance / watermark tier | **DROPPED** - with no false promise there is nothing to enforce |
+
+### 14a - what a member can see and do
+
+| id | what | where it starts from |
+|---|---|---|
+| 14a.1 | An **invoice list** with a receipt number: the charges, the amount, the date, the gateway, the status and the ledger events. The receipt number is `INV-<purchase id>` - deterministic, no sequence table | reuse `ExportController.php:27-43`'s query shape (`purchases` joined to `users` and `galleries`) with `WHERE p.user_id = ?` instead of the date window |
+| 14a.2 | A **refund request**: the member asks, the admin approves or declines, approval calls the existing `Purchase::refundAtGateway()` and appends the ledger event | `Purchase.php:218-271`; the request state rides in `purchase_events` (append-only, free `event` column) rather than a new table |
+| 14a.3 | A **card update for an active subscription**. The form and the controller already work - the only thing gating it is `status = 'past_due'` (`MembershipController.php:135`). The other three blockers (a `BT-` `transaction_ref`, a Braintree processor, a client token) apply equally to an active subscription | `MembershipController.php:121-170` and `:236-308`. NOTE: the vaulted `payment_method_token` is **not stored locally**, so "which card is on my membership" needs a column - only added if that is wanted |
+| 14a.4 | A **membership pause**: the expiry clock stops. A `paused_until` column beside the existing `PAST_DUE_GRACE_DAYS` mechanism, the access predicates exclude a paused subscription, and the expiry shifts by the paused duration. The status enum is **not** touched (no `ALTER ... ENUM`) | `Subscription.php:21-44` |
+
+### 14b - what the site owns
+
+| id | what | where it starts from |
+|---|---|---|
+| 14b.1 | A **dunning ladder the site drives**: retry days, a **downgrade** step (a Gold member whose payment fails drops to Silver instead of being cancelled), then an explicit cancel. Today the cadence is the gateway's | the existing sequence is `payment_failed` mail -> `past_due` mail -> 7-day grace -> expiry (`Lifecycle.php:50-78`, `Subscription.php:21-44`, `Housekeeping.php:414-441`); it needs a schedule table and a job |
+| 14b.2 | A **dispute / chargeback state**: `purchase_events.event` already has the room (the column comment names `chargeback`) but **nothing writes it**. A `disputed` status on `purchases` (an enum ALTER) plus the ledger events, and a disputed purchase stops counting as revenue | `Purchase.php:14-20` (the status enum), `schema.sql:1118-1135` (the ledger) |
+
+### 14c - gifting
+
+| id | what | where it starts from |
+|---|---|---|
+| 14c.1 | A **member-facing gift purchase**, built on the mechanism that already exists: a sale code (`SaleCode::generate()`) pinned to a plan, 100 % off, one use. The member buys the plan as a gift, the site issues the code, the recipient redeems it at checkout through the existing `sale_code` field, and the member sees "gifts I sent" with each code's state. **No new recipient entity, no delivery token, no redemption audit** - the sale code IS the token, and the redemption is already recorded on the subscription (`sale_code_id`) and in the audit log | `SaleCode.php:48-70`, `MembershipController.php:364` and `:599-612` |
+
+---
+
 ## New checks (the house style)
 
 Every new check must be **proven to bite**: revert the fix, watch it fail,
@@ -418,7 +639,26 @@ query - the two parsers between the app and the auth webhook) ·
 `smoke.rate_limits.present` · `smoke.media.cacheable` ·
 `smoke.sitemap.covers_the_site` · `smoke.seo.no_duplicate_titles` ·
 `smoke.seo.alt_text` · `smoke.seo.breadcrumbs` · `smoke.seo.og_images` ·
-`smoke.seo.canonicals` · `smoke.csrf.per_form`.
+`smoke.seo.canonicals` · `smoke.csrf.per_form` ·
+`smoke.seo.crawlable_surface` (the CSP report-uri is absolute, the feeds
+and the sitemaps are publicly cacheable, and a paginated page sends its
+`Link` header - which must survive the page cache) ·
+`smoke.seo.guest_covers_are_modern` (the blurred cover the guest and the
+crawler see has an AVIF and a WebP copy) ·
+`smoke.ops.rate_limiter_sharded` (the limiter's state is sharded, the one
+global file is gone, and the limit is still enforced) ·
+`smoke.exposure.csrf_rotated` (the token is rotated on the login, the
+logout and the step-up) · `smoke.exposure.xsendfile_scope` (X-Sendfile
+covers the published media and the APK, not the whole storage tree) ·
+`smoke.chat_bridge.no_busy_loop` (the SSE loop sleeps on EVERY path and
+rate limits its frames) · `smoke.analytics.only_the_window_files` (a log
+file older than the window is not read) ·
+`smoke.access.one_predicate` now also pins the ONE-query access decision
+(`Photo::accessInfo()` and the five facts it must return) ·
+**phase 13/14 (planned):** `smoke.media.poster_build_is_verified` ·
+`smoke.money.levels_are_tiered` · `smoke.theme.title_image_upload` ·
+`smoke.sec.braintree_csp` · `smoke.terms.no_false_claims` ·
+`smoke.system.php_fatals_card`.
 
 ---
 
@@ -443,8 +683,21 @@ query - the two parsers between the app and the auth webhook) ·
 6. Prod smoke runs as `www-data` and needs `sudo rm -rf
    /tmp/gallery-analytics-rot` first, or `smoke.analytics.rotated_discovery`
    fails on a root-owned dir.
-7. `php tests/smoke.php` -> 963 checks at the start of this programme. The
-   count may only go up.
+7. `php tests/smoke.php` -> 963 checks at the start of this programme, and
+   **1005 now**. The count may only go up.
+8. **A new smoke check must also be registered in `TestSuite::tests()`.**
+   `tests/smoke.php:37+` asserts the smoke set is a SUBSET of the suite,
+   so a check that is not registered **fails CI**.
+9. **Wait ~75 s after a deploy to PROD before verifying anything.** Prod's
+   `opcache.revalidate_freq` is **60** seconds (not the 2 in
+   `90-gallery-opcache.ini` - the pool's php.ini wins), so the OLD code
+   keeps running for up to a minute after the files change. A view file is
+   included at runtime and changes at once; a class needs the window. This
+   cost an hour of chasing a "the deploy did not work" that had worked.
+10. A new migration must land in `schema.sql` as well
+   (`smoke.schema.migrations_are_in_the_schema`), the SQL must be
+   re-runnable, and an applied migration's checksum is immutable
+   (`scripts/migrate.php:148-153`).
 
 **A NOTE ON THE MEASUREMENTS.** The performance and SEO numbers came from
 a read-only audit that measured the LIVE prod box: MySQL's `general_log`
