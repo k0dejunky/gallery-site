@@ -56,8 +56,16 @@ $asyncDecodeAttr    = $heroCard ? '' : ' decoding="async"';
                     <img src="<?= e(file_url($cover['filename'], $coverSize)) ?>" alt="<?= e(\App\Models\Photo::altText($cover, (string) ($gallery['title'] ?? ''))) ?>" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?> data-fallback="<?= e($placeholder) ?>" title="Saving is disabled for members-only content">
                 <?php elseif ($coverSize === 'blur'): ?>
                     <?php // Guests (and search engines) only ever see the blurred
-                        // preview cover; the real thumbnail is for members. ?>
-                    <img src="<?= e(file_url($cover['filename'], 'blur')) ?>" alt="<?= e(\App\Models\Photo::altText($cover, (string) ($gallery['title'] ?? ''))) ?>" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> data-fallback="<?= e($placeholder) ?>" title="Saving is disabled for members-only content">
+                        // preview cover; the real thumbnail is for members. The
+                        // blurred cover gets the same modern formats as the
+                        // member's thumbnail, so the guest grid is not the one
+                        // surface that is stuck with plain JPEG. ?>
+                    <picture>
+                        <source type="image/avif" srcset="<?= e(file_url($cover['filename'], 'blur', 'avif')) ?>">
+                        <source type="image/webp" srcset="<?= e(file_url($cover['filename'], 'blur', 'webp')) ?>">
+                        <source type="image/jpeg" srcset="<?= e(file_url($cover['filename'], 'blur')) ?>">
+                        <img src="<?= e(file_url($cover['filename'], 'blur')) ?>" alt="<?= e(\App\Models\Photo::altText($cover, (string) ($gallery['title'] ?? ''))) ?>" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> data-fallback="<?= e($placeholder) ?>" title="Saving is disabled for members-only content">
+                    </picture>
                 <?php else: ?>
                     <picture>
                         <source type="image/avif" srcset="<?= e(file_url($cover['filename'], 'thumb', 'avif')) ?>">

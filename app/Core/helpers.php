@@ -2214,6 +2214,50 @@ function _make_avif(string $variant): void
 }
 
 /**
+ * Encode a WebP copy of a finished variant next to it.
+ *
+ * The grid serves AVIF and WebP through a <picture> block, and a variant
+ * that has no WebP copy falls back to its JPEG - which is what the guest
+ * grid (the blurred covers) used to do for every single cover.
+ */
+function _make_webp(string $variant): void
+{
+    if (!is_file($variant)) {
+        return;
+    }
+
+    $webp = preg_replace('/\.[^.]+$/', '.webp', $variant);
+    if (!is_string($webp) || $webp === $variant || is_file($webp)) {
+        return;
+    }
+
+    if (is_executable('/usr/bin/ffmpeg')) {
+        exec(
+            escapeshellarg('/usr/bin/ffmpeg') . ' -y -hide_banner -loglevel error -i '
+            . escapeshellarg($variant)
+            . ' -frames:v 1 -c:v libwebp -quality 80 '
+            . escapeshellarg($webp) . ' 2>/dev/null'
+        );
+
+        if (is_file($webp)) {
+            return;
+        }
+    }
+
+    // GD can do it too, when the extension is one it can read.
+    $image = @imagecreatefromstring((string) @file_get_contents($variant));
+    if ($image === false || !function_exists('imagewebp')) {
+        if ($image !== false) {
+            imagedestroy($image);
+        }
+
+        return;
+    }
+    @imagewebp($image, $webp, 80);
+    imagedestroy($image);
+}
+
+/**
  * GD-only WebP variant generation: decode once, then write the web and
  * thumbnail sizes as WebP. Used as the fallback when ffmpeg is unavailable
  * (or for non-JPEG uploads), keeping WebP parity with the ffmpeg path.

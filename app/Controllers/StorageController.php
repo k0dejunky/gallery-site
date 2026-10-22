@@ -320,6 +320,12 @@ class StorageController extends Controller
         if ($moved && is_file($dest)) {
             @chmod($dest, 0644);
 
+            // The blurred cover is what every guest (and every crawler) sees,
+            // so it gets the modern formats too: without them the guest
+            // grid was the one surface that could not use AVIF or WebP.
+            _make_webp($dest);
+            _make_avif($dest);
+
             return $dest;
         }
 

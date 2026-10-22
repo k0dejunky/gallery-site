@@ -7275,6 +7275,41 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
         // --- Behavioural: the parser is pure, so the fixture can be asserted
         //     without a database (the smoke suite must stay DB-free).
         $fixture = "$root/tests/fixtures/access-log.sample";
+        $add('smoke.seo.guest_covers_are_modern', 'Smoke · SEO', 'The guest grid serves AVIF and WebP too', static function () use ($root, $read, $ok, $bad): array {
+            // The member's thumbnail had a <picture> block with AVIF and
+            // WebP, but the guest (and the crawler) saw the BLURRED cover -
+            // and that variant had no modern-format copy at all, so the one
+            // surface that the search engines actually read was stuck with
+            // plain JPEG.
+            $card    = (string) $read($root . '/views/partials/gallery_card.php');
+            $helpers = (string) $read($root . '/app/Core/helpers.php');
+            $store   = (string) $read($root . '/app/Controllers/StorageController.php');
+            $backfill = (string) $read($root . '/bin/avif_backfill.php');
+            $problems = [];
+
+            if (strpos($card, "file_url(\$cover['filename'], 'blur', 'avif')") === false) {
+                $problems[] = 'the guest cover must offer an AVIF source';
+            }
+            if (strpos($card, "file_url(\$cover['filename'], 'blur', 'webp')") === false) {
+                $problems[] = 'the guest cover must offer a WebP source';
+            }
+            // A blurred cover made on demand has to get its copies too, or
+            // the next guest pays for the JPEG again.
+            if (strpos($store, "_make_avif(\$dest)") === false || strpos($store, "_make_webp(\$dest)") === false) {
+                $problems[] = 'an on-demand blurred cover must get its AVIF and WebP copies';
+            }
+            if (strpos($helpers, 'function _make_webp(') === false) {
+                $problems[] = 'there must be a helper that writes a WebP copy of a variant';
+            }
+            // And the backfill must cover the blurred covers.
+            if (strpos($backfill, "glob(\$root . '/blur_*.*')") === false) {
+                $problems[] = 'the AVIF backfill must cover the blurred covers';
+            }
+
+            return $problems === []
+                ? $ok('the guest grid serves AVIF and WebP too')
+                : $bad(implode('; ', $problems));
+        });
         $add('smoke.seo.crawlable_surface', 'Smoke · SEO', 'The crawlable surface is cacheable and announces its neighbours', static function () use ($root, $read, $ok, $bad): array {
             // Three things a crawler could not use:
             //  - the CSP report-uri was RELATIVE, so the browser had

@@ -9,6 +9,9 @@ declare(strict_types=1);
 //
 // Usage: php bin/avif_backfill.php [--limit=N] [--dry-run] [--thumb-only]
 // Exit code 0 on success (idempotent; skips files that already have avif).
+//
+// It also writes the missing WebP copy, so a variant can carry both modern
+// formats.
 
 require __DIR__ . '/../app/bootstrap.php';
 
@@ -35,6 +38,12 @@ if (!$thumbOnly) {
     foreach (glob($root . '/web_*.*') ?: [] as $f) {
         $files[] = $f;
     }
+    // The blurred covers are what every guest (and every crawler) sees.
+    // They had no modern-format copy at all, so the guest grid was the one
+    // surface that could not use AVIF or WebP.
+    foreach (glob($root . '/blur_*.*') ?: [] as $f) {
+        $files[] = $f;
+    }
 }
 foreach (glob($root . '/thumb_*.*') ?: [] as $f) {
     $files[] = $f;
@@ -50,15 +59,23 @@ foreach ($files as $file) {
     if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tiff'], true)) {
         continue;
     }
+    // A WebP is never the SOURCE of an AVIF: the AVIF belongs next to the
+    // JPEG of the same variant, not next to the WebP copy of it.
+    if ($ext === 'webp' || $ext === 'avif') {
+        continue;
+    }
 
     $avif = preg_replace('/\.[^.]+$/', '.avif', $file);
-    if (is_file($avif)) {
+    $webp = preg_replace('/\.[^.]+$/', '.webp', $file);
+    $needAvif = !is_file($avif);
+    $needWebp = !is_file($webp);
+    if (!$needAvif && !$needWebp) {
         continue;
     }
 
     if ($dryRun) {
         $count++;
-        echo "would: " . basename($file) . "\n";
+        echo "would: " . basename($file) . ($needAvif ? ' +avif' : '') . ($needWebp ? ' +webp' : '') . "\n";
         continue;
     }
 
@@ -66,20 +83,35 @@ foreach ($files as $file) {
     // site's 2-slot ffmpeg guard (used by live uploads) is never exhausted
     // by the backfill.
     $bin = is_executable('/usr/local/bin/ffmpeg.real') ? '/usr/local/bin/ffmpeg.real' : '/usr/bin/ffmpeg';
-    exec(
-        escapeshellarg($bin) . ' -y -hide_banner -loglevel error -i '
-        . escapeshellarg($file)
-        . ' -frames:v 1 -c:v libsvtav1 -preset 8 -crf 36 -still-picture 1 -threads 8 '
-        . escapeshellarg($avif) . ' 2>/dev/null'
-    );
 
-    if (is_file($avif)) {
-        $count++;
-        if ($count % 50 === 0) {
-            echo $count . " done\n";
+    if ($needWebp) {
+        exec(
+            escapeshellarg($bin) . ' -y -hide_banner -loglevel error -i '
+            . escapeshellarg($file)
+            . ' -frames:v 1 -c:v libwebp -quality 80 -threads 8 '
+            . escapeshellarg($webp) . ' 2>/dev/null'
+        );
+        if (!is_file($webp)) {
+            $errors++;
         }
-    } else {
-        $errors++;
+    }
+
+    if ($needAvif) {
+        exec(
+            escapeshellarg($bin) . ' -y -hide_banner -loglevel error -i '
+            . escapeshellarg($file)
+            . ' -frames:v 1 -c:v libsvtav1 -preset 8 -crf 36 -still-picture 1 -threads 8 '
+            . escapeshellarg($avif) . ' 2>/dev/null'
+        );
+
+        if (!is_file($avif)) {
+            $errors++;
+        }
+    }
+
+    $count++;
+    if ($count % 50 === 0) {
+        echo $count . " done\n";
     }
 }
 
