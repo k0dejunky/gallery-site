@@ -104,6 +104,10 @@ class AdminChatController extends Controller
             'cleanedCount' => ChatMessage::cleanedPairCount(),
             'broadcasts'   => ChatBroadcast::log(50),
             'tokens'       => OperatorToken::all(),
+            // The raw value of a token that was just created. It is shown
+            // ONCE - only its hash is stored - so it travels through the
+            // session and is handed to the page once.
+            'newToken'     => $this->takeNewToken(),
             'latestApk'    => $this->latestApkVersion(),
             'questionnaires' => ChatQuestionnaire::recent(20),
             'liveChatMutes' => Database::run(
@@ -112,6 +116,30 @@ class AdminChatController extends Controller
                  ORDER BY chat_muted_until DESC'
             )->fetchAll(),
         ]);
+    }
+
+    /**
+     * The raw value of the token that was just created, once.
+     *
+     * Only the hash is stored, so this is the one chance the operator gets
+     * to copy it. It is taken out of the session as it is read, so a reload
+     * does not bring it back.
+     *
+     * @return array{label: string, raw: string}|null
+     */
+    private function takeNewToken(): ?array
+    {
+        $token = $_SESSION['operator_token_new'] ?? null;
+        unset($_SESSION['operator_token_new']);
+
+        if (!is_array($token) || empty($token['raw'])) {
+            return null;
+        }
+
+        return [
+            'label' => (string) ($token['label'] ?? ''),
+            'raw'   => (string) $token['raw'],
+        ];
     }
 
     /**
@@ -619,7 +647,11 @@ class AdminChatController extends Controller
             'Created operator token "' . $label . '"' . ($expiresAt ? ' expiring ' . $expiresAt . ' UTC' : '')
         );
 
-        $this->flash('success', 'Token created for "' . $label . '". Copy it now (shown only once): ' . $raw);
+        // The raw value is handed to the page ONCE (only the hash is kept),
+        // in a panel of its own so it cannot be missed.
+        $_SESSION['operator_token_new'] = ['label' => $label, 'raw' => $raw];
+
+        $this->flash('success', 'Token created for "' . $label . '". Copy it now - it is shown only once.');
         $this->redirect('/admin/chat');
     }
 

@@ -2774,6 +2774,42 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.chat.operator_tokens_are_reachable', 'Smoke · Chat', 'The operator device tokens are where the operator can find them', static function () use ($root, $read, $ok, $bad): array {
+            // The tokens are needed for EVERY new device, and they used to
+            // be the sixth section of a long page - far below the fold on a
+            // phone. The section has to be the first thing on the page.
+            $view = (string) $read($root . '/views/admin/chat.php');
+            $ctrl = (string) $read($root . '/app/Controllers/AdminChatController.php');
+
+            $tokens = strpos($view, 'Operator device tokens');
+            $overview = strpos($view, '<h2>Overview</h2>');
+            $moderation = strpos($view, 'AI &amp; moderation');
+            if ($tokens === false) {
+                return $bad('the admin chat page has no operator device token section');
+            }
+            if ($overview === false || $tokens < $overview) {
+                return $bad('the operator device tokens must come after the overview');
+            }
+            if ($moderation !== false && $tokens > $moderation) {
+                return $bad('the operator device tokens are buried under the other sections');
+            }
+
+            // And the token that was just created has to be SHOWN: only its
+            // hash is stored, so the raw value is shown exactly once - in a
+            // panel of its own, not as a flash line that scrolls away.
+            if (strpos($ctrl, "'newToken'") === false) {
+                return $bad('the admin chat page does not receive the token that was just created');
+            }
+            if (strpos($ctrl, 'operator_token_new') === false) {
+                return $bad('a created token is not carried to the page that shows it');
+            }
+            if (strpos($view, 'operator-token-value') === false) {
+                return $bad('the created token is not shown in a copyable panel');
+            }
+
+            return $ok('the operator device tokens are at the top and a new one is shown once');
+        });
+
         $add('smoke.live.no_stream_key_for_members', 'Smoke · Live', 'A member cannot publish to the operator stream', static function () use ($root, $read, $ok, $bad): array {
             // The stream key was BOTH the HLS playback path and the RTMP
             // publish credential, and /live/state handed it to every paying
