@@ -220,6 +220,13 @@ class ImportController extends Controller
         }
 
         $ids = $this->request->post('photo_ids');
+        // The importer sends the ids as one JSON array (a multipart body
+        // cannot repeat a field with the client it uses), but a real
+        // photo_ids[] field is accepted as well.
+        if (is_string($ids)) {
+            $decoded = json_decode($ids, true);
+            $ids = is_array($decoded) ? $decoded : null;
+        }
         if (!is_array($ids) || empty($ids)) {
             $this->json(['ok' => false, 'error' => 'photo_ids[] is required'], 422);
             return;
@@ -540,6 +547,7 @@ class ImportController extends Controller
                 'gallery_id' => $galleryId,
                 'url'        => url('/galleries/' . $galleryId),
                 'uploaded'   => $uploaded,
+                'photo_ids'  => $photoIds,
                 'errors'     => $errors,
             ], 201);
             return;
@@ -550,6 +558,9 @@ class ImportController extends Controller
             'gallery_id' => $galleryId,
             'url'        => url('/galleries/' . $galleryId),
             'uploaded'   => $uploaded,
+            // The ids let the importer put the photos back in order: it
+            // uploads the files side by side, so they arrive in any order.
+            'photo_ids'  => $photoIds,
         ], 201);
     }
 

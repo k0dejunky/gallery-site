@@ -50,6 +50,12 @@ CHUNK_MIN = 8 * 1024 * 1024     # 8 MiB
 # own file, so they may arrive in any order.
 CHUNK_WORKERS = 6
 
+# How many small files are uploaded at the same time. A small file is one
+# request and the time is spent waiting for the server, so several of them
+# side by side make the whole album arrive much faster. The order of the
+# photos is put back afterwards (the /order endpoint).
+FILE_WORKERS = 6
+
 DEFAULT_CONFIG = {
     "host_folder": "",           # set at load (folder picker / --host / config)
     "posted_folder": "",         # default: <host_folder>/posted
@@ -61,6 +67,7 @@ DEFAULT_CONFIG = {
     "description": "",
     "is_secret": False,
     "chunk_workers": CHUNK_WORKERS,   # chunks of a file uploaded at the same time
+    "file_workers": FILE_WORKERS,     # small files uploaded at the same time
     "status_file": "",           # default: <host_folder>/.gallery_import_status.json
     "log_file": "",              # default: <host_folder>/gallery_import.log
     "image_ext": list(IMAGE_EXT),
@@ -349,7 +356,12 @@ def _upload_chunked(cfg, gid, path, original_name):
 def post_gallery(cfg, title, gtype, slot, files):
     """Create the scheduled gallery (metadata only), then upload each file in
     its own request so no single upload is huge (avoids server input timeouts
-    on large folders / long videos)."""
+    on large folders / long videos).
+
+    The files are uploaded in parallel: one connection to the server carries
+    about 0.9 MB/s on this link and six of them carry about 4.4 MB/s. The
+    photos then arrive in any order, so the photo ids are sent back to the
+    server afterwards in the order the folder listed the files in."""
     base = (cfg["server_base"] or "").rstrip("/")
     token = (cfg["import_token"] or "").strip()
     fields = {
@@ -369,29 +381,111 @@ def post_gallery(cfg, title, gtype, slot, files):
 
     uploaded = 0
     errors = []
-    for idx, fname in enumerate(files, 1):
-        try:
-            fsize = os.path.getsize(fname)
-            _set_progress(file=os.path.basename(fname), file_index=idx,
-                          files_total=len(files), file_bytes=0, file_total=fsize,
-                          stage="uploading",
-                          message="uploading %s" % os.path.basename(fname))
-            if fsize >= CHUNK_MIN:
-                # Large file → resumable chunked upload (many small requests).
-                data = _upload_chunked(cfg, gid, fname, os.path.basename(fname))
-                status, ok = 201, bool(data.get("ok"))
-            else:
-                status, data = _http_retry(base + "/webhooks/import/gallery/%d/files" % gid, token,
-                                           None, [fname], timeout=900)
-                ok = data.get("ok")
-        except Exception as exc:
-            errors.append("%s: %s" % (os.path.basename(fname), exc))
-            continue
+    photo_ids = {}          # index in files -> photo id on the server
 
-        if status in (200, 201) and ok:
+    def send_small(item):
+        """Upload one small file. Returns (index, photo_id, error)."""
+        index, fname = item
+        try:
+            status, resp = _http_retry(
+                base + "/webhooks/import/gallery/%d/files" % gid, token, None,
+                [fname], timeout=900)
+        except Exception as exc:
+            return index, None, "%s: %s" % (os.path.basename(fname), exc)
+        # A partial answer means the server kept the gallery but did not take
+        # the file (a file it cannot read, for instance). That is a failure:
+        # the folder must stay put instead of being moved away with an empty
+        # gallery behind.
+        if resp.get("partial") or not resp.get("uploaded"):
+            return index, None, "%s: %s" % (
+                os.path.basename(fname),
+                "; ".join(resp.get("errors") or ["the file was not taken"]))
+        if status in (200, 201) and resp.get("ok"):
+            ids = resp.get("photo_ids") or []
+            photo_id = int(ids[0]) if ids else 0
+            return index, photo_id, None
+        return index, None, "%s: HTTP %d: %s" % (
+            os.path.basename(fname), status, resp.get("error") or resp)
+
+    def send_big(item):
+        """Upload one big file in chunks. Returns (index, photo_id, error)."""
+        index, fname = item
+        try:
+            resp = _upload_chunked(cfg, gid, fname, os.path.basename(fname))
+        except Exception as exc:
+            return index, None, "%s: %s" % (os.path.basename(fname), exc)
+        if resp.get("ok"):
+            return index, int(resp.get("photo_id") or 0), None
+        return index, None, "%s: %s" % (os.path.basename(fname), resp.get("error") or resp)
+
+    sized = []
+    for index, fname in enumerate(files):
+        try:
+            size = os.path.getsize(fname)
+        except OSError:
+            size = 0
+        sized.append((index, fname, size))
+
+    small = [(i, f) for i, f, s in sized if s < CHUNK_MIN]
+    big = [(i, f) for i, f, s in sized if s >= CHUNK_MIN]
+
+    _set_progress(gallery_type=gtype, file="", file_index=0,
+                  files_total=len(files), file_bytes=0, file_total=0,
+                  stage="uploading", message="posting %s gallery" % gtype)
+
+    # The small files go out side by side: each one is a single request and
+    # the time is spent waiting for the server, not on the bytes.
+    file_workers = max(1, int(cfg.get("file_workers") or FILE_WORKERS))
+    if small and file_workers > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=file_workers) as pool:
+            for index, photo_id, error in pool.map(send_small, small):
+                if error:
+                    errors.append(error)
+                    continue
+                uploaded += 1
+                if photo_id:
+                    photo_ids[index] = photo_id
+                _set_progress(file_index=uploaded, files_total=len(files))
+    else:
+        for item in small:
+            index, photo_id, error = send_small(item)
+            if error:
+                errors.append(error)
+                continue
             uploaded += 1
-        else:
-            errors.append("%s: HTTP %d: %s" % (os.path.basename(fname), status, data.get("error") or data))
+            if photo_id:
+                photo_ids[index] = photo_id
+            _set_progress(file_index=uploaded, files_total=len(files))
+
+    # The big ones go one at a time, but each one is uploaded in parallel
+    # chunks, so the link is busy the whole time.
+    for index, fname in big:
+        _set_progress(file=os.path.basename(fname), file_index=uploaded + 1,
+                      files_total=len(files), file_bytes=0, file_total=0,
+                      stage="uploading", message="uploading %s" % os.path.basename(fname))
+        index, photo_id, error = send_big((index, fname))
+        if error:
+            errors.append(error)
+            continue
+        uploaded += 1
+        if photo_id:
+            photo_ids[index] = photo_id
+
+    # The files arrived in any order, so the order the folder listed them in
+    # is sent back to the server.
+    if photo_ids:
+        ordered = [photo_ids[i] for i in sorted(photo_ids.keys())]
+        try:
+            # The ids go as one JSON array: the multipart body cannot repeat
+            # a field, and the server reads a JSON string as well.
+            status, resp = _http_retry(
+                base + "/webhooks/import/gallery/%d/order" % gid, token,
+                {"photo_ids": json.dumps(ordered)}, None, timeout=300)
+            if status not in (200, 201) or not resp.get("ok"):
+                errors.append("order: HTTP %s: %s" % (status, resp.get("error") or resp))
+        except Exception as exc:
+            errors.append("order: %s" % exc)
 
     if errors:
         # Partial failure: report it as a failure so the folder stays put and
@@ -399,6 +493,12 @@ def post_gallery(cfg, title, gtype, slot, files):
         # (idempotent by title+type) and uploads the missing files.
         return {"ok": False, "error": "%s (uploaded %d of %d)" %
                 (errors[0], uploaded, len(files)), "gallery_id": gid, "uploaded": uploaded}
+    if uploaded != len(files):
+        # The server took every file without saying so, but the count does
+        # not add up. The folder stays put rather than leaving a gallery
+        # with a hole in it.
+        return {"ok": False, "error": "uploaded %d of %d files" % (uploaded, len(files)),
+                "gallery_id": gid, "uploaded": uploaded}
     return {"ok": True, "gallery_id": gid, "url": str(data.get("url") or ""), "uploaded": uploaded}
 
 
