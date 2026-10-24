@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Controller;
+use App\Core\Database;
 use App\Core\MediaUploader;
 use App\Core\Request;
 use App\Models\Gallery;
@@ -30,6 +31,45 @@ class ImportController extends Controller
     {
         parent::__construct($request);
         // Intentionally no Auth::requireLogin(): machine-to-machine.
+    }
+
+    /**
+     * GET /webhooks/import/galleries
+     * Every gallery the site holds: id, title, type, level, publish date.
+     *
+     * The folder-import worker uses it to skip the albums that are already
+     * on the site. Its own "posted" folder cannot know about them: the site
+     * is fed by more than one box, so a gallery can be published by the
+     * Windows box while this box never saw the folder.
+     */
+    public function galleries(): void
+    {
+        if (!$this->authorized()) {
+            $this->deny();
+            return;
+        }
+
+        $rows = Database::run(
+            'SELECT id, title, type, min_level, published_at FROM galleries
+             WHERE deleted_at IS NULL ORDER BY id'
+        )->fetchAll();
+
+        $galleries = [];
+        foreach ($rows as $row) {
+            $galleries[] = [
+                'gallery_id'   => (int) $row['id'],
+                'title'        => (string) $row['title'],
+                'type'         => (string) $row['type'],
+                'min_level'    => (int) $row['min_level'],
+                'published_at' => (string) $row['published_at'],
+            ];
+        }
+
+        $this->json([
+            'ok'       => true,
+            'galleries' => $galleries,
+            'count'    => count($galleries),
+        ]);
     }
 
     /**

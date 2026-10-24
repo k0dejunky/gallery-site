@@ -6111,6 +6111,13 @@ class SmokeChecks
                 ? $ok('settings endpoint wired')
                 : $bad('ImportController must implement /webhooks/import/settings with per-machine resolution');
         });
+        $add('smoke.import.galleries_endpoint', 'Smoke · Gallery Import', 'ImportController exposes GET /webhooks/import/galleries (the titles the site already holds)', static function () use ($root, $read, $importCtrl, $ok, $bad): array {
+            $routes = $read("$root/config/routes.php");
+            return strpos($importCtrl, 'public function galleries()') !== false
+                && strpos($routes, '/webhooks/import/galleries') !== false
+                ? $ok('galleries endpoint wired')
+                : $bad('ImportController must implement GET /webhooks/import/galleries so a folder-import worker can skip the albums the site already holds');
+        });
         $add('smoke.import.settings_model', 'Smoke · Gallery Import', 'ImportSettings stores per-machine host/posted folders', static function () use ($root, $read, $ok, $bad): array {
             $m = $read("$root/app/Models/ImportSettings.php");
             return strpos($m, 'class ImportSettings') !== false && strpos($m, "'machines'") !== false

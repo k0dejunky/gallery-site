@@ -56,6 +56,7 @@ return [
 
     // Gallery import API (folder-import app; Bearer GALLERY_IMPORT_KEY)
     ['GET', '/webhooks/import/queue', 'ImportController@queue'],
+    ['GET', '/webhooks/import/galleries', 'ImportController@galleries'],
     ['GET', '/webhooks/import/settings', 'ImportController@settings'],
     ['POST', '/webhooks/import/gallery', 'ImportController@gallery'],
     ['POST', '/webhooks/import/gallery/{id}/files', 'ImportController@files'],
