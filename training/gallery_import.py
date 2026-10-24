@@ -44,10 +44,11 @@ CHUNK_SIZE = 16 * 1024 * 1024   # 16 MiB
 CHUNK_MIN = 8 * 1024 * 1024     # 8 MiB
 
 # How many chunks of a file are uploaded at the same time. One connection to
-# the server carries about 0.9 MB/s on this link and three of them together
-# carry about 1.9 MB/s, so a big video arrives twice as fast. The server
-# writes every chunk to its own file, so they may arrive in any order.
-CHUNK_WORKERS = 3
+# the server carries about 0.9 MB/s on this link and six of them together
+# carry about 4.4 MB/s, so a big video arrives several times as fast. Twelve
+# connections are no better than six. The server writes every chunk to its
+# own file, so they may arrive in any order.
+CHUNK_WORKERS = 6
 
 DEFAULT_CONFIG = {
     "host_folder": "",           # set at load (folder picker / --host / config)
