@@ -6111,12 +6111,16 @@ class SmokeChecks
                 ? $ok('settings endpoint wired')
                 : $bad('ImportController must implement /webhooks/import/settings with per-machine resolution');
         });
-        $add('smoke.import.galleries_endpoint', 'Smoke · Gallery Import', 'ImportController exposes GET /webhooks/import/galleries (the titles the site already holds)', static function () use ($root, $read, $importCtrl, $ok, $bad): array {
+        $add('smoke.import.order_endpoint', 'Smoke · Gallery Import', 'ImportController exposes GET /webhooks/import/galleries and the photo order endpoint', static function () use ($root, $read, $importCtrl, $ok, $bad): array {
             $routes = $read("$root/config/routes.php");
+            $gallery = $read("$root/app/Models/Gallery.php");
             return strpos($importCtrl, 'public function galleries()') !== false
+                && strpos($importCtrl, 'public function order(') !== false
                 && strpos($routes, '/webhooks/import/galleries') !== false
-                ? $ok('galleries endpoint wired')
-                : $bad('ImportController must implement GET /webhooks/import/galleries so a folder-import worker can skip the albums the site already holds');
+                && strpos($routes, '/webhooks/import/gallery/{id}/order') !== false
+                && strpos($gallery, 'function setPhotoOrder(') !== false
+                ? $ok('galleries + order endpoints wired')
+                : $bad('ImportController must implement GET /webhooks/import/galleries and POST /webhooks/import/gallery/{id}/order (the importer uploads a folder in parallel)');
         });
         $add('smoke.import.settings_model', 'Smoke · Gallery Import', 'ImportSettings stores per-machine host/posted folders', static function () use ($root, $read, $ok, $bad): array {
             $m = $read("$root/app/Models/ImportSettings.php");

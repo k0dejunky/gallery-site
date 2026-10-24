@@ -199,6 +199,37 @@ class ImportController extends Controller
     }
 
     /**
+     * POST /webhooks/import/gallery/{id}/order
+     * Put the gallery's photos in the order the importer lists them in.
+     *
+     * The importer uploads the files of an album in parallel, so they arrive
+     * in any order and a photo's position is the order it was attached in.
+     * This puts them back. Body: photo_ids[] in the wanted order.
+     */
+    public function order(int $galleryId): void
+    {
+        if (!$this->authorized()) {
+            $this->deny();
+            return;
+        }
+
+        $gallery = Gallery::find($galleryId);
+        if ($gallery === null) {
+            $this->json(['ok' => false, 'error' => 'gallery not found'], 404);
+            return;
+        }
+
+        $ids = $this->request->post('photo_ids');
+        if (!is_array($ids) || empty($ids)) {
+            $this->json(['ok' => false, 'error' => 'photo_ids[] is required'], 422);
+            return;
+        }
+
+        $count = Gallery::setPhotoOrder($galleryId, $ids);
+        $this->json(['ok' => true, 'ordered' => $count]);
+    }
+
+    /**
      * POST /webhooks/import/gallery/{id}/files
      * Add one or more media files to an existing scheduled gallery. One file
      * (or a small batch) per request keeps each upload small and reliable.

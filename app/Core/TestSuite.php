@@ -1721,6 +1721,79 @@ class TestSuite
             }
         });
 
+        $add('db.import_photo_order', 'Database', 'setPhotoOrder puts a gallery\'s photos in the given order (the importer uploads in parallel)', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    Database::run(
+                        "INSERT INTO galleries (title, type) VALUES ('TmpImportOrder', 'images')"
+                    );
+                    $gid = (int) $pdo->lastInsertId();
+
+                    $hashes = [];
+                    $photoIds = [];
+                    for ($i = 0; $i < 3; $i++) {
+                        $hash = 'tmpimportorder' . bin2hex(random_bytes(6));
+                        Database::run(
+                            'INSERT INTO photos (filename, hash) VALUES (?, ?)',
+                            ['tmp_order_' . $i . '.jpg', $hash]
+                        );
+                        $pid = (int) $pdo->lastInsertId();
+                        $hashes[] = $hash;
+                        $photoIds[] = $pid;
+                        \App\Models\Gallery::attachPhoto($gid, $pid);
+                    }
+
+                    // The order the importer wants: the third file first.
+                    $wanted = [$photoIds[2], $photoIds[0], $photoIds[1]];
+                    $count = \App\Models\Gallery::setPhotoOrder($gid, $wanted);
+                    if ($count !== 3) {
+                        return ['pass' => false, 'detail' => 'setPhotoOrder reported ' . $count . ' of 3'];
+                    }
+
+                    $rows = Database::run(
+                        'SELECT photo_id, position FROM gallery_photo
+                         WHERE gallery_id = ? ORDER BY position ASC, photo_id ASC',
+                        [$gid]
+                    )->fetchAll();
+
+                    $got = [];
+                    foreach ($rows as $row) {
+                        $got[] = (int) $row['photo_id'];
+                    }
+                    if ($got !== $wanted) {
+                        return ['pass' => false, 'detail' => 'the order came back as ' . implode(',', $got)];
+                    }
+
+                    // The positions have to be 1, 2, 3 so the grid shows them
+                    // in that order.
+                    $positions = [];
+                    foreach ($rows as $row) {
+                        $positions[] = (int) $row['position'];
+                    }
+                    if ($positions !== [1, 2, 3]) {
+                        return ['pass' => false, 'detail' => 'the positions are ' . implode(',', $positions)];
+                    }
+
+                    return ['pass' => true, 'detail' => 'the order was set'];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $e) {
+                return ['pass' => false, 'detail' => $e->getMessage()];
+            }
+        });
         $add('db.subscription_cancel_is_final', 'Database', 'A cancelled subscription is not resurrected by a replayed payment postback', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

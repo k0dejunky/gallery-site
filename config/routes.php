@@ -60,6 +60,7 @@ return [
     ['GET', '/webhooks/import/settings', 'ImportController@settings'],
     ['POST', '/webhooks/import/gallery', 'ImportController@gallery'],
     ['POST', '/webhooks/import/gallery/{id}/files', 'ImportController@files'],
+    ['POST', '/webhooks/import/gallery/{id}/order', 'ImportController@order'],
     ['POST', '/webhooks/import/gallery/{id}/files/chunk', 'ImportController@chunk'],
     ['POST', '/webhooks/import/gallery/{id}/files/chunk/complete', 'ImportController@chunkComplete'],
 

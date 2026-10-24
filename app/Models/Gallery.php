@@ -1297,6 +1297,66 @@ class Gallery
     }
 
     /**
+     * Put the gallery's photos in the given order.
+     *
+     * The folder-import worker uploads the files of an album in parallel, so
+     * they arrive in any order, and a photo's position is the order it was
+     * attached in. This puts them back where the folder listed them.
+     *
+     * The positions are not unique, so every row is parked far out of the
+     * way first and the named ones are then given their place one by one.
+     * A photo the caller did not name keeps its parked position and shows
+     * after the ones that were named.
+     */
+    public static function setPhotoOrder(int $galleryId, array $photoIds): int
+    {
+        $ordered = [];
+        foreach ($photoIds as $photoId) {
+            $photoId = (int) $photoId;
+            if ($photoId > 0) {
+                $ordered[] = $photoId;
+            }
+        }
+        $ordered = array_values(array_unique($ordered));
+        if (empty($ordered)) {
+            return 0;
+        }
+
+        $pdo = Database::connection();
+        $own = !$pdo->inTransaction();
+        if ($own) {
+            $pdo->beginTransaction();
+        }
+        try {
+            Database::run(
+                'UPDATE gallery_photo SET position = position + 1000000 WHERE gallery_id = ?',
+                [$galleryId]
+            );
+            $position = 1;
+            foreach ($ordered as $photoId) {
+                Database::run(
+                    'UPDATE gallery_photo SET position = ? WHERE gallery_id = ? AND photo_id = ?',
+                    [$position, $galleryId, $photoId]
+                );
+                $position++;
+            }
+            if ($own) {
+                $pdo->commit();
+            }
+        } catch (\Throwable $e) {
+            if ($own) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+
+        \App\Core\Cache::bump('gallery');
+        \App\Core\Cache::bump('media');
+
+        return count($ordered);
+    }
+
+    /**
      * Swap a photo's position with its neighbor (up or down) to reorder the
      * gallery display.
      */
