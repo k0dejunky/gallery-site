@@ -54,8 +54,11 @@ class CategorySuggestion
             return false;
         }
 
+        // INSERT IGNORE: a folder-import worker uploads the files of an
+        // album side by side, and two of them can reach this point together.
+        // The second insert would fail on the primary key.
         Database::run(
-            "INSERT INTO gallery_category_jobs (gallery_id, status, engine) VALUES (?, 'queued', ?)",
+            "INSERT IGNORE INTO gallery_category_jobs (gallery_id, status, engine) VALUES (?, 'queued', ?)",
             [$galleryId, self::driver()]
         );
 

@@ -1287,8 +1287,11 @@ class Gallery
             [$galleryId]
         )->fetchColumn();
 
+        // INSERT IGNORE: a folder-import worker uploads the files of an
+        // album side by side, and two of them can attach the same photo at
+        // the same time. The primary key says it is attached already.
         Database::run(
-            'INSERT INTO gallery_photo (gallery_id, photo_id, position) VALUES (?, ?, ?)',
+            'INSERT IGNORE INTO gallery_photo (gallery_id, photo_id, position) VALUES (?, ?, ?)',
             [$galleryId, $photoId, $position]
         );
 
