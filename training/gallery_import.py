@@ -36,11 +36,13 @@ VIDEO_EXT = ("mp4", "webm", "mov", "m4v", "ogg", "avi", "mkv", "3gp", "3g2", "mp
              "wmv", "flv", "ts", "mts", "m2ts", "vob", "asf")
 
 # Resumable chunked upload: files at/above CHUNK_MIN bytes are sliced into
-# CHUNK_SIZE parts and uploaded as many small requests (each safely within the
-# server's proxy/timeout limits), so multi-GB videos upload reliably instead of
-# stalling in a single long request. Values must match the server's
-# config('app.uploads') chunk_size/chunk_min.
-CHUNK_SIZE = 16 * 1024 * 1024   # 16 MiB
+# CHUNK_SIZE parts and uploaded as many small requests (each safely within
+# the server's proxy/timeout limits), so multi-GB videos upload reliably
+# instead of stalling in a single long request. The server refuses a part
+# bigger than its own chunk_size (16 MiB), but a smaller part is fine and
+# gives a file more parts to send side by side: a 9 MB file is one part at
+# 16 MiB (one slow connection) and three parts at 4 MiB.
+CHUNK_SIZE = 4 * 1024 * 1024   # 4 MiB
 CHUNK_MIN = 8 * 1024 * 1024     # 8 MiB
 
 # How many chunks of a file are uploaded at the same time. One connection to
@@ -436,6 +438,8 @@ def post_gallery(cfg, title, gtype, slot, files):
     # The small files go out side by side: each one is a single request and
     # the time is spent waiting for the server, not on the bytes.
     file_workers = max(1, int(cfg.get("file_workers") or FILE_WORKERS))
+    _log(cfg, "posting %s gallery %s: %d small file(s), %d big one(s), %d worker(s)"
+         % (gtype, title, len(small), len(big), file_workers))
     if small and file_workers > 1:
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=file_workers) as pool:
