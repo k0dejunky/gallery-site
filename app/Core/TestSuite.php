@@ -552,6 +552,108 @@ class TestSuite
             )];
         });
 
+        $add('db.variant_orientation', 'Database', 'a preview keeps the orientation the browser shows (the EXIF tag is applied once, not twice)', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+                if (!function_exists('imagecreatetruecolor') || !function_exists('imagejpeg')) {
+                    return ['pass' => true, 'detail' => 'GD is not available here'];
+                }
+
+                $dir = sys_get_temp_dir() . '/vs-ori-' . bin2hex(random_bytes(4));
+                if (!@mkdir($dir, 0777, true)) {
+                    return ['pass' => false, 'detail' => 'cannot make a work folder'];
+                }
+
+                try {
+                    // A WIDE picture with the EXIF orientation 6 tag and a
+                    // black mark in its top-left corner. Every browser shows
+                    // it turned 90 degrees clockwise, so the upright picture
+                    // is 100 wide, 200 tall, and the mark sits in its
+                    // top-right corner.
+                    $src = $dir . '/src.jpg';
+                    $im  = imagecreatetruecolor(200, 100);
+                    imagefill($im, 0, 0, imagecolorallocate($im, 255, 255, 255));
+                    imagefilledrectangle($im, 2, 2, 30, 30, imagecolorallocate($im, 0, 0, 0));
+                    imagejpeg($im, $src, 92);
+                    imagedestroy($im);
+
+                    $orientation = 6;
+
+                    // Build the EXIF block by hand: a big-endian TIFF with
+                    // one Orientation tag, wrapped in a JPEG APP1 segment.
+                    $tiff = "MM\x00\x2a\x00\x00\x00\x08"
+                        . "\x00\x01"          // one IFD entry
+                        . "\x01\x12\x00\x03\x00\x00\x00\x01\x00\x06\x00\x00"
+                        . "\x00\x00\x00\x00";  // no next IFD
+                    $exifData = "Exif\x00\x00" . $tiff;
+                    $app1 = "\xFF\xE1"
+                        . pack('n', strlen($exifData) + 2) . $exifData;
+                    $raw = file_get_contents($src);
+                    file_put_contents($src, "\xFF\xD8" . $app1 . substr($raw, 2));
+
+                    if (exif_orientation_of($src) !== $orientation) {
+                        return ['pass' => false, 'detail' => 'the test image carries no orientation tag'];
+                    }
+
+                    $web   = $dir . '/web.jpg';
+                    $thumb = $dir . '/thumb.jpg';
+                    create_image_variants($src, $web, $thumb, 1280, 200, 200);
+
+                    if (!is_file($web)) {
+                        return ['pass' => false, 'detail' => 'no preview was written'];
+                    }
+
+                    // Where is the mark in the preview? It has to be in the
+                    // top-right quarter: that is where the upright picture
+                    // puts it. Applying the orientation twice moved it to the
+                    // bottom-left.
+                    $preview = @imagecreatefromjpeg($web);
+                    if ($preview === false) {
+                        return ['pass' => false, 'detail' => 'the preview cannot be read'];
+                    }
+                    $w = imagesx($preview);
+                    $h = imagesy($preview);
+                    $dark = null;
+                    for ($x = 0; $x < $w; $x += max(1, intdiv($w, 12))) {
+                        for ($y = 0; $y < $h; $y += max(1, intdiv($h, 12))) {
+                            $rgb = imagecolorsforindex($preview, imagecolorat($preview, $x, $y));
+                            if ((int) (($rgb['red'] + $rgb['green'] + $rgb['blue']) / 3) < 100) {
+                                $dark = [$x, $y];
+                                break 2;
+                            }
+                        }
+                    }
+                    imagedestroy($preview);
+
+                    if ($dark === null) {
+                        return ['pass' => false, 'detail' => 'the mark is not in the preview'];
+                    }
+                    if ($dark[0] < $w / 2) {
+                        return ['pass' => false, 'detail' => sprintf(
+                            'the mark sits on the left of the %dx%d preview; the upright picture has it on the right',
+                            $w, $h
+                        )];
+                    }
+                    if ($dark[1] > $h / 2) {
+                        return ['pass' => false, 'detail' => sprintf(
+                            'the mark sits at the bottom of the %dx%d preview; the upright picture has it at the top',
+                            $w, $h
+                        )];
+                    }
+
+                    return ['pass' => true, 'detail' => sprintf('the preview is %dx%d and upright', $w, $h)];
+                } finally {
+                    foreach (glob($dir . '/*') ?: [] as $file) {
+                        @unlink($file);
+                    }
+                    @rmdir($dir);
+                }
+            } catch (\Throwable $e) {
+                return ['pass' => false, 'detail' => $e->getMessage()];
+            }
+        });
         $add('db.media_dimensions', 'Database', 'the display size of a media file is stored on the photo row', function () {
             $cols = Database::run('SHOW COLUMNS FROM photos')->fetchAll();
             $have = [];

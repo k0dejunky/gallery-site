@@ -2048,32 +2048,6 @@ function burn_video_watermark(string $src, string $dest, ?string $logoPath = nul
     return true;
 }
 
-/**
- * Map an EXIF orientation value to the ffmpeg transpose chain that bakes the
- * rotation into the pixels. ffmpeg ignores EXIF rotation metadata, so photos
- * from phones would come out sideways unless corrected here.
- */
-function _exif_transpose_chain(int $orientation): string
-{
-    switch ($orientation) {
-        case 2:
-            return 'hflip';
-        case 3:
-            return 'transpose=1,transpose=1';
-        case 4:
-            return 'vflip';
-        case 5:
-            return 'transpose=0';
-        case 6:
-            return 'transpose=1';
-        case 7:
-            return 'transpose=3';
-        case 8:
-            return 'transpose=2';
-    }
-
-    return '';
-}
 
 /**
  * Generate the web variant and thumbnail from one source image in a single
@@ -2142,8 +2116,21 @@ function create_image_variants(string $src, string $webDest, string $thumbDest, 
         $webpWebW = max(1, (int) round($effW * min(1.0, $maxDim / max($effW, $effH))));
         $webpWebH = max(1, (int) round($effH * min(1.0, $maxDim / max($effW, $effH))));
 
-        $pre       = _exif_transpose_chain($orientation);
-        $filters   = ($pre !== '' ? $pre . ',' : '') . 'split=4[a][b][c][d]'
+        // ffmpeg applies the EXIF orientation ITSELF: the decoder's autorotate
+        // is on by default, so the frames that enter the filter chain are
+        // already upright (and swapped for the orientations 5-8, which is what
+        // $effW/$effH describe).
+        //
+        // The orientation must therefore NOT be applied a second time here.
+        // It was, and every camera photo came out 180 degrees from the
+        // original: the previews in the grids were upside down while the
+        // browser showed the original the right way up - and because the
+        // manage page's rotate buttons are judged against that preview, the
+        // rotation looked like it turned the images the wrong way.
+        //
+        // The transpose values also changed meaning between ffmpeg releases,
+        // so letting ffmpeg do it is the version-proof answer.
+        $filters   = 'split=4[a][b][c][d]'
             . ';' . $webChain
             . ";[b]scale={$thumbWidth}:{$thumbHeight}:force_original_aspect_ratio=increase,crop={$thumbWidth}:{$thumbHeight}[t]"
             . ";[c]scale={$webpWebW}:{$webpWebH}[ww]"

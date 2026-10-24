@@ -6111,6 +6111,19 @@ class SmokeChecks
                 ? $ok('settings endpoint wired')
                 : $bad('ImportController must implement /webhooks/import/settings with per-machine resolution');
         });
+        $add('smoke.media.variant_orientation', 'Smoke · Media', 'A preview applies the EXIF orientation once (ffmpeg already does it)', static function () use ($root, $read, $ok, $bad): array {
+            $helpers = $read("$root/app/Core/helpers.php");
+            // ffmpeg's autorotate applies the EXIF orientation itself. A
+            // second, explicit transpose turned every camera photo 180
+            // degrees from the original: the previews in the grids came out
+            // upside down, and because the manage page's rotate buttons are
+            // judged against those previews, the rotation looked like it
+            // turned the images the wrong way.
+            if (strpos($helpers, '_exif_transpose_chain') !== false) {
+                return $bad('create_image_variants must not transpose the EXIF orientation a second time: ffmpeg already does it');
+            }
+            return $ok('the EXIF orientation is applied once');
+        });
         $add('smoke.import.order_endpoint', 'Smoke · Gallery Import', 'ImportController exposes GET /webhooks/import/galleries and the photo order endpoint', static function () use ($root, $read, $importCtrl, $ok, $bad): array {
             $routes = $read("$root/config/routes.php");
             $gallery = $read("$root/app/Models/Gallery.php");
