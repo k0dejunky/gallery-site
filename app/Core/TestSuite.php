@@ -1794,6 +1794,76 @@ class TestSuite
                 return ['pass' => false, 'detail' => $e->getMessage()];
             }
         });
+        $add('db.import_no_orphan_files', 'Database', 're-importing a file the site already holds leaves no file behind', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                $dir = \config('app.uploads')['dir'];
+                $made = [];
+
+                try {
+                    Database::run(
+                        "INSERT INTO galleries (title, type) VALUES ('TmpOrphanFiles', 'images')"
+                    );
+                    $gid = (int) $pdo->lastInsertId();
+
+                    $hash   = 'tmporphan' . bin2hex(random_bytes(8));
+                    $first  = 'tmp_orphan_first_' . bin2hex(random_bytes(4)) . '.jpg';
+                    $second = 'tmp_orphan_second_' . bin2hex(random_bytes(4)) . '.jpg';
+
+                    // The site holds the file already.
+                    \App\Models\Photo::create($first, $hash);
+
+                    // A second copy of the same file arrives (a re-import).
+                    foreach ([$first, $second] as $name) {
+                        $path = $dir . '/' . $name;
+                        file_put_contents($path, 'not really an image');
+                        $made[] = $path;
+                        $made[] = $dir . '/web_' . $name;
+                        $made[] = $dir . '/thumb_' . $name;
+                    }
+
+                    \App\Core\MediaUploader::commit($gid, $second, $hash);
+
+                    if (is_file($dir . '/' . $second)) {
+                        return ['pass' => false, 'detail' => 'the second copy of the file was left on the disk'];
+                    }
+                    if (is_file($dir . '/web_' . $second)) {
+                        return ['pass' => false, 'detail' => 'the preview of the second copy was left on the disk'];
+                    }
+                    // The one the photo points at must still be there.
+                    if (!is_file($dir . '/' . $first)) {
+                        return ['pass' => false, 'detail' => 'the file of the photo was removed'];
+                    }
+
+                    $photos = (int) Database::run('SELECT COUNT(*) FROM photos WHERE hash = ?', [$hash])->fetchColumn();
+                    if ($photos !== 1) {
+                        return ['pass' => false, 'detail' => 'the site holds ' . $photos . ' copies of the file'];
+                    }
+
+                    return ['pass' => true, 'detail' => 'the second copy was removed'];
+                } finally {
+                    foreach ($made as $path) {
+                        if (is_file($path)) {
+                            @unlink($path);
+                        }
+                    }
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $e) {
+                return ['pass' => false, 'detail' => $e->getMessage()];
+            }
+        });
         $add('db.subscription_cancel_is_final', 'Database', 'A cancelled subscription is not resurrected by a replayed payment postback', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

@@ -207,6 +207,26 @@ class MediaUploader
     }
 
     /**
+     * Remove a file that was written for a photo the site already holds,
+     * together with the previews that were made for it.
+     */
+    private static function discardSavedFile(string $filename, array $config): void
+    {
+        $dir = $config['dir'];
+        $paths = [
+            $dir . '/' . $filename,
+            $dir . '/web_' . $filename,
+            $dir . '/thumb_' . $filename,
+            video_sample_path($filename),
+        ];
+        foreach ($paths as $path) {
+            if (is_file($path)) {
+                @unlink($path);
+            }
+        }
+    }
+
+    /**
      * Commit a saved file into a gallery: skip when a photo with the same
      * content hash already exists (attach the existing one), otherwise create
      * the photo row and attach it. Returns the photo id.
@@ -218,6 +238,12 @@ class MediaUploader
         $existing = \App\Models\Photo::findByHash($hash);
 
         if ($existing !== null) {
+            // The site already holds this file. The copy that was just
+            // written is not used by anything, so it goes away again: a
+            // re-import of a folder would otherwise leave a copy of every
+            // file behind and fill the disk.
+            self::discardSavedFile($filename, $config);
+
             \App\Models\Gallery::attachPhoto($galleryId, (int) $existing['id']);
 
             return (int) $existing['id'];
