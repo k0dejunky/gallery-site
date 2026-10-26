@@ -3814,6 +3814,7 @@ class SmokeChecks
             $model = (string) $read($root . '/app/Models/LiveChatMessage.php');
             $ctrl  = (string) $read($root . '/app/Controllers/SupportController.php');
             $view  = (string) $read($root . '/views/admin/support.php');
+            $liveView = (string) $read($root . '/views/admin/live_chat.php');
             $routes = (string) $read($root . '/config/routes.php');
             $problems = [];
 
@@ -3827,20 +3828,25 @@ class SmokeChecks
                 $problems[] = 'there must be a way to remove every message from one member in a stream';
             }
             if (strpos($ctrl, 'LiveChatMessage::recent(') === false) {
-                $problems[] = 'the support page must show the live chat';
+                $problems[] = 'the live chat page must show the live chat';
             }
             if (strpos($ctrl, 'deleteLiveMessage(') === false) {
                 $problems[] = 'there must be an action that removes a live chat message';
             }
-            if (strpos($view, 'Live chat') === false) {
-                $problems[] = 'the support page must have a live chat section';
+            if ($liveView === '' || stripos($liveView, 'live chat') === false) {
+                $problems[] = 'there must be a live chat page with the messages';
             }
-            if (strpos($routes, '/admin/support/live-chat/') === false) {
+            if (strpos($routes, '/admin/live-chat') === false) {
                 $problems[] = 'there must be a route for the live chat moderation';
+            }
+            // The support page is for support information: the chat of a live
+            // stream belongs on its own page.
+            if (stripos($view, 'live chat') !== false) {
+                $problems[] = 'the support page must not show the live chat';
             }
 
             return $problems === []
-                ? $ok('the live chat can be moderated')
+                ? $ok('the live chat can be moderated on its own page')
                 : $bad(implode('; ', $problems));
         });
 

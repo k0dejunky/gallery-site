@@ -128,11 +128,28 @@ public function submit(): void
     {
         Auth::requirePermission('support');
         $this->viewAdmin('support', [
-            'title'        => 'Support Messages',
-            'messages'     => SupportMessage::all(),
-            // The live chat had NO moderation screen at all: a member's
-            // live chat message stayed in the replay for everyone to see and
-            // there was nowhere to look at what was said.
+            'title'    => 'Support Messages',
+            'messages' => SupportMessage::all(),
+        ]);
+    }
+
+    /**
+     * The live chat moderation queue.
+     *
+     * The live chat had NO moderation screen at all: a member's live chat
+     * message stayed in the replay for everyone to see and there was nowhere
+     * to look at what was said or to take a message down. The member chat has
+     * a moderation path; the live chat had none.
+     *
+     * It used to sit on the support page, which made that page show two
+     * unrelated things - the support tickets and the chat of a live stream.
+     * It has a page of its own now.
+     */
+    public function liveChat(): void
+    {
+        Auth::requirePermission('support');
+        $this->viewAdmin('live_chat', [
+            'title'        => 'Live Chat',
             'liveMessages' => \App\Models\LiveChatMessage::recent(100),
             'liveSessions' => \App\Models\LiveChatMessage::sessionsWithChat(25),
             'liveCount'    => \App\Models\LiveChatMessage::countSince(3600),
@@ -152,7 +169,7 @@ public function submit(): void
             $this->flash('error', 'That message was already gone.');
         }
 
-        $this->redirect('/admin/support');
+        $this->redirect('/admin/live-chat');
     }
 
     /**
@@ -169,7 +186,7 @@ public function submit(): void
                 ? $removed . ' live chat message(s) removed.'
                 : 'There was nothing to remove.');
 
-        $this->redirect('/admin/support');
+        $this->redirect('/admin/live-chat');
     }
 
     public function adminShow(int $id): void
