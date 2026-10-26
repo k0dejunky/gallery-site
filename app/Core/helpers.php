@@ -2050,6 +2050,50 @@ function burn_video_watermark(string $src, string $dest, ?string $logoPath = nul
 
 
 /**
+ * The ffmpeg filter chain that puts a picture the right way up.
+ *
+ * ffmpeg applies the EXIF orientation ITSELF (the decoder's autorotate), and
+ * the site used to apply it a second time here: every camera photo came out
+ * 180 degrees from the original, so the previews in the grids were upside
+ * down while the browser showed the original the right way up - and because
+ * the manage page's rotate buttons are judged against those previews, a
+ * rotation looked like it turned the images the wrong way.
+ *
+ * The orientation is applied ONCE, here, and the decoder is told not to
+ * apply it as well (-noautorotate).
+ *
+ * The transpose values mean different things in different ffmpeg releases:
+ * 1 and 3 swapped their meaning (one of them gained a flip). Only the
+ * values that mean the same thing in every release are used here, so a
+ * preview is upright on every box. 90 degrees clockwise is written as
+ * "90 counter-clockwise, then 180" for the same reason.
+ */
+function _exif_transpose_chain(int $orientation): string
+{
+    $clockwise = 'transpose=2,transpose=1,transpose=1';
+
+    switch ($orientation) {
+        case 2:
+            return 'hflip';
+        case 3:
+            return 'transpose=1,transpose=1';
+        case 4:
+            return 'vflip';
+        case 5:
+            return $clockwise . ',hflip';
+        case 6:
+            return $clockwise;
+        case 7:
+            return 'transpose=2,hflip';
+        case 8:
+            return 'transpose=2';
+    }
+
+    return '';
+}
+
+
+/**
  * Generate the web variant and thumbnail from one source image in a single
  * ffmpeg pass: one decode feeds both output sizes through a filter_complex
  * split. This replaces the old double GD pipeline (thumbnail + web image
@@ -2121,32 +2165,40 @@ function create_image_variants(string $src, string $webDest, string $thumbDest, 
         // already upright (and swapped for the orientations 5-8, which is what
         // $effW/$effH describe).
         //
-        // The orientation must therefore NOT be applied a second time here.
-        // It was, and every camera photo came out 180 degrees from the
-        // original: the previews in the grids were upside down while the
-        // browser showed the original the right way up - and because the
-        // manage page's rotate buttons are judged against that preview, the
-        // rotation looked like it turned the images the wrong way.
-        //
-        // The transpose values also changed meaning between ffmpeg releases,
-        // so letting ffmpeg do it is the version-proof answer.
-        $filters   = 'split=4[a][b][c][d]'
+        // The orientation is applied ONCE, here, and the decoder is told not
+        // to apply it as well (-noautorotate). ffmpeg used to do it as well,
+        // and every camera photo came out 180 degrees from the original:
+        // the previews in the grids were upside down while the browser showed
+        // the original the right way up - and because the manage page's
+        // rotate buttons are judged against that preview, the rotation looked
+        // like it turned the images the wrong way.
+        $pre       = _exif_transpose_chain($orientation);
+        $filters   = ($pre !== '' ? $pre . ',' : '') . 'split=4[a][b][c][d]'
             . ';' . $webChain
             . ";[b]scale={$thumbWidth}:{$thumbHeight}:force_original_aspect_ratio=increase,crop={$thumbWidth}:{$thumbHeight}[t]"
             . ";[c]scale={$webpWebW}:{$webpWebH}[ww]"
             . ";[d]scale={$thumbWidth}:{$thumbHeight}:force_original_aspect_ratio=increase,crop={$thumbWidth}:{$thumbHeight}[tt]";
 
         $cmd = escapeshellarg('/usr/bin/ffmpeg')
-            . ' -y -hide_banner -loglevel error -i ' . escapeshellarg($src)
+            . ' -y -hide_banner -loglevel error -noautorotate -i ' . escapeshellarg($src)
             . ' -map_metadata -1'
             . ' -filter_complex "' . $filters . '"'
             . ' -map "[w]" -frames:v 1 -q:v 4 ' . escapeshellarg($webDest)
             . ' -map "[t]" -frames:v 1 -q:v 5 ' . escapeshellarg($thumbDest)
             . ' -map "[ww]" -frames:v 1 -c:v libwebp -quality 80 ' . escapeshellarg($webpWebDest)
-            . ' -map "[tt]" -frames:v 1 -c:v libwebp -quality 80 ' . escapeshellarg($webpThumbDest)
-            . ' 2>/dev/null';
+            . ' -map "[tt]" -frames:v 1 -c:v libwebp -quality 80 ' . escapeshellarg($webpThumbDest);
 
-        exec($cmd, $out, $rc);
+        $out = [];
+        exec($cmd . ' 2>&1', $out, $rc);
+
+        if ($rc !== 0 && stripos(implode("\n", $out), 'noautorotate') !== false) {
+            // This ffmpeg does not know the option - and an ffmpeg that does
+            // not know it does not rotate the picture by itself either, so
+            // the orientation in the filter chain is all that is needed.
+            $cmd = str_replace(' -noautorotate ', ' ', $cmd);
+            $out = [];
+            exec($cmd . ' 2>&1', $out, $rc);
+        }
 
         // All four outputs must exist: this ffmpeg invocation also writes the
         // WebP variants, and returning success on JPEG alone left the grids

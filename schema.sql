@@ -372,6 +372,11 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     access_level INT NULL,
     payment_processor_id INT UNSIGNED NULL,
     transaction_ref VARCHAR(255) NULL,
+    -- The payment that was last counted. A renewal postback for the same
+    -- payment must not grant a second period.
+    last_payment_ref VARCHAR(120) NULL,
+    -- How many billing periods this subscription has been granted.
+    periods_granted INT UNSIGNED NOT NULL DEFAULT 0,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_subscriptions_user (user_id),

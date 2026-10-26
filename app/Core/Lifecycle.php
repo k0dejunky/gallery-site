@@ -91,9 +91,44 @@ final class Lifecycle
         ]);
     }
 
-    /** Win-back for a lapsed user (honours marketing opt-out). */
-    public static function onWinback(int $subscriptionId): bool
+    /**
+     * A payment was received: the member's receipt.
+     *
+     * Sent once per payment, so a member who renews every month gets one
+     * receipt per month. The payment id is what makes it one per payment.
+     */
+    public static function onPaymentReceived(int $subscriptionId, string $paymentKey,
+        string $receiptNumber = ''): bool
     {
+        $sub = self::subscription($subscriptionId);
+        if ($sub === null) {
+            return false;
+        }
+
+        $expires = (string) ($sub['expires_at'] ?? '');
+        $amount = (float) ($sub['price_paid'] ?? 0);
+        if ($amount <= 0) {
+            $amount = (float) ($sub['price'] ?? 0);
+        }
+
+        return self::send(
+            'payment_received_' . substr(sha1((string) $paymentKey), 0, 20),
+            $subscriptionId,
+            'payment_received',
+            'Your payment was received',
+            [
+                'planName'      => (string) ($sub['plan_name'] ?? 'your membership'),
+                'amount'        => $amount,
+                'receiptNumber' => (string) ($receiptNumber !== '' ? $receiptNumber : $paymentKey),
+                'paidAt'        => date('F j, Y'),
+                'expiresAt'     => $expires !== '' ? \tzdate('F j, Y', $expires) : '',
+                'manageUrl'     => absolute_url('/membership/my'),
+            ]
+        );
+    }
+
+    /** Win-back for a lapsed user (honours marketing opt-out). */
+    public static function onWinback(int $subscriptionId): bool    {
         $sub = self::subscription($subscriptionId);
         if ($sub === null || (int) ($sub['marketing_opt_out'] ?? 0) === 1) {
             return false;

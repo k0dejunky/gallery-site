@@ -465,13 +465,10 @@ class WebhookController extends Controller
         switch ($kind) {
             case 'subscription_charged_successfully':
             case 'subscription_charged':
-                // Payment succeeded - ensure the subscription is active. A
-                // cancelled (or ended) subscription is final: a replayed
-                // postback must not resurrect it with a free period.
-                if (in_array((string) $subscription['status'], Subscription::APPROVABLE, true)) {
-                    Subscription::activateWithTransaction($subId, 'BT-' . $btId);
-                    $this->notifyPayment('Braintree', $subId, 'BT-' . $btId);
-                }
+                // A payment: the first one, or a renewal of the term that is
+                // running out. The transaction id identifies the payment, so
+                // a replayed postback grants nothing.
+                $this->countBraintreePayment($subId, $subscription, $btId, $txId, $notification);
                 echo 'ok';
                 return;
 
@@ -675,9 +672,24 @@ class WebhookController extends Controller
             return;
         }
 
+        // A renewal arrives as a PAYMENT, and a payment's id is the sale's,
+        // not the subscription's. The sale carries the subscription it belongs
+        // to in billing_agreement_id, so the row is looked up by both.
         $subscription = $this->findByPayPalRef($ref);
         if ($subscription === null) {
-            error_log('[webhooks/paypal] no matching subscription for ' . $ref . ' (' . $eventType . ')');
+            $agreementId = (string) ($event['resource']['billing_agreement_id'] ?? '');
+            if ($agreementId !== '') {
+                $subscription = $this->findByPayPalRef('PAYPAL-' . $agreementId);
+            }
+        }
+        if ($subscription === null) {
+            error_log(sprintf(
+                '[webhooks/paypal] no matching subscription for %s (%s) resource=%s agreement=%s',
+                $ref,
+                $eventType,
+                $resourceId,
+                (string) ($event['resource']['billing_agreement_id'] ?? '-')
+            ));
             echo 'no matching subscription';
             return;
         }
@@ -687,13 +699,20 @@ class WebhookController extends Controller
         switch ($eventType) {
             case 'BILLING.SUBSCRIPTION.ACTIVATED':
             case 'BILLING.SUBSCRIPTION.APPROVED':
-            case 'PAYMENT.SALE.COMPLETED':
-                // Only a subscription that is still approvable is activated:
-                // a cancelled one is final, even if the postback is retried.
+                // The subscription exists now. The payment that goes with it
+                // grants the first period.
                 if (in_array((string) $subscription['status'], Subscription::APPROVABLE, true)) {
                     Subscription::activateWithTransaction($subId, $ref);
                     $this->notifyPayment('PayPal', $subId, $ref);
                 }
+                echo 'ok';
+                return;
+
+            case 'PAYMENT.SALE.COMPLETED':
+                // A payment: the first one, or a renewal of the term that is
+                // running out. The sale's id identifies the payment, so a
+                // replayed postback grants nothing.
+                $this->countPayPalPayment($subId, $event, $resourceId);
                 echo 'ok';
                 return;
 
@@ -839,10 +858,82 @@ class WebhookController extends Controller
     }
 
     /**
+     * Count a Braintree payment and extend the subscription it belongs to.
+     *
+     * The transaction id identifies the payment, so a replayed postback
+     * grants nothing. Braintree's notification carries the time of the
+     * transaction, which is what says whether the payment is for the term
+     * that is running out.
+     */
+    private function countBraintreePayment(int $subId, array $subscription, string $btId,
+        string $txId, array $notification): void
+    {
+        $paymentKey = 'braintree:' . ($txId !== '' ? $txId : $btId);
+        $receipt = trim((string) ($notification['order_id'] ?? ''));
+        if ($receipt === '') {
+            $receipt = $txId !== '' ? $txId : $btId;
+        }
+        $paidAt = (string) ($notification['timestamp'] ?? '');
+
+        $result = Subscription::renew($subId, $paymentKey, $paidAt, $receipt);
+
+        if ($result === 'cancelled') {
+            // The member may have been charged after cancelling. Access does
+            // not come back, but the admin has to reconcile the payment.
+            $this->notifyPayment('Braintree', $subId, 'BT-' . $txId, 'a payment arrived for a cancelled membership');
+            error_log('[webhooks/braintree] a payment for a CANCELLED subscription #' . $subId . ' (transaction ' . $txId . ')');
+            return;
+        }
+
+        if ($result !== 'renewed') {
+            return;
+        }
+
+        $this->notifyPayment('Braintree', $subId, 'BT-' . $txId);
+        Lifecycle::onPaymentReceived($subId, $paymentKey, $receipt);
+    }
+
+    /**
+     * Count a PayPal payment and extend the subscription it belongs to.
+     *
+     * The payment is the sale: its id is what makes the postback idempotent
+     * and what the member is shown as the receipt. The gateway's invoice
+     * number is used for the receipt when it gave one.
+     */
+    private function countPayPalPayment(int $subId, array $event, string $saleId): void
+    {
+        $receipt = trim((string) ($event['resource']['invoice_number'] ?? ''));
+        if ($receipt === '') {
+            $receipt = $saleId;
+        }
+        $paidAt = (string) ($event['event_time'] ?? '');
+
+        $result = Subscription::renew($subId, 'paypal:' . $saleId, $paidAt, $receipt);
+
+        if ($result === 'cancelled') {
+            // The member may have been charged after cancelling. Access does
+            // not come back, but the admin has to reconcile the payment.
+            $this->notifyPayment('PayPal', $subId, 'PAYPAL-' . $saleId, 'a payment arrived for a cancelled membership');
+            error_log('[webhooks/paypal] a payment for a CANCELLED subscription #' . $subId . ' (sale ' . $saleId . ')');
+            return;
+        }
+
+        if ($result !== 'renewed') {
+            return;
+        }
+
+        $this->notifyPayment('PayPal', $subId, 'PAYPAL-' . $saleId);
+        Lifecycle::onPaymentReceived($subId, 'paypal:' . $saleId, $receipt);
+    }
+
+    /**
      * Best-effort admin email after an automated (webhook) payment: who,
      * which plan, how much, which reference. Never blocks the postback.
+     *
+     * $note says something extra about the payment - used when a payment
+     * arrived for a cancelled membership, which the admin has to reconcile.
      */
-    private function notifyPayment(string $provider, int $subscriptionId, string $ref): void
+    private function notifyPayment(string $provider, int $subscriptionId, string $ref, string $note = ''): void
     {
         try {
             $row = Database::run(
@@ -861,13 +952,14 @@ class WebhookController extends Controller
                     number_format((float) ($row['price_paid'] ?? 0), 2),
                     $row['email'] ?? 'unknown user'),
                 sprintf(
-                    "%s just paid %s via %s for the \"%s\" plan (%s).\nReference: %s",
+                    "%s just paid %s via %s for the \"%s\" plan (%s).\nReference: %s%s",
                     $row['email'] ?? 'unknown user',
                     number_format((float) ($row['price_paid'] ?? 0), 2),
                     $provider,
                     $row['plan'] ?? '?',
                     $row['billing_cycle'] ?? '?',
-                    $ref
+                    $ref,
+                    $note !== '' ? "\n" . $note : ''
                 ),
                 604800
             );

@@ -84,7 +84,10 @@ class MembershipController extends Controller
 
         $data = [
             'plans' => $plans,
-            'paymentProcessors' => PaymentProcessor::enabled(),
+            // Only the processors a member may actually pick: a sandbox
+            // processor cannot take a real payment, so it is not offered
+            // while the site has a live one.
+            'paymentProcessors' => PaymentProcessor::offerable(),
             'user' => $user,
             // How many galleries each tier opens - the plan cards say it, so
             // the member can see what the money buys.
@@ -365,12 +368,15 @@ class MembershipController extends Controller
 
         // Optional payment processor chosen at checkout. An explicit selection
         // of "none" (manual/offline) leaves the processor null; otherwise the
-        // submitted processor must exist and be enabled.
+        // submitted processor must exist, be enabled AND be one a member may
+        // pick (a sandbox processor is not offered while the site has a live
+        // one, so a crafted request must not be able to select it either).
         $paymentProcessorId = null;
         $paymentChoice = (int) $this->request->post('payment_processor', 0);
         if ($paymentChoice > 0) {
             $processor = PaymentProcessor::find($paymentChoice);
-            if ($processor === null || (int) $processor['enabled'] !== 1) {
+            if ($processor === null || (int) $processor['enabled'] !== 1
+                || !PaymentProcessor::isOfferable($paymentChoice)) {
                 $this->flash('error', 'That payment method is not available.');
                 $this->redirect('/membership');
             }

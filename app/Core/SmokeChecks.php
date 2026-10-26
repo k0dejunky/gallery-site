@@ -6117,7 +6117,63 @@ class SmokeChecks
                 ? $ok('settings endpoint wired')
                 : $bad('ImportController must implement /webhooks/import/settings with per-machine resolution');
         });
-        $add('smoke.media.variant_orientation', 'Smoke · Media', 'A preview applies the EXIF orientation once (ffmpeg already does it)', static function () use ($root, $read, $ok, $bad): array {
+        $add('smoke.membership.renewal', 'Smoke · Membership', 'A renewal extends the term (the postback is found and counted)', static function () use ($root, $read, $ok, $bad): array {
+            $sub  = (string) $read($root . '/app/Models/Subscription.php');
+            $hook = (string) $read($root . '/app/Controllers/WebhookController.php');
+            $life = (string) $read($root . '/app/Core/Lifecycle.php');
+            $problems = [];
+
+            // The renewal has to reach the model at all.
+            if (strpos($sub, 'public static function renew(') === false) {
+                $problems[] = 'there must be a Subscription::renew() that counts a payment and extends the term';
+            }
+            if (strpos($sub, 'last_payment_ref') === false) {
+                $problems[] = 'the subscription must remember the payment it last counted, or a replayed postback grants a second period';
+            }
+            // A renewal arrives as a PAYMENT, whose id is the sale's, not
+            // the subscription's: the lookup has to try both.
+            if (strpos($hook, 'billing_agreement_id') === false) {
+                $problems[] = 'the PayPal lookup must find the subscription through the sale\'s billing_agreement_id, or a renewal is never found';
+            }
+            if (strpos($hook, 'Subscription::renew(') === false) {
+                $problems[] = 'the webhook must count a payment with Subscription::renew()';
+            }
+            if (strpos($life, 'onPaymentReceived(') === false) {
+                $problems[] = 'a renewal must send the member a receipt';
+            }
+            if (!is_file($root . '/views/emails/payment_received.php')) {
+                $problems[] = 'there must be a payment_received email template';
+            }
+
+            return $problems === []
+                ? $ok('a renewal is found, counted and receipted')
+                : $bad(implode('; ', $problems));
+        });
+        $add('smoke.membership.processor_offerable', 'Smoke · Membership', 'A member is not offered a sandbox processor while the site has a live one', static function () use ($root, $read, $ok, $bad): array {
+            $pp    = (string) $read($root . '/app/Models/PaymentProcessor.php');
+            $ctrl  = (string) $read($root . '/app/Controllers/MembershipController.php');
+            $admin = (string) $read($root . '/app/Controllers/PaymentProcessorsController.php');
+            $problems = [];
+
+            if (strpos($pp, 'public static function offerable(') === false) {
+                $problems[] = 'there must be a PaymentProcessor::offerable() that leaves a sandbox processor out';
+            }
+            if (strpos($ctrl, 'PaymentProcessor::offerable()') === false) {
+                $problems[] = 'the membership page must offer the offerable processors';
+            }
+            if (strpos($ctrl, 'isOfferable(') === false) {
+                $problems[] = 'the checkout must refuse a processor that is not offerable';
+            }
+            // The admin keeps every processor, sandbox ones included.
+            if (strpos($admin, 'PaymentProcessor::all()') === false) {
+                $problems[] = 'the admin must still see every processor, sandbox ones included';
+            }
+
+            return $problems === []
+                ? $ok('a sandbox processor is not offered to a member, and the admin still has it')
+                : $bad(implode('; ', $problems));
+        });
+        $add('smoke.media.variant_orientation', 'Smoke · Media', 'A preview applies the EXIF orientation once', static function () use ($root, $read, $ok, $bad): array {
             $helpers = $read("$root/app/Core/helpers.php");
             // ffmpeg's autorotate applies the EXIF orientation itself. A
             // second, explicit transpose turned every camera photo 180
@@ -6125,10 +6181,30 @@ class SmokeChecks
             // upside down, and because the manage page's rotate buttons are
             // judged against those previews, the rotation looked like it
             // turned the images the wrong way.
-            if (strpos($helpers, '_exif_transpose_chain') !== false) {
-                return $bad('create_image_variants must not transpose the EXIF orientation a second time: ffmpeg already does it');
+            //
+            // So the image path applies the orientation ONCE: it asks
+            // ffmpeg not to rotate (-noautorotate) and puts the orientation
+            // in the filter chain itself.
+            $problems = [];
+            if (strpos($helpers, 'function _exif_transpose_chain(') === false) {
+                $problems[] = 'there must be a helper that builds the orientation filter chain';
             }
-            return $ok('the EXIF orientation is applied once');
+            if (strpos($helpers, "-noautorotate -i ") === false) {
+                $problems[] = 'the image variants must ask ffmpeg not to rotate the picture itself';
+            }
+            if (strpos($helpers, "_exif_transpose_chain(\$orientation)") === false) {
+                $problems[] = 'the image variants must apply the EXIF orientation in the filter chain';
+            }
+            // The transpose values changed meaning between ffmpeg releases,
+            // so only the values that mean the same thing everywhere may be
+            // used: 90 degrees clockwise is written as "90 counter-clockwise,
+            // then 180".
+            if (strpos($helpers, "transpose=2,transpose=1,transpose=1") === false) {
+                $problems[] = 'the orientation chain must use the transpose values that mean the same thing in every ffmpeg release';
+            }
+            return $problems === []
+                ? $ok('the EXIF orientation is applied exactly once')
+                : $bad(implode('; ', $problems));
         });
         $add('smoke.import.order_endpoint', 'Smoke · Gallery Import', 'ImportController exposes GET /webhooks/import/galleries and the photo order endpoint', static function () use ($root, $read, $importCtrl, $ok, $bad): array {
             $routes = $read("$root/config/routes.php");
@@ -7100,10 +7176,23 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             // the sample aspect, and must not disable the autorotate (which
             // would leave the rotation in the file for the browser to apply
             // a second time).
+            // The VIDEO path must keep ffmpeg's autorotate: the rotation is
+            // baked into the pixels by it and the leftover tag is cleared, so
+            // the browser does not apply it a second time. Only the image
+            // path asks ffmpeg not to rotate, so the check looks at the
+            // video function alone - the file also contains the image path.
+            $videoFn = '';
+            $videoStart = strpos($helpers, 'function create_video_rendition(');
+            if ($videoStart !== false) {
+                $videoEnd = strpos($helpers, "\nfunction ", $videoStart + 10);
+                $videoFn = $videoEnd === false
+                    ? substr($helpers, $videoStart)
+                    : substr($helpers, $videoStart, $videoEnd - $videoStart);
+            }
             $encode = strpos($helpers, "video_display_dimensions(\$src)") !== false
                 && strpos($helpers, "scale=' . \$tw . ':' . \$th . ',setsar=1") !== false
                 && strpos($helpers, "' -metadata:s:v:0 rotate=0'") !== false
-                && strpos($helpers, '-noautorotate') === false;
+                && strpos($videoFn, '-noautorotate') === false;
             // The poster is a fixed 16:9 still that shows the WHOLE frame.
             $poster = strpos($helpers, "create_video_thumbnail(\$src, \$dest, 1280, 720, 'pad')") !== false
                 && strpos($helpers, "force_original_aspect_ratio=decrease") !== false;

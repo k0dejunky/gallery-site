@@ -654,6 +654,121 @@ class TestSuite
                 return ['pass' => false, 'detail' => $e->getMessage()];
             }
         });
+        $add('db.subscription_renewal', 'Database', 'a renewal extends the term, a replayed payment grants nothing, a cancelled one is not resurrected', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    // A monthly plan and a member of our own.
+                    $planId = (int) Database::run(
+                        "SELECT id FROM plans WHERE active = 1 AND billing_cycle = 'monthly' ORDER BY id ASC LIMIT 1"
+                    )->fetchColumn();
+                    if ($planId <= 0) {
+                        return ['pass' => true, 'detail' => 'no monthly plan fixture'];
+                    }
+                    $userId = (int) Database::run(
+                        'SELECT id FROM users ORDER BY id ASC LIMIT 1'
+                    )->fetchColumn();
+                    if ($userId <= 0) {
+                        return ['pass' => true, 'detail' => 'no user fixture'];
+                    }
+
+                    // A subscription whose term ends NOW: that is the moment a
+                    // gateway charges the next period.
+                    // The clock is PHP's, not the database's: the boxes
+                    // disagree about their session timezone, and the renewal
+                    // is measured against PHP's clock.
+                    $now = date('Y-m-d H:i:s');
+                    $monthAgo = date('Y-m-d H:i:s', strtotime('-1 month'));
+                    Database::run(
+                        "INSERT INTO subscriptions (user_id, plan_id, status, transaction_ref, starts_at, expires_at, created_at)
+                         VALUES (?, ?, 'active', ?, ?, ?, ?)",
+                        [$userId, $planId, 'RENEW-TEST-' . bin2hex(random_bytes(3)), $monthAgo, $now, $monthAgo]
+                    );
+                    $subId = (int) $pdo->lastInsertId();
+                    $before = (string) Database::run(
+                        'SELECT expires_at FROM subscriptions WHERE id = ?', [$subId]
+                    )->fetchColumn();
+
+                    // 1. A payment that renews the term: the expiry moves a
+                    //    whole cycle forward.
+                    $paidAt = date('Y-m-d H:i:s');
+                    $result = \App\Models\Subscription::renew($subId, 'paypal:SALE-1', $paidAt, 'RCPT-1');
+                    $after = (string) Database::run(
+                        'SELECT expires_at FROM subscriptions WHERE id = ?', [$subId]
+                    )->fetchColumn();
+                    if ($result !== 'renewed') {
+                        return ['pass' => false, 'detail' => 'the renewal said ' . $result];
+                    }
+                    if (strtotime($after) <= strtotime($before)) {
+                        return ['pass' => false, 'detail' => 'the expiry did not move: ' . $before . ' -> ' . $after];
+                    }
+                    $expected = date('Y-m-d H:i:s', strtotime('+1 month', strtotime($before)));
+                    if (abs(strtotime($after) - strtotime($expected)) > 60) {
+                        return ['pass' => false, 'detail' => "the expiry is $after, expected $expected"];
+                    }
+
+                    // 2. The SAME payment again: a replayed postback must
+                    //    not grant a second period.
+                    $replay = \App\Models\Subscription::renew($subId, 'paypal:SALE-1', $paidAt, 'RCPT-1');
+                    $afterReplay = (string) Database::run(
+                        'SELECT expires_at FROM subscriptions WHERE id = ?', [$subId]
+                    )->fetchColumn();
+                    if ($replay !== 'duplicate' || $afterReplay !== $after) {
+                        return ['pass' => false, 'detail' => 'a replayed payment granted another period (' . $replay . ')'];
+                    }
+
+                    // 3. A payment dated BEFORE the term ends belongs to the
+                    //    term that is already granted: it must not add one.
+                    $early = date('Y-m-d H:i:s', strtotime($after) - (20 * 86400));
+                    $earlyResult = \App\Models\Subscription::renew($subId, 'paypal:SALE-2', $early, 'RCPT-2');
+                    $afterEarly = (string) Database::run(
+                        'SELECT expires_at FROM subscriptions WHERE id = ?', [$subId]
+                    )->fetchColumn();
+                    if ($earlyResult !== 'already' || $afterEarly !== $after) {
+                        return ['pass' => false, 'detail' => 'an early payment granted a period (' . $earlyResult . ')'];
+                    }
+
+                    // 4. A payment with no id at all cannot be told from a
+                    //    replay, so it is ignored.
+                    if (\App\Models\Subscription::renew($subId, '', $paidAt) !== 'ignored') {
+                        return ['pass' => false, 'detail' => 'a payment without an id was not ignored'];
+                    }
+
+                    // 5. A cancelled subscription is final: a payment for it
+                    //    does not bring the access back.
+                    Database::run(
+                        "UPDATE subscriptions SET status = 'cancelled' WHERE id = ?", [$subId]
+                    );
+                    $cancelled = \App\Models\Subscription::renew($subId, 'paypal:SALE-3', $paidAt, 'RCPT-3');
+                    $status = (string) Database::run(
+                        'SELECT status FROM subscriptions WHERE id = ?', [$subId]
+                    )->fetchColumn();
+                    if ($cancelled !== 'cancelled' || $status !== 'cancelled') {
+                        return ['pass' => false, 'detail' => 'a cancelled subscription was resurrected (' . $cancelled . ')'];
+                    }
+
+                    return [
+                        'pass'   => true,
+                        'detail' => 'renewed, replay, early payment and cancelled all behaved',
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $e) {
+                return ['pass' => false, 'detail' => $e->getMessage()];
+            }
+        });
         $add('db.media_dimensions', 'Database', 'the display size of a media file is stored on the photo row', function () {
             $cols = Database::run('SHOW COLUMNS FROM photos')->fetchAll();
             $have = [];

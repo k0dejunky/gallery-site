@@ -236,6 +236,45 @@ class PaymentProcessor
     }
 
     /**
+     * The processors a MEMBER may pick.
+     *
+     * A processor in test/sandbox mode cannot take a real payment, so it is
+     * not offered while the site has a live one: a member would pick it and
+     * the checkout would go nowhere. A site with no live processor at all (a
+     * test box) keeps its test processors, so the checkout can still be
+     * exercised there.
+     *
+     * The admin keeps every processor either way - the Payment Processors
+     * page lists all of them, so a sandbox processor can still be configured
+     * and switched on.
+     */
+    public static function offerable(): array
+    {
+        $all = self::enabled();
+
+        $live = array_values(array_filter(
+            $all,
+            static fn (array $processor): bool => strtolower((string) ($processor['mode'] ?? '')) === 'live'
+        ));
+
+        return $live !== [] ? $live : $all;
+    }
+
+    /**
+     * Whether a processor may be offered to a member right now.
+     */
+    public static function isOfferable(int $id): bool
+    {
+        foreach (self::offerable() as $processor) {
+            if ((int) $processor['id'] === $id) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Fetch a single processor by id, or null when it does not exist.
      */
     public static function find(int $id): ?array

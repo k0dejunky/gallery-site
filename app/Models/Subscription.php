@@ -354,7 +354,17 @@ class Subscription
         // The period runs from the PURCHASE date, not from the moment the
         // payment was approved: a subscription that sat in the queue for
         // three days used to still grant a full 30 days from the approval.
+        //
+        // A RETRY (a subscription that went past due and is paid again) is
+        // different: its old expiry is behind it, and counting from the
+        // purchase date would hand out a period that had already ended. It
+        // starts from now instead.
         $from = !empty($row['created_at']) ? (string) $row['created_at'] : 'now';
+        $oldExpiry = $row['expires_at'] ?? null;
+        if ($oldExpiry !== null && $oldExpiry !== '' && strtotime((string) $oldExpiry) < time()) {
+            $from = 'now';
+        }
+
         $expires = null;
         if ($row['billing_cycle'] === 'monthly') {
             $expires = date('Y-m-d H:i:s', strtotime('+1 month', strtotime($from)));
@@ -369,6 +379,137 @@ class Subscription
              SET status = ?, past_due_at = NULL, starts_at = CURRENT_TIMESTAMP, expires_at = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ? AND status IN (?, ?)',
             ['active', $expires, $id, 'pending', 'past_due']
+        );
+    }
+
+    /**
+     * How many days before the term ends a payment still counts as the
+     * renewal of that term.
+     *
+     * A gateway charges a recurring subscription ON the day the term ends,
+     * but some of them charge a little early. A payment that arrives well
+     * BEFORE the term ends is for the term that was already granted, and it
+     * must not hand out a second one.
+     */
+    public const RENEWAL_WINDOW_DAYS = 3;
+
+    /**
+     * Count a payment and extend the subscription by one billing period.
+     *
+     * A renewal arrives as a payment postback: PayPal sends
+     * PAYMENT.SALE.COMPLETED (the sale carries the subscription's id in
+     * billing_agreement_id), Braintree sends subscription_charged. The
+     * subscription it belongs to is found by the caller; this method does
+     * the accounting.
+     *
+     * The payment is identified by $paymentKey, so a replayed postback
+     * grants nothing: a member is never given two months for one payment.
+     *
+     * $paidAt is when the payment happened (the postback's timestamp). A
+     * payment made BEFORE the current term ends belongs to the term that
+     * was already granted, so it grants nothing - that is what keeps the
+     * first month's payment from handing out a second month when the
+     * activation postback already granted the first one.
+     *
+     * $receiptNumber is what the member is shown as the receipt (the
+     * gateway's invoice number when it gave one, the payment id otherwise).
+     *
+     * @return string 'renewed' | 'already' | 'duplicate' | 'cancelled' | 'ignored'
+     */
+    public static function renew(int $id, string $paymentKey, string $paidAt = '',
+        string $receiptNumber = ''): string
+    {
+        if ($paymentKey === '') {
+            // Without a payment id there is no way to tell a renewal from a
+            // replay, and a replayed postback would grant a second period.
+            error_log('[subscription] a payment for subscription #' . $id . ' was ignored: it carried no payment id');
+            return 'ignored';
+        }
+
+        $row = Database::run(
+            'SELECT s.*, p.billing_cycle AS billing_cycle, p.name AS plan_name
+             FROM subscriptions s
+             JOIN plans p ON p.id = s.plan_id
+             WHERE s.id = ? LIMIT 1',
+            [$id]
+        )->fetch();
+
+        if ($row === false) {
+            return 'ignored';
+        }
+
+        $status = (string) $row['status'];
+
+        if ($status === 'cancelled') {
+            // A cancelled subscription is final: access does not come back.
+            // The member may still have been charged, so the caller alerts
+            // the admin and somebody reconciles it by hand.
+            return 'cancelled';
+        }
+
+        if ((string) ($row['last_payment_ref'] ?? '') === $paymentKey) {
+            return 'duplicate';
+        }
+
+        $cycle = $row['billing_cycle'] ?? '';
+        if ($cycle !== 'monthly' && $cycle !== 'yearly') {
+            // A lifetime plan has no term to extend.
+            return 'ignored';
+        }
+
+        $now      = time();
+        $oldExpiry = $row['expires_at'] ?? null;
+        $oldTs    = ($oldExpiry !== null && $oldExpiry !== '') ? strtotime((string) $oldExpiry) : 0;
+
+        if (in_array($status, self::APPROVABLE, true)) {
+            // The first payment, or a retry after a failed one.
+            self::approve($id);
+            self::recordPayment($id, $paymentKey, $receiptNumber);
+            return 'renewed';
+        }
+
+        // A live subscription: this payment has to be for the term that is
+        // running out. A payment that arrives well before the term ends is
+        // for the term that was already granted.
+        if ($oldTs > 0 && $paidAt !== '') {
+            $paidTs = strtotime($paidAt);
+            if ($paidTs !== false && $paidTs < $oldTs - (self::RENEWAL_WINDOW_DAYS * 86400)) {
+                // Remember the payment so its replay is a no-op, but grant
+                // nothing: the term it paid for is the one that is running.
+                self::recordPayment($id, $paymentKey, $receiptNumber);
+                return 'already';
+            }
+        }
+
+        // The renewal: the term runs on from where it ended, or from now if
+        // it had already lapsed.
+        $base = ($oldTs > $now) ? $oldTs : $now;
+        $expires = $cycle === 'monthly'
+            ? date('Y-m-d H:i:s', strtotime('+1 month', $base))
+            : date('Y-m-d H:i:s', strtotime('+1 year', $base));
+
+        Database::run(
+            'UPDATE subscriptions
+             SET status = ?, past_due_at = NULL, expires_at = ?, updated_at = CURRENT_TIMESTAMP,
+                 last_payment_ref = ?, periods_granted = periods_granted + 1
+             WHERE id = ? AND status <> ?',
+            ['active', $expires, $paymentKey, $id, 'cancelled']
+        );
+
+        return 'renewed';
+    }
+
+    /**
+     * Remember which payment was counted, so its postback cannot be counted
+     * twice, and keep the period counter in step.
+     */
+    private static function recordPayment(int $id, string $paymentKey, string $receiptNumber = ''): void
+    {
+        Database::run(
+            'UPDATE subscriptions
+             SET last_payment_ref = ?, periods_granted = periods_granted + 1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?',
+            [$paymentKey, $id]
         );
     }
 
