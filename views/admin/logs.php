@@ -66,7 +66,7 @@
 <section class="adm-section">
     <div class="adm-section-head">
         <h2>Pending Category Approvals</h2>
-        <p>Frequently missed searches that can be promoted to categories.</p>
+        <p>Frequently missed searches that can be promoted to categories. Only real misses are listed - a search that found something is not a miss, and a term the site already has as a category is not offered.</p>
     </div>
     <div class="sys-card">
 <table>
@@ -87,6 +87,14 @@
     <?php endforeach; ?>
     </tbody>
 </table>
+        <?php if (!empty($skippedApprovals)): ?>
+            <p class="muted u-fs-085" style="margin:.75rem 0 0">
+                Skipped - the site already has these as a category:
+                <?php foreach ($skippedApprovals as $skipped): ?>
+                    <span class="chip"><?= e($skipped['term']) ?> (<?= number_format((int) $skipped['count']) ?>)</span>
+                <?php endforeach; ?>
+            </p>
+        <?php endif; ?>
     </div>
 </section>
 <?php endif; ?>

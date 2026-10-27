@@ -1537,6 +1537,148 @@ class TestSuite
             }
         });
 
+        $add('db.missed_search_ignores_hits_and_existing_categories', 'Database', 'the pending category list holds real misses only', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix = bin2hex(random_bytes(3));
+                    // A category the site already has.
+                    $existingName = 'probe exists ' . $suffix;
+                    \App\Models\Category::create($existingName);
+                    // A term nobody has a category for.
+                    $newTerm  = 'probe missing ' . $suffix;
+                    $dismissed = 'probe dismissed ' . $suffix;
+
+                    $record = static function (string $term, int $found, int $dismissed = 0): void {
+                        Database::run(
+                            'INSERT INTO search_stats (term, found, dismissed, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)',
+                            [$term, $found, $dismissed]
+                        );
+                    };
+
+                    // Six misses for the existing category (the threshold is 5).
+                    for ($i = 0; $i < 6; $i++) {
+                        $record($existingName, 0);
+                    }
+                    // Six misses and two HITS for a term with no category.
+                    for ($i = 0; $i < 6; $i++) {
+                        $record($newTerm, 0);
+                    }
+                    $record($newTerm, 1);
+                    $record($newTerm, 1);
+                    // Six misses for a term the admin dismissed.
+                    for ($i = 0; $i < 6; $i++) {
+                        $record($dismissed, 0, 1);
+                    }
+
+                    $pendingKeys = array_column(\App\Models\Stats::pendingCategoryApprovals(5), 'term_key');
+                    $skippedKeys = array_column(\App\Models\Stats::skippedCategoryTerms(5), 'term_key');
+                    $counts      = \App\Models\Stats::missedSearchLifetimeCounts();
+
+                    $newPending      = in_array(mb_strtolower($newTerm), $pendingKeys, true);
+                    $existingPending = in_array(mb_strtolower($existingName), $pendingKeys, true);
+                    $dismissedPending = in_array(mb_strtolower($dismissed), $pendingKeys, true);
+                    $existingSkipped = in_array(mb_strtolower($existingName), $skippedKeys, true);
+                    // The count is the MISSES, not every search: 6 misses + 2
+                    // hits must read as 6, not 8.
+                    $countIsMisses = (int) ($counts[mb_strtolower($newTerm)] ?? 0) === 6;
+
+                    $ok = $newPending && !$existingPending && !$dismissedPending
+                        && $existingSkipped && $countIsMisses;
+
+                    return [
+                        'pass'   => $ok,
+                        'detail' => $ok
+                            ? 'the new term is pending; the existing category and the dismissed term are not'
+                            : 'newPending=' . var_export($newPending, true)
+                                . ' existingPending=' . var_export($existingPending, true)
+                                . ' dismissedPending=' . var_export($dismissedPending, true)
+                                . ' existingSkipped=' . var_export($existingSkipped, true)
+                                . ' countIsMisses=' . var_export($countIsMisses, true),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
+        $add('db.search_reaches_gated_galleries', 'Database', 'the search reaches the galleries above the member level (the card shows them blurred)', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix = bin2hex(random_bytes(3));
+                    $categoryId = \App\Models\Category::create('probe gated ' . $suffix);
+                    // A gallery in the free tier and one above it.
+                    $free  = \App\Models\Gallery::create('probe free gallery ' . $suffix, 'scratch', 'images', 0, null, false, true, true);
+                    $gated = \App\Models\Gallery::create('probe gated gallery ' . $suffix, 'scratch', 'images', 2, null, false, true, true);
+                    // A secret one: the include_gated switch must NOT open it.
+                    $secret = \App\Models\Gallery::create('probe secret gallery ' . $suffix, 'scratch', 'images', 0, null, true, true, true);
+                    \App\Models\Gallery::setCategories($free, [$categoryId]);
+                    \App\Models\Gallery::setCategories($gated, [$categoryId]);
+                    \App\Models\Gallery::setCategories($secret, [$categoryId]);
+
+                    $ids = static function (array $paginator): array {
+                        return array_map('intval', array_column($paginator['items'], 'id'));
+                    };
+
+                    // A member below the level: the category holds nothing they
+                    // may open.
+                    $closed = $ids(\App\Models\Gallery::paginate(1, 50, ['category' => $categoryId, 'max_level' => 0]));
+                    // The search itself: include_gated reaches every category.
+                    $open = $ids(\App\Models\Gallery::paginate(1, 50, [
+                        'category'      => $categoryId,
+                        'max_level'     => 0,
+                        'include_gated' => true,
+                    ]));
+
+                    $gatedFound       = in_array($gated, $open, true);
+                    $gatedHidden      = !in_array($gated, $closed, true);
+                    $freeStillThere   = in_array($free, $open, true);
+                    $secretStillHidden = !in_array($secret, $open, true);
+
+                    $ok = $gatedFound && $gatedHidden && $freeStillThere && $secretStillHidden;
+
+                    return [
+                        'pass'   => $ok,
+                        'detail' => $ok
+                            ? 'the gated gallery is reachable by the search and hidden by the plain list'
+                            : 'gatedFound=' . var_export($gatedFound, true)
+                                . ' gatedHidden=' . var_export($gatedHidden, true)
+                                . ' freeStillThere=' . var_export($freeStillThere, true)
+                                . ' secretStillHidden=' . var_export($secretStillHidden, true),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.test_gallery_is_not_announced', 'Database', 'a test gallery sends no member email and no notification', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

@@ -326,10 +326,14 @@ CREATE TABLE IF NOT EXISTS search_stats (
     -- 1 when the search found something. The "popular searches" come from
     -- the ones that hit; the ones that missed are what the site does NOT have.
     found      TINYINT(1) NOT NULL DEFAULT 0,
+    -- 1 when the admin dismissed this term: it is not offered as a new
+    -- category any more, but the search history is kept.
+    dismissed  TINYINT(1) NOT NULL DEFAULT 0,
     user_id    INT UNSIGNED NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_searchstats_term_created (term, created_at),
     INDEX idx_searchstats_found_term (found, term),
+    INDEX idx_searchstats_found_dismissed (found, dismissed, term),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 

@@ -77,12 +77,53 @@ class Category
 
     /**
      * Fetch a category by exact name (used to avoid duplicate categories).
+     *
+     * The comparison is case-insensitive on purpose: the admin types
+     * "Pussy", the categorizer proposes "pussy" and the visitor searches
+     * "PUSSY", and all three are the same category. It used to lean on the
+     * column's collation for that, which breaks the moment the collation
+     * changes, so the lower-casing is explicit now.
      */
     public static function findByName(string $name): ?array
     {
+        $name = trim($name);
+
+        if ($name === '') {
+            return null;
+        }
+
         $category = Database::run(
-            'SELECT * FROM categories WHERE name = ? LIMIT 1',
+            'SELECT * FROM categories WHERE LOWER(name) = LOWER(?) LIMIT 1',
             [$name]
+        )->fetch();
+
+        return $category ?: null;
+    }
+
+    /**
+     * The category a search term names, if any.
+     *
+     * A member searching for a category name should land on that category,
+     * even when every gallery in it is above their level (the search shows
+     * those galleries blurred). Without this the site recorded the search as
+     * a MISS - "we do not have this" - for a category it plainly has.
+     *
+     * Exact name (case-insensitive) or the URL slug.
+     */
+    public static function matchForSearch(string $term): ?array
+    {
+        $term = trim($term);
+
+        if ($term === '') {
+            return null;
+        }
+
+        $category = Database::run(
+            'SELECT c.*, (SELECT COUNT(*) FROM gallery_category gc WHERE gc.category_id = c.id) AS gallery_count
+             FROM categories c
+             WHERE LOWER(c.name) = LOWER(?) OR c.slug = ?
+             LIMIT 1',
+            [$term, slugify($term)]
         )->fetch();
 
         return $category ?: null;

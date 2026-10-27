@@ -368,9 +368,24 @@ class GalleryController extends Controller
         // The paginated grid is only used for search results; the full
         // listing above already covers the browse path, so skip the two
         // paginator queries (COUNT + SELECT) unless actually needed.
+        //
+        // The SEARCH reaches every category: include_gated turns the level
+        // filter off, so a member searching a category name finds that
+        // category's galleries even when they are above their level. The
+        // gated ones are rendered BLURRED with their lock (the card), and
+        // the membership gate itself is untouched - the gallery page, the
+        // photos pager and the files route still check the level. Without
+        // this the site recorded "we do not have this" for a category it
+        // plainly has, because every gallery in it sat above the searcher's
+        // level.
         $paginator = ($q !== '')
-            ? Gallery::paginate($page, 24, $filters)
+            ? Gallery::paginate($page, 24, $filters + ['include_gated' => true])
             : ['items' => [], 'total' => 0, 'page' => $page, 'pages' => 1];
+
+        // The category the search names, if any. It gets a link above the
+        // results, so a member who searched a category lands on the
+        // category even when its galleries are behind their level.
+        $categoryMatch = $q !== '' ? Category::matchForSearch($q) : null;
 
         // Every search is tracked, with whether it found anything, so the
         // member facing an empty result can see what others are looking for.
@@ -447,6 +462,7 @@ class GalleryController extends Controller
             'lcpPreload'    => $lcpPreload,
             'sort'          => $sort,
             'content'       => $content,
+            'categoryMatch' => $categoryMatch,
             'viewedIds'     => $viewedIds,
             'recentlyViewed' => $recentlyViewed,
             'favoriteGalleryIds' => $favoriteGalleryIds,

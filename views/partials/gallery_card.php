@@ -2,19 +2,29 @@
 // The cover and the categories come from the caller (Gallery::preloadCards):
 // a per-card query here cost the guest home page 24 queries for 12 cards.
 $cover = $cover ?? null;
-// A logged-out visitor gets the REAL cover of a gallery they may open (a safe
-// gallery at any level, or an adult one in the free tier) and the blurred
-// teaser of anything else. Those public URLs carry no media token: the card
-// markup is shared by every visitor through the page cache, and the bytes are
-// public by the guest-viewable rule.
+// The gate is on the CONTENT, not on the discovery: a gallery the viewer
+// cannot open is shown BLURRED with its lock, whether the viewer is a guest
+// (a safe gallery at any level, or an adult one in the free tier, is open
+// to them) or a member whose membership is below the gallery's level. The
+// search needs this: it reaches every category, so the gated galleries have
+// to be visible as teasers instead of vanishing.
+//
+// The blurred teaser is PUBLIC (the files route serves it without a token),
+// so it needs no token and the card markup stays cacheable.
 $isGuest      = !\App\Core\Auth::check();
-$guestCanView = $isGuest && \App\Models\Gallery::guestViewable($gallery);
-$coverSize    = ($isGuest && !$guestCanView) ? 'blur' : 'thumb';
+$memberLevel  = \App\Core\Auth::effectiveLevel();
+$galleryLevel = \App\Models\Gallery::effectiveLevel($gallery);
+$canOpen      = $isGuest
+    ? \App\Models\Gallery::guestViewable($gallery)
+    : ($memberLevel >= $galleryLevel);
+$coverSize    = $canOpen ? 'thumb' : 'blur';
 $isAdult      = (int) ($gallery['is_nsfw'] ?? 1) === 1;
-$coverUrl     = static function (string $size, string $format = '') use ($cover, $isGuest, $guestCanView): string {
-    return $isGuest && $guestCanView
-        ? public_file_url((string) $cover['filename'], $size, $format)
-        : file_url((string) $cover['filename'], $size, $format);
+$coverUrl     = static function (string $size, string $format = '') use ($cover, $canOpen, $isGuest): string {
+    if ($size === 'blur' || ($isGuest && $canOpen)) {
+        return public_file_url((string) $cover['filename'], $size, $format);
+    }
+
+    return file_url((string) $cover['filename'], $size, $format);
 };
 $galleryCategories = $galleryCategories ?? [];
 $galleryUrl  = url('/galleries/' . (int) $gallery['id']) . (!empty($listingReturnTo) ? '?' . http_build_query(['return_to' => $listingReturnTo]) : '');
@@ -35,13 +45,16 @@ $cardId = 'card-' . (int) $gallery['id'];
 // letting them click through to a blurred wall and an upgrade prompt.
 // Two cases: the gallery is above the member's level, or it is pay-per-view
 // (everyone sees the teaser; the full set needs a code or a purchase).
-$memberLevel = \App\Core\Auth::effectiveLevel();
 // A safe gallery is open to everyone regardless of its stored level, so the
 // lock badge must use the EFFECTIVE level or it would advertise a paywall on
 // a gallery the visitor can already open.
-$isLocked    = $memberLevel < PHP_INT_MAX
-    && \App\Models\Gallery::effectiveLevel($gallery) > $memberLevel;
-$lockLevel   = \App\Models\Gallery::effectiveLevel($gallery);
+$isLocked    = $memberLevel < PHP_INT_MAX && $galleryLevel > $memberLevel;
+$lockLevel   = $galleryLevel;
+$coverTitle  = $canOpen
+    ? ''
+    : ($isGuest
+        ? 'Members-only content'
+        : 'Needs a ' . \App\Models\Subscription::levelLabel($lockLevel) . ' membership');
 $ppvPrice    = (float) ($gallery['ppv_price'] ?? 0) > 0 ? (float) $gallery['ppv_price'] : null;
 // First card on a page gets high fetch priority and eager loading (it is the
 // LCP element); all others lazy-load. Reserve the 400x300 cover ratio so the
@@ -81,14 +94,14 @@ $asyncDecodeAttr    = $heroCard ? '' : ' decoding="async"';
                         <source type="image/avif" srcset="<?= e(public_file_url($cover['filename'], 'blur', 'avif')) ?>">
                         <source type="image/webp" srcset="<?= e(public_file_url($cover['filename'], 'blur', 'webp')) ?>">
                         <source type="image/jpeg" srcset="<?= e(public_file_url($cover['filename'], 'blur')) ?>">
-                        <img src="<?= e(public_file_url($cover['filename'], 'blur')) ?>" alt="<?= e(\App\Models\Photo::altText($cover, (string) ($gallery['title'] ?? ''))) ?>" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> data-fallback="<?= e($placeholder) ?>" title="Saving is disabled for members-only content">
+                        <img src="<?= e(public_file_url($cover['filename'], 'blur')) ?>" alt="<?= e(\App\Models\Photo::altText($cover, (string) ($gallery['title'] ?? ''))) ?>" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> data-fallback="<?= e($placeholder) ?>"<?= $coverTitle !== '' ? ' title="' . e($coverTitle) . '"' : '' ?>>
                     </picture>
                 <?php else: ?>
                     <picture>
                         <source type="image/avif" srcset="<?= e($coverUrl('thumb', 'avif')) ?>">
                         <source type="image/webp" srcset="<?= e($coverUrl('thumb', 'webp')) ?>">
                         <source type="image/jpeg" srcset="<?= e($coverUrl('thumb')) ?>">
-                        <img src="<?= e($coverUrl('thumb')) ?>" srcset="<?= e(file_srcset($cover['filename'], !($isGuest && $guestCanView))) ?>" sizes="(min-width: 800px) 400px, 100vw" alt="<?= e(\App\Models\Photo::altText($cover, (string) ($gallery['title'] ?? ''))) ?>" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> data-fallback="<?= e($placeholder) ?>">
+                        <img src="<?= e($coverUrl('thumb')) ?>" srcset="<?= e(file_srcset($cover['filename'], !($isGuest && $canOpen))) ?>" sizes="(min-width: 800px) 400px, 100vw" alt="<?= e(\App\Models\Photo::altText($cover, (string) ($gallery['title'] ?? ''))) ?>" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> data-fallback="<?= e($placeholder) ?>">
                     </picture>
                 <?php endif; ?>
                 <?php if ($isVideoCard): ?><span class="video-badge" aria-hidden="true">&#9654;</span><?php endif; ?>

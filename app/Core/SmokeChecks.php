@@ -8873,6 +8873,152 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.trends.missed_searches_are_misses', 'Smoke · Admin UI', 'The missed-search lists count only the searches that found nothing', static function () use ($root, $read, $ok, $bad): array {
+            $stats = (string) $read($root . '/app/Models/Stats.php');
+            $problems = [];
+
+            // The pending list: a real miss (found = 0), not dismissed, and
+            // not a term the site already has as a category.
+            $at = strpos($stats, 'public static function pendingCategoryApprovals(');
+            if ($at === false) {
+                $problems[] = 'Stats::pendingCategoryApprovals() was not found';
+            } else {
+                $body = substr($stats, $at, 2000);
+                if (strpos($body, 'found = 0') === false) {
+                    $problems[] = 'the pending list must count only the searches that found NOTHING (found = 0) - a search that hit is not a demand for a category';
+                }
+                if (strpos($body, 'dismissed = 0') === false) {
+                    $problems[] = 'the pending list must skip the terms the admin dismissed';
+                }
+                if (strpos($body, 'NOT EXISTS (SELECT 1 FROM categories') === false) {
+                    $problems[] = 'the pending list must skip the terms the site already has as a category - offering one produced a dead end (the promote action refuses it)';
+                }
+            }
+
+            // The trends panel is titled "Missed Searches".
+            $at = strpos($stats, 'public static function searchTrends(');
+            if ($at === false) {
+                $problems[] = 'Stats::searchTrends() was not found';
+            } else {
+                $body = substr($stats, $at, 2400);
+                if (strpos($body, 'found = 0') === false) {
+                    $problems[] = 'the Missed Searches panel must count only the searches that found nothing';
+                }
+                if (strpos($body, 'hits') === false) {
+                    $problems[] = 'the Missed Searches panel must report the hits next to the misses';
+                }
+            }
+
+            // The lifetime count is the threshold check in the promote
+            // action, so it has to use the same definition of a miss.
+            $at = strpos($stats, 'public static function missedSearchLifetimeCounts(');
+            if ($at === false) {
+                $problems[] = 'Stats::missedSearchLifetimeCounts() was not found';
+            } else {
+                $body = substr($stats, $at, 1200);
+                if (strpos($body, 'found = 0') === false) {
+                    $problems[] = 'the lifetime counts must count the misses only';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the missed-search lists hold the real misses only')
+                : $bad(implode('; ', $problems));
+        });
+        $add('smoke.trends.dismiss_keeps_the_history', 'Smoke · Admin UI', 'Dismissing a missed search keeps the search history', static function () use ($root, $read, $ok, $bad): array {
+            $controller = (string) $read($root . '/app/Controllers/TrendsController.php');
+            $migration = (string) @file_get_contents($root . '/database/migrations/091_search_stats_dismissed.sql');
+            $schema    = (string) $read($root . '/schema.sql');
+            $problems  = [];
+
+            $at = strpos($controller, 'public function dismissPromotion(');
+            if ($at === false) {
+                $problems[] = 'dismissPromotion() was not found';
+            } else {
+                $body = substr($controller, $at, 1800);
+                if (strpos($body, 'SET dismissed = 1') === false) {
+                    $problems[] = 'dismissing must FLAG the term (dismissed = 1)';
+                }
+                if (strpos($body, 'DELETE FROM search_stats') !== false) {
+                    $problems[] = 'dismissing must not delete the search history - it threw away every search behind the term, including the ones that hit';
+                }
+            }
+            if (strpos($migration, 'dismissed') === false) {
+                $problems[] = 'migration 091 must add the dismissed column';
+            }
+            if (strpos($schema, 'dismissed  TINYINT(1) NOT NULL DEFAULT 0') === false) {
+                $problems[] = 'schema.sql must carry search_stats.dismissed';
+            }
+
+            return $problems === []
+                ? $ok('dismiss flags the term and keeps the history')
+                : $bad(implode('; ', $problems));
+        });
+        $add('smoke.trends.a_category_is_never_a_miss', 'Smoke · Search', 'A category the site has is never recorded as a missing search', static function () use ($root, $read, $ok, $bad): array {
+            $category = (string) $read($root . '/app/Models/Category.php');
+            $gallery  = (string) $read($root . '/app/Models/Gallery.php');
+            $gc       = (string) $read($root . '/app/Controllers/GalleryController.php');
+            $index    = (string) $read($root . '/views/gallery/index.php');
+            $problems = [];
+
+            if (strpos($category, 'public static function matchForSearch(') === false) {
+                $problems[] = 'Category::matchForSearch() must exist - a search that names a category has to find it';
+            }
+            if (strpos($category, 'LOWER(name) = LOWER(?)') === false) {
+                $problems[] = 'the category lookup must be case-insensitive ("Pussy" and "pussy" are one category)';
+            }
+            // The search reaches the galleries above the member level.
+            $at = strpos($gallery, 'public static function paginate(');
+            if ($at === false) {
+                $problems[] = 'Gallery::paginate() was not found';
+            } else {
+                $body = substr($gallery, $at, 4600);
+                if (strpos($body, 'include_gated') === false) {
+                    $problems[] = 'the search must be able to reach the galleries above the member level (include_gated)';
+                }
+                if (strpos($body, 'g.is_secret = 0') === false) {
+                    $problems[] = 'a secret gallery must stay hidden when the search reaches the gated galleries';
+                }
+            }
+            if (strpos($gc, "'include_gated' => true") === false) {
+                $problems[] = 'the search must pass include_gated';
+            }
+            if (strpos($index, '$categoryMatch') === false) {
+                $problems[] = 'the results must offer the category the search named';
+            }
+
+            return $problems === []
+                ? $ok('a category the site has is found, not missed')
+                : $bad(implode('; ', $problems));
+        });
+        $add('smoke.search.gated_galleries_are_blurred', 'Smoke · Search', 'A gallery the viewer cannot open is shown blurred, with its lock', static function () use ($root, $read, $ok, $bad): array {
+            $card = (string) $read($root . '/views/partials/gallery_card.php');
+            $problems = [];
+
+            if (strpos($card, '$canOpen') === false) {
+                $problems[] = 'the card must decide whether the viewer can open the gallery';
+            }
+            if (strpos($card, "\$coverSize    = \$canOpen ? 'thumb' : 'blur';") === false) {
+                $problems[] = 'a gallery the viewer cannot open must be shown BLURRED - the gate is on the content, not on the discovery';
+            }
+            if (strpos($card, 'Gallery::guestViewable($gallery)') === false) {
+                $problems[] = 'a guest must be able to open a safe gallery (and only that)';
+            }
+            if (strpos($card, '$memberLevel >= $galleryLevel') === false) {
+                $problems[] = 'a member must be able to open a gallery at or below their level';
+            }
+            if (strpos($card, '$isLocked') === false) {
+                $problems[] = 'the lock must stay on the card';
+            }
+            if (strpos($card, "public_file_url((string) \$cover['filename'], \$size, \$format)") === false) {
+                $problems[] = 'the blurred teaser is public and must be served without a media token';
+            }
+
+            return $problems === []
+                ? $ok('the gated galleries are blurred teasers, the gate stays')
+                : $bad(implode('; ', $problems));
+        });
+
         $cache = $tests;
 
         return $cache;

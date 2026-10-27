@@ -73,14 +73,20 @@ class LogsController extends Controller
             ['delete', 'gallery']
         )->fetchAll();
 
-        // Pending category promotions from missed searches.
+        // Pending category promotions from missed searches. The list holds
+        // real misses only - a search that hit is not a miss, and a term the
+        // site already has as a category is not something to create.
         $pendingApprovals = \App\Models\Stats::pendingCategoryApprovals(5);
+        // The terms skipped for that second reason, so the page can say so
+        // instead of looking like the data vanished.
+        $skippedApprovals = \App\Models\Stats::skippedCategoryTerms(5);
 
         $this->viewAdmin('logs', [
             'paginator'          => $paginator,
             'pendingSubs'        => $pendingSubs,
             'pendingDeletes'     => $pendingDeletes,
             'pendingApprovals'   => $pendingApprovals,
+            'skippedApprovals'   => $skippedApprovals,
             'facets'             => $facets,
             'filterQ'            => $q,
             'filterAction'       => $action,

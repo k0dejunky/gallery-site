@@ -224,11 +224,14 @@ CREATE INDEX IF NOT EXISTS idx_catviews_category_created ON category_views (cate
 CREATE TABLE IF NOT EXISTS search_stats (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     term       VARCHAR(255) NOT NULL,
+    found      INTEGER NOT NULL DEFAULT 0,
+    dismissed  INTEGER NOT NULL DEFAULT 0,
     user_id    INTEGER,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_searchstats_term_created ON search_stats (term, created_at);
+CREATE INDEX IF NOT EXISTS idx_searchstats_found_dismissed ON search_stats (found, dismissed, term);
 
 CREATE TABLE IF NOT EXISTS plans (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,

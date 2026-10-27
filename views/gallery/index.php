@@ -234,9 +234,29 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
         <button class="btn btn-sm btn-outline" type="submit">Save this search</button>
     </form>
 
+    <?php // The category the search names. It gets a link above the results,
+          // so a member who searched a category lands on the category even
+          // when its galleries are behind their level (they are shown
+          // blurred, with their lock). ?>
+    <?php if (!empty($categoryMatch)): ?>
+        <div class="chips" style="justify-content:center;margin-bottom:1rem;">
+            <a class="chip active" href="<?= e(url('/galleries/category/' . e((string) ($categoryMatch['slug'] ?? '')))) ?>">
+                <?= \App\Core\Icon::svg('tag', 'rail-ico') ?>
+                <?= e((string) ($categoryMatch['name'] ?? '')) ?>
+                <span class="muted">(<?= number_format((int) ($categoryMatch['gallery_count'] ?? 0)) ?>)</span>
+            </a>
+        </div>
+    <?php endif; ?>
+
     <?php if (empty($paginator['items'])): ?>
         <div class="empty-state">
             <p>No galleries found<?= $q !== '' ? ' for &ldquo;' . e($q) . '&rdquo;' : '' ?>.</p>
+            <?php if (!empty($categoryMatch)): ?>
+                <p class="muted u-fs-085" style="margin:.5rem 0 .35rem;">
+                    There is a category called &ldquo;<?= e((string) ($categoryMatch['name'] ?? '')) ?>&rdquo; &mdash;
+                    <a class="thin-link" href="<?= e(url('/galleries/category/' . e((string) ($categoryMatch['slug'] ?? '')))) ?>">open it</a>.
+                </p>
+            <?php endif; ?>
             <?php if (!empty($popularSearches)): ?>
                 <p class="muted u-fs-085" style="margin:.5rem 0 .35rem;">Popular searches</p>
                 <div class="chips" style="justify-content:center">

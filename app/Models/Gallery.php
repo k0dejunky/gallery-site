@@ -388,7 +388,15 @@ class Gallery
             $where[] = self::mediaTypeCondition($filters['type']);
         }
 
-        if (array_key_exists('max_level', $filters)) {
+        // The level filter. include_gated turns it OFF: the SEARCH then
+        // reaches every category, whatever level the galleries in it need,
+        // and the card renders the gated ones blurred with their lock. The
+        // membership gate itself is untouched - the gallery page, the photos
+        // pager and the files route all still check the level.
+        //
+        // The secret handling above is NOT affected by this: a secret
+        // gallery still needs its allow-list.
+        if (array_key_exists('max_level', $filters) && empty($filters['include_gated'])) {
             $maxLevel = (int) $filters['max_level'];
             if ($maxLevel < PHP_INT_MAX) {
                 $where[]  = '(g.is_secret = 1 OR ' . self::accessLevelSql('g') . ' <= ?)';

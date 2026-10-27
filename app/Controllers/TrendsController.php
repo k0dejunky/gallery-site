@@ -66,6 +66,10 @@ class TrendsController extends Controller
             'categoryTrends' => Stats::categoryTrends($period),
             'searchTrends'   => $searchTrends,
             'pendingApprovals' => Stats::pendingCategoryApprovals(self::PROMOTION_THRESHOLD),
+            // The terms that are not offered because the site already has a
+            // category with that name. Shown as a note, so a term that
+            // vanishes from the list does not look like lost data.
+            'skippedApprovals' => Stats::skippedCategoryTerms(self::PROMOTION_THRESHOLD),
             'periods'        => Stats::periods(),
             'currentPeriod'  => $period,
             'promotionThreshold' => self::PROMOTION_THRESHOLD,
@@ -95,7 +99,11 @@ class TrendsController extends Controller
      */
     public function approvePromotion(): void
     {
+        // The term is normalised the same way everywhere: trimmed, with
+        // runs of spaces collapsed, so "  wet  swim " and "wet swim" are
+        // the same category.
         $term = trim((string) $this->request->post('term', ''));
+        $term = (string) preg_replace('/\s+/u', ' ', $term);
 
         if ($term === '') {
             $this->flash('error', 'No search term provided.');
@@ -134,19 +142,24 @@ class TrendsController extends Controller
     }
 
     /**
-     * Dismiss a pending category approval. Removes the search_stats rows
-     * for the term so it no longer appears in the pending list.
+     * Dismiss a pending category approval.
+     *
+     * The term stops being offered, but its history STAYS: the rows are
+     * flagged (dismissed = 1) instead of deleted. Deleting them threw away
+     * the record of every search behind the term - including the ones that
+     * did hit - so silencing one term lost data the trends page used.
      */
     public function dismissPromotion(): void
     {
         $term = trim((string) $this->request->post('term', ''));
+        $term = (string) preg_replace('/\s+/u', ' ', $term);
 
         if ($term === '') {
             $this->flash('error', 'No search term provided.');
             $this->redirect('/admin/trends');
         }
 
-        Database::run('DELETE FROM search_stats WHERE LOWER(term) = ?', [mb_strtolower($term)]);
+        Database::run('UPDATE search_stats SET dismissed = 1 WHERE LOWER(term) = ?', [mb_strtolower($term)]);
 
         AuditLog::record(
             (int) Auth::user()['id'],

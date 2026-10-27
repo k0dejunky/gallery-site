@@ -153,6 +153,14 @@ $sparkline = static function (array $values, int $width = 120, int $height = 28,
         <p class="muted" style="margin-top:0">
             Missed searches searched more than <?= (int) $promotionThreshold ?> times. Approve one to create it as a new category, or dismiss it.
         </p>
+        <?php if (!empty($skippedApprovals)): ?>
+            <p class="muted u-fs-085" style="margin:.35rem 0 0">
+                Skipped - the site already has these as a category:
+                <?php foreach ($skippedApprovals as $skipped): ?>
+                    <span class="chip"><?= e($skipped['term']) ?> (<?= number_format((int) $skipped['count']) ?>)</span>
+                <?php endforeach; ?>
+            </p>
+        <?php endif; ?>
         <?php if (empty($pendingApprovals)): ?>
             <?= admin_empty('check', 'Nothing waiting for approval', 'Every suggested category has been dealt with.') ?>
         <?php else: ?>
@@ -195,6 +203,7 @@ $sparkline = static function (array $values, int $width = 120, int $height = 28,
         <h2>Missed Searches</h2>
         <p class="muted" style="margin-top:0">
             <?= $isAllTime ? 'All-time missed searches.' : 'Search terms that returned no results over the ' . e($rangeLabel) . ' vs. the same period before.' ?>
+            A search that found something is not a miss, and a term the site already has as a category is not offered below.
         </p>
         <?php if (empty($searchTrends)): ?>
             <?= admin_empty('search', 'No missed searches yet', 'Every recent search found something.') ?>
@@ -203,7 +212,8 @@ $sparkline = static function (array $values, int $width = 120, int $height = 28,
                 <thead>
                     <tr>
                         <th>Search term</th>
-                        <th>Searches (<?= e($rangeLabel) ?>)</th>
+                        <th>Misses (<?= e($rangeLabel) ?>)</th>
+                        <th>Hits</th>
                         <?php if (!$isAllTime): ?>
                             <th>Previous</th>
                             <th>Trend</th>
@@ -215,6 +225,7 @@ $sparkline = static function (array $values, int $width = 120, int $height = 28,
                         <tr>
                             <td><?= e($row['term']) ?></td>
                             <td><?= number_format($row['cur']) ?></td>
+                            <td><?= (int) ($row['hits'] ?? 0) > 0 ? number_format((int) $row['hits']) : '<span class="muted">0</span>' ?></td>
                             <?php if (!$isAllTime): ?>
                                 <td><?= $row['prev'] > 0 ? number_format($row['prev']) : '<span class="muted">0</span>' ?></td>
                                 <td><?= $trendBadge($row['trend']) ?></td>

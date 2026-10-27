@@ -1013,6 +1013,13 @@ class Stats
      * before it. Only terms with activity in the combined window appear.
      * Sorted by current-period searches so the most-searched terms are on
      * top. The "all" period reports lifetime totals instead.
+     *
+     * A MISS is a search that found nothing: the rows carry found = 0 and
+     * only those are counted. The panel this feeds is titled "Missed
+     * Searches", and it used to count every search - a term that hit eight
+     * times looked like eight misses, and a term that exists as a category
+     * was offered as a new one. The hits are still reported next to the
+     * misses ("hits"), so the admin can see the difference.
      */
     public static function searchTrends(string $period = 'weekly'): array
     {
@@ -1022,10 +1029,13 @@ class Stats
         if ($days === null) {
             $rows = Database::run(
                 'SELECT LOWER(term) AS term_key, MAX(term) AS term,
-                        COUNT(*) AS cur_count,
+                        SUM(CASE WHEN found = 0 THEN 1 ELSE 0 END) AS cur_count,
+                        SUM(CASE WHEN found = 1 THEN 1 ELSE 0 END) AS hits,
                         0 AS prev_count
                  FROM search_stats
+                 WHERE dismissed = 0
                  GROUP BY LOWER(term)
+                 HAVING cur_count > 0
                  ORDER BY cur_count DESC, term ASC'
             )->fetchAll();
 
@@ -1036,11 +1046,13 @@ class Stats
 
         $rows = Database::run(
             'SELECT LOWER(term) AS term_key, MAX(term) AS term,
-                    COALESCE(SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END), 0) AS cur_count,
-                    COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END), 0) AS prev_count
+                    COALESCE(SUM(CASE WHEN found = 0 AND created_at >= ? THEN 1 ELSE 0 END), 0) AS cur_count,
+                    COALESCE(SUM(CASE WHEN found = 0 AND created_at >= ? AND created_at < ? THEN 1 ELSE 0 END), 0) AS prev_count,
+                    COALESCE(SUM(CASE WHEN found = 1 THEN 1 ELSE 0 END), 0) AS hits
              FROM search_stats
-             WHERE created_at >= ?
+             WHERE dismissed = 0 AND created_at >= ?
              GROUP BY LOWER(term)
+             HAVING cur_count > 0
              ORDER BY cur_count DESC, prev_count DESC, term ASC',
             [$currentLow, $previousLow, $currentLow, $previousLow]
         )->fetchAll();
@@ -1054,6 +1066,10 @@ class Stats
      * worth promoting to a real category, independent of the period chosen
      * on the Trends page.
      *
+     * Only real misses count (found = 0): a search that found something is
+     * not a demand for a new category. Dismissed terms are left out too -
+     * the admin has already dealt with them.
+     *
      * @return array<string, int>
      */
     public static function missedSearchLifetimeCounts(): array
@@ -1061,6 +1077,7 @@ class Stats
         $rows = Database::run(
             'SELECT LOWER(term) AS term_key, COUNT(*) AS total
              FROM search_stats
+             WHERE found = 0 AND dismissed = 0
              GROUP BY LOWER(term)'
         )->fetchAll();
 
@@ -1078,14 +1095,53 @@ class Stats
      * threshold, regardless of the period selected on the Trends page.
      * Sorted by lifetime count so the most-searched terms are on top.
      *
+     * A term is only offered when the site really does not have it:
+     *
+     *  - it must be a MISS (found = 0). A term that hit is not a demand.
+     *  - it must not be DISMISSED. The admin has been through it.
+     *  - it must not already be a CATEGORY. Offering "pussy" for approval
+     *    when the category "pussy" exists produced a dead end: the promote
+     *    action refused it, so the only way out was to dismiss it - and
+     *    dismissing used to delete the search history.
+     *
      * @return array<int, array{term_key: string, term: string, count: int}>
      */
     public static function pendingCategoryApprovals(int $threshold): array
     {
         $rows = Database::run(
-            'SELECT LOWER(term) AS term_key, MAX(term) AS term, COUNT(*) AS total
-             FROM search_stats
-             GROUP BY LOWER(term)
+            'SELECT LOWER(s.term) AS term_key, MAX(s.term) AS term, COUNT(*) AS total
+             FROM search_stats s
+             WHERE s.found = 0 AND s.dismissed = 0
+               AND NOT EXISTS (SELECT 1 FROM categories c WHERE LOWER(c.name) = LOWER(s.term))
+             GROUP BY LOWER(s.term)
+             HAVING COUNT(*) > ?
+             ORDER BY total DESC, term ASC',
+            [$threshold]
+        )->fetchAll();
+
+        return array_map(static fn (array $row): array => [
+            'term_key' => (string) $row['term_key'],
+            'term'     => (string) $row['term'],
+            'count'    => (int) $row['total'],
+        ], $rows);
+    }
+
+    /**
+     * The missed terms that are NOT offered for approval because the site
+     * already has a category with that name. The admin page shows them as
+     * a note, so a term that disappears from the list does not look like
+     * lost data.
+     *
+     * @return array<int, array{term_key: string, term: string, count: int}>
+     */
+    public static function skippedCategoryTerms(int $threshold): array
+    {
+        $rows = Database::run(
+            'SELECT LOWER(s.term) AS term_key, MAX(s.term) AS term, COUNT(*) AS total
+             FROM search_stats s
+             WHERE s.found = 0 AND s.dismissed = 0
+               AND EXISTS (SELECT 1 FROM categories c WHERE LOWER(c.name) = LOWER(s.term))
+             GROUP BY LOWER(s.term)
              HAVING COUNT(*) > ?
              ORDER BY total DESC, term ASC',
             [$threshold]
