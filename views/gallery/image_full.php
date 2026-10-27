@@ -8,35 +8,52 @@ $title      = $photo['caption'] !== '' ? $photo['caption'] : ($galleryTitle !== 
 $metaDescription = $photo['caption'] !== ''
     ? $photo['caption'] . ($galleryTitle !== '' ? ' — from "' . $galleryTitle . '" on ' . config('app.site_name') . '.' : '')
     : 'An image from ' . ($galleryTitle !== '' ? '"' . $galleryTitle . '"' : 'the gallery') . ' on ' . config('app.site_name') . '.';
-$canonicalUrl = absolute_url('/images/' . (int) $photo['id']);
+// The controller decides the canonical (a public photo keeps its own page,
+// a gated one points at its gallery) - the same for every visitor.
+$canonicalUrl = $canonicalUrl ?? absolute_url('/images/' . (int) $photo['id']);
+$publicBytes  = $publicBytes ?? true;
 $ogImage = absolute_url(file_url($photo['filename'], 'thumb'));
 $canDownloadFull = $canDownloadFull ?? true;
 $publicMedia     = $publicMedia ?? false;
-$ldJson = [
-    '@context' => 'https://schema.org',
-    '@type'    => 'ImageObject',
-    'name'     => $title,
-    'url'      => $canonicalUrl,
-    // On a page a logged-out visitor may open, the schema URL must be the
-    // PUBLIC web rendition (no session token) or a crawler cannot fetch it.
-    // A full url: a relative one is "Invalid URL in field contentUrl" to
-    // Search Console, and a crawler cannot fetch it either.
-    'contentUrl' => absolute_url($publicMedia ? public_file_url($photo['filename'], 'web') : file_url($photo['filename'])),
-    'caption'  => $photo['caption'],
-    'description' => $metaDescription,
-    'author'   => ['@type' => 'Organization', 'name' => config('app.site_name'), 'url' => absolute_url('')],
-];
-// Google's paywalled-content markup: without it a gated page looks like an
-// empty page that is hiding its content behind a form (a "cloaking" pattern),
-// which is exactly how Google classifies it. Declaring the paywall up front
-// lets it index the page as subscription content instead.
-if (empty($canViewFull)) {
-    $ldJson['isAccessibleForFree'] = false;
-    $ldJson['hasPart'] = [
-        '@type' => 'WebPageElement',
-        'isAccessibleForFree' => false,
-        'cssSelector' => '.paywalled-content',
+// The structured data.
+//
+// A photo whose bytes are PUBLIC gets the ImageObject: it is a real page
+// about that photo (the full-size view), the canonical is the page itself,
+// and the contentUrl is the PUBLIC web rendition - a relative url is
+// "Invalid URL in field contentUrl" to Search Console, and a crawler has to
+// be able to fetch it.
+//
+// A GATED photo's page is only the paywall wall of its gallery, and its
+// canonical is that gallery. There is nothing to describe here: the gallery
+// page carries the gallery's own structured data and the paywall markup, so
+// the viewer page stays quiet instead of promising an image the page does
+// not even show.
+$ldJson = [];
+if ($publicBytes) {
+    $ldJson = [
+        '@context' => 'https://schema.org',
+        '@type'    => 'ImageObject',
+        'name'     => $title,
+        'url'      => $canonicalUrl,
+        'contentUrl' => absolute_url(
+            $publicMedia ? public_file_url($photo['filename'], 'web') : file_url($photo['filename'])
+        ),
+        'caption'  => $photo['caption'],
+        'description' => $metaDescription,
+        'author'   => ['@type' => 'Organization', 'name' => config('app.site_name'), 'url' => absolute_url('')],
     ];
+    // Google's paywalled-content markup: without it a gated page looks like
+    // an empty page that is hiding its content behind a form (a "cloaking"
+    // pattern), which is exactly how Google classifies it. Declaring the
+    // paywall up front lets it index the page as subscription content.
+    if (empty($canViewFull)) {
+        $ldJson['isAccessibleForFree'] = false;
+        $ldJson['hasPart'] = [
+            '@type' => 'WebPageElement',
+            'isAccessibleForFree' => false,
+            'cssSelector' => '.paywalled-content',
+        ];
+    }
 }
 ?>
 <?php

@@ -134,7 +134,10 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
         }
     }
     </script>
-    <?php if (isset($ldJson) && is_array($ldJson)): ?>
+    <?php // An EMPTY structured-data block must not be emitted: a page with
+          // no data of its own (a gated media viewer) stays quiet rather
+          // than sending an empty object. ?>
+    <?php if (!empty($ldJson) && is_array($ldJson)): ?>
     <script nonce="<?= csp_nonce() ?>" type="application/ld+json"><?= json_encode($ldJson, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?></script>
     <?php endif; ?>
     <?php if (!empty($breadcrumbItems)): ?>

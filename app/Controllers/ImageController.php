@@ -68,6 +68,25 @@ class ImageController extends Controller
             Photo::recordView($id, (int) $user['id']);
         }
 
+        // The canonical URL of this page. It is the SAME for every visitor:
+        //
+        //  - a photo whose bytes are PUBLIC (safe for work, or an adult one
+        //    in the free tier) has a page of its own - it is the full-size
+        //    view of that photo, and it carries the ImageObject.
+        //  - a GATED photo's page is only the paywall wall of its gallery,
+        //    so the GALLERY page is the better canonical. That is what
+        //    consolidates the thousands of viewer pages that were reported
+        //    as "Duplicate" and "Google chose different canonical than user".
+        //  - a photo in a SECRET gallery keeps its own page: its gallery is
+        //    not crawlable, so pointing there would be a canonical to a 404.
+        $canonicalPath = '/images/' . (int) $id;
+        $publicBytes  = Photo::guestViewable($id);
+
+        if (!$publicBytes && $gallery !== null && empty($gallery['is_secret'])) {
+            $canonicalPath = '/galleries/' . (int) $gallery['id'];
+        }
+        $canonicalUrl = absolute_url($canonicalPath);
+
         $currentIndex = 0;
         $mediaCount   = 1;
         $prev = $next = $prevGallery = $nextGallery = null;
@@ -161,6 +180,10 @@ class ImageController extends Controller
             // may read the public web rendition of guest-viewable media.
             'canDownloadFull' => $user !== null,
             'publicMedia'     => $user === null && $canViewFull,
+            // The canonical and whether the photo's bytes are public. Both
+            // are the same for every visitor (see above).
+            'canonicalUrl'    => $canonicalUrl,
+            'publicBytes'    => $publicBytes,
             // Scene-detected chapter markers for the player's chapter list
             // (empty until the chapters worker has analysed the video).
             'chapters'      => $requireVideo ? \App\Models\VideoChapter::forPhoto($id) : [],

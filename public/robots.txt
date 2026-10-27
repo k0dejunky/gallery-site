@@ -32,6 +32,24 @@ Disallow: /gallery/internal
 Disallow: /gallery/files/
 Disallow: /gallery/*?se=
 
+# The public renditions of the media ARE crawlable. The structured data
+# points at them (the ImageObject's contentUrl, the video sitemap's
+# content_loc), and a crawler cannot fetch a URL that robots.txt forbids -
+# so the promise and the rule have to agree. The ORIGINAL still needs a
+# media token, so it stays blocked here (and answers 404 without a
+# session anyway).
+Allow: /gallery/files/*?size=web
+Allow: /gallery/files/*?size=web_lo
+Allow: /gallery/files/*?size=web_hi
+Allow: /gallery/files/*?size=thumb
+Allow: /gallery/files/*?size=blur
+Allow: /gallery/files/*?size=poster
+
+# Nothing to index here: the live page is a member feature (a 302 to the
+# login for a guest) and the health endpoint is JSON.
+Disallow: /gallery/live
+Disallow: /gallery/health
+
 # Short public video sample clips (Google Video indexing) are crawlable.
 Allow: /gallery/previews/
 

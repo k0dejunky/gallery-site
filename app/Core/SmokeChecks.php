@@ -5431,6 +5431,85 @@ class SmokeChecks
                 ? $ok('the breadcrumbs and the media content urls are full urls')
                 : $bad(implode('; ', $problems));
         });
+        $add('smoke.seo.one_canonical_per_page', 'Smoke · SEO', 'Every page has one URL: the old paths redirect, the media viewers consolidate', static function () use ($root, $read, $ok, $bad): array {
+            // Search Console reported the whole list of "why not indexed"
+            // reasons at once. Three of them are about the SITE, not about
+            // the content:
+            //
+            //  - "Not found (404)": the app's old paths at the origin root
+            //    (/galleries/163, /images/1265) answered 404.
+            //  - "Page with redirect": /gallery without the trailing slash
+            //    answered Apache's directory 301.
+            //  - "Duplicate / Google chose different canonical than user":
+            //    the thousands of media viewer pages, which are only the
+            //    paywall wall of their gallery.
+            $rootFiles = (string) $read($root . '/config/gallery-root-files.conf');
+            $alias     = (string) $read($root . '/config/gallery-alias.conf');
+            $robots    = (string) $read($root . '/public/robots.txt');
+            $imageCtrl = (string) $read($root . '/app/Controllers/ImageController.php');
+            $imageView = (string) $read($root . '/views/gallery/image_full.php');
+            $player    = (string) $read($root . '/views/video/player.php');
+            $problems  = [];
+
+            // The old origin-root paths answer with a redirect.
+            foreach ([
+                '^/galleries$'      => '/gallery/galleries',
+                '^/galleries/(.*)$' => '/gallery/galleries/$1',
+                '^/images/(.*)$'     => '/gallery/images/$1',
+                '^/videos/(.*)$'     => '/gallery/videos/$1',
+                '^/tags/(.*)$'       => '/gallery/tags/$1',
+                '^/previews/(.*)$'   => '/gallery/previews/$1',
+            ] as $pattern => $target) {
+                $rule = '/RedirectMatch\s+301\s+' . preg_quote($pattern, '/') . '\s+' . preg_quote($target, '/') . '\s*$/m';
+                if (preg_match($rule, $rootFiles) !== 1) {
+                    $problems[] = 'the old path ' . $pattern . ' must redirect to ' . $target;
+                }
+            }
+            // And no catch-all: the scanner blocks have to keep winning.
+            if (preg_match('/RedirectMatch\s+301\s+\^\/\(\.\*\)\$/', $rootFiles) === 1) {
+                $problems[] = 'the redirects must stay narrow - a catch-all would swallow the scanner blocks';
+            }
+
+            // The alias config is in the repo, so a reinstall keeps the
+            // rules the boxes run.
+            if (strpos($alias, 'Alias /gallery') === false) {
+                $problems[] = 'the alias config must map /gallery to the app';
+            }
+
+            // robots.txt has to agree with the structured data: the public
+            // renditions are crawlable, the private ones are not.
+            // The rules are compared LINE by LINE: a prefix match would be
+            // satisfied by the web_lo rule and would never notice that the
+            // web one is gone.
+            $robotLines = array_map('trim', preg_split('/\R/', $robots) ?: []);
+            foreach (['Allow: /gallery/files/*?size=web', 'Disallow: /gallery/live'] as $rule) {
+                if (!in_array($rule, $robotLines, true)) {
+                    $problems[] = 'robots.txt must carry the exact line "' . $rule . '"';
+                }
+            }
+
+            // The media viewers: a gated photo points at its gallery, a
+            // public one keeps its own page.
+            if (strpos($imageCtrl, "Photo::guestViewable(\$id)") === false) {
+                $problems[] = 'the media viewer must decide the canonical with the public-bytes rule';
+            }
+            if (strpos($imageCtrl, "\$canonicalPath = '/galleries/'") === false) {
+                $problems[] = 'a gated photo must point its canonical at its gallery';
+            }
+            if (strpos($imageView, '$canonicalUrl = $canonicalUrl ??') === false) {
+                $problems[] = 'the media view must use the canonical the controller decided';
+            }
+            // The VIDEO pages keep their own canonical: the video sitemap
+            // points at them, and a canonical to the gallery would drop the
+            // video entries.
+            if (strpos($player, "\$canonicalUrl = absolute_url('/videos/'") === false) {
+                $problems[] = 'the video page must keep its own canonical (the video sitemap depends on it)';
+            }
+
+            return $problems === []
+                ? $ok('one URL per page: the old paths redirect, the media viewers consolidate')
+                : $bad(implode('; ', $problems));
+        });
         $add('smoke.seo.robots_at_root', 'Smoke · SEO', 'robots.txt scopes disallows to /gallery/', static function () use ($read, $root, $ok, $bad): array {
             $robots = (string) $read("$root/public/robots.txt");
             if ($robots === '') {

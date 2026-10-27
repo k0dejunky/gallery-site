@@ -247,6 +247,11 @@ cat > /etc/apache2/conf-available/gallery.conf <<EOF
 # Serves the gallery app under the /gallery URL path.
 Alias /gallery "$INSTALL_DIR/public"
 
+# A request for the base path without its trailing slash answers with a 301
+# to /gallery/ (Apache's own directory redirect, one hop) - the standard
+# behaviour. A rewrite here cannot beat mod_alias, so it is left alone.
+# (Keep in sync with config/gallery-alias.conf.)
+
 <Directory "$INSTALL_DIR/public">
     Options FollowSymLinks
     AllowOverride All
