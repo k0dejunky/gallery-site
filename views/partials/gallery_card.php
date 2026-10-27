@@ -2,7 +2,20 @@
 // The cover and the categories come from the caller (Gallery::preloadCards):
 // a per-card query here cost the guest home page 24 queries for 12 cards.
 $cover = $cover ?? null;
-$coverSize = \App\Core\Auth::check() ? 'thumb' : 'blur';
+// A logged-out visitor gets the REAL cover of a gallery they may open (a safe
+// gallery at any level, or an adult one in the free tier) and the blurred
+// teaser of anything else. Those public URLs carry no media token: the card
+// markup is shared by every visitor through the page cache, and the bytes are
+// public by the guest-viewable rule.
+$isGuest      = !\App\Core\Auth::check();
+$guestCanView = $isGuest && \App\Models\Gallery::guestViewable($gallery);
+$coverSize    = ($isGuest && !$guestCanView) ? 'blur' : 'thumb';
+$isAdult      = (int) ($gallery['is_nsfw'] ?? 1) === 1;
+$coverUrl     = static function (string $size, string $format = '') use ($cover, $isGuest, $guestCanView): string {
+    return $isGuest && $guestCanView
+        ? public_file_url((string) $cover['filename'], $size, $format)
+        : file_url((string) $cover['filename'], $size, $format);
+};
 $galleryCategories = $galleryCategories ?? [];
 $galleryUrl  = url('/galleries/' . (int) $gallery['id']) . (!empty($listingReturnTo) ? '?' . http_build_query(['return_to' => $listingReturnTo]) : '');
 $isVideoCard = $cover !== null && is_video($cover['filename']);
@@ -23,9 +36,12 @@ $cardId = 'card-' . (int) $gallery['id'];
 // Two cases: the gallery is above the member's level, or it is pay-per-view
 // (everyone sees the teaser; the full set needs a code or a purchase).
 $memberLevel = \App\Core\Auth::effectiveLevel();
+// A safe gallery is open to everyone regardless of its stored level, so the
+// lock badge must use the EFFECTIVE level or it would advertise a paywall on
+// a gallery the visitor can already open.
 $isLocked    = $memberLevel < PHP_INT_MAX
-    && (int) ($gallery['min_level'] ?? 0) > $memberLevel;
-$lockLevel   = (int) ($gallery['min_level'] ?? 0);
+    && \App\Models\Gallery::effectiveLevel($gallery) > $memberLevel;
+$lockLevel   = \App\Models\Gallery::effectiveLevel($gallery);
 $ppvPrice    = (float) ($gallery['ppv_price'] ?? 0) > 0 ? (float) $gallery['ppv_price'] : null;
 // First card on a page gets high fetch priority and eager loading (it is the
 // LCP element); all others lazy-load. Reserve the 400x300 cover ratio so the
@@ -49,11 +65,12 @@ $asyncDecodeAttr    = $heroCard ? '' : ' decoding="async"';
                     <span class="viewed-badge" title="You have seen this gallery" aria-hidden="true">&#10003;</span>
                     <span class="sr-only">Already viewed</span>
                 <?php endif; ?>
+                <?php if ($isAdult): ?><span class="nsfw-badge" title="Adult content">18+</span><span class="sr-only">Adult content</span><?php endif; ?>
             </div>
         <?php else: ?>
             <div class="card-cover">
                 <?php if ($isVideoCard): ?>
-                    <img src="<?= e(file_url($cover['filename'], $coverSize)) ?>" alt="<?= e(\App\Models\Photo::altText($cover, (string) ($gallery['title'] ?? ''))) ?>" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?> data-fallback="<?= e($placeholder) ?>" title="Saving is disabled for members-only content">
+                    <img src="<?= e($coverUrl($coverSize)) ?>" alt="<?= e(\App\Models\Photo::altText($cover, (string) ($gallery['title'] ?? ''))) ?>" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?> data-fallback="<?= e($placeholder) ?>">
                 <?php elseif ($coverSize === 'blur'): ?>
                     <?php // Guests (and search engines) only ever see the blurred
                         // preview cover; the real thumbnail is for members. The
@@ -61,17 +78,17 @@ $asyncDecodeAttr    = $heroCard ? '' : ' decoding="async"';
                         // member's thumbnail, so the guest grid is not the one
                         // surface that is stuck with plain JPEG. ?>
                     <picture>
-                        <source type="image/avif" srcset="<?= e(file_url($cover['filename'], 'blur', 'avif')) ?>">
-                        <source type="image/webp" srcset="<?= e(file_url($cover['filename'], 'blur', 'webp')) ?>">
-                        <source type="image/jpeg" srcset="<?= e(file_url($cover['filename'], 'blur')) ?>">
-                        <img src="<?= e(file_url($cover['filename'], 'blur')) ?>" alt="<?= e(\App\Models\Photo::altText($cover, (string) ($gallery['title'] ?? ''))) ?>" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> data-fallback="<?= e($placeholder) ?>" title="Saving is disabled for members-only content">
+                        <source type="image/avif" srcset="<?= e(public_file_url($cover['filename'], 'blur', 'avif')) ?>">
+                        <source type="image/webp" srcset="<?= e(public_file_url($cover['filename'], 'blur', 'webp')) ?>">
+                        <source type="image/jpeg" srcset="<?= e(public_file_url($cover['filename'], 'blur')) ?>">
+                        <img src="<?= e(public_file_url($cover['filename'], 'blur')) ?>" alt="<?= e(\App\Models\Photo::altText($cover, (string) ($gallery['title'] ?? ''))) ?>" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> data-fallback="<?= e($placeholder) ?>" title="Saving is disabled for members-only content">
                     </picture>
                 <?php else: ?>
                     <picture>
-                        <source type="image/avif" srcset="<?= e(file_url($cover['filename'], 'thumb', 'avif')) ?>">
-                        <source type="image/webp" srcset="<?= e(file_url($cover['filename'], 'thumb', 'webp')) ?>">
-                        <source type="image/jpeg" srcset="<?= e(file_url($cover['filename'], 'thumb')) ?>">
-                        <img src="<?= e(file_url($cover['filename'], 'thumb')) ?>" srcset="<?= e(file_srcset($cover['filename'])) ?>" sizes="(min-width: 800px) 400px, 100vw" alt="<?= e(\App\Models\Photo::altText($cover, (string) ($gallery['title'] ?? ''))) ?>" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> data-fallback="<?= e($placeholder) ?>" title="Saving is disabled for members-only content">
+                        <source type="image/avif" srcset="<?= e($coverUrl('thumb', 'avif')) ?>">
+                        <source type="image/webp" srcset="<?= e($coverUrl('thumb', 'webp')) ?>">
+                        <source type="image/jpeg" srcset="<?= e($coverUrl('thumb')) ?>">
+                        <img src="<?= e($coverUrl('thumb')) ?>" srcset="<?= e(file_srcset($cover['filename'], !($isGuest && $guestCanView))) ?>" sizes="(min-width: 800px) 400px, 100vw" alt="<?= e(\App\Models\Photo::altText($cover, (string) ($gallery['title'] ?? ''))) ?>" width="400" height="300"<?= $fetchPriorityAttr ?><?= $lazyLoadAttr ?><?= $asyncDecodeAttr ?> data-fallback="<?= e($placeholder) ?>">
                     </picture>
                 <?php endif; ?>
                 <?php if ($isVideoCard): ?><span class="video-badge" aria-hidden="true">&#9654;</span><?php endif; ?>
@@ -79,6 +96,7 @@ $asyncDecodeAttr    = $heroCard ? '' : ' decoding="async"';
                     <span class="viewed-badge" title="You have seen this gallery" aria-hidden="true">&#10003;</span>
                     <span class="sr-only">Already viewed</span>
                 <?php endif; ?>
+                <?php if ($isAdult): ?><span class="nsfw-badge" title="Adult content">18+</span><span class="sr-only">Adult content</span><?php endif; ?>
             </div>
         <?php endif; ?>
         <h2><?= e($gallery['title']) ?></h2>

@@ -10,12 +10,16 @@ $metaDescription = $photo['caption'] !== ''
     : 'An image from ' . ($galleryTitle !== '' ? '"' . $galleryTitle . '"' : 'the gallery') . ' on ' . config('app.site_name') . '.';
 $canonicalUrl = absolute_url('/images/' . (int) $photo['id']);
 $ogImage = absolute_url(file_url($photo['filename'], 'thumb'));
+$canDownloadFull = $canDownloadFull ?? true;
+$publicMedia     = $publicMedia ?? false;
 $ldJson = [
     '@context' => 'https://schema.org',
     '@type'    => 'ImageObject',
     'name'     => $title,
     'url'      => $canonicalUrl,
-    'contentUrl' => file_url($photo['filename']),
+    // On a page a logged-out visitor may open, the schema URL must be the
+    // PUBLIC web rendition (no session token) or a crawler cannot fetch it.
+    'contentUrl' => $publicMedia ? public_file_url($photo['filename'], 'web') : file_url($photo['filename']),
     'caption'  => $photo['caption'],
     'description' => $metaDescription,
     'author'   => ['@type' => 'Organization', 'name' => config('app.site_name'), 'url' => absolute_url('')],
@@ -79,11 +83,17 @@ $breadcrumbItems = [
         ?>
     <?php else: ?>
     <p class="media-progress" role="status">Item <?= (int) ($currentIndex + 1) ?> of <?= (int) ($mediaCount ?? 1) ?></p>
+    <?php
+    // A logged-out visitor reads the public web rendition; the original (and
+    // the "View full size" button that swaps it in) is for account holders.
+    $webUrl  = $publicMedia ? public_file_url($photo['filename'], 'web') : file_url($photo['filename'], 'web');
+    $webWebp = $publicMedia ? public_file_url($photo['filename'], 'web', 'webp') : file_url($photo['filename'], 'web', 'webp');
+    ?>
     <img id="fullsize-img"
-         src="<?= e(file_url($photo['filename'], 'web')) ?>"
-         data-web="<?= e(file_url($photo['filename'], 'web')) ?>"
-         data-web-webp="<?= e(file_url($photo['filename'], 'web', 'webp')) ?>"
-         data-full="<?= e(file_url($photo['filename'])) ?>"
+         src="<?= e($webUrl) ?>"
+         data-web="<?= e($webUrl) ?>"
+         data-web-webp="<?= e($webWebp) ?>"
+         <?php if ($canDownloadFull): ?>data-full="<?= e(file_url($photo['filename'])) ?>"<?php endif; ?>
          decoding="async"
          fetchpriority="high"
          alt="<?= e($photoAlt) ?>"
@@ -92,7 +102,9 @@ $breadcrumbItems = [
         <?php if ($photo['caption'] !== ''): ?>
             <span><?= e($photo['caption']) ?></span><br>
         <?php endif; ?>
-        <button id="fullsize-toggle" class="btn" type="button">View full size</button>
+        <?php if ($canDownloadFull): ?>
+            <button id="fullsize-toggle" class="btn" type="button">View full size</button>
+        <?php endif; ?>
         <span>&middot; <?= number_format((int) ($photo['views'] ?? 0)) ?> views &middot; <?= number_format((int) ($photo['unique_views'] ?? 0)) ?> unique</span>
     </figcaption>
     <?php endif; ?>

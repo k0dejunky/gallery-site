@@ -55,7 +55,7 @@ class GalleryController extends Controller
         $offset = max(0, (int) $this->request->query('offset', 0));
         $limit  = 18;
         $maxLevel = Auth::effectiveLevel();
-        $levelSql = $maxLevel >= PHP_INT_MAX ? '' : ' AND g.min_level <= ' . (int) $maxLevel;
+        $levelSql = $maxLevel >= PHP_INT_MAX ? '' : ' AND ' . \App\Models\Gallery::accessLevelSql('g') . ' <= ' . (int) $maxLevel;
 
         $baseWhere = "g.is_secret = 0 AND " . \App\Models\Gallery::publishedVisibleSql('g') . $levelSql;
         $params = [];
@@ -115,7 +115,7 @@ class GalleryController extends Controller
         // with no subscription - could enumerate every premium gallery's
         // title, description, item count and its real 400x300 cover.
         $maxLevel = Auth::effectiveLevel();
-        $levelSql = $maxLevel >= PHP_INT_MAX ? '' : ' AND g.min_level <= ' . (int) $maxLevel;
+        $levelSql = $maxLevel >= PHP_INT_MAX ? '' : ' AND ' . \App\Models\Gallery::accessLevelSql('g') . ' <= ' . (int) $maxLevel;
 
         $where  = \App\Models\Gallery::publishedVisibleSql('g') . ' AND g.is_secret = 0 AND g.type = \'videos\'' . $levelSql;
         $params = [];
@@ -237,6 +237,12 @@ class GalleryController extends Controller
         $sort  = in_array($this->request->query('sort', ''), ['newest', 'views', 'title'], true)
             ? (string) $this->request->query('sort')
             : '';
+        // The content filter: safe-for-work or adult. A safe gallery is open
+        // to everybody, so this is how a visitor asks for the open half of
+        // the catalogue without a membership.
+        $content = in_array($this->request->query('content', ''), ['sfw', 'nsfw'], true)
+            ? (string) $this->request->query('content')
+            : '';
 
         $user      = Auth::user();
         $isMember  = Auth::hasActiveSubscription();
@@ -261,13 +267,14 @@ class GalleryController extends Controller
 
         if ($q === '') {
             $listingKey = 'home:' . $type . ':level' . ($maxLevel >= PHP_INT_MAX ? 'all' : (string) $maxLevel)
+                . ($content !== '' ? ':c' . $content : '')
                 . ($user !== null ? ':u' . (int) $user['id'] : '');
 
             $listingJson = \App\Core\Cache::rememberGen(
                 'gallery',
                 $listingKey,
                 \App\Models\ServerOptimizations::cacheTtl('listing'),
-                static function () use ($categories, $type, $maxLevel, $user): string {
+                static function () use ($categories, $type, $maxLevel, $user, $content): string {
                     $sections = [];
                     $seen     = [];
                     // The catalogue is bounded: the listing showed EVERY
@@ -275,7 +282,7 @@ class GalleryController extends Controller
                     // grew with the collection. Each category shows its
                     // newest 24 and links to the category page for the rest.
                     $perCategory = 24;
-                    $byCategory = Gallery::inCategories(array_column($categories, 'id'), $type, $maxLevel, $user !== null ? (int) $user['id'] : 0);
+                    $byCategory = Gallery::inCategories(array_column($categories, 'id'), $type, $maxLevel, $user !== null ? (int) $user['id'] : 0, $content);
 
                     foreach ($categories as $cat) {
                         $galleries = [];
@@ -298,7 +305,7 @@ class GalleryController extends Controller
                     }
 
                     $uncategorized = array_values(array_filter(
-                        Gallery::withoutCategory($type, $maxLevel, $user !== null ? (int) $user['id'] : 0),
+                        Gallery::withoutCategory($type, $maxLevel, $user !== null ? (int) $user['id'] : 0, $content),
                         static fn (array $gallery): bool => !isset($seen[(int) $gallery['id']])
                     ));
 
@@ -353,6 +360,9 @@ class GalleryController extends Controller
         }
         if ($sort !== '') {
             $filters['sort'] = $sort;
+        }
+        if ($content !== '') {
+            $filters['content'] = $content;
         }
 
         // The paginated grid is only used for search results; the full
@@ -418,7 +428,7 @@ class GalleryController extends Controller
         // ones being looked at this week. The trending one is filtered by
         // the member's level, so it never advertises a locked gallery.
         $recentStrip   = \App\Models\Gallery::paginate(1, 8, $filters)['items'];
-        $trendingStrip = \App\Models\Gallery::trending(7, 8, $maxLevel);
+        $trendingStrip = \App\Models\Gallery::trending(7, 8, $maxLevel, $content);
         $stripCovers   = \App\Models\Gallery::preloadCards(array_merge($recentStrip, $trendingStrip));
 
         $this->view('gallery/index', [
@@ -436,6 +446,7 @@ class GalleryController extends Controller
             'cardCovers'    => $cardCovers,
             'lcpPreload'    => $lcpPreload,
             'sort'          => $sort,
+            'content'       => $content,
             'viewedIds'     => $viewedIds,
             'recentlyViewed' => $recentlyViewed,
             'favoriteGalleryIds' => $favoriteGalleryIds,
@@ -491,10 +502,17 @@ class GalleryController extends Controller
         $sort = in_array($this->request->query('sort', ''), ['newest', 'views', 'title'], true)
             ? (string) $this->request->query('sort')
             : '';
+        // The content filter, like on the catalogue: safe-for-work or adult.
+        $content = in_array($this->request->query('content', ''), ['sfw', 'nsfw'], true)
+            ? (string) $this->request->query('content')
+            : '';
 
         $filters       = ['q' => $q, 'category' => (int) $category['id'], 'max_level' => $user === null ? PHP_INT_MAX : Auth::effectiveLevel(), 'user_id' => (int) ($user['id'] ?? 0)];
         if ($sort !== '') {
             $filters['sort'] = $sort;
+        }
+        if ($content !== '') {
+            $filters['content'] = $content;
         }
         $imagePaginator = [];
         $videoPaginator = [];
@@ -536,6 +554,7 @@ class GalleryController extends Controller
             'q'              => $q,
             'type'           => $type,
             'sort'           => $sort,
+            'content'        => $content,
             'currentUser'    => $user,
             'hasActive'      => Auth::hasActiveSubscription(),
             'cardCovers'     => $this->preloadCardData([], $imagePaginator, $videoPaginator),
@@ -581,7 +600,11 @@ class GalleryController extends Controller
         // never disagree about one asset.
         $minLevel  = \App\Models\Gallery::accessLevel($id);
         if ($user === null) {
-            $canViewFull = false;
+            // A logged-out visitor may open a safe gallery (any level) and an
+            // adult gallery in the free tier; the paid adult tiers stay
+            // behind the membership gate. The rule lives on the model so the
+            // page, the media viewer and the card cover cannot disagree.
+            $canViewFull = \App\Models\Gallery::guestViewable($gallery);
         } elseif (\App\Core\Auth::isSuperAdmin()) {
             $canViewFull = true;
         } elseif (!empty($gallery['is_secret'])) {
@@ -663,9 +686,8 @@ class GalleryController extends Controller
      */
     public function photosPage(int $id): void
     {
-        Auth::requireLogin();
-
-        $gallery = Gallery::findPublic($id, (int) Auth::user()['id']);
+        $user    = Auth::user();
+        $gallery = Gallery::findPublic($id, $user !== null ? (int) $user['id'] : null);
 
         if ($gallery === null) {
             $this->notFound();
@@ -674,10 +696,22 @@ class GalleryController extends Controller
 
         if (empty($gallery['is_secret'])) {
             $accessLevel = \App\Models\Gallery::accessLevel($id);
-            Auth::requireGalleryLevel(
-                $accessLevel,
-                'This gallery needs a ' . \App\Models\Subscription::levelLabel($accessLevel) . ' membership to view.'
-            );
+
+            if ($user === null) {
+                // The guest grid only pages for a gallery they may open.
+                if (!\App\Models\Gallery::guestViewable($gallery)) {
+                    $this->notFound();
+                    return;
+                }
+            } elseif (
+                !\App\Core\Auth::isSuperAdmin()
+                && !\App\Models\Purchase::userUnlocked((int) $user['id'], $id)
+            ) {
+                Auth::requireGalleryLevel(
+                    $accessLevel,
+                    'This gallery needs a ' . \App\Models\Subscription::levelLabel($accessLevel) . ' membership to view.'
+                );
+            }
         }
 
         $pageSize = max(1, (int) config('app.gallery_page_size', 48));
@@ -759,6 +793,9 @@ class GalleryController extends Controller
             $type     = strtolower(trim((string) ($row['type'] ?? ''))) === 'videos' ? 'videos' : 'images';
             $minLevel = max(0, min(3, (int) ($row['min_level'] ?? 0)));
             $isSecret = !empty($row['is_secret']) && (int) $row['is_secret'] === 1;
+            // The content rating: anything but an explicit 0 is ADULT, so an
+            // old CSV (or a typo) can never open a gallery by accident.
+            $isNsfw   = (string) ($row['is_nsfw'] ?? '1') !== '0';
             $publishedAt = Gallery::normalizePublishAt($row['published_at'] ?? null);
 
             $categoryIds = [];
@@ -775,6 +812,7 @@ class GalleryController extends Controller
                     'type'      => $type,
                     'min_level' => $minLevel,
                     'secret'    => $isSecret ? 'yes' : 'no',
+                    'rating'    => $isNsfw ? 'adult' : 'safe for work',
                     'published' => $publishedAt ?: '(immediate)',
                     'categories' => count($categoryIds),
                     'ok'        => true,
@@ -783,7 +821,7 @@ class GalleryController extends Controller
             }
 
             try {
-                $galleryId = Gallery::create($title, (string) ($row['description'] ?? ''), $type, $minLevel, $publishedAt, $isSecret);
+                $galleryId = Gallery::create($title, (string) ($row['description'] ?? ''), $type, $minLevel, $publishedAt, $isSecret, false, $isNsfw);
                 Gallery::setCategories($galleryId, $categoryIds);
                 $created++;
             } catch (\Throwable $e) {
@@ -811,7 +849,7 @@ class GalleryController extends Controller
     /**
      * Parse a gallery CSV into rows. Accepts optional header; columns in
      * order: title, description, type, min_level, is_secret, published_at,
-     * categories (pipe-separated).
+     * categories (pipe-separated), is_nsfw (optional, 1 = adult).
      */
     private static function parseGalleryCsv(string $content): array
     {
@@ -840,6 +878,9 @@ class GalleryController extends Controller
                 'is_secret'   => (string) ($cols[4] ?? '0'),
                 'published_at'=> (string) ($cols[5] ?? ''),
                 'categories'  => (string) ($cols[6] ?? ''),
+                // Optional 8th column: the content rating. Absent means
+                // ADULT, so an old CSV can never open a gallery by accident.
+                'is_nsfw'     => (string) ($cols[7] ?? '1'),
             ];
         }
 
@@ -883,6 +924,9 @@ class GalleryController extends Controller
         // A test gallery is never announced to members: no "new gallery"
         // email, no in-app bell, no social auto-post.
         $isTest      = $this->request->post('is_test') === '1';
+        // Content rating: fail CLOSED. A form that does not post the control
+        // (or posts garbage) creates an ADULT gallery, never a public one.
+        $isNsfw      = (string) $this->request->post('is_nsfw', '1') !== '0';
         $allowedUsers = $this->request->post('allowed_users', []);
         $allowedUsers = is_array($allowedUsers) ? $allowedUsers : [];
         $categoryIds = $this->request->post('categories', []);
@@ -918,7 +962,7 @@ class GalleryController extends Controller
             $publishedAt = Gallery::normalizePublishAt($publishAtRaw);
         }
 
-        $galleryId = Gallery::create($title, $description, $type, $minLevel, $publishedAt, $isSecret, $isTest);
+        $galleryId = Gallery::create($title, $description, $type, $minLevel, $publishedAt, $isSecret, $isTest, $isNsfw);
         Gallery::setCategories($galleryId, $categoryIds);
         if ($isSecret) {
             Gallery::setAllowedUsers($galleryId, $allowedUsers);
@@ -929,6 +973,7 @@ class GalleryController extends Controller
         AuditLog::record((int) Auth::user()['id'], 'create', 'gallery', $galleryId, 'Created gallery "' . $title . '"', null, [
             'title' => $title, 'description' => $description, 'type' => $type,
             'min_level' => $minLevel,
+            'is_nsfw' => $isNsfw,
             'categories' => array_map('intval', $categoryIds),
             'photos' => $count,
             'published_at' => $publishedAt,
@@ -1694,6 +1739,10 @@ class GalleryController extends Controller
         // The manage form posts a hidden is_test=0 next to the tick, so an
         // unticked box clears the flag instead of leaving it stale.
         $isTest      = $this->request->post('is_test') === '1';
+        // Applied only when the form carried the control; a form that does
+        // not know about the flag must not silently change it.
+        $isNsfwRaw   = $this->request->post('is_nsfw', null);
+        $isNsfw      = $isNsfwRaw === null ? null : ((string) $isNsfwRaw !== '0');
         $allowedUsers = $this->request->post('allowed_users', []);
         $allowedUsers = is_array($allowedUsers) ? $allowedUsers : [];
         $categoryIds = $this->request->post('categories', []);
@@ -1726,7 +1775,7 @@ if ($publishAtRaw !== '') {
             $this->redirect('/admin/galleries/' . $id . '/edit');
         }
 
-        Gallery::update($id, $title, $description, $type, $minLevel, $publishedAt, $isSecret, $isTest);
+        Gallery::update($id, $title, $description, $type, $minLevel, $publishedAt, $isSecret, $isTest, $isNsfw);
         Gallery::setCategories($id, $categoryIds);
 
         // What the editor just did to the categories is the strongest lesson
@@ -1765,6 +1814,7 @@ if ($publishAtRaw !== '') {
         $after = [
             'title' => $title, 'description' => $description, 'type' => $type,
             'min_level' => $minLevel,
+            'is_nsfw' => $isNsfw ?? ((int) ($gallery['is_nsfw'] ?? 1) === 1),
             'categories' => array_map('intval', $categoryIds),
             'published_at' => $publishedAt,
             'is_secret' => $isSecret,
@@ -1775,6 +1825,7 @@ if ($publishAtRaw !== '') {
             'description' => $gallery['description'] ?? '',
             'type' => $gallery['type'] ?? 'images',
             'min_level' => (int) ($gallery['min_level'] ?? 0),
+            'is_nsfw' => (int) ($gallery['is_nsfw'] ?? 1) === 1,
             'categories' => $beforeCategories,
             'published_at' => $gallery['published_at'] ?? null,
             'is_secret' => !empty($gallery['is_secret']),
@@ -1970,7 +2021,7 @@ if ($publishAtRaw !== '') {
         $ids = array_values(array_filter(array_map('intval', (array) ($this->request->post('ids') ?? []))));
         $action = (string) $this->request->post('action', '');
 
-        if ($ids === [] || !in_array($action, ['delete', 'category'], true)) {
+        if ($ids === [] || !in_array($action, ['delete', 'category', 'mark_sfw', 'mark_nsfw'], true)) {
             $this->flash('error', 'Nothing to do — select galleries and an action first.');
             $this->redirect('/admin/galleries');
         }
@@ -1995,7 +2046,15 @@ if ($publishAtRaw !== '') {
                 continue;
             }
 
-            if ($action === 'delete') {
+            if ($action === 'mark_sfw' || $action === 'mark_nsfw') {
+                $nsfw = $action === 'mark_nsfw';
+                Gallery::setNsfw($id, $nsfw);
+                AuditLog::record($adminId, 'update', 'gallery', $id,
+                    $nsfw ? 'Marked gallery "' . $gallery['title'] . '" NSFW' : 'Marked gallery "' . $gallery['title'] . '" SFW',
+                    ['is_nsfw' => (int) ($gallery['is_nsfw'] ?? 1) === 1],
+                    ['is_nsfw' => $nsfw]);
+                $done++;
+            } elseif ($action === 'delete') {
                 if ($gallery['deleted_at'] === null) {
                     AuditLog::record($adminId, 'delete', 'gallery', $id,
                         'Bulk-deleted gallery "' . $gallery['title'] . '"',
@@ -2013,7 +2072,10 @@ if ($publishAtRaw !== '') {
             }
         }
 
-        $this->flash('success', ucfirst($action === 'delete' ? 'Deleted' : 'Recategorized') . " {$done} gallery(ies).");
+        $verb = $action === 'delete' ? 'Deleted'
+            : ($action === 'category' ? 'Recategorized'
+            : ($action === 'mark_sfw' ? 'Marked SFW' : 'Marked NSFW'));
+        $this->flash('success', $verb . " {$done} gallery(ies).");
         $this->redirect('/admin/galleries');
     }
 

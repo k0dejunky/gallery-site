@@ -17,13 +17,18 @@ $tags            = (array) ($tags ?? []);
     <p class="hero-kicker">Adults only</p>
     <h1 style="font-size:clamp(1.8rem, 4vw, 2.6rem);margin:0 0 .4rem;"><?= e(config('app.site_name')) ?></h1>
     <p class="muted" style="max-width:52rem;margin:0 auto 1.5rem;">
-        Original photos, videos and live streams — updated regularly. Join for full access;
-        guests may browse blurred teasers.
+        Original photos, videos and live streams — updated regularly. Safe-for-work galleries
+        are open to everyone; adult galleries open in the free tier and beyond with a membership.
     </p>
     <div style="display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap;">
         <a class="btn" href="<?= url('/signup') ?>">Join now — free preview</a>
         <a class="btn btn-outline" href="<?= url('/login') ?>">Log in</a>
         <a class="btn btn-outline" href="<?= url('/membership') ?>">See membership</a>
+    </div>
+    <div class="guest-browse">
+        <a class="btn btn-sm btn-outline" href="<?= url('/galleries') ?>">All galleries</a>
+        <a class="btn btn-sm btn-outline" href="<?= url('/galleries?type=videos') ?>">Videos</a>
+        <a class="btn btn-sm btn-outline" href="<?= url('/galleries?content=sfw') ?>">Safe for work</a>
     </div>
     <?php if (!empty($mediaCounts['images']) || !empty($mediaCounts['videos'])): ?>
         <p class="muted" style="font-size:.9rem;margin:1rem 0 0;">

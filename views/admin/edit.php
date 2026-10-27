@@ -36,6 +36,19 @@
             <?php endforeach; ?>
         <?php endif; ?>
     </p>
+    <?php $editNsfw = (int) ($gallery['is_nsfw'] ?? 1) === 1; ?>
+    <p>
+        <label>Content rating</label><br>
+        <label class="chip <?= !$editNsfw ? 'active' : '' ?>">
+            <input type="radio" name="is_nsfw" value="0" <?= !$editNsfw ? 'checked' : '' ?>>
+            SFW &mdash; safe for work
+        </label>
+        <label class="chip <?= $editNsfw ? 'active' : '' ?>">
+            <input type="radio" name="is_nsfw" value="1" <?= $editNsfw ? 'checked' : '' ?>>
+            NSFW &mdash; adult
+        </label>
+        <span class="muted">A safe gallery is open to everyone regardless of the membership level below.</span>
+    </p>
     <p>
         <label for="min_level">Minimum membership level required</label><br>
         <select name="min_level" id="min_level">

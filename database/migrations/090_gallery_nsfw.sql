@@ -1,0 +1,22 @@
+-- 090 Safe-for-work flag on galleries.
+--
+-- Until now every gallery was gated the same way: a guest saw nothing but
+-- blurred previews, and the membership level decided what a member could
+-- open. There was no way to say "this set is ordinary, non-adult material
+-- and should be readable by anyone who visits", so the public site had no
+-- real front door - even the two dev galleries without a level were still
+-- blurred and login-gated.
+--
+-- is_nsfw is that flag. It is stored on the gallery, not on the media,
+-- because a gallery is the unit the owner publishes and describes.
+--
+--   1 = adult (the default). The membership level still applies, EXCEPT
+--       that level 0 is a free tier: guests may view it after the 18+ gate.
+--   0 = safe. It is public: it overrides min_level entirely, exactly the
+--       same way min_level 0 already did for logged-in members.
+--
+-- The default is 1 so applying this migration to an existing site changes
+-- nothing: every current gallery keeps its old membership behaviour until
+-- the owner marks it safe.
+ALTER TABLE galleries
+    ADD COLUMN is_nsfw TINYINT(1) NOT NULL DEFAULT 1 AFTER min_level;

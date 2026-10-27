@@ -35,9 +35,11 @@ class ImageController extends Controller
         $gallery   = $galleryId !== null ? Gallery::find($galleryId) : null;
         $user      = Auth::user();
 
-        // Media sitting in a published, non-secret gallery is indexable: it
-        // renders a blurred preview for guests and search engines, while the
-        // full-resolution view stays behind login + membership level.
+        // Media sitting in a published, non-secret gallery is indexable. A
+        // guest may view the full media of a safe gallery (or an adult one in
+        // the free tier); anything else renders the blurred preview and the
+        // membership gate. Photo::guestViewable() applies the strictest rule
+        // across every gallery holding the file, so a shared file cannot leak.
         $isPublic = Photo::hasPublicGallery($id);
 
         if ($user === null) {
@@ -45,7 +47,7 @@ class ImageController extends Controller
                 $this->notFound();
                 return;
             }
-            $canViewFull = false;
+            $canViewFull = Photo::guestViewable($id);
         } else {
             if (!Photo::userCanView($id, (int) $user['id'])) {
                 $this->notFound();
@@ -155,6 +157,10 @@ class ImageController extends Controller
             'playlistQuery' => $playlistQuery,
             'playlistId'    => $playlistId,
             'canViewFull'   => $canViewFull,
+            // The ORIGINAL file is for account holders; a logged-out visitor
+            // may read the public web rendition of guest-viewable media.
+            'canDownloadFull' => $user !== null,
+            'publicMedia'     => $user === null && $canViewFull,
             // Scene-detected chapter markers for the player's chapter list
             // (empty until the chapters worker has analysed the video).
             'chapters'      => $requireVideo ? \App\Models\VideoChapter::forPhoto($id) : [],

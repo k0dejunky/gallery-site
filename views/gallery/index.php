@@ -59,6 +59,27 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
     <a class="chip <?= $type === 'videos' ? 'active' : '' ?>" href="<?= e($vidUrl) ?>"<?= $type === 'videos' ? ' aria-current="page"' : '' ?>>&#9654; Video Galleries</a>
 </div>
 
+<?php // The content filter. A safe-for-work gallery is open to everybody,
+      // so this is how a visitor asks for the open half of the catalogue
+      // without a membership. ?>
+<div class="chips content-chips" style="justify-content:center">
+    <span class="label">Content:</span>
+    <?php
+    $contentParams = $query;
+    if ($type !== '') {
+        $contentParams['type'] = $type;
+    }
+    foreach (['' => 'All', 'sfw' => 'Safe for work', 'nsfw' => 'Adult'] as $val => $label):
+        $p = $contentParams;
+        if ($val !== '') {
+            $p['content'] = $val;
+        }
+        $href = $p ? $base . '?' . http_build_query($p) : $base;
+    ?>
+        <a class="chip <?= ($content ?? '') === $val ? 'active' : '' ?>" href="<?= e($href) ?>"<?= ($content ?? '') === $val ? ' aria-current="page"' : '' ?>><?= e($label) ?></a>
+    <?php endforeach; ?>
+</div>
+
 <div class="sort-bar" style="justify-content:center">
     <span class="label">Sort:</span>
     <?php

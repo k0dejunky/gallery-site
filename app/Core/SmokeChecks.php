@@ -735,8 +735,9 @@ class SmokeChecks
             // A chip that drops the other filters would silently widen the
             // list, so every group must carry all three.
             foreach ([
-                '$filterUrl($t, $filterLevelKey, $filterCategories)' => 'the type chips',
-                '$filterUrl($filterType, $l, $filterCategories)'    => 'the level chips',
+                '$filterUrl($t, $filterLevelKey, $filterCategories, $filterContent)' => 'the type chips',
+                '$filterUrl($filterType, $l, $filterCategories, $filterContent)'    => 'the level chips',
+                '$filterUrl($filterType, $filterLevelKey, $c, $filterContent)'      => 'the content chips',
             ] as $needle => $what) {
                 if (strpos($view, $needle) === false) {
                     $problems[] = $what . ' drop the category filter from their links';
@@ -2380,7 +2381,7 @@ class SmokeChecks
             // silently: the element gets the browser's default and nobody
             // says anything. There were 51 of them.
             $css = '';
-            foreach (['public/assets/css/admin.css', 'public/assets/css/user.css', 'public/assets/css/utilities.css', 'public/assets/css/support.css', 'app/Core/theme_base.css'] as $file) {
+            foreach (['public/assets/css/admin.css', 'public/assets/css/user.css', 'public/assets/css/utilities.css', 'public/assets/css/support.css', 'public/assets/css/public.css', 'app/Core/theme_base.css'] as $file) {
                 $css .= (string) @file_get_contents($root . '/' . $file);
             }
             $js = '';
@@ -3464,8 +3465,11 @@ class SmokeChecks
                     $problems[] = 'Photo::accessInfo() must return ' . $field;
                 }
             }
-            if (strpos($photo, 'MAX(g.min_level)') === false) {
-                $problems[] = 'accessInfo() must use the STRICTEST level across the galleries that hold the photo';
+            if (strpos($photo, "COALESCE(MAX(' . Gallery::accessLevelSql('g') . '), 0) AS access_level") === false) {
+                $problems[] = 'accessInfo() must use the STRICTEST access level across the galleries that hold the photo';
+            }
+            if (strpos($photo, 'MAX(g.min_level)') !== false) {
+                $problems[] = 'accessInfo() must not reach for the raw min_level column - SFW galleries are open at any level';
             }
             // The media viewer: the PHOTO's level.
             if (strpos($image, 'Photo::accessLevel(') === false) {
@@ -3479,8 +3483,8 @@ class SmokeChecks
             // galleries. The minimum used to leak: the bytes of a photo that
             // also sat in a Silver gallery were served at Silver level even
             // though the Gold gallery advertised it as Gold content.
-            if (strpos($photo, 'SELECT MAX(g.min_level)') === false) {
-                $problems[] = 'a photo\'s bytes must be served at the STRICTEST level across the galleries that hold it';
+            if (strpos($photo, "SELECT MAX(' . Gallery::accessLevelSql('g') . ')") === false) {
+                $problems[] = 'a photo\'s bytes must be served at the STRICTEST access level across the galleries that hold it';
             }
             // And the grid must be filtered by the member's level, so the
             // page never shows a photo whose bytes they cannot fetch.
@@ -3511,8 +3515,8 @@ class SmokeChecks
                 $problems[] = 'browseGalleries() was not found';
             } else {
                 $browse = substr($gc, $browseAt, 2600);
-                if (strpos($browse, 'min_level <=') === false) {
-                    $problems[] = 'the in-player gallery browser must filter by the member level - it listed every premium gallery';
+                if (strpos($browse, 'Gallery::accessLevelSql(\'g\')') === false) {
+                    $problems[] = 'the in-player gallery browser must filter by the member access level - it listed every premium gallery';
                 }
             }
             // And a shared collection must not leak a premium cover. The
@@ -8421,8 +8425,12 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
         $add('smoke.media.viewer_defaults_to_web', 'Smoke · Media', 'Image viewer loads the web rendition, full size only on demand', static function () use ($root, $ok, $bad): array {
             $view = (string) file_get_contents("$root/views/gallery/image_full.php");
 
-            $defaultIsWeb = (bool) preg_match('/<img id="fullsize-img"\s+src="<\?= e\(file_url\(\$photo\[\'filename\'\], \'web\'\)\)/', $view);
-            $fullIsSeparate = str_contains($view, "data-full=\"<?= e(file_url(\$photo['filename'])) ?>\"");
+            // The URL is a local now: it is the PUBLIC one for a guest and
+            // the tokenised one for a member, so the src is a variable.
+            $defaultIsWeb = str_contains($view, "\$webUrl  = \$publicMedia ? public_file_url(\$photo['filename'], 'web') : file_url(\$photo['filename'], 'web');")
+                && (bool) preg_match('/<img id="fullsize-img"\s+src="<\?= e\(\$webUrl\) \?>"/', $view);
+            $fullIsSeparate = str_contains($view, "data-full=\"<?= e(file_url(\$photo['filename'])) ?>\"")
+                && str_contains($view, "if (\$canDownloadFull)");
             $toggleOnly = str_contains($view, 'img.src = img.dataset.full');
 
             return ($defaultIsWeb && $fullIsSeparate && $toggleOnly)
@@ -8664,6 +8672,205 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             return $missing === []
                 ? $ok('user.css + admin.css versioned by filemtime')
                 : $bad('stylesheets must use asset_url(): ' . implode(', ', $missing));
+        });
+
+        $add('smoke.gallery.nsfw_flag', 'Smoke · Galleries', 'A safe-for-work gallery is open at any level; everything else keeps min_level', static function () use ($root, $read, $ok, $bad): array {
+            $gallery  = (string) $read($root . '/app/Models/Gallery.php');
+            $photo    = (string) $read($root . '/app/Models/Photo.php');
+            $schema   = (string) $read($root . '/schema.sql');
+            $sqlite   = (string) $read($root . '/schema.sqlite.sql');
+            $problems = [];
+
+            // The flag is born ADULT, so applying the migration to the live
+            // catalogue changes no existing behaviour until the admin flags
+            // a gallery safe.
+            if (strpos($schema, 'is_nsfw') === false || strpos($sqlite, 'is_nsfw') === false) {
+                $problems[] = 'schema.sql and schema.sqlite.sql must both carry galleries.is_nsfw';
+            }
+            $migration = (string) @file_get_contents($root . '/database/migrations/090_gallery_nsfw.sql');
+            if (strpos($migration, 'ADD COLUMN is_nsfw') === false || strpos($migration, 'DEFAULT 1') === false) {
+                $problems[] = 'migration 090 must add is_nsfw NOT NULL DEFAULT 1 (existing rows are adult)';
+            }
+            // ONE expression decides the level: SFW -> 0, else min_level.
+            if (strpos($gallery, 'public static function accessLevelSql(') === false
+                || strpos($gallery, "CASE WHEN ' . \$alias . '.is_nsfw = 0 THEN 0 ELSE ' . \$alias . '.min_level END") === false) {
+                $problems[] = 'Gallery::accessLevelSql() must map is_nsfw=0 to level 0 and keep min_level otherwise';
+            }
+            if (strpos($gallery, 'public static function guestViewableSql(') === false
+                || strpos($gallery, ".is_nsfw = 0 OR ' . \$alias . '.min_level = 0") === false) {
+                $problems[] = 'Gallery::guestViewableSql() must be SFW OR free tier';
+            }
+            // Fail closed: a row that arrives without the column is adult.
+            if (strpos($gallery, "(int) (\$gallery['is_nsfw'] ?? 1) === 0 ? 0") === false
+                || strpos($gallery, "(int) (\$gallery['is_nsfw'] ?? 1) === 0") === false) {
+                $problems[] = 'effectiveLevel()/guestViewable() must treat a missing is_nsfw as ADULT';
+            }
+            // The strictest-photo rule has to use the same expression, or a
+            // SFW photo in a Gold gallery stays locked (and vice versa).
+            if (strpos($photo, "Gallery::accessLevelSql('g')") === false
+                || strpos($photo, "Gallery::guestViewableSql('g')") === false) {
+                $problems[] = 'Photo must derive both access_level and guest_view from the Gallery expressions';
+            }
+            foreach (['public static function effectiveLevel(', 'public static function guestViewable(', 'public static function setNsfw('] as $needle) {
+                if (strpos($gallery, $needle) === false) {
+                    $problems[] = 'Gallery::' . trim(str_replace(['public static function ', '('], '', $needle)) . '() is missing';
+                }
+            }
+            // Every gate must use the model, never the raw column.
+            foreach (['app/Controllers/GalleryController.php', 'app/Controllers/WallController.php'] as $file) {
+                $src = (string) $read($root . '/' . $file);
+                if (strpos($src, "Gallery::effectiveLevel(\$gallery)") === false
+                    && strpos($src, "Gallery::accessLevelSql('g')") === false
+                    && strpos($src, "Gallery::accessLevel(") === false) {
+                    $problems[] = $file . ' still gates on the raw min_level column';
+                }
+            }
+
+            return $problems === []
+                ? $ok('is_nsfw -> level 0 when safe, min_level otherwise, fail-closed')
+                : $bad(implode('; ', $problems));
+        });
+        $add('smoke.gallery.guest_access', 'Smoke · Galleries', 'Guests get public renditions, never originals or paid NSFW', static function () use ($root, $read, $ok, $bad): array {
+            $store  = (string) $read($root . '/app/Controllers/StorageController.php');
+            $helper = (string) $read($root . '/app/Core/helpers.php');
+            $card   = (string) $read($root . '/views/partials/gallery_card.php');
+            $full   = (string) $read($root . '/views/gallery/image_full.php');
+            $gc     = (string) $read($root . '/app/Controllers/GalleryController.php');
+            $img    = (string) $read($root . '/app/Controllers/ImageController.php');
+            $problems = [];
+
+            // A guest may fetch the PUBLIC renditions of a guest-viewable
+            // photo without a token; the original always needs an account.
+            if (strpos($store, "\$access['guest_view']") === false) {
+                $problems[] = 'the files route must allow a tokenless guest request only when guest_view is true';
+            }
+            if (strpos($store, "['web', 'web_lo', 'web_hi', 'poster']") === false) {
+                $problems[] = 'the guest allowance must be web/web_lo/web_hi/poster (never the original)';
+            }
+            if (strpos($helper, 'function public_file_url(') === false) {
+                $problems[] = 'helpers.php must expose public_file_url() for cacheable guest markup';
+            }
+            if (strpos($helper, 'function file_srcset(string $filename, bool $signed = true)') === false) {
+                $problems[] = 'file_srcset() must be able to emit UNSIGNED guest sources';
+            }
+            // The gallery page and the viewer ask the model, not the row.
+            if (strpos($gc, 'Gallery::guestViewable($gallery)') === false) {
+                $problems[] = 'GalleryController::show() must let a guest open only a guest-viewable gallery';
+            }
+            if (strpos($img, "Photo::guestViewable(\$") === false) {
+                $problems[] = "ImageController must decide a guest's full view with Photo::guestViewable()";
+            }
+            // Cards: a guest cover is the PUBLIC url, and an adult gallery
+            // advertises itself.
+            if (strpos($card, 'public_file_url(') === false) {
+                $problems[] = 'guest card covers must use public_file_url()';
+            }
+            if (strpos($card, 'nsfw-badge') === false || strpos($card, '>18+<') === false) {
+                $problems[] = 'an adult gallery card must carry the 18+ badge';
+            }
+            // The full-size download is a member action.
+            if (strpos($img, "'canDownloadFull'") === false || strpos($full, 'canDownloadFull') === false) {
+                $problems[] = 'the full-size image must be hidden for guests (canDownloadFull)';
+            }
+
+            return $problems === []
+                ? $ok('guest renditions are public, originals + full-size stay members-only')
+                : $bad(implode('; ', $problems));
+        });
+        $add('smoke.gallery.guest_surface', 'Smoke · Galleries', 'A guest gets a real navigation, the public categories and the content filter', static function () use ($root, $read, $ok, $bad): array {
+            $layout   = (string) $read($root . '/views/layout.php');
+            $css      = (string) $read($root . '/public/assets/css/public.css');
+            $gc       = (string) $read($root . '/app/Controllers/GalleryController.php');
+            $index    = (string) $read($root . '/views/gallery/index.php');
+            $category = (string) $read($root . '/views/gallery/category.php');
+            $cache    = (string) $read($root . '/app/Core/PageCache.php');
+            $problems = [];
+
+            // The top bar is for guests on EVERY page, not just the ones
+            // without the rail: without it the browse pages had no header.
+            if (strpos($layout, '$user === null || !$sidebarNav') === false) {
+                $problems[] = 'the top nav must be shown to a guest even on the rail pages';
+            }
+            // The guest rail is the public browse surface, not the member one.
+            foreach (['pub-sfw', 'pub-signin', 'pub-join'] as $key) {
+                if (strpos($layout, "'" . $key . "'") === false) {
+                    $problems[] = 'the guest rail is missing the ' . $key . ' entry';
+                }
+            }
+            if (strpos($layout, '$publicCategories') === false) {
+                $problems[] = 'the guest rail must list the public categories';
+            }
+            // The phone bar too: a guest on the landing page had no nav.
+            if (strpos($layout, '$sidebarNav || $user === null') === false) {
+                $problems[] = 'the bottom bar must be shown to a guest on every page';
+            }
+            // The styles the new markup uses.
+            foreach (['nsfw-badge', 'public-nav', 'public-brand', 'title-logo', 'content-chips'] as $class) {
+                if (strpos($css, '.' . $class) === false) {
+                    $problems[] = 'public.css must style .' . $class;
+                }
+            }
+            // The content filter: read by both browse pages, offered by both
+            // views, and part of the cached page identity.
+            if (strpos($gc, "query('content', '')") === false) {
+                $problems[] = 'the browse pages must read the content filter';
+            }
+            if (strpos($index, 'Safe for work') === false || strpos($category, 'Safe for work') === false) {
+                $problems[] = 'the catalogue and the category page must offer the content filter';
+            }
+            if (strpos($cache, "'vt', 'content'") === false) {
+                $problems[] = 'the page cache key must carry the content filter (or ?content=sfw would serve the unfiltered page)';
+            }
+
+            return $problems === []
+                ? $ok('guests get the nav, the categories and the content filter')
+                : $bad(implode('; ', $problems));
+        });
+        $add('smoke.gallery.nsfw_admin', 'Smoke · Galleries', 'The flag is editable, filterable and bulk-switchable in the admin', static function () use ($root, $read, $ok, $bad): array {
+            $gc       = (string) $read($root . '/app/Controllers/GalleryController.php');
+            $admin    = (string) $read($root . '/app/Controllers/AdminController.php');
+            $list     = (string) $read($root . '/views/admin/galleries.php');
+            $gallery  = (string) $read($root . '/app/Models/Gallery.php');
+            $problems = [];
+
+            // Every form that sets min_level sets the flag beside it.
+            foreach (['create', 'edit', 'manage'] as $form) {
+                $src = (string) $read($root . '/views/admin/' . $form . '.php');
+                if (strpos($src, 'name="is_nsfw"') === false) {
+                    $problems[] = 'views/admin/' . $form . '.php must post is_nsfw';
+                }
+            }
+            // Fail closed on create: anything but an explicit 0 is adult.
+            if (strpos($gc, "post('is_nsfw', '1')") === false) {
+                $problems[] = 'store() must default a missing is_nsfw to ADULT';
+            }
+            if (strpos($gc, "post('is_nsfw', null)") === false) {
+                $problems[] = 'update() must leave the flag alone when the field is not posted';
+            }
+            if (strpos($gc, "'mark_sfw'") === false || strpos($gc, "'mark_nsfw'") === false) {
+                $problems[] = 'bulk() must support mark_sfw and mark_nsfw';
+            }
+            if (strpos($gallery, 'public static function setNsfw(') === false) {
+                $problems[] = 'Gallery::setNsfw() must exist for the bulk switch';
+            }
+            // The list: a Content filter plus a visible rating pill.
+            if (strpos($admin, "\$_GET['content']") === false) {
+                $problems[] = 'AdminController::galleries() must read the content filter';
+            }
+            if (strpos($list, 'mark_sfw') === false || strpos($list, 'pill-ok') === false) {
+                $problems[] = 'the gallery list must offer the bulk switch and a SFW pill';
+            }
+            if (strpos($list, 'content=') === false) {
+                $problems[] = 'the filter chips must carry the content filter';
+            }
+            // A flag change re-renders the cached guest pages.
+            if (strpos($gallery, 'setNsfw') === false || strpos($gallery, 'PageCache::invalidate()') === false) {
+                $problems[] = 'setNsfw() must invalidate the page cache';
+            }
+
+            return $problems === []
+                ? $ok('flag is editable, filterable, bulk-switchable and cache-busting')
+                : $bad(implode('; ', $problems));
         });
 
         $cache = $tests;

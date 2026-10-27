@@ -122,6 +122,7 @@ class AdminController extends Controller
         $type      = (string) ($_GET['type'] ?? 'all');
         $levelKey  = (string) ($_GET['level'] ?? 'all');
         $categoryKey = (string) ($_GET['categories'] ?? 'all');
+        $contentKey  = (string) ($_GET['content'] ?? 'all');
         $filters   = [];
 
         if (in_array($type, ['images', 'videos'], true)) {
@@ -147,6 +148,16 @@ class AdminController extends Controller
             $filters['uncategorized'] = true;
         }
 
+        // SFW / NSFW switch. Prod already holds 228 galleries created before
+        // the flag existed, so "mark NSFW" is the bulk action that lets the
+        // owner classify the archive instead of editing 228 forms.
+        if (!in_array($contentKey, ['all', 'sfw', 'nsfw'], true)) {
+            $contentKey = 'all';
+        }
+        if ($contentKey !== 'all') {
+            $filters['content'] = $contentKey;
+        }
+
         if (Auth::isSuperAdmin()) {
             $filters['include_secret'] = true;
         }
@@ -161,6 +172,7 @@ class AdminController extends Controller
             'filterType'  => $type,
             'filterLevel' => $level,
             'filterCategories' => $categoryKey,
+            'filterContent' => $contentKey,
             'queuedGalleries' => Gallery::queuedForPublishing(Auth::isSuperAdmin()),
             'importSettings'  => \App\Models\ImportSettings::all(),
             'duplicateReport' => \App\Core\DuplicateGalleries::report(),

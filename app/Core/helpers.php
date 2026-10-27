@@ -249,6 +249,26 @@ function media_variant_prefix(string $size): string
  */
 function file_url(string $filename, string $size = '', string $format = ''): string
 {
+    return _file_url_build($filename, $size, $format, true);
+}
+
+/**
+ * Same as file_url() but NEVER appends the session-bound media token. Use for
+ * bytes that are public by definition - a logged-out visitor's view of a safe
+ * gallery (or a free adult one), thumbnails, og:image - so the URL can live in
+ * a page cached for every visitor and be read by a crawler that has no session.
+ */
+function public_file_url(string $filename, string $size = '', string $format = ''): string
+{
+    return _file_url_build($filename, $size, $format, false);
+}
+
+/**
+ * Shared URL builder behind file_url()/public_file_url(). $signed adds the
+ * per-session HMAC that the member-only /files/ variants require.
+ */
+function _file_url_build(string $filename, string $size, string $format, bool $signed): string
+{
     static $mtimeCache = [];
 
     $variantSizes = ['thumb', 'web', 'blur', 'poster', 'web_lo', 'web_hi'];
@@ -296,7 +316,7 @@ function file_url(string $filename, string $size = '', string $format = ''): str
 
     // Append a time-bound HMAC for non-thumb variants so a raw URL opened in
     // DevTools or a new tab can't be saved without the token.
-    if ($size !== 'thumb') {
+    if ($signed && $size !== 'thumb') {
         $token = media_token($filename);
 
         if ($token !== '') {
@@ -312,10 +332,11 @@ function file_url(string $filename, string $size = '', string $format = ''): str
  * and web variants (with their WebP versions), so browsers pick the right
  * size and format. Returns '' when the media has no image variants.
  */
-function file_srcset(string $filename): string
+function file_srcset(string $filename, bool $signed = true): string
 {
-    $thumb = file_url($filename, 'thumb');
-    $web   = file_url($filename, 'web');
+    $build = $signed ? 'file_url' : 'public_file_url';
+    $thumb = $build($filename, 'thumb');
+    $web   = $build($filename, 'web');
 
     $set = [];
     if ($thumb !== '') {

@@ -25,6 +25,19 @@
         <span class="type-switch-track" aria-hidden="true"></span>
         <strong class="type-switch-label"><?= ($gallery['type'] ?? 'images') === 'videos' ? 'Video Gallery' : 'Image Gallery' ?></strong>
     </label>
+    <?php $manageNsfw = (int) ($gallery['is_nsfw'] ?? 1) === 1; ?>
+    <p class="muted" style="margin-top: var(--spacing-sm);">
+        <label>Content rating</label><br>
+        <label class="chip <?= !$manageNsfw ? 'active' : '' ?>">
+            <input type="radio" name="is_nsfw" value="0" <?= !$manageNsfw ? 'checked' : '' ?>>
+            SFW &mdash; safe for work
+        </label>
+        <label class="chip <?= $manageNsfw ? 'active' : '' ?>">
+            <input type="radio" name="is_nsfw" value="1" <?= $manageNsfw ? 'checked' : '' ?>>
+            NSFW &mdash; adult
+        </label>
+        <span class="muted">A safe gallery is open to everyone regardless of the level below.</span>
+    </p>
     <p class="muted" style="margin-top: var(--spacing-sm);">
         <label for="manage-min-level">Membership level required to view</label>
         <select name="min_level" id="manage-min-level">

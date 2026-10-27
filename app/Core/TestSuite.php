@@ -1359,6 +1359,184 @@ class TestSuite
             }
         });
 
+        $add('db.gallery_nsfw_flag', 'Database', 'a safe-for-work gallery is open at any level and keeps its own level when it is adult', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix = bin2hex(random_bytes(3));
+                    // One safe gallery that sits in a PAID tier (it would
+                    // have been locked), one adult gallery in the free tier
+                    // and one adult gallery in a paid tier.
+                    $safe   = \App\Models\Gallery::create('PROBE safe ' . $suffix, 'scratch', 'images', 2, null, false, true, false);
+                    $free   = \App\Models\Gallery::create('PROBE free ' . $suffix, 'scratch', 'images', 0, null, false, true, true);
+                    $paid   = \App\Models\Gallery::create('PROBE paid ' . $suffix, 'scratch', 'images', 2, null, false, true, true);
+
+                    $fetch = static function (int $id): array {
+                        $found = Database::run('SELECT id, min_level, is_nsfw FROM galleries WHERE id = ?', [$id])->fetch();
+                        return is_array($found) ? $found : [];
+                    };
+
+                    $safeRow = $fetch($safe);
+                    $freeRow = $fetch($free);
+                    $paidRow = $fetch($paid);
+
+                    // The stored flag.
+                    $flagged = (int) ($safeRow['is_nsfw'] ?? 1) === 0
+                        && (int) ($freeRow['is_nsfw'] ?? 0) === 1
+                        && (int) ($paidRow['is_nsfw'] ?? 0) === 1;
+
+                    // The model.
+                    $levels = \App\Models\Gallery::effectiveLevel($safeRow) === 0
+                        && \App\Models\Gallery::effectiveLevel($freeRow) === 0
+                        && \App\Models\Gallery::effectiveLevel($paidRow) === 2;
+
+                    // The guest rule: safe or free tier.
+                    $guests = \App\Models\Gallery::guestViewable($safeRow) === true
+                        && \App\Models\Gallery::guestViewable($freeRow) === true
+                        && \App\Models\Gallery::guestViewable($paidRow) === false;
+
+                    // A row that arrives without the column is ADULT: a paid
+                    // gallery stays closed and keeps its level.
+                    $failClosed = \App\Models\Gallery::guestViewable(['min_level' => 2]) === false
+                        && \App\Models\Gallery::effectiveLevel(['min_level' => 2]) === 2
+                        // ... and an adult gallery in the FREE tier is still
+                        // open, because the flag defaults to adult.
+                        && \App\Models\Gallery::guestViewable(['min_level' => 0]) === true;
+
+                    // The SQL expression the grids and the gates use.
+                    $sql = Database::run(
+                        'SELECT id, ' . \App\Models\Gallery::accessLevelSql('g') . ' AS lvl FROM galleries g WHERE g.id IN (?, ?, ?)',
+                        [$safe, $free, $paid]
+                    )->fetchAll();
+                    $sqlLevels = [];
+                    foreach ($sql as $sqlRow) {
+                        $sqlLevels[(int) $sqlRow['id']] = (int) $sqlRow['lvl'];
+                    }
+                    $expression = ($sqlLevels[$safe] ?? -1) === 0
+                        && ($sqlLevels[$free] ?? -1) === 0
+                        && ($sqlLevels[$paid] ?? -1) === 2;
+
+                    // The content filter.
+                    $listed = static function (string $content): array {
+                        $rows = \App\Models\Gallery::paginate(1, 200, ['content' => $content]);
+                        return array_map('intval', array_column($rows['items'], 'id'));
+                    };
+                    $sfwIds = $listed('sfw');
+                    $nsfwIds = $listed('nsfw');
+                    $filter = in_array($safe, $sfwIds, true)
+                        && !in_array($free, $sfwIds, true)
+                        && in_array($free, $nsfwIds, true)
+                        && !in_array($safe, $nsfwIds, true);
+
+                    // The bulk switch.
+                    \App\Models\Gallery::setNsfw($safe, true);
+                    $after = $fetch($safe);
+                    $switch = (int) ($after['is_nsfw'] ?? 0) === 1
+                        && \App\Models\Gallery::effectiveLevel($after) === 2;
+                    \App\Models\Gallery::setNsfw($safe, false);
+
+                    $ok = $flagged && $levels && $guests && $failClosed && $expression && $filter && $switch;
+
+                    return [
+                        'pass'   => $ok,
+                        'detail' => $ok
+                            ? 'safe=' . var_export($levels, true) . ' guests=' . var_export($guests, true)
+                                . ' sql=' . var_export($expression, true) . ' filter=' . var_export($filter, true)
+                                . ' switch=' . var_export($switch, true)
+                            : 'flagged=' . var_export($flagged, true) . ' levels=' . var_export($levels, true)
+                                . ' guests=' . var_export($guests, true) . ' failClosed=' . var_export($failClosed, true)
+                                . ' expression=' . var_export($expression, true) . ' filter=' . var_export($filter, true)
+                                . ' switch=' . var_export($switch, true),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
+        $add('db.guest_media_access', 'Database', 'a photo in a safe gallery is open to a guest, a photo in a paid adult gallery is not', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix = bin2hex(random_bytes(3));
+                    $safe = \App\Models\Gallery::create('PROBE media safe ' . $suffix, 'scratch', 'images', 2, null, false, true, false);
+                    $paid = \App\Models\Gallery::create('PROBE media paid ' . $suffix, 'scratch', 'images', 2, null, false, true, true);
+
+                    // One photo in each. The photo has to be real (a row in
+                    // photos) so the access query can find it.
+                    $photoId = static function (): int {
+                        Database::run(
+                            'INSERT INTO photos (filename, hash, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)',
+                            ['probe_' . bin2hex(random_bytes(4)) . '.jpg', sha1(bin2hex(random_bytes(16)))]
+                        );
+                        return (int) Database::connection()->lastInsertId();
+                    };
+                    $safePhoto = $photoId();
+                    $paidPhoto = $photoId();
+                    Database::run('INSERT INTO gallery_photo (gallery_id, photo_id) VALUES (?, ?)', [$safe, $safePhoto]);
+                    Database::run('INSERT INTO gallery_photo (gallery_id, photo_id) VALUES (?, ?)', [$paid, $paidPhoto]);
+
+                    $filename = static function (int $photoId): string {
+                        $found = Database::run('SELECT filename FROM photos WHERE id = ?', [$photoId])->fetchColumn();
+                        return (string) $found;
+                    };
+
+                    $safeName = $filename($safePhoto);
+                    $paidName = $filename($paidPhoto);
+
+                    $safeInfo = \App\Models\Photo::accessInfo($safeName, 0);
+                    $paidInfo = \App\Models\Photo::accessInfo($paidName, 0);
+
+                    $guestOpen = $safeInfo !== null
+                        && $safeInfo['guest_view'] === true
+                        && $safeInfo['access_level'] === 0;
+                    $guestShut = $paidInfo !== null
+                        && $paidInfo['guest_view'] === false
+                        && $paidInfo['access_level'] === 2;
+
+                    $ok = $guestOpen && $guestShut;
+
+                    return [
+                        'pass'   => $ok,
+                        'detail' => $ok
+                            ? 'safe: guest_view=' . var_export($safeInfo['guest_view'] ?? null, true)
+                                . ' level=' . var_export($safeInfo['access_level'] ?? null, true)
+                                . ' | paid: guest_view=' . var_export($paidInfo['guest_view'] ?? null, true)
+                                . ' level=' . var_export($paidInfo['access_level'] ?? null, true)
+                            : 'guestOpen=' . var_export($guestOpen, true) . ' guestShut=' . var_export($guestShut, true),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.test_gallery_is_not_announced', 'Database', 'a test gallery sends no member email and no notification', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

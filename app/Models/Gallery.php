@@ -289,6 +289,12 @@ class Gallery
             $where[] = 'NOT EXISTS (SELECT 1 FROM gallery_category gc WHERE gc.gallery_id = g.id)';
         }
 
+        // Safe (SFW) / adult (NSFW): the admin list filter and the public
+        // browse switch share this one condition.
+        if (isset($filters['content']) && in_array($filters['content'], ['sfw', 'nsfw'], true)) {
+            $where[] = $filters['content'] === 'sfw' ? 'g.is_nsfw = 0' : 'g.is_nsfw = 1';
+        }
+
         // A correlated subquery instead of a LEFT JOIN ... GROUP BY: the
         // join materialised a temporary table and sorted the whole table.
         return Database::run(
@@ -385,9 +391,15 @@ class Gallery
         if (array_key_exists('max_level', $filters)) {
             $maxLevel = (int) $filters['max_level'];
             if ($maxLevel < PHP_INT_MAX) {
-                $where[]  = '(g.is_secret = 1 OR g.min_level <= ?)';
+                $where[]  = '(g.is_secret = 1 OR ' . self::accessLevelSql('g') . ' <= ?)';
                 $params[] = $maxLevel;
             }
+        }
+
+        // Public browse switch (?content=sfw|nsfw). Independent of the level
+        // gate: a safe gallery is public no matter its min_level.
+        if (isset($filters['content']) && in_array($filters['content'], ['sfw', 'nsfw'], true)) {
+            $where[] = $filters['content'] === 'sfw' ? 'g.is_nsfw = 0' : 'g.is_nsfw = 1';
         }
 
         $orderBy = 'g.created_at DESC';
@@ -458,7 +470,7 @@ class Gallery
      * category it belongs to; callers deduplicate across categories. This
      * avoids the N+1 pattern of one query per category.
      */
-    public static function inCategories(array $categoryIds, string $type = '', int $maxLevel = PHP_INT_MAX, ?int $userId = null): array
+    public static function inCategories(array $categoryIds, string $type = '', int $maxLevel = PHP_INT_MAX, ?int $userId = null, string $content = ''): array
     {
         $result = [];
 
@@ -478,7 +490,12 @@ class Gallery
             $typeCondition = ' AND ' . self::mediaTypeCondition($type);
         }
 
-        $levelCondition = $maxLevel < PHP_INT_MAX ? ' AND (g.is_secret = 1 OR g.min_level <= ' . (int) $maxLevel . ')' : '';
+        $levelCondition = $maxLevel < PHP_INT_MAX
+            ? ' AND (g.is_secret = 1 OR ' . self::accessLevelSql('g') . ' <= ' . (int) $maxLevel . ')'
+            : '';
+        $contentCondition = in_array($content, ['sfw', 'nsfw'], true)
+            ? ' AND g.is_nsfw = ' . ($content === 'sfw' ? '0' : '1')
+            : '';
         $accessCondition = ' AND g.is_secret = 0';
         $accessParams = [];
         if ($userId !== null) {
@@ -494,7 +511,7 @@ class Gallery
                     (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count, ' . self::videoCountSql() . '
              FROM galleries g
              INNER JOIN gallery_category gc ON gc.gallery_id = g.id
-             WHERE gc.category_id IN (' . $placeholders . ') AND ' . self::publishedVisibleSql('g') . $accessCondition . $typeCondition . $levelCondition . '
+             WHERE gc.category_id IN (' . $placeholders . ') AND ' . self::publishedVisibleSql('g') . $accessCondition . $typeCondition . $levelCondition . $contentCondition . '
              ORDER BY g.created_at DESC, g.id DESC',
             array_merge($ids, $accessParams)
         )->fetchAll();
@@ -510,14 +527,19 @@ class Gallery
      * Galleries tagged with no category at all (shown in the catch-all
      * "Uncategorized" section of the full listing).
      */
-    public static function withoutCategory(string $type = '', int $maxLevel = PHP_INT_MAX, ?int $userId = null): array
+    public static function withoutCategory(string $type = '', int $maxLevel = PHP_INT_MAX, ?int $userId = null, string $content = ''): array
     {
         $typeCondition = '';
         if (in_array($type, ['images', 'videos'], true)) {
             $typeCondition = ' AND ' . self::mediaTypeCondition($type);
         }
 
-        $levelCondition = $maxLevel < PHP_INT_MAX ? ' AND (g.is_secret = 1 OR g.min_level <= ' . (int) $maxLevel . ')' : '';
+        $levelCondition = $maxLevel < PHP_INT_MAX
+            ? ' AND (g.is_secret = 1 OR ' . self::accessLevelSql('g') . ' <= ' . (int) $maxLevel . ')'
+            : '';
+        $contentCondition = in_array($content, ['sfw', 'nsfw'], true)
+            ? ' AND g.is_nsfw = ' . ($content === 'sfw' ? '0' : '1')
+            : '';
         $accessCondition = ' AND g.is_secret = 0';
         $accessParams = [];
         if ($userId !== null) {
@@ -530,7 +552,7 @@ class Gallery
                     (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count, ' . self::videoCountSql() . '
              FROM galleries g
              WHERE ' . self::publishedVisibleSql('g') . $accessCondition . '
-               AND NOT EXISTS (SELECT 1 FROM gallery_category gc WHERE gc.gallery_id = g.id)' . $typeCondition . $levelCondition . '
+               AND NOT EXISTS (SELECT 1 FROM gallery_category gc WHERE gc.gallery_id = g.id)' . $typeCondition . $levelCondition . $contentCondition . '
              ORDER BY g.created_at DESC, g.id DESC',
             $accessParams
         )->fetchAll();
@@ -774,16 +796,20 @@ class Gallery
      * email, no bell, no auto-post). A gallery whose title looks like a test
      * gallery is flagged automatically, so a script or an import cannot
      * accidentally mail every member the title of a throwaway set.
+     *
+     * $isNsfw defaults to TRUE: a caller that does not know (an import, a
+     * script, the video editor) must never publish adult-unvetted content as
+     * safe. The owner flips it on the gallery form.
      */
-    public static function create(string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, bool $isSecret = false, bool $isTest = false): int
+    public static function create(string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, bool $isSecret = false, bool $isTest = false, bool $isNsfw = true): int
     {
         $type = $type === 'videos' ? 'videos' : 'images';
 
         $isTest = $isTest || is_test_gallery(['title' => $title]);
 
         Database::run(
-            'INSERT INTO galleries (title, description, type, min_level, is_secret, is_test, published_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-            [$title, $description, $type, $minLevel, $isSecret ? 1 : 0, $isTest ? 1 : 0, $publishedAt]
+            'INSERT INTO galleries (title, description, type, min_level, is_nsfw, is_secret, is_test, published_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+            [$title, $description, $type, $minLevel, $isNsfw ? 1 : 0, $isSecret ? 1 : 0, $isTest ? 1 : 0, $publishedAt]
         );
 
         \App\Core\Cache::bump('gallery');
@@ -796,11 +822,11 @@ class Gallery
     /**
      * Update a gallery's title, description and type.
      *
-     * $isSecret and $isTest are applied only when given; passing null leaves
-     * that flag alone, so a form that only posts one of them cannot wipe the
-     * other.
+     * $isSecret, $isTest and $isNsfw are applied only when given; passing
+     * null leaves that flag alone, so a form that only posts one of them
+     * cannot wipe the other.
      */
-    public static function update(int $id, string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, ?bool $isSecret = null, ?bool $isTest = null): void
+    public static function update(int $id, string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, ?bool $isSecret = null, ?bool $isTest = null, ?bool $isNsfw = null): void
     {
         $type = $type === 'videos' ? 'videos' : 'images';
 
@@ -815,12 +841,27 @@ class Gallery
             $sets[]   = 'is_test = ?';
             $values[] = $isTest ? 1 : 0;
         }
+        if ($isNsfw !== null) {
+            $sets[]   = 'is_nsfw = ?';
+            $values[] = $isNsfw ? 1 : 0;
+        }
 
         $values[] = $id;
         Database::run(
             'UPDATE galleries SET ' . implode(', ', $sets) . ' WHERE id = ?',
             $values
         );
+        \App\Core\Cache::bump('gallery');
+        \App\Core\PageCache::invalidate();
+    }
+
+    /**
+     * Flip the SFW/NSFW flag alone (the admin bulk action). Publishes or
+     * re-gates the gallery, so every cached listing has to go.
+     */
+    public static function setNsfw(int $id, bool $isNsfw): void
+    {
+        Database::run('UPDATE galleries SET is_nsfw = ? WHERE id = ?', [$isNsfw ? 1 : 0, $id]);
         \App\Core\Cache::bump('gallery');
         \App\Core\PageCache::invalidate();
     }
@@ -899,22 +940,67 @@ class Gallery
      * do not ship every item's markup in the initial page response.
      */
     /**
-     * The level a member needs to open this gallery.
+     * The ONE expression that says what level a gallery really needs.
      *
-     * A gallery's OWN min_level decides it. The photos inside it have their
-     * own rule (Photo::accessLevel, the strictest across every gallery that
-     * holds them), and the gallery's grid is filtered by the member's level
-     * so the two never disagree: a member is never shown a photo whose
+     * A safe-for-work gallery (is_nsfw = 0) is public: it needs no level at
+     * all, so the stored min_level is ignored. Everything else keeps its
+     * min_level, which means applying this expression to existing data is a
+     * no-op: the 090 migration marks every existing gallery adult, so the
+     * CASE returns min_level for all of them.
+     *
+     * Used by every SQL gate that used to compare g.min_level directly, and
+     * by accessLevel()/effectiveLevel() below. A row selected without the
+     * column (an old query, a fixture) is treated as ADULT - fail closed.
+     */
+    public static function accessLevelSql(string $alias = 'g'): string
+    {
+        return 'CASE WHEN ' . $alias . '.is_nsfw = 0 THEN 0 ELSE ' . $alias . '.min_level END';
+    }
+
+    /**
+     * SQL: a gallery a logged-out visitor may open (after the 18+ gate).
+     *
+     * Safe galleries are public regardless of level; an adult gallery is
+     * public only in the free tier (min_level 0) - the paid tiers stay behind
+     * the membership gate (and the preview blur).
+     */
+    public static function guestViewableSql(string $alias = 'g'): string
+    {
+        return '(' . $alias . '.is_nsfw = 0 OR ' . $alias . '.min_level = 0)';
+    }
+
+    /**
+     * The effective level of a gallery row: 0 when safe, else min_level.
+     * Rows without the column count as adult (fail closed).
+     */
+    public static function effectiveLevel(array $gallery): int
+    {
+        return (int) ($gallery['is_nsfw'] ?? 1) === 0 ? 0 : (int) ($gallery['min_level'] ?? 0);
+    }
+
+    /** Whether a logged-out visitor may open this gallery in full. */
+    public static function guestViewable(array $gallery): bool
+    {
+        return (int) ($gallery['is_nsfw'] ?? 1) === 0
+            || (int) ($gallery['min_level'] ?? 0) <= 0;
+    }
+
+    /**
+     * The level a member needs to open this gallery - the effective one, so
+     * a safe gallery never demands Silver/Gold. The photos inside it have
+     * their own rule (Photo::accessLevel, the strictest across every gallery
+     * that holds them), and the gallery's grid is filtered by the member's
+     * level so the two never disagree: a member is never shown a photo whose
      * bytes they could not fetch.
      */
     public static function accessLevel(int $galleryId): int
     {
         $row = Database::run(
-            'SELECT min_level FROM galleries WHERE id = ? LIMIT 1',
+            'SELECT min_level, is_nsfw FROM galleries WHERE id = ? LIMIT 1',
             [$galleryId]
-        )->fetchColumn();
+        )->fetch();
 
-        return ($row === false || $row === null) ? 0 : (int) $row;
+        return $row ? self::effectiveLevel($row) : 0;
     }
 
     /**
@@ -936,7 +1022,10 @@ class Gallery
         $levelSql = '';
         $params   = [$galleryId];
         if ($maxLevel < PHP_INT_MAX) {
-            $levelSql = ' AND (SELECT MAX(g.min_level) FROM gallery_photo x
+            // The strictest level across every gallery that holds the
+            // photo - and the level of a SAFE gallery is 0, so a photo in a
+            // safe gallery is never held back by a paid gallery next to it.
+            $levelSql = ' AND (SELECT MAX(' . self::accessLevelSql('g') . ') FROM gallery_photo x
                                   INNER JOIN galleries g ON g.id = x.gallery_id
                                   WHERE x.photo_id = p.id) <= ?';
             $params[] = (int) $maxLevel;
@@ -962,7 +1051,10 @@ class Gallery
         $levelSql = '';
         $params   = [$galleryId];
         if ($maxLevel < PHP_INT_MAX) {
-            $levelSql = ' AND (SELECT MAX(g.min_level) FROM gallery_photo x
+            // The strictest level across every gallery that holds the
+            // photo - and the level of a SAFE gallery is 0, so a photo in a
+            // safe gallery is never held back by a paid gallery next to it.
+            $levelSql = ' AND (SELECT MAX(' . self::accessLevelSql('g') . ') FROM gallery_photo x
                                   INNER JOIN galleries g ON g.id = x.gallery_id
                                   WHERE x.photo_id = p.id) <= ?';
             $params[] = (int) $maxLevel;
@@ -1028,7 +1120,7 @@ class Gallery
     {
         $op    = $direction === 'next' ? '<' : '>';
         $order = $direction === 'next' ? 'DESC' : 'ASC';
-        $levelClause = $maxLevel >= PHP_INT_MAX ? '' : ' AND g.min_level <= ' . (int) $maxLevel;
+        $levelClause = $maxLevel >= PHP_INT_MAX ? '' : ' AND ' . self::accessLevelSql('g') . ' <= ' . (int) $maxLevel;
 
         $row = Database::run(
             "SELECT g.id, g.title FROM galleries g
@@ -1674,11 +1766,17 @@ class Gallery
      * Trending galleries: most-viewed (by content_views) over the trailing
      * window. Excludes secret galleries so the strip is guest-safe.
      */
-    public static function trending(int $days = 7, int $limit = 6, int $maxLevel = PHP_INT_MAX): array
+    public static function trending(int $days = 7, int $limit = 6, int $maxLevel = PHP_INT_MAX, string $content = ''): array
     {
         // The level filter, so the trending strip does not advertise a
         // gallery the member cannot open.
-        $levelClause = $maxLevel < PHP_INT_MAX ? ' AND g.min_level <= ' . (int) $maxLevel : '';
+        $levelClause = $maxLevel < PHP_INT_MAX ? ' AND ' . self::accessLevelSql('g') . ' <= ' . (int) $maxLevel : '';
+        // The content filter follows the strip: a visitor who asked for the
+        // safe-for-work half of the catalogue must not get adult galleries
+        // in the "trending" row above it.
+        $contentClause = in_array($content, ['sfw', 'nsfw'], true)
+            ? ' AND g.is_nsfw = ' . ($content === 'sfw' ? '0' : '1')
+            : '';
 
         return Database::run(
             'SELECT g.*,
@@ -1692,7 +1790,7 @@ class Gallery
                  WHERE entity_type = \'gallery\' AND view_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
                  GROUP BY entity_id
              ) ts ON ts.gid = g.id
-             WHERE g.is_secret = 0 AND ' . self::publishedVisibleSql('g') . $levelClause . '
+             WHERE g.is_secret = 0 AND ' . self::publishedVisibleSql('g') . $levelClause . $contentClause . '
              ORDER BY trend_n DESC, g.views DESC, g.id DESC
              LIMIT ' . max(1, (int) $limit),
             [max(1, (int) $days)]
@@ -1713,13 +1811,14 @@ class Gallery
         // preview was shown the EIGHT free-tier galleries and nothing else,
         // so the 51 paid galleries were never linked to each other - not for
         // a crawler and not for a member who later upgraded.
-        $galleryLevel = (int) Database::run(
-            'SELECT min_level FROM galleries WHERE id = ? LIMIT 1',
+        $viewed = Database::run(
+            'SELECT min_level, is_nsfw FROM galleries WHERE id = ? LIMIT 1',
             [$galleryId]
-        )->fetchColumn();
+        )->fetch();
 
-        $level = max((int) $maxLevel, (int) ($galleryLevel ?? 0));
-        $levelClause = $level < PHP_INT_MAX ? ' AND g.min_level <= ' . (int) $level : '';
+        $galleryLevel = $viewed ? self::effectiveLevel($viewed) : 0;
+        $level = max((int) $maxLevel, $galleryLevel);
+        $levelClause = $level < PHP_INT_MAX ? ' AND ' . self::accessLevelSql('g') . ' <= ' . (int) $level : '';
 
         return Database::run(
             'SELECT DISTINCT g.*,
@@ -1803,7 +1902,7 @@ class Gallery
         }
 
         $where = 'g.deleted_at IS NULL AND g.is_secret = 0 AND ' . self::publishedVisibleSql('g')
-            . ' AND g.min_level > ' . (int) $maxLevel;
+            . ' AND ' . self::accessLevelSql('g') . ' > ' . (int) $maxLevel;
         $params = [];
 
         if ($categoryId !== null && $categoryId > 0) {

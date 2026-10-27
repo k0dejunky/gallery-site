@@ -48,36 +48,49 @@ class StorageController extends Controller
         $access    = Photo::accessInfo($name, $userId);
 
         if ($size !== 'thumb' && $size !== 'blur') {
-            // Require a valid HMAC token so raw-URL replay from DevTools is
-            // rejected. The token is bound to the original filename plus the
-            // caller's session, so it can't be used without the matching
-            // session cookie and stays valid for the life of the session
-            // (bounded by the app's session idle timeout).
-            if (!media_token_valid($name, $token)) {
-                $this->notFound();
-                return;
-            }
+            if ($user === null) {
+                // A logged-out visitor may stream the WEB variants of a
+                // public gallery - safe galleries at any level, adult ones in
+                // the free tier. Those bytes are public by definition, so no
+                // media token is required (and none is minted for them: their
+                // URLs go into page-cacheable markup). The ORIGINAL file
+                // still needs an account.
+                $publicRendition = in_array($size, ['web', 'web_lo', 'web_hi', 'poster'], true);
 
-            if ($access === null) {
-                Auth::requireSubscription();
-            } else {
-                // A guest never gets here (the media token is bound to a
-                // session), but the rule is kept: an original needs a member.
-                if ($user === null || !$access['can_view']) {
+                if ($access === null || !$access['guest_view'] || !$publicRendition) {
                     $this->notFound();
                     return;
                 }
-                if (!$access['has_public']) {
-                    // A secret-only photo is authorized by its allow-list;
-                    // membership level never grants access to it.
-                } elseif ($access['unlocked']) {
-                    // Paid PPV unlock for the gallery holding this photo:
-                    // membership level does not apply.
+            } else {
+                // Require a valid HMAC token so raw-URL replay from DevTools
+                // is rejected. The token is bound to the original filename
+                // plus the caller's session, so it can't be used without the
+                // matching session cookie and stays valid for the life of the
+                // session (bounded by the app's session idle timeout).
+                if (!media_token_valid($name, $token)) {
+                    $this->notFound();
+                    return;
+                }
+
+                if ($access === null) {
+                    Auth::requireSubscription();
                 } else {
-                    Auth::requireGalleryLevel(
-                        (int) $access['access_level'],
-                        'A membership is required to view that file.'
-                    );
+                    if (!$access['can_view']) {
+                        $this->notFound();
+                        return;
+                    }
+                    if (!$access['has_public']) {
+                        // A secret-only photo is authorized by its allow-list;
+                        // membership level never grants access to it.
+                    } elseif ($access['unlocked']) {
+                        // Paid PPV unlock for the gallery holding this photo:
+                        // membership level does not apply.
+                    } else {
+                        Auth::requireGalleryLevel(
+                            (int) $access['access_level'],
+                            'A membership is required to view that file.'
+                        );
+                    }
                 }
             }
         }

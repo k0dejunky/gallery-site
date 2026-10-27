@@ -116,7 +116,7 @@ class WallController extends Controller
                 continue;
             }
 
-            $minLevel = (int) ($gallery['min_level'] ?? 0);
+            $minLevel = \App\Models\Gallery::effectiveLevel($gallery);
 
             $result[$galleryId] = [
                 'gallery_id'  => $galleryId,

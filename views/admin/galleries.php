@@ -16,11 +16,12 @@ $levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill'];
 $filterType       = $filterType ?? 'all';
 $filterLevel      = $filterLevel ?? null;
 $filterCategories = $filterCategories ?? 'all';
-$hasFilter        = $filterType !== 'all' || $filterLevel !== null || $filterCategories !== 'all';
+$filterContent    = $filterContent ?? 'all';
+$hasFilter        = $filterType !== 'all' || $filterLevel !== null || $filterCategories !== 'all' || $filterContent !== 'all';
 
 // Every chip carries the other filters, so narrowing by one does not silently
 // drop the rest.
-$filterUrl = static function (string $type, string $level, string $categories = 'all'): string {
+$filterUrl = static function (string $type, string $level, string $categories = 'all', string $content = 'all'): string {
     $q = [];
     if ($type !== 'all') {
         $q[] = 'type=' . rawurlencode($type);
@@ -30,6 +31,9 @@ $filterUrl = static function (string $type, string $level, string $categories = 
     }
     if ($categories !== 'all') {
         $q[] = 'categories=' . rawurlencode($categories);
+    }
+    if ($content !== 'all') {
+        $q[] = 'content=' . rawurlencode($content);
     }
 
     return url('/admin/galleries' . ($q ? '?' . implode('&', $q) : ''));
@@ -71,21 +75,28 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                 <span class="mg-filter-label">Type</span>
                 <?php foreach (['all' => 'All', 'images' => 'Images', 'videos' => 'Videos'] as $t => $tLabel): ?>
                     <a class="btn btn-sm mg-filter-btn<?= $filterType === $t ? ' mg-filter-active' : '' ?>"
-                       href="<?= e($filterUrl($t, $filterLevelKey, $filterCategories)) ?>"><?= e($tLabel) ?></a>
+                       href="<?= e($filterUrl($t, $filterLevelKey, $filterCategories, $filterContent)) ?>"><?= e($tLabel) ?></a>
                 <?php endforeach; ?>
             </div>
             <div class="mg-filter-group">
                 <span class="mg-filter-label">Level</span>
                 <?php foreach (['all' => 'All', '0' => 'Free', '1' => 'Silver', '2' => 'Gold', '3' => 'Platinum'] as $l => $lLabel): ?>
                     <a class="btn btn-sm mg-filter-btn<?= $filterLevelKey === (string) $l ? ' mg-filter-active' : '' ?>"
-                       href="<?= e($filterUrl($filterType, $l, $filterCategories)) ?>"><?= e($lLabel) ?></a>
+                       href="<?= e($filterUrl($filterType, $l, $filterCategories, $filterContent)) ?>"><?= e($lLabel) ?></a>
+                <?php endforeach; ?>
+            </div>
+            <div class="mg-filter-group">
+                <span class="mg-filter-label">Content</span>
+                <?php foreach (['all' => 'All', 'sfw' => 'SFW', 'nsfw' => 'NSFW'] as $cn => $cnLabel): ?>
+                    <a class="btn btn-sm mg-filter-btn<?= $filterContent === $cn ? ' mg-filter-active' : '' ?>"
+                       href="<?= e($filterUrl($filterType, $filterLevelKey, $filterCategories, $cn)) ?>"><?= e($cnLabel) ?></a>
                 <?php endforeach; ?>
             </div>
             <div class="mg-filter-group">
                 <span class="mg-filter-label">Categories</span>
                 <?php foreach (['all' => 'All', 'uncategorized' => 'Uncategorized'] as $c => $cLabel): ?>
                     <a class="btn btn-sm mg-filter-btn<?= $filterCategories === $c ? ' mg-filter-active' : '' ?>"
-                       href="<?= e($filterUrl($filterType, $filterLevelKey, $c)) ?>"><?= e($cLabel) ?></a>
+                       href="<?= e($filterUrl($filterType, $filterLevelKey, $c, $filterContent)) ?>"><?= e($cLabel) ?></a>
                 <?php endforeach; ?>
             </div>
             <?php if ($hasFilter): ?>
@@ -253,7 +264,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
 
     <?php if (empty($galleries)): ?>
         <div class="mg-empty">
-            <?php if ($filterCategories === 'uncategorized' && $filterType === 'all' && $filterLevel === null): ?>
+            <?php if ($filterCategories === 'uncategorized' && $filterType === 'all' && $filterLevel === null && $filterContent === 'all'): ?>
                 <p>Every gallery has at least one category.</p>
             <?php else: ?>
                 <p>No galleries match the selected filters.</p>
@@ -272,6 +283,8 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
             <div class="adm-bulk-controls">
                 <select name="action" id="mg-bulk-action">
                     <option value="category">Set category</option>
+                    <option value="mark_sfw">Mark SFW (safe for work)</option>
+                    <option value="mark_nsfw">Mark NSFW (adult)</option>
                     <option value="delete">Delete</option>
                 </select>
                 <select name="category_id" id="mg-bulk-category">
@@ -320,6 +333,11 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                             <a class="mg-title" href="<?= url('/admin/galleries/' . $gid) ?>"
                                title="<?= e(trim((string) $gallery['title'] . (trim((string) ($gallery['description'] ?? '')) !== '' ? "
 " . (string) $gallery['description'] : ''))) ?>"><?= e((string) $gallery['title']) ?></a>
+                            <?php if ((int) ($gallery['is_nsfw'] ?? 1) === 1): ?>
+                                <span class="pill pill-err" title="Adult content">18+</span>
+                            <?php else: ?>
+                                <span class="pill pill-ok" title="Safe for work — visible to everyone">SFW</span>
+                            <?php endif; ?>
                             <?php if (!empty($gallery['is_secret'])): ?>
                                 <span class="pill pill-warn">Secret</span>
                             <?php endif; ?>
@@ -353,8 +371,10 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                             <b><?= number_format((int) ($gallery['video_count'] ?? 0)) ?></b> video<?= (int) ($gallery['video_count'] ?? 0) === 1 ? '' : 's' ?>
                         </td>
                         <td>
-                            <?php if ($level === 0): ?>
-                                <span class="pill pill-muted">Free</span>
+                            <?php if ((int) ($gallery['is_nsfw'] ?? 1) === 0): ?>
+                                <span class="pill pill-ok" title="Safe for work: open to everyone, whatever the stored level (<?= e($levelNames[$level] ?? 'Level ' . $level) ?>)">Everyone</span>
+                            <?php elseif ($level === 0): ?>
+                                <span class="pill pill-muted" title="Adult, free tier: guests see it after the age gate">Free</span>
                             <?php else: ?>
                                 <span class="pill <?= $levelPill[$level] ?? 'pill' ?>"><?= $levelNames[$level] ?? 'Level ' . $level ?></span>
                             <?php endif; ?>

@@ -13,9 +13,9 @@
 $tourUser    = \App\Core\Auth::user();
 $tourLevel   = \App\Core\Auth::effectiveLevel();
 $tourAdmin   = $tourLevel >= PHP_INT_MAX;
-$levelClause = $tourAdmin ? '' : ' AND g.min_level <= ' . (int) $tourLevel;
+$levelClause = $tourAdmin ? '' : ' AND ' . \App\Models\Gallery::accessLevelSql('g') . ' <= ' . (int) $tourLevel;
 $levelKey    = $tourAdmin ? 'admin' : 'l' . (int) $tourLevel;
-$tourMedia   = \App\Core\Cache::rememberGen('tour', 'first_media_v3_' . $levelKey, 3600, function () use ($levelClause) {
+$tourMedia   = \App\Core\Cache::rememberGen('tour', 'first_media_v4_' . $levelKey, 3600, function () use ($levelClause) {
     $galleryRow = \App\Core\Database::run(
         'SELECT g.id FROM galleries g
          WHERE g.is_secret = 0 AND ' . \App\Models\Gallery::publishedVisibleSql('g') . $levelClause . '
@@ -27,7 +27,7 @@ $tourMedia   = \App\Core\Cache::rememberGen('tour', 'first_media_v3_' . $levelKe
          INNER JOIN gallery_photo gp ON gp.photo_id = p.id
          INNER JOIN galleries g ON g.id = gp.gallery_id
          WHERE p.is_video = 1 AND g.is_secret = 0 AND ' . \App\Models\Gallery::publishedVisibleSql('g') . $levelClause . '
-         ORDER BY g.min_level ASC, p.id DESC LIMIT 1'
+         ORDER BY ' . \App\Models\Gallery::accessLevelSql('g') . ' ASC, p.id DESC LIMIT 1'
     )->fetch();
 
     return [

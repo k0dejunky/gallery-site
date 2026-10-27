@@ -47,7 +47,7 @@ class PageCache
      *
      * @var string[] $keep
      */
-    public static function normaliseQuery(string $query, array $keep = ['q', 'page', 'page_images', 'page_videos', 'type', 'category', 'tag', 'sort', 'period', 'vt']): string
+    public static function normaliseQuery(string $query, array $keep = ['q', 'page', 'page_images', 'page_videos', 'type', 'category', 'tag', 'sort', 'period', 'vt', 'content']): string
     {
         if ($query === '') {
             return '';

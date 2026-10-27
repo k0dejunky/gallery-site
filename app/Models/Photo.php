@@ -93,10 +93,13 @@ class Photo
      *
      * The row:
      *   photo_id     the photo, or null when the file is not a photo
-     *   access_level the STRICTEST level over the galleries holding it
+     *   access_level the STRICTEST effective level over the galleries holding it
      *   has_public   1 when a published, visible, non-secret gallery holds it
      *   has_secret   1 when a secret gallery holds it
      *   can_view     1 when the member may see it
+     *   guest_view   1 when a logged-out visitor may see the bytes: a public
+     *                gallery holds it and EVERY public gallery holding it is
+     *                guest-viewable (safe, or adult in the free tier)
      *   unlocked     1 when the member paid for one of those galleries
      *
      * @return array<string, mixed>|null
@@ -110,8 +113,10 @@ class Photo
 
         $row = Database::run(
             'SELECT p.id AS photo_id,
-                    COALESCE(MAX(g.min_level), 0) AS access_level,
+                    COALESCE(MAX(' . Gallery::accessLevelSql('g') . '), 0) AS access_level,
                     COALESCE(MAX(CASE WHEN ' . $visible . ' AND g.is_secret = 0 THEN 1 ELSE 0 END), 0) AS has_public,
+                    COALESCE(MIN(CASE WHEN ' . $visible . ' AND g.is_secret = 0
+                                      THEN (' . Gallery::guestViewableSql('g') . ') ELSE NULL END), 0) AS guest_view,
                     COALESCE(MAX(CASE WHEN g.is_secret = 1 THEN 1 ELSE 0 END), 0) AS has_secret,
                     COALESCE(MAX(CASE WHEN ' . $visible . ' AND ' . $allowed . ' THEN 1 ELSE 0 END), 0) AS can_view,
                     COALESCE(MAX(CASE WHEN EXISTS (
@@ -152,6 +157,7 @@ class Photo
             'has_public'   => (int) $row['has_public'] === 1,
             'has_secret'   => (int) $row['has_secret'] === 1,
             'can_view'     => (int) $row['can_view'] === 1,
+            'guest_view'   => (int) ($row['guest_view'] ?? 0) === 1 && (int) $row['has_public'] === 1,
             'unlocked'     => (int) $row['unlocked'] === 1,
         ];
     }
@@ -253,7 +259,7 @@ class Photo
     public static function minimumGalleryLevel(int $photoId): int
     {
         $level = Database::run(
-            'SELECT MIN(g.min_level) FROM gallery_photo gp
+            'SELECT MIN(' . Gallery::accessLevelSql('g') . ') FROM gallery_photo gp
              INNER JOIN galleries g ON g.id = gp.gallery_id
              WHERE gp.photo_id = ?',
             [$photoId]
@@ -311,13 +317,42 @@ class Photo
     public static function accessLevel(int $photoId): int
     {
         $level = Database::run(
-            'SELECT MAX(g.min_level) FROM gallery_photo gp
+            'SELECT MAX(' . Gallery::accessLevelSql('g') . ') FROM gallery_photo gp
              INNER JOIN galleries g ON g.id = gp.gallery_id
              WHERE gp.photo_id = ?',
             [$photoId]
         )->fetchColumn();
 
         return ($level === false || $level === null) ? 0 : (int) $level;
+    }
+
+    /**
+     * Whether a logged-out visitor may see this photo's bytes.
+     *
+     * The same STRICTEST rule accessLevel() uses, applied to the safe/free
+     * question: there must be at least one public gallery holding the photo,
+     * and every public gallery holding it must be guest-viewable (safe, or
+     * adult in the free tier). A photo shared with a paid gallery therefore
+     * stays behind the gate even if a safe gallery holds it too.
+     */
+    public static function guestViewable(int $photoId): bool
+    {
+        $visible = Gallery::publishedVisibleSql('g');
+
+        $row = Database::run(
+            'SELECT
+                COALESCE(MAX(CASE WHEN ' . $visible . ' AND g.is_secret = 0 THEN 1 ELSE 0 END), 0) AS has_public,
+                COALESCE(MIN(CASE WHEN ' . $visible . ' AND g.is_secret = 0
+                                  THEN (' . Gallery::guestViewableSql('g') . ') ELSE NULL END), 0) AS all_guest
+             FROM gallery_photo gp
+             INNER JOIN galleries g ON g.id = gp.gallery_id
+             WHERE gp.photo_id = ?',
+            [$photoId]
+        )->fetch();
+
+        return $row !== false
+            && (int) $row['has_public'] === 1
+            && (int) $row['all_guest'] === 1;
     }
 
     /**

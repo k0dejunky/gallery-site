@@ -73,7 +73,7 @@ $breadcrumbItems = [
         <button type="submit" class="btn btn-sm btn-outline">Add to collection</button>
         <a href="<?= url('/collections') ?>" class="muted" style="font-size:.85rem;">Manage collections</a>
     </form>
-<?php elseif ($canViewFull): ?>
+<?php elseif ($canViewFull && \App\Core\Auth::check()): ?>
     <p class="muted" style="font-size:.9rem;margin-bottom:.75rem;">
         <a href="<?= url('/collections') ?>">Create a collection</a> to save this gallery.
     </p>
@@ -122,7 +122,7 @@ $breadcrumbItems = [
     </div>
     <?php
     $gateTitle = $gallery['title'];
-    $gateLevel = (int) ($gallery['min_level'] ?? 0);
+    $gateLevel = \App\Models\Gallery::effectiveLevel($gallery);
     $gateMedia = 'gallery';
     require __DIR__ . '/../partials/membership_gate.php';
     ?>

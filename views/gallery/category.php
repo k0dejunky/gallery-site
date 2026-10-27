@@ -68,6 +68,15 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
     <a class="chip <?= $type === 'videos' ? 'active' : '' ?>" href="<?= e($vidUrl) ?>"<?= $type === 'videos' ? ' aria-current="page"' : '' ?>>&#9654; Video Galleries</a>
 </div>
 
+<?php // The content filter (safe for work / adult), like on the catalogue. ?>
+<div class="chips content-chips" style="justify-content:center">
+    <span class="label">Content:</span>
+    <?php foreach (['' => 'All', 'sfw' => 'Safe for work', 'nsfw' => 'Adult'] as $value => $label): ?>
+        <?php $contentQuery = $query; if ($value === '') unset($contentQuery['content']); else $contentQuery['content'] = $value; ?>
+        <a class="chip <?= ($content ?? '') === $value ? 'active' : '' ?>" href="<?= e($base . ($contentQuery ? '?' . http_build_query($contentQuery) : '')) ?>"<?= ($content ?? '') === $value ? ' aria-current="page"' : '' ?>><?= e($label) ?></a>
+    <?php endforeach; ?>
+</div>
+
 <div class="sort-bar" style="justify-content:center">
     <span class="label">Sort:</span>
     <?php foreach (['' => 'Newest', 'views' => 'Most Viewed', 'title' => 'A-Z'] as $value => $label): ?>
@@ -80,6 +89,7 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
 $paginationQuery = $q !== '' ? ['q' => $q] : [];
 if ($type !== '') $paginationQuery['type'] = $type;
 if (($sort ?? '') !== '') $paginationQuery['sort'] = $sort;
+if (($content ?? '') !== '') $paginationQuery['content'] = $content;
 $searchSuffix = $q !== '' ? ' match your search' : '';
 $sectionBaseUrl = $base . ($paginationQuery ? '?' . http_build_query($paginationQuery) : '');
 // A section's pager link keeps the other section on the page it was on.

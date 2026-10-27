@@ -20,6 +20,12 @@ $currentType = in_array($_GET['type'] ?? '', ['images', 'videos'], true)
     : '';
 $typeSuffix  = $currentType !== '' ? '?type=' . $currentType : '';
 
+// The content filter (safe for work / adult) is a first-class browse
+// dimension now, so the nav has to know which one is on.
+$currentContent = in_array($_GET['content'] ?? '', ['sfw', 'nsfw'], true)
+    ? (string) $_GET['content']
+    : '';
+
 // Used to hide the nav "Login" button while the user is already on the
 // login page (a redundant click).
 $currentPath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '';
@@ -160,6 +166,7 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/utilities.css')) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/support.css')) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/user.css')) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('/assets/css/public.css')) ?>">
 </head>
 <?php
 // The body carries the compact scale and, while an admin is impersonating a
@@ -213,16 +220,30 @@ if (!empty($_SESSION['impersonator_id'])) {
     }
     ?>
     <header class="title-header">
-            <img src="<?= e(url(\App\Models\Theme::userTheme($userThemePreset)['title_image'])) ?>" alt="<?= e(config('app.site_name')) ?>">
+            <a class="title-logo" href="<?= e(url('/')) ?>" aria-label="<?= e(config('app.site_name')) ?> - home">
+                <img src="<?= e(url(\App\Models\Theme::userTheme($userThemePreset)['title_image'])) ?>" alt="<?= e(config('app.site_name')) ?>">
+            </a>
     </header>
-    <?php if (!$sidebarNav && !$isAuthPage): ?>
-    <nav class="nav">
+    <?php // A guest gets the top nav on EVERY page, including the ones that
+          // keep the left rail: without it the browse pages had no header at
+          // all (the rail's member links were all they had, and every one of
+          // them bounced to the login). A member keeps the old behaviour:
+          // the rail carries the nav, so the top bar would duplicate it. ?>
+    <?php if (!$isAuthPage && ($user === null || !$sidebarNav)): ?>
+    <nav class="nav<?= $user === null ? ' public-nav' : '' ?>">
         <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav-links-id" id="nav-toggle-id" data-action="galleryNavToggle">&#9776;</button>
+        <?php if ($user === null): ?>
+            <a class="public-brand" href="<?= e(url('/')) ?>"><?= e(config('app.site_name')) ?></a>
+        <?php endif; ?>
+        <?php // The rail has its own search box, so the top bar only carries
+              // one when there is no rail. ?>
+        <?php if (!$sidebarNav): ?>
         <form class="site-search site-search-top" method="get" action="<?= e(url('/galleries')) ?>" role="search">
             <label class="sr-only" for="site-search-top">Search galleries</label>
             <input type="search" id="site-search-top" name="q" value="<?= e($siteSearchQuery) ?>" placeholder="Search galleries&hellip;" autocomplete="off">
             <button type="submit" class="btn btn-sm">Search</button>
         </form>
+        <?php endif; ?>
         <span class="spacer"></span>
         <div class="nav-links" id="nav-links-id">
         <?php if ($user !== null): ?>
@@ -232,6 +253,12 @@ if (!empty($_SESSION['impersonator_id'])) {
                 <button type="submit" class="btn btn-sm btn-danger">Logout</button>
             </form>
         <?php else: ?>
+            <?php // The public browse links. They are the same on every page,
+                  // so a visitor can get back to the catalogue from the
+                  // gallery, the creator page or the membership panel. ?>
+            <a class="btn btn-sm btn-outline" href="<?= url('/galleries') ?>">Galleries</a>
+            <a class="btn btn-sm btn-outline" href="<?= url('/galleries?type=videos') ?>">Videos</a>
+            <a class="btn btn-sm btn-outline" href="<?= url('/membership') ?>">Membership</a>
             <?php if (!$isLoginPage): ?>
                 <a class="btn btn-sm" href="<?= url('/login') ?>">Login</a>
             <?php endif; ?>
@@ -247,6 +274,24 @@ if (!empty($_SESSION['impersonator_id'])) {
         <?php endforeach; ?>
     <?php endforeach; ?>
 
+    <?php // The icon painter and the guest nav are used by the rail AND by
+          // the phone's bottom bar, and the bottom bar is shown to guests
+          // even on the pages that have no rail (the landing page, a gallery
+          // page). They used to live inside the rail block, so the bar
+          // rendered with undefined variables there. ?>
+    <?php
+    $icon = static fn (string $name): string => \App\Core\Icon::svg($name, 'rail-ico');
+    $guestNavItems = [
+        ['key' => 'pub-galleries', 'label' => 'Galleries', 'href' => '/galleries', 'icon' => 'image',
+         'active' => strpos($currentPath, url('/galleries')) === 0 && $currentType === ''],
+        ['key' => 'pub-videos', 'label' => 'Videos', 'href' => '/galleries?type=videos', 'icon' => 'film',
+         'active' => $currentType === 'videos'],
+        ['key' => 'pub-signin', 'label' => 'Sign in', 'href' => '/login', 'icon' => 'user',
+         'active' => $isLoginPage],
+        ['key' => 'pub-join', 'label' => 'Join', 'href' => '/signup', 'icon' => 'plus',
+         'active' => $currentPath === url('/signup')],
+    ];
+    ?>
     <?php if ($sidebarNav): ?>
     <div class="home-layout">
         <div class="home-nav-wrap">
@@ -280,13 +325,45 @@ if (!empty($_SESSION['impersonator_id'])) {
         // scrollable column of icon links grouped by purpose, and the sign-out
         // control pinned at the bottom. Colours still come from the theme's
         // --sidebar-* tokens, so the theme editor keeps working on it.
-        $icon = static fn (string $name): string => \App\Core\Icon::svg($name, 'rail-ico');
         $navWallUnread = $user !== null ? \App\Models\Notification::unreadCount((int) $user['id']) : 0;
         $memberName = (string) ($user['email'] ?? '');
         $memberInitial = $memberName !== '' ? strtoupper(substr($memberName, 0, 1)) : '?';
         $memberLevel = \App\Core\Auth::hasActiveSubscription() ? 'Active member' : 'Free account';
 
-        $railGroups = [
+        // A guest has no account, no favourites, no wall and no collections:
+        // the old rail gave them seven links that all bounced to the login
+        // and a "Favorite categories" list that was always empty. The guest
+        // rail is the public browse surface instead - the catalogue, the
+        // videos, the safe-for-work filter, the membership and the two
+        // things they can actually do.
+        // The public category list (cached) - the guest rail shows the whole
+        // catalogue, so the visitor can browse it by name.
+        $publicCategories = $user === null ? \App\Models\Category::all() : [];
+
+        $railGroups = $user === null ? [
+            [
+                'label' => 'Browse',
+                'items' => [
+                    ['key' => 'pub-galleries', 'label' => 'Galleries', 'href' => '/galleries', 'icon' => 'image',
+                     'active' => strpos($currentPath, url('/galleries')) === 0 && $currentType === ''],
+                    ['key' => 'pub-videos', 'label' => 'Videos', 'href' => '/galleries?type=videos', 'icon' => 'film',
+                     'active' => $currentType === 'videos'],
+                    ['key' => 'pub-sfw', 'label' => 'Safe for work', 'href' => '/galleries?content=sfw', 'icon' => 'sparkle',
+                     'active' => $currentContent === 'sfw'],
+                    ['key' => 'pub-membership', 'label' => 'Membership', 'href' => '/membership', 'icon' => 'card',
+                     'active' => strpos($currentPath, url('/membership')) === 0],
+                ],
+            ],
+            [
+                'label' => 'Account',
+                'items' => [
+                    ['key' => 'pub-signin', 'label' => 'Sign in', 'href' => '/login', 'icon' => 'user',
+                     'active' => $isLoginPage],
+                    ['key' => 'pub-join', 'label' => 'Join free', 'href' => '/signup', 'icon' => 'plus',
+                     'active' => $currentPath === url('/signup')],
+                ],
+            ],
+        ] : [
             [
                 'label' => 'Overview',
                 'items' => [
@@ -369,15 +446,8 @@ if (!empty($_SESSION['impersonator_id'])) {
             }
         }
 
-        // A guest has no account pages, so their nav is short: the galleries
-        // and the two things they can do. The guest identity block and the
-        // guest bottom bar both read this list, so there is one of them.
-        $guestNavItems = [
-            ['key' => 'pub-galleries', 'label' => 'Galleries', 'href' => '/galleries', 'icon' => 'image',
-             'active' => strpos($currentPath, url('/galleries')) === 0],
-            ['key' => 'pub-signin', 'label' => 'Sign in', 'href' => '/login', 'icon' => 'user'],
-            ['key' => 'pub-join', 'label' => 'Join', 'href' => '/signup', 'icon' => 'plus'],
-        ];
+        // The guest identity block reads the same $guestNavItems the bottom
+        // bar uses, so there is one list of what a guest can do.
         ?>
         <nav class="home-nav-actions user-nav" aria-label="Site menu">
             <form class="site-search site-search-rail" method="get" action="<?= e(url('/galleries')) ?>" role="search">
@@ -401,7 +471,7 @@ if (!empty($_SESSION['impersonator_id'])) {
                     <span class="rail-avatar" aria-hidden="true">?</span>
                     <span class="rail-identity-text">
                         <strong>Guest</strong>
-                        <small><a href="<?= url($guestNavItems[1]['href']) ?>">Sign in</a> or <a href="<?= url($guestNavItems[2]['href']) ?>">join</a></small>
+                        <small><a href="<?= url('/login') ?>">Sign in</a> or <a href="<?= url('/signup') ?>">join</a></small>
                     </span>
                 </div>
             <?php endif; ?>
@@ -426,15 +496,31 @@ if (!empty($_SESSION['impersonator_id'])) {
                 </div>
                 <div class="rail-categories">
                 <?php if (strpos($currentPath, url('/chat')) !== 0): ?>
-                    <div class="rail-group">Favorite categories</div>
-                    <?php if (empty($navCategories)): ?>
-                        <p class="muted rail-empty">No favorite categories yet.</p>
+                    <?php if ($user === null): ?>
+                        <?php // A guest has no favourite categories - the whole
+                              // catalogue is theirs to browse, so the rail
+                              // lists the public categories instead of an
+                              // empty "no favorites yet". ?>
+                        <div class="rail-group">Categories</div>
+                        <?php if (empty($publicCategories)): ?>
+                            <p class="muted rail-empty">No categories yet.</p>
+                        <?php else: ?>
+                            <?php foreach ($publicCategories as $cat): ?>
+                                <?php $isActive = (int) $cat['id'] === $activeCategoryId; ?>
+                                <a class="nav-item rail-category<?= $isActive ? ' active' : '' ?>" href="<?= url('/galleries/category/' . e($cat['slug']) . $typeSuffix) ?>"<?= $isActive ? ' aria-current="page"' : '' ?>><?= $icon('tag') ?><span><?= e($cat['name']) ?></span></a>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                     <?php else: ?>
-                        <?php foreach ($navCategories as $cat): ?>
-                            <?php // Keep the current type filter (images/videos) on the category link. ?>
-                            <?php $isActive = (int) $cat['id'] === $activeCategoryId; ?>
-                            <a class="nav-item rail-category<?= $isActive ? ' active' : '' ?>" href="<?= url('/galleries/category/' . e($cat['slug']) . $typeSuffix) ?>"<?= $isActive ? ' aria-current="page"' : '' ?>><?= $icon('tag') ?><span><?= e($cat['name']) ?></span></a>
-                        <?php endforeach; ?>
+                        <div class="rail-group">Favorite categories</div>
+                        <?php if (empty($navCategories)): ?>
+                            <p class="muted rail-empty">No favorite categories yet.</p>
+                        <?php else: ?>
+                            <?php foreach ($navCategories as $cat): ?>
+                                <?php // Keep the current type filter (images/videos) on the category link. ?>
+                                <?php $isActive = (int) $cat['id'] === $activeCategoryId; ?>
+                                <a class="nav-item rail-category<?= $isActive ? ' active' : '' ?>" href="<?= url('/galleries/category/' . e($cat['slug']) . $typeSuffix) ?>"<?= $isActive ? ' aria-current="page"' : '' ?>><?= $icon('tag') ?><span><?= e($cat['name']) ?></span></a>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                     <?php endif; ?>
                 <?php endif; ?>
                 </div>
@@ -456,7 +542,7 @@ if (!empty($_SESSION['impersonator_id'])) {
     <?php else: ?>
     <main id="main-content"><?php echo $content; ?></main>
     <?php endif; ?>
-    <?php if ($sidebarNav): ?>
+    <?php if ($sidebarNav || $user === null): ?>
     <?php
     // The phone's bottom bar. It used to be nine text-only links at ~10.9px,
     // which did not fit on a 360px screen, and it had no icons, no
@@ -806,7 +892,10 @@ document.addEventListener('error',function(e){
   }
 },true);
     </script>
-    <script nonce="<?= csp_nonce() ?>" src="<?= url('/assets/js/user.js') ?>?v=22" defer></script>
-    <script nonce="<?= csp_nonce() ?>" src="<?= url('/assets/js/tour.js') ?>?v=9" defer></script>
+    <!-- The version comes from the file's mtime, so a change to a script
+         can never be published without the cache busting with it (the assets
+         are served immutable). -->
+    <script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('/assets/js/user.js')) ?>" defer></script>
+    <script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('/assets/js/tour.js')) ?>" defer></script>
 </body>
 </html>

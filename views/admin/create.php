@@ -50,6 +50,21 @@
                 </div>
 
                 <div class="field">
+                    <label>Content rating</label>
+                    <div class="type-switch-row">
+                        <label class="chip">
+                            <input type="radio" name="is_nsfw" value="0">
+                            SFW &mdash; safe for work
+                        </label>
+                        <label class="chip active">
+                            <input type="radio" name="is_nsfw" value="1" checked>
+                            NSFW &mdash; adult
+                        </label>
+                    </div>
+                    <span class="muted">A safe gallery is open to everyone regardless of the membership level below. An adult gallery follows the level (Level 0 is the free public tier; the other levels are members only).</span>
+                </div>
+
+                <div class="field">
                     <label for="min_level">Minimum membership level required</label>
                     <select name="min_level" id="min_level">
                         <option value="0" selected>No restriction (Level 0)</option>
