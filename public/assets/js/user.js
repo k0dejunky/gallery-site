@@ -653,6 +653,7 @@
       '<div class="player-seek">' +
         '<div class="player-seek-track">' +
           '<div class="player-buffered" data-buffered></div>' +
+          '<div class="player-played" data-played></div>' +
           (chapters.length ? '<div class="player-ticks">' + chapters.map(function(c){
             return '<span class="player-tick" style="left:' + Math.min(100, Math.max(0, (c.start / (video.duration || 0)) * 100)) + '%"></span>';
           }).join('') + '</div>' : '') +
@@ -811,6 +812,7 @@
     var seek = bar.querySelector('.player-seek input');
     var track = bar.querySelector('.player-seek-track');
     var bufferedEl = bar.querySelector('[data-buffered]');
+    var playedEl = bar.querySelector('[data-played]');
     var time = bar.querySelector('.player-time');
     var speedBtn = bar.querySelector('[data-act="speed"]');
     var playBtn = bar.querySelector('[data-act="play"]');
@@ -818,6 +820,23 @@
     var speedIdx = SPEEDS.indexOf(1);
 
     video.controls = false;
+
+    /* A narrow player cannot hold every control. The seek bar keeps its
+       space (it is the one control the viewer needs); the two optional ones
+       step aside. Without this the seek collapsed to ZERO width - the bar
+       was there, the time was ticking, and there was nothing to drag. */
+    function fitBar(){
+      var w = bar.clientWidth;
+      bar.classList.toggle('is-narrow', w > 0 && w < 420);
+      bar.classList.toggle('is-tiny', w > 0 && w < 320);
+    }
+    fitBar();
+    if(typeof ResizeObserver === 'function'){
+      var ro = new ResizeObserver(fitBar);
+      try { ro.observe(bar); } catch(e) {}
+    } else {
+      window.addEventListener('resize', fitBar);
+    }
     /* Chapter ticks sit above the track as percentages, so they have to be
        re-laid-out once the real duration is known (the markup above uses 0). */
     function layoutTicks(){
@@ -878,6 +897,10 @@
       if(!video.duration || isNaN(video.duration)){ seek.value = 0; time.textContent = '0:00 / 0:00'; return; }
       seek.value = Math.round(video.currentTime / video.duration * 1000);
       time.textContent = fmt(video.currentTime) + ' / ' + fmt(video.duration);
+      /* How much has been played. The bar used to draw only the BUFFERED
+         range, which for a served file is the whole file - so it looked full
+         from the first second and never moved. */
+      if(playedEl) playedEl.style.width = Math.min(100, (video.currentTime / video.duration) * 100) + '%';
       if(bufferedEl && video.buffered && video.buffered.length){
         var end = 0;
         for(var i = 0; i < video.buffered.length; i++){

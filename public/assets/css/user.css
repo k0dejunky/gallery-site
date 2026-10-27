@@ -244,8 +244,8 @@ body.player-theater #video-player-wrap+.media-progress{display:none}
 .player-bar.show,.gallery-player:hover .player-bar{opacity:1}
 .player-btn{background:none;border:0;color:#fff;font-size:15px;line-height:1;cursor:pointer;padding:.25rem .35rem;border-radius:6px;font-family:inherit}
 .player-btn:hover{background:rgba(255,255,255,.18);color:#ffd0e8}
-.player-seek{flex:1;position:relative;display:flex;align-items:center;height:16px;cursor:pointer}
-.player-seek input[type=range]{width:100%;margin:0;appearance:none;-webkit-appearance:none;background:transparent;height:16px;cursor:pointer}
+.player-seek{flex:1 1 0;min-width:64px;position:relative;display:flex;align-items:center;height:16px;cursor:pointer}
+.player-seek input[type=range]{flex:1 1 auto;min-width:0;width:100%;margin:0;appearance:none;-webkit-appearance:none;background:transparent;height:16px;cursor:pointer}
 .player-seek input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:rgba(255,255,255,.28)}
 .player-seek input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:12px;width:12px;border-radius:50%;background:#ff9fd4;border:2px solid #fff;margin-top:-4px}
 .player-seek input[type=range]::-moz-range-track{height:4px;border-radius:4px;background:rgba(255,255,255,.28)}
@@ -262,12 +262,29 @@ body.player-theater #video-player-wrap+.media-progress{display:none}
 .player-more button[aria-pressed=true]{color:#ffd0e8}
 .player-live-dot{width:8px;height:8px;border-radius:50%;background:#ff4777;box-shadow:0 0 6px #ff4777;display:inline-block;margin-right:.3rem;vertical-align:middle}
 .player-keep{display:inline-flex;align-items:center;gap:.3rem;color:rgba(255,255,255,.9);font-size:12px;cursor:pointer;white-space:nowrap}
+/* A narrow player (a phone, the mini player) cannot hold every control.
+   The seek bar keeps its space; the optional ones step aside. */
+.player-bar.is-narrow .player-keep,
+.player-bar.is-narrow .player-speed{display:none}
+/* A very narrow one (a portrait video on a phone, the mini player) drops
+   the controls that are not needed on a small screen - the clock, the
+   volume, the picture-in-picture - so that the seek bar and the fullscreen
+   button always fit and nothing is pushed out of the bar. */
+.player-bar.is-tiny [data-act="vol"],
+.player-bar.is-tiny [data-act="pip"],
+.player-bar.is-tiny .player-time{display:none}
+.player-bar.is-tiny .player-seek{min-width:56px}
+.player-bar.is-tiny{gap:.25rem}
 .player-keep input{accent-color:#ff9fd4;cursor:pointer}
 
 /* Seek track: a buffered-range fill and chapter ticks sit under the range
    input, which stays transparent on top so dragging still works. */
 .player-seek-track{position:absolute;left:0;right:0;top:50%;height:4px;transform:translateY(-50%);border-radius:4px;background:rgba(255,255,255,.28);overflow:hidden;pointer-events:none}
 .player-buffered{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(255,255,255,.42);transition:width .25s linear}
+/* How much of the video has been played. Without it the bar only showed the
+   BUFFERED range, which for a served file is the whole thing - so the bar
+   looked full from the first second and never moved. */
+.player-played{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,#ff9fd4,#ff4777);border-radius:4px;transition:width .12s linear}
 .player-ticks{position:absolute;inset:0}
 .player-tick{position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.85);transform:translateX(-1px)}
 .player-tick:first-child{display:none}
