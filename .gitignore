@@ -61,3 +61,8 @@ vendor/
 # Reddit browser auto-poster (Playwright install + saved login session + logs).
 /storage/reddit-browser/*
 !/storage/reddit-browser/.gitkeep
+
+# The sitemap, written out by bin/write_sitemap.php so the origin root can
+# serve it as a file. It is regenerated every day; it is not source.
+/public/sitemap.xml
+/public/videositemap.xml

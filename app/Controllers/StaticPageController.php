@@ -140,14 +140,9 @@ class StaticPageController extends Controller
      */
     private function baseUrl(): string
     {
-        $base = rtrim((string) env_value('APP_URL', ''), '/');
-        if ($base === '') {
-            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-            $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
-            $base   = $scheme . '://' . $host . rtrim((string) config('app.base_path'), '/');
-        }
-
-        return $base;
+        // One place decides the site's address, so the map that is served and
+        // the map that is written out always carry the same links.
+        return \App\Core\Sitemap::baseUrl();
     }
 
     /**
@@ -156,9 +151,23 @@ class StaticPageController extends Controller
      * require a membership so only the listing pages are published. Entries
      * carry a <lastmod> when the content has a known publish/create date.
      *
-     * Individual media pages are intentionally excluded (see the note in the
-     * body): they are gated viewers with no crawler-visible content.
+     * Individual media pages are intentionally excluded (see the note in
+     * App\Core\Sitemap): they are gated viewers with no crawler-visible
+     * content.
      */
+    public function sitemap(): void
+    {
+        // A feed and a sitemap hold no session state, so they can be
+        // cached (a crawler fetches them again and again).
+        $this->publicCache(300);
+
+        // The map is built in one place (App\Core\Sitemap), so the file that
+        // is written out for the crawlers and the map that is served here
+        // can never drift apart.
+        header('Content-Type: application/xml; charset=utf-8');
+        echo \App\Core\Sitemap::xml();
+    }
+
     /**
      * The video sitemap.
      *
@@ -175,124 +184,8 @@ class StaticPageController extends Controller
         // cached (a crawler fetches them again and again).
         $this->publicCache(300);
 
-        $base = $this->baseUrl();
-
-        $rows = \App\Core\Database::run(
-            'SELECT p.id, p.filename, p.caption, p.duration_seconds, p.created_at,
-                    g.title AS gallery_title
-             FROM photos p
-             INNER JOIN gallery_photo gp ON gp.photo_id = p.id
-             INNER JOIN galleries g ON g.id = gp.gallery_id
-             WHERE p.is_video = 1
-               AND g.deleted_at IS NULL AND g.is_secret = 0 AND '
-            . Gallery::publishedVisibleSql('g') . '
-             GROUP BY p.id, p.filename, p.caption, p.duration_seconds, p.created_at, g.title
-             ORDER BY p.created_at DESC
-             LIMIT 5000'
-        )->fetchAll();
-
-        $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
-            . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"'
-            . ' xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">' . "\n";
-
-        foreach ($rows as $row) {
-            $pageUrl = $base . '/videos/' . (int) $row['id'];
-            $clipUrl = $base . '/previews/' . (int) $row['id'];
-            $title = trim((string) ($row['caption'] ?? '')) !== ''
-                ? (string) $row['caption']
-                : (string) ($row['gallery_title'] ?? 'Video');
-
-            $xml .= '  <url>' . "\n"
-                . '    <loc>' . htmlspecialchars($pageUrl, ENT_XML1, 'UTF-8') . '</loc>' . "\n"
-                . '    <video:video>' . "\n"
-                . '      <video:thumbnail_loc>' . htmlspecialchars(absolute_url(url('/files/' . rawurlencode((string) $row['filename']) . '?size=thumb')), ENT_XML1, 'UTF-8') . '</video:thumbnail_loc>' . "\n"
-                . '      <video:title>' . htmlspecialchars($title, ENT_XML1, 'UTF-8') . '</video:title>' . "\n"
-                . '      <video:content_loc>' . htmlspecialchars($clipUrl, ENT_XML1, 'UTF-8') . '</video:content_loc>' . "\n"
-                . '      <video:publication_date>' . date('c', strtotime((string) ($row['created_at'] ?? 'now')) ?: time()) . '</video:publication_date>' . "\n";
-            if (!empty($row['duration_seconds'])) {
-                $xml .= '      <video:duration>' . (int) $row['duration_seconds'] . '</video:duration>' . "\n";
-            }
-            $xml .= '    </video:video>' . "\n"
-                . '  </url>' . "\n";
-        }
-
-        $xml .= '</urlset>' . "\n";
-
         header('Content-Type: application/xml; charset=utf-8');
-        echo $xml;
-    }
-
-    public function sitemap(): void
-    {
-        // A feed and a sitemap hold no session state, so they can be
-        // cached (a crawler fetches them again and again).
-        $this->publicCache(300);
-
-        $base = $this->baseUrl();
-
-        // Static pages render 200 for guests; content pages now serve a
-        // public, indexable blurred preview too, so they belong in the map.
-        $entries = [];
-        foreach (['/', '/galleries', '/creator', '/about', '/terms', '/privacy', '/2257', '/dmca', '/report-abuse', '/membership'] as $staticPath) {
-            $entries[] = [$staticPath, null];
-        }
-
-        // ONLY the categories that have a gallery in them. 27 of the 111
-        // category pages had no published gallery, so they were a 200 page
-        // whose whole body was "No image galleries in this category" - a
-        // thin page in the map, and a wasted crawl.
-        $rows = \App\Core\Database::run(
-            "SELECT c.slug, MAX(COALESCE(g.published_at, g.created_at)) AS lastmod
-             FROM categories c
-             INNER JOIN gallery_category gc ON gc.category_id = c.id
-             INNER JOIN galleries g ON g.id = gc.gallery_id
-             WHERE g.deleted_at IS NULL AND g.is_secret = 0 AND "
-            . Gallery::publishedVisibleSql('g') . '
-             GROUP BY c.slug
-             ORDER BY c.name'
-        )->fetchAll();
-        foreach ($rows as $row) {
-            $entries[] = ['/galleries/category/' . rawurlencode((string) $row['slug']), (string) ($row['lastmod'] ?? '')];
-        }
-
-        $galleries = \App\Core\Database::run(
-            'SELECT id, COALESCE(published_at, created_at) AS lastmod FROM galleries
-             WHERE deleted_at IS NULL AND is_secret = 0 AND '
-            . Gallery::publishedVisibleSql('galleries') . '
-             ORDER BY COALESCE(published_at, created_at) DESC'
-        )->fetchAll();
-        foreach ($galleries as $g) {
-            $entries[] = ['/galleries/' . (int) $g['id'], (string) ($g['lastmod'] ?? '')];
-        }
-
-        // NOTE: individual media pages (/images/{id}, /videos/{id}) are
-        // deliberately NOT listed. They are member-gated media viewers, not
-        // landing pages: for a crawler they render an "unlock with a
-        // membership" wall with no media, and most had no caption, so the
-        // whole set shared one boilerplate <title>. Submitting thousands of
-        // near-identical empty URLs only told Google the site was thin, and
-        // the crawler budget was spent on pages that can never rank. They
-        // stay crawlable and linked from their galleries, so anything that
-        // does earn impressions can still be found; the map now points at
-        // pages that actually have content.
-
-        // Stay comfortably under Google's 50k URLs / 50MB sitemap limits.
-        $entries = array_slice($entries, 0, 45000);
-
-        $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
-            . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
-        foreach ($entries as [$path, $lastmod]) {
-            $xml .= '  <url><loc>' . htmlspecialchars($base . '/' . ltrim($path, '/'), ENT_XML1, 'UTF-8') . '</loc>';
-            $ts = is_string($lastmod) && $lastmod !== '' ? strtotime($lastmod) : false;
-            if ($ts !== false) {
-                $xml .= '<lastmod>' . date('Y-m-d', $ts) . '</lastmod>';
-            }
-            $xml .= '</url>' . "\n";
-        }
-        $xml .= '</urlset>' . "\n";
-
-        header('Content-Type: application/xml; charset=utf-8');
-        echo $xml;
+        echo \App\Core\Sitemap::videoXml();
     }
 
     /**

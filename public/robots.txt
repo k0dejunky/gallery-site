@@ -35,4 +35,8 @@ Disallow: /gallery/*?se=
 # Short public video sample clips (Google Video indexing) are crawlable.
 Allow: /gallery/previews/
 
-Sitemap: https://amethyst2213.com/gallery/sitemap.xml
+# The map is at the host root, where a crawler looks for it. It is a file,
+# written out every day, and it is also served by the app under /gallery/ -
+# both carry exactly the same URLs.
+Sitemap: https://amethyst2213.com/sitemap.xml
+Sitemap: https://amethyst2213.com/videositemap.xml

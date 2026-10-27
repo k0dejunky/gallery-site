@@ -3980,7 +3980,9 @@ class SmokeChecks
             // had a caption - so every image had alt="" and every image
             // page was titled "Full-size image".
             $layout   = (string) $read($root . '/views/layout.php');
-            $sitemap  = (string) $read($root . '/app/Controllers/StaticPageController.php');
+            // The map is built in App\Core\Sitemap; the controller only
+            // renders it, so that is where the map's contents are checked.
+            $sitemap  = (string) $read($root . '/app/Core/Sitemap.php');
             $creator  = (string) $read($root . '/views/creator/profile.php');
             $tag      = (string) $read($root . '/views/gallery/tag.php');
             $photo    = (string) $read($root . '/app/Models/Photo.php');
@@ -4038,7 +4040,7 @@ class SmokeChecks
             if (strpos($sitemap, 'INNER JOIN gallery_category') === false) {
                 $problems[] = 'the sitemap must only list the categories that have a gallery in them';
             }
-            if (strpos($sitemap, 'videoSitemap') === false) {
+            if (strpos($sitemap, 'videoXml') === false) {
                 $problems[] = 'there must be a video sitemap';
             }
 
@@ -5295,6 +5297,8 @@ class SmokeChecks
         });
         $layoutView  = $read("$root/views/layout.php");
         $staticPages = $read("$root/app/Controllers/StaticPageController.php");
+        // The map itself is built in App\Core\Sitemap.
+        $sitemapMap = $read("$root/app/Core/Sitemap.php");
         $add('smoke.campaign.rss_feed', 'Smoke · Campaign', 'RSS feed route + attributed items + autodiscovery', static function () use ($routes, $layoutView, $staticPages, $ok, $bad): array {
             if (!in_array(['GET', '/feed.xml', 'StaticPageController@feed'], $routes, true)) {
                 return $bad('config/routes.php must expose GET /feed.xml');
@@ -5307,16 +5311,16 @@ class SmokeChecks
             }
             return $ok('route + feed + autodiscovery');
         });
-        $add('smoke.campaign.sitemap_lastmod', 'Smoke · Campaign', 'Sitemap carries <lastmod> dates', static function () use ($staticPages, $ok, $bad): array {
-            return strpos($staticPages, '<lastmod>') !== false && strpos($staticPages, 'COALESCE(published_at, created_at)') !== false
+        $add('smoke.campaign.sitemap_lastmod', 'Smoke · Campaign', 'Sitemap carries <lastmod> dates', static function () use ($sitemapMap, $ok, $bad): array {
+            return strpos($sitemapMap, '<lastmod>') !== false && strpos($sitemapMap, 'COALESCE(published_at, created_at)') !== false
                 ? $ok('lastmod emitted from publish/create dates')
-                : $bad('sitemap() must emit <lastmod> for dated entries');
+                : $bad('the sitemap must emit <lastmod> for dated entries');
         });
-        $add('smoke.seo.no_empty_media_urls', 'Smoke · SEO', 'Sitemap omits gated media pages', static function () use ($staticPages, $ok, $bad): array {
+        $add('smoke.seo.no_empty_media_urls', 'Smoke · SEO', 'Sitemap omits gated media pages', static function () use ($sitemapMap, $ok, $bad): array {
             // /images/{id} and /videos/{id} are member-gated viewers that render
             // an unlock wall with no media for a crawler. Submitting thousands
             // of them made the site look like a wall of empty duplicate pages.
-            if (preg_match('#<loc>[^<]*/(images|videos)/\d+</loc>#', $staticPages) === 1) {
+            if (preg_match('#<loc>[^<]*/(images|videos)/\d+</loc>#', $sitemapMap) === 1) {
                 return $bad('sitemap() must NOT list /images/{id} or /videos/{id} - gated media viewers with no crawler-visible content');
             }
             return $ok('no gated media URLs in the sitemap');
@@ -6116,6 +6120,40 @@ class SmokeChecks
             return strpos($importCtrl, 'public function settings()') !== false && strpos($importCtrl, 'ImportSettings::allForMachine(') !== false
                 ? $ok('settings endpoint wired')
                 : $bad('ImportController must implement /webhooks/import/settings with per-machine resolution');
+        });
+        $add('smoke.seo.sitemap', 'Smoke · SEO', 'the sitemap is built in one place and written out as a file for the crawlers', static function () use ($root, $read, $ok, $bad): array {
+            $sitemap   = (string) @file_get_contents($root . '/app/Core/Sitemap.php');
+            $ctrl      = (string) $read($root . '/app/Controllers/StaticPageController.php');
+            $writer    = (string) @file_get_contents($root . '/bin/write_sitemap.php');
+            $apache    = (string) @file_get_contents($root . '/config/gallery-root-files.conf');
+            $problems = [];
+
+            if (strpos($sitemap, 'class Sitemap') === false) {
+                $problems[] = 'there must be an App\Core\Sitemap that builds the map';
+            }
+            // The file that is written out and the map that is served have to
+            // be the same map, or Google is told about a different site.
+            if (strpos($ctrl, 'Sitemap::xml()') === false || strpos($ctrl, 'Sitemap::videoXml()') === false) {
+                $problems[] = 'the sitemap routes must render the shared map';
+            }
+            if (strpos($writer, 'Sitemap::write(') === false) {
+                $problems[] = 'there must be a script that writes the map out as a file';
+            }
+            if (strpos($apache, 'Alias /sitemap.xml') === false) {
+                $problems[] = 'the origin root must serve the map as a file, the way it serves robots.txt';
+            }
+            // The links in the map are absolute, so the map is the same
+            // wherever it is fetched from.
+            if (strpos($sitemap, "baseUrl()") === false) {
+                $problems[] = 'the map must use the site\'s base address';
+            }
+            if (!is_file($root . '/public/robots.txt') || strpos((string) file_get_contents($root . '/public/robots.txt'), 'Sitemap:') === false) {
+                $problems[] = 'robots.txt must point at the map';
+            }
+
+            return $problems === []
+                ? $ok('the map is built once, served and written out')
+                : $bad(implode('; ', $problems));
         });
         $add('smoke.membership.renewal', 'Smoke · Membership', 'A renewal extends the term (the postback is found and counted)', static function () use ($root, $read, $ok, $bad): array {
             $sub  = (string) $read($root . '/app/Models/Subscription.php');

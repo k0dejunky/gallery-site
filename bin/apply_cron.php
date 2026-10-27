@@ -178,6 +178,12 @@ $crond['gallery-web-analytics'] =
     "{$waFields[0]} {$waFields[1]} * * * {$php}/bin/aggregate_access_log.php --days=2 >> " . SITE_ROOT . "/storage/logs/web-analytics.log 2>&1\n";
 $crond['gallery-ai-watchdog'] =
     "* * * * * root /usr/bin/php " . SITE_ROOT . "/bin/keep_ai_alive.php >> " . SITE_ROOT . "/storage/logs/ai-watchdog.log 2>&1\n";
+// The sitemap as a file: the origin root serves it the way it serves
+// robots.txt, so a crawler never waits on the application for it. It is
+// rewritten every day, because the publish queue moves a gallery forward
+// every day and the map has to follow.
+$crond['gallery-sitemap'] =
+    "23 4 * * * {$php}/bin/write_sitemap.php >> " . SITE_ROOT . "/storage/logs/sitemap.log 2>&1\n";
 
 // --- Write the files atomically ------------------------------------------------
 foreach ($crond as $name => $content) {
