@@ -149,7 +149,11 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
                 'name'     => (string) ($item['label'] ?? ''),
             ];
             if (!empty($item['url'])) {
-                $entry['item'] = (string) $item['url'];
+                // Google wants a FULL url here: a relative path is not a
+                // URL, and Search Console reports it as "Invalid URL in
+                // field \"id\" (in \"itemListElement.item\")" on every
+                // page that has breadcrumbs.
+                $entry['item'] = absolute_url((string) $item['url']);
             }
             return $entry;
         }, $breadcrumbItems, array_keys($breadcrumbItems))),

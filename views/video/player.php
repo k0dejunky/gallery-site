@@ -35,7 +35,9 @@ $sampleClipUrl = video_sample_url((int) $photo['id'], (string) $photo['filename'
 if ($sampleClipUrl !== '') {
     // Point Google at the short public sample clip so it can verify + index
     // the video; the full-length file stays behind the membership gate.
-    $videoObject['contentUrl'] = $sampleClipUrl;
+    // A full url: video_sample_url() is a site path, and a relative one is
+    // "Invalid URL in field contentUrl" to Search Console.
+    $videoObject['contentUrl'] = absolute_url($sampleClipUrl);
 }
 if (!empty($photo['duration_seconds'])) {
     $videoObject['duration'] = 'PT' . (int) $photo['duration_seconds'] . 'S';

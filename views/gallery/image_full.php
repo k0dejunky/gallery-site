@@ -19,7 +19,9 @@ $ldJson = [
     'url'      => $canonicalUrl,
     // On a page a logged-out visitor may open, the schema URL must be the
     // PUBLIC web rendition (no session token) or a crawler cannot fetch it.
-    'contentUrl' => $publicMedia ? public_file_url($photo['filename'], 'web') : file_url($photo['filename']),
+    // A full url: a relative one is "Invalid URL in field contentUrl" to
+    // Search Console, and a crawler cannot fetch it either.
+    'contentUrl' => absolute_url($publicMedia ? public_file_url($photo['filename'], 'web') : file_url($photo['filename'])),
     'caption'  => $photo['caption'],
     'description' => $metaDescription,
     'author'   => ['@type' => 'Organization', 'name' => config('app.site_name'), 'url' => absolute_url('')],

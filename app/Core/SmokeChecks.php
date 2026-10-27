@@ -5384,6 +5384,53 @@ class SmokeChecks
                 ? $ok('gallery + image + video all declare the paywall')
                 : $bad('missing isAccessibleForFree markup on: ' . implode(', ', $missing));
         });
+        $add('smoke.seo.structured_data_urls_are_absolute', 'Smoke · SEO', 'Every URL in the structured data is a full url', static function () use ($root, $read, $ok, $bad): array {
+            // Search Console: "Invalid URL in field \"id\" (in
+            // \"itemListElement.item\")" - the breadcrumbs carried a RELATIVE
+            // path, and a relative path is not a URL. The same mistake in
+            // the ImageObject and the VideoObject contentUrl was waiting
+            // behind it ("Invalid URL in field contentUrl").
+            $layout = (string) $read($root . '/views/layout.php');
+            $image  = (string) $read($root . '/views/gallery/image_full.php');
+            $player = (string) $read($root . '/views/video/player.php');
+            $problems = [];
+
+            // The breadcrumbs.
+            $at = strpos($layout, "'itemListElement'");
+            if ($at === false) {
+                $problems[] = 'the BreadcrumbList was not found';
+            } else {
+                $body = substr($layout, $at, 1400);
+                if (strpos($body, 'absolute_url(') === false) {
+                    $problems[] = 'the breadcrumb item must be a FULL url - a relative path is "Invalid URL in field id" to Search Console';
+                }
+                if (preg_match("/'item'\s*=>\s*\(string\)\s*\\\$item\['url'\]/", $body) === 1) {
+                    $problems[] = 'the breadcrumb item must not be the raw site path';
+                }
+            }
+
+            // The media content urls.
+            if (strpos($image, "'contentUrl' => absolute_url(") === false) {
+                $problems[] = 'the ImageObject contentUrl must be a full url';
+            }
+            if (strpos($player, "['contentUrl'] = absolute_url(") === false) {
+                $problems[] = 'the VideoObject contentUrl must be a full url';
+            }
+
+            // And the raw (relative) forms must be gone, or they would come
+            // back with the next edit. The helpers used for them - url(),
+            // file_url(), public_file_url() - all return a site path.
+            if (strpos($image, "'contentUrl' => \$publicMedia") !== false) {
+                $problems[] = 'the ImageObject contentUrl must not be the raw site path again';
+            }
+            if (strpos($player, "\$videoObject['contentUrl'] = \$sampleClipUrl;") !== false) {
+                $problems[] = 'the VideoObject contentUrl must not be the raw site path again';
+            }
+
+            return $problems === []
+                ? $ok('the breadcrumbs and the media content urls are full urls')
+                : $bad(implode('; ', $problems));
+        });
         $add('smoke.seo.robots_at_root', 'Smoke · SEO', 'robots.txt scopes disallows to /gallery/', static function () use ($read, $root, $ok, $bad): array {
             $robots = (string) $read("$root/public/robots.txt");
             if ($robots === '') {
