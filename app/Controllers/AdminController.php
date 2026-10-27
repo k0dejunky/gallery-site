@@ -121,6 +121,7 @@ class AdminController extends Controller
 
         $type      = (string) ($_GET['type'] ?? 'all');
         $levelKey  = (string) ($_GET['level'] ?? 'all');
+        $categoryKey = (string) ($_GET['categories'] ?? 'all');
         $filters   = [];
 
         if (in_array($type, ['images', 'videos'], true)) {
@@ -136,6 +137,16 @@ class AdminController extends Controller
             $level = null;
         }
 
+        // The galleries with nothing filed under them. The list itself shows
+        // which ones those are, but an admin working through the backlog
+        // needs to see only them.
+        if (!in_array($categoryKey, ['all', 'uncategorized'], true)) {
+            $categoryKey = 'all';
+        }
+        if ($categoryKey === 'uncategorized') {
+            $filters['uncategorized'] = true;
+        }
+
         if (Auth::isSuperAdmin()) {
             $filters['include_secret'] = true;
         }
@@ -149,6 +160,7 @@ class AdminController extends Controller
             'galleryCategories' => \App\Models\Gallery::categoriesBulk($galleryIds),
             'filterType'  => $type,
             'filterLevel' => $level,
+            'filterCategories' => $categoryKey,
             'queuedGalleries' => Gallery::queuedForPublishing(Auth::isSuperAdmin()),
             'importSettings'  => \App\Models\ImportSettings::all(),
             'duplicateReport' => \App\Core\DuplicateGalleries::report(),

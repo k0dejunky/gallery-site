@@ -281,6 +281,14 @@ class Gallery
             }
         }
 
+        // Galleries with nothing filed under them. The admin works through the
+        // ones the categorizer could not name, so this has to be a filter and
+        // not a hand-compiled list. NOT EXISTS (rather than a LEFT JOIN with
+        // IS NULL) keeps the primary key of gallery_category usable.
+        if (!empty($filters['uncategorized'])) {
+            $where[] = 'NOT EXISTS (SELECT 1 FROM gallery_category gc WHERE gc.gallery_id = g.id)';
+        }
+
         // A correlated subquery instead of a LEFT JOIN ... GROUP BY: the
         // join materialised a temporary table and sorted the whole table.
         return Database::run(

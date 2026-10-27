@@ -1300,6 +1300,65 @@ class TestSuite
             }
         });
 
+        $add('db.gallery_uncategorized_filter', 'Database', 'the uncategorized filter finds only the galleries with no categories', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix = bin2hex(random_bytes(3));
+                    $filed  = \App\Models\Gallery::create('PROBE filed ' . $suffix, 'scratch');
+                    $bare   = \App\Models\Gallery::create('PROBE bare ' . $suffix, 'scratch');
+
+                    $categoryId = (int) Database::run('SELECT id FROM categories ORDER BY id LIMIT 1')->fetchColumn();
+                    if ($categoryId === 0) {
+                        Database::run('INSERT INTO categories (name, slug) VALUES (?, ?)', ['Probe', 'probe-' . $suffix]);
+                        $categoryId = (int) Database::connection()->lastInsertId();
+                    }
+                    \App\Models\Gallery::setCategories($filed, [$categoryId]);
+
+                    $ids = static function (array $rows): array {
+                        return array_map('intval', array_column($rows, 'id'));
+                    };
+                    $listed = $ids(\App\Models\Gallery::all(['uncategorized' => true]));
+
+                    $found  = in_array($bare, $listed, true);
+                    $missed = !in_array($filed, $listed, true);
+                    // Without the filter both are there, so the test is not
+                    // passing because the list is empty.
+                    $plain = $ids(\App\Models\Gallery::all([]));
+                    $both  = in_array($filed, $plain, true) && in_array($bare, $plain, true);
+                    // The filters combine: a video-only list excludes an
+                    // uncategorized IMAGE gallery.
+                    $videos = $ids(\App\Models\Gallery::all(['uncategorized' => true, 'type' => 'videos']));
+                    $combo  = !in_array($bare, $videos, true);
+
+                    $ok = $found && $missed && $both && $combo;
+
+                    return [
+                        'pass'   => $ok,
+                        'detail' => $ok
+                            ? 'the uncategorized list holds the bare gallery only (' . count($listed) . ' gallery/galleries)'
+                            : 'found=' . var_export($found, true) . ' missed=' . var_export($missed, true)
+                                . ' both=' . var_export($both, true) . ' combo=' . var_export($combo, true),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.test_gallery_is_not_announced', 'Database', 'a test gallery sends no member email and no notification', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

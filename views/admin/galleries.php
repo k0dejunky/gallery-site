@@ -13,17 +13,23 @@ foreach ($galleries as $gallery) {
 $levelNames = [0 => 'Free', 1 => 'Silver', 2 => 'Gold', 3 => 'Platinum'];
 $levelPill  = [1 => 'pill-info', 2 => 'pill-warn', 3 => 'pill'];
 
-$filterType  = $filterType ?? 'all';
-$filterLevel = $filterLevel ?? null;
-$hasFilter   = $filterType !== 'all' || $filterLevel !== null;
+$filterType       = $filterType ?? 'all';
+$filterLevel      = $filterLevel ?? null;
+$filterCategories = $filterCategories ?? 'all';
+$hasFilter        = $filterType !== 'all' || $filterLevel !== null || $filterCategories !== 'all';
 
-$filterUrl = static function (string $type, string $level): string {
+// Every chip carries the other filters, so narrowing by one does not silently
+// drop the rest.
+$filterUrl = static function (string $type, string $level, string $categories = 'all'): string {
     $q = [];
     if ($type !== 'all') {
         $q[] = 'type=' . rawurlencode($type);
     }
     if ($level !== 'all') {
         $q[] = 'level=' . rawurlencode($level);
+    }
+    if ($categories !== 'all') {
+        $q[] = 'categories=' . rawurlencode($categories);
     }
 
     return url('/admin/galleries' . ($q ? '?' . implode('&', $q) : ''));
@@ -65,14 +71,21 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                 <span class="mg-filter-label">Type</span>
                 <?php foreach (['all' => 'All', 'images' => 'Images', 'videos' => 'Videos'] as $t => $tLabel): ?>
                     <a class="btn btn-sm mg-filter-btn<?= $filterType === $t ? ' mg-filter-active' : '' ?>"
-                       href="<?= e($filterUrl($t, $filterLevelKey)) ?>"><?= e($tLabel) ?></a>
+                       href="<?= e($filterUrl($t, $filterLevelKey, $filterCategories)) ?>"><?= e($tLabel) ?></a>
                 <?php endforeach; ?>
             </div>
             <div class="mg-filter-group">
                 <span class="mg-filter-label">Level</span>
                 <?php foreach (['all' => 'All', '0' => 'Free', '1' => 'Silver', '2' => 'Gold', '3' => 'Platinum'] as $l => $lLabel): ?>
                     <a class="btn btn-sm mg-filter-btn<?= $filterLevelKey === (string) $l ? ' mg-filter-active' : '' ?>"
-                       href="<?= e($filterUrl($filterType, $l)) ?>"><?= e($lLabel) ?></a>
+                       href="<?= e($filterUrl($filterType, $l, $filterCategories)) ?>"><?= e($lLabel) ?></a>
+                <?php endforeach; ?>
+            </div>
+            <div class="mg-filter-group">
+                <span class="mg-filter-label">Categories</span>
+                <?php foreach (['all' => 'All', 'uncategorized' => 'Uncategorized'] as $c => $cLabel): ?>
+                    <a class="btn btn-sm mg-filter-btn<?= $filterCategories === $c ? ' mg-filter-active' : '' ?>"
+                       href="<?= e($filterUrl($filterType, $filterLevelKey, $c)) ?>"><?= e($cLabel) ?></a>
                 <?php endforeach; ?>
             </div>
             <?php if ($hasFilter): ?>
@@ -240,7 +253,11 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
 
     <?php if (empty($galleries)): ?>
         <div class="mg-empty">
-            <p>No galleries match the selected filters.</p>
+            <?php if ($filterCategories === 'uncategorized' && $filterType === 'all' && $filterLevel === null): ?>
+                <p>Every gallery has at least one category.</p>
+            <?php else: ?>
+                <p>No galleries match the selected filters.</p>
+            <?php endif; ?>
             <a class="btn btn-sm" href="<?= url('/admin/galleries') ?>">Clear filters</a>
         </div>
     <?php else: ?>

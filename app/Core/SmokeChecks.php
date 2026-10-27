@@ -712,6 +712,45 @@ class SmokeChecks
             return $ok('a frozen or dead player is rebuilt on its own');
         });
 
+        $add('smoke.admin.galleries_uncategorized_filter', 'Smoke · Admin UI', 'The gallery list can be narrowed to the galleries with no categories', static function () use ($root, $read, $ok, $bad): array {
+            // The list already marks an uncategorized gallery with a pill, but
+            // working through the backlog meant scanning every row.
+            $controller = (string) $read($root . '/app/Controllers/AdminController.php');
+            $model      = (string) $read($root . '/app/Models/Gallery.php');
+            $view       = (string) $read($root . '/views/admin/galleries.php');
+            $problems   = [];
+
+            if (strpos($controller, '$_GET[\'categories\']') === false) {
+                $problems[] = 'the controller does not read the categories filter';
+            }
+            if (strpos($controller, '$filters[\'uncategorized\'] = true') === false) {
+                $problems[] = 'the controller does not pass the uncategorized filter to the model';
+            }
+            if (strpos($model, 'NOT EXISTS (SELECT 1 FROM gallery_category') === false) {
+                $problems[] = 'the model has no uncategorized filter';
+            }
+            if (strpos($view, 'Uncategorized') === false || strpos($view, 'filterCategories') === false) {
+                $problems[] = 'the list has no Uncategorized chip';
+            }
+            // A chip that drops the other filters would silently widen the
+            // list, so every group must carry all three.
+            foreach ([
+                '$filterUrl($t, $filterLevelKey, $filterCategories)' => 'the type chips',
+                '$filterUrl($filterType, $l, $filterCategories)'    => 'the level chips',
+            ] as $needle => $what) {
+                if (strpos($view, $needle) === false) {
+                    $problems[] = $what . ' drop the category filter from their links';
+                }
+            }
+            if (strpos($view, '$filterCategories !== \'all\'') === false) {
+                $problems[] = 'the uncategorized filter does not count as an active filter (Clear filters would not show)';
+            }
+
+            return $problems === []
+                ? $ok('the uncategorized filter is wired from the query string to the query')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.admin.bulk_jobs_stay_on_page', 'Smoke · Admin UI', 'The bulk photo actions update the page in place instead of reloading it', static function () use ($root, $ok, $bad): array {
             // The manage page used to reload itself every five seconds while a
             // background job ran, which threw the admin back to the top of a
