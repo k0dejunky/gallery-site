@@ -825,8 +825,8 @@ class SmokeChecks
             // :has()-less browsers) the saved categories must already read
             // as selected.
             $edit = (string) @file_get_contents("$root/views/admin/edit.php");
-            if (strpos($edit, "$assigned, true) ? ' selected'") === false
-                || strpos($edit, "$assigned, true) ? 'checked'") === false) {
+            if (strpos($edit, "\$assigned, true) ? ' selected'") === false
+                || strpos($edit, "\$assigned, true) ? 'checked'") === false) {
                 return $bad('the edit page does not server-render the selected state for saved categories');
             }
             return $ok('the chip state is styled and kept in lockstep by the shared script');

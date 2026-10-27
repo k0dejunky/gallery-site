@@ -205,7 +205,12 @@ if (!empty($_SESSION['impersonator_id'])) {
     // search was the box on the gallery listing. The query is read from
     // the listing's own parameter, so a search box shows what is being
     // searched for.
-    $siteSearchQuery = isset($q) ? trim((string) $q) : trim((string) ($_GET['q'] ?? ''));
+    $siteSearchQuery = '';
+    if (isset($q) && is_string($q)) {
+        $siteSearchQuery = trim($q);
+    } elseif (isset($_GET['q']) && is_string($_GET['q'])) {
+        $siteSearchQuery = trim($_GET['q']);
+    }
     ?>
     <header class="title-header">
             <img src="<?= e(url(\App\Models\Theme::userTheme($userThemePreset)['title_image'])) ?>" alt="<?= e(config('app.site_name')) ?>">
@@ -331,7 +336,8 @@ if (!empty($_SESSION['impersonator_id'])) {
                     ['key' => 'pub-settings', 'label' => 'Settings', 'href' => '/settings', 'icon' => 'sliders',
                      'active' => strpos($currentPath, url('/settings')) === 0],
                     ['key' => 'pub-admin', 'label' => 'Admin', 'href' => '/admin', 'icon' => 'server',
-                     'show' => $user !== null && \App\Core\Auth::isAdmin()],
+                     'show' => $user !== null && \App\Core\Auth::isAdmin(),
+                     'active' => strpos($currentPath, url('/admin')) === 0],
                 ],
             ],
         ];

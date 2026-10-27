@@ -2390,6 +2390,103 @@ class TestSuite
             }
         });
 
+        $add('model.cache_shape', 'Models', 'The cache hands back one shape on every path', function () {
+            // A cached value reached the reader in two shapes: the string the
+            // producer stored, and an ARRAY on the path where a request
+            // waited for another request to produce the value. A caller that
+            // json_decodes the result then died with a TypeError, and the
+            // whole page went down whenever two requests raced for the same
+            // key (it happened on the home page's media rail).
+            $problems = [];
+
+            // 1. A cached ARRAY must be readable by the callers.
+            $rows = [['id' => 1, 'filename' => 'x.jpg', 'created_at' => '2026-01-01 00:00:00', 'gallery_id' => 1]];
+            \App\Core\Cache::rememberGen('media', 'video:1', 60, static function () use ($rows) {
+                return $rows;
+            });
+            try {
+                $videos = \App\Models\Photo::recentVideos(1);
+                if (!is_array($videos)) {
+                    $problems[] = 'recentVideos did not return an array';
+                }
+            } catch (\Throwable $error) {
+                $problems[] = 'a cached array took the page down: ' . $error->getMessage();
+            }
+
+            // 2. A string in, a string out.
+            $value = json_encode(['a' => 1]);
+            $out = \App\Core\Cache::rememberGen('shape-test', 'k', 60, static function () use ($value) {
+                return $value;
+            });
+            if (!is_string($out)) {
+                $problems[] = 'rememberGen returned a ' . gettype($out) . ' for a string value';
+            }
+
+            // 3. The "another process is producing it" path must return the
+            //    same shape. The second process holds the producer lock and
+            //    only then takes its time, so this one really has to wait
+            //    for the value instead of computing it.
+            // The stampede guard only exists when there is a shared store
+            // to guard with, so the race is only exercised where there is one.
+            if (!\App\Core\Cache::available()) {
+                return $problems === []
+                    ? ['pass' => true, 'detail' => 'the cache returns one shape on every path (no shared store: the race was not exercised)']
+                    : ['pass' => false, 'detail' => implode('; ', $problems)];
+            }
+
+            $raceKey = 'race-' . bin2hex(random_bytes(4));
+            $root = dirname(__DIR__, 2);
+            $marker = sys_get_temp_dir() . '/cache-shape-' . bin2hex(random_bytes(3)) . '.lock';
+            $script = $marker . '.php';
+            $code = '<?php require ' . var_export($root . '/app/bootstrap.php', true) . ';'
+                . ' $m = new ReflectionMethod("\\App\\Core\\Cache", "acquireLock");'
+                . ' $m->setAccessible(true);'
+                . ' $m->invoke(null, \\App\\Core\\Cache::genKey("shape-test", $argv[3]), 60);'
+                . ' touch($argv[1]);'
+                . ' usleep(900000);'
+                . ' \\App\\Core\\Cache::set(\\App\\Core\\Cache::genKey("shape-test", $argv[3]), $argv[2], 60);';
+            file_put_contents($script, $code);
+            $child = proc_open(
+                escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($script)
+                    . ' ' . escapeshellarg($marker)
+                    . ' ' . escapeshellarg(json_encode(['raced' => 1]))
+                    . ' ' . escapeshellarg($raceKey),
+                [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+                $pipes
+            );
+            if (is_resource($child)) {
+                // Wait until the other process really holds the lock.
+                $held = false;
+                for ($i = 0; $i < 100; $i++) {
+                    if (file_exists($marker)) {
+                        $held = true;
+                        break;
+                    }
+                    usleep(100000);
+                }
+                if (!$held) {
+                    $problems[] = 'the second process never took the lock';
+                } else {
+                    $ran = false;
+                    $raced = \App\Core\Cache::rememberGen('shape-test', $raceKey, 60, static function () use (&$ran) {
+                        $ran = true;
+                        return 'the callback must not run';
+                    });
+                    if ($ran) {
+                        $problems[] = 'the callback ran instead of waiting for the other process';
+                    } elseif (!is_string($raced)) {
+                        $problems[] = 'the waited-for path returned a ' . gettype($raced) . ' where a string was expected';
+                    }
+                }
+                proc_close($child);
+                @unlink($script);
+                @unlink($marker);
+            }
+
+            return $problems === []
+                ? ['pass' => true, 'detail' => 'the cache returns one shape on every path']
+                : ['pass' => false, 'detail' => implode('; ', $problems)];
+        });
         $add('model.theme_defaults', 'Models', 'Theme defaults resolve', function () {
             try {
                 $d = \App\Models\Theme::defaults();

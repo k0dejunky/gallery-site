@@ -369,11 +369,13 @@ public static function rememberGen(string $bucket, string $key, int $ttl, callab
     if ($lock === null) {
         $waited = self::waitFor($cacheKey, $ttl);
         if ($waited !== null) {
-            $decoded = json_decode($waited, true);
-            if (is_array($decoded)) {
-                return $decoded;
-            }
-            return [];
+            // The same shape the normal path returns. The plain key holds
+            // strings (an array is stored under its own ":a" key), and
+            // decoding it here handed the caller an ARRAY where it expected
+            // a string - a caller that json_decodes the result then died
+            // with a TypeError, which took the whole page down whenever two
+            // requests raced for the same key.
+            return $waited;
         }
     }
 

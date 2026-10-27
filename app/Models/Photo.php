@@ -436,7 +436,10 @@ class Photo
             }
         );
 
-        $decoded = json_decode($cached, true);
+        // The cached value is a JSON string, but the cache can hand back an
+        // array (a value stored under the array key). Both are accepted, so a
+        // cached entry can never take the page down.
+        $decoded = is_array($cached) ? $cached : json_decode((string) $cached, true);
 
         return [
             'images' => (int) ($decoded['images'] ?? 0),
@@ -482,7 +485,10 @@ class Photo
             }
         );
 
-        $decoded = json_decode($cached, true);
+        // The cached value is a JSON string, but the cache can hand back an
+        // array (a value stored under the array key). Both are accepted, so a
+        // cached entry can never take the page down.
+        $decoded = is_array($cached) ? $cached : json_decode((string) $cached, true);
 
         return is_array($decoded) ? $decoded : [];
     }
