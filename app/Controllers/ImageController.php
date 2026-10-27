@@ -184,6 +184,10 @@ class ImageController extends Controller
             // are the same for every visitor (see above).
             'canonicalUrl'    => $canonicalUrl,
             'publicBytes'    => $publicBytes,
+            // The level the wall names. The image page used to say "Members
+            // content" whatever the gallery was, so a Gold photo asked for a
+            // Silver membership.
+            'gateLevel'      => Photo::accessLevel($id),
             // Scene-detected chapter markers for the player's chapter list
             // (empty until the chapters worker has analysed the video).
             'chapters'      => $requireVideo ? \App\Models\VideoChapter::forPhoto($id) : [],

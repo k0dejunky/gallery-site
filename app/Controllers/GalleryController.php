@@ -658,11 +658,22 @@ class GalleryController extends Controller
         $pageSize = max(1, (int) config('app.gallery_page_size', 48));
         $gridLevel = Auth::effectiveLevel();
         $total    = Gallery::photoCount($id, $gridLevel);
+        // The gallery's REAL size, with no level filter. A gated gallery has
+        // plenty of media - the visitor simply may not open it - and the
+        // wall has to be able to say how much of it there is ("291 photos")
+        // instead of the page claiming there is none.
+        $mediaCount = Gallery::photoCount($id, PHP_INT_MAX);
         // Full members see the paginated slice; the preview shows only a
         // handful of blurred thumbs (all blur variants are lightweight).
+        //
+        // The preview comes from the gallery ITSELF, not from the level
+        // filtered list: a gated gallery has to show what the visitor is
+        // being invited to unlock. The blur variants are public teasers by
+        // design (the files route serves them without a token), and a
+        // secret gallery never reaches this page at all.
         $photos = $canViewFull
             ? Gallery::photosSlice($id, $pageSize, 0, $gridLevel)
-            : Gallery::photosSlice($id, 8, 0, $gridLevel);
+            : Gallery::photosSlice($id, 8, 0, PHP_INT_MAX);
 
         // The related cards get their cover and their categories in two
         // queries, not two per card.
@@ -673,6 +684,8 @@ class GalleryController extends Controller
             'gallery'    => $gallery,
             'photos'     => $photos,
             'total'      => $total,
+            // The real size of the gallery (no level filter).
+            'mediaCount' => $mediaCount,
             'pageSize'   => $pageSize,
             'categories' => Gallery::categories($id),
             'currentUser' => $user,

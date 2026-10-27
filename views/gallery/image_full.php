@@ -96,8 +96,9 @@ $breadcrumbItems = [
              style="max-width:100%;height:auto;border-radius:10px;box-shadow:0 2px 12px rgba(59,7,100,.35);">
         <?php
         $gateTitle = $photo['caption'] !== '' ? $photo['caption'] : 'This image';
-        $gateLevel = 0;
+        $gateLevel = (int) ($gateLevel ?? 0);
         $gateMedia = 'image';
+        $gateCount = 0;
         require __DIR__ . '/../partials/membership_gate.php';
         ?>
     <?php else: ?>

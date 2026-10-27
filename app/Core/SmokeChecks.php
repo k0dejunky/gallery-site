@@ -1420,9 +1420,16 @@ class SmokeChecks
                 // The paywall gate. The headline sat on --purple-800 over
                 // --pink-100, which is a LIGHT pairing: 1.60:1 on the dark
                 // skin, so the upsell for every locked gallery was invisible.
-                ['views/partials/membership_gate.php',
-                    'color:var(--heading-color)', 'color:var(--purple-800)',
-                    '--heading-color', '--pink-100', 4.5],
+                // The wall is a card now, so the headline sits on --card-bg
+                // and the declaration lives in the stylesheet.
+                ['public/assets/css/public.css',
+                    'color:var(--heading-color', 'color:var(--purple-800',
+                    '--heading-color', '--card-bg', 4.5],
+                // The tier eyebrow is 12px bold: body text, so it needs the
+                // 4.5:1 floor too (--purple-500 on the card is 3.46).
+                ['public/assets/css/public.css',
+                    'color:var(--link-color)', '',
+                    '--link-color', '--card-bg', 4.5],
                 // The focus ring. --purple-600 on the page background was
                 // 2.83:1, under the 3:1 WCAG 1.4.11 asks of a non-text
                 // indicator. The palette already had --focus-ring for it.
@@ -8901,6 +8908,63 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
 
             return $problems === []
                 ? $ok('guest renditions are public, originals + full-size stay members-only')
+                : $bad(implode('; ', $problems));
+        });
+        $add('smoke.paywall.a_gated_gallery_shows_the_wall', 'Smoke · Paywall', 'A gated gallery shows the wall, not an empty gallery', static function () use ($root, $read, $ok, $bad): array {
+            // The gallery page filtered the photos by the viewer's level
+            // BEFORE rendering, so a gated gallery came back EMPTY and the
+            // page claimed "This gallery doesn't have any media yet" under a
+            // gallery with 291 photos in it. The wall was never shown to a
+            // guest at all, and the crawler saw an empty page.
+            $show = (string) $read($root . '/views/gallery/show.php');
+            $ctrl = (string) $read($root . '/app/Controllers/GalleryController.php');
+            $gate = (string) $read($root . '/views/partials/membership_gate.php');
+            $img  = (string) $read($root . '/views/gallery/image_full.php');
+            $problems = [];
+
+            // The wall is decided by the access and comes FIRST.
+            $wallAt  = strpos($show, '!$canViewFull && (int) ($mediaCount ?? 0) > 0');
+            $emptyAt = strpos($show, 'This gallery doesn&rsquo;t have any media yet');
+            if ($wallAt === false) {
+                $problems[] = 'the gallery page must render the wall when the viewer cannot open the gallery';
+            } elseif ($emptyAt !== false && $wallAt > $emptyAt) {
+                $problems[] = 'the empty state came first - a gated gallery was shown as "no media yet"';
+            }
+
+            // The gallery's REAL size (no level filter) and the teasers from
+            // the gallery itself.
+            if (strpos($ctrl, "'mediaCount' => \$mediaCount") === false) {
+                $problems[] = 'the controller must pass the gallery\'s real media count';
+            }
+            if (strpos($ctrl, 'Gallery::photoCount($id, PHP_INT_MAX)') === false) {
+                $problems[] = 'the real media count must be taken without the level filter';
+            }
+            if (strpos($ctrl, 'Gallery::photosSlice($id, 8, 0, PHP_INT_MAX)') === false) {
+                $problems[] = 'the blurred teasers must come from the gallery, not from the level filtered list';
+            }
+
+            // The wall itself: a designed card that names the tier.
+            if (strpos($gate, 'class="wall"') === false || strpos($gate, 'wall-title') === false) {
+                $problems[] = 'the wall must be the designed card, not the old flat box';
+            }
+            if (strpos($gate, "'This is ' . \$gateLabel") === false) {
+                $problems[] = 'the wall must name the tier that is required';
+            }
+            if (strpos($gate, "url('/membership')") === false) {
+                $problems[] = 'the wall must offer the membership';
+            }
+
+            // The image page asked for a Free membership whatever the
+            // gallery was.
+            if (strpos($img, '$gateLevel = 0;') !== false) {
+                $problems[] = 'the image page must not hardcode the gate level to 0';
+            }
+            if (strpos($img, '$gateLevel = (int) ($gateLevel ?? 0);') === false) {
+                $problems[] = 'the image page must use the level the controller decided';
+            }
+
+            return $problems === []
+                ? $ok('a gated gallery shows a real wall with the right tier')
                 : $bad(implode('; ', $problems));
         });
         $add('smoke.gallery.guest_surface', 'Smoke · Galleries', 'A guest gets a real navigation, the public categories and the content filter', static function () use ($root, $read, $ok, $bad): array {

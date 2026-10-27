@@ -22,6 +22,7 @@ final class Icon
     /** @var array<string, string> icon name => SVG path data */
     private const PATHS = [
         'grid'        => 'M4 4h6v6H4zM14 4h6v6h-6zM14 14h6v6h-6zM4 14h6v6H4z',
+        'lock'        => 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
         'upload'      => 'M12 16V4M7.5 8.5 12 4l4.5 4.5M4 16v2.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V16',
         'trend'       => 'M3 17l5.5-5.5 3.5 3.5L21 6M15 6h6v6',
         'bars'        => 'M5 20v-9M10 20V4M15 20v-7M20 20V9',

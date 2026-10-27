@@ -32,3 +32,85 @@
 /* The guest browse strip on the landing page. */
 .guest-browse{display:flex;flex-wrap:wrap;gap:.6rem;justify-content:center;margin-top:1rem}
 .guest-browse .btn{flex:0 0 auto}
+
+/* The paywall.
+ *
+ * It used to be a flat pink box with a centred sentence and two plain
+ * buttons - the one screen a visitor is guaranteed to see, and it looked
+ * like a template. This is a card: a lock badge, the tier as an eyebrow,
+ * one clear sentence about what a membership opens, a primary action and
+ * a quiet note. The colours come from the theme tokens, so it follows the
+ * light and the dark theme.
+ */
+.wall{
+    position:relative;
+    display:grid;
+    grid-template-columns:auto minmax(0,1fr);
+    gap:.15rem 1.1rem;
+    align-items:start;
+    margin:1.5rem 0 2rem;
+    padding:1.4rem 1.5rem 1.25rem;
+    border:1px solid var(--card-border);
+    border-radius:var(--border-radius-lg,14px);
+    background:var(--card-bg);
+    box-shadow:var(--shadow,0 12px 34px rgba(0,0,0,.22));
+    overflow:hidden;
+}
+/* The accent edge: the one bit of colour that says "this is the gate". */
+.wall::before{
+    content:"";
+    position:absolute;
+    inset:0 auto 0 0;
+    width:4px;
+    background:linear-gradient(180deg,var(--purple-500),var(--pink-400,var(--purple-400)));
+}
+.wall-icon{
+    grid-row:1 / span 2;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:46px;
+    height:46px;
+    border-radius:13px;
+    border:1px solid var(--pink-400,var(--card-border));
+    background:var(--pink-100,rgba(255,255,255,.06));
+    /* The lock is a non-text indicator: it needs 3:1 against the card, and
+       --purple-500 is 3.46 while --purple-400 is 4.71. */
+    color:var(--purple-400);
+}
+.wall-ico{width:22px;height:22px;display:block}
+.wall-body{min-width:0}
+.wall-eyebrow{
+    margin:0;
+    font-size:var(--font-size-xs,.75rem);
+    font-weight:700;
+    letter-spacing:.09em;
+    text-transform:uppercase;
+    /* 10.58:1 on the card - the eyebrow is 12px, so it is body text. */
+    color:var(--link-color);
+}
+.wall-title{
+    margin:.2rem 0 .45rem;
+    font-size:var(--font-size-xl,1.25rem);
+    line-height:1.25;
+    color:var(--heading-color,var(--card-title-color));
+}
+.wall-text{
+    margin:0 0 1.05rem;
+    max-width:58ch;
+    color:var(--muted-color);
+}
+.wall-actions{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center}
+.wall-note{
+    margin:.85rem 0 0;
+    font-size:var(--font-size-sm,.9rem);
+    color:var(--muted-color);
+}
+.wall-note a{color:var(--link-color,var(--purple-600))}
+.wall-18{margin-left:.5rem;opacity:.75}
+@media (max-width:560px){
+    .wall{grid-template-columns:1fr;padding:1.15rem 1.1rem 1.05rem;gap:.5rem}
+    .wall-icon{grid-row:auto;width:40px;height:40px}
+    .wall-actions .btn{flex:1 1 100%;justify-content:center;text-align:center}
+    .wall-18{display:block;margin:.35rem 0 0}
+}

@@ -1,9 +1,13 @@
 <?php $title = $gallery['title']; ?>
 <?php
 $galleryDescription = trim((string) ($gallery['description'] ?? ''));
+// How many items the visitor is told about. A gated gallery has media the
+// visitor may not open, and "0 items" (the level filtered count) made a
+// 291-photo gallery look empty - to the visitor and to a crawler.
+$itemCount = (int) ($canViewFull ? ($total ?? 0) : ($mediaCount ?? 0));
 $metaDescription = $galleryDescription !== ''
     ? $galleryDescription
-    : 'Browse "' . $title . '" — ' . number_format((int) ($total ?? 0)) . ' items on ' . config('app.site_name') . '.';
+    : 'Browse "' . $title . '" — ' . number_format($itemCount) . ' items on ' . config('app.site_name') . '.';
 $canonicalUrl = absolute_url('/galleries/' . (int) $gallery['id']);
 // A gallery is a collection of work, not a website.
 $ogType = 'article';
@@ -38,7 +42,7 @@ $breadcrumbItems = [
 
 <h1><?= e($gallery['title']) ?></h1>
 <p><?= e($gallery['description']) ?></p>
-<p class="muted"><?= number_format((int) ($gallery['views'] ?? 0)) ?> views &middot; <?= number_format((int) ($gallery['unique_views'] ?? 0)) ?> unique viewers &middot; <?= number_format((int) $total) ?> items</p>
+<p class="muted"><?= number_format((int) ($gallery['views'] ?? 0)) ?> views &middot; <?= number_format((int) ($gallery['unique_views'] ?? 0)) ?> unique viewers &middot; <?= number_format($itemCount) ?> items</p>
 
 <?php require __DIR__ . '/../partials/star_rating.php'; ?>
 
@@ -95,20 +99,20 @@ $breadcrumbItems = [
     </div>
 <?php endif; ?>
 
-<?php if (empty($photos)): ?>
-    <div class="empty-state">
-        <p class="muted">This gallery doesn&rsquo;t have any media yet.</p>
-        <a class="btn btn-sm" href="<?= e(url('/galleries')) ?>">Browse other galleries</a>
-    </div>
-<?php elseif (!$canViewFull): ?>
+<?php if (!$canViewFull && (int) ($mediaCount ?? 0) > 0): ?>
     <?php // Blurred, indexable preview for guests and below-level members; the
-        // full grid and its lightbox stay behind the membership gate. ?>
+        // full grid and its lightbox stay behind the membership gate.
+        //
+        // The WALL is decided by the access, not by the photo list: a gated
+        // gallery has media, and the page used to filter it away and then
+        // claim the gallery was empty. ?>
     <div class="grid paywalled-content">
         <?php foreach ($photos as $idx => $photo): ?>
             <figure class="gallery-item">
                 <a class="grid-link" href="<?= e(url((is_video($photo['filename']) ? '/videos/' : '/images/') . (int) $photo['id'])) ?>">
                     <img src="<?= e(file_url($photo['filename'], 'blur')) ?>"
-                         alt="<?= e($photo['caption']) ?>" loading="lazy" decoding="async">
+                         alt="<?= e($photo['caption']) ?>" loading="lazy" decoding="async"
+                         data-fallback="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'%3E%3Crect width='400' height='300' fill='%23241b33'/%3E%3C/svg%3E">
                 </a>
                 <figcaption>
                     <?php if ($photo['link'] !== ''): ?>
@@ -124,8 +128,14 @@ $breadcrumbItems = [
     $gateTitle = $gallery['title'];
     $gateLevel = \App\Models\Gallery::effectiveLevel($gallery);
     $gateMedia = 'gallery';
+    $gateCount = (int) ($mediaCount ?? 0);
     require __DIR__ . '/../partials/membership_gate.php';
     ?>
+<?php elseif (empty($photos)): ?>
+    <div class="empty-state">
+        <p class="muted">This gallery doesn&rsquo;t have any media yet.</p>
+        <a class="btn btn-sm" href="<?= e(url('/galleries')) ?>">Browse other galleries</a>
+    </div>
 <?php else: ?>
     <div class="grid" id="gallery" data-gallery-id="<?= (int) $gallery['id'] ?>"
          data-total="<?= (int) $total ?>" data-loaded="<?= count($photos) ?>"
