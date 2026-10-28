@@ -134,9 +134,9 @@ then commit + push to GitHub.
 | Phase | Status | Commit | Dev smoke | Notes |
 |---|---|---|---|---|
 | 0 | **done** | (this commit) | - | spec + design-system master |
-| 1 | **dev-deployed, dev-verified** | (this commit, local only) | 1036/1036 | fonts live, OLED tokens, override JSONs deleted, cache cleared; CDP 1280+390 green. Defer: white cookie-consent banner (phase 2/3 token bypass) |
-| 2 | in progress | - | - | member component retint; fix consent banner |
-| 3 | pending | - | - | member key pages; kill `.error-page` light-pink skin |
+| 1 | **dev-deployed, dev-verified** | (phase 0-1 commit, local only) | 1036/1036 | fonts live, OLED tokens, override JSONs deleted, cache cleared; CDP 1280+390 green. Defer note: white cookie-consent banner — fixed in phase 2 |
+| 2 | **dev-deployed, dev-verified** | (this commit, local only) | 1037/1037 | member component retint: consent banner (dark surface + fuchsia top rule), skip-link, support hover, labels/breadcrumbs/sort/nav/unread/progress text tokens, pressed-ctl chips (ink on purple), chat bubbles/link/image, dark bubble fallbacks, light-pink data-URI placeholders in gallery_card + guest_teaser. New guard `smoke.theme.member_components_off_the_light_skin` (12 selector assertions + blanket dark-purple-text ban + placeholder checks), proven to bite. CDP: banner bg rgb(21,10,29) text rgb(245,237,247) border rgb(217,70,239), sort/breadcrumbs muted, links #e9aefc — exact. FOUND (pre-existing, not phase 2): 390px phones scroll 63px horizontally — `.site-search-top` ends x452, `.title-logo img` 394, guest bottom-nav content 449 → fix in phase 3 |
+| 3 | pending | - | - | member key pages; kill `.error-page` light-pink skin; FIX the pre-existing 390 horizontal overflow (site-search-top / title-logo / guest bottom-nav) |
 | 4 | pending | - | - | wall + player polish; admin fonts/type land here |
 | 5 | pending | - | - | admin retint + type + KPI/table polish |
 | 6 | pending | - | - | inline-style debt sweep + drift guard |

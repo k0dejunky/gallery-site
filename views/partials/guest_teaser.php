@@ -5,7 +5,10 @@
 // column left of the form and the videos column right of it. Expects
 // $recentImages, $recentVideos and $guestSide.
 $pictureBlank = 'data:image/svg+xml;utf8,' . rawurlencode(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" fill="#ffd9e8"/><rect x="130" y="102" width="140" height="96" rx="12" fill="none" stroke="#f472b6" stroke-width="8"/><circle cx="185" cy="145" r="14" fill="#ec4899"/><path d="M130 196l42-42 32 30 44-52 52 64" fill="none" stroke="#9333ea" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    // In an <img src> page CSS vars do NOT reach this SVG, so the colours
+    // are literals that must mirror the member tokens: the pink-100 surface,
+    // pink-400 frame, pink-500 dot and purple-400 line.
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" fill="#150a1d"/><rect x="130" y="102" width="140" height="96" rx="12" fill="none" stroke="#3a1f4a" stroke-width="8"/><circle cx="185" cy="145" r="14" fill="#d946ef"/><path d="M130 196l42-42 32 30 44-52 52 64" fill="none" stroke="#c084fc" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 );
 
 $guestSide = $guestSide === 'videos' ? 'videos' : 'pics';

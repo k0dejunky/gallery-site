@@ -1648,6 +1648,104 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.theme.member_components_off_the_light_skin', 'Smoke · UI', 'The member components carry no white slab or dark-purple label left by the light skin', static function () use ($root, $ok, $bad): array {
+            // Phase 2 of the redesign: phase 1 re-valued the palette and the
+            // big blocks, but the light-era component rules underneath still
+            // shipped - the consent banner was a white slab pinned over the
+            // phone UI, purple-700/800 labels sit at 2.3-2.9:1 on the dark
+            // cards, and both card SVG placeholders painted a light-pink box
+            // (CSS vars never reach an SVG loaded through <img src>). Each
+            // rule below must carry the dark tokens; reverting any one of
+            // them makes this bite.
+            $css    = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $card   = (string) @file_get_contents($root . '/views/partials/gallery_card.php');
+            $teaser = (string) @file_get_contents($root . '/views/partials/guest_teaser.php');
+            $problems = [];
+
+            // Pull one rule out by selector (selector ... { ... }) so a
+            // sibling rule cannot mask the assertion. Whitespace is stripped
+            // from the body: the chat block writes "background: var(--x)"
+            // with a space, the rest of the file does not, and the needles
+            // below are written once.
+            $rule = static function (string $src, string $selector): string {
+                $at = strpos($src, $selector);
+                if ($at === false) {
+                    return '';
+                }
+                $open  = strpos($src, '{', $at);
+                $close = $open === false ? false : strpos($src, '}', $open);
+                if ($close === false) {
+                    return '';
+                }
+                return (string) preg_replace('/\s+/', '', substr($src, $at, $close - $at + 1));
+            };
+
+            // [selector, needles the rule must carry, needles it must not]
+            $want = [
+                ['#consent-banner', ['background:var(--surface-2)', 'color:var(--text-color)'],
+                    ['background:#fff', 'var(--purple-900)']],
+                ['.skip-link:focus', ['background:var(--btn-bg)', 'color:var(--btn-color)'],
+                    ['background:#fff']],
+                ['.chat-image', ['background:var(--surface-2)'], ['background:#fff']],
+                // The support hero's white button hovers into a dark slab
+                // with dark-purple text (1.9:1): the hover is the CTA pair.
+                ['.support-hero .btn:hover', ['var(--btn-hover-bg)'], ['var(--pink-100)']],
+                ['.settings-fields label', ['color:var(--text-color)'], ['var(--purple-800']],
+                ['.breadcrumbs', ['color:var(--muted-color)'], ['var(--purple-700']],
+                ['.sort-bar .label', ['color:var(--muted-color)'], ['var(--purple-700']],
+                ['.nav-toggle', ['color:var(--text-color)'], ['var(--purple-700']],
+                ['.unread-label', ['color:var(--link-color)'], ['var(--purple-700']],
+                ['.gallery-progress', ['color:var(--muted-color)'], ['var(--purple-700']],
+                // White on purple-500 is 3.96:1 for an 11.5px label; the
+                // ink on that chip is 5.16:1.
+                ['.pl-ctl[aria-pressed=true]', ['color:var(--btn-color)'], ['color:#fff']],
+                ['.cat-fav-toggle.selected', ['color:var(--btn-color)'], ['color:#fff']],
+            ];
+            foreach ($want as [$selector, $need, $deny]) {
+                $body = $rule($css, $selector);
+                if ($body === '') {
+                    $problems[] = 'user.css no longer has the rule ' . $selector;
+                    continue;
+                }
+                foreach ($need as $needle) {
+                    if (strpos($body, $needle) === false) {
+                        $problems[] = $selector . ' must use "' . $needle . '"';
+                    }
+                }
+                foreach ($deny as $needle) {
+                    if (stripos($body, $needle) !== false) {
+                        $problems[] = $selector . ' still carries "' . $needle . '"';
+                    }
+                }
+            }
+
+            // A dark-purple TEXT colour is never right on the OLED member
+            // skin (purple-500/600/700/800 are 3.46/3.71/2.95/2.29:1 on the
+            // cards). Anywhere in the member stylesheet - including rules a
+            // skin block only happens to out-specify today.
+            if (preg_match_all('/(?<![a-z-])color:\s*var\(--purple-(?:500|600|700|800)/', $css, $m)) {
+                foreach (array_unique($m[0]) as $hit) {
+                    $problems[] = 'user.css still sets a dark-purple text colour (' . $hit . ')';
+                }
+            }
+
+            // The two SVG placeholders: they used to paint a light-pink box
+            // when a cover failed to load. The literal must be the dark
+            // surface (the data-URI cannot see the palette).
+            foreach (['views/partials/gallery_card.php' => $card, 'views/partials/guest_teaser.php' => $teaser] as $name => $src) {
+                if (strpos($src, '#ffd9e8') !== false) {
+                    $problems[] = $name . ' still paints the light-pink placeholder box';
+                }
+                if (strpos($src, '#150a1d') === false) {
+                    $problems[] = $name . ' must carry the dark placeholder surface';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the member components are off the light skin (slabs, labels, placeholders)')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.ui.chips_reachable', 'Smoke · UI', 'A chip that carries a checkbox is reachable by keyboard', static function () use ($root, $ok, $bad): array {
             // .chip input[type="checkbox"] { display: none } took the
             // e-mail-notification toggles and the favourite-category chips
