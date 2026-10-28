@@ -749,33 +749,11 @@ body.impersonating .title-header { display: none; }
 
 [data-cc-number].bt-field, [data-cc-exp].bt-field, [data-cc-cvv].bt-field { min-height:38px; }
 
-/* Wall feed — OnlyFans-style notification posts */
-.wall-feed{display:grid;gap:var(--spacing-md)}
-.wall-post{position:relative;border:1px solid var(--card-border);border-radius:var(--border-radius-lg);background:var(--card-bg);box-shadow:var(--shadow);padding:var(--spacing-md) var(--spacing-md) var(--spacing-sm);overflow:hidden}
-.wall-post-unread{border-color:var(--purple-500);box-shadow:0 0 0 1px var(--purple-500),var(--shadow)}
-.wall-post-head{display:flex;align-items:center;gap:var(--spacing-sm);margin-bottom:var(--spacing-sm)}
-.wall-post-avatar{flex:0 0 auto;width:2.4rem;height:2.4rem;border-radius:999px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1rem;font-weight:800;letter-spacing:.03em;box-shadow:var(--shadow)}
-.wall-post-meta{flex:1;min-width:0;display:grid;line-height:1.25}
-.wall-post-meta strong{color:var(--card-title-color,#581c87);font-size:var(--font-size-base)}
-.wall-post-time{color:var(--card-text-color,#4c1d95);font-size:var(--font-size-xs)}
-.wall-post-new{background:#b42318;color:#fff;flex:0 0 auto;font-size:var(--font-size-xs)}
-.wall-post-open{flex:0 0 auto}
-.wall-post-title{display:block;color:var(--card-title-color,#581c87);font-size:var(--font-size-lg);font-weight:700;margin:0 0 .2rem;text-decoration:none;line-height:1.3}
-.wall-post-title:hover{color:var(--purple-700);text-decoration:underline}
-.wall-post-desc{display:block;color:var(--card-text-color,#4c1d95);margin:0 0 var(--spacing-sm);text-decoration:none;line-height:1.5}
-.wall-post-desc:hover{color:var(--purple-700)}
-.wall-post .video-badge{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
-.wall-photos{display:grid;gap:var(--spacing-xs);margin-bottom:var(--spacing-sm);overflow:hidden;border-radius:var(--border-radius)}
-.wall-photos-1{grid-template-columns:1fr}
-.wall-photos-2{grid-template-columns:repeat(2,1fr)}
-.wall-photos-3{grid-template-columns:repeat(3,1fr)}
-.wall-photo{position:relative;display:block;aspect-ratio:4/3;overflow:hidden;border-radius:var(--border-radius)}
-.wall-photo img{display:block;width:100%;height:100%;object-fit:cover}
-.wall-photo-lock{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(40,10,50,.35)}
-.wall-photo-lock .chip{background:rgba(20,8,34,.72);color:#fff;font-size:var(--font-size-xs);border-color:transparent}
-.wall-post-foot{display:flex;align-items:center;justify-content:space-between;gap:var(--spacing-sm);margin-top:var(--spacing-xs)}
-.wall-post-foot .muted{font-size:var(--font-size-sm)}
-@media(max-width:640px){.wall-post-open{display:none}.wall-photos-3{grid-template-columns:repeat(3,1fr)}}
+/* The Wall feed moved to public/assets/css/wall.css: it is one timeline now
+   (the studio's updates and the member's notifications in one list), with a
+   compact media row and a quieter hierarchy. The rules lived here once and
+   were carried by the two loops of the page - the markup was there twice
+   too, and the two drifted. */
 
 /* ==========================================================================
    MEMBER SITE SKIN — the public pages only (`body:not(.admin-theme)`).
@@ -1177,12 +1155,8 @@ body.site-compact .home-layout { grid-template-columns: 224px minmax(0, 1fr); }
    The member's own notifications sit in a collapsed block under the
    creator's updates: they are two different things, and a member with 30
    notifications should not have to scroll past all of them. */
-.wall-inbox > summary{
-    display:flex;align-items:center;gap:.5rem;cursor:pointer;
-    padding:.5rem .25rem;font-size:.95rem;
-}
-.wall-inbox > summary:hover strong{text-decoration:underline}
-.wall-inbox[open] > summary{margin-bottom:.5rem}
+/* The collapsible inbox is gone: the wall is one timeline now, so the
+   member's notifications sit in it with the studio's updates. */
 
 /* ---------- Comment replies and reactions -------------------------------- */
 .comment-reactions{display:flex;gap:.35rem;margin-top:.35rem;flex-wrap:wrap}

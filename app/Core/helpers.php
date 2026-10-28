@@ -1227,6 +1227,42 @@ function site_timezones(): array
  * UTC (storage is UTC throughout) and converted to the configured timezone,
  * so a returned empty string only happens for unparseable input.
  */
+/**
+ * How long ago something happened, in words ("2 days ago").
+ *
+ * The age in seconds is measured by the DATABASE (TIMESTAMPDIFF against
+ * NOW()), not by PHP: the row was written by the same clock, so the two
+ * always agree - and a feed that says "just now" for a two-day-old post
+ * (or "in 6 hours") is worse than no timestamp at all.
+ */
+function time_ago(int $seconds): string
+{
+    $seconds = max(0, $seconds);
+
+    if ($seconds < 45) {
+        return 'just now';
+    }
+    if ($seconds < 3600) {
+        $m = max(1, intdiv($seconds, 60));
+        return $m . ' minute' . ($m === 1 ? '' : 's') . ' ago';
+    }
+    if ($seconds < 86400) {
+        $h = intdiv($seconds, 3600);
+        return $h . ' hour' . ($h === 1 ? '' : 's') . ' ago';
+    }
+    if ($seconds < 2592000) {
+        $d = intdiv($seconds, 86400);
+        return $d . ' day' . ($d === 1 ? '' : 's') . ' ago';
+    }
+    if ($seconds < 31536000) {
+        $mo = intdiv($seconds, 2592000);
+        return $mo . ' month' . ($mo === 1 ? '' : 's') . ' ago';
+    }
+    $y = intdiv($seconds, 31536000);
+
+    return $y . ' year' . ($y === 1 ? '' : 's') . ' ago';
+}
+
 function tzdate(string $format, $when = null): string
 {
     if ($when === null) {

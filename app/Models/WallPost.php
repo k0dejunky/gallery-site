@@ -17,9 +17,10 @@ class WallPost
     public static function allPublished(int $limit = 30, int $offset = 0): array
     {
         return Database::run(
-            'SELECT * FROM wall_posts
-             WHERE deleted_at IS NULL
-             ORDER BY pinned DESC, created_at DESC, id DESC
+            'SELECT w.*, TIMESTAMPDIFF(SECOND, w.created_at, NOW()) AS age_seconds
+             FROM wall_posts w
+             WHERE w.deleted_at IS NULL
+             ORDER BY w.pinned DESC, w.created_at DESC, w.id DESC
              LIMIT ' . max(1, (int) $limit) . ' OFFSET ' . max(0, (int) $offset)
         )->fetchAll();
     }

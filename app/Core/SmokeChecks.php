@@ -1425,6 +1425,16 @@ class SmokeChecks
                 ['public/assets/css/public.css',
                     'color:var(--heading-color', 'color:var(--purple-800',
                     '--heading-color', '--card-bg', 4.5],
+                // The wall's type badge. The badge is 11px uppercase on a
+                // tinted pill over the card, so it is body text: the floor
+                // applies.
+                ['public/assets/css/wall.css',
+                    'color:#f0abfc', '',
+                    '--chip-color', '--card-bg', 4.5],
+                // The wall's date divider and the meta line: 12px on the card.
+                ['public/assets/css/wall.css',
+                    'color:var(--muted-color', '',
+                    '--muted-color', '--card-bg', 4.5],
                 // The tier eyebrow is 12px bold: body text, so it needs the
                 // 4.5:1 floor too (--purple-500 on the card is 3.46).
                 ['public/assets/css/public.css',
@@ -2388,7 +2398,7 @@ class SmokeChecks
             // silently: the element gets the browser's default and nobody
             // says anything. There were 51 of them.
             $css = '';
-            foreach (['public/assets/css/admin.css', 'public/assets/css/user.css', 'public/assets/css/utilities.css', 'public/assets/css/support.css', 'public/assets/css/public.css', 'app/Core/theme_base.css'] as $file) {
+            foreach (['public/assets/css/admin.css', 'public/assets/css/user.css', 'public/assets/css/utilities.css', 'public/assets/css/support.css', 'public/assets/css/public.css', 'public/assets/css/wall.css', 'app/Core/theme_base.css'] as $file) {
                 $css .= (string) @file_get_contents($root . '/' . $file);
             }
             $js = '';
@@ -6642,18 +6652,21 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             // comments.php, so a change to a comment had to be made twice
             // and the two drifted.
             $wall = $read("$root/views/wall.php");
+            // The wall's card (the one partial both kinds of feed item
+            // render) carries the thread now.
+            $card = $read("$root/views/partials/wall_post.php");
             $pt   = $read("$root/views/partials/comments.php");
             $th   = $read("$root/views/partials/comment_thread.php");
             $problems = [];
 
-            if (strpos($wall, "partials/comment_thread.php") === false) {
+            if (strpos($card, "comment_thread.php") === false) {
                 $problems[] = 'the wall must use the shared comment thread';
             }
             if (strpos($pt, "comment_thread.php") === false) {
                 $problems[] = 'the comments partial must use the shared comment thread';
             }
             // Neither may carry its own copy of the markup.
-            foreach (['wall.php' => $wall, 'comments.php' => $pt] as $name => $src) {
+            foreach (['wall.php' => $wall, 'wall_post.php' => $card, 'comments.php' => $pt] as $name => $src) {
                 if (strpos($src, 'Comment::isStaff') !== false) {
                     $problems[] = $name . ' still renders its own copy of the comment markup';
                 }
@@ -6687,17 +6700,19 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
         });
         $add('smoke.wall.gate_previews', 'Smoke · Wall', 'Wall renders membership-gated previews for gallery-linked posts', static function () use ($root, $read, $ok, $bad): array {
             $wc = $read("$root/app/Controllers/WallController.php");
-            $wv = $read("$root/views/wall.php");
+            // The card partial renders the grid for BOTH kinds of feed item
+            // (a studio update and a notification), so the thumb-vs-blur
+            // decision lives there now.
+            $wv = $read("$root/views/partials/wall_post.php");
             // The unlocked galleries are fetched in ONE query (the bulk
             // helper), not one query per gallery.
             return strpos($wc, 'private function buildGalleryPreviews(') !== false
                 && (strpos($wc, 'Purchase::unlockedGalleryIds(') !== false
                     || strpos($wc, 'Purchase::userUnlocked(') !== false)
                 && strpos($wc, "'gallery_id'  => \$galleryId") !== false
-                && strpos($wv, "\$post['preview']") !== false
-                && strpos($wv, "\$postShowLock ? 'blur' : 'thumb'") !== false
+                && strpos($wv, "\$locked ? 'blur' : 'thumb'") !== false
                 ? $ok('gallery-linked wall posts carry the membership-aware preview grid')
-                : $bad('WallController must decorate gallery-linked wall posts and the wall view must render thumb-vs-blur by membership level, exactly like notifications');
+                : $bad('WallController must decorate gallery-linked wall posts and the wall card must render thumb-vs-blur by membership level, exactly like notifications');
         });
         $add('smoke.ap.queue_all', 'Smoke · Auto Poster', 'Queue lists every queued row by default', static function () use ($apq, $ok, $bad): array {
             return strpos($apq, 'public static function queued(int $limit = 0, ?string $platform = null)') !== false
@@ -8908,6 +8923,70 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
 
             return $problems === []
                 ? $ok('guest renditions are public, originals + full-size stay members-only')
+                : $bad(implode('; ', $problems));
+        });
+        $add('smoke.wall.one_timeline_one_card', 'Smoke · Wall', 'The wall is one timeline rendered with one card', static function () use ($root, $read, $ok, $bad): array {
+            // The wall was two blocks (a collapsible inbox above the studio
+            // posts) and the card markup was written TWICE - once per loop -
+            // so the two drifted. Now it is one timeline and one card.
+            $wall   = (string) $read($root . '/views/wall.php');
+            $card   = (string) $read($root . '/views/partials/wall_post.php');
+            $ctrl   = (string) $read($root . '/app/Controllers/WallController.php');
+            $css    = (string) $read($root . '/public/assets/css/wall.css');
+            $userCss = (string) $read($root . '/public/assets/css/user.css');
+            $helpers = (string) $read($root . '/app/Core/helpers.php');
+            $problems = [];
+
+            // ONE card: the page may not carry the card markup itself.
+            if (strpos($wall, 'class="wall-post') !== false) {
+                $problems[] = 'the wall page must render the card partial, not carry the card markup';
+            }
+            if (strpos($wall, "partials/wall_post.php") === false) {
+                $problems[] = 'the wall page must include views/partials/wall_post.php';
+            }
+            if (substr_count($wall, 'partials/wall_post.php') !== 1) {
+                $problems[] = 'the wall page must include the card exactly once';
+            }
+
+            // ONE timeline: the controller merges the two sources.
+            if (strpos($ctrl, 'private function buildFeed(') === false) {
+                $problems[] = 'the controller must build one merged feed';
+            }
+            if (strpos($ctrl, "buildFeed(\$posts, \$notifications") === false) {
+                $problems[] = 'the feed must take the posts AND the notifications';
+            }
+            if (strpos($ctrl, "continue;") === false) {
+                $problems[] = 'a notification that duplicates a studio post must be dropped';
+            }
+            if (strpos($wall, 'wall-inbox') !== false) {
+                $problems[] = 'the collapsible inbox is gone - the feed is one timeline';
+            }
+
+            // The card's parts.
+            foreach (['wall-post-avatar', 'wall-post-badge', 'wall-post-time', 'wall-photos', 'wall-post-foot', 'wall-comments-toggle'] as $class) {
+                if (strpos($card, $class) === false) {
+                    $problems[] = 'the card must have a ' . $class;
+                }
+            }
+            // The relative time, measured by the same clock that wrote the row.
+            if (strpos($helpers, 'function time_ago(') === false) {
+                $problems[] = 'there must be a time_ago() helper';
+            }
+            if (strpos($ctrl, 'age_seconds') === false && strpos($card, 'age_seconds') === false) {
+                $problems[] = 'the age must come from the database (the same clock that wrote the row)';
+            }
+
+            // The styles live in their own file now, and the old rules are
+            // gone (two rule sets for the same classes is how it drifted).
+            if (strpos($css, '.wall-post{') === false || strpos($css, '.wall-photos{') === false) {
+                $problems[] = 'wall.css must carry the wall styles';
+            }
+            if (strpos($userCss, '.wall-post{') !== false) {
+                $problems[] = 'the old wall rules are still in user.css - delete them';
+            }
+
+            return $problems === []
+                ? $ok('the wall is one timeline rendered with one card')
                 : $bad(implode('; ', $problems));
         });
         $add('smoke.paywall.a_gated_gallery_shows_the_wall', 'Smoke · Paywall', 'A gated gallery shows the wall, not an empty gallery', static function () use ($root, $read, $ok, $bad): array {

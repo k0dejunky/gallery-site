@@ -65,9 +65,10 @@ class Notification
     public static function forUser(int $userId, int $limit = 50): array
     {
         return Database::run(
-            'SELECT * FROM notifications
-             WHERE user_id = ?
-             ORDER BY created_at DESC, id DESC
+            'SELECT n.*, TIMESTAMPDIFF(SECOND, n.created_at, NOW()) AS age_seconds
+             FROM notifications n
+             WHERE n.user_id = ?
+             ORDER BY n.created_at DESC, n.id DESC
              LIMIT ' . max(1, (int) $limit),
             [$userId]
         )->fetchAll();

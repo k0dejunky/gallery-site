@@ -1,0 +1,182 @@
+/* The Wall.
+ *
+ * The member wall is the site's landing page for a logged-in member: the
+ * studio's updates and the member's own notifications, in one timeline.
+ *
+ * It used to be a flat list of cards with three enormous 4:3 photos each
+ * (a 20-post feed was ~10,000px of scrolling), the date headings were
+ * styled like section titles, and the "N" avatar was the first letter of
+ * the type label. The rules below give the feed a hierarchy - the post's
+ * title first, the date a quiet divider - and cut the media down to a
+ * compact row so the feed reads as a feed.
+ *
+ * Colours come from the theme tokens, so the light and the dark theme both
+ * work.
+ */
+
+/* ---------- the page header ---------------------------------------------- */
+.wall-hero{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:var(--spacing-md,1rem);
+    flex-wrap:wrap;
+    padding:var(--spacing-lg,1.5rem) var(--spacing-lg,1.5rem);
+    margin-bottom:var(--spacing-lg,1.5rem);
+    border-radius:var(--border-radius-lg,14px);
+    background:linear-gradient(135deg,var(--purple-900),var(--purple-700));
+    color:#fff;
+    box-shadow:var(--shadow,0 10px 30px rgba(0,0,0,.25));
+}
+.wall-hero h1{margin:.15rem 0;color:#fff}
+.wall-hero .muted{color:rgba(255,255,255,.82)}
+.wall-hero .eyebrow{margin:0;text-transform:uppercase;letter-spacing:.12em;font-size:var(--font-size-xs,.75rem);opacity:.85}
+.wall-hero-text{min-width:0}
+.wall-hero-actions{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.wall-unread{
+    display:inline-flex;align-items:center;padding:.12rem .5rem;border-radius:999px;
+    background:rgba(255,255,255,.16);color:#fff;font-size:var(--font-size-xs,.75rem);font-weight:700;
+}
+
+/* ---------- the feed ------------------------------------------------------ */
+.wall-feed-section{margin-bottom:var(--spacing-xl,2.5rem)}
+.wall-feed-head{
+    display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap;
+    margin:0 0 var(--spacing-sm,.75rem);
+}
+.wall-feed-title{margin:0;font-size:var(--font-size-xl,1.25rem);color:var(--heading-color)}
+.wall-feed-count{font-size:var(--font-size-sm,.9rem);color:var(--muted-color)}
+.wall-feed{display:grid;gap:var(--spacing-md,1rem)}
+
+/* The date is a quiet divider now, not a second heading. */
+.wall-day{
+    display:flex;align-items:center;gap:.75rem;
+    margin:.4rem 0 .1rem;
+    color:var(--muted-color);
+}
+.wall-day span{
+    font-size:var(--font-size-xs,.75rem);
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    white-space:nowrap;
+}
+.wall-day::after{content:"";height:1px;background:var(--card-border);flex:1}
+
+/* ---------- the card ------------------------------------------------------ */
+.wall-post{
+    position:relative;
+    border:1px solid var(--card-border);
+    border-radius:var(--border-radius-lg,14px);
+    background:var(--card-bg);
+    box-shadow:var(--shadow,0 10px 26px rgba(0,0,0,.22));
+    padding:1rem 1.1rem .9rem;
+    overflow:hidden;
+}
+.wall-post-unread{border-color:var(--purple-500);box-shadow:0 0 0 1px var(--purple-500),var(--shadow,0 10px 26px rgba(0,0,0,.22))}
+.wall-post-head{display:flex;align-items:center;gap:.65rem;margin-bottom:.6rem}
+.wall-post-avatar{
+    flex:0 0 auto;
+    width:2.4rem;height:2.4rem;border-radius:999px;
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:1rem;font-weight:800;letter-spacing:.03em;
+    box-shadow:var(--shadow,0 4px 12px rgba(0,0,0,.3));
+}
+.wall-post-avatar--gallery{background:var(--avatar-gallery,#b42318)}
+.wall-post-avatar--reply{background:var(--avatar-reply,#7c3aed)}
+.wall-post-avatar--purchase{background:var(--avatar-purchase,#0f766e)}
+.wall-post-avatar--default{background:var(--avatar-default,#99618a)}
+.wall-post-meta{flex:1;min-width:0;display:grid;line-height:1.25;gap:.1rem}
+.wall-post-author{color:var(--card-title-color,#fbe9f4);font-size:var(--font-size-base,1rem);font-weight:600}
+.wall-post-sub{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap}
+.wall-post-time{color:var(--muted-color,#c3a6c9);font-size:var(--font-size-xs,.75rem)}
+.wall-post-badge{
+    display:inline-flex;align-items:center;padding:.08rem .4rem;border-radius:999px;
+    font-size:.66rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    border:1px solid transparent;white-space:nowrap;
+}
+.wall-post-badge--gallery{background:rgba(180,35,24,.22);border-color:rgba(180,35,24,.5);color:#fca5a5}
+.wall-post-badge--reply{background:rgba(124,58,237,.22);border-color:rgba(124,58,237,.5);color:#c4b5fd}
+.wall-post-badge--purchase{background:rgba(15,118,110,.26);border-color:rgba(15,118,110,.5);color:#5eead4}
+.wall-post-badge--default{background:rgba(153,97,138,.2);border-color:rgba(153,97,138,.45);color:#f0abfc}
+.wall-post-badge--pinned{background:rgba(147,51,234,.24);border-color:rgba(147,51,234,.5);color:#d8b4fe}
+.wall-post-new{
+    flex:0 0 auto;background:#b42318;color:#fff;border-radius:999px;
+    padding:.08rem .42rem;font-size:var(--font-size-xs,.75rem);font-weight:700;
+}
+.wall-post-open{
+    flex:0 0 auto;margin-left:auto;color:var(--link-color,#f0abfc);
+    font-size:var(--font-size-sm,.9rem);font-weight:600;text-decoration:none;white-space:nowrap;
+}
+.wall-post-open:hover{color:var(--purple-300,#c084fc);text-decoration:underline}
+.wall-post-title{
+    display:block;color:var(--card-title-color,#fbe9f4);
+    font-size:var(--font-size-lg,1.1rem);font-weight:700;line-height:1.3;
+    margin:0 0 .5rem;text-decoration:none;
+}
+.wall-post-title:hover{color:var(--purple-300,#c084fc);text-decoration:underline}
+.wall-post-body{
+    margin:0 0 .75rem;color:var(--card-text-color,#d9c1d6);line-height:1.55;white-space:pre-line;
+}
+
+/* ---------- the media: a compact row, not three posters ------------------- */
+.wall-photos{
+    position:relative;display:grid;gap:.4rem;margin:0 0 .75rem;
+}
+.wall-photos-1{grid-template-columns:1fr}
+.wall-photos-2{grid-template-columns:repeat(2,1fr)}
+.wall-photos-3{grid-template-columns:repeat(3,1fr)}
+.wall-photo{
+    position:relative;display:block;aspect-ratio:16/9;max-height:170px;
+    overflow:hidden;border-radius:var(--border-radius,10px);
+    border:1px solid var(--card-border);
+    background:var(--pink-100,#2b1123);
+}
+.wall-photo img{display:block;width:100%;height:100%;object-fit:cover}
+.wall-photo-lock{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(20,8,34,.42)}
+.wall-photo-lock .chip{background:rgba(20,8,34,.78);color:#fff;font-size:var(--font-size-xs,.75rem);border-color:transparent}
+.wall-photo-more{
+    position:absolute;right:.5rem;bottom:.5rem;
+    display:inline-flex;align-items:center;padding:.1rem .45rem;border-radius:999px;
+    background:rgba(20,8,34,.78);color:#fff;font-size:var(--font-size-xs,.75rem);font-weight:600;
+}
+
+/* ---------- the foot ------------------------------------------------------ */
+.wall-post-foot{
+    display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap;
+    margin-top:.15rem;
+}
+.wall-post-facts{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.wall-post-count{color:var(--muted-color,#c3a6c9);font-size:var(--font-size-sm,.9rem)}
+.wall-post-lock{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.wall-post-lock .chip{background:rgba(153,97,138,.2);border-color:rgba(153,97,138,.45);color:#f0abfc}
+
+/* ---------- the comment thread -------------------------------------------- */
+.wall-comments{flex:0 0 auto}
+.wall-comments-toggle{
+    display:inline-flex;align-items:center;gap:.35rem;cursor:pointer;
+    color:var(--muted-color,#c3a6c9);font-size:var(--font-size-sm,.9rem);
+    list-style:none;
+}
+.wall-comments-toggle::-webkit-details-marker{display:none}
+.wall-comments-toggle:hover{color:var(--link-color,#f0abfc)}
+.wall-comments-ico{width:15px;height:15px;display:block}
+.wall-comments[open] .wall-comments-toggle{margin-bottom:.6rem}
+.wall-comments-body{
+    margin-top:.5rem;display:grid;gap:.75rem;
+    border-top:1px solid var(--card-border);padding-top:.75rem;
+}
+.wall-composer{display:flex;gap:.5rem;align-items:flex-start;flex-wrap:wrap}
+.wall-composer textarea{
+    flex:1;min-width:180px;resize:vertical;
+    padding:.5rem .6rem;border-radius:var(--input-radius,8px);
+    border:1px solid var(--card-border);background:var(--pink-100,#2b1123);color:var(--text-color,#f3e7f1);
+    font:inherit;
+}
+
+/* ---------- a phone ------------------------------------------------------- */
+@media (max-width:640px){
+    .wall-hero{padding:1.1rem 1rem;align-items:flex-start;flex-direction:column;gap:.7rem}
+    .wall-post{padding:.85rem .9rem .8rem}
+    .wall-photo{max-height:120px}
+    .wall-post-open{margin-left:0}
+}

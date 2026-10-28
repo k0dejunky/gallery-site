@@ -174,6 +174,7 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/support.css')) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/user.css')) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/public.css')) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('/assets/css/wall.css')) ?>">
 </head>
 <?php
 // The body carries the compact scale and, while an admin is impersonating a

@@ -58,7 +58,10 @@ class WallController extends Controller
         }
         unset($post);
 
-        $notifications = Notification::forUser((int) $user['id'], 30);
+        // The member's own notifications. They are the newest activity by
+        // nature, so they are merged into the FIRST page of the timeline
+        // only - on the older pages they would repeat.
+        $notifications = $page === 1 ? Notification::forUser((int) $user['id'], 30) : [];
 
         foreach ($notifications as &$n) {
             if ($n['read_at'] === null) {
@@ -69,6 +72,20 @@ class WallController extends Controller
 
         $notifications = $this->decorateNotifications($notifications, (int) $user['id']);
 
+        // The comments of every post in ONE query. The view used to call
+        // forEntity() once per post - 20 queries for a 20-post feed.
+        $postComments = \App\Models\Comment::forEntities(
+            \App\Models\Comment::TYPE_WALL,
+            array_map(static fn (array $p): int => (int) $p['id'], $posts)
+        );
+
+        // ONE timeline: the studio's updates and the member's notifications,
+        // newest first, each with its own type badge. The wall used to be
+        // two separate blocks - a collapsible inbox above a post list - and
+        // a member with 30 notifications had to scroll past all of them to
+        // reach the studio's news.
+        $items = $this->buildFeed($posts, $notifications, $postComments);
+
         // The wall SHOWS the inbox, so opening it is reading it. The nav
         // badge used to stay lit until the member clicked every single
         // notification - it now follows the attention.
@@ -77,20 +94,128 @@ class WallController extends Controller
         }
 
         $this->view('wall', [
+            // The merged timeline (studio updates + the member's
+            // notifications), newest first.
+            'items'         => $items,
             'posts'         => $posts,
             // The comments of every post in ONE query. The view used to
             // call forEntity() once per post - 20 queries for a 20-post
             // feed.
-            'postComments'  => \App\Models\Comment::forEntities(
-                \App\Models\Comment::TYPE_WALL,
-                array_map(static fn (array $p): int => (int) $p['id'], $posts)
-            ),
+            'postComments'  => $postComments,
             'notifications' => $notifications,
             'unreadIds'     => $unreadIds ?? [],
             'sidebarNav'    => true,
             'paginator'     => ['page' => $page, 'pages' => $pages, 'total' => $total],
             'baseUrl'       => url('/wall'),
         ]);
+    }
+
+    /**
+     * The merged timeline: the studio's updates and the member's own
+     * notifications, newest first.
+     *
+     * A notification that points at a gallery whose studio post is already
+     * in this page is DROPPED: the post says the same thing better (it
+     * carries the comments as well), and the merged feed would otherwise
+     * show the same set twice - the studio announces a set, and the
+     * notification is the member's copy of that announcement.
+     *
+     * Every item has the same shape, so the page renders ONE card for both
+     * kinds (views/partials/wall_post.php).
+     *
+     * @param array $posts         the studio posts on this page
+     * @param array $notifications the member's notifications (page 1 only)
+     * @param array $postComments  the comment count per post id
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildFeed(array $posts, array $notifications, array $postComments): array
+    {
+        $postGalleryIds = [];
+        foreach ($posts as $post) {
+            $galleryId = (int) ($post['gallery_id'] ?? 0);
+            if ($galleryId > 0) {
+                $postGalleryIds[$galleryId] = $galleryId;
+            }
+        }
+
+        $items = [];
+
+        foreach ($posts as $post) {
+            $preview = $post['preview'] ?? null;
+            $postId  = (int) $post['id'];
+            $items[] = [
+                'kind'       => 'post',
+                'created_at' => (string) ($post['created_at'] ?? ''),
+                'age'        => (int) ($post['age_seconds'] ?? 0),
+                'pinned'     => !empty($post['pinned']),
+                'badge'      => $preview !== null ? 'New set' : 'Studio update',
+                'tone'       => $preview !== null ? 'gallery' : 'default',
+                'title'      => $preview !== null ? (string) ($preview['title'] ?? '') : '',
+                'body'       => $preview === null ? (string) ($post['body'] ?? '') : '',
+                'url'        => $preview !== null
+                    ? url('/galleries/' . (int) $preview['gallery_id'])
+                    : url('/wall'),
+                'preview'    => $preview,
+                'locked'     => $preview !== null && empty($preview['can_view']),
+                'count'      => (int) ($preview['count'] ?? 0),
+                'comments'   => count($postComments[(int) $postId] ?? []),
+                'postId'     => $postId,
+                'isNew'      => false,
+            ];
+        }
+
+        foreach ($notifications as $notification) {
+            $preview = $notification['preview'] ?? null;
+            $galleryId = (int) ($preview['gallery_id'] ?? 0);
+
+            // The studio post for this set is already on the page.
+            if ($galleryId > 0 && isset($postGalleryIds[$galleryId])) {
+                continue;
+            }
+
+            $type = (string) ($notification['type'] ?? '');
+            [$badge, $tone] = match ($type) {
+                'gallery'  => ['New set', 'gallery'],
+                'wall'     => ['Wall post', 'default'],
+                'reply'    => ['Reply', 'reply'],
+                'purchase' => ['Membership', 'purchase'],
+                default    => ['Update', 'default'],
+            };
+
+            $items[] = [
+                'kind'       => 'notification',
+                'created_at' => (string) ($notification['created_at'] ?? ''),
+                'age'        => (int) ($notification['age_seconds'] ?? 0),
+                'pinned'     => false,
+                'badge'      => $badge,
+                'tone'       => $tone,
+                'title'      => $preview !== null
+                    ? (string) ($preview['title'] ?? '')
+                    : (string) ($notification['title'] ?? ''),
+                'body'       => $preview !== null
+                    ? (string) ($preview['description'] ?? '')
+                    : (string) ($notification['body'] ?? ''),
+                'url'        => url('/notifications/' . (int) $notification['id']),
+                'preview'    => $preview,
+                'locked'     => $preview !== null && empty($preview['can_view']),
+                'count'      => (int) ($preview['count'] ?? 0),
+                'comments'   => 0,
+                'postId'     => null,
+                'isNew'      => $notification['read_at'] === null,
+            ];
+        }
+
+        // Pinned first, then newest first. The two sources share one
+        // clock, so a plain string compare on the timestamp is enough.
+        usort($items, static function (array $a, array $b): int {
+            if ($a['pinned'] !== $b['pinned']) {
+                return $a['pinned'] ? -1 : 1;
+            }
+
+            return strcmp((string) $b['created_at'], (string) $a['created_at']);
+        });
+
+        return $items;
     }
 
     /**
