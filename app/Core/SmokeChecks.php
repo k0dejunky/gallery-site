@@ -1479,6 +1479,15 @@ class SmokeChecks
                     '.guest-teaser-stats strong{color:var(--text-color)}',
                     '.guest-teaser-stats strong{color:var(--purple-800)}',
                     '--text-color', '--card-bg', 4.5],
+                // The rebranded CTA. The primary button is dark ink on the
+                // fuchsia accent; the old indigo/yellow pair is gone.
+                ['public/assets/css/user.css',
+                    'color: var(--btn-text)', '',
+                    '--btn-text', '--btn-gradient-1', 4.5],
+                // The body copy on the OLED page background.
+                ['public/assets/css/user.css',
+                    'color: var(--text-color)', '',
+                    '--text-color', '--page-bg', 4.5],
             ];
 
             // The member palette, parsed out of Theme.php.
@@ -1549,6 +1558,93 @@ class SmokeChecks
 
             return $problems === []
                 ? $ok(count($pairs) . ' contrast pairs meet their floor')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.theme.self_hosted_fonts', 'Smoke · UI', 'The display and body fonts are self-hosted variable woff2 with swap', static function () use ($root, $ok, $bad): array {
+            // The redesign puts Playfair Display on the display headings and
+            // Inter on the body, both self-hosted (no third-party CDN, works
+            // offline). One variable woff2 per family covers every weight.
+            $base = (string) @file_get_contents($root . '/app/Core/theme_base.css');
+            $problems = [];
+
+            if (strpos($base, "@font-face") === false) {
+                $problems[] = 'theme_base.css must declare the @font-face rules';
+            }
+            foreach (['Inter', 'Playfair Display'] as $family) {
+                if (preg_match('/@font-face\s*\{[^}]*font-family:\s*\'' . preg_quote($family, '/') . '\'/s', $base) !== 1) {
+                    $problems[] = 'no @font-face for ' . $family;
+                }
+            }
+            // Variable fonts must expose a weight range and swap must be on.
+            if (preg_match('/font-weight:\s*100\s+900/', $base) !== 1) {
+                $problems[] = 'the Inter face must be a variable font (font-weight: 100 900)';
+            }
+            if (preg_match_all('/font-display:\s*swap\s*;/', $base, $m) !== 2) {
+                $problems[] = 'both faces must set font-display: swap';
+            }
+            // The files have to exist and be non-trivial woff2 blobs.
+            foreach (['inter-latin-var.woff2', 'playfair-latin-var.woff2'] as $file) {
+                $path = $root . '/public/assets/fonts/' . $file;
+                $size = is_file($path) ? (int) filesize($path) : 0;
+                if ($size < 8000) {
+                    $problems[] = $file . ' is missing or too small (' . $size . ' B)';
+                }
+            }
+            // The body and display stacks must actually consume the tokens.
+            if (strpos($base, 'var(--font-family-body') === false) {
+                $problems[] = 'the body must use the --font-family-body token';
+            }
+            if (strpos($base, 'var(--font-family-display') === false) {
+                $problems[] = 'h1/h2 must use the --font-family-display token';
+            }
+
+            return $problems === []
+                ? $ok('Playfair Display + Inter are self-hosted variable woff2 with font-display: swap')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.theme.rebrand_tokens', 'Smoke · UI', 'The CTA is the fuchsia accent and the indigo/yellow pair is gone', static function () use ($root, $ok, $bad): array {
+            // The old primary button was indigo (#7375fa) with yellow text
+            // (#faf56e) - the legacy pair the redesign deletes. The member
+            // palette now carries the fuchsia CTA, and the legacy values must
+            // not survive anywhere in the palette.
+            $theme = (string) @file_get_contents($root . '/app/Models/Theme.php');
+            if (preg_match('/private const MEMBER_COLORS = \[(.*?)\n    \];/s', $theme, $m) !== 1) {
+                return $bad('the member palette could not be read out of Theme.php');
+            }
+            $block = $m[1];
+            $problems = [];
+
+            $expect = [
+                'btn-bg'      => '#d946ef',
+                'btn-color'   => '#0a0210',
+                'btn-hover-bg'=> '#e879f9',
+                'page-bg'     => '#050208',
+                'card-bg'     => '#0d0612',
+                'border'      => '#2a1638',
+            ];
+            foreach ($expect as $key => $hex) {
+                if (preg_match("/'" . preg_quote($key, '/') . "'\s*=>\s*'" . preg_quote($hex, '/') . "'/", $block) !== 1) {
+                    $problems[] = $key . ' must be ' . $hex;
+                }
+            }
+            // The legacy indigo/yellow CTA pair must be gone.
+            foreach (['#7375fa', '#faf56e'] as $legacy) {
+                if (stripos($block, $legacy) !== false) {
+                    $problems[] = 'the legacy CTA colour ' . $legacy . ' is still in the member palette';
+                }
+            }
+            // The layout defaults must carry the new font + motion tokens.
+            $layout = (string) @file_get_contents($root . '/app/Models/Theme.php');
+            foreach (['font-family-body', 'font-family-display', 'motion-fast', 'glow-brand'] as $key) {
+                if (strpos($layout, "'" . $key . "'") === false) {
+                    $problems[] = 'the layout defaults must carry the ' . $key . ' token';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the fuchsia CTA is in place and the indigo/yellow pair is gone')
                 : $bad(implode('; ', $problems));
         });
 

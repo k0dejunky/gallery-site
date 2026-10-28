@@ -1,6 +1,24 @@
-        body { font-family: sans-serif; max-width: none; width: 100%; margin: 0; padding: 1rem 1.5rem; box-sizing: border-box; color: var(--purple-900); background: var(--pink-200); font-size: var(--font-size-base); line-height: var(--line-height); }
-        h1 { font-size: var(--font-size-h1); }
-        h2 { font-size: var(--font-size-xl); }
+        /* Self-hosted variable fonts. One woff2 per family covers the whole
+           weight axis (latin subset, ~86 KB total). font-display: swap paints
+           the fallback immediately and swaps the face in when it loads. The
+           URL is relative to /theme.css, which sits beside /assets. */
+        @font-face {
+            font-family: 'Inter';
+            font-style: normal;
+            font-weight: 100 900;
+            font-display: swap;
+            src: url('assets/fonts/inter-latin-var.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Playfair Display';
+            font-style: normal;
+            font-weight: 400 900;
+            font-display: swap;
+            src: url('assets/fonts/playfair-latin-var.woff2') format('woff2');
+        }
+        body { font-family: var(--font-family-body, Inter, system-ui, sans-serif); max-width: none; width: 100%; margin: 0; padding: 1rem 1.5rem; box-sizing: border-box; color: var(--purple-900); background: var(--pink-200); font-size: var(--font-size-base); line-height: var(--line-height); }
+        h1 { font-size: var(--font-size-h1); font-family: var(--font-family-display, 'Playfair Display', Georgia, serif); letter-spacing: -0.01em; line-height: 1.15; }
+        h2 { font-size: var(--font-size-xl); font-family: var(--font-family-display, 'Playfair Display', Georgia, serif); line-height: 1.2; }
         h3, h4, h5, h6 { font-size: var(--font-size-lg); }
         /* Content headings are left aligned. This was 'center', and the
            member site fought it with about fifteen opt-outs in the
