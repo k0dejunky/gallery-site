@@ -157,7 +157,7 @@
     </div>
 <?php // Chat statistics: AI master switch, training queue, base model. ?>
 <div class="stat-cards u-mt-lg">
-    <div class="stat-card" style="border-left:4px solid <?= !empty($chatStats['aiEnabled']) ? 'var(--success,#16a34a)' : 'var(--danger,#c62828)' ?>;">
+    <div class="stat-card" style="border-left:4px solid <?= !empty($chatStats['aiEnabled']) ? 'var(--adm-ok)' : 'var(--adm-err)' ?>;">
         <b><?= !empty($chatStats['aiEnabled']) ? 'ON' : 'OFF' ?></b>
         <small>AI master switch</small>
     </div>
@@ -170,11 +170,11 @@
         <small>Pairs trained</small>
     </div>
     <div class="stat-card">
-        <b style="color:<?= !empty($chatStats['baseOnline']) ? 'var(--success,#16a34a)' : 'var(--danger,#c62828)' ?>;"><?= !empty($chatStats['baseOnline']) ? 'Online' : 'Offline' ?></b>
+        <b style="color:<?= !empty($chatStats['baseOnline']) ? 'var(--adm-ok)' : 'var(--adm-err)' ?>;"><?= !empty($chatStats['baseOnline']) ? 'Online' : 'Offline' ?></b>
         <small>Base AI status</small>
     </div>
-    <div class="stat-card" style="border-left:4px solid <?= !empty($liveStatus['live']) ? '#dc2626' : 'var(--card-border,#ccc)' ?>;">
-        <b style="color:<?= !empty($liveStatus['live']) ? '#dc2626' : 'var(--text-muted,#888)' ?>;"><?= !empty($liveStatus['live']) ? 'LIVE' : 'Offline' ?></b>
+    <div class="stat-card" style="border-left:4px solid <?= !empty($liveStatus['live']) ? 'var(--adm-err)' : 'var(--card-border,#ccc)' ?>;">
+        <b style="color:<?= !empty($liveStatus['live']) ? 'var(--adm-err)' : 'var(--adm-text-faint)' ?>;"><?= !empty($liveStatus['live']) ? 'LIVE' : 'Offline' ?></b>
         <small>Live stream</small>
     </div>
 </div>
@@ -185,12 +185,12 @@
         <?php
             $diskFreePct = (float) $disk['free'] / (float) $disk['total'] * 100;
             if ($diskFreePct < 10): ?>
-            <div style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.9rem;">
+            <div style="background:var(--adm-err-bg);border:1px solid var(--adm-err-border);color:var(--adm-err);border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.9rem;">
                 <b>Danger:</b> only <?= number_format((float) $disk['free'] / 1073741824, 1) ?> GB free (<?= number_format($diskFreePct, 1) ?>%).
                 Free disk space is critically low — clean up or extend the volume soon.
             </div>
         <?php elseif ($diskFreePct < 25): ?>
-            <div style="background:#fffbeb;border:1px solid #fde68a;color:#b45309;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.9rem;">
+            <div style="background:var(--adm-warn-bg);border:1px solid var(--adm-warn-border);color:var(--adm-warn);border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.9rem;">
                 <b>Warning:</b> <?= number_format((float) $disk['free'] / 1073741824, 1) ?> GB free (<?= number_format($diskFreePct, 1) ?>%).
                 Consider cleaning up or extending storage.
             </div>
@@ -261,8 +261,8 @@
 
 <div class="stat-cards u-mt-lg">
     <?php if ((int) $security['locked_ips'] > 0 || (int) $security['locked_pairs'] > 0): ?>
-        <div class="stat-card" style="background:#fef2f2;">
-            <b style="color:#dc2626;font-size:1.3rem;"><?= count($security['locked_ips']) + count($security['locked_pairs']) ?></b>
+        <div class="stat-card" style="background:var(--adm-err-bg);">
+            <b style="color:var(--adm-err);font-size:1.3rem;"><?= count($security['locked_ips']) + count($security['locked_pairs']) ?></b>
             <small>Active lockouts (last <?= (int) $security['window_min'] ?>m)</small>
         </div>
     <?php endif; ?>
@@ -378,7 +378,7 @@
                     <tr>
                         <td><b><?= e($label) ?></b></td>
                         <td><?= number_format((int) $finance['new_paid'][$i]) ?></td>
-                        <td<?= (int) $finance['churn'][$i] > 0 ? ' style="color:#b45309;"' : '' ?>><?= number_format((int) $finance['churn'][$i]) ?></td>
+                        <td<?= (int) $finance['churn'][$i] > 0 ? ' style="color:var(--adm-warn);"' : '' ?>><?= number_format((int) $finance['churn'][$i]) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 <tr><td><b>ARPU</b></td><td colspan="2">$<?= number_format($mrrNow / $activeMembers, 2) ?>/mo</td></tr>
@@ -416,7 +416,7 @@
             </div>
             <div class="stat-card">
                 <span class="muted">Change over <?= e($winLabels[$storagePeriod] ?? $storagePeriod) ?></span>
-                <b style="font-size:1.3rem;color:<?= $delta > 0 ? '#16a34a' : ($delta < 0 ? '#dc2626' : 'inherit') ?>;">
+                <b style="font-size:1.3rem;color:<?= $delta > 0 ? 'var(--adm-ok)' : ($delta < 0 ? 'var(--adm-err)' : 'inherit') ?>;">
                     <?= $delta > 0 ? '+' : '' ?><?= number_format($delta, 2) ?> GB
                 </b>
                 <span class="muted u-fs-08"><?= e((string) reset($storageTrend['gb'])) ?> GB → <?= e((string) end($storageTrend['gb'])) ?> GB</span>

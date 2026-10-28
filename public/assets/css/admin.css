@@ -46,6 +46,13 @@
     --adm-info: #175cd3;
     --adm-info-bg: #eff8ff;
     --adm-info-border: #b2ddff;
+    /* Fixed relationships the palette must not drift into: text on a
+       dark/colored fill, the deep-red restricted banner, and the black
+       veil behind letterboxed thumbnails. Views reference these instead
+       of forking the hex into a style attribute. */
+    --adm-inverse: #ffffff;
+    --adm-err-deep: #7f1d1d;
+    --adm-media-veil: #000000;
 
     /* Sidebar */
     --adm-side-bg: linear-gradient(180deg, var(--purple-900, #2e1065), var(--purple-700, #5b21b6));

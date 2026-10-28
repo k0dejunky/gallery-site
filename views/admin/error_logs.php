@@ -5,7 +5,7 @@ $title = 'Error Logs';
             <thead><tr><th>Source</th><th>Time</th><th>Error</th></tr></thead>
             <tbody>
                 <?php if (empty($errors)): ?>
-                <tr><td colspan="3" style="text-align:center;color:var(--text-muted)">No errors found.</td></tr>
+                <tr><td colspan="3" style="text-align:center;color:var(--adm-text-dim)">No errors found.</td></tr>
                 <?php else: foreach ($errors as $error): ?>
                 <tr>
                     <td class="error-log-source"><?= e((string) ($error['source'] ?? 'Unknown')) ?></td>

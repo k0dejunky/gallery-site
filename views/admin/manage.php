@@ -102,7 +102,7 @@
 <?php if (!empty($suggestions) || (($suggestionJob['status'] ?? '') === 'error') || (($suggestionJob['status'] ?? '') === 'queued') || (($suggestionJob['status'] ?? '') === 'running')): ?>
 <h2 class="u-mt-15">AI Suggestions</h2>
 <?php if (($suggestionJob['status'] ?? '') === 'error'): ?>
-    <p class="muted" style="color:var(--red-600, #b91c1c);">
+    <p class="muted" style="color:var(--adm-err);">
         Last analysis failed: <?= e($suggestionJob['error'] ?? 'unknown error') ?>
         <form class="inline" method="post" action="<?= url('/admin/category-suggestions/reanalyze') ?>" style="display:inline;margin-left:.5rem;">
             <?= csrf_field() ?>
@@ -156,7 +156,7 @@
 <?php if (!empty($descriptionSuggestion) || in_array(($descriptionJob['status'] ?? ''), ['error', 'queued', 'running'], true)): ?>
 <h2 class="u-mt-15">AI Description</h2>
 <?php if (($descriptionJob['status'] ?? '') === 'error'): ?>
-    <p class="muted" style="color:var(--red-600, #b91c1c);">
+    <p class="muted" style="color:var(--adm-err);">
         Last description attempt failed: <?= e($descriptionJob['error'] ?? 'unknown error') ?>
         <form class="inline" method="post" action="<?= url('/admin/description-suggestions/reanalyze') ?>" style="display:inline;margin-left:.5rem;">
             <?= csrf_field() ?>

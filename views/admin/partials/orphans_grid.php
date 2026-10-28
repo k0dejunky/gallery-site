@@ -15,7 +15,7 @@ $pageUrl = static fn (int $p): string => url('/admin/system' . ($p > 1 ? '?page=
                     <?php if ($orphan['type'] === 'image' || $orphan['type'] === 'video'): ?>
                         <img src="<?= $vu ?>?thumb=1" alt="<?= e((string) $orphan['name']) ?>" loading="lazy">
                         <?php if ($orphan['type'] === 'video'): ?>
-                            <span style="position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:1.7rem;text-shadow:0 1px 5px rgba(0,0,0,.65);pointer-events:none;">&#9654;</span>
+                            <span style="position:absolute;inset:0;display:grid;place-items:center;color:var(--adm-inverse);font-size:1.7rem;text-shadow:0 1px 5px rgba(0,0,0,.65);pointer-events:none;">&#9654;</span>
                         <?php endif; ?>
                     <?php else: ?>
                         <div style="aspect-ratio:4/3;display:grid;place-items:center;background:var(--purple-900);color:var(--pink-200);font-size:1.5rem;">&#128196;</div>

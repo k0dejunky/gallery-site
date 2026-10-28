@@ -13,7 +13,7 @@
     <div style="border:1px solid var(--card-border,#ddd);border-radius:8px;padding:.75rem 1rem;background:var(--card-bg,#fff);">
         <strong><?= (int) $stats['queued'] ?></strong> queued / running
     </div>
-    <div style="border:1px solid var(--card-border,#ddd);border-radius:8px;padding:.75rem 1rem;background:var(--card-bg,#fff);<?= $stats['errors'] > 0 ? 'border-color:var(--red-600,#b91c1c);' : '' ?>">
+    <div style="border:1px solid var(--card-border,#ddd);border-radius:8px;padding:.75rem 1rem;background:var(--card-bg,#fff);<?= $stats['errors'] > 0 ? 'border-color:var(--adm-err);' : '' ?>">
         <strong><?= (int) $stats['errors'] ?></strong> error<?= $stats['errors'] === 1 ? '' : 's' ?>
     </div>
     <div style="border:1px solid var(--card-border,#ddd);border-radius:8px;padding:.75rem 1rem;background:var(--card-bg,#fff);">

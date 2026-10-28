@@ -71,43 +71,43 @@ $platformPath  = $platform === 'x' ? url('/admin/auto-poster') : url('/admin/aut
             <div>
                 <label for="ap-pattern"><strong>Post pattern</strong> <span class="muted" style="font-weight:400;">(everything outside the tokens is posted verbatim)</span></label>
                 <textarea name="pattern" id="ap-pattern" rows="4" maxlength="2048"
-                          style="width:100%;box-sizing:border-box;font-size:.9rem;padding:.5rem .6rem;border:1px solid #d1d5db;border-radius:4px;word-wrap:break-word;resize:vertical;"><?= e((string) $apTemplate['pattern']) ?></textarea>
+                          style="width:100%;box-sizing:border-box;font-size:.9rem;padding:.5rem .6rem;border:1px solid var(--adm-border-strong);border-radius:4px;word-wrap:break-word;resize:vertical;"><?= e((string) $apTemplate['pattern']) ?></textarea>
                 <p class="muted" style="font-size:.78rem;margin-top:.3rem;">
                     Tokens: <code>{title}</code> &middot; <code>{sep}</code> (a &ldquo;&mdash;&rdquo; only when both title and description exist) &middot; <code>{description}</code> &middot; <code>{hashtags}</code>. Put any link/URL you want in the pattern text itself (e.g. <code>amethyst2213.com</code>).
                 </p>
                 <div style="display:flex;flex-wrap:wrap;gap:.75rem;margin-top:.75rem;">
                     <label class="u-fs-085"><span class="muted">Hashtags per post:</span><br>
-                        <input type="number" name="max_tags" min="0" max="60" value="<?= (int) $apTemplate['max_tags'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="max_tags" min="0" max="60" value="<?= (int) $apTemplate['max_tags'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid var(--adm-border-strong);border-radius:4px;"></label>
                     <label class="u-fs-085"><span class="muted">Max characters:</span><br>
-                        <input type="number" name="max_length" min="<?= $apMinLength ?>" max="<?= $apLenCeil ?>" value="<?= (int) $apTemplate['max_length'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="max_length" min="<?= $apMinLength ?>" max="<?= $apLenCeil ?>" value="<?= (int) $apTemplate['max_length'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid var(--adm-border-strong);border-radius:4px;"></label>
                     <label class="u-fs-085"><span class="muted">Default schedule (min):</span><br>
-                        <input type="number" name="schedule_minutes" min="1" max="10080" value="<?= (int) $apTemplate['schedule_minutes'] ?>" style="width:7rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="schedule_minutes" min="1" max="10080" value="<?= (int) $apTemplate['schedule_minutes'] ?>" style="width:7rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid var(--adm-border-strong);border-radius:4px;"></label>
                     <label class="u-fs-085"><span class="muted">Recent window (days):</span><br>
-                        <input type="number" name="recent_days" min="1" max="90" value="<?= (int) $apTemplate['recent_days'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="recent_days" min="1" max="90" value="<?= (int) $apTemplate['recent_days'] ?>" style="width:6rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid var(--adm-border-strong);border-radius:4px;"></label>
                     <?php if ($apMedia): ?>
                     <label class="u-fs-085"><span class="muted">Media per post:</span><br>
-                        <input type="number" name="max_media" min="0" max="<?= $apMediaMax ?>" value="<?= (int) $apTemplate['max_media'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="max_media" min="0" max="<?= $apMediaMax ?>" value="<?= (int) $apTemplate['max_media'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid var(--adm-border-strong);border-radius:4px;"></label>
                     <?php endif; ?>
                     <?php if (($apTemplate['video'] ?? 'none') === 'screenshots'): ?>
                     <label class="u-fs-085"><span class="muted">Video screenshots:</span><br>
-                        <input type="number" name="screenshots" min="1" max="4" value="<?= (int) $apTemplate['screenshots'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="screenshots" min="1" max="4" value="<?= (int) $apTemplate['screenshots'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid var(--adm-border-strong);border-radius:4px;"></label>
                     <?php endif; ?>
                     <label class="u-fs-085"><span class="muted">Preview blur %:</span><br>
-                        <input type="number" name="blur_percent" min="0" max="100" value="<?= (int) $apTemplate['blur_percent'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid #d1d5db;border-radius:4px;"></label>
+                        <input type="number" name="blur_percent" min="0" max="100" value="<?= (int) $apTemplate['blur_percent'] ?>" style="width:5rem;font-size:.85rem;padding:.2rem .3rem;border:1px solid var(--adm-border-strong);border-radius:4px;"></label>
                 </div>
                 <p class="u-mt-075">
                     <label class="muted" style="font-size:.85rem;display:block;">Banned words <span style="font-weight:400;">(never appear in a post; comma-separated, optional)</span><br>
-                        <input type="text" name="banned_words" value="<?= e(implode(', ', $apTemplate['banned_words'] ?? [])) ?>" placeholder="nipple, nipples" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                        <input type="text" name="banned_words" value="<?= e(implode(', ', $apTemplate['banned_words'] ?? [])) ?>" placeholder="nipple, nipples" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid var(--adm-border-strong);border-radius:4px;">
                     </label>
                 </p>
             </div>
             <div>
-                <div style="border:1px dashed #d1d5db;border-radius:6px;padding:.6rem .75rem;">
+                <div style="border:1px dashed var(--adm-border-strong);border-radius:6px;padding:.6rem .75rem;">
                     <div style="display:flex;align-items:center;justify-content:space-between;">
                         <span class="muted" style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Live preview</span>
                         <span id="ap-preview-count" class="muted" style="font-size:.75rem;font-variant-numeric:tabular-nums;">0/<?= $apMaxLength ?></span>
                     </div>
-                    <p id="ap-preview" style="font-size:.88rem;color:#374151;margin:.4rem 0 0;word-wrap:break-word;white-space:pre-wrap;">&mdash;</p>
+                    <p id="ap-preview" style="font-size:.88rem;color:var(--adm-text-dim);margin:.4rem 0 0;word-wrap:break-word;white-space:pre-wrap;">&mdash;</p>
                 </div>
                 <p class="muted" style="font-size:.75rem;margin-top:.5rem;">The exact text is baked at queue time from each gallery&rsquo;s real title, description and categories.</p>
             </div>
@@ -183,18 +183,18 @@ $platformPath  = $platform === 'x' ? url('/admin/auto-poster') : url('/admin/aut
                         <td style="white-space:nowrap;">
                             <?php if (!empty($media)): ?>
                                 <?php foreach ($media as $mf): ?>
-                                    <img src="<?= e(file_url((string) $mf['filename'], 'thumb')) ?>" alt="" width="40" height="30" style="border-radius:4px;object-fit:cover;background:#000;vertical-align:middle;margin-right:2px;">
+                                    <img src="<?= e(file_url((string) $mf['filename'], 'thumb')) ?>" alt="" width="40" height="30" style="border-radius:4px;object-fit:cover;background:var(--adm-media-veil);vertical-align:middle;margin-right:2px;">
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <span class="muted">no media</span>
                             <?php endif; ?>
                         </td>
-                        <td style="max-width:400px;font-size:.85rem;color:#374151;word-wrap:break-word;"><?= e((string) $item['text']) ?></td>
+                        <td style="max-width:400px;font-size:.85rem;color:var(--adm-text-dim);word-wrap:break-word;"><?= e((string) $item['text']) ?></td>
                         <td>
                             <form method="post" action="<?= url('/admin/auto-poster/queue/schedule') ?>" class="inline">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="queue_id" value="<?= (int) $item['id'] ?>">
-                                <input type="datetime-local" name="scheduled_at" value="<?= e(\App\Models\AutoPostQueue::displaySchedule($item['scheduled_at'] ?? null, $platform)) ?>" style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;">
+                                <input type="datetime-local" name="scheduled_at" value="<?= e(\App\Models\AutoPostQueue::displaySchedule($item['scheduled_at'] ?? null, $platform)) ?>" style="font-size:.8rem;padding:.15rem .3rem;border:1px solid var(--adm-border-strong);border-radius:4px;">
                                 <button type="submit" class="btn btn-sm">Set</button>
                             </form>
                             <div class="muted" style="font-size:.75rem;margin-top:.1rem;">
@@ -230,13 +230,13 @@ $platformPath  = $platform === 'x' ? url('/admin/auto-poster') : url('/admin/aut
                                 <div>
                                     <label class="muted" style="display:block;margin-bottom:.2rem;font-size:.8rem;">Post text</label>
                                     <textarea name="text" rows="3" maxlength="<?= $apMaxLength ?>" data-char-count data-char-count-id="qedit-<?= (int) $item['id'] ?>"
-                                              style="width:100%;box-sizing:border-box;font-size:.85rem;font-family:inherit;padding:.4rem .5rem;border:1px solid #d1d5db;border-radius:4px;"
+                                              style="width:100%;box-sizing:border-box;font-size:.85rem;font-family:inherit;padding:.4rem .5rem;border:1px solid var(--adm-border-strong);border-radius:4px;"
                                               aria-label="Editable text for queued post #<?= (int) $item['id'] ?>"><?= e((string) $item['text']) ?></textarea>
                                 <div class="muted" style="font-size:.72rem;text-align:right;"><span data-char-count-out="qedit-<?= (int) $item['id'] ?>">0</span>/<?= $apMaxLength ?></div>
                                 </div>
                                 <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
                                     <label class="muted u-fs-08">Schedule:</label>
-                                    <input type="datetime-local" name="scheduled_at" value="<?= e(\App\Models\AutoPostQueue::displaySchedule($item['scheduled_at'] ?? null, $platform)) ?>" style="font-size:.8rem;padding:.15rem .3rem;border:1px solid #d1d5db;border-radius:4px;">
+                                    <input type="datetime-local" name="scheduled_at" value="<?= e(\App\Models\AutoPostQueue::displaySchedule($item['scheduled_at'] ?? null, $platform)) ?>" style="font-size:.8rem;padding:.15rem .3rem;border:1px solid var(--adm-border-strong);border-radius:4px;">
                                     <span class="muted" style="font-size:.72rem;">leave blank to clear the schedule (publish on next worker run)</span>
                                     <span style="flex:1"></span>
                                     <button type="submit" class="btn btn-sm">Save changes</button>
@@ -288,7 +288,7 @@ $platformPath  = $platform === 'x' ? url('/admin/auto-poster') : url('/admin/aut
                             <?php // Failed posts: editable text so the wording can be fixed, then reposted/scheduled. ?>
                             <td style="max-width:340px;font-size:.85rem;" class="rp-edit">
                                 <textarea name="text" form="ap-edit-<?= (int) $rp['id'] ?>" maxlength="<?= $rpMax ?>" rows="2" data-char-count data-char-count-id="rp-<?= (int) $rp['id'] ?>"
-                                          style="width:100%;box-sizing:border-box;font-size:.85rem;font-family:inherit;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;"
+                                          style="width:100%;box-sizing:border-box;font-size:.85rem;font-family:inherit;padding:.3rem .4rem;border:1px solid var(--adm-border-strong);border-radius:4px;"
                                           aria-label="Editable text for post #<?= (int) $rp['id'] ?>"><?= e((string) $rp['text']) ?></textarea>
                                 <div class="muted" style="font-size:.72rem;margin-top:.15rem;text-align:right;"><span data-char-count-out="rp-<?= (int) $rp['id'] ?>">0</span>/<?= $rpMax ?> &middot; Edit the wording, then click Repost now or Reschedule.</div>
                             </td>
@@ -408,7 +408,7 @@ $platformPath  = $platform === 'x' ? url('/admin/auto-poster') : url('/admin/aut
 
         <?php if ($apInstances): ?>
             <?php // Multi-instance accounts (Mastodon family): per-instance tokens. ?>
-            <hr style="border:none;border-top:1px solid #e5e7eb;margin:.75rem 0;">
+            <hr style="border:none;border-top:1px solid var(--adm-border);margin:.75rem 0;">
             <p style="font-size:.85rem;margin:.4rem 0;"><strong>Instances</strong> — one bot account + token per instance.</p>
             <?php if (!empty($channel['instances']) && is_array($channel['instances'])): ?>
                 <ul style="margin:.4rem 0 .75rem;padding-left:1.1rem;font-size:.85rem;">
@@ -439,9 +439,9 @@ $platformPath  = $platform === 'x' ? url('/admin/auto-poster') : url('/admin/aut
         <?php if ($apOAuth): ?>
             <p class="u-mt-075">
                 <?php if (!empty($authHealth) && $authHealth['ok']): ?>
-                    <span style="color:var(--success,#2e7d32);font-weight:600;">&#10003; Authorized — <?= e((string) ($authHealth['note'] ?? 'connected')) ?></span>
+                    <span style="color:var(--adm-ok);font-weight:600;">&#10003; Authorized — <?= e((string) ($authHealth['note'] ?? 'connected')) ?></span>
                 <?php elseif (!empty($authHealth)): ?>
-                    <span style="color:var(--danger,#c62828);font-weight:600;">&#9888; Token invalid — <?= e((string) ($authHealth['error'] ?? 'token invalid')) ?></span><br>
+                    <span style="color:var(--adm-err);font-weight:600;">&#9888; Token invalid — <?= e((string) ($authHealth['error'] ?? 'token invalid')) ?></span><br>
                     <a class="btn" style="margin-top:.5rem;" href="<?= url('/admin/auto-poster/' . $platform . '/authorize') ?>">Re-authorize <?= e($platformName) ?></a>
                 <?php elseif (!empty($channel['refresh_token'])): ?>
                     <span class="muted" style="display:block;margin-bottom:.5rem;">Authorization state unknown — could not verify the token.</span>
@@ -454,9 +454,9 @@ $platformPath  = $platform === 'x' ? url('/admin/auto-poster') : url('/admin/aut
         <?php elseif (!empty($authHealth)): ?>
             <p class="u-mt-075">
                 <?php if ($authHealth['ok']): ?>
-                    <span style="color:var(--success,#2e7d32);font-weight:600;">&#10003; Connected — <?= e((string) ($authHealth['note'] ?? 'connected')) ?></span>
+                    <span style="color:var(--adm-ok);font-weight:600;">&#10003; Connected — <?= e((string) ($authHealth['note'] ?? 'connected')) ?></span>
                 <?php else: ?>
-                    <span style="color:var(--danger,#c62828);font-weight:600;">&#9888; <?= e((string) ($authHealth['error'] ?? 'token invalid')) ?></span>
+                    <span style="color:var(--adm-err);font-weight:600;">&#9888; <?= e((string) ($authHealth['error'] ?? 'token invalid')) ?></span>
                 <?php endif; ?>
             </p>
         <?php else: ?>
@@ -478,11 +478,11 @@ $platformPath  = $platform === 'x' ? url('/admin/auto-poster') : url('/admin/aut
             $sessionAge  = $sessionOk ? (int) ((time() - (int) filemtime($sessionFile)) / 86400) : null;
             $btOn        = ($channel['browser_enabled'] ?? '') === '1';
             ?>
-            <p style="margin-top:.75rem;border-top:1px solid #eee;padding-top:.75rem;font-size:.82rem;">
+            <p style="margin-top:.75rem;border-top:1px solid var(--adm-border);padding-top:.75rem;font-size:.82rem;">
                 <strong>Browser worker (share-button method):</strong><br>
-                node: <?= $nodeOk ? e(trim($nodeVer)) : '<span style="color:#c62828;">missing</span>' ?> &middot;
-                playwright: <?= $playwrightOk ? 'installed' : '<span style="color:#c62828;">not installed</span>' ?> &middot;
-                session: <?= $sessionOk ? ('saved ' . (int) $sessionAge . ' day(s) ago') : '<span style="color:#c62828;">none yet</span>' ?> &middot;
+                node: <?= $nodeOk ? e(trim($nodeVer)) : '<span style="color:var(--adm-err);">missing</span>' ?> &middot;
+                playwright: <?= $playwrightOk ? 'installed' : '<span style="color:var(--adm-err);">not installed</span>' ?> &middot;
+                session: <?= $sessionOk ? ('saved ' . (int) $sessionAge . ' day(s) ago') : '<span style="color:var(--adm-err);">none yet</span>' ?> &middot;
                 enabled: <?= $btOn ? 'yes' : 'no' ?>
                 <?php if (!$btOn || !$sessionOk || !$playwrightOk): ?>
                     <br><span class="muted">On the server run <code>sudo bash bin/browser/setup_reddit_browser.sh</code>, log in once with

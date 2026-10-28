@@ -164,11 +164,11 @@ if (preg_match('#/admin/([a-z0-9-]+)#', (string) ($current ?? ''), $m)) {
 <a class="skip-link" href="#admin-content">Skip to main content</a>
 <?php $isSiteEditor = strpos($_SERVER['REQUEST_URI'] ?? '', '/admin/site-editor') !== false; ?>
 <?php if (!empty($_SESSION['impersonator_id'])): ?>
-    <div style="background:#7f1d1d;color:#fff;padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;justify-content:center;border-radius:var(--border-radius);margin-bottom:var(--spacing-md);">
+    <div style="background:var(--adm-err-deep);color:var(--adm-inverse);padding:.5rem 1rem;display:flex;gap:1rem;align-items:center;justify-content:center;border-radius:var(--border-radius);margin-bottom:var(--spacing-md);">
         <b>Impersonating — viewing the site as a member.</b>
         <form method="post" action="<?= url('/admin/impersonate/exit') ?>" style="display:inline;">
             <?= csrf_field() ?>
-            <button type="submit" class="btn btn-sm" style="background:#fff;color:#7f1d1d;">Return to admin</button>
+            <button type="submit" class="btn btn-sm" style="background:var(--adm-surface);color:var(--adm-err-deep);">Return to admin</button>
         </form>
     </div>
     <style>.impersonating .title-header { display: none; }</style>

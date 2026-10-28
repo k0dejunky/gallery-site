@@ -11,12 +11,12 @@ $canOperate = \App\Core\Auth::can('system_ops');
     <?php
         $diskPct = (float) $diskFree / (float) $diskTotal * 100;
         if ($diskPct < 10): ?>
-        <div style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.9rem;">
+        <div style="background:var(--adm-err-bg);border:1px solid var(--adm-err-border);color:var(--adm-err);border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.9rem;">
             <b>Danger:</b> only <?= number_format((float) $diskFree / 1073741824, 1) ?> GB free (<?= number_format($diskPct, 1) ?>%).
             Free disk space is critically low — clean up or extend the volume soon.
         </div>
     <?php elseif ($diskPct < 25): ?>
-        <div style="background:#fffbeb;border:1px solid #fde68a;color:#b45309;border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.9rem;">
+        <div style="background:var(--adm-warn-bg);border:1px solid var(--adm-warn-border);color:var(--adm-warn);border-radius:8px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.9rem;">
             <b>Warning:</b> <?= number_format((float) $diskFree / 1073741824, 1) ?> GB free (<?= number_format($diskPct, 1) ?>%).
             Consider cleaning up or extending storage.
         </div>
@@ -208,7 +208,7 @@ $canOperate = \App\Core\Auth::can('system_ops');
 
         <h2 class="u-mt-1">Scheduled housekeeping</h2>
         <?php $cronState = ($cronAgeMin === null) ? 'never run'
-            : (($cronAgeMin > 45) ? '<b style="color:#b45309;">last run ' . (int) $cronAgeMin . ' min ago</b>'
+            : (($cronAgeMin > 45) ? '<b style="color:var(--adm-warn);">last run ' . (int) $cronAgeMin . ' min ago</b>'
                                   : 'last run ' . (int) $cronAgeMin . ' min ago'); ?>
         <p class="muted u-fs-085">
             Expires overdue subscriptions, removes staging folders idle 72h+, keeps the
@@ -268,7 +268,7 @@ $canOperate = \App\Core\Auth::can('system_ops');
     <div class="sys-card" id="sys-media">
         <h2>Media thumbnails</h2>
         <?php if ($variants['running']): ?>
-            <p><b style="color:#b45309;">Regeneration in progress… refresh to update.</b></p>
+            <p><b style="color:var(--adm-warn);">Regeneration in progress… refresh to update.</b></p>
         <?php endif; ?>
         <p class="muted u-fs-085">
             <?= (int) $variants['total'] ?> media items ·
@@ -585,7 +585,7 @@ $canOperate = \App\Core\Auth::can('system_ops');
     <div class="sys-card">
         <h2>Backups</h2>
         <?php if (!empty($backupFailure)): ?>
-            <p style="background:#fee2e2;border:1px solid #ef4444;color:#991b1b;padding:.4rem .6rem;border-radius:var(--border-radius);font-size:.85rem;">
+            <p style="background:var(--adm-err-bg);border:1px solid var(--adm-err-border);color:var(--adm-err);padding:.4rem .6rem;border-radius:var(--border-radius);font-size:.85rem;">
                 <b>Last run failed:</b> <?= e((string) $backupFailure) ?>
             </p>
         <?php endif; ?>
@@ -597,7 +597,7 @@ $canOperate = \App\Core\Auth::can('system_ops');
                 <?php if ((int) ($lastSync['sync_rc'] ?? -1) === 0): ?>
                     <b style="color:var(--success-text,#15803d);">synced ✓</b>
                 <?php else: ?>
-                    <b style="color:#b45309;">not configured / rc=<?= (int) $lastSync['sync_rc'] ?></b>
+                    <b style="color:var(--adm-warn);">not configured / rc=<?= (int) $lastSync['sync_rc'] ?></b>
                 <?php endif; ?>
                 (BACKUP_SYNC_CMD)
             </p>
@@ -606,7 +606,7 @@ $canOperate = \App\Core\Auth::can('system_ops');
             <?= csrf_field() ?>
             <button class="btn" type="submit"<?= !empty($backupRunning) ? ' disabled' : '' ?>>Create backup now</button>
             <?php if (!empty($backupRunning)): ?>
-                <b style="color:#b45309;">Backup in progress… refresh to update.</b>
+                <b style="color:var(--adm-warn);">Backup in progress… refresh to update.</b>
             <?php else: ?>
                 <span class="muted">Database + uploaded media (.tar.gz, split into 4 GB parts for parallel offsite sync)</span>
             <?php endif; ?>

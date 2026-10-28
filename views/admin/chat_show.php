@@ -32,13 +32,13 @@
                     <?= $m['sender_role'] === 'user' ? 'Member' : ($m['sender_role'] === 'model' ? 'AI' : 'Operator') ?> &middot; <?= e(tzdate('g:i A', (string) $m['created_at'])) ?>
                 </small>
                 <div style="display:inline-block;text-align:left;max-width:100%;padding:2px 7px;border-radius:12px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;
-                     <?= $m['sender_role'] === 'user' ? 'background:var(--purple-600,#9333ea);color:#fff;border-bottom-right-radius:3px;' : 'background:var(--pink-100,#fdf2f8);color:var(--purple-900,#4a044e);border:1px solid var(--pink-300,#f9a8d4);border-bottom-left-radius:3px;' ?>">
+                     <?= $m['sender_role'] === 'user' ? 'background:var(--purple-600,#9333ea);color:var(--adm-inverse);border-bottom-right-radius:3px;' : 'background:var(--pink-100,#fdf2f8);color:var(--purple-900,#4a044e);border:1px solid var(--pink-300,#f9a8d4);border-bottom-left-radius:3px;' ?>">
                     <?= e((string) $m['message']) ?>
                     <?php if (!empty($m['attachment_name'])): ?>
                         <?php if (empty($m['attachment_url'])): ?>
                             <span style="display:block;margin-top:.5rem;font-size:.85rem;opacity:.7;">🔒 Media expired</span>
                         <?php elseif (!empty($m['attachment_thumb_url'])): ?>
-                            <a href="<?= e($m['attachment_url']) ?>" target="_blank" rel="noopener" style="display:block;margin-top:.5rem;border-radius:8px;overflow:hidden;border:1px solid rgba(0,0,0,.08);background:#fff;">
+                            <a href="<?= e($m['attachment_url']) ?>" target="_blank" rel="noopener" style="display:block;margin-top:.5rem;border-radius:8px;overflow:hidden;border:1px solid rgba(0,0,0,.08);background:var(--adm-surface);">
                                 <img src="<?= e($m['attachment_thumb_url']) ?>" alt="<?= e($m['attachment_name']) ?>" style="display:block;max-width:220px;max-height:220px;width:auto;height:auto;">
                             </a>
                         <?php else: ?>
@@ -157,7 +157,7 @@
         wrap.innerHTML =
             '<small style="display:block;font-size:.7rem;opacity:.7;text-transform:uppercase;letter-spacing:.04em;">' + esc(who) + ' &middot; ' + esc(time) + '</small>' +
             '<div style="display:inline-block;text-align:left;max-width:100%;padding:2px 7px;border-radius:12px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;' +
-            (m.sender_role === 'user' ? 'background:var(--purple-600,#9333ea);color:#fff;border-bottom-right-radius:3px;' : 'background:var(--pink-100,#fdf2f8);color:var(--purple-900,#4a044e);border:1px solid var(--pink-300,#f9a8d4);border-bottom-left-radius:3px;') +
+            (m.sender_role === 'user' ? 'background:var(--purple-600,#9333ea);color:var(--adm-inverse);border-bottom-right-radius:3px;' : 'background:var(--pink-100,#fdf2f8);color:var(--purple-900,#4a044e);border:1px solid var(--pink-300,#f9a8d4);border-bottom-left-radius:3px;') +
             '">' + esc(m.message) +
             (m.attachment_name ? (m.media_expired
                 ? '<div style="margin-top:.3rem;">🔒 Media expired</div>'

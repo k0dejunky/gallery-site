@@ -2425,7 +2425,17 @@ class SmokeChecks
                 'views/unsubscribe.php'                    => 'a standalone light page',
             ];
 
-            $files = array_merge(glob($root . '/views/*.php') ?: [], glob($root . '/views/*/*.php') ?: []);
+            // Recursive on purpose: the old two-glob walk stopped at
+            // views/*/*.php, so a nested partial (auth/partials/signup_form
+            // held a dark-red error literal for months) was never scanned.
+            $files = [];
+            $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/views', \FilesystemIterator::SKIP_DOTS));
+            foreach ($it as $f) {
+                if ($f->isFile() && str_ends_with($f->getFilename(), '.php')) {
+                    $files[] = $f->getPathname();
+                }
+            }
+            sort($files);
             foreach ($files as $file) {
                 $rel = str_replace($root . '/', '', $file);
                 if (str_starts_with($rel, 'views/admin/') || str_starts_with($rel, 'views/emails/')) {
@@ -2449,6 +2459,70 @@ class SmokeChecks
 
             return $problems === []
                 ? $ok('the member views carry no stray colours')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.theme.inline_styles_on_tokens', 'Smoke · Theme', 'Inline style attributes reference palette tokens', static function () use ($root, $ok, $bad): array {
+            // Phase 6 of the redesign swept the views' inline style
+            // attributes onto the --adm-* tokens (input borders, status
+            // colours, callouts, buttons). Two things drift without a
+            // guard: a bare hex in a style attribute copies a value out
+            // of the palette, and the legacy var names (--success,
+            // --danger, --red-600, --text-muted) are NOT defined on the
+            // admin scope at all, so their "fallback" is a hidden
+            // hardcoded literal that no editor control can reach.
+            //
+            // A var() fallback (var(--card-border,#ddd) with --card-border
+            // really defined) stays legal: the variable wins, the hex
+            // only shows if the token disappears.
+            //
+            // Emails are exempt (email HTML has no stylesheet and must
+            // inline every colour). The site editor is exempt: it is a
+            // self-contained dark IDE panel with its own palette, the
+            // same reasoning as the standalone member pages above.
+            $allowed = [
+                'views/admin/site_editor.php' => 'a self-contained dark tool with its own palette',
+            ];
+            $legacy = ['success', 'danger', 'red-600', 'text-muted'];
+
+            $problems = [];
+            $files = [];
+            $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/views', \FilesystemIterator::SKIP_DOTS));
+            foreach ($it as $f) {
+                if ($f->isFile() && str_ends_with($f->getFilename(), '.php')) {
+                    $files[] = $f->getPathname();
+                }
+            }
+            sort($files);
+            foreach ($files as $file) {
+                $rel = str_replace($root . '/', '', $file);
+                if (str_starts_with($rel, 'views/emails/') || isset($allowed[$rel])) {
+                    continue;
+                }
+                $src = (string) @file_get_contents($file);
+                if (preg_match_all('/style\s*=\s*(["\'])(.*?)\1/s', $src, $attrs, PREG_OFFSET_CAPTURE) === false) {
+                    continue;
+                }
+                foreach ($attrs[2] as [$body, $offset]) {
+                    $line = substr_count(substr($src, 0, $offset), "\n") + 1;
+                    // Drop legal var() fallbacks, then any surviving hex
+                    // is a value forked out of the palette.
+                    $stripped = preg_replace('/var\(\s*--[a-z0-9-]+\s*,\s*#[0-9a-fA-F]{3,8}\s*\)/', '', (string) $body);
+                    if (preg_match_all('/(?<!&)#[0-9a-fA-F]{3,8}\b/', (string) $stripped, $m)) {
+                        foreach ($m[0] as $hex) {
+                            $problems[] = $rel . ':' . $line . ' carries the colour ' . $hex . ' in a style attribute';
+                        }
+                    }
+                    foreach ($legacy as $name) {
+                        if (preg_match('/var\(\s*--' . preg_quote($name, '/') . '\s*[,)]/', (string) $body)) {
+                            $problems[] = $rel . ':' . $line . ' uses var(--' . $name . ') which is undefined on this scope';
+                        }
+                    }
+                }
+            }
+
+            return $problems === []
+                ? $ok('every inline style attribute references a palette token')
                 : $bad(implode('; ', $problems));
         });
 

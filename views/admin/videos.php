@@ -26,7 +26,7 @@
             </thead>
             <tbody>
                 <?php if (empty($videos)): ?>
-                <tr><td colspan="8" style="text-align:center;color:var(--text-muted)">No videos found.</td></tr>
+                <tr><td colspan="8" style="text-align:center;color:var(--adm-text-dim)">No videos found.</td></tr>
                 <?php else: ?>
                 <?php foreach ($videos as $video): ?>
                 <tr>

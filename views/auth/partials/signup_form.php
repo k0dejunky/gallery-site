@@ -50,7 +50,7 @@
                     This promotion grants a free <?= (int) $promoInfo['days'] ?>-day <?= e((string) $promoInfo['level']) ?> trial when you sign up.
                 </p>
             <?php elseif (($promoInfo['ok'] ?? null) === false): ?>
-                <p style="color:#b91c1c;font-size:.85rem;margin:0;">
+                <p style="color:var(--flash-error-color);font-size:.85rem;margin:0;">
                     That promotion code is not available or has been fully used.
                 </p>
             <?php endif; ?>

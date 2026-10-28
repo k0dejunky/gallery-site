@@ -40,7 +40,7 @@ $operatorIsOnline = !empty($operatorOnline);
             <small id="waiting-badge">Waiting to be trained</small>
         </div>
         <div class="stat-card">
-            <b style="color:<?= $operatorIsOnline ? '#15803d' : '#b45309' ?>;">
+            <b style="color:<?= $operatorIsOnline ? 'var(--adm-ok)' : 'var(--adm-warn)' ?>;">
                 <?= $operatorIsOnline ? 'Online' : 'Away' ?>
             </b>
             <small>Operator presence</small>
@@ -72,15 +72,15 @@ $operatorIsOnline = !empty($operatorOnline);
     <p class="muted" style="font-size:.85rem;margin:.75rem 0 0;">
         AI base:
         <?php if (!empty($ai['hasBase'])): ?>
-            <strong style="color:#15803d;">online</strong>
+            <strong style="color:var(--adm-ok);">online</strong>
         <?php else: ?>
-            <strong style="color:var(--danger,#c62828);">offline</strong>
+            <strong style="color:var(--adm-err);">offline</strong>
         <?php endif; ?>
         &middot;
         <?php if (!empty($ai['hasFine'])): ?>
             fine-tuned model loaded (<code><?= e((string) $finetunedModel) ?></code>)
         <?php elseif (!empty($adapterInstalled)): ?>
-            adapter installed — model <span style="color:var(--danger,#c62828);">not built yet</span>
+            adapter installed — model <span style="color:var(--adm-err);">not built yet</span>
         <?php else: ?>
             no adapter installed (retrieval mode only)
         <?php endif; ?>

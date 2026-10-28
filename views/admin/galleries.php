@@ -120,7 +120,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.75rem 1rem;">
                 <div>
                     <label class="muted u-label">Machine name (host/posted below apply to this machine)</label>
-                    <input type="text" name="import_machine" value="<?= e((string) ($importS['machine_name'] ?? '')) ?>" placeholder="win-box / linux" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                    <input type="text" name="import_machine" value="<?= e((string) ($importS['machine_name'] ?? '')) ?>" placeholder="win-box / linux" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid var(--adm-border-strong);border-radius:4px;">
                     <span class="muted" style="font-size:.72rem;">Each machine keeps its own host/posted folders; blank = shared default.</span>
                 </div>
                 <div>
@@ -129,35 +129,35 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                 </div>
                 <div>
                     <label class="muted u-label">Daily schedule (HH:MM, blank = interval only)</label>
-                    <input type="text" name="import_schedule" value="<?= e((string) ($importS['schedule'] ?? '')) ?>" placeholder="06:00" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                    <input type="text" name="import_schedule" value="<?= e((string) ($importS['schedule'] ?? '')) ?>" placeholder="06:00" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid var(--adm-border-strong);border-radius:4px;">
                 </div>
                 <div>
                     <label class="muted u-label">Interval (minutes, 0 = off)</label>
-                    <input type="number" name="import_interval_minutes" min="0" value="<?= (int) ($importS['interval_minutes'] ?? 0) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                    <input type="number" name="import_interval_minutes" min="0" value="<?= (int) ($importS['interval_minutes'] ?? 0) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid var(--adm-border-strong);border-radius:4px;">
                 </div>
                 <div>
                     <label class="muted u-label">Host folder (on the Windows box / Ubuntu)</label>
-                    <input type="text" name="import_host_folder" value="<?= e((string) ($importS['host_folder'] ?? '')) ?>" placeholder="C:\work\incoming" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                    <input type="text" name="import_host_folder" value="<?= e((string) ($importS['host_folder'] ?? '')) ?>" placeholder="C:\work\incoming" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid var(--adm-border-strong);border-radius:4px;">
                 </div>
                 <div>
                     <label class="muted u-label">Posted folder (defaults to &lt;host&gt;/posted)</label>
-                    <input type="text" name="import_posted_folder" value="<?= e((string) ($importS['posted_folder'] ?? '')) ?>" placeholder="C:\work\incoming\posted" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                    <input type="text" name="import_posted_folder" value="<?= e((string) ($importS['posted_folder'] ?? '')) ?>" placeholder="C:\work\incoming\posted" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid var(--adm-border-strong);border-radius:4px;">
                 </div>
                 <div>
                     <label class="muted u-label">Import token (GALLERY_IMPORT_KEY)</label>
-                    <input type="password" name="import_token" value="" placeholder="<?= empty($importS['import_token']) ? 'set the key' : 'Leave blank to keep the saved key' ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                    <input type="password" name="import_token" value="" placeholder="<?= empty($importS['import_token']) ? 'set the key' : 'Leave blank to keep the saved key' ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid var(--adm-border-strong);border-radius:4px;">
                 </div>
                 <div>
                     <label class="muted u-label">Spacing (hours between galleries)</label>
-                    <input type="number" name="import_spacing_hours" min="1" max="168" value="<?= (int) ($importS['spacing_hours'] ?? 24) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                    <input type="number" name="import_spacing_hours" min="1" max="168" value="<?= (int) ($importS['spacing_hours'] ?? 24) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid var(--adm-border-strong);border-radius:4px;">
                 </div>
                 <div>
                     <label class="muted u-label">Min membership level</label>
-                    <input type="number" name="import_min_level" min="0" max="3" value="<?= (int) ($importS['min_level'] ?? 0) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                    <input type="number" name="import_min_level" min="0" max="3" value="<?= (int) ($importS['min_level'] ?? 0) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid var(--adm-border-strong);border-radius:4px;">
                 </div>
                 <div>
                     <label class="muted u-label">Gallery description</label>
-                    <input type="text" name="import_description" value="<?= e((string) ($importS['description'] ?? '')) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid #d1d5db;border-radius:4px;">
+                    <input type="text" name="import_description" value="<?= e((string) ($importS['description'] ?? '')) ?>" style="width:100%;box-sizing:border-box;font-size:.85rem;padding:.3rem .4rem;border:1px solid var(--adm-border-strong);border-radius:4px;">
                 </div>
                 <div>
                     <label class="muted u-label">Secret gallery</label>
@@ -197,7 +197,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                 <p class="muted" style="margin:.5rem 0 0;">No duplicate galleries found.</p>
             <?php else: ?>
                 <?php foreach ($exact as $group): ?>
-                    <div class="dup-group" style="border:1px solid var(--pink-300);border-radius:6px;padding:.75rem 1rem;margin-bottom:.75rem;background:#fff;">
+                    <div class="dup-group" style="border:1px solid var(--pink-300);border-radius:6px;padding:.75rem 1rem;margin-bottom:.75rem;background:var(--adm-surface);">
                         <h4 style="margin:0 0 .4rem;font-size:.95rem;">
                             <?= count($group['galleries']) ?> galleries share the same <?= (int) $group['photos'] ?> photos
                         </h4>
@@ -381,9 +381,9 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                         </td>
                         <td class="mg-date mg-scheduled">
                             <?php if (!empty($gallery['published_at']) && $gallery['published_at'] > gmdate('Y-m-d H:i:s')): ?>
-                                <span style="color:#b91c1c;" title="<?= e(tzdate('Y-m-d H:i', $gallery['published_at'])) ?>"><?= e(tzdate('M j, H:i', $gallery['published_at'])) ?></span>
+                                <span style="color:var(--adm-err);" title="<?= e(tzdate('Y-m-d H:i', $gallery['published_at'])) ?>"><?= e(tzdate('M j, H:i', $gallery['published_at'])) ?></span>
                             <?php else: ?>
-                                <span style="color:#15803d;" title="<?= e(tzdate('Y-m-d H:i', !empty($gallery['published_at']) ? $gallery['published_at'] : $gallery['created_at'])) ?>"><?= e(tzdate('M j, H:i', !empty($gallery['published_at']) ? $gallery['published_at'] : $gallery['created_at'])) ?></span>
+                                <span style="color:var(--adm-ok);" title="<?= e(tzdate('Y-m-d H:i', !empty($gallery['published_at']) ? $gallery['published_at'] : $gallery['created_at'])) ?>"><?= e(tzdate('M j, H:i', !empty($gallery['published_at']) ? $gallery['published_at'] : $gallery['created_at'])) ?></span>
                             <?php endif; ?>
                         </td>
                         <td class="mg-date" title="<?= !empty($gallery['created_at']) ? e(tzdate('Y-m-d H:i', $gallery['created_at'])) : '' ?>"><?= !empty($gallery['created_at']) ? e(tzdate('M j, H:i', $gallery['created_at'])) : '' ?></td>

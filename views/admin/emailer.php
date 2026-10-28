@@ -259,11 +259,11 @@ $queueBase    = url('/admin/emailer');
                         <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= e((string) $row['subject']) ?></td>
                         <td>
                             <?php if ($row['status'] === 'sent'): ?>
-                                <span style="color:var(--success,#2e7d32);font-weight:600;">sent</span>
+                                <span style="color:var(--adm-ok);font-weight:600;">sent</span>
                             <?php elseif ($row['status'] === 'failed'): ?>
-                                <span style="color:#b3261e;font-weight:600;">failed</span>
+                                <span style="color:var(--adm-err);font-weight:600;">failed</span>
                             <?php else: ?>
-                                <span style="color:#b45309;font-weight:600;">queued</span>
+                                <span style="color:var(--adm-warn);font-weight:600;">queued</span>
                             <?php endif; ?>
                         </td>
                         <td><?= (int) $row['attempts'] ?></td>

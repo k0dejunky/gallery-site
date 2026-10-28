@@ -16,14 +16,14 @@ $formatBytes = static fn (?int $bytes): string => ($bytes === null || $bytes < 0
             <thead><tr><th>ID</th><th>Project</th><th>User</th><th>Preview</th><th>Status</th><th>Output file</th><th>Size</th><th>Created</th><th>Actions</th></tr></thead>
             <tbody>
                 <?php if (empty($exports)): ?>
-                <tr><td colspan="9" style="text-align:center;color:var(--text-muted)">No exports yet.</td></tr>
+                <tr><td colspan="9" style="text-align:center;color:var(--adm-text-dim)">No exports yet.</td></tr>
                 <?php else: foreach ($exports as $ex): ?>
                 <tr>
                     <td><?= (int) $ex['id'] ?></td>
                     <td><?= htmlspecialchars((string) ($ex['project_title'] ?? '-')) ?> <span class="text-muted">#<?= (int) $ex['project_id'] ?></span></td>
                     <td><?= htmlspecialchars((string) ($ex['user_email'] ?? '-')) ?></td>
                     <td><?php if ($ex['status'] === 'completed' && !empty($ex['output_file']) && !empty($ex['file_exists'])): ?><video class="ve-export-preview" controls preload="none" src="<?= url('/admin/video-exports/' . (int) $ex['id'] . '/stream') ?>"></video><?php else: ?>-<?php endif; ?></td>
-                    <td><span style="color:<?= $ex['status'] === 'completed' ? 'var(--success,#2e7d32)' : ($ex['status'] === 'failed' ? 'var(--danger,#c62828)' : 'inherit') ?>"><?= $exportStatusLabel((string) $ex['status']) ?></span><?php if ((int) ($ex['progress'] ?? 0) > 0 && in_array($ex['status'], ['queued', 'running'], true)): ?> (<?= (int) $ex['progress'] ?>%)<?php endif; ?></td>
+                    <td><span style="color:<?= $ex['status'] === 'completed' ? 'var(--adm-ok)' : ($ex['status'] === 'failed' ? 'var(--adm-err)' : 'inherit') ?>"><?= $exportStatusLabel((string) $ex['status']) ?></span><?php if ((int) ($ex['progress'] ?? 0) > 0 && in_array($ex['status'], ['queued', 'running'], true)): ?> (<?= (int) $ex['progress'] ?>%)<?php endif; ?></td>
                     <td><?= htmlspecialchars((string) ($ex['output_file'] ?? '-')) ?></td>
                     <td><?= $formatBytes(isset($ex['file_size']) ? (int) $ex['file_size'] : null) ?></td>
                     <td><?= !empty($ex['created_at']) ? htmlspecialchars(tzdate('Y-m-d H:i', $ex['created_at'])) : '' ?></td>
@@ -34,11 +34,11 @@ $formatBytes = static fn (?int $bytes): string => ($bytes === null || $bytes < 0
                         <?php elseif ($ex['status'] === 'failed' && !empty($ex['error'])): ?><span class="text-muted" title="<?= htmlspecialchars((string) $ex['error']) ?>">Error</span><?php endif; ?>
                         <?php if (!empty($ex['gallery_exists'])): ?>
                         <form method="post" action="<?= url('/admin/video-exports/' . (int) $ex['id'] . '/purge') ?>" style="display:inline" data-confirm="Purge this exported file? The file and thumbnail will be kept for the gallery and the export record removed.">
-                            <?= csrf_field() ?><button class="btn small" type="submit" style="background:#7c3aed;color:#fff" title="Purge export after gallery created">Purge</button>
+                            <?= csrf_field() ?><button class="btn small" type="submit" style="background:var(--adm-accent);color:var(--adm-inverse)" title="Purge export after gallery created">Purge</button>
                         </form>
                         <?php endif; ?>
                         <form method="post" action="<?= url('/admin/video-exports/' . (int) $ex['id'] . '/delete') ?>" style="display:inline" data-confirm="Delete this export<?= $ex['status'] === 'running' || $ex['status'] === 'queued' ? ' (and any partial output file)' : '' ?>?">
-                            <?= csrf_field() ?><button class="btn small" type="submit" style="background:#b42318;color:#fff">Delete</button>
+                            <?= csrf_field() ?><button class="btn small" type="submit" style="background:var(--adm-err);color:var(--adm-inverse)">Delete</button>
                         </form>
                     </td>
                 </tr>
@@ -65,7 +65,7 @@ $formatBytes = static fn (?int $bytes): string => ($bytes === null || $bytes < 0
             </thead>
             <tbody>
                 <?php if (empty($projects)): ?>
-                <tr><td colspan="9" style="text-align:center;color:var(--text-muted)">No video projects yet.</td></tr>
+                <tr><td colspan="9" style="text-align:center;color:var(--adm-text-dim)">No video projects yet.</td></tr>
                 <?php else: ?>
                 <?php foreach ($projects as $row): ?>
                 <tr>
@@ -83,7 +83,7 @@ $formatBytes = static fn (?int $bytes): string => ($bytes === null || $bytes < 0
                         <?php endif; ?>
                         <form method="post" action="<?= url('/admin/video-projects/' . (int) $row['id'] . '/delete') ?>" style="display:inline"
                               data-confirm="Delete this video project<?= (int) ($row['export_count'] ?? 0) > 0 ? ' and its export record(s)' : '' ?>? This removes the saved editor state.">
-                            <?= csrf_field() ?><button class="btn small" type="submit" style="background:#b42318;color:#fff">Delete</button>
+                            <?= csrf_field() ?><button class="btn small" type="submit" style="background:var(--adm-err);color:var(--adm-inverse)">Delete</button>
                         </form>
                     </td>
                 </tr>
