@@ -1857,6 +1857,40 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.theme.admin_on_brand_tokens', 'Smoke · UI', 'The admin accent is the fuchsia brand, on ink, with Playfair KPIs', static function () use ($root, $ok, $bad): array {
+            // Phase 5 retinted the admin accent from generic purple to the
+            // brand fuchsia. White on fuchsia is only 3.3:1, so every text
+            // surface ON the accent (primary button, avatar initial) must be
+            // ink. The palette's pink-500/pink-700 are the theme editor's
+            // editable pickers - both scopes now carry the fuchsia pair.
+            $css = (string) file_get_contents($root . '/public/assets/css/admin.css');
+            $theme = (string) file_get_contents($root . '/app/Models/Theme.php');
+            $problems = [];
+            if (strpos($css, '--adm-accent: var(--pink-500, #d946ef)') === false) {
+                $problems[] = 'the admin accent must resolve through --pink-500';
+            }
+            if (strpos($css, '--adm-accent-strong: var(--pink-700, #a21caf)') === false) {
+                $problems[] = 'the admin accent-strong must resolve through --pink-700';
+            }
+            if (strpos($css, "background: var(--adm-accent);\n    border-color: var(--adm-accent);\n    color: #0a0210;") === false) {
+                $problems[] = 'btn-primary must be ink on the fuchsia accent (white is 3.3:1)';
+            }
+            if (preg_match('/\.stat-card b \{[^}]*var\(--font-family-display/s', $css) !== 1) {
+                $problems[] = 'the KPI numbers must carry the display font';
+            }
+            // Both palettes (member + admin) carry the same fuchsia pair.
+            // The consts pad their arrows differently, so match whitespace.
+            if (preg_match_all("/'pink-500'\s*=>\s*'#d946ef'/", $theme) !== 2) {
+                $problems[] = 'both Theme.php palettes must carry pink-500 #d946ef';
+            }
+            if (preg_match_all("/'pink-700'\s*=>\s*'#a21caf'/", $theme) !== 2) {
+                $problems[] = 'both Theme.php palettes must carry pink-700 #a21caf';
+            }
+            return $problems === []
+                ? $ok('the admin accent is the fuchsia brand, ink-on-accent, Playfair KPIs')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.ui.chips_reachable', 'Smoke · UI', 'A chip that carries a checkbox is reachable by keyboard', static function () use ($root, $ok, $bad): array {
             // .chip input[type="checkbox"] { display: none } took the
             // e-mail-notification toggles and the favourite-category chips

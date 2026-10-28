@@ -24,10 +24,14 @@
     --adm-text-faint: #8b93a7;
 
     /* Brand (theme driven, with sane fallbacks) */
-    --adm-accent: var(--purple-500, #7c3aed);
-    --adm-accent-strong: var(--purple-600, #6d28d9);
-    --adm-accent-soft: rgba(124, 58, 237, .09);
-    --adm-accent-ring: rgba(124, 58, 237, .35);
+    /* The admin accent follows the brand CTA: fuchsia, not the old rose.
+       --pink-500/--pink-700 are the admin palette's editable pickers, so the
+       theme editor's swatches move the accent with them. White on fuchsia is
+       only 3.3:1 - every surface that puts text ON the accent uses ink. */
+    --adm-accent: var(--pink-500, #d946ef);
+    --adm-accent-strong: var(--pink-700, #a21caf);
+    --adm-accent-soft: rgba(217, 70, 239, .10);
+    --adm-accent-ring: rgba(217, 70, 239, .35);
 
     /* Status */
     --adm-ok: #15803d;
@@ -322,7 +326,7 @@ body.admin-theme {
     font-size: 13px;
     font-weight: 700;
     letter-spacing: .02em;
-    color: #fff;
+    color: #0a0210;
     background: linear-gradient(140deg, var(--adm-accent), var(--adm-accent-strong));
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
 }
@@ -660,9 +664,9 @@ body.admin-theme {
 .admin-theme .btn-primary {
     background: var(--adm-accent);
     border-color: var(--adm-accent);
-    color: #fff;
+    color: #0a0210;
 }
-.admin-theme .btn-primary:hover { background: var(--adm-accent-strong); border-color: var(--adm-accent-strong); }
+.admin-theme .btn-primary:hover { background: var(--adm-accent-strong); border-color: var(--adm-accent-strong); color: #f5edf7; }
 
 .admin-theme .btn-danger {
     background: var(--adm-err-bg);
@@ -746,11 +750,14 @@ body.admin-theme {
 .admin-theme .stat-card b {
     display: block;
     font-size: 25px;
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1.15;
     letter-spacing: -.02em;
     color: var(--adm-text);
     font-variant-numeric: tabular-nums;
+    /* The KPI numbers are the console's display type - same Playfair the
+       page titles carry. Labels below stay Inter. */
+    font-family: var(--font-family-display, 'Playfair Display', Georgia, 'Times New Roman', serif);
 }
 
 .admin-theme .stat-card small {
