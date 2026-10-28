@@ -19,11 +19,11 @@ $planId    = (int) $plan['id'];
 <title>Checkout — <?= $planName ?></title>
 <style>
 :root {
-    --purple-900:#1e1033;--purple-800:#2d1854;--purple-700:#4a2d80;--purple-600:#6b44b8;
-    --purple-500:#8b5cf6;--purple-400:#a78bfa;--purple-300:#c4b5fd;
-    --pink-100:#fdf2f8;--pink-200:#fce7f3;--pink-300:#f9a8d4;--pink-400:#f472b6;
-    --card-bg:#fff;--card-border:#e5d0ec;--card-radius:12px;--border-radius:10px;
-    --shadow:0 2px 8px rgba(30,16,51,.12);--input-padding:.55rem .75rem;
+    --purple-900:#f5edf7;--purple-800:#ffffff;--purple-700:#b9a0c4;--purple-600:#d946ef;
+    --purple-500:#e879f9;--purple-400:#e9aefc;--purple-300:#c084fc;
+    --pink-100:#0d0612;--pink-200:#050208;--pink-300:#2a1638;--pink-400:#d946ef;
+    --card-bg:#150a1d;--card-border:#2a1638;--card-radius:12px;--border-radius:10px;
+    --shadow:0 8px 32px rgba(0,0,0,.5);--input-padding:.55rem .75rem;
     --input-border-width:1px;--input-radius:8px;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -34,7 +34,7 @@ h1{font-size:1.5rem;text-align:center;margin-bottom:.5rem;color:var(--purple-800
 .plan-summary{text-align:center;margin-bottom:1.25rem;}
 .plan-summary .price{font-size:1.6rem;font-weight:bold;}
 .plan-summary .cycle{font-size:.85rem;color:var(--purple-700);opacity:.7;}
-.plan-summary .sale{color:#b45309;font-weight:600;font-size:.85rem;margin-top:.25rem;}
+.plan-summary .sale{color:#fbbf24;font-weight:600;font-size:.85rem;margin-top:.25rem;}
 .card{background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--card-radius);
       padding:1.25rem;margin-bottom:1rem;box-shadow:var(--shadow);}
 .card h2{font-size:1.1rem;margin-bottom:.75rem;color:var(--purple-800);}
@@ -43,16 +43,16 @@ label{display:block;font-size:.82rem;font-weight:600;margin-bottom:.3rem;color:v
           padding:.55rem .75rem;background:var(--pink-100);min-height:40px;margin-bottom:.75rem;
           transition:border-color .15s;}
 .bt-field.focus{border-color:var(--purple-400);outline:2px solid var(--purple-400);}
-.bt-field.error{border-color:#dc2626;}
+.bt-field.error{border-color:#f87171;}
 .field-row{display:flex;gap:.75rem;}
 .field-row>div{flex:1;}
-.error-text{color:#dc2626;font-size:.78rem;margin-top:-.5rem;margin-bottom:.5rem;display:none;}
+.error-text{color:#f87171;font-size:.78rem;margin-top:-.5rem;margin-bottom:.5rem;display:none;}
 .error-text.show{display:block;}
 .paypal-placeholder{border:2px dashed var(--pink-300);border-radius:var(--input-radius);
                      padding:1rem;text-align:center;color:var(--purple-700);opacity:.6;
                      font-size:.9rem;margin-bottom:.75rem;}
 .btn{display:block;width:100%;padding:.75rem;border:none;border-radius:var(--border-radius);
-     background:var(--purple-600);color:#fff;font-size:1rem;font-weight:600;cursor:pointer;
+     background:var(--purple-600);color:#0a0210;font-size:1rem;font-weight:600;cursor:pointer;
      transition:background .15s;margin-top:.5rem;}
 .btn:hover{background:var(--purple-500);}
 .btn:disabled{opacity:.5;cursor:not-allowed;}
@@ -64,8 +64,8 @@ label{display:block;font-size:.82rem;font-weight:600;margin-bottom:.3rem;color:v
 @keyframes spin{to{transform:rotate(360deg)}}
 .status{padding:.75rem;border-radius:var(--input-radius);margin-bottom:.75rem;font-size:.85rem;display:none;}
 .status.show{display:block;}
-.status.error{background:#fef2f2;color:#991b1b;border:1px solid #fecaca;}
-.status.success{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;}
+.status.error{background:#2a1010;color:#fca5a5;border:1px solid #7f1d1d;}
+.status.success{background:#0a2015;color:#86efac;border:1px solid #166534;}
 .back-link{display:block;text-align:center;margin-top:1rem;font-size:.85rem;color:var(--purple-600);text-decoration:none;}
 .back-link:hover{text-decoration:underline;}
 </style>

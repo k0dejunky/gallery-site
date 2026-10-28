@@ -1700,6 +1700,14 @@ class SmokeChecks
                 // ink on that chip is 5.16:1.
                 ['.pl-ctl[aria-pressed=true]', ['color:var(--btn-color)'], ['color:#fff']],
                 ['.cat-fav-toggle.selected', ['color:var(--btn-color)'], ['color:#fff']],
+                // The third light-pink skin (the error pages) is gone: the
+                // page and its card render on the same OLED tokens as the
+                // rest of the member site.
+                ['.error-page', ['background:var(--page-bg)', 'color:var(--text-color)'],
+                    ['background:#f9a8d4', 'color:#3b0764', 'font-family:sans-serif']],
+                ['.error-page h1', ['color:var(--heading-color)'], ['color:#581c87']],
+                ['.error-page .card', ['background:var(--surface-2)', 'var(--border)'],
+                    ['background:#f472b6', '#ec4899']],
             ];
             foreach ($want as [$selector, $need, $deny]) {
                 $body = $rule($css, $selector);
@@ -1741,8 +1749,54 @@ class SmokeChecks
                 }
             }
 
+            // The two standalone pages (they carry their own literals - no
+            // site layout, no palette) must paint the same dark skin.
+            foreach ([
+                'views/auth/step_up.php' => [
+                    'must' => ['#050208', '#150a1d', '#d946ef'],
+                    'was'  => ['#fdf2f8', '#fbcfe8', '#db2777'],
+                ],
+                'views/membership/braintree_checkout.php' => [
+                    'must' => ['#150a1d', '#050208', '#d946ef'],
+                    'was'  => ['--card-bg:#fff', '#fdf2f8', '#fce7f3'],
+                ],
+            ] as $name => $set) {
+                $src = (string) file_get_contents($root . '/' . $name);
+                foreach ($set['must'] as $needle) {
+                    if (strpos($src, $needle) === false) {
+                        $problems[] = $name . ' must carry ' . $needle;
+                    }
+                }
+                foreach ($set['was'] as $needle) {
+                    if (strpos($src, $needle) !== false) {
+                        $problems[] = $name . ' still carries the light ' . $needle;
+                    }
+                }
+            }
+
             return $problems === []
                 ? $ok('the member components are off the light skin (slabs, labels, placeholders)')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.theme.mobile_no_horizontal_overflow', 'Smoke · UI', 'The guest top search and the logo cannot push a 390px phone sideways', static function () use ($root, $ok, $bad): array {
+            // Measured on dev at 390: the page scrolled 63px sideways. Bisect
+            // (hiding one family at a time) blamed exactly two rules: the
+            // .site-search-top form's 22rem flex basis (+59) and the
+            // site-compact logo cap of a hard 380px inside a 372px column
+            // (+4). Both are static CSS, so both are assertable here; the
+            // live proof is a CDP run where documentElement.scrollWidth
+            // equals clientWidth at 390.
+            $css = (string) file_get_contents($root . '/public/assets/css/user.css');
+            $problems = [];
+            if (strpos($css, '.site-search-top{flex:1 1 100%') === false) {
+                $problems[] = 'the mobile query must give .site-search-top a full row (flex:1 1 100%)';
+            }
+            if (strpos($css, 'max-width: min(380px, 100%)') === false) {
+                $problems[] = 'the site-compact logo cap must respect the column (min(380px, 100%))';
+            }
+            return $problems === []
+                ? $ok('the phone layout has no known sideways overflow (search wrap + logo cap)')
                 : $bad(implode('; ', $problems));
         });
 
