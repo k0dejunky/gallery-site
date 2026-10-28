@@ -1,0 +1,23 @@
+/* Self-hosted variable fonts for the ADMIN console (and any page that does
+ * not load /theme.css). One woff2 per family covers the whole weight axis
+ * (latin subset, ~86 KB total). font-display: swap paints the fallback
+ * immediately and swaps the face in when it loads.
+ *
+ * The member site serves the SAME two faces from app/Core/theme_base.css,
+ * whose URLs are relative to /theme.css (which sits beside /assets). These
+ * URLs are relative to THIS file (/assets/css/fonts.css -> ../fonts), so the
+ * two blocks differ only in their url() form. Keep them in sync. */
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('../fonts/inter-latin-var.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Playfair Display';
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: swap;
+    src: url('../fonts/playfair-latin-var.woff2') format('woff2');
+}

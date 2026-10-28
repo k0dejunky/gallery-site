@@ -1599,6 +1599,40 @@ class SmokeChecks
                 $problems[] = 'h1/h2 must use the --font-family-display token';
             }
 
+            // The admin console must load the SAME two faces. They ship in
+            // their own static file (assets/css/fonts.css) whose urls are
+            // relative to that file, and views/admin/layout.php links it
+            // before admin.css. Without the link every admin font-family
+            // silently falls back to the system stack.
+            $fonts = (string) @file_get_contents($root . '/public/assets/css/fonts.css');
+            if ($fonts === '') {
+                $problems[] = 'public/assets/css/fonts.css is missing';
+            } else {
+                foreach (['Inter', 'Playfair Display'] as $family) {
+                    if (preg_match('/@font-face\s*\{[^}]*font-family:\s*\'' . preg_quote($family, '/') . '\'/s', $fonts) !== 1) {
+                        $problems[] = 'fonts.css has no @font-face for ' . $family;
+                    }
+                }
+                if (strpos($fonts, "url('../fonts/inter-latin-var.woff2')") === false
+                    || strpos($fonts, "url('../fonts/playfair-latin-var.woff2')") === false) {
+                    $problems[] = 'fonts.css urls must be relative to the file (../fonts/...)';
+                }
+                if (substr_count($fonts, 'font-display: swap;') !== 2) {
+                    $problems[] = 'both fonts.css faces must set font-display: swap';
+                }
+            }
+            $adminLayout = (string) @file_get_contents($root . '/views/admin/layout.php');
+            if (strpos($adminLayout, 'assets/css/fonts.css') === false) {
+                $problems[] = 'views/admin/layout.php must link assets/css/fonts.css';
+            }
+            $adminCss = (string) @file_get_contents($root . '/public/assets/css/admin.css');
+            if (strpos($adminCss, "var(--font-family-body, 'Inter'") === false) {
+                $problems[] = 'the admin body must use the --font-family-body token';
+            }
+            if (strpos($adminCss, "var(--font-family-display, 'Playfair Display'") === false) {
+                $problems[] = 'the admin h1 must use the --font-family-display token';
+            }
+
             return $problems === []
                 ? $ok('Playfair Display + Inter are self-hosted variable woff2 with font-display: swap')
                 : $bad(implode('; ', $problems));
@@ -1797,6 +1831,29 @@ class SmokeChecks
             }
             return $problems === []
                 ? $ok('the phone layout has no known sideways overflow (search wrap + logo cap)')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.theme.player_on_brand_tokens', 'Smoke · UI', 'The player chrome uses the brand tokens, not the old soft pinks', static function () use ($root, $ok, $bad): array {
+            // Phase 4 retinted the seek thumb / played bar / spinner / hover
+            // tints from the old soft-pink pair (#ff9fd4 / #ffd0e8) onto the
+            // fuchsia brand tokens. The live-dot red (#ff4777) stays - it is
+            // the conventional "recording" signal, not a theme colour.
+            $css = (string) file_get_contents($root . '/public/assets/css/user.css');
+            $problems = [];
+            foreach (['#ff9fd4', '#ffd0e8'] as $hex) {
+                if (stripos($css, $hex) !== false) {
+                    $problems[] = 'user.css still carries the old player pink ' . $hex;
+                }
+            }
+            if (strpos($css, 'var(--pink-500,#e879f9)') === false) {
+                $problems[] = 'the seek thumb must use var(--pink-500)';
+            }
+            if (strpos($css, 'var(--purple-200,#e9d5ff)') === false) {
+                $problems[] = 'the player hover tint must use var(--purple-200)';
+            }
+            return $problems === []
+                ? $ok('the player chrome is on the fuchsia brand tokens')
                 : $bad(implode('; ', $problems));
         });
 

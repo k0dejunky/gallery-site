@@ -248,23 +248,23 @@ body.player-theater #video-player-wrap+.media-progress{display:none}
 .player-bar{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:.4rem;padding:.4rem .6rem;background:linear-gradient(180deg,rgba(15,5,28,0),rgba(15,5,28,.82));color:#fff;font-size:13px;opacity:0;transition:opacity .18s;z-index:3}
 .player-bar.show,.gallery-player:hover .player-bar{opacity:1}
 .player-btn{background:none;border:0;color:#fff;font-size:15px;line-height:1;cursor:pointer;padding:.25rem .35rem;border-radius:6px;font-family:inherit}
-.player-btn:hover{background:rgba(255,255,255,.18);color:#ffd0e8}
+.player-btn:hover{background:rgba(255,255,255,.18);color:var(--purple-200,#e9d5ff)}
 .player-seek{flex:1 1 0;min-width:64px;position:relative;display:flex;align-items:center;height:16px;cursor:pointer}
 .player-seek input[type=range]{flex:1 1 auto;min-width:0;width:100%;margin:0;appearance:none;-webkit-appearance:none;background:transparent;height:16px;cursor:pointer}
 .player-seek input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:rgba(255,255,255,.28)}
-.player-seek input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:12px;width:12px;border-radius:50%;background:#ff9fd4;border:2px solid #fff;margin-top:-4px}
+.player-seek input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:12px;width:12px;border-radius:50%;background:var(--pink-500,#e879f9);border:2px solid #fff;margin-top:-4px}
 .player-seek input[type=range]::-moz-range-track{height:4px;border-radius:4px;background:rgba(255,255,255,.28)}
-.player-seek input[type=range]::-moz-range-thumb{height:12px;width:12px;border-radius:50%;background:#ff9fd4;border:2px solid #fff}
+.player-seek input[type=range]::-moz-range-thumb{height:12px;width:12px;border-radius:50%;background:var(--pink-500,#e879f9);border:2px solid #fff}
 .player-time{white-space:nowrap;color:rgba(255,255,255,.85);min-width:88px;text-align:center}
 .player-speed{font-weight:700}
 .player-quality{position:absolute;bottom:2.6rem;right:.5rem;display:flex;flex-direction:column;gap:.15rem;background:rgba(20,8,34,.94);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:.35rem;z-index:4;min-width:92px}
 .player-quality button{background:none;border:0;color:#fff;text-align:left;padding:.3rem .5rem;border-radius:6px;cursor:pointer;font-size:13px}
-.player-quality button:hover{background:rgba(255,255,255,.16);color:#ffd0e8}
+.player-quality button:hover{background:rgba(255,255,255,.16);color:var(--purple-200,#e9d5ff)}
 .player-more{position:absolute;bottom:2.6rem;right:.5rem;display:flex;flex-direction:column;gap:.15rem;background:rgba(20,8,34,.94);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:.35rem;z-index:4;min-width:150px}
 .player-more[hidden]{display:none}
 .player-more button{background:none;border:0;color:#fff;text-align:left;padding:.35rem .5rem;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap}
-.player-more button:hover{background:rgba(255,255,255,.16);color:#ffd0e8}
-.player-more button[aria-pressed=true]{color:#ffd0e8}
+.player-more button:hover{background:rgba(255,255,255,.16);color:var(--purple-200,#e9d5ff)}
+.player-more button[aria-pressed=true]{color:var(--purple-200,#e9d5ff)}
 .player-live-dot{width:8px;height:8px;border-radius:50%;background:#ff4777;box-shadow:0 0 6px #ff4777;display:inline-block;margin-right:.3rem;vertical-align:middle}
 .player-keep{display:inline-flex;align-items:center;gap:.3rem;color:rgba(255,255,255,.9);font-size:12px;cursor:pointer;white-space:nowrap}
 /* A narrow player (a phone, the mini player) cannot hold every control.
@@ -280,7 +280,7 @@ body.player-theater #video-player-wrap+.media-progress{display:none}
 .player-bar.is-tiny .player-time{display:none}
 .player-bar.is-tiny .player-seek{min-width:56px}
 .player-bar.is-tiny{gap:.25rem}
-.player-keep input{accent-color:#ff9fd4;cursor:pointer}
+.player-keep input{accent-color:var(--pink-500,#e879f9);cursor:pointer}
 
 /* Seek track: a buffered-range fill and chapter ticks sit under the range
    input, which stays transparent on top so dragging still works. */
@@ -289,7 +289,7 @@ body.player-theater #video-player-wrap+.media-progress{display:none}
 /* How much of the video has been played. Without it the bar only showed the
    BUFFERED range, which for a served file is the whole thing - so the bar
    looked full from the first second and never moved. */
-.player-played{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,#ff9fd4,#ff4777);border-radius:4px;transition:width .12s linear}
+.player-played{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,var(--pink-500,#e879f9),#ff4777);border-radius:4px;transition:width .12s linear}
 .player-ticks{position:absolute;inset:0}
 .player-tick{position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.85);transform:translateX(-1px)}
 .player-tick:first-child{display:none}
@@ -298,7 +298,7 @@ body.player-theater #video-player-wrap+.media-progress{display:none}
 .player-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;background:rgba(8,3,16,.62);color:#fff;z-index:2;text-align:center;padding:1rem}
 .player-overlay[hidden]{display:none}
 .player-overlay-msg{margin:0;font-size:.9rem}
-.player-spinner{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.28);border-top-color:#ff9fd4;animation:player-spin .9s linear infinite}
+.player-spinner{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.28);border-top-color:var(--pink-500,#e879f9);animation:player-spin .9s linear infinite}
 .player-spinner[hidden]{display:none}
 @keyframes player-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.player-spinner{animation-duration:2.4s}}
@@ -308,11 +308,11 @@ body.player-theater #video-player-wrap+.media-progress{display:none}
 .player-chapters summary{cursor:pointer;font-weight:600}
 .player-chapters ol{list-style:none;margin:.5rem 0 0;padding:0;display:flex;flex-direction:column;gap:.15rem}
 .player-chapters button{display:flex;gap:.6rem;width:100%;text-align:left;background:none;border:0;color:#fff;padding:.3rem .4rem;border-radius:6px;cursor:pointer;font:inherit}
-.player-chapters button:hover{background:rgba(255,255,255,.16);color:#ffd0e8}
-.player-chapters .ch-time{color:#ff9fd4;font-variant-numeric:tabular-nums;min-width:3.2em}
+.player-chapters button:hover{background:rgba(255,255,255,.16);color:var(--purple-200,#e9d5ff)}
+.player-chapters .ch-time{color:var(--pink-500,#e879f9);font-variant-numeric:tabular-nums;min-width:3.2em}
 .player-keys{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(20,8,34,.95);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:.75rem 1rem;z-index:6;font-size:.82rem;max-width:min(92%,320px)}
 .player-keys dl{display:grid;grid-template-columns:auto 1fr;gap:.2rem .7rem;margin:.5rem 0 0}
-.player-keys dt{color:#ff9fd4;font-family:ui-monospace,monospace}
+.player-keys dt{color:var(--pink-500,#e879f9);font-family:ui-monospace,monospace}
 .player-keys dd{margin:0}
 
 /* The control bar sits above the home-indicator area on phones. */
@@ -687,7 +687,7 @@ body.impersonating .title-header { display: none; }
         color: #fff;
     }
     .live-grid:fullscreen .live-chat h2 { color: #fff; border-bottom-color: rgba(255,255,255,.35); }
-    .live-grid:fullscreen .live-chat-msg .who { color: #ffd0e8; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+    .live-grid:fullscreen .live-chat-msg .who { color: var(--purple-200,#e9d5ff); text-shadow: 0 1px 2px rgba(0,0,0,.8); }
     .live-grid:fullscreen .live-chat-msg { text-shadow: 0 1px 2px rgba(0,0,0,.8); }
     .live-grid:fullscreen .live-chat-msg .when { color: rgba(255,255,255,.8); }
     .live-grid:fullscreen .live-chat-form { border-top-color: rgba(255,255,255,.35); }

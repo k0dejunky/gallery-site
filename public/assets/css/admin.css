@@ -86,7 +86,7 @@
     --text-heading: var(--adm-text);
     --muted-text-color: var(--adm-text-dim);
 
-    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-family-body, 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif);
     font-size: 14px;
     line-height: 1.5;
     color: var(--adm-text);
@@ -575,9 +575,10 @@ body.admin-theme {
 .admin-theme .adm-h1 {
     margin: 0;
     font-size: 20px;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: -.015em;
     color: var(--adm-text);
+    font-family: var(--font-family-display, 'Playfair Display', Georgia, 'Times New Roman', serif);
 }
 
 /* Keyboard focus has to be visible on every interactive surface, including the
@@ -603,7 +604,13 @@ body.admin-theme {
     letter-spacing: -.01em;
 }
 
-.admin-theme h1 { font-size: 24px; font-weight: 700; margin: 0 0 .35rem; }
+/* Page titles are the only Playfair on the admin console: display type on
+   section headings (h2/h3) hurts density in a table-heavy tool. Body and
+   every UI label stay on Inter. */
+.admin-theme h1 {
+    font-size: 24px; font-weight: 600; margin: 0 0 .35rem;
+    font-family: var(--font-family-display, 'Playfair Display', Georgia, 'Times New Roman', serif);
+}
 .admin-theme h2 { font-size: 18px; font-weight: 650; margin: 0 0 .5rem; }
 .admin-theme h3 { font-size: 15px; font-weight: 650; margin: 0 0 .35rem; }
 .admin-theme h4 { font-size: 13px; font-weight: 700; margin: 0 0 .35rem; }
