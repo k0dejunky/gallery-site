@@ -276,6 +276,15 @@ class Theme
         'age-gate-1'              => '#0d0612',
         'age-gate-2'              => '#050208',
         'age-gate-3'              => '#1e0f2a',
+        // Phase 7 kit: the translucent surfaces the media-first components
+        // paint with. The scrims are the page background at alpha, so a
+        // gradient over any cover keeps the site's own hue instead of
+        // fading through grey, and the glass header dims through blur
+        // rather than sitting on an opaque slab.
+        'glass-bg'                => '#0d0612b8',
+        'scrim-clear'             => '#05020800',
+        'scrim-soft'              => '#050208a6',
+        'scrim-strong'            => '#050208e6',
     ];
 
     /**

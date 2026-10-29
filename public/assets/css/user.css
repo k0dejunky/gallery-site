@@ -1177,3 +1177,217 @@ body.site-compact .home-layout { grid-template-columns: 224px minmax(0, 1fr); }
 .comment-reply{font-size:.92rem}
 .comment-reply-box{margin-top:.35rem}
 .comment-reply-box > summary{cursor:pointer;font-size:.82rem;color:var(--muted-text-color,#6b5b6b)}
+
+/* ======================================================================
+   Phase 7 - member component kit.
+   The immersive media-first building blocks every later phase composes:
+   glass header, cover heroes, media-led cards, section heads, filter
+   bars, pills and stat chips. Colours are palette tokens only (the
+   --glass-bg / --scrim-* tokens live in Theme.php); the hex inside a
+   var() is the established fallback form this file already uses.
+   Nothing here changes a page on its own - phases 8-11 wire it up.
+   ====================================================================== */
+
+/* --- Page measure: one consistent content width ---------------------- */
+.page-shell{width:100%;max-width:76rem;margin-inline:auto}
+
+/* --- Glass header (phase 8 puts layout.php behind it) ---------------- */
+/* The negative margins cancel the body's 1.5rem side padding so the bar
+   bleeds edge to edge while its inner row stays on the page measure. */
+.glass-header{
+    position:sticky;top:0;z-index:70;
+    margin:0 -1.5rem var(--spacing-md);
+    padding:.15rem 1.5rem;
+    background:var(--glass-bg,#0d0612b8);
+    backdrop-filter:blur(16px) saturate(1.5);
+    -webkit-backdrop-filter:blur(16px) saturate(1.5);
+    border-bottom:1px solid var(--border,#2a1638);
+    box-shadow:0 12px 30px rgba(0,0,0,.45);
+}
+.glass-header-inner{display:flex;align-items:center;gap:var(--spacing-lg);max-width:76rem;margin-inline:auto;min-height:3.25rem}
+.glass-brand{
+    display:inline-flex;align-items:center;gap:.55rem;min-width:0;
+    font-family:var(--font-family-display,'Playfair Display',Georgia,serif);
+    font-size:var(--font-size-lg);font-weight:700;letter-spacing:.01em;
+    color:var(--heading-color,#fff);text-decoration:none;white-space:nowrap;
+}
+.glass-brand:hover{color:var(--link-hover,#fbcfe8)}
+.glass-brand img{max-height:2.4rem;width:auto;display:block}
+.glass-actions{display:flex;align-items:center;gap:var(--spacing-sm);margin-left:auto;min-width:0}
+.glass-actions .site-search{margin-left:auto}
+
+/* --- Cover hero ------------------------------------------------------ */
+.hero-cover{
+    position:relative;isolation:isolate;overflow:hidden;
+    display:flex;align-items:flex-end;
+    min-height:clamp(19rem,44vh,29rem);
+    margin:0 0 var(--spacing-xl);
+    background:var(--surface-2,#150a1d);
+    border:1px solid var(--border,#2a1638);
+    border-radius:var(--border-radius-lg,14px);
+    box-shadow:var(--shadow,0 8px 32px rgba(0,0,0,.5));
+}
+.hero-cover-media{position:absolute;inset:0;z-index:0}
+.hero-cover-media img{width:100%;height:100%;object-fit:cover;object-position:center 28%;display:block}
+/* The scrim runs clear -> soft -> strong top to bottom: type sits on the
+   strong end, the imagery still reads at the top. */
+.hero-cover-scrim{
+    position:absolute;inset:0;z-index:1;pointer-events:none;
+    background:linear-gradient(180deg,var(--scrim-clear,#05020800) 0%,var(--scrim-soft,#050208a6) 48%,var(--scrim-strong,#050208e6) 100%);
+}
+.hero-cover-inner{position:relative;z-index:2;width:100%;padding:clamp(1.2rem,3.5vw,2.4rem);display:flex;flex-direction:column;gap:.45rem}
+.hero-cover-center{align-items:center;text-align:center}
+.hero-cover-center .hero-cover-inner{align-items:center}
+.hero-cover-center .hero-cover-lede{margin-inline:auto}
+.hero-cover-center .hero-cover-actions{justify-content:center}
+.hero-cover-tall{min-height:clamp(23rem,58vh,37rem)}
+.hero-cover-kicker{
+    margin:0;font-size:var(--font-size-xs);font-weight:700;
+    text-transform:uppercase;letter-spacing:.15em;color:var(--link-color,#e9aefc);
+}
+.hero-cover-title{
+    margin:0;font-family:var(--font-family-display,'Playfair Display',Georgia,serif);
+    font-size:clamp(1.7rem,4.2vw,2.8rem);line-height:1.06;letter-spacing:-.01em;
+    color:var(--heading-color,#fff);text-wrap:balance;
+}
+.hero-cover-lede{margin:.15rem 0 0;max-width:56ch;font-size:var(--font-size-md);color:var(--text-color,#f5edf7)}
+.hero-cover-actions{display:flex;flex-wrap:wrap;gap:var(--spacing-sm);margin-top:var(--spacing-sm)}
+.hero-cover-meta{display:flex;flex-wrap:wrap;gap:.35rem 1rem;margin:.35rem 0 0;font-size:var(--font-size-sm);color:var(--muted-color,#b9a0c4)}
+
+/* --- Media-led card -------------------------------------------------- */
+/* .card-led strips the padding so the cover runs edge to edge; the
+   title/meta sit ON the image behind a scrim, the interactive row
+   (favorite / expand / details) stays on the card surface below. */
+.card-led{padding:0;overflow:hidden;transition:transform var(--motion-base,200ms) ease,border-color var(--motion-base,200ms) ease,box-shadow var(--motion-base,200ms) ease}
+.card-led:hover{transform:translateY(-3px);border-color:var(--pink-400,#3a1f4a);box-shadow:var(--shadow-float,0 24px 64px rgba(0,0,0,.6))}
+.card-led .card-link{display:block;color:inherit;text-decoration:none}
+.card-media{
+    position:relative;display:block;overflow:hidden;
+    aspect-ratio:16/10;background:var(--card-placeholder-bg,#150a1d);
+    border-radius:var(--card-radius,14px) var(--card-radius,14px) 0 0;
+}
+.card-media>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;transition:transform var(--motion-slow,320ms) ease}
+.card-led:hover .card-media>img{transform:scale(1.05)}
+.card-scrim{
+    position:absolute;left:0;right:0;bottom:0;height:64%;z-index:1;pointer-events:none;
+    background:linear-gradient(180deg,var(--scrim-clear,#05020800),var(--scrim-strong,#050208e6));
+}
+.card-badges{position:absolute;top:.55rem;left:.55rem;right:.55rem;z-index:2;display:flex;gap:.35rem;flex-wrap:wrap;pointer-events:none}
+.card-overlay{position:absolute;left:0;right:0;bottom:0;z-index:2;padding:.75rem .9rem .85rem;display:flex;flex-direction:column;gap:.2rem;pointer-events:none}
+.card-overlay .card-title{
+    margin:0;font-size:var(--font-size-base);font-weight:700;line-height:1.3;
+    color:var(--card-title-color,#fff);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.card-overlay .card-meta{margin:0;font-size:var(--font-size-sm);color:var(--muted-color,#b9a0c4)}
+.card-led .card-body{padding:.65rem .9rem .8rem;display:flex;flex-direction:column;gap:.3rem}
+.card-led .card-body h2{margin:0;font-size:var(--font-size-base);font-weight:700;color:var(--card-title-color,#fff);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-led .card-body .card-media-count{margin:0;color:var(--card-text-color,#d9c1d6)}
+
+/* --- Badges and pills ------------------------------------------------ */
+.card-badge{
+    display:inline-flex;align-items:center;gap:.3rem;
+    padding:.18rem .55rem;border-radius:999px;
+    font-size:.68rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    background:var(--scrim-strong,#050208e6);color:var(--text-color,#f5edf7);
+    border:1px solid var(--border,#2a1638);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+}
+.card-badge-adult{background:var(--btn-danger-bg,#3b1024);color:var(--btn-danger-color,#fecdd3);border-color:var(--btn-danger-border,#f43f5e)}
+.card-badge-live{background:var(--btn-danger-bg,#3b1024);color:var(--btn-danger-color,#fecdd3);border-color:var(--btn-danger-border,#f43f5e)}
+.card-badge-count{margin-left:auto}
+.pill{
+    display:inline-flex;align-items:center;gap:.3rem;
+    padding:.18rem .6rem;border-radius:999px;white-space:nowrap;
+    font-size:var(--font-size-xs);font-weight:700;line-height:1.5;
+    background:var(--surface-3,#1e0f2a);color:var(--text-color,#f5edf7);
+    border:1px solid var(--border,#2a1638);
+}
+.pill-adult{background:var(--btn-danger-bg,#3b1024);color:var(--btn-danger-color,#fecdd3);border-color:var(--btn-danger-border,#f43f5e)}
+.pill-soft{background:var(--chip-bg,#150a1d);color:var(--chip-color,#f0abfc);border-color:var(--chip-border,#2a1638)}
+.pill-accent{background:var(--chip-active-bg,#a855f7);color:var(--chip-active-color,#fff);border-color:var(--chip-active-border,#c084fc)}
+
+/* --- Section head ---------------------------------------------------- */
+.section-head{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:var(--spacing-md);flex-wrap:wrap;
+    margin:var(--spacing-xl) 0 var(--spacing-md);
+    padding-bottom:.55rem;border-bottom:1px solid var(--border,#2a1638);
+}
+.section-head h2,.section-head h3{
+    margin:0;font-family:var(--font-family-display,'Playfair Display',Georgia,serif);
+    font-size:clamp(1.25rem,2.6vw,1.6rem);color:var(--heading-color,#fff);
+}
+.section-kicker{
+    display:block;margin:0 0 .3rem;
+    font-size:var(--font-size-xs);font-weight:700;
+    text-transform:uppercase;letter-spacing:.14em;color:var(--link-color,#e9aefc);
+}
+.section-link{font-size:var(--font-size-sm);color:var(--link-color,#e9aefc);text-decoration:none;white-space:nowrap}
+.section-link:hover{color:var(--link-hover,#fbcfe8);text-decoration:underline}
+
+/* --- Filter bar ------------------------------------------------------ */
+.filter-bar{
+    display:flex;align-items:center;gap:var(--spacing-sm);flex-wrap:wrap;
+    padding:.6rem .8rem;margin:0 0 var(--spacing-lg);
+    background:var(--surface-2,#150a1d);
+    border:1px solid var(--border,#2a1638);
+    border-radius:var(--border-radius-lg,14px);
+}
+.filter-bar-label{
+    margin:0;font-size:var(--font-size-xs);font-weight:700;
+    text-transform:uppercase;letter-spacing:.1em;color:var(--muted-color,#b9a0c4);
+}
+.filter-bar .chips{margin:0}
+.filter-bar .chip{padding:.24rem .65rem;font-size:var(--font-size-sm)}
+
+/* --- Buttons (kit additions) ----------------------------------------- */
+.btn-lg{padding:.7rem 1.35rem;font-size:var(--font-size-md);border-radius:var(--border-radius,10px)}
+.btn-ghost{background:transparent;color:var(--text-color,#f5edf7);border:1px solid var(--outline-border,#3a1f4a)}
+.btn-ghost:hover{background:var(--surface-3,#1e0f2a);color:var(--text-color,#f5edf7)}
+.btn-grad{
+    background:linear-gradient(135deg,var(--btn-gradient-1,#d946ef),var(--btn-gradient-2,#e879f9));
+    color:var(--btn-text,#0a0210);
+}
+.btn-grad:hover{
+    background:linear-gradient(135deg,var(--btn-hover-gradient-1,#e879f9),var(--btn-hover-gradient-2,#f0a5ff));
+    color:var(--btn-text,#0a0210);
+    box-shadow:var(--glow-brand,0 0 0 1px rgba(168,85,247,.35),0 0 24px rgba(168,85,247,.15));
+}
+
+/* --- Stat chips (hero stats) ----------------------------------------- */
+.stat-chip{
+    display:inline-flex;flex-direction:column;gap:.05rem;
+    padding:.45rem .85rem;min-width:5.5rem;
+    background:var(--glass-bg,#0d0612b8);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    border:1px solid var(--border,#2a1638);
+    border-radius:var(--border-radius,10px);
+}
+.stat-chip b{
+    font-family:var(--font-family-display,'Playfair Display',Georgia,serif);
+    font-size:var(--font-size-lg);font-weight:600;line-height:1.15;
+    color:var(--heading-color,#fff);
+}
+.stat-chip span{font-size:var(--font-size-xs);text-transform:uppercase;letter-spacing:.08em;color:var(--muted-color,#b9a0c4)}
+.hero-cover .stat-chip-row{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.6rem}
+
+/* --- Generic media frame (aspect-locked imagery anywhere) ------------ */
+.media-frame{position:relative;overflow:hidden;background:var(--card-placeholder-bg,#150a1d);border-radius:var(--border-radius,10px)}
+.media-frame img{width:100%;height:100%;object-fit:cover;display:block}
+.media-frame-16x9{aspect-ratio:16/9}
+.media-frame-4x3{aspect-ratio:4/3}
+.media-frame-1x1{aspect-ratio:1/1}
+
+/* --- Photo grids that keep their ratio ------------------------------- */
+/* The base .grid pins every thumbnail to 150px, which crops tall and
+   wide sources to the same box. The ratio variant locks the cell to 4:3
+   instead; user.css loads after theme.css, so it wins on equal weight. */
+.grid-ratio{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+.grid-ratio img{height:auto;aspect-ratio:4/3;object-fit:cover}
+.grid-ratio .gallery-item{margin:0}
+
+/* --- Kit focus ring -------------------------------------------------- */
+:where(.btn-ghost,.btn-grad,.btn-lg,.section-link,.glass-brand,.card-led .card-link):focus-visible{
+    outline:2px solid var(--focus-ring,#c084fc);outline-offset:2px;
+}

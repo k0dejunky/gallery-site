@@ -1891,6 +1891,75 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.theme.member_component_kit', 'Smoke · Theme', 'The phase-7 member component kit exists, uses palette tokens and forks no colours', static function () use ($root, $ok, $bad): array {
+            // Phase 7 of the redesign: the immersive media-first building
+            // blocks (glass header, cover hero, media-led card, section
+            // head, filter bar, pills, stat chips, media frame) live in
+            // user.css so phases 8-11 can compose them. Two things drift
+            // without this guard: a kit selector quietly renamed (the
+            // later phases then build on nothing), and a palette colour
+            // forked into the kit as a literal (the four scrim/glass
+            // tokens are the only values those surfaces may paint with).
+            $css    = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $theme  = (string) @file_get_contents($root . '/app/Models/Theme.php');
+            $problems = [];
+
+            // Every kit selector the later phases compose.
+            foreach ([
+                '.page-shell{', '.glass-header{', '.glass-header-inner{',
+                '.hero-cover{', '.hero-cover-scrim{', '.hero-cover-title{',
+                '.card-led{', '.card-media{', '.card-scrim{', '.card-overlay{',
+                '.card-badge{', '.pill{', '.section-head{', '.filter-bar{',
+                '.btn-grad{', '.stat-chip{', '.media-frame{', '.grid-ratio{',
+            ] as $needle) {
+                if (strpos($css, $needle) === false) {
+                    $problems[] = 'user.css no longer defines ' . $needle;
+                }
+            }
+
+            // The four tokens the kit paints with, in the member palette.
+            if (preg_match('/private const MEMBER_COLORS = \[(.*?)\n    \];/s', $theme, $m) !== 1) {
+                $problems[] = 'the member palette could not be read out of Theme.php';
+                $block = '';
+            } else {
+                $block = $m[1];
+            }
+            foreach (['glass-bg' => '#0d0612b8', 'scrim-clear' => '#05020800',
+                      'scrim-soft' => '#050208a6', 'scrim-strong' => '#050208e6'] as $key => $hex) {
+                if (preg_match("/'" . preg_quote($key, '/') . "'\s*=>\s*'" . preg_quote($hex, '/') . "'/", $block) !== 1) {
+                    $problems[] = 'the member palette must carry ' . $key . ' ' . $hex;
+                }
+            }
+            // The kit must actually consume them (a token nobody reads is
+            // invisible to every component built on top).
+            foreach (['var(--glass-bg', 'var(--scrim-clear', 'var(--scrim-soft', 'var(--scrim-strong'] as $use) {
+                if (strpos($css, $use) === false) {
+                    $problems[] = 'the kit must use ' . $use . ')';
+                }
+            }
+
+            // No palette colour may be forked into the kit as a bare
+            // literal: strip the legal var(--x, #hex) fallbacks (the
+            // established form this file uses) and nothing hex-shaped may
+            // survive. rgba() shadows are the file's existing practice.
+            $at = strpos($css, 'Phase 7 - member component kit');
+            if ($at === false) {
+                $problems[] = 'the phase-7 kit section is missing from user.css';
+            } else {
+                $kit = substr($css, $at);
+                $stripped = (string) preg_replace('/var\(\s*--[a-z0-9-]+\s*,\s*#[0-9a-fA-F]{3,8}\s*\)/', '', $kit);
+                if (preg_match_all('/(?<!&)#[0-9a-fA-F]{3,8}\b/', $stripped, $m2)) {
+                    foreach (array_unique($m2[0]) as $hex) {
+                        $problems[] = 'the kit forks the palette colour ' . $hex . ' (use a token)';
+                    }
+                }
+            }
+
+            return $problems === []
+                ? $ok('the phase-7 component kit is complete, tokenised and colour-clean')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.ui.chips_reachable', 'Smoke · UI', 'A chip that carries a checkbox is reachable by keyboard', static function () use ($root, $ok, $bad): array {
             // .chip input[type="checkbox"] { display: none } took the
             // e-mail-notification toggles and the favourite-category chips
