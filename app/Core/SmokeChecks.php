@@ -1891,6 +1891,75 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.theme.auth_splash_and_plans_on_tokens', 'Smoke · Theme', 'The auth splash and the membership plan cards sit on the member kit', static function () use ($root, $ok, $bad): array {
+            // Phase 10: the auth splash and the pricing page are polished on
+            // the member tokens (surface-2 card, card shadow, Playfair hero)
+            // and the plan grid is the kit treatment with a highlighted tier.
+            // The check also keeps the functional strings the payment flows
+            // depend on in place while the view is being restyled.
+            $problems = [];
+
+            $base = (string) file_get_contents($root . '/app/Core/theme_base.css');
+            if (preg_match('/\.auth-panel \{[^}]*background:\s*var\(--surface-2\)/', $base) !== 1) {
+                $problems[] = 'the auth panel must carry the surface-2 card look';
+            }
+            if (preg_match('/\.auth-panel \{[^}]*var\(--pink-100\)/', $base) === 1) {
+                $problems[] = 'the auth panel must not fall back to the pink-100 skin';
+            }
+            if (preg_match('/\.auth-panel h1 \{[^}]*var\(--heading-color\)/', $base) !== 1) {
+                $problems[] = 'the auth hero heading must use the heading token';
+            }
+
+            $shell  = (string) file_get_contents($root . '/views/auth/partials/auth_shell.php');
+            $login  = (string) file_get_contents($root . '/views/auth/partials/login_form.php');
+            $signup = (string) file_get_contents($root . '/views/auth/partials/signup_form.php');
+            if (strpos($shell, 'var(--font-family-display)') === false) {
+                $problems[] = 'the auth hero must carry the display face';
+            }
+            if (substr_count($shell, "require __DIR__ . '/../../partials/guest_teaser.php'") !== 2) {
+                $problems[] = 'the auth splash must keep both guest teaser side panels';
+            }
+            if (strpos($login, 'class="btn btn-grad"') === false) {
+                $problems[] = 'the login submit button must be the fuchsia primary';
+            }
+            if (strpos($signup, 'class="btn btn-grad"') === false) {
+                $problems[] = 'the signup submit button must be the fuchsia primary';
+            }
+
+            $membership = (string) file_get_contents($root . '/views/membership/index.php');
+            $kitUser    = (string) file_get_contents($root . '/public/assets/css/user.css');
+            foreach ([
+                'plans-grid' => 'the pricing grid must be the plans-grid treatment',
+                '.plan-card{' => 'the plan cards must be the plan-card treatment',
+                'plan-popular' => 'the popular tier needs its highlight class',
+                'plan-popular-tag' => 'the popular tier must carry the pill styles',
+                '.plan-price{' => 'the price line must carry the display face',
+                'var(--font-family-display' => 'the plan typography must use the display token',
+            ] as $needle => $why) {
+                if (strpos($kitUser, $needle) === false) {
+                    $problems[] = $why;
+                }
+            }
+            foreach ([
+                'class="card plan-card' => 'the plan cards must keep the card base',
+                'class="pill pill-accent plan-popular-tag"' => 'the popular tier must carry the pill',
+                '<p class="plan-price"' => 'the price line must carry the display face',
+                'btn-grad u-w-full">Subscribe' => 'the subscribe CTA must be the fuchsia primary',
+                'Or pay by card (Braintree)' => 'the Braintree secondary must stay untouched',
+                'data-pp-button' => 'the PayPal JS buttons must stay untouched',
+                'levelCounts' => 'the included-galleries count must stay untouched',
+                'checkout_processor' => 'the per-plan processor choice must stay untouched',
+            ] as $needle => $why) {
+                if (strpos($membership, $needle) === false) {
+                    $problems[] = $why;
+                }
+            }
+
+            return $problems === []
+                ? $ok('auth splash + plan cards on the member kit')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.theme.member_component_kit', 'Smoke · Theme', 'The phase-7 member component kit exists, uses palette tokens and forks no colours', static function () use ($root, $ok, $bad): array {
             // Phase 7 of the redesign: the immersive media-first building
             // blocks (glass header, cover hero, media-led card, section
@@ -1957,6 +2026,47 @@ class SmokeChecks
 
             return $problems === []
                 ? $ok('the phase-7 component kit is complete, tokenised and colour-clean')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.theme.glass_header_shell', 'Smoke · Theme', 'The shell renders the sticky glass header, not the stacked logo + pill nav', static function () use ($root, $ok, $bad): array {
+            // Phase 8: layout.php swapped the centred .title-header block
+            // plus the separate pill .nav for ONE sticky glass bar. The
+            // hamburger / .nav-links contract and the nav visibility rule
+            // are unchanged; the error shell keeps its own title-header.
+            $layout = (string) @file_get_contents($root . '/views/layout.php');
+            $css    = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $errors = (string) @file_get_contents($root . '/views/errors/partials/shell.php');
+            $problems = [];
+
+            foreach (['class="glass-header"', 'class="glass-header-inner"', 'class="glass-brand"'] as $needle) {
+                if (strpos($layout, $needle) === false) {
+                    $problems[] = 'the layout must render ' . $needle;
+                }
+            }
+            // The old stacked block is gone from the layout (the CSS rules
+            // stay for the error shell, which keeps its own copy).
+            if (strpos($layout, 'class="title-header"') !== false) {
+                $problems[] = 'the layout must not render the old .title-header block';
+            }
+            if (strpos($errors, 'class="title-header"') === false) {
+                $problems[] = 'the error shell keeps its own title-header (the brand survives on error pages)';
+            }
+            // The hamburger contract and the guest-always-gets-the-nav rule.
+            foreach (['window.GalleryTopNav = {', 'data-action="galleryNavToggle"', 'id="nav-links-id"', '$user === null || !$sidebarNav'] as $needle) {
+                if (strpos($layout, $needle) === false) {
+                    $problems[] = 'the shell must keep ' . $needle;
+                }
+            }
+            // The bar adapts the nav it hosts, and impersonation hides it.
+            foreach (['.glass-header .nav{', 'body.impersonating .glass-header'] as $needle) {
+                if (strpos($css, $needle) === false) {
+                    $problems[] = 'user.css must carry ' . $needle;
+                }
+            }
+
+            return $problems === []
+                ? $ok('the shell is the sticky glass header with the old nav contract intact')
                 : $bad(implode('; ', $problems));
         });
 

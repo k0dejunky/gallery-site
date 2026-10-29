@@ -72,8 +72,8 @@
         .btn-disabled { opacity: 0.5; cursor: not-allowed; }
         .hero { padding: var(--spacing-md) 0 var(--spacing-lg); text-align: center; }
         .hero form { display: flex; justify-content: center; gap: var(--spacing-sm); flex-wrap: wrap; }
-        .auth-panel { max-width: 420px; margin: var(--spacing-xl) auto; padding: var(--spacing-lg); background: var(--pink-100); border: var(--input-border-width) solid var(--pink-300); border-radius: var(--border-radius-lg); }
-        .auth-panel h1 { text-align: center; margin-top: 0; color: var(--purple-800); }
+        .auth-panel { max-width: 420px; margin: var(--spacing-xl) auto; padding: var(--spacing-lg); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--border-radius-lg); box-shadow: var(--shadow-card); }
+        .auth-panel h1 { text-align: center; margin-top: 0; color: var(--heading-color); }
         .auth-panel .auth-links { text-align: center; margin-bottom: 0; }
         .auth-panel input[type="email"], .auth-panel input[type="password"] { width: 100%; box-sizing: border-box; }
         .hero input[type="text"] { padding: 0.7rem 1rem; font-size: var(--font-size-base); border: 2px solid var(--purple-400); border-radius: var(--border-radius); width: 60%; min-width: 220px; }

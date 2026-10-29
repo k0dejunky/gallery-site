@@ -11,12 +11,15 @@
  */
 ?>
 <style>
+    .auth-splash { align-items: center; gap: var(--spacing-lg); }
     .auth-splash .auth-panel { flex: 0 1 auto; width: auto; max-width: 520px; }
     .auth-splash-side { flex: 1 1 300px; }
     .auth-panel .auth-hero { text-align: center; margin: 0 0 .5rem; }
-    .auth-panel .auth-hero h1 { margin: 0 0 .35rem; font-size: 1.35rem; }
+    .auth-panel .auth-hero h1 { margin: 0 0 .35rem; font-size: 1.7rem; font-family: var(--font-family-display); font-weight: 600; }
+    .auth-panel .auth-hero p { color: var(--muted-color); }
     .auth-panel .auth-panel-heading { margin: 0 0 .25rem; font-size: 1.1rem; }
     .auth-panel .guest-teaser-stats { margin: var(--spacing-md) 0; }
+    .auth-panel .auth-form-note { margin-top: 0; }
     @media (max-width: 1352px) { .auth-splash { flex-direction: column; } .auth-splash .auth-panel { order: -1; } }
 </style>
 

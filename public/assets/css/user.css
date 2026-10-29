@@ -634,9 +634,11 @@ body.site-compact .title-header img { max-width: min(380px, 100%); }
     .age-gate-panel p{margin:.5rem 0 1.25rem;color:#5a4d6b;}
     .age-gate-panel .thin-link{color:#8b5ab5;text-decoration:underline;}
     .age-gate-panel .btn{margin:.2rem .25rem;}
-/* While an admin is impersonating a member the title image is hidden.
-   This rule used to live in a conditional <style> block in the layout. */
-body.impersonating .title-header { display: none; }
+/* While an admin is impersonating a member the brand bar is hidden
+   (it used to be the title image; phase 8 moved the brand into the
+   glass header). The error shell keeps its own title-header copy. */
+body.impersonating .title-header,
+body.impersonating .glass-header { display: none; }
 
 /* ---------- Live stream ------------------------------------------------------ */
 
@@ -1391,3 +1393,65 @@ body.site-compact .home-layout { grid-template-columns: 224px minmax(0, 1fr); }
 :where(.btn-ghost,.btn-grad,.btn-lg,.section-link,.glass-brand,.card-led .card-link):focus-visible{
     outline:2px solid var(--focus-ring,#c084fc);outline-offset:2px;
 }
+
+/* ======================================================================
+   Phase 8 - shell.
+   layout.php now renders the glass header (phase 7 kit) instead of the
+   stacked centred .title-header block + pill .nav. This section adapts
+   the nav that rides INSIDE the bar, the mobile dropdown and the fold
+   behaviour. Everything else stays on the kit's own rules.
+   ====================================================================== */
+
+/* The nav loses the base pill (border-bottom / padding / margin) and
+   stretches so the search sits left and the links sit right. */
+.glass-header .nav{
+    flex:1 1 auto;min-width:0;
+    border-bottom:none;padding-bottom:0;margin-bottom:0;
+}
+.glass-header .site-search-top{margin:0}
+
+/* Desktop: the link cluster is one right-aligned row (the base leaves
+   .nav-links a plain block of inline-block buttons). Scoped to
+   min-width so it never beats the mobile dropdown's display:none. */
+@media(min-width:641px){
+    .glass-header .nav-links{display:flex;flex-wrap:wrap;gap:var(--spacing-sm);align-items:center;justify-content:flex-end}
+}
+
+/* Phone: the toggle rides right of the brand, the search wraps to its
+   own row inside the nav, and the dropdown hangs off the nav. */
+@media(max-width:640px){
+    .glass-header .nav{justify-content:flex-end}
+    .glass-header .nav .spacer{display:none}
+}
+@media(max-width:768px){
+    .glass-header-inner{flex-wrap:wrap;row-gap:var(--spacing-sm)}
+    .glass-header .nav{flex-wrap:wrap;row-gap:var(--spacing-sm)}
+}
+
+/* Footer: a little more air above the legal row now the header is slim. */
+.site-footer{margin-top:var(--spacing-xl)}
+
+/* ======================================================================
+   Phase 10 - membership pricing cards.
+   The membership page renders inside the shared .auth-panel
+   (theme_base.css carries its surface-2 card look now, alongside the
+   login/signup splash). These are the pricing-grid primitives the
+   membership view composes. Pure tokens only - the kit's hex-free
+   rule above runs to EOF.
+   ====================================================================== */
+
+.plans-grid{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+    gap:var(--spacing-md);margin-top:var(--spacing-lg);
+}
+.plan-card{
+    position:relative;display:flex;flex-direction:column;justify-content:space-between;
+    gap:var(--spacing-md);text-align:center;margin:0;padding:var(--spacing-lg) var(--spacing-md);
+}
+.plan-card h2{font-family:var(--font-family-display,'Playfair Display',Georgia,serif);font-weight:600;font-size:1.35rem}
+.plan-price{
+    font-family:var(--font-family-display,'Playfair Display',Georgia,serif);
+    font-size:1.85rem;font-weight:600;line-height:1.2;
+}
+.plan-popular{border-color:var(--btn-gradient-1,#d946ef);box-shadow:var(--glow-brand,var(--shadow-card))}
+.plan-popular-tag{position:absolute;top:-0.65rem;left:50%;transform:translateX(-50%);white-space:nowrap}

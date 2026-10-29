@@ -57,7 +57,7 @@
         </div>
 
         <div class="signup-actions">
-            <button type="submit" class="btn">Sign Up</button>
+            <button type="submit" class="btn btn-grad">Sign Up</button>
         </div>
     </div>
 </form>

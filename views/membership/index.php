@@ -179,12 +179,13 @@ $ldJson = [
             if ($__slug === 'chat-add-on') { $paypalChatName     = (string) ($candidatePlan['name'] ?? ''); }
         }
         ?>
-        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); order:7;">
+        <div class="plans-grid" style="order:7;">
             <?php foreach ($plans as $plan): ?>
-                <div class="card" style="display:flex; flex-direction:column; justify-content:space-between; text-align:center; margin:0;">
+                <div class="card plan-card<?= (int) $plan['id'] === $goldPlanId ? ' plan-popular' : '' ?>">
                     <div style="order:1;">
+                        <?php if ((int) $plan['id'] === $goldPlanId): ?><span class="pill pill-accent plan-popular-tag">Most popular</span><?php endif; ?>
                         <h2 class="u-mt-0"><?= e($plan['name']) ?></h2>
-                        <p style="font-size:1.5rem; font-weight:bold; margin:0.5rem 0;">
+                        <p class="plan-price" style="margin:0.5rem 0;">
                             <?php if (!empty($plan['sale'])): ?>
                                 <del class="muted" style="font-size:0.95rem;">$<?= number_format((float) $plan['price'], 2) ?></del>
                                 $<?= number_format((float) $plan['sale']['sale_price'], 2) ?>
@@ -241,7 +242,7 @@ $ldJson = [
                     <?php elseif ($useBraintreeOnly && !$isLifetime && $braintreeAvailable): ?>
                         <div style="order:2;">
                             <?php if ($braintreeLive): ?>
-                                <a class="btn" style="width:100%; box-sizing:border-box;" href="<?= url('/membership/checkout') ?>?plan_id=<?= (int) $plan['id'] ?>">Pay by card</a>
+                                <a class="btn btn-grad" style="width:100%; box-sizing:border-box;" href="<?= url('/membership/checkout') ?>?plan_id=<?= (int) $plan['id'] ?>">Pay by card</a>
                             <?php else: ?>
                                 <button type="button" class="btn" style="width:100%; box-sizing:border-box; opacity:.55; cursor:not-allowed;" disabled aria-label="Pay by card (coming soon)" title="Braintree card checkout is not available yet.">Pay by card</button>
                             <?php endif; ?>
@@ -262,7 +263,7 @@ $ldJson = [
                                     </select>
                                 </div>
                             <?php endif; ?>
-                            <button type="submit" class="btn u-w-full">Subscribe</button>
+                            <button type="submit" class="btn btn-grad u-w-full">Subscribe</button>
                         </form>
                     <?php endif; ?>
                     <?php if ($braintreeAvailable && !$hasActive && $pendingSub === null && !$isLifetime && !$useBraintreeOnly && !$useOffline): ?>

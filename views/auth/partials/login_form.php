@@ -19,6 +19,6 @@
         </label>
     </p>
     <p class="u-center">
-        <button type="submit" class="btn">Login</button>
+        <button type="submit" class="btn btn-grad">Login</button>
     </p>
 </form>
