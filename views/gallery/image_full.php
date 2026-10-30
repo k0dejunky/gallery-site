@@ -70,7 +70,7 @@ $breadcrumbItems = [
 
 <?php // Save this image to a collection (the viewer already loads them). ?>
 <?php if (!empty($canViewFull) && !empty($collections)): ?>
-<form method="post" action="<?= url('/collections/' . (int) $collections[0]['id'] . '/photos') ?>" class="settings-form player-save-form" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.25rem 0 .75rem;">
+<form method="post" action="<?= url('/collections/' . (int) $collections[0]['id'] . '/photos') ?>" class="settings-form player-save-form save-form">
     <?= csrf_field() ?>
     <input type="hidden" name="photo_id" value="<?= (int) $photo['id'] ?>">
     <label class="muted u-fs-09">Save this image to a collection</label>
@@ -80,20 +80,19 @@ $breadcrumbItems = [
         <?php endforeach; ?>
     </select>
     <button type="submit" class="btn btn-sm btn-outline">Add to collection</button>
-    <a href="<?= url('/collections') ?>" class="muted" style="font-size:.85rem;">Manage collections</a>
+    <a href="<?= url('/collections') ?>" class="muted save-form-link">Manage collections</a>
 </form>
 <?php elseif (!empty($canViewFull)): ?>
-<p class="muted" style="font-size:.9rem;margin:.25rem 0 .75rem;"><a href="<?= url('/collections') ?>">Create a collection</a> to save this image.</p>
+<p class="muted save-form-hint"><a href="<?= url('/collections') ?>">Create a collection</a> to save this image.</p>
 <?php endif; ?>
 <?php $reportUrl = url('/support') . '?' . http_build_query(['return_to' => $_SERVER['REQUEST_URI'] ?? url('/galleries')]); ?>
 
-<figure class="paywalled-content" style="margin: 1rem 0; text-align: center;">
+<figure class="paywalled-content media-viewer">
     <?php if (empty($canViewFull)): ?>
         <?php // Blurred, indexable preview for guests and below-level members. ?>
         <img src="<?= e(file_url($photo['filename'], 'blur')) ?>"
              alt="<?= e($photoAlt) ?>"
-             decoding="async"
-             style="max-width:100%;height:auto;border-radius:10px;box-shadow:0 2px 12px rgba(59,7,100,.35);">
+             decoding="async">
         <?php
         $gateTitle = $photo['caption'] !== '' ? $photo['caption'] : 'This image';
         $gateLevel = (int) ($gateLevel ?? 0);
@@ -116,11 +115,10 @@ $breadcrumbItems = [
          <?php if ($canDownloadFull): ?>data-full="<?= e(file_url($photo['filename'])) ?>"<?php endif; ?>
          decoding="async"
          fetchpriority="high"
-         alt="<?= e($photoAlt) ?>"
-         style="max-width: 100%; height: auto; border-radius: 10px; box-shadow: 0 2px 12px rgba(59, 7, 100, 0.35);">
-    <figcaption class="muted" style="margin-top: 0.75rem">
+         alt="<?= e($photoAlt) ?>">
+    <figcaption class="muted media-meta">
         <?php if ($photo['caption'] !== ''): ?>
-            <span><?= e($photo['caption']) ?></span><br>
+            <span class="media-caption"><?= e($photo['caption']) ?></span>
         <?php endif; ?>
         <?php if ($canDownloadFull): ?>
             <button id="fullsize-toggle" class="btn" type="button">View full size</button>
@@ -129,7 +127,7 @@ $breadcrumbItems = [
     </figcaption>
     <?php endif; ?>
 </figure>
-<p style="text-align:center"><a href="<?= e($reportUrl) ?>">Report broken media</a></p>
+<p class="media-report"><a href="<?= e($reportUrl) ?>">Report broken media</a></p>
 <?php
 $commentableType = 'photo';
 $commentableId   = (int) $photo['id'];

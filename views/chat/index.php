@@ -1,34 +1,34 @@
 <?php $title = 'Chat'; ?>
 
-<div class="chat-page">
+<div class="chat-page page-shell chat-shell">
             <?php if (!empty($questionnaires)): ?>
                 <div class="card u-mb-1">
                     <h2 class="section-title" style="margin-bottom:.5rem;">Questionnaires</h2>
                     <?php foreach ($questionnaires as $q): ?>
                         <?php $qAnswered = !empty($q['answered']); ?>
-                        <div id="questionnaire-<?= (int)$q['id'] ?>" style="border:1px solid var(--pink-300);border-radius:var(--card-radius);background:var(--pink-100);padding:1rem;margin-bottom:.75rem;<?= $qAnswered ? 'opacity:.85;' : '' ?>">
-                            <strong><?= e((string)$q['title']) ?></strong>
+                        <div id="questionnaire-<?= (int)$q['id'] ?>" class="qn-panel<?= $qAnswered ? ' qn-panel-done' : '' ?>">
+                            <strong class="qn-title"><?= e((string)$q['title']) ?></strong>
                             <?php if ($qAnswered): ?>
                                 <span class="chat-submitted">✓ Submitted</span>
                             <?php endif; ?>
-                            <?php if (!empty($q['intro'])): ?><p style="margin:.35rem 0 .6rem;white-space:pre-wrap;"><?= e((string)$q['intro']) ?></p><?php endif; ?>
+                            <?php if (!empty($q['intro'])): ?><p class="qn-intro"><?= e((string)$q['intro']) ?></p><?php endif; ?>
 
                             <?php if ($qAnswered): ?>
                                 <?php foreach ($q['questions'] as $qq): ?>
                                     <?php $qqid=(int)$qq['id']; $my = $q['my_answers'][$qqid] ?? ''; ?>
-                                    <div style="margin-bottom:.5rem;">
-                                        <label style="display:block;font-weight:600;margin-bottom:.25rem;"><?= e((string)$qq['prompt']) ?></label>
+                                    <div class="qn-question">
+                                        <label class="qn-label"><?= e((string)$qq['prompt']) ?></label>
                                         <?php if ($qq['qtype']==='text'): ?>
                                             <textarea rows="2" disabled class="chat-answer"><?= e((string)$my) ?></textarea>
                                         <?php elseif ($qq['qtype']==='choice' || $qq['qtype']==='rating'): ?>
                                             <?php if ($qq['qtype']==='choice'): $opts=$qq['options_decoded']??[]; else: $opts=$qq['options_decoded']??['min'=>1,'max'=>5]; $tmp=[]; for($r=(int)$opts['min'];$r<=(int)$opts['max'];$r++){ $tmp[]=$r; } $opts=$tmp; endif; ?>
                                             <?php foreach ($opts as $opt): ?>
-                                                <label style="display:inline-flex;align-items:center;gap:.3rem;margin-right:.75rem;"><input type="radio" disabled <?= (string)$my === (string)$opt ? 'checked' : '' ?>> <?= e((string)$opt) ?></label>
+                                                <label class="qn-option"><input type="radio" disabled <?= (string)$my === (string)$opt ? 'checked' : '' ?>> <?= e((string)$opt) ?></label>
                                             <?php endforeach; ?>
                                         <?php elseif ($qq['qtype']==='multichoice'): ?>
                                             <?php $vals=json_decode((string)$my,true); if(!is_array($vals)){$vals=array_filter([(string)$my]);} ?>
                                             <?php foreach (($qq['options_decoded']??[]) as $opt): ?>
-                                                <label style="display:inline-flex;align-items:center;gap:.3rem;margin-right:.75rem;"><input type="checkbox" disabled <?= in_array((string)$opt, array_map('strval',$vals), true) ? 'checked' : '' ?>> <?= e((string)$opt) ?></label>
+                                                <label class="qn-option"><input type="checkbox" disabled <?= in_array((string)$opt, array_map('strval',$vals), true) ? 'checked' : '' ?>> <?= e((string)$opt) ?></label>
                                             <?php endforeach; ?>
                                         <?php elseif ($qq['qtype']==='number'): ?>
                                             <input type="text" disabled value="<?= e((string)$my) ?>" class="chat-answer">
@@ -37,26 +37,26 @@
                                 <?php endforeach; ?>
                                 <p class="muted u-m0"><strong>Submitted.</strong> You can view your answers above; they can't be changed.</p>
                             <?php elseif ((int)$q['allow_replies'] === 1): ?>
-                                <form method="post" action="<?= url('/chat/questionnaire/' . (int)$q['id'] . '/answer') ?>" style="display:flex;flex-direction:column;gap:.5rem;">
+                                <form method="post" action="<?= url('/chat/questionnaire/' . (int)$q['id'] . '/answer') ?>" class="qn-form">
                                     <?= csrf_field() ?>
                                     <?php foreach ($q['questions'] as $qq): ?>
                                         <?php $qqid=(int)$qq['id']; $key='q'.$qqid; ?>
                                         <div>
-                                            <label style="display:block;font-weight:600;margin-bottom:.25rem;"><?= e((string)$qq['prompt']) ?><?= (int)$qq['required']===1?'*':'' ?></label>
+                                            <label class="qn-label"><?= e((string)$qq['prompt']) ?><?= (int)$qq['required']===1?'*':'' ?></label>
                                             <?php if ($qq['qtype']==='text'): ?>
                                                 <textarea name="answers[<?= $key ?>]" rows="2" aria-label="<?= e((string)$qq['prompt']) ?>" <?= (int)$qq['required']===1?'required':'' ?>></textarea>
                                             <?php elseif ($qq['qtype']==='choice'): ?>
                                                 <?php foreach (($qq['options_decoded']??[]) as $opt): ?>
-                                                    <label style="display:inline-flex;align-items:center;gap:.3rem;margin-right:.75rem;"><input type="radio" name="answers[<?= $key ?>]" value="<?= e((string)$opt) ?>" <?= (int)$qq['required']===1?'required':'' ?>> <?= e((string)$opt) ?></label>
+                                                    <label class="qn-option"><input type="radio" name="answers[<?= $key ?>]" value="<?= e((string)$opt) ?>" <?= (int)$qq['required']===1?'required':'' ?>> <?= e((string)$opt) ?></label>
                                                 <?php endforeach; ?>
                                             <?php elseif ($qq['qtype']==='multichoice'): ?>
                                                 <?php foreach (($qq['options_decoded']??[]) as $opt): ?>
-                                                    <label style="display:inline-flex;align-items:center;gap:.3rem;margin-right:.75rem;"><input type="checkbox" name="answers[<?= $key ?>][]" value="<?= e((string)$opt) ?>"> <?= e((string)$opt) ?></label>
+                                                    <label class="qn-option"><input type="checkbox" name="answers[<?= $key ?>][]" value="<?= e((string)$opt) ?>"> <?= e((string)$opt) ?></label>
                                                 <?php endforeach; ?>
                                             <?php elseif ($qq['qtype']==='rating'): ?>
                                                 <?php $opts=$qq['options_decoded']??['min'=>1,'max'=>5]; $min=(int)$opts['min']; $max=(int)$opts['max']; ?>
                                                 <?php for ($r=$min;$r<=$max;$r++): ?>
-                                                    <label style="display:inline-flex;align-items:center;gap:.2rem;margin-right:.5rem;"><input type="radio" name="answers[<?= $key ?>]" value="<?= $r ?>" <?= (int)$qq['required']===1?'required':'' ?>> <?= $r ?></label>
+                                                    <label class="qn-option"><input type="radio" name="answers[<?= $key ?>]" value="<?= $r ?>" <?= (int)$qq['required']===1?'required':'' ?>> <?= $r ?></label>
                                                 <?php endfor; ?>
                                             <?php elseif ($qq['qtype']==='number'): ?>
                                                 <input type="number" name="answers[<?= $key ?>]" aria-label="<?= e((string)$qq['prompt']) ?>" <?= (int)$qq['required']===1?'required':'' ?>>
@@ -76,9 +76,9 @@
     <?php if (empty($eligible)): ?>
         <h1>Chat</h1>
         <?php if (trim((string) $dailyMessage) !== ''): ?>
-            <div style="border:1px solid var(--pink-300);border-radius:var(--card-radius);background:var(--pink-100);padding:1rem;margin-bottom:1rem;">
+            <div class="chat-daily">
                 <strong>Message from the site</strong>
-                <p style="margin:.5rem 0 0;white-space:pre-wrap;"><?= e((string) $dailyMessage) ?></p>
+                <p><?= e((string) $dailyMessage) ?></p>
             </div>
         <?php endif; ?>
         <p class="muted">Chat is available to members on the <strong>Platinum</strong>, <strong>Yearly</strong>, <strong>Lifetime</strong>, or <strong>Chat add-on</strong> plans. Upgrade in <a href="<?= url('/membership') ?>">Membership</a> to start chatting.</p>
@@ -113,7 +113,7 @@
                             <?php if (empty($m['attachment_url'])): ?>
                                 <span class="chat-attachment chat-expired">🔒 Media expired</span>
                             <?php elseif (!empty($m['attachment_thumb_url']) && str_starts_with((string) $m['attachment_type'], 'image/')): ?>
-                                <a href="<?= e($m['attachment_url']) ?>" target="_blank" rel="noopener" style="display:inline-block;margin-top:.4rem;" title="Open full image">
+                                <a href="<?= e($m['attachment_url']) ?>" target="_blank" rel="noopener" class="chat-attachment-link" title="Open full image">
                                     <img class="chat-image" loading="lazy" src="<?= e($m['attachment_thumb_url']) ?>" alt="<?= e($m['attachment_name']) ?>" draggable="false" data-nocontext>
                                 </a>
                             <?php else: ?>
@@ -129,8 +129,8 @@
         <form class="chat-composer" id="chat-form">
             <?= csrf_field() ?>
             <textarea id="chat-input" rows="2" maxlength="2000" placeholder="Type a message…" aria-label="Message"></textarea>
-            <label class="btn btn-outline" for="chat-file" title="Attach a file (images, video, audio, PDF, text; max 25 MB)" style="display:flex;align-items:center;">📎</label>
-            <input type="file" id="chat-file" accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.oga,.wav,.pdf,.txt" style="display:none;" aria-label="Attach a file">
+            <label class="btn btn-outline chat-attach-btn" for="chat-file" title="Attach a file (images, video, audio, PDF, text; max 25 MB)">📎</label>
+            <input type="file" id="chat-file" class="chat-file-input" accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.oga,.wav,.pdf,.txt" aria-label="Attach a file">
             <button type="submit" class="btn" id="chat-send">Send</button>
         </form>
         <p class="muted" id="chat-file-name" style="display:none;margin:.35rem 0 0;"></p>
@@ -204,7 +204,7 @@
             if (msg.media_expired || !msg.attachment_url) {
                 html += ' <span class="chat-attachment chat-expired">🔒 Media expired</span>';
             } else if (msg.attachment_thumb_url) {
-                html += ' <a href="' + esc(msg.attachment_url) + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:.4rem;" title="Open full image">' +
+                html += ' <a href="' + esc(msg.attachment_url) + '" target="_blank" rel="noopener" class="chat-attachment-link" title="Open full image">' +
                     ' <img class="chat-image" loading="lazy" src="' + esc(msg.attachment_thumb_url) + '" alt="' + esc(msg.attachment_name) + '" draggable="false" data-nocontext></a>';
             } else {
                 html += ' <span class="chat-attachment">📎 ' + esc(msg.attachment_name) + '</span>';

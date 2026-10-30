@@ -1,6 +1,6 @@
 <?php $title = 'Support'; ?>
 
-<div class="support-page">
+<div class="support-page page-shell">
 <header class="support-hero">
     <div><h1>Support</h1><p>Questions, feedback, or something not working? We are here to help.</p></div>
 </header>

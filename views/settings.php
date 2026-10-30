@@ -2,10 +2,11 @@
 <?php // Favourite IDs as a plain list so checkbox state can be checked cheaply. ?>
 <?php $favIds = array_map('intval', array_column($favorites, 'id')); ?>
 
+<div class="page-shell">
 <h1>Settings</h1>
 <p class="settings-back"><a class="btn btn-outline" href="<?= e(url('/account')) ?>">&larr; Back to dashboard</a></p>
 
-<section class="card settings-card" style="border-left:4px solid var(--purple-500);">
+<section class="card settings-card settings-card-accent">
     <h2 class="section-title">Site tour</h2>
     <p class="muted">Replay the interactive tour that walks you through the site's features.</p>
     <button type="button" class="btn btn-sm" data-action="startSiteTour">Start tour</button>
@@ -13,11 +14,11 @@
 
 <?php // Super admins see the operator chat bridge connection details. ?>
 <?php if (!empty($chatBridge) && !empty($chatBridge['visible'])): ?>
-<section class="card settings-card" style="border-left:4px solid var(--purple-500);">
+<section class="card settings-card settings-card-accent">
     <h2 class="section-title">Operator chat bridge</h2>
     <p class="muted">Enter these in the Operator Chat Android app to connect as an operator.</p>
-    <p><strong>Server URL</strong><br><code style="word-break:break-all;"><?= e((string) $chatBridge['server_url']) ?></code></p>
-    <p><strong>Bridge token</strong><br><code style="word-break:break-all;"><?= e((string) $chatBridge['bridge_token']) ?></code></p>
+    <p><strong>Server URL</strong><br><code class="settings-code"><?= e((string) $chatBridge['server_url']) ?></code></p>
+    <p><strong>Bridge token</strong><br><code class="settings-code"><?= e((string) $chatBridge['bridge_token']) ?></code></p>
     <p class="muted u-fs-08">Keep the token private — it grants operator reply and training-data access.</p>
 </section>
 <?php endif; ?>
@@ -62,9 +63,9 @@
     <p class="muted">Choose the timezone that dates and times across the site should be displayed in. Times are stored in UTC and converted to this timezone on display.</p>
     <form method="post" action="<?= e(url('/settings/timezone')) ?>">
         <?= csrf_field() ?>
-        <div class="settings-fields" style="grid-template-columns:minmax(0,1fr);">
+        <div class="settings-fields settings-fields-1">
             <label>Timezone
-                <select name="timezone" id="site-timezone" style="min-width:220px;">
+                <select name="timezone" id="site-timezone" class="settings-select">
                     <option value="UTC"<?= $siteTimezone === 'UTC' ? ' selected' : '' ?>>UTC (Coordinated Universal Time)</option>
                     <?php foreach ($siteTimezones as [$value, $label]): ?>
                         <option value="<?= e($value) ?>"<?= $siteTimezone === $value ? ' selected' : '' ?>><?= e($label) ?></option>
@@ -95,7 +96,7 @@
 
 <?php // Super admins can tune server optimization settings. ?>
 <?php if (!empty($serverOptCanApply)): ?>
-<section class="card settings-card" style="border-left:4px solid var(--purple-500);">
+<section class="card settings-card settings-card-accent">
     <h2 class="section-title">Server optimizations</h2>
     <p class="muted">Tune server-level performance. Save stores the values; "Apply to server" writes the config and reloads services (Apache, PHP-FPM, MySQL) via a scoped root helper. No site functionality or layout changes.</p>
     <?php if (!empty($serverOptStatus) && !empty($serverOptStatus['applied_at'])): ?>
@@ -106,7 +107,7 @@
     <?php endif; ?>
     <form method="post" action="<?= e(url('/settings/server-optimizations')) ?>" class="settings-form">
         <?= csrf_field() ?>
-        <div class="settings-fields" style="grid-template-columns:repeat(2,minmax(0,1fr));">
+        <div class="settings-fields">
             <label>Brotli compression
                 <input type="hidden" name="brotli_enabled" value="0">
                 <input type="checkbox" name="brotli_enabled" value="1"<?= !empty($serverOpt['brotli_enabled']) ? ' checked' : '' ?>>
@@ -149,11 +150,11 @@
                 <input type="number" name="cache_recent_ttl" min="15" max="3600" value="<?= (int) $serverOpt['cache_recent_ttl'] ?>">
             </label>
         </div>
-        <div style="display:flex;gap:.5rem;margin-top:.5rem;flex-wrap:wrap;">
+        <div class="settings-actions">
             <button type="submit" class="btn">Save settings</button>
         </div>
     </form>
-    <form method="post" action="<?= e(url('/settings/server-optimizations/apply')) ?>" style="margin-top:.5rem;" data-confirm="Apply server optimizations now (writes config, reloads Apache/PHP-FPM/MySQL)?">
+    <form method="post" action="<?= e(url('/settings/server-optimizations/apply')) ?>" class="settings-apply" data-confirm="Apply server optimizations now (writes config, reloads Apache/PHP-FPM/MySQL)?">
         <?= csrf_field() ?>
         <button type="submit" class="btn btn-outline">Apply to server</button>
     </form>
@@ -162,7 +163,7 @@
 
 <section class="card settings-card" id="gDisplayBar">
     <h2 class="section-title">Gallery display</h2>
-    <div class="settings-fields" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <div class="settings-fields settings-fields-3">
         <label>View mode
             <select id="gd-view" data-gd="view">
                 <option value="grid">Grid</option>
@@ -203,8 +204,8 @@
 </section>
 
 <?php if (!empty($emailUnverified)): ?>
-    <section class="card" style="border-left:4px solid var(--purple-500);margin-bottom:var(--spacing-lg);">
-        <h2 style="margin-top:0;">Verify your email address</h2>
+    <section class="card settings-card settings-card-accent">
+        <h2 class="u-mt-0">Verify your email address</h2>
         <p>Please verify your email to keep your account details current. Check your inbox for the verification link.</p>
         <form method="post" action="<?= url('/verify-email/resend') ?>">
             <?= csrf_field() ?>
@@ -318,12 +319,12 @@
     </form>
     <?php if (\App\Core\Auth::isAdmin()): ?>
         <?php $totpEnabled = !empty($user['totp_enabled']); ?>
-        <hr style="margin:1rem 0;border:none;border-top:1px solid var(--pink-300);">
-        <h3 style="margin:0 0 .5rem;">Two-factor authentication</h3>
+        <hr class="settings-hr">
+        <h3 class="settings-h3">Two-factor authentication</h3>
         <p class="muted">Add a time-based one-time code from an authenticator app to protect admin access.</p>
         <?php if ($totpEnabled): ?>
-            <p><span class="pill pill-ok" style="text-transform:none;">Enabled</span></p>
-            <form method="post" action="<?= e(url('/settings/two-factor/disable')) ?>" style="margin-top:.5rem;">
+            <p><span class="pill pill-ok">Enabled</span></p>
+            <form method="post" action="<?= e(url('/settings/two-factor/disable')) ?>" class="settings-apply">
                 <?= csrf_field() ?>
                 <p>
                     <label for="disable-2fa-code">Current verification code to disable</label><br>
@@ -354,3 +355,4 @@
         <button type="submit" class="btn">Change Password</button>
     </p>
 </form>
+</div>

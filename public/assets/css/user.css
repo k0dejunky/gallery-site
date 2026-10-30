@@ -1455,3 +1455,152 @@ body.site-compact .home-layout { grid-template-columns: 224px minmax(0, 1fr); }
 }
 .plan-popular{border-color:var(--btn-gradient-1,#d946ef);box-shadow:var(--glow-brand,var(--shadow-card))}
 .plan-popular-tag{position:absolute;top:-0.65rem;left:50%;transform:translateX(-50%);white-space:nowrap}
+
+/* ======================================================================
+   Phase 11 - media viewing and the secondary member pages.
+   The image/video viewers get a real stage card, the collection and
+   settings pages lose their one-off inline styles, and the favourites /
+   support / chat pages adopt the shared section-head + surface rhythm.
+   Pure tokens only - the kit's hex-free rule runs to EOF.
+   ====================================================================== */
+
+/* --- the media stage (image viewer + video player) ---------------------- */
+.media-viewer{
+    margin:1rem auto;
+    padding:clamp(.45rem,.8vw,.85rem);
+    text-align:center;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:var(--border-radius-lg);
+    box-shadow:var(--shadow-card);
+}
+.media-viewer img{max-width:100%;height:auto;border-radius:var(--border-radius)}
+.media-viewer .media-stage,
+.media-viewer .gallery-player{border-radius:var(--border-radius)}
+.media-meta{
+    display:flex;justify-content:center;align-items:center;
+    gap:.35rem .9rem;flex-wrap:wrap;
+    margin:.75rem 0 0;
+    color:var(--muted-color);
+    font-size:var(--font-size-sm);
+}
+.media-meta .media-caption{flex-basis:100%;color:var(--text-color);font-size:var(--font-size-base)}
+.media-actions{display:flex;justify-content:center;gap:.5rem;flex-wrap:wrap;margin-top:.6rem}
+.media-report{text-align:center;margin:.5rem 0 0;font-size:var(--font-size-sm)}
+.save-form{
+    display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;
+    margin:.25rem 0 .75rem;padding:.6rem .75rem;
+    border:1px solid var(--border);border-radius:var(--border-radius);
+    background:var(--surface-2);
+}
+.save-form-link{font-size:var(--font-size-sm)}
+.save-form-hint{font-size:var(--font-size-sm);margin:.25rem 0 .75rem}
+
+/* --- the player's side rail --------------------------------------------- */
+.player-main{min-width:0}
+.player-side .player-playlist{
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:var(--border-radius-lg);
+    padding:.75rem;
+    box-shadow:var(--shadow-card);
+}
+.player-playlist h3{margin:0 0 .55rem;color:var(--heading-color)}
+.pl-count{font-weight:400;color:var(--muted-color);font-size:var(--font-size-sm)}
+.pl-empty{padding:.5rem;margin:.25rem 0 0;font-size:var(--font-size-sm)}
+.pb-note{font-size:var(--font-size-sm)}
+.player-chapters{
+    margin-top:.55rem;text-align:left;
+    border:1px solid var(--border);border-radius:var(--border-radius);
+    background:var(--surface-2);padding:.5rem .7rem;
+}
+.player-chapters summary{cursor:pointer;color:var(--text-color);font-weight:600}
+
+/* --- collections --------------------------------------------------------- */
+.collection-create{padding:1rem;margin-bottom:1.5rem}
+.collection-create form{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.collection-create input[type="text"]{flex:1;min-width:220px}
+.collection-card{display:flex;flex-direction:column}
+.collection-card h3{margin:.4rem 0 .15rem;font-size:.95rem;color:var(--heading-color)}
+.collection-card-count{margin:0;font-size:var(--font-size-sm);color:var(--muted-color)}
+.collection-card-actions{display:flex;gap:.35rem;padding:.6rem}
+.collection-placeholder{
+    display:grid;place-items:center;height:100%;
+    color:var(--muted-color);font-size:2.2rem;background:var(--surface-3);
+}
+.collection-panel{padding:1rem;margin-bottom:1.5rem}
+.collection-panel h2{margin:0 0 .5rem;font-size:1rem}
+.collection-panel-row{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.collection-panel-row input[type="text"]{flex:1;min-width:240px}
+.collection-panel-note{margin:.5rem 0 0}
+.collection-order.collection-media-actions{padding:.6rem .6rem 0}
+.collection-order.collection-media-actions-full{padding:.6rem}
+.collection-media-remove{padding:.6rem}
+.collection-media-remove-tight{padding:0 .6rem .6rem}
+.collection-section-gap{margin-top:1.5rem}
+.collection-media-title{margin:.4rem 0 .15rem;font-size:.95rem}
+.collection-media-duration{margin:0;font-size:var(--font-size-sm);color:var(--muted-color)}
+
+/* --- settings ------------------------------------------------------------ */
+body:not(.admin-theme) .settings-card-accent{border-left:4px solid var(--btn-bg)}
+.settings-fields-1{grid-template-columns:minmax(0,1fr)}
+.settings-fields-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.settings-actions{display:flex;gap:.5rem;margin-top:.5rem;flex-wrap:wrap}
+.settings-hr{margin:1rem 0;border:none;border-top:1px solid var(--border)}
+.settings-apply{margin-top:.5rem}
+.settings-h3{margin:0 0 .5rem}
+.settings-select{min-width:220px}
+.settings-code{word-break:break-all}
+@media(max-width:640px){.settings-fields-3{grid-template-columns:1fr}}
+
+/* --- favourites and support --------------------------------------------- */
+.favorites-heading{margin-top:var(--spacing-xl)}
+.favorites-heading a{font-size:var(--font-size-sm)}
+.support-section-heading{margin-top:var(--spacing-lg)}
+
+/* --- chat ---------------------------------------------------------------- */
+.chat-shell{max-width:62rem;margin-inline:auto}
+.chat-page h1{margin-bottom:var(--spacing-sm)}
+.chat-thread{
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:var(--border-radius-lg);
+    padding:.85rem;
+    box-shadow:var(--shadow-card);
+}
+.chat-composer{
+    padding:.6rem;
+    border:1px solid var(--border);
+    border-radius:var(--border-radius-lg);
+    background:var(--surface-2);
+    box-shadow:var(--shadow-card);
+}
+.chat-composer textarea{
+    background:var(--surface-3);
+    border:1px solid var(--border);
+    border-radius:var(--border-radius);
+    color:var(--text-color);
+    padding:.55rem .7rem;
+}
+.chat-attach-btn{display:flex;align-items:center}
+.chat-file-input{display:none}
+.chat-file-name{display:none;margin:.35rem 0 0}
+.chat-attachment-link{display:inline-block;margin-top:.4rem}
+.chat-daily{
+    border:1px solid var(--border);border-radius:var(--border-radius-lg);
+    background:var(--surface-2);padding:1rem;margin-bottom:1rem;
+    box-shadow:var(--shadow-card);
+}
+.chat-daily p{margin:.5rem 0 0;white-space:pre-wrap}
+.qn-panel{
+    border:1px solid var(--border);border-radius:var(--card-radius);
+    background:var(--surface-2);padding:1rem;margin-bottom:.75rem;
+}
+.qn-panel-done{opacity:.85}
+.qn-title{color:var(--heading-color)}
+.qn-intro{margin:.35rem 0 .6rem;white-space:pre-wrap}
+.qn-question{margin-bottom:.5rem}
+.qn-label{display:block;font-weight:600;margin-bottom:.25rem;color:var(--text-color)}
+.qn-options{display:flex;flex-wrap:wrap;gap:.25rem .75rem}
+.qn-option{display:inline-flex;align-items:center;gap:.3rem;margin-right:.75rem}
+.qn-form{display:flex;flex-direction:column;gap:.5rem}

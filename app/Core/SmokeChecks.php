@@ -1857,6 +1857,89 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.theme.media_and_secondary_pages_on_kit', 'Smoke · Theme', 'The viewers and the secondary member pages sit on the member kit', static function () use ($root, $ok, $bad): array {
+            // Phase 11: the image viewer and the video player get the media
+            // stage card, and favourites / collections / settings / support /
+            // chat adopt the shared page-shell + section-head rhythm. The
+            // one-off inline styles they used to carry are gone (a bare
+            // media shadow, a 4px accent border, flex paddings), and every
+            // functional string the flows depend on stays put.
+            $problems = [];
+            $read = static function (string $rel) use ($root, &$problems): string {
+                $src = (string) @file_get_contents($root . '/' . $rel);
+                if ($src === '') {
+                    $problems[] = $rel . ' could not be read';
+                }
+                return $src;
+            };
+            $want = [
+                'views/gallery/image_full.php' => [
+                    ['media-viewer', 'media-meta', 'media-report', 'save-form'],
+                    ['box-shadow:0 2px 12px'],
+                ],
+                'views/video/player.php' => [
+                    ['media-viewer', 'media-meta', 'pl-count', 'pb-note', 'section-head', 'save-form'],
+                    [],
+                ],
+                'views/favorites/index.php' => [
+                    ['page-shell', 'section-head favorites-heading'],
+                    [],
+                ],
+                'views/collections/index.php' => [
+                    ['page-shell', 'collection-create', 'collection-card', 'collection-placeholder'],
+                    ['style="display:flex;gap:.35rem;padding:.6rem;"'],
+                ],
+                'views/collections/show.php' => [
+                    ['page-shell', 'collection-panel', 'collection-media-title', 'collection-media-actions'],
+                    ['style="padding:1rem;margin-bottom:1.5rem;"'],
+                ],
+                'views/settings.php' => [
+                    ['page-shell', 'settings-card-accent', 'settings-fields-1', 'settings-fields-3', 'settings-actions'],
+                    ['border-left:4px solid var(--purple-500);'],
+                ],
+                'views/support/contact.php' => [
+                    ['page-shell'],
+                    [],
+                ],
+                'views/support/show.php' => [
+                    ['page-shell'],
+                    [],
+                ],
+                'views/chat/index.php' => [
+                    ['chat-shell', 'qn-panel', 'chat-daily', 'chat-attachment-link', 'chat-file-input', 'qn-form'],
+                    [],
+                ],
+            ];
+            foreach ($want as $rel => [$need, $deny]) {
+                $src = $read($rel);
+                foreach ($need as $needle) {
+                    if (strpos($src, $needle) === false) {
+                        $problems[] = $rel . ' must carry "' . $needle . '"';
+                    }
+                }
+                foreach ($deny as $needle) {
+                    if (strpos($src, $needle) !== false) {
+                        $problems[] = $rel . ' still carries "' . $needle . '"';
+                    }
+                }
+            }
+            // The stylesheet carries the rules the views now name.
+            $css = $read('public/assets/css/user.css');
+            foreach ([
+                '.media-viewer{', '.media-meta{', '.media-report{', '.save-form{',
+                '.collection-panel{', '.collection-media-title{',
+                'body:not(.admin-theme) .settings-card-accent{border-left:4px solid var(--btn-bg)}',
+                '.settings-fields-3{', '.qn-panel{', '.chat-daily{', '.chat-shell{',
+            ] as $selector) {
+                if (strpos($css, $selector) === false) {
+                    $problems[] = 'user.css is missing ' . $selector;
+                }
+            }
+            return $problems === []
+                ? $ok('the viewers and secondary pages are on the kit (stage cards, page-shell, section-head)')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.theme.admin_on_brand_tokens', 'Smoke · UI', 'The admin accent is the fuchsia brand, on ink, with Playfair KPIs', static function () use ($root, $ok, $bad): array {
             // Phase 5 retinted the admin accent from generic purple to the
             // brand fuchsia. White on fuchsia is only 3.3:1, so every text

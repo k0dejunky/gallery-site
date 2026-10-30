@@ -1,5 +1,6 @@
 <?php $title = 'Favorites'; ?>
 
+<div class="page-shell">
 <div class="favorites-hero">
     <p class="eyebrow">Your collection</p>
     <h1>Favorites</h1>
@@ -7,7 +8,7 @@
 </div>
 
 <section class="favorites-section">
-    <div class="favorites-heading"><h2>Favorite galleries</h2><a href="<?= e(url('/galleries')) ?>">Browse galleries</a></div>
+    <div class="section-head favorites-heading"><h2>Favorite galleries</h2><a href="<?= e(url('/galleries')) ?>">Browse galleries</a></div>
     <?php if (empty($favoriteGalleries)): ?>
         <div class="empty-state"><p>No favorite galleries yet.</p><a class="btn btn-sm" href="<?= e(url('/galleries')) ?>">Find a gallery</a></div>
     <?php else: ?>
@@ -21,7 +22,7 @@
 
 <?php if (!empty($recentlyViewed)): ?>
 <section class="favorites-section">
-    <div class="favorites-heading"><h2>Recently viewed</h2><a href="<?= e(url('/galleries')) ?>">Browse all</a></div>
+    <div class="section-head favorites-heading"><h2>Recently viewed</h2><a href="<?= e(url('/galleries')) ?>">Browse all</a></div>
     <div class="grid">
         <?php foreach ($recentlyViewed as $gallery): ?>
             <?php $cover = $cardCovers['covers'][(int) $gallery['id']] ?? null; $galleryCategories = $cardCovers['categories'][(int) $gallery['id']] ?? []; $coverFetchPriority = empty($coverFetchPriority) ? 'high' : ''; require __DIR__ . '/../partials/gallery_card.php'; ?>
@@ -31,7 +32,7 @@
 <?php endif; ?>
 
 <section class="favorites-section">
-    <div class="favorites-heading"><h2>Saved searches</h2><a href="<?= e(url('/galleries')) ?>">Search galleries</a></div>
+    <div class="section-head favorites-heading"><h2>Saved searches</h2><a href="<?= e(url('/galleries')) ?>">Search galleries</a></div>
     <?php if (empty($savedSearches)): ?>
         <div class="empty-state"><p>You have no saved searches.</p><a class="btn btn-sm" href="<?= e(url('/galleries')) ?>">Create one</a></div>
     <?php else: ?>
@@ -46,3 +47,4 @@
         </div>
     <?php endif; ?>
 </section>
+</div>

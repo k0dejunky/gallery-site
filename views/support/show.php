@@ -1,6 +1,6 @@
 <?php $title = 'Support #' . (int) $ticket['id']; ?>
 
-<div class="support-thread">
+<div class="support-thread page-shell">
 <header class="support-thread-header">
     <div><a class="support-back" href="<?= url('/support') ?>">&larr; All tickets</a><h1>#<?= (int) $ticket['id'] ?> &middot; <?= e($ticket['subject']) ?></h1></div>
     <div class="support-thread-status"><span class="status-badge support-status-<?= e($ticket['status']) ?>"><?= e(ucfirst($ticket['status'])) ?></span></div>

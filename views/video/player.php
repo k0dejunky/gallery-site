@@ -130,7 +130,7 @@ foreach ((array) ($playlist ?? []) as $item) {
 <?php require __DIR__ . '/../partials/media_nav.php'; ?>
 
 <?php if (!empty($collections)): ?>
-    <form method="post" action="<?= url('/collections/' . (int) $collections[0]['id'] . '/photos') ?>" class="settings-form player-save-form" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.25rem 0 .75rem;">
+    <form method="post" action="<?= url('/collections/' . (int) $collections[0]['id'] . '/photos') ?>" class="settings-form player-save-form save-form">
         <?= csrf_field() ?>
         <input type="hidden" name="photo_id" value="<?= (int) $photo['id'] ?>">
         <label class="muted u-fs-09">Save video to collection</label>
@@ -140,16 +140,16 @@ foreach ((array) ($playlist ?? []) as $item) {
             <?php endforeach; ?>
         </select>
         <button type="submit" class="btn btn-sm btn-outline">Add to collection</button>
-        <a href="<?= url('/collections') ?>" class="muted" style="font-size:.85rem;">Manage collections</a>
+        <a href="<?= url('/collections') ?>" class="muted save-form-link">Manage collections</a>
     </form>
 <?php else: ?>
-    <p class="muted" style="font-size:.9rem;margin:.25rem 0 .75rem;"><a href="<?= url('/collections') ?>">Create a collection</a> to save this video.</p>
+    <p class="muted save-form-hint"><a href="<?= url('/collections') ?>">Create a collection</a> to save this video.</p>
 <?php endif; ?>
 <?php endif; ?>
 
 <div class="player-layout"<?= !empty($playlist) ? ' data-has-playlist="1"' : '' ?>>
     <div class="player-main">
-        <figure id="video-player-wrap" class="paywalled-content" style="margin: 1rem 0; text-align: center;">
+        <figure id="video-player-wrap" class="paywalled-content media-viewer">
             <?php if (empty($canViewFull)): ?>
                 <?php // Blurred, indexable preview for guests and below-level
                     // members: play the short blurred sample clip, or fall
@@ -165,8 +165,8 @@ foreach ((array) ($playlist ?? []) as $item) {
                              alt="<?= e($title) ?>" decoding="async">
                     <?php endif; ?>
                 </div>
-                <figcaption class="muted" style="margin-top:.5rem">
-                    <?php if ($photo['caption'] !== ''): ?><span><?= e($photo['caption']) ?></span><br><?php endif; ?>
+                <figcaption class="muted media-meta">
+                    <?php if ($photo['caption'] !== ''): ?><span class="media-caption"><?= e($photo['caption']) ?></span><?php endif; ?>
                     <span><?= number_format((int) ($photo['views'] ?? 0)) ?> views &middot; <?= number_format((int) ($photo['unique_views'] ?? 0)) ?> unique</span>
                 </figcaption>
                 <?php
@@ -222,15 +222,15 @@ foreach ((array) ($playlist ?? []) as $item) {
                 <?php endif; ?>
             </div>
             <div class="video-resume" hidden role="status">Resume from <span class="video-resume-time">0:00</span> <button type="button" class="btn btn-sm">Resume</button></div>
-            <figcaption class="muted" style="margin-top: 0.5rem">
+            <figcaption class="muted media-meta">
                 <?php if ($photo['caption'] !== ''): ?>
-                    <span><?= e($photo['caption']) ?></span><br>
+                    <span class="media-caption"><?= e($photo['caption']) ?></span>
                 <?php endif; ?>
                 <span><?= number_format((int) ($photo['views'] ?? 0)) ?> views &middot; <?= number_format((int) ($photo['unique_views'] ?? 0)) ?> unique</span>
             </figcaption>
             <?php endif; ?>
         </figure>
-        <p style="text-align:center"><a href="<?= e($reportUrl) ?>">Report broken media</a></p>
+        <p class="media-report"><a href="<?= e($reportUrl) ?>">Report broken media</a></p>
     </div>
 
     <?php if (!empty($canViewFull)): ?>
@@ -240,9 +240,9 @@ foreach ((array) ($playlist ?? []) as $item) {
             <div id="player-playlist-body">
             <h3><?= !empty($playlistName) ? e($playlistName) : 'Up next' ?>
                 <?php if (!empty($playlist)): ?>
-                    <span class="muted" style="font-weight:400;">(<?= count($playlist) ?><?= $playlistTotal > 0 ? ', ' . e(gmdate('H:i:s', $playlistTotal)) : '' ?>)</span>
+                    <span class="muted pl-count">(<?= count($playlist) ?><?= $playlistTotal > 0 ? ', ' . e(gmdate('H:i:s', $playlistTotal)) : '' ?>)</span>
                 <?php elseif (!empty($upNext)): ?>
-                    <span class="muted" style="font-weight:400;">(from this gallery)</span>
+                    <span class="muted pl-count">(from this gallery)</span>
                 <?php endif; ?>
             </h3>
             <div class="pl-controls" role="group" aria-label="Playback queue">
@@ -276,7 +276,7 @@ foreach ((array) ($playlist ?? []) as $item) {
                 <?php endif; ?>
             </ul>
             <?php if (empty($playlist) && empty($upNext)): ?>
-                <p class="pl-empty muted" style="padding:.5rem;margin:.25rem 0 0;font-size:.85rem;">No videos queued. Browse galleries to add to the playlist.</p>
+                <p class="pl-empty muted">No videos queued. Browse galleries to add to the playlist.</p>
             <?php endif; ?>
             </div>
         </aside>
@@ -288,7 +288,7 @@ foreach ((array) ($playlist ?? []) as $item) {
             <div class="pb-toolbar">
                 <input type="search" id="pb-search" placeholder="Search galleries&hellip;" aria-label="Search galleries">
             </div>
-            <p class="muted" style="font-size:.85rem;">Click a video to play or add it to the playlist. The picture-in-picture window keeps playing while you browse.</p>
+            <p class="muted pb-note">Click a video to play or add it to the playlist. The picture-in-picture window keeps playing while you browse.</p>
             <div class="pb-body"></div>
         </div>
     </div>
@@ -304,7 +304,7 @@ require __DIR__ . '/../partials/share-bar.php';
 if (!empty($relatedGalleries)): ?>
 <?php $currentGallery = $gallery ?? null; ?>
 <section class="fav-section">
-    <h2>More like this</h2>
+    <div class="section-head"><h2>More like this</h2></div>
     <div class="grid">
         <?php foreach ($relatedGalleries as $related): ?>
             <?php

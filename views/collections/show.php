@@ -23,6 +23,7 @@ foreach ((array) ($images ?? []) as $i) {
 }
 $collectionList = implode("\n", $collectionList);
 ?>
+<div class="page-shell">
 <h1><?= e((string) ($collection['name'] ?? 'Collection')) ?></h1>
 <?php if ($mediaCount > 0): ?>
     <?php /* The copy button copies THIS element's value (the copy helper
@@ -48,28 +49,28 @@ $collectionList = implode("\n", $collectionList);
 <?php /* The private share link: somebody else can see the set without an
       account, and the owner can kill the link. */ ?>
 <?php $shareUrl = !empty($shareToken) ? url('/collections/' . (int) ($collection['id'] ?? 0) . '/s/' . $shareToken) : ''; ?>
-<section class="card" style="padding:1rem;margin-bottom:1.5rem;">
-    <h2 style="margin:0 0 .5rem;font-size:1rem;">Share this collection</h2>
+<section class="card collection-panel">
+    <h2>Share this collection</h2>
     <?php if ($shareUrl !== ''): ?>
-        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
-            <input type="text" id="collection-share-url" readonly value="<?= e($shareUrl) ?>" aria-label="The share link" style="flex:1;min-width:240px;">
+        <div class="collection-panel-row">
+            <input type="text" id="collection-share-url" readonly value="<?= e($shareUrl) ?>" aria-label="The share link">
             <button type="button" class="btn btn-sm" data-copy="collection-share-url" data-copy-label="Copy link">Copy the link</button>
             <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/stop-sharing') ?>">
                 <?= csrf_field() ?>
                 <button type="submit" class="btn btn-sm btn-outline" data-confirm="Stop sharing? The link will stop working for everybody.">Stop sharing</button>
             </form>
         </div>
-        <p class="muted u-fs-085" style="margin:.5rem 0 0;">Anyone with this link can see the collection. Nobody has to sign in.</p>
+        <p class="muted u-fs-085 collection-panel-note">Anyone with this link can see the collection. Nobody has to sign in.</p>
     <?php else: ?>
         <p class="muted">This collection is not shared.</p>
     <?php endif; ?>
 </section>
 
-<section class="card" style="padding:1rem;margin-bottom:1.5rem;">
-    <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/rename') ?>" class="settings-form" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+<section class="card collection-panel">
+    <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/rename') ?>" class="settings-form collection-panel-row">
         <?= csrf_field() ?>
         <label class="muted u-fs-09">Rename</label>
-        <input type="text" name="name" required maxlength="120" value="<?= e((string) ($collection['name'] ?? '')) ?>" aria-label="Collection name" style="flex:1;min-width:200px;">
+        <input type="text" name="name" required maxlength="120" value="<?= e((string) ($collection['name'] ?? '')) ?>" aria-label="Collection name">
         <button type="submit" class="btn btn-sm">Save name</button>
     </form>
 </section>
@@ -81,17 +82,17 @@ $collectionList = implode("\n", $collectionList);
     </div>
 <?php else: ?>
     <?php if (!empty($images)): ?>
-        <h2 class="section-title">Images</h2>
+        <div class="section-head"><h2>Images</h2></div>
         <div class="grid">
             <?php foreach ($images as $img): ?>
                 <div class="card card-compact">
                     <a class="card-link" href="<?= url('/images/' . (int) $img['id'] . '?playlist=' . (int) ($collection['id'] ?? 0)) ?>">
                         <div class="card-cover"><img src="<?= e((string) $img['thumb']) ?>" alt="" loading="lazy"></div>
                         <div class="card-body">
-                            <h3 style="margin:.4rem 0 .15rem;font-size:.95rem;"><?= e($img['caption'] !== '' ? (string) $img['caption'] : 'Image') ?></h3>
+                            <h3 class="collection-media-title"><?= e($img['caption'] !== '' ? (string) $img['caption'] : 'Image') ?></h3>
                         </div>
                     </a>
-                    <form method="post" action="<?= url('/collections/' . $collectionId . '/move') ?>" class="collection-order" style="padding:.6rem .6rem 0;">
+                    <form method="post" action="<?= url('/collections/' . $collectionId . '/move') ?>" class="collection-order collection-media-actions">
                         <?= csrf_field() ?>
                         <input type="hidden" name="kind" value="photo">
                         <input type="hidden" name="photo_id" value="<?= (int) $img['id'] ?>">
@@ -99,7 +100,7 @@ $collectionList = implode("\n", $collectionList);
                         <button type="submit" class="btn btn-sm btn-outline" title="Move up" aria-label="Move <?= e($img['caption'] !== '' ? (string) $img['caption'] : 'this image') ?> up">&#9650; Up</button>
                         <button type="submit" class="btn btn-sm btn-outline" name="dir" value="down" title="Move down" aria-label="Move <?= e($img['caption'] !== '' ? (string) $img['caption'] : 'this image') ?> down">&#9660; Down</button>
                     </form>
-                    <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/photos/' . (int) $img['id'] . '/delete') ?>" style="padding:.6rem;">
+                    <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/photos/' . (int) $img['id'] . '/delete') ?>" class="collection-media-remove">
                         <?= csrf_field() ?>
                         <button type="submit" class="btn btn-sm btn-outline u-w-full">Remove image</button>
                     </form>
@@ -109,18 +110,18 @@ $collectionList = implode("\n", $collectionList);
     <?php endif; ?>
 
     <?php if (!empty($videos)): ?>
-        <h2 class="section-title" style="<?= !empty($images) ? 'margin-top:1.5rem;' : '' ?>">Videos</h2>
+        <div class="section-head<?= !empty($images) ? ' collection-section-gap' : '' ?>"><h2>Videos</h2></div>
         <div class="grid">
             <?php foreach ($videos as $v): ?>
                 <div class="card card-compact">
                     <a class="card-link" href="<?= url('/videos/' . (int) $v['id'] . '?playlist=' . (int) ($collection['id'] ?? 0)) ?>">
                         <div class="card-cover"><img src="<?= e((string) $v['thumb']) ?>" alt="" loading="lazy"></div>
                         <div class="card-body">
-                            <h3 style="margin:.4rem 0 .15rem;font-size:.95rem;"><?= e($v['caption'] !== '' ? (string) $v['caption'] : 'Video') ?></h3>
-                            <p class="muted" style="margin:0;font-size:.85rem;"><?= e(!empty($v['duration_seconds']) ? gmdate('i:s', (int) $v['duration_seconds']) : '') ?></p>
+                            <h3 class="collection-media-title"><?= e($v['caption'] !== '' ? (string) $v['caption'] : 'Video') ?></h3>
+                            <p class="muted collection-media-duration"><?= e(!empty($v['duration_seconds']) ? gmdate('i:s', (int) $v['duration_seconds']) : '') ?></p>
                         </div>
                     </a>
-                    <form method="post" action="<?= url('/collections/' . $collectionId . '/move') ?>" class="collection-order" style="padding:.6rem;">
+                    <form method="post" action="<?= url('/collections/' . $collectionId . '/move') ?>" class="collection-order collection-media-actions-full">
                         <?= csrf_field() ?>
                         <input type="hidden" name="kind" value="photo">
                         <input type="hidden" name="photo_id" value="<?= (int) $v['id'] ?>">
@@ -128,7 +129,7 @@ $collectionList = implode("\n", $collectionList);
                         <button type="submit" class="btn btn-sm btn-outline" title="Move up in the playlist" aria-label="Move <?= e($v['caption'] !== '' ? (string) $v['caption'] : 'this video') ?> up">&#9650; Up</button>
                         <button type="submit" class="btn btn-sm btn-outline" name="dir" value="down" title="Move down in the playlist" aria-label="Move <?= e($v['caption'] !== '' ? (string) $v['caption'] : 'this video') ?> down">&#9660; Down</button>
                     </form>
-                    <form method="post" action="<?= url('/collections/' . $collectionId . '/photos/' . (int) $v['id'] . '/delete') ?>" style="padding:0 .6rem .6rem;">
+                    <form method="post" action="<?= url('/collections/' . $collectionId . '/photos/' . (int) $v['id'] . '/delete') ?>" class="collection-media-remove-tight">
                         <?= csrf_field() ?>
                         <button type="submit" class="btn btn-sm btn-outline u-w-full">Remove video</button>
                     </form>
@@ -138,7 +139,7 @@ $collectionList = implode("\n", $collectionList);
     <?php endif; ?>
 
     <?php if (!empty($galleries)): ?>
-        <h2 class="section-title" style="<?= !empty($videos) ? 'margin-top:1.5rem;' : '' ?>">Galleries</h2>
+        <div class="section-head<?= (!empty($videos) || !empty($images)) ? ' collection-section-gap' : '' ?>"><h2>Galleries</h2></div>
         <div class="grid">
             <?php foreach ($galleries as $gallery): ?>
                 <div class="collection-gallery-cell">
@@ -149,7 +150,7 @@ $collectionList = implode("\n", $collectionList);
                     $coverFetchPriority = empty($coverFetchPriority) ? 'high' : '';
                     require __DIR__ . '/../partials/gallery_card.php';
                     ?>
-                    <form method="post" action="<?= url('/collections/' . $collectionId . '/move') ?>" class="collection-order" style="padding:.6rem .6rem 0;">
+                    <form method="post" action="<?= url('/collections/' . $collectionId . '/move') ?>" class="collection-order collection-media-actions">
                         <?= csrf_field() ?>
                         <input type="hidden" name="kind" value="gallery">
                         <input type="hidden" name="gallery_id" value="<?= $gid ?>">
@@ -157,7 +158,7 @@ $collectionList = implode("\n", $collectionList);
                         <button type="submit" class="btn btn-sm btn-outline" title="Move up" aria-label="Move <?= e((string) ($gallery['title'] ?? 'this gallery')) ?> up">&#9650; Up</button>
                         <button type="submit" class="btn btn-sm btn-outline" name="dir" value="down" title="Move down" aria-label="Move <?= e((string) ($gallery['title'] ?? 'this gallery')) ?> down">&#9660; Down</button>
                     </form>
-                    <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/galleries/' . $gid . '/delete') ?>" style="padding:.6rem;">
+                    <form method="post" action="<?= url('/collections/' . (int) ($collection['id'] ?? 0) . '/galleries/' . $gid . '/delete') ?>" class="collection-media-remove">
                         <?= csrf_field() ?>
                         <button type="submit" class="btn btn-sm btn-outline u-w-full">Remove from collection</button>
                     </form>
@@ -166,3 +167,4 @@ $collectionList = implode("\n", $collectionList);
         </div>
     <?php endif; ?>
 <?php endif; ?>
+</div>
