@@ -446,8 +446,14 @@ body.player-theater #video-player-wrap+.media-progress{display:none}
    overrides further down this file, which silently overrode the theme
    editor's layout controls on every page - the editor's font-size and
    spacing pickers changed nothing. Only the page padding stays here. */
+/* Phase 12: the side padding is a token so the glass header can bleed
+   edge-to-edge without guessing. The old -1.5rem margins were written for
+   the 24px auth padding; member pages are .site-compact (13.6px), so the
+   bar overshot by 21px and every member page scrolled 10px sideways. */
+body { --page-pad-x: 1.5rem; }
 body.site-compact {
-    padding: .57rem .85rem;
+    --page-pad-x: .85rem;
+    padding: .57rem var(--page-pad-x);
 }
 body.site-compact .admin-nav,
 body.site-compact .home-nav-wrap { flex-basis: 176px; }
@@ -1194,12 +1200,13 @@ body.site-compact .home-layout { grid-template-columns: 224px minmax(0, 1fr); }
 .page-shell{width:100%;max-width:76rem;margin-inline:auto}
 
 /* --- Glass header (phase 8 puts layout.php behind it) ---------------- */
-/* The negative margins cancel the body's 1.5rem side padding so the bar
-   bleeds edge to edge while its inner row stays on the page measure. */
+/* The negative margins cancel the body's side padding so the bar bleeds
+   edge to edge while its inner row stays on the page measure. --page-pad-x
+   follows the density (1.5rem auth, .85rem site-compact). */
 .glass-header{
     position:sticky;top:0;z-index:70;
-    margin:0 -1.5rem var(--spacing-md);
-    padding:.15rem 1.5rem;
+    margin:0 calc(-1 * var(--page-pad-x, 1.5rem)) var(--spacing-md);
+    padding:.15rem var(--page-pad-x, 1.5rem);
     background:var(--glass-bg,#0d0612b8);
     backdrop-filter:blur(16px) saturate(1.5);
     -webkit-backdrop-filter:blur(16px) saturate(1.5);

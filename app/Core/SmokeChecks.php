@@ -2142,7 +2142,14 @@ class SmokeChecks
                 }
             }
             // The bar adapts the nav it hosts, and impersonation hides it.
-            foreach (['.glass-header .nav{', 'body.impersonating .glass-header'] as $needle) {
+            // Phase 12: the bleed follows --page-pad-x so a .site-compact
+            // page (13.6px sides) does not scroll sideways under the bar
+            // (the old -1.5rem margins overshot by 21px at every width).
+            foreach (['.glass-header .nav{', 'body.impersonating .glass-header',
+                      '--page-pad-x: .85rem',
+                      'margin:0 calc(-1 * var(--page-pad-x, 1.5rem)) var(--spacing-md)',
+                      'padding:.15rem var(--page-pad-x, 1.5rem)',
+            ] as $needle) {
                 if (strpos($css, $needle) === false) {
                     $problems[] = 'user.css must carry ' . $needle;
                 }

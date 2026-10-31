@@ -386,7 +386,16 @@ if (!empty($_SESSION['impersonator_id'])) {
                 'label' => 'Browse',
                 'items' => [
                     ['key' => 'pub-galleries', 'label' => 'Galleries', 'href' => '/galleries', 'icon' => 'image',
-                     'active' => strpos($currentPath, url('/galleries')) === 0],
+                     'active' => strpos($currentPath, url('/galleries')) === 0 && $currentType === ''],
+                    // Phase 12 IA: the guest rail always had Videos + the
+                    // SFW filter; a member's rail now does too (they land
+                    // in the phone's "More" sheet). They share the
+                    // catalogue path, so the Galleries entry only lights
+                    // up on the unfiltered view.
+                    ['key' => 'pub-videos', 'label' => 'Videos', 'href' => '/galleries?type=videos', 'icon' => 'film',
+                     'active' => strpos($currentPath, url('/galleries')) === 0 && $currentType === 'videos'],
+                    ['key' => 'pub-sfw', 'label' => 'Safe for work', 'href' => '/galleries?content=sfw', 'icon' => 'sparkle',
+                     'active' => $currentContent === 'sfw'],
                     ['key' => 'pub-favorites', 'label' => 'Favorites', 'href' => '/favorites', 'icon' => 'heart',
                      'active' => strpos($currentPath, url('/favorites')) === 0,
                      'gate' => ($user !== null && !\App\Core\Auth::hasActiveSubscription()) ? 'Silver' : ''],
