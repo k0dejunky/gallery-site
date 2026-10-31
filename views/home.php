@@ -13,33 +13,50 @@ $trending        = (array) ($trending ?? []);
 $tags            = (array) ($tags ?? []);
 ?>
 
-<div class="hero home-hero">
-    <p class="hero-kicker">Adults only</p>
-    <h1 style="font-size:clamp(1.8rem, 4vw, 2.6rem);margin:0 0 .4rem;"><?= e(config('app.site_name')) ?></h1>
-    <p class="muted" style="max-width:52rem;margin:0 auto 1.5rem;">
-        Original photos, videos and live streams — updated regularly. Safe-for-work galleries
-        are open to everyone; adult galleries open in the free tier and beyond with a membership.
-    </p>
-    <div style="display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap;">
-        <a class="btn" href="<?= url('/signup') ?>">Join now — free preview</a>
-        <a class="btn btn-outline" href="<?= url('/login') ?>">Log in</a>
-        <a class="btn btn-outline" href="<?= url('/membership') ?>">See membership</a>
+<div class="hero-cover hero-cover-center hero-cover-tall">
+    <div class="hero-cover-media">
+        <?php if (!empty($covers) && !empty(reset($covers))): ?>
+            <?php $c = reset($covers); ?>
+            <img src="<?= e(file_url($c['filename'], 'thumb')) ?>" alt="" loading="eager" fetchpriority="high">
+        <?php endif; ?>
     </div>
-    <div class="guest-browse">
-        <a class="btn btn-sm btn-outline" href="<?= url('/galleries') ?>">All galleries</a>
-        <a class="btn btn-sm btn-outline" href="<?= url('/galleries?type=videos') ?>">Videos</a>
-        <a class="btn btn-sm btn-outline" href="<?= url('/galleries?content=sfw') ?>">Safe for work</a>
-    </div>
-    <?php if (!empty($mediaCounts['images']) || !empty($mediaCounts['videos'])): ?>
-        <p class="muted" style="font-size:.9rem;margin:1rem 0 0;">
-            <?= number_format((int) ($mediaCounts['images'] ?? 0)) ?> photos
-            <?= !empty($mediaCounts['videos']) ? ' &middot; ' . number_format((int) $mediaCounts['videos']) . ' videos' : '' ?>
-            in the home collection
+    <div class="hero-cover-scrim"></div>
+    <div class="hero-cover-inner">
+        <p class="hero-cover-kicker">Adults only &middot; Verified creators</p>
+        <h1 class="hero-cover-title"><?= e(config('app.site_name')) ?></h1>
+        <p class="hero-cover-lede">
+            Original photos, videos and live streams — updated regularly. Safe-for-work galleries
+            are open to everyone; adult galleries open in the free tier and beyond with a membership.
         </p>
-    <?php endif; ?>
-    <p class="muted" style="font-size:.8rem;margin:.4rem 0 0;">
-        You must be 18 or older to enter. Content is blurred until you sign up.
-    </p>
+        <div class="hero-cover-actions">
+            <a class="btn btn-grad btn-lg" href="<?= url('/signup') ?>">Join now — free preview</a>
+            <a class="btn btn-ghost btn-lg" href="<?= url('/login') ?>">Log in</a>
+            <a class="btn btn-ghost btn-lg" href="<?= url('/membership') ?>">See membership</a>
+        </div>
+        <div class="stat-chip-row" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.8rem;justify-content:center;">
+            <?php if (!empty($mediaCounts['images'])): ?>
+                <div class="stat-chip">
+                    <b><?= number_format((int) $mediaCounts['images']) ?></b>
+                    <span class="muted" style="font-size:.75rem;">Photos</span>
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($mediaCounts['videos'])): ?>
+                <div class="stat-chip">
+                    <b><?= number_format((int) $mediaCounts['videos']) ?></b>
+                    <span class="muted" style="font-size:.75rem;">Videos</span>
+                </div>
+            <?php endif; ?>
+            <div class="stat-chip">
+                <b>18+</b>
+                <span class="muted" style="font-size:.75rem;">Age verified</span>
+            </div>
+        </div>
+        <div class="guest-browse" style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem;justify-content:center;">
+            <a class="pill" href="<?= url('/galleries') ?>">All galleries</a>
+            <a class="pill" href="<?= url('/galleries?type=videos') ?>">Videos</a>
+            <a class="pill" href="<?= url('/galleries?content=sfw') ?>">Safe for work</a>
+        </div>
+    </div>
 </div>
 
 <?php if ($categories !== []): ?>

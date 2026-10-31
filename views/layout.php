@@ -227,54 +227,57 @@ if (!empty($_SESSION['impersonator_id'])) {
         $siteSearchQuery = trim($_GET['q']);
     }
     ?>
-    <header class="title-header">
-            <a class="title-logo" href="<?= e(url('/')) ?>" aria-label="<?= e(config('app.site_name')) ?> - home">
+    <?php
+    // Phase 8: ONE sticky glass bar replaces the stacked centred logo
+    // block (.title-header) and the separate pill nav. The brand rides on
+    // every page; the nav + search keep the old rules - a guest always
+    // gets them, a member gets them when the page has no rail, and an
+    // auth page keeps its focused panel (brand only). The hamburger /
+    // .nav-links dropdown contract (GalleryTopNav) is unchanged. The
+    // error pages keep their own title-header in errors/partials/shell.php.
+    ?>
+    <header class="glass-header">
+        <div class="glass-header-inner">
+            <a class="glass-brand" href="<?= e(url('/')) ?>" aria-label="<?= e(config('app.site_name')) ?> - home">
                 <img src="<?= e(url(\App\Models\Theme::userTheme($userThemePreset)['title_image'])) ?>" alt="<?= e(config('app.site_name')) ?>">
             </a>
-    </header>
-    <?php // A guest gets the top nav on EVERY page, including the ones that
-          // keep the left rail: without it the browse pages had no header at
-          // all (the rail's member links were all they had, and every one of
-          // them bounced to the login). A member keeps the old behaviour:
-          // the rail carries the nav, so the top bar would duplicate it. ?>
-    <?php if (!$isAuthPage && ($user === null || !$sidebarNav)): ?>
-    <nav class="nav<?= $user === null ? ' public-nav' : '' ?>">
-        <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav-links-id" id="nav-toggle-id" data-action="galleryNavToggle">&#9776;</button>
-        <?php if ($user === null): ?>
-            <a class="public-brand" href="<?= e(url('/')) ?>"><?= e(config('app.site_name')) ?></a>
-        <?php endif; ?>
-        <?php // The rail has its own search box, so the top bar only carries
-              // one when there is no rail. ?>
-        <?php if (!$sidebarNav): ?>
-        <form class="site-search site-search-top" method="get" action="<?= e(url('/galleries')) ?>" role="search">
-            <label class="sr-only" for="site-search-top">Search galleries</label>
-            <input type="search" id="site-search-top" name="q" value="<?= e($siteSearchQuery) ?>" placeholder="Search galleries&hellip;" autocomplete="off">
-            <button type="submit" class="btn btn-sm">Search</button>
-        </form>
-        <?php endif; ?>
-        <span class="spacer"></span>
-        <div class="nav-links" id="nav-links-id">
-        <?php if ($user !== null): ?>
-            <a class="btn btn-sm btn-outline" href="<?= url('/settings') ?>" data-se-move-key="top-settings">Settings</a>
-            <form class="inline" method="post" action="<?= url('/logout') ?>" data-se-move-key="top-logout">
-                <?= csrf_field() ?>
-                <button type="submit" class="btn btn-sm btn-danger">Logout</button>
-            </form>
-        <?php else: ?>
-            <?php // The public browse links. They are the same on every page,
-                  // so a visitor can get back to the catalogue from the
-                  // gallery, the creator page or the membership panel. ?>
-            <a class="btn btn-sm btn-outline" href="<?= url('/galleries') ?>">Galleries</a>
-            <a class="btn btn-sm btn-outline" href="<?= url('/galleries?type=videos') ?>">Videos</a>
-            <a class="btn btn-sm btn-outline" href="<?= url('/membership') ?>">Membership</a>
-            <?php if (!$isLoginPage): ?>
-                <a class="btn btn-sm" href="<?= url('/login') ?>">Login</a>
+            <?php if (!$isAuthPage && ($user === null || !$sidebarNav)): ?>
+            <nav class="nav<?= $user === null ? ' public-nav' : '' ?>" aria-label="Primary">
+                <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav-links-id" id="nav-toggle-id" data-action="galleryNavToggle">&#9776;</button>
+                <?php // The rail has its own search box, so the header only
+                      // carries one when there is no rail. ?>
+                <?php if (!$sidebarNav): ?>
+                <form class="site-search site-search-top" method="get" action="<?= e(url('/galleries')) ?>" role="search">
+                    <label class="sr-only" for="site-search-top">Search galleries</label>
+                    <input type="search" id="site-search-top" name="q" value="<?= e($siteSearchQuery) ?>" placeholder="Search galleries&hellip;" autocomplete="off">
+                    <button type="submit" class="btn btn-sm">Search</button>
+                </form>
+                <?php endif; ?>
+                <span class="spacer"></span>
+                <div class="nav-links" id="nav-links-id">
+                <?php if ($user !== null): ?>
+                    <a class="btn btn-sm btn-outline" href="<?= url('/settings') ?>" data-se-move-key="top-settings">Settings</a>
+                    <form class="inline" method="post" action="<?= url('/logout') ?>" data-se-move-key="top-logout">
+                        <?= csrf_field() ?>
+                        <button type="submit" class="btn btn-sm btn-danger">Logout</button>
+                    </form>
+                <?php else: ?>
+                    <?php // The public browse links. They are the same on every page,
+                          // so a visitor can get back to the catalogue from the
+                          // gallery, the creator page or the membership panel. ?>
+                    <a class="btn btn-sm btn-outline" href="<?= url('/galleries') ?>">Galleries</a>
+                    <a class="btn btn-sm btn-outline" href="<?= url('/galleries?type=videos') ?>">Videos</a>
+                    <a class="btn btn-sm btn-outline" href="<?= url('/membership') ?>">Membership</a>
+                    <?php if (!$isLoginPage): ?>
+                        <a class="btn btn-sm" href="<?= url('/login') ?>">Login</a>
+                    <?php endif; ?>
+                    <a class="btn btn-sm btn-outline" href="<?= url('/signup') ?>">Sign Up</a>
+                <?php endif; ?>
+                </div>
+            </nav>
             <?php endif; ?>
-            <a class="btn btn-sm btn-outline" href="<?= url('/signup') ?>">Sign Up</a>
-        <?php endif; ?>
         </div>
-    </nav>
-    <?php endif; ?>
+    </header>
 
     <?php foreach ($flash as $flashType => $flashMessages): ?>
         <?php foreach ($flashMessages as $flashMessage): ?>

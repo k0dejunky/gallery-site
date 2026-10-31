@@ -53,49 +53,56 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
     </form>
 </div>
 
-<div class="chips" style="justify-content:center">
-    <a class="chip <?= $type === '' ? 'active' : '' ?>" href="<?= e($allUrl) ?>"<?= $type === '' ? ' aria-current="page"' : '' ?>>All Galleries</a>
-    <a class="chip <?= $type === 'images' ? 'active' : '' ?>" href="<?= e($imgUrl) ?>"<?= $type === 'images' ? ' aria-current="page"' : '' ?>>&#128444; Image Galleries</a>
-    <a class="chip <?= $type === 'videos' ? 'active' : '' ?>" href="<?= e($vidUrl) ?>"<?= $type === 'videos' ? ' aria-current="page"' : '' ?>>&#9654; Video Galleries</a>
+<div class="filter-bar">
+    <p class="filter-bar-label">Type</p>
+    <div class="chips" style="margin:0">
+        <a class="chip <?= $type === '' ? 'active' : '' ?>" href="<?= e($allUrl) ?>"<?= $type === '' ? ' aria-current="page"' : '' ?>>All Galleries</a>
+        <a class="chip <?= $type === 'images' ? 'active' : '' ?>" href="<?= e($imgUrl) ?>"<?= $type === 'images' ? ' aria-current="page"' : '' ?>>Image Galleries</a>
+        <a class="chip <?= $type === 'videos' ? 'active' : '' ?>" href="<?= e($vidUrl) ?>"<?= $type === 'videos' ? ' aria-current="page"' : '' ?>>Video Galleries</a>
+    </div>
 </div>
 
 <?php // The content filter. A safe-for-work gallery is open to everybody,
       // so this is how a visitor asks for the open half of the catalogue
       // without a membership. ?>
-<div class="chips content-chips" style="justify-content:center">
-    <span class="label">Content:</span>
-    <?php
-    $contentParams = $query;
-    if ($type !== '') {
-        $contentParams['type'] = $type;
-    }
-    foreach (['' => 'All', 'sfw' => 'Safe for work', 'nsfw' => 'Adult'] as $val => $label):
-        $p = $contentParams;
-        if ($val !== '') {
-            $p['content'] = $val;
+<div class="filter-bar">
+    <p class="filter-bar-label">Content</p>
+    <div class="chips content-chips" style="margin:0">
+        <?php
+        $contentParams = $query;
+        if ($type !== '') {
+            $contentParams['type'] = $type;
         }
-        $href = $p ? $base . '?' . http_build_query($p) : $base;
-    ?>
-        <a class="chip <?= ($content ?? '') === $val ? 'active' : '' ?>" href="<?= e($href) ?>"<?= ($content ?? '') === $val ? ' aria-current="page"' : '' ?>><?= e($label) ?></a>
-    <?php endforeach; ?>
+        foreach (['' => 'All', 'sfw' => 'Safe for work', 'nsfw' => 'Adult'] as $val => $label):
+            $p = $contentParams;
+            if ($val !== '') {
+                $p['content'] = $val;
+            }
+            $href = $p ? $base . '?' . http_build_query($p) : $base;
+        ?>
+            <a class="chip <?= ($content ?? '') === $val ? 'active' : '' ?>" href="<?= e($href) ?>"<?= ($content ?? '') === $val ? ' aria-current="page"' : '' ?>><?= e($label) ?></a>
+        <?php endforeach; ?>
+    </div>
 </div>
 
-<div class="sort-bar" style="justify-content:center">
-    <span class="label">Sort:</span>
-    <?php
-    $sortBase = url('/galleries');
-    $sortParams = [];
-    if ($q !== '') $sortParams['q'] = $q;
-    if ($categoryId > 0) $sortParams['category'] = $categoryId;
-    if ($type !== '') $sortParams['type'] = $type;
-    $sortOptions = ['' => 'Newest', 'views' => 'Most Viewed', 'title' => 'A–Z'];
-    foreach ($sortOptions as $val => $label):
-        $p = $sortParams;
-        if ($val !== '') $p['sort'] = $val;
-        $href = $p ? $sortBase . '?' . http_build_query($p) : $sortBase;
-    ?>
-        <a class="chip <?= ($sort ?? '') === $val ? 'active' : '' ?>" href="<?= e($href) ?>"<?= ($sort ?? '') === $val ? ' aria-current="page"' : '' ?>><?= $label ?></a>
-    <?php endforeach; ?>
+<div class="filter-bar">
+    <p class="filter-bar-label">Sort</p>
+    <div class="chips" style="margin:0">
+        <?php
+        $sortBase = url('/galleries');
+        $sortParams = [];
+        if ($q !== '') $sortParams['q'] = $q;
+        if ($categoryId > 0) $sortParams['category'] = $categoryId;
+        if ($type !== '') $sortParams['type'] = $type;
+        $sortOptions = ['' => 'Newest', 'views' => 'Most Viewed', 'title' => 'A–Z'];
+        foreach ($sortOptions as $val => $label):
+            $p = $sortParams;
+            if ($val !== '') $p['sort'] = $val;
+            $href = $p ? $sortBase . '?' . http_build_query($p) : $sortBase;
+        ?>
+            <a class="chip <?= ($sort ?? '') === $val ? 'active' : '' ?>" href="<?= e($href) ?>"<?= ($sort ?? '') === $val ? ' aria-current="page"' : '' ?>><?= $label ?></a>
+        <?php endforeach; ?>
+    </div>
 </div>
 
 <?php if (($lockedTotal ?? 0) > 0): ?>
