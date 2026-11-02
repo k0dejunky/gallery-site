@@ -1323,8 +1323,9 @@ PHP;
         $this->flash(
             $summary['errors'] > 0 ? 'error' : 'success',
             sprintf(
-                'PayPal reconciliation done — %d activated, %d closed, %d skipped, %d errors.',
-                $summary['activated'], $summary['closed'], $summary['skipped'], $summary['errors']
+                'PayPal reconciliation done — %d activated, %d renewed, %d closed, %d skipped, %d errors.',
+                $summary['activated'], (int) ($summary['renewed'] ?? 0), $summary['closed'],
+                $summary['skipped'], $summary['errors']
             )
         );
         $this->redirect('/admin/system');

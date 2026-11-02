@@ -135,6 +135,25 @@ class PayPalGateway
      */
     public function getSubscriptionStatus(string $paypalSubscriptionId): ?string
     {
+        $data = $this->getSubscription($paypalSubscriptionId);
+
+        if ($data === null) {
+            return null;
+        }
+
+        $result = (string) ($data['status'] ?? '');
+
+        return $result !== '' ? $result : null;
+    }
+
+    /**
+     * The full subscription object (status, billing_info.last_payment,
+     * next_billing_time, ...). The reconciler needs the last payment's
+     * time to credit a rebill whose webhook never arrived; null when PayPal
+     * cannot be reached or the id is unknown.
+     */
+    public function getSubscription(string $paypalSubscriptionId): ?array
+    {
         $paypalSubscriptionId = trim($paypalSubscriptionId);
 
         if ($paypalSubscriptionId === '' || !preg_match('/\A[A-Za-z0-9_-]{6,100}\z/', $paypalSubscriptionId)) {
@@ -159,9 +178,7 @@ class PayPalGateway
 
         $data = json_decode((string) $body, true);
 
-        $result = (string) ($data['status'] ?? '');
-
-        return $result !== '' ? $result : null;
+        return is_array($data) ? $data : null;
     }
 
     /**

@@ -3545,6 +3545,52 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.paypal.webhook_and_renewal_reconcile', 'Smoke · Money', 'A PayPal rebill is credited even when its webhook never arrives', static function () use ($root, $read, $ok, $bad): array {
+            // Prod had NO webhook registered at PayPal at all (the list
+            // endpoint returned {"webhooks":[]}), so PAYMENT.SALE.COMPLETED
+            // never arrived: the reconciler activated pending rows but never
+            // renewed a term, expire_subscriptions() revoked the member
+            // minutes after PayPal had successfully charged them.
+            $hk   = (string) $read($root . '/app/Core/Housekeeping.php');
+            $gw   = (string) $read($root . '/app/Core/PayPalGateway.php');
+            $hook = (string) $read($root . '/app/Controllers/WebhookController.php');
+            $problems = [];
+
+            // The renewal phase: agreement ACTIVE + a last payment we have
+            // not counted -> Subscription::renew() with a stable key.
+            // Needles must hit CODE, not the docblock that mentions them.
+            if (strpos($gw, 'function getSubscription(') === false) {
+                $problems[] = 'PayPalGateway must expose getSubscription() (status + billing_info) for the reconciler';
+            }
+            if (strpos($hk, '= \App\Models\Subscription::renew(') === false) {
+                $problems[] = 'the PayPal reconciler must credit renewals through Subscription::renew()';
+            }
+            if (strpos($hk, "'paypal:'") === false) {
+                $problems[] = 'the reconciler needs a stable per-payment key (paypal:<agreement>:<paidAt>) so re-runs are no-ops';
+            }
+            if (strpos($hk, "s.status IN ('active', 'past_due', 'expired')") === false) {
+                $problems[] = 'the renewal phase must consider live AND already-expired rows (the reported bug leaves them expired)';
+            }
+            if (strpos($hk, "['billing_info']['last_payment']") === false) {
+                $problems[] = 'the renewal phase must read billing_info.last_payment.time from PayPal';
+            }
+            // The event PayPal actually fires for a subscription payment
+            // (developer.paypal.com event-names: "PAYMENT.SALE.COMPLETED —
+            // A payment is made on a subscription", carrying
+            // billing_agreement_id). Dropping this case silently re-breaks
+            // renewals even with a healthy webhook.
+            if (strpos($hook, "case 'PAYMENT.SALE.COMPLETED'") === false) {
+                $problems[] = 'WebhookController must map PAYMENT.SALE.COMPLETED to the renewal path';
+            }
+            if (strpos($hook, "case 'BILLING.SUBSCRIPTION.ACTIVATED'") === false) {
+                $problems[] = 'WebhookController must keep the activation path';
+            }
+
+            return $problems === []
+                ? $ok('renewal reconcile + sale-completed webhook wired')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.money.only_real_money_is_revenue', 'Smoke · Money', 'Only collected money counts as revenue', static function () use ($root, $read, $ok, $bad): array {
             // An OFFLINE tip is a member posting an amount and a note:
             // nothing is charged and the amount is whatever the member

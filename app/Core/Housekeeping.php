@@ -105,9 +105,12 @@ class Housekeeping
             // One-off abandoned-signup recovery emails (max once per day).
             $out['recovery_emails'] = self::step('recovery_emails', fn () => self::sendRecoveryEmails($root), $out);
 
-            // Auto-approve paid PayPal memberships whose webhook was missed.
+            // Auto-approve paid PayPal memberships whose webhook was missed,
+            // and credit renewals whose webhook never arrived (a rebill that
+            // PayPal charged but the local row never heard about).
             $reconciled = self::step('paypal_reconcile', fn () => self::reconcilePayPalSubscriptions(), $out) ?? ['activated' => 0];
             $out['paypal_reconciled'] = $reconciled['activated']; // activations are the headline number
+            $out['paypal_renewed'] = (int) ($reconciled['renewed'] ?? 0);
 
             // Subscriptions whose expiry passed while nobody was watching.
             $expiredRows = self::step('expire_subscriptions', function () {
@@ -580,15 +583,26 @@ class Housekeeping
      * Reconcile pending PayPal subscriptions against PayPal's own status so
      * a paid membership activates even when a webhook was missed (verified
      * path — activation only happens when PayPal reports the subscription
-     * ACTIVE/APPROVED). Returns a summary for the caller to log.
+     * ACTIVE/APPROVED).
      *
-     * @return array{activated:int, closed:int, skipped:int, errors:int}
+     * It also credits RENEWALS: a term that is ending (or has just ended)
+     * while PayPal reports the agreement ACTIVE with a last payment we have
+     * not counted yet is extended through Subscription::renew(). That is the
+     * safety net behind the reported "successful payment, still expired"
+     * bug — without a webhook (none was ever registered at PayPal), the
+     * rebill was invisible locally and expire_subscriptions() revoked a
+     * member PayPal had just charged. The payment key is stable per PayPal
+     * payment, so re-running this every few minutes is a no-op.
+     *
+     * Returns a summary for the caller to log.
+     *
+     * @return array{activated:int, closed:int, renewed:int, renew_noop:int, skipped:int, errors:int}
      */
     public static function reconcilePayPalSubscriptions(): array
     {
-        $summary = ['activated' => 0, 'closed' => 0, 'skipped' => 0, 'errors' => 0];
+        $summary = ['activated' => 0, 'closed' => 0, 'renewed' => 0, 'renew_noop' => 0, 'skipped' => 0, 'errors' => 0];
 
-        $rows = Database::run(
+        $pendingRows = Database::run(
             "SELECT s.id, s.transaction_ref, s.user_id, s.plan_id,
                     pp.id AS processor_id, pp.config_json
              FROM subscriptions s
@@ -597,31 +611,47 @@ class Housekeeping
              ORDER BY s.id ASC"
         )->fetchAll();
 
-        if ($rows === []) {
+        // Renewal candidates: a live/expired term whose end is at hand, on a
+        // plan that actually has a term to extend. Lifetime rows are excluded
+        // (renew() would only return 'ignored'), and the 14-day window keeps
+        // the API call count fixed instead of polling every PayPal member
+        // on every housekeeping tick.
+        $renewRows = Database::run(
+            "SELECT s.id, s.transaction_ref, s.user_id
+             FROM subscriptions s
+             JOIN plans p ON p.id = s.plan_id
+             WHERE s.transaction_ref LIKE 'PAYPAL-%'
+               AND s.status IN ('active', 'past_due', 'expired')
+               AND p.billing_cycle IN ('monthly', 'yearly')
+               AND s.expires_at IS NOT NULL
+               AND s.expires_at <= DATE_ADD(NOW(), INTERVAL 14 DAY)
+             ORDER BY s.id ASC"
+        )->fetchAll();
+
+        if ($pendingRows === [] && $renewRows === []) {
             return $summary;
         }
 
         // A single enabled PayPal processor provides the credentials.
         $gateway = null;
-        if (count($rows) > 0) {
-            $processor = Database::run(
-                "SELECT * FROM payment_processors
-                 WHERE provider = 'paypal' AND enabled = 1
-                 ORDER BY is_default DESC, id ASC LIMIT 1"
-            )->fetch();
+        $processor = Database::run(
+            "SELECT * FROM payment_processors
+             WHERE provider = 'paypal' AND enabled = 1
+             ORDER BY is_default DESC, id ASC LIMIT 1"
+        )->fetch();
 
-            if ($processor !== false) {
-                $gateway = \App\Core\PayPalGateway::fromConfig($processor);
-            }
+        if ($processor !== false) {
+            $gateway = \App\Core\PayPalGateway::fromConfig($processor);
         }
 
         if ($gateway === null) {
-            $summary['skipped'] = count($rows);
-            error_log('[paypal-reconcile] no enabled PayPal processor with credentials; left ' . count($rows) . ' pending');
+            $summary['skipped'] = count($pendingRows) + count($renewRows);
+            error_log('[paypal-reconcile] no enabled PayPal processor with credentials; left '
+                . count($pendingRows) . ' pending and ' . count($renewRows) . ' unrenewed');
             return $summary;
         }
 
-        foreach ($rows as $row) {
+        foreach ($pendingRows as $row) {
             $id  = (int) $row['id'];
             $ref = (string) $row['transaction_ref'];
             // ref format: PAYPAL-<paypal subscription id>
@@ -669,6 +699,73 @@ class Housekeeping
             } else {
                 // Any other status (e.g. PENDING/APPROVED-but-not-active) is left alone.
                 $summary['skipped']++;
+            }
+        }
+
+        foreach ($renewRows as $row) {
+            $id  = (int) $row['id'];
+            $ref = (string) $row['transaction_ref'];
+            $paypalId = preg_replace('/^PAYPAL-/', '', $ref);
+
+            try {
+                $sub = $gateway->getSubscription($paypalId);
+            } catch (\Throwable $e) {
+                error_log('[paypal-reconcile] renewal check failed for ' . $ref . ': ' . $e->getMessage());
+                $summary['errors']++;
+                continue;
+            }
+
+            if ($sub === null) {
+                $summary['skipped']++;
+                continue;
+            }
+
+            if ((string) ($sub['status'] ?? '') !== 'ACTIVE') {
+                // The agreement is not billing any more (cancelled/expired/
+                // suspended on PayPal): leave the local row to run out on
+                // its own terms — a member who paid through the current
+                // term keeps it either way.
+                $summary['skipped']++;
+                continue;
+            }
+
+            $paidAt = (string) ($sub['billing_info']['last_payment']['time'] ?? '');
+            if ($paidAt === '') {
+                // ACTIVE with no payment yet: the first payment is the
+                // pending-activation path's job, not a renewal.
+                $summary['skipped']++;
+                continue;
+            }
+
+            // Stable per PayPal payment: replaying this reconcile is a
+            // no-op, and renew()'s early-payment window keeps a webhook
+            // recording the same payment under its sale id from granting
+            // a second period.
+            $paymentKey = 'paypal:' . $paypalId . ':' . $paidAt;
+
+            $result = \App\Models\Subscription::renew($id, $paymentKey, $paidAt);
+
+            if ($result === 'renewed') {
+                $summary['renewed']++;
+                \App\Models\AuditLog::record(
+                    (int) ($row['user_id'] ?? 0),
+                    'update',
+                    'subscription',
+                    $id,
+                    'Renewed via PayPal reconciliation (agreement ACTIVE, last payment ' . $paidAt . ')',
+                    null,
+                    ['paypal_subscription_id' => $paypalId, 'last_payment' => $paidAt]
+                );
+                error_log('[paypal-reconcile] renewed ' . $ref . ' (payment ' . $paidAt . ')');
+            } elseif ($result === 'cancelled') {
+                // Locally final but PayPal reports a payment: a human has
+                // to look at it (the member was charged after cancelling).
+                $summary['skipped']++;
+                error_log('[paypal-reconcile] ' . $ref . ' is cancelled locally but PayPal reports payment '
+                    . $paidAt . ' on an ACTIVE agreement — needs a manual look');
+            } else {
+                // 'already' | 'duplicate' | 'ignored': nothing to grant.
+                $summary['renew_noop']++;
             }
         }
 

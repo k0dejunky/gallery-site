@@ -40,9 +40,11 @@ flock($lockFp, LOCK_UN);
 fclose($lockFp);
 
 $line = sprintf(
-    '%s | paypal_reconciled activated=%d closed=%d skipped=%d errors=%d',
+    '%s | paypal_reconciled activated=%d renewed=%d noop=%d closed=%d skipped=%d errors=%d',
     date('Y-m-d H:i:s'),
     (int) $summary['activated'],
+    (int) ($summary['renewed'] ?? 0),
+    (int) ($summary['renew_noop'] ?? 0),
     (int) $summary['closed'],
     (int) $summary['skipped'],
     (int) $summary['errors']
