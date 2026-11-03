@@ -41,8 +41,17 @@ $isAuthPage = $isLoginPage
 // 18+ entry gate: shown once per session to guests while it is enabled in
 // the admin System page. Members, the login/signup pages and every non-HTML
 // endpoint stay reachable without confirmation.
+//
+// A VERIFIED crawler is not shown the gate. It is a full-screen fixed
+// overlay, so without this exemption every page Google opens is the dialog
+// (its <h1> "Are you over 18?" is the page's only heading) and a video watch
+// page is reported as "Video isn't on a watch page". Google documents this
+// exemption as the recommended practice for age-gated content; Crawler only
+// grants it after reverse-DNS plus forward confirmation, so a spoofed
+// User-Agent still gets the gate.
 $ageGateEnabled  = \App\Models\SiteConfig::ageGateEnabled();
-$ageGateRequired = $user === null && $ageGateEnabled && empty($_SESSION['age_verified']);
+$ageGateRequired = $user === null && $ageGateEnabled && empty($_SESSION['age_verified'])
+    && !\App\Core\Crawler::isVerified();
 $ageReturnTo     = (string) ($_SERVER['REQUEST_URI'] ?? '/');
 
 // Google Analytics loads only after the visitor has given consent (a

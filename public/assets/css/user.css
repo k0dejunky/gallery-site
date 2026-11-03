@@ -1472,6 +1472,10 @@ body.site-compact .home-layout { grid-template-columns: 224px minmax(0, 1fr); }
    ====================================================================== */
 
 /* --- the media stage (image viewer + video player) ---------------------- */
+/* The watch page's own heading: theme_base already gives an h1 the display
+   face and the H1 size, this only tightens the rhythm under the breadcrumbs
+   and lets a long caption wrap instead of pushing the player sideways. */
+.media-title{margin:.15rem 0 .6rem;overflow-wrap:anywhere}
 .media-viewer{
     margin:1rem auto;
     padding:clamp(.45rem,.8vw,.85rem);

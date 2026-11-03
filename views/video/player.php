@@ -126,6 +126,13 @@ foreach ((array) ($playlist ?? []) as $item) {
 }
 ?>
 <?php require __DIR__ . '/../partials/breadcrumbs.php'; ?>
+<?php
+// The page's own heading names the VIDEO. Without it the only <h1> a crawler
+// ever sees on a watch page is the age gate's, and Search Console reports
+// "Video isn't on a watch page" - the title sat in <title> and in the
+// related-rail <h2>s while the player itself had no heading at all.
+?>
+<h1 class="media-title"><?= e($title) ?></h1>
 <?php if (!empty($canViewFull)): ?>
 <?php require __DIR__ . '/../partials/media_nav.php'; ?>
 

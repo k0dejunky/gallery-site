@@ -6255,6 +6255,58 @@ class SmokeChecks
                 ? $ok('one URL per page: the old paths redirect, the media viewers consolidate')
                 : $bad(implode('; ', $problems));
         });
+        $add('smoke.seo.video_watch_page', 'Smoke · SEO', 'A video watch page reads as one to a crawler', static function () use ($read, $root, $ok, $bad): array {
+            // Search Console: "Video isn't on a watch page" for every URL in
+            // the video sitemap. The markup was already right - one <video>
+            // per page, a VideoObject, its own canonical - so the fault was
+            // what a crawler actually SAW: the full-screen age gate
+            // (.age-gate{position:fixed;inset:0;z-index:99999}) sat over the
+            // player and its <h1> "Are you over 18?" was the page's only
+            // heading. Google documents exempting a VERIFIED crawler as the
+            // recommended practice for age-gated content.
+            $player   = (string) $read($root . '/views/video/player.php');
+            $layout   = (string) $read($root . '/views/layout.php');
+            $crawler  = (string) $read($root . '/app/Core/Crawler.php');
+            $problems = [];
+
+            // The page has to head the VIDEO, not just the interstitial.
+            if (preg_match('/<h1[^>]*class="media-title"/', $player) !== 1) {
+                $problems[] = 'the video page must give the video its own <h1> - without it the only h1 on the page is the age gate\'s';
+            }
+            if (strpos($player, 'class="media-title"><?= e($title)') === false) {
+                $problems[] = 'the video page h1 must carry the video title';
+            }
+
+            // The gate steps aside for a crawler we have confirmed.
+            $at      = strpos($layout, '$ageGateRequired');
+            $assign  = $at === false ? '' : substr($layout, $at, 400);
+            if (strpos($assign, '!\\App\\Core\\Crawler::isVerified()') === false) {
+                $problems[] = 'the age gate must be suppressed for a verified crawler';
+            }
+
+            // ... and "verified" has to mean verified: the User-Agent alone is
+            // printable by anyone, so the address has to reverse-resolve into
+            // the engine's domain AND resolve back to itself.
+            if ($crawler === '') {
+                $problems[] = 'app/Core/Crawler.php is missing';
+            } else {
+                foreach (['gethostbyaddr', 'dns_get_record', 'suffixesFor', 'Cache::get'] as $needle) {
+                    if (strpos($crawler, $needle) === false) {
+                        $problems[] = 'Crawler must confirm the address, not trust the User-Agent (' . $needle . ' missing)';
+                    }
+                }
+                // The reverse lookup must feed a forward confirmation, i.e.
+                // both halves live in the same method.
+                $confirm = preg_match('/function confirm\(.*?\n    \}/s', $crawler, $cm) === 1 ? $cm[0] : '';
+                if ($confirm === '' || strpos($confirm, 'dns_get_record') === false || strpos($confirm, 'str_ends_with') === false) {
+                    $problems[] = 'Crawler::confirm() must reverse-DNS, match the engine suffix AND forward-confirm';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the video page heads the video and a verified crawler skips the gate')
+                : $bad(implode('; ', $problems));
+        });
         $add('smoke.seo.robots_at_root', 'Smoke · SEO', 'robots.txt scopes disallows to /gallery/', static function () use ($read, $root, $ok, $bad): array {
             $robots = (string) $read("$root/public/robots.txt");
             if ($robots === '') {
