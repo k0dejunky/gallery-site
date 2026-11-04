@@ -815,11 +815,14 @@ body:not(.admin-theme) .chip.active {
     color: var(--chip-active-color);
 }
 
-/* Buttons are a deep-crimson pill with white text. inline-flex + centre is
+/* Buttons are a deep-wine pill with white text. inline-flex + centre is
    what keeps the label optically centred: a flex item is blockified, so a
    plain block button pinned its single line to the top of the box, and with
    content-box sizing the min-height was added ON TOP of the padding - the
-   hero actions measured 72px tall with the text 11px above centre. */
+   hero actions measured 72px tall with the text 11px above centre.
+   The shadow is NEUTRAL: a coloured halo around a coloured button reads as
+   a sticker (the old rgba(225,29,72,.32) glow), so depth comes from a soft
+   black drop shadow plus a hairline top highlight instead. */
 body:not(.admin-theme) .btn {
     display: inline-flex;
     align-items: center;
@@ -831,11 +834,11 @@ body:not(.admin-theme) .btn {
     letter-spacing: .01em;
     color: var(--btn-text);
     background: linear-gradient(135deg, var(--btn-gradient-1), var(--btn-gradient-2));
-    box-shadow: 0 2px 10px rgba(225,29,72,.32);
+    box-shadow: 0 6px 18px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.25);
 }
 body:not(.admin-theme) .btn:hover {
     background: linear-gradient(135deg, var(--btn-hover-gradient-1), var(--btn-hover-gradient-2));
-    box-shadow: 0 4px 16px rgba(225,29,72,.45);
+    box-shadow: 0 8px 22px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.3);
 }
 /* The quiet link sits in a button row without looking like a button:
    the .btn pill above is more specific than .btn-link, so it needs an
@@ -851,16 +854,20 @@ body:not(.admin-theme) .btn.btn-link:hover {
 body:not(.admin-theme) .btn.btn-link:hover { color: var(--link-hover); }
 /* Same trap as .btn-link: the solid .btn pill (0,2,1) beats the plain
    .btn-ghost (0,1,0), so the hero's secondary actions rendered as solid
-   rose pills with no hierarchy next to the primary CTA. */
-body:not(.admin-theme) .btn-ghost,
-body:not(.admin-theme) .btn-ghost:hover {
-    background: transparent;
+   rose pills with no hierarchy next to the primary CTA. A ghost here is a
+   FAINT white wash (5%), not a bare transparent box: over the cover image
+   an outline alone has nothing to sit on and the button reads as loose
+   text. The border comes from --outline-border so the theme editor keeps
+   its control. */
+body:not(.admin-theme) .btn-ghost {
+    background: rgba(255,255,255,.05);
     box-shadow: none;
-    border: 1px solid var(--outline-border, #8b7f96);
+    border: 1px solid var(--outline-border, #736c7e);
     color: var(--text-color, #f5edf7);
 }
 body:not(.admin-theme) .btn-ghost:hover {
-    background: var(--surface-3, #1e0f2a);
+    background: rgba(255,255,255,.1);
+    box-shadow: none;
     color: var(--text-color, #f5edf7);
 }
 body:not(.admin-theme) .btn-outline {
@@ -1428,16 +1435,16 @@ body.site-compact .home-layout { grid-template-columns: 224px minmax(0, 1fr); }
 
 /* --- Buttons (kit additions) ----------------------------------------- */
 .btn-lg{padding:.7rem 1.35rem;font-size:var(--font-size-md);border-radius:var(--border-radius,10px)}
-.btn-ghost{background:transparent;color:var(--text-color,#f5edf7);border:1px solid var(--outline-border,#8b7f96)}
-.btn-ghost:hover{background:var(--surface-3,#1e0f2a);color:var(--text-color,#f5edf7)}
+.btn-ghost{background:rgba(255,255,255,.05);color:var(--text-color,#f5edf7);border:1px solid var(--outline-border,#736c7e)}
+.btn-ghost:hover{background:rgba(255,255,255,.1);color:var(--text-color,#f5edf7)}
 .btn-grad{
-    background:linear-gradient(135deg,var(--btn-gradient-1,#9f1239),var(--btn-gradient-2,#e11d48));
+    background:linear-gradient(135deg,var(--btn-gradient-1,#881337),var(--btn-gradient-2,#be123c));
     color:var(--btn-text,#ffffff);
 }
 .btn-grad:hover{
     background:linear-gradient(135deg,var(--btn-hover-gradient-1,#be123c),var(--btn-hover-gradient-2,#e11d48));
     color:var(--btn-text,#ffffff);
-    box-shadow:var(--glow-brand,0 0 0 1px rgba(225,29,72,.35),0 0 24px rgba(225,29,72,.15));
+    box-shadow:0 8px 22px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.3);
 }
 
 /* --- Stat chips (hero stats) ----------------------------------------- */
@@ -1536,7 +1543,7 @@ body.site-compact .home-layout { grid-template-columns: 224px minmax(0, 1fr); }
     font-family:var(--font-family-display,'Playfair Display',Georgia,serif);
     font-size:1.85rem;font-weight:600;line-height:1.2;
 }
-.plan-popular{border-color:var(--btn-gradient-1,#d946ef);box-shadow:var(--glow-brand,var(--shadow-card))}
+.plan-popular{border-color:var(--btn-gradient-1,#881337);box-shadow:var(--glow-brand,var(--shadow-card))}
 .plan-popular-tag{position:absolute;top:-0.65rem;left:50%;transform:translateX(-50%);white-space:nowrap}
 
 /* ======================================================================
