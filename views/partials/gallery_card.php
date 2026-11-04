@@ -38,7 +38,7 @@ $videoCount  = (int) ($gallery['video_count'] ?? 0);
 $createdAt = !empty($gallery['created_at']) ? strtotime((string) $gallery['created_at']) : false;
 $hasDetails = ($gallery['description'] ?? '') !== '' || $createdAt !== false || !empty($galleryCategories);
 $placeholder = 'data:image/svg+xml;utf8,' . rawurlencode(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" fill="#150a1d"/><rect x="130" y="102" width="140" height="96" rx="12" fill="none" stroke="#3a1f4a" stroke-width="8"/><circle cx="185" cy="145" r="14" fill="#d946ef"/><path d="M130 196l42-42 32 30 44-52 52 64" fill="none" stroke="#c084fc" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" fill="#150a1d"/><rect x="130" y="102" width="140" height="96" rx="12" fill="none" stroke="#3a1f4a" stroke-width="8"/><circle cx="185" cy="145" r="14" fill="#e11d48"/><path d="M130 196l42-42 32 30 44-52 52 64" fill="none" stroke="#fb7185" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 );
 $cardId = 'card-' . (int) $gallery['id'];
 $isLocked    = $memberLevel < PHP_INT_MAX && $galleryLevel > $memberLevel;
@@ -61,8 +61,8 @@ $asyncDecodeAttr    = $heroCard ? '' : ' decoding="async"';
                 <svg class="card-placeholder" viewBox="0 0 400 300" role="img" aria-label="No photos yet" style="position:absolute;inset:0;width:100%;height:100%;">
                     <rect width="400" height="300" fill="var(--surface-2)"/>
                     <rect x="130" y="102" width="140" height="96" rx="12" fill="none" stroke="var(--border)" stroke-width="8"/>
-                    <circle cx="185" cy="145" r="14" fill="var(--purple-500)"/>
-                    <path d="M130 196l42-42 32 30 44-52 52 64" fill="none" stroke="var(--link-color)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="185" cy="145" r="14" fill="var(--pink-500)"/>
+                    <path d="M130 196l42-42 32 30 44-52 52 64" fill="none" stroke="var(--brand-2)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
             <?php else: ?>
                 <?php if ($isVideoCard): ?>
@@ -85,7 +85,7 @@ $asyncDecodeAttr    = $heroCard ? '' : ' decoding="async"';
             <?php endif; ?>
             <div class="card-scrim"></div>
             <div class="card-badges">
-                <?php if ($isAdult): ?><span class="card-badge nsfw-badge card-badge-adult" title="Adult content">18+</span><span class="sr-only">Adult content</span><?php endif; ?>
+                <?php if ($isAdult): ?><span class="card-badge nsfw-badge card-badge-adult" title="Adult content">18+</span><span class="sr-only">Adult content</span><?php else: ?><span class="card-badge card-badge-sfw" title="Safe for work">SFW</span><?php endif; ?>
                 <?php if ($isVideoCard): ?><span class="card-badge">&#9654; Video</span><?php endif; ?>
                 <?php if ($isViewed): ?><span class="card-badge viewed-badge" title="You have seen this gallery">&#10003;</span><span class="sr-only">Already viewed</span><?php endif; ?>
             </div>

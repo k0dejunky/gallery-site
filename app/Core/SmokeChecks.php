@@ -1638,11 +1638,12 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
-        $add('smoke.theme.rebrand_tokens', 'Smoke · UI', 'The CTA is the fuchsia accent and the indigo/yellow pair is gone', static function () use ($root, $ok, $bad): array {
-            // The old primary button was indigo (#7375fa) with yellow text
-            // (#faf56e) - the legacy pair the redesign deletes. The member
-            // palette now carries the fuchsia CTA, and the legacy values must
-            // not survive anywhere in the palette.
+        $add('smoke.theme.rebrand_tokens', 'Smoke · UI', 'The CTA is the crimson-rose accent and the legacy fuchsia pair is gone', static function () use ($root, $ok, $bad): array {
+            // The member CTA shifted fuchsia (#d946ef) -> crimson-rose
+            // (skill colour domain: primary #E11D48, secondary #FB7185).
+            // The legacy fuchsia/purple values must not survive anywhere
+            // in the MEMBER palette (the admin scope keeps its fuchsia
+            // pins — see smoke.theme.admin_on_brand_tokens).
             $theme = (string) @file_get_contents($root . '/app/Models/Theme.php');
             if (preg_match('/private const MEMBER_COLORS = \[(.*?)\n    \];/s', $theme, $m) !== 1) {
                 return $bad('the member palette could not be read out of Theme.php');
@@ -1651,9 +1652,9 @@ class SmokeChecks
             $problems = [];
 
             $expect = [
-                'btn-bg'      => '#d946ef',
-                'btn-color'   => '#0a0210',
-                'btn-hover-bg'=> '#e879f9',
+                'btn-bg'      => '#e11d48',
+                'btn-color'   => '#ffffff',
+                'btn-hover-bg'=> '#be123c',
                 'page-bg'     => '#050208',
                 'card-bg'     => '#0d0612',
                 'border'      => '#2a1638',
@@ -1663,8 +1664,10 @@ class SmokeChecks
                     $problems[] = $key . ' must be ' . $hex;
                 }
             }
-            // The legacy indigo/yellow CTA pair must be gone.
-            foreach (['#7375fa', '#faf56e'] as $legacy) {
+            // The legacy fuchsia/purple CTA values must be gone from the
+            // member palette (the admin palette keeps them — see
+            // admin_on_brand_tokens).
+            foreach (['#7375fa', '#faf56e', '#d946ef', '#a855f7', '#9333ea'] as $legacy) {
                 if (stripos($block, $legacy) !== false) {
                     $problems[] = 'the legacy CTA colour ' . $legacy . ' is still in the member palette';
                 }
@@ -1678,7 +1681,7 @@ class SmokeChecks
             }
 
             return $problems === []
-                ? $ok('the fuchsia CTA is in place and the indigo/yellow pair is gone')
+                ? $ok('the crimson-rose CTA is in place and the legacy fuchsia/purple CTA is gone')
                 : $bad(implode('; ', $problems));
         });
 
@@ -1787,11 +1790,11 @@ class SmokeChecks
             // site layout, no palette) must paint the same dark skin.
             foreach ([
                 'views/auth/step_up.php' => [
-                    'must' => ['#050208', '#150a1d', '#d946ef'],
+                    'must' => ['#050208', '#150a1d', '#e11d48'],
                     'was'  => ['#fdf2f8', '#fbcfe8', '#db2777'],
                 ],
                 'views/membership/braintree_checkout.php' => [
-                    'must' => ['#150a1d', '#050208', '#d946ef'],
+                    'must' => ['#150a1d', '#050208', '#e11d48'],
                     'was'  => ['--card-bg:#fff', '#fdf2f8', '#fce7f3'],
                 ],
             ] as $name => $set) {
@@ -1846,14 +1849,52 @@ class SmokeChecks
                     $problems[] = 'user.css still carries the old player pink ' . $hex;
                 }
             }
-            if (strpos($css, 'var(--pink-500,#e879f9)') === false) {
+            if (strpos($css, 'var(--pink-500,#fb7185)') === false) {
                 $problems[] = 'the seek thumb must use var(--pink-500)';
             }
-            if (strpos($css, 'var(--purple-200,#e9d5ff)') === false) {
+            if (strpos($css, 'var(--purple-200,#fecdd3)') === false) {
                 $problems[] = 'the player hover tint must use var(--purple-200)';
             }
             return $problems === []
-                ? $ok('the player chrome is on the fuchsia brand tokens')
+                ? $ok('the player chrome is on the crimson-rose brand tokens')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.theme.rose_cta_contrast', 'Smoke \u00b7 UI', 'The rose CTA clears the contrast floor on every end of its gradients', static function () use ($ok, $bad): array {
+            // The member CTA shifted fuchsia -> crimson-rose (skill colour
+            // domain: primary #E11D48, secondary #FB7185). Two text pairs
+            // carry the button: white on the solid btn-bg/btn-hover and
+            // ink on the btn-grad gradient ends. Both must clear 4.5:1
+            // (0.875rem semibold is normal text, not large).
+            $ratio = static function (string $fg, string $bg): float {
+                $chan = static function (string $hex): float {
+                    $hex = ltrim($hex, '#');
+                    $parts = [hexdec(substr($hex, 0, 2)) / 255, hexdec(substr($hex, 2, 2)) / 255, hexdec(substr($hex, 4, 2)) / 255];
+                    $rgb = array_map(static fn($c) => $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4, $parts);
+                    return 0.2126 * $rgb[0] + 0.7152 * $rgb[1] + 0.0722 * $rgb[2];
+                };
+                $a = $chan($fg); $b = $chan($bg);
+                [$hi, $lo] = [$a > $b ? $a : $b, $a > $b ? $b : $a];
+                return ($hi + 0.05) / ($lo + 0.05);
+            };
+            $pairs = [
+                'white on btn-bg' => ['#ffffff', '#e11d48'],
+                'white on btn-hover-bg' => ['#ffffff', '#be123c'],
+                'ink on btn-gradient-1' => ['#0a0210', '#f43f5e'],
+                'ink on btn-gradient-2' => ['#0a0210', '#fb7185'],
+                'ink on btn-hover-gradient-1' => ['#0a0210', '#fb7185'],
+                'ink on btn-hover-gradient-2' => ['#0a0210', '#fda4af'],
+                'rose link on page-bg' => ['#fda4af', '#050208'],
+                'rose link on surface-2' => ['#fda4af', '#150a1d'],
+            ];
+            $problems = [];
+            foreach ($pairs as $name => [$fg, $bg]) {
+                if ($ratio($fg, $bg) < 4.5) {
+                    $problems[] = $name . ' is under 4.5:1';
+                }
+            }
+            return $problems === []
+                ? $ok('every rose CTA text pair clears 4.5:1')
                 : $bad(implode('; ', $problems));
         });
 
@@ -1961,13 +2002,20 @@ class SmokeChecks
             if (preg_match('/\.stat-card b \{[^}]*var\(--font-family-display/s', $css) !== 1) {
                 $problems[] = 'the KPI numbers must carry the display font';
             }
-            // Both palettes (member + admin) carry the same fuchsia pair.
-            // The consts pad their arrows differently, so match whitespace.
-            if (preg_match_all("/'pink-500'\s*=>\s*'#d946ef'/", $theme) !== 2) {
-                $problems[] = 'both Theme.php palettes must carry pink-500 #d946ef';
-            }
-            if (preg_match_all("/'pink-700'\s*=>\s*'#a21caf'/", $theme) !== 2) {
-                $problems[] = 'both Theme.php palettes must carry pink-700 #a21caf';
+            // The admin palette keeps its own fuchsia pair (the admin
+            // scope is light; the member scope went crimson-rose — the
+            // user declined to move the admin accent). Match the ADMIN
+            // palette block specifically, not the whole file.
+            if (preg_match('/private const COLORS = \[(.*?)\n    \];/s', $theme, $am) !== 1) {
+                $problems[] = 'the admin palette could not be read out of Theme.php';
+            } else {
+                $adminBlock = $am[1];
+                if (preg_match_all("/'pink-500'\s*=>\s*'#d946ef'/", $adminBlock) !== 1) {
+                    $problems[] = 'the admin palette must carry pink-500 #d946ef';
+                }
+                if (preg_match_all("/'pink-700'\s*=>\s*'#a21caf'/", $adminBlock) !== 1) {
+                    $problems[] = 'the admin palette must carry pink-700 #a21caf';
+                }
             }
             return $problems === []
                 ? $ok('the admin accent is the fuchsia brand, ink-on-accent, Playfair KPIs')
@@ -2222,6 +2270,72 @@ class SmokeChecks
             }
             return $problems === []
                 ? $ok('no view carries an inline event handler')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.ui.broken_image_fallback_survives_picture', 'Smoke · UI', 'A broken cover falls back even inside a picture element', static function () use ($root, $ok, $bad): array {
+            // An <img> inside <picture> is chosen from its <source>/srcset
+            // candidates, so assigning .src alone never sticks: the browser
+            // re-picks the same 404 URL and the raw broken-image icon shows.
+            // The handler must drop the sources first. The home hero must
+            // not hard-code the hiding class either, or its cover can never
+            // show even when the file loads.
+            $problems = [];
+            $layout = (string) @file_get_contents($root . '/views/layout.php');
+            if (strpos($layout, "querySelectorAll('source')") === false) {
+                $problems[] = 'the fallback handler must strip the <source> siblings before swapping the src';
+            }
+            if (strpos($layout, "removeAttribute('srcset')") === false) {
+                $problems[] = 'the fallback handler must drop the img srcset before swapping the src';
+            }
+            $home = (string) @file_get_contents($root . '/views/home.php');
+            if (preg_match('/<img[^>]*class="media-broken"/', $home) === 1) {
+                $problems[] = 'the home hero img hard-codes media-broken, so its cover can never show';
+            }
+            if (strpos($home, 'data-fallback=') === false) {
+                $problems[] = 'the home hero img needs a data-fallback for a missing cover';
+            }
+            return $problems === []
+                ? $ok('sources are dropped before the swap and the hero is not pre-hidden')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.ui.section_links_stay_quiet', 'Smoke · UI', 'Section links render as quiet links, not gradient pills', static function () use ($root, $ok, $bad): array {
+            // body:not(.admin-theme) .btn (specificity 0,2,1) paints every
+            // .btn with the solid rose pill, which beats .btn-link's
+            // background:none (0,1,0) - so "View all" rendered as a filled
+            // gradient tag flush against the container edge. The quiet link
+            // needs an equally specific override.
+            $css = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $problems = [];
+            if (strpos($css, 'body:not(.admin-theme) .btn.btn-link') === false) {
+                $problems[] = 'user.css needs a .btn.btn-link override that beats the .btn pill';
+            }
+            if (preg_match('/body:not\(\.admin-theme\) \.btn\.btn-link[^{]*\{[^}]*background:\s*none/s', $css) !== 1) {
+                $problems[] = 'the .btn.btn-link override must set background:none';
+            }
+            if (strpos($css, 'body:not(.admin-theme) .btn {') === false && strpos($css, 'body:not(.admin-theme) .btn{') === false) {
+                $problems[] = 'the .btn pill rule the override exists to beat is gone - re-check the pairing';
+            }
+            return $problems === []
+                ? $ok('the quiet link override beats the .btn pill')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.ui.ghost_buttons_stay_ghost', 'Smoke · UI', 'Secondary actions render as ghost buttons, not solid pills', static function () use ($root, $ok, $bad): array {
+            // body:not(.admin-theme) .btn (0,2,1) beats .btn-ghost (0,1,0),
+            // so "Log in" / "See membership" rendered as solid rose pills
+            // identical to the primary CTA - no hierarchy in the hero.
+            $css = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $problems = [];
+            if (preg_match('/body:not\(\.admin-theme\) \.btn-ghost[^{]*\{[^}]*background:\s*transparent/s', $css) !== 1) {
+                $problems[] = 'user.css needs a .btn-ghost override with background:transparent that beats the .btn pill';
+            }
+            if (strpos($css, 'body:not(.admin-theme) .btn-ghost:hover') === false) {
+                $problems[] = 'the .btn-ghost hover override is gone - the pill hover would paint over it';
+            }
+            return $problems === []
+                ? $ok('ghost buttons keep a transparent background over the pill rule')
                 : $bad(implode('; ', $problems));
         });
 

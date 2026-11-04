@@ -17,7 +17,9 @@ then confirmed direction:
 - **Admin:** stays a light dense console, modernised (retint + type + polish).
 - **Typography:** Playfair Display (display) + Inter (body/UI), self-hosted
   woff2, latin subset, `font-display: swap`.
-- **CTA:** fuchsia `#d946ef` (kills the legacy indigo/yellow button pair).
+- **CTA:** rose `#e11d48` (rebranded from fuchsia `#d946ef` on Nov 3 2026 —
+  hotter adult-vertical accent, member scope only; kills the legacy
+  indigo/yellow button pair).
 - **Depth:** design system + components + key pages. Same PHP structure, no
   information-architecture rewrite.
 - **Execution policy (user-mandated):** every phase deploys to **dev first**
@@ -47,11 +49,18 @@ bites on that.
 | Text | `text` | `#f5edf7` (≥7:1 on canvas) |
 | Heading | `heading` | `#ffffff` (serif display only) |
 | Muted | `muted` | `#b9a0c4` (≥4.5:1 on surfaces) |
-| Link | `link` | `#e9aefc` |
-| Brand | `purple-500` | `#a855f7` |
-| CTA | `btn-bg` | `#d946ef` → hover `#e879f9` |
-| On CTA | `btn-color` | `#0a0210` |
-| Focus | `focus-ring` | `#c084fc` |
+| Link | `link` | `#fda4af` |
+| Brand | `purple-500` | `#e11d48` (rose ramp — rebrand Nov 3 2026) |
+| CTA | `btn-bg` | `#e11d48` → hover `#be123c`; gradients `#f43f5e→#fb7185` (hover `#fb7185→#fda4af`) |
+| On CTA | `btn-color` | `#ffffff` |
+| Focus | `focus-ring` | `#fb7185` |
+
+**Rose/crimson rebrand (Nov 3 2026, user-requested):** the accent moved from
+fuchsia/purple to a hotter crimson-rose convention for the adult vertical —
+**member scope only**; the admin console keeps its fuchsia palette. All key
+names preserved; `smoke.theme.rebrand_tokens` bites on the old fuchsia/purple
+values and `smoke.theme.rose_cta_contrast` pins 8 white-on-rose contrast
+pairs at ≥4.5:1.
 
 **Key names are PRESERVED** from the old palette (pink-*, purple-*, btn-*,
 card-*, sidebar-*, table-*, pagination-*, …) so the 148 member views do not
@@ -76,7 +85,7 @@ status ok/warn/err/info pairs unified.
 - Type scale: `2xs 11 / xs 12 / sm 13 / md 14 / base 15 / lg 17 / xl 21 / 2xl 28 / 3xl 36`.
 - Shadows (dark = rim + glow, not drop): `shadow-card` (inner highlight +
   `0 8px 32px rgba(0,0,0,.5)`), `shadow-float`, `glow-brand`
-  (`0 0 0 1px rgba(168,85,247,.35), 0 0 24px rgba(168,85,247,.15)`).
+  (`0 0 0 1px rgba(225,29,72,.35), 0 0 24px rgba(225,29,72,.15)` — rose).
 - Motion: `fast 140 / base 200 / slow 320 ms`, easing
   `cubic-bezier(.2,.8,.2,1)`, all behind `prefers-reduced-motion`.
 - Breakpoints (kills the 14 scattered admin widths): `sm 480 / md 640 /
@@ -177,4 +186,5 @@ Superseded in part by the Oct 28 "full redesign incl. IA tweaks" decision:
 | 10 | **dev-deployed, dev-verified** | `70b13ae` | 1044/1044 | membership pricing cards + immersive auth splash. `theme_base.css` `.auth-panel` retinted to the OLED card (surface-2 bg, `--border`, `--shadow-card`, heading token — `text-align:center` kept for the `one_alignment` pin); the panel wraps the login/signup splash AND the whole membership page, so both pages go immersive in one rule. auth_shell hero heading on Playfair `--font-family-display`; both auth submit buttons → `.btn.btn-grad`. Membership page: `.plans-grid` + `.plan-card` (kit tokens, `user.css` phase-10 section — a NEW view `<style>` block is forbidden by the `no_inline_style_blocks` ratchet), Playfair plan names + `.plan-price`, Gold tier gets `.plan-popular` + `pill pill-accent` "Most popular", Subscribe/Pay-by-card CTAs → `.btn-grad`; ALL payment markup untouched (PayPal `data-pp-button`, Braintree gating, `levelCounts`, `checkout_processor`, chat alias). New guard `smoke.theme.auth_splash_and_plans_on_tokens` (stylesheet + view needles + payment-string regression) proven to bite. TRAP found: `smoke.ui.no_inline_style_blocks` walks `views/*/*.php` (depth 2) — membership/index.php caught, kept the styles in user.css instead. Verified on dev: `/gallery/login` btn-grad; `/gallery/membership` 5 plan-cards + 1 Most popular pill; served theme.css carries the new `.auth-panel`; dev smoke 1044/1044. Local suite 1123/6 (known env-only) |
 | 11 | **dev-deployed, dev-verified** | `0834f43` | 1045/1045 | media viewing + secondary pages on the kit. Image full + video player: the figure becomes `.media-viewer` (surface-2 stage card, radius, border), figcaption `.media-meta`/`.media-caption`, save-to-collection card `.save-form`, report link `.media-report`; player playlist count `.pl-count`, browse note `.pb-note`, "More like this" on `.section-head`. Favorites/collections (index + show + public share): `.page-shell` measure + `.section-head` rhythm, create card `.collection-create`, cards `.collection-card`, share/rename `.collection-panel`, media rows `.collection-media-*` (title/duration/actions/remove) — every one-off inline style gone. Settings: `.settings-card-accent` (fuchsia left rule), `.settings-fields-1/3`, `.settings-actions`, `.settings-hr`, `.settings-apply`, `.settings-h3`, `.settings-select`, `.settings-code`. Support contact/thread on `.page-shell`. Chat: `.chat-shell` measure, questionnaire panels `.qn-panel`/`.qn-*` (answered → `.qn-panel-done`), daily broadcast `.chat-daily`, attachment link/attach button/file input classes — `role=log`, the 25 MB guard and the typing ping untouched. NEW guard `smoke.theme.media_and_secondary_pages_on_kit` (9 views, required + banned inline needles, 12 stylesheet selectors) proven to bite. BUG FOUND LIVE: `body:not(.admin-theme) .card` (card polish, specificity 0,2,1) overrode the accent's `border-left` (0,1,0) — fixed to `body:not(.admin-theme) .settings-card-accent` and pinned in the guard; CDP now `rgb(217,70,239)`. FOUND (phase 8 carry-over, phase 12): `.glass-header` is 21px wider than the viewport at every width (negative margins vs body padding) → 10px horizontal scroll on member pages; dev photo 95 has no `web` rendition (data, not code). CDP dev: viewer bg `rgb(21,10,29)` radius 14, meta `rgb(185,160,196)`, page-shell max 1216px, chat-shell 992px, collections panel/card surface-2, settings accent fuchsia + 3-col fields. Local 1045/1045, suite 1124/6 (known env-only), dev 1045/1045, deploy RC=0 md5 parity |
 | 12 | **dev-deployed, dev-verified** | (this commit, local only) | 1045/1045 | responsive/a11y hardening + IA. **CATCH-UP FIRST:** the phase 8/9 work was deployed and verified on dev but never committed (docs falsely said "(local commit)") — committed as `3fe596b` after re-verifying dev md5 parity for all 4 files; `views/partials/comment_thread.php` (one-line emoji decode fix, also dev-matched) left dirty on purpose. **THE PHASE-11 OVERFLOW (root cause + fix):** `body.site-compact` sets side padding `.85rem` (13.6px) while `.glass-header` hard-coded `margin:0 -1.5rem; padding:.15rem 1.5rem` (24px) → the bar overshot ~21px → every member page scrolled 10px sideways at every width (390: sw 400/cw 390; 1280: sw 1275/cw 1265). New body token `--page-pad-x` (1.5rem default, `.85rem` on site-compact) now feeds BOTH the body padding and the header's `calc(-1 * var(--page-pad-x))` margin / `var(--page-pad-x)` padding. Guard `smoke.theme.glass_header_shell` extended with the 3 token needles — bite-proven (margin reverted to `-1.5rem` → named FAIL). **IA:** the member rail's Browse group gains Videos + Safe for work (mirroring the guest rail; they flow into the phone's "More" sheet automatically); the Galleries entry now lights only on the unfiltered catalogue (`$currentType === ''`). CDP on dev: sw=cw at 390 (390/390) AND 1280 (1265/1265) on /galleries, /wall, /collections as a member, and on guest / + /galleries and auth /login (ml=-24px auth, -13.6px member, headerW==cw exactly); rail shows Dashboard/Galleries/Videos/Safe for work/Favorites/...; screenshots `/tmp/opencode/shot/p12-galleries-{1280,390}.png`. Local smoke 1045/1045, suite 1124/6 (known env-only), dev deploy RC=0 md5 parity, dev smoke 1045/1045 |
+| Rework (Nov 3) | **dev-deployed, dev-verified** | (local only) | 1051/1051 | **Rose/crimson rebrand + premium polish pass.** Palette: `MEMBER_COLORS` revalued to the rose ramp (pink-500/btn-bg `#e11d48`, hover `#be123c`, gradients `#f43f5e→#fb7185`, link `#fda4af`, purples remapped, surfaces unchanged — admin untouched); CSS `var()` fallbacks in user/wall/public.css, the SVG placeholders in gallery_card/guest_teaser and the standalone `step_up`/`braintree_checkout` pages re-matched (white CTA text — ink was 4.34:1). Guards: `rebrand_tokens` + `player_on_brand_tokens` re-pinned to rose, `admin_on_brand_tokens` scoped to the ADMIN palette block, NEW `smoke.theme.rose_cta_contrast` (8 pairs ≥4.5:1) — all bite-proven. **Premium polish:** text gradient wordmark replaces the purple PNG in the glass header and the home hero; hero cover on the `blur` public variant with a `data-fallback` (no inline handler — `no_inline_handlers` bit); bigger Playfair hero title, structured lede, quiet pill CTAs, stat-chip/guest-browse rhythm, `.home-section-head` wrap, card stagger reveal (reduced-motion safe), rose card badges/SVG art. **3 screenshot defects fixed:** (1) hero img pre-hidden by a hard-coded `media-broken` class — removed; (2) broken covers inside `<picture>` never fell back (the `<source>`/`srcset` re-picked the 404 URL) — the global error handler now strips sources + srcset before swapping; (3) `.btn-link` section links rendered as solid gradient pills (`body:not(.admin-theme) .btn` 0,2,1 beat `.btn-link` 0,1,0) — now a `.btn.btn-link` override. Two NEW bite-proven guards: `smoke.ui.broken_image_fallback_survives_picture`, `smoke.ui.section_links_stay_quiet`, plus `smoke.ui.ghost_buttons_stay_ghost` (`.btn-ghost` was dead to the same specificity trap — the hero's secondary CTAs rendered as solid rose pills with no hierarchy; now a real ghost). CDP dev: broken imgs 7→0, hero cover shows, links quiet, ghost transparent. Suite 1129/6 (known env-only) |
 | Prod | **BLOCKED on user permission** | - | - | ask after all phases green on dev |

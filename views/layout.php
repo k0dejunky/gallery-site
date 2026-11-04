@@ -248,7 +248,7 @@ if (!empty($_SESSION['impersonator_id'])) {
     <header class="glass-header">
         <div class="glass-header-inner">
             <a class="glass-brand" href="<?= e(url('/')) ?>" aria-label="<?= e(config('app.site_name')) ?> - home">
-                <img src="<?= e(url(\App\Models\Theme::userTheme($userThemePreset)['title_image'])) ?>" alt="<?= e(config('app.site_name')) ?>">
+                <span class="glass-word"><?= e(config('app.site_name')) ?></span>
             </a>
             <?php if (!$isAuthPage && ($user === null || !$sidebarNav)): ?>
             <nav class="nav<?= $user === null ? ' public-nav' : '' ?>" aria-label="Primary">
@@ -917,6 +917,16 @@ document.addEventListener('error',function(e){
   if(t.tagName==='IMG'&&t.hasAttribute('data-hide-on-error')){t.style.display='none';return;}
   if(t.tagName==='IMG'&&t.hasAttribute('data-fallback')&&!t.getAttribute('data-fb')){
     t.setAttribute('data-fb','1');
+    // An image inside <picture> is selected from its <source>/srcset
+    // candidates, so assigning .src alone never sticks - the browser
+    // re-picks the same 404 URL. Drop the sources first, then swap.
+    var p=t.parentNode;
+    if(p&&p.tagName==='PICTURE'){
+      var ss=p.querySelectorAll('source');
+      for(var i=0;i<ss.length;i++){ss[i].parentNode.removeChild(ss[i]);}
+    }
+    t.removeAttribute('srcset');
+    t.removeAttribute('sizes');
     t.src=t.getAttribute('data-fallback');
   }
 },true);
