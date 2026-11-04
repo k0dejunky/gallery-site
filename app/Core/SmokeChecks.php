@@ -1479,8 +1479,9 @@ class SmokeChecks
                     '.guest-teaser-stats strong{color:var(--text-color)}',
                     '.guest-teaser-stats strong{color:var(--purple-800)}',
                     '--text-color', '--card-bg', 4.5],
-                // The rebranded CTA. The primary button is dark ink on the
-                // fuchsia accent; the old indigo/yellow pair is gone.
+                // The rebranded CTA. The primary button is white text on
+                // the deep-crimson gradient; the old indigo/yellow pair and
+                // the ink-on-salmon pair are both gone.
                 ['public/assets/css/user.css',
                     'color: var(--btn-text)', '',
                     '--btn-text', '--btn-gradient-1', 4.5],
@@ -1639,11 +1640,12 @@ class SmokeChecks
         });
 
         $add('smoke.theme.rebrand_tokens', 'Smoke · UI', 'The CTA is the crimson-rose accent and the legacy fuchsia pair is gone', static function () use ($root, $ok, $bad): array {
-            // The member CTA shifted fuchsia (#d946ef) -> crimson-rose
-            // (skill colour domain: primary #E11D48, secondary #FB7185).
-            // The legacy fuchsia/purple values must not survive anywhere
-            // in the MEMBER palette (the admin scope keeps its fuchsia
-            // pins — see smoke.theme.admin_on_brand_tokens).
+            // The member CTA is the deep-crimson gradient with WHITE text
+            // (#9F1239 -> #E11D48); it replaced the salmon gradient with ink
+            // text that read cheap on the hero, and before that the legacy
+            // fuchsia (#d946ef). The legacy fuchsia/purple values must not
+            // survive anywhere in the MEMBER palette (the admin scope keeps
+            // its fuchsia pins — see smoke.theme.admin_on_brand_tokens).
             $theme = (string) @file_get_contents($root . '/app/Models/Theme.php');
             if (preg_match('/private const MEMBER_COLORS = \[(.*?)\n    \];/s', $theme, $m) !== 1) {
                 return $bad('the member palette could not be read out of Theme.php');
@@ -1655,6 +1657,17 @@ class SmokeChecks
                 'btn-bg'      => '#e11d48',
                 'btn-color'   => '#ffffff',
                 'btn-hover-bg'=> '#be123c',
+                // The gradient the .btn pill and .btn-grad paint with, and
+                // the text that sits on it (white, not ink).
+                'btn-gradient-1'       => '#9f1239',
+                'btn-gradient-2'       => '#e11d48',
+                'btn-hover-gradient-1' => '#be123c',
+                'btn-hover-gradient-2' => '#e11d48',
+                'btn-text'    => '#ffffff',
+                // The ghost/outline border: the old #3a1f4a sat at 1.4:1 on
+                // the page, so the hero's secondary actions had no visible
+                // edge and read as odd shapes.
+                'outline-border' => '#8b7f96',
                 'page-bg'     => '#050208',
                 'card-bg'     => '#0d0612',
                 'border'      => '#2a1638',
@@ -1860,12 +1873,26 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
-        $add('smoke.theme.rose_cta_contrast', 'Smoke \u00b7 UI', 'The rose CTA clears the contrast floor on every end of its gradients', static function () use ($ok, $bad): array {
-            // The member CTA shifted fuchsia -> crimson-rose (skill colour
-            // domain: primary #E11D48, secondary #FB7185). Two text pairs
-            // carry the button: white on the solid btn-bg/btn-hover and
-            // ink on the btn-grad gradient ends. Both must clear 4.5:1
-            // (0.875rem semibold is normal text, not large).
+        $add('smoke.theme.rose_cta_contrast', 'Smoke \u00b7 UI', 'The rose CTA clears the contrast floor on every end of its gradients', static function () use ($root, $ok, $bad): array {
+            // The member CTA is the deep-crimson gradient carrying WHITE
+            // text (the salmon gradient it replaced needed ink text, which
+            // is what read cheap). Every pair is read out of the palette so
+            // a palette edit is what gets measured - the values themselves
+            // are pinned by smoke.theme.rebrand_tokens. Both ends of every
+            // gradient must clear 4.5:1 (0.95rem semibold is normal text,
+            // not large), and white on #e11d48 is the tight end at 4.70.
+            $theme = (string) @file_get_contents($root . '/app/Models/Theme.php');
+            if (preg_match('/private const MEMBER_COLORS = \[(.*?)\n    \];/s', $theme, $m) !== 1) {
+                return $bad('the member palette could not be read out of Theme.php');
+            }
+            $pal = [];
+            if (preg_match_all("/'([a-z0-9-]+)'\s*=>\s*'(#[0-9a-fA-F]{3,8})'/", $m[1], $tokens, PREG_SET_ORDER) !== false) {
+                foreach ($tokens as $t) {
+                    $pal[$t[1]] = $t[2];
+                }
+            }
+            $v = static fn(string $key, string $fallback): string => strtolower($pal[$key] ?? $fallback);
+            $text = $v('btn-text', '#ffffff');
             $ratio = static function (string $fg, string $bg): float {
                 $chan = static function (string $hex): float {
                     $hex = ltrim($hex, '#');
@@ -1878,14 +1905,14 @@ class SmokeChecks
                 return ($hi + 0.05) / ($lo + 0.05);
             };
             $pairs = [
-                'white on btn-bg' => ['#ffffff', '#e11d48'],
-                'white on btn-hover-bg' => ['#ffffff', '#be123c'],
-                'ink on btn-gradient-1' => ['#0a0210', '#f43f5e'],
-                'ink on btn-gradient-2' => ['#0a0210', '#fb7185'],
-                'ink on btn-hover-gradient-1' => ['#0a0210', '#fb7185'],
-                'ink on btn-hover-gradient-2' => ['#0a0210', '#fda4af'],
-                'rose link on page-bg' => ['#fda4af', '#050208'],
-                'rose link on surface-2' => ['#fda4af', '#150a1d'],
+                'button text on btn-gradient-1' => [$text, $v('btn-gradient-1', '#9f1239')],
+                'button text on btn-gradient-2' => [$text, $v('btn-gradient-2', '#e11d48')],
+                'button text on btn-hover-gradient-1' => [$text, $v('btn-hover-gradient-1', '#be123c')],
+                'button text on btn-hover-gradient-2' => [$text, $v('btn-hover-gradient-2', '#e11d48')],
+                'btn-color on btn-bg' => [$v('btn-color', '#ffffff'), $v('btn-bg', '#e11d48')],
+                'btn-color on btn-hover-bg' => [$v('btn-color', '#ffffff'), $v('btn-hover-bg', '#be123c')],
+                'rose link on page-bg' => ['#fda4af', $v('page-bg', '#050208')],
+                'rose link on surface-2' => ['#fda4af', $v('surface-2', '#150a1d')],
             ];
             $problems = [];
             foreach ($pairs as $name => [$fg, $bg]) {
@@ -2336,6 +2363,70 @@ class SmokeChecks
             }
             return $problems === []
                 ? $ok('ghost buttons keep a transparent background over the pill rule')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.ui.hero_buttons_are_compact_and_centred', 'Smoke \u00b7 UI', 'The hero CTAs are 44px pills with the label centred in them', static function () use ($root, $ok, $bad): array {
+            // Reported: "the hero image buttons are oddly shaped, the text
+            // is not centered and they are way too big". Three causes, all
+            // in user.css, one assertion each:
+            //   1. a flex item is blockified, so a plain block .btn pinned
+            //      its single line to the top of the box;
+            //   2. the box was content-box, so the hero's min-height:44px
+            //      was added ON TOP of the padding + border -> 44 + 25.6 +
+            //      2 = 72px tall with the text 11px above centre;
+            //   3. the whole hero button block was written twice.
+            $css = (string) @file_get_contents($root . '/public/assets/css/user.css');
+            $problems = [];
+
+            // Pull one rule out by selector (selector { ... }) so a sibling
+            // rule cannot mask the assertion; whitespace is stripped, so
+            // the needles below are written without it.
+            $rule = static function (string $src, string $selector): string {
+                $at = strpos($src, $selector);
+                if ($at === false) {
+                    return '';
+                }
+                $open  = strpos($src, '{', $at);
+                $close = $open === false ? false : strpos($src, '}', $open);
+                if ($close === false) {
+                    return '';
+                }
+                return (string) preg_replace('/\s+/', '', substr($src, $at, $close - $at + 1));
+            };
+
+            $btn = $rule($css, 'body:not(.admin-theme) .btn {');
+            if ($btn === '') {
+                $problems[] = 'the member .btn rule could not be read out of user.css';
+            } else {
+                foreach (['display:inline-flex', 'align-items:center', 'justify-content:center', 'box-sizing:border-box'] as $needle) {
+                    if (strpos($btn, $needle) === false) {
+                        $problems[] = 'the .btn rule needs ' . $needle . ' or the label sits off-centre in an inflated box';
+                    }
+                }
+            }
+
+            if (substr_count($css, '.hero-cover-actions .btn-lg{') !== 1) {
+                $problems[] = 'the hero .btn-lg rule must appear exactly once (it was duplicated)';
+            }
+            $hero = $rule($css, '.hero-cover-actions .btn-lg{');
+            if ($hero === '') {
+                $problems[] = 'the hero .btn-lg rule is gone';
+            } else {
+                foreach (['padding:.6rem1.25rem', 'font-size:.95rem', 'min-height:44px'] as $needle) {
+                    if (strpos($hero, $needle) === false) {
+                        $problems[] = 'the hero .btn-lg rule needs ' . $needle . ' (a compact 44px pill)';
+                    }
+                }
+            }
+
+            // The stale fuchsia glow that rode along with the old palette.
+            if (strpos($css, 'rgba(236,72,153') !== false) {
+                $problems[] = 'user.css still glows fuchsia - the member glow is the crimson rgba(225,29,72,...)';
+            }
+
+            return $problems === []
+                ? $ok('the hero CTAs are compact pills with a centred label')
                 : $bad(implode('; ', $problems));
         });
 
