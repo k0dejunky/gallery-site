@@ -117,6 +117,49 @@ class Stats
     }
 
     /**
+     * The day boundaries the dashboard's signup cards count against.
+     *
+     * Everything the admin SEES is rendered in the site timezone - the users
+     * list's "Created" column (tzdate()), the traffic page's "Signed up"
+     * column (site_time()) - so the cards have to start their windows at the
+     * site's own midnight. They used CURDATE(), which is the DATABASE
+     * server's day: prod runs MySQL in UTC while the site is
+     * America/Denver, so a signup made after ~17:00 local time was counted
+     * on the following day and the cards disagreed with the lists beside
+     * them.
+     *
+     * users.created_at is written in UTC (PHP's date.timezone is UTC and the
+     * column defaults to CURRENT_TIMESTAMP), so the boundaries are computed
+     * in the site zone and handed back converted to UTC.
+     *
+     * @param string|null $nowUtc    'Y-m-d H:i:s' in UTC; null = now (tests pin it).
+     * @param string|null $timezone  site timezone name; null = the configured one.
+     * @return array{today_from:string,week_from:string,today_label:string,week_label:string}
+     */
+    public static function signupWindows(?string $nowUtc = null, ?string $timezone = null): array
+    {
+        $utcZone = new \DateTimeZone('UTC');
+
+        $name = $timezone ?? site_timezone();
+        try {
+            $siteZone = new \DateTimeZone($name !== '' ? $name : 'UTC');
+        } catch (\Throwable $e) {
+            $siteZone = $utcZone; // a bad configured zone must not blank the dashboard
+        }
+
+        $now     = new \DateTimeImmutable($nowUtc ?? 'now', $utcZone);
+        $today   = $now->setTimezone($siteZone)->setTime(0, 0);
+        $week    = $today->modify('-7 days');
+
+        return [
+            'today_from'  => $today->setTimezone($utcZone)->format('Y-m-d H:i:s'),
+            'week_from'   => $week->setTimezone($utcZone)->format('Y-m-d H:i:s'),
+            'today_label' => $today->format('M j'),
+            'week_label'  => $week->format('M j') . ' – ' . $today->format('M j'),
+        ];
+    }
+
+    /**
      * Membership growth figures for the admin dashboard: monthly-equivalent
      * recurring revenue of active subscriptions, recent signups, and how
      * active members are distributed across payment processors.
@@ -136,10 +179,15 @@ class Stats
             ['active']
         )->fetchColumn();
 
+        // The windows are computed in the SITE's day (see signupWindows()),
+        // not the database server's CURDATE().
+        $window = self::signupWindows();
+
         $signups = Database::run(
             'SELECT
-                (SELECT COUNT(*) FROM users WHERE created_at >= CURDATE()) AS today,
-                (SELECT COUNT(*) FROM users WHERE created_at >= CURDATE() - INTERVAL 7 DAY) AS week'
+                (SELECT COUNT(*) FROM users WHERE created_at >= ?) AS today,
+                (SELECT COUNT(*) FROM users WHERE created_at >= ?) AS week',
+            [$window['today_from'], $window['week_from']]
         )->fetch();
 
         $byProcessor = Database::run(
@@ -157,6 +205,8 @@ class Stats
             'mrr'          => $mrr,
             'new_today'    => (int) ($signups['today'] ?? 0),
             'new_week'     => (int) ($signups['week'] ?? 0),
+            'today_label'  => $window['today_label'],
+            'week_label'   => $window['week_label'],
             'by_processor' => $byProcessor,
         ];
     }

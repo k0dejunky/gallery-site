@@ -3070,6 +3070,49 @@ class TestSuite
             return ['pass' => env_value('MAIL_HOST') !== '', 'detail' => env_value('MAIL_HOST') ?: 'empty'];
         });
 
+        // ---------------------------------------------------------------- Dashboard stats
+        $add('stats.signup_window_math', 'Stats', 'The signup cards count the site\'s day, not the database server\'s', function () {
+            // Prod runs MySQL in UTC while the site is America/Denver, so a
+            // CURDATE()-based window counted a signup made at 20:00 local time
+            // on the FOLLOWING day - the card disagreed with the users list
+            // right beside it, which renders Created in the site timezone.
+            $problems = [];
+
+            $w = \App\Models\Stats::signupWindows('2026-11-04 18:00:00', 'America/Denver');
+            // 18:00 UTC is 11:00 in Denver, so the site's day began at
+            // 07:00 UTC; October is still MDT (UTC-6), hence 06:00.
+            if (($w['today_from'] ?? '') !== '2026-11-04 07:00:00') {
+                $problems[] = 'today_from=' . ($w['today_from'] ?? 'missing');
+            }
+            if (($w['week_from'] ?? '') !== '2026-10-28 06:00:00') {
+                $problems[] = 'week_from=' . ($w['week_from'] ?? 'missing');
+            }
+            if (($w['today_label'] ?? '') !== 'Nov 4') {
+                $problems[] = 'today_label=' . ($w['today_label'] ?? 'missing');
+            }
+            if (strpos((string) ($w['week_label'] ?? ''), 'Oct 28') !== 0) {
+                $problems[] = 'week_label=' . ($w['week_label'] ?? 'missing');
+            }
+            // The whole point: the server's midnight is seven hours late.
+            if (($w['today_from'] ?? '') === '2026-11-04 00:00:00') {
+                $problems[] = 'the window still starts at the database server midnight';
+            }
+
+            // A zone name the box cannot resolve must not blank the dashboard.
+            try {
+                $fallback = \App\Models\Stats::signupWindows('2026-11-04 18:00:00', 'Not/AZone');
+                if (($fallback['today_from'] ?? '') !== '2026-11-04 00:00:00') {
+                    $problems[] = 'a broken zone should fall back to UTC, got ' . ($fallback['today_from'] ?? 'nothing');
+                }
+            } catch (\Throwable $ex) {
+                $problems[] = 'a broken zone threw: ' . $ex->getMessage();
+            }
+
+            return $problems === []
+                ? ['pass' => true, 'detail' => 'site day 07:00Z, week 06:00Z (MST/MDT), labels Nov 4 / Oct 28 – Nov 4']
+                : ['pass' => false, 'detail' => implode('; ', $problems)];
+        });
+
         // Merge in every static smoke check (single source of truth shared
         // with tests/smoke.php) so the admin suite can run them too.
         foreach (SmokeChecks::all() as $id => $smokeTest) {

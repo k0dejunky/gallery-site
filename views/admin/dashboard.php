@@ -96,11 +96,14 @@
         <div class="stat-card kpi"><b><?= number_format($summary['logged_in_members']) ?></b><small>Logged In Members</small></div>
     </div>
 
-    <?php // Membership growth cards: recurring revenue + recent signups. ?>
+    <?php // Membership growth cards: recurring revenue + recent signups.
+         // The two period cards name the exact window they count, because the
+         // window starts at the SITE's midnight (Stats::signupWindows()), not
+         // the database server's day - otherwise "today" is ambiguous. ?>
     <div class="stat-cards">
         <div class="stat-card"><b>$<?= number_format((float) $growth['mrr'], 2) ?></b><small>Recurring / month</small></div>
-        <div class="stat-card"><b><?= number_format($growth['new_today']) ?></b><small>Signups Today</small></div>
-        <div class="stat-card"><b><?= number_format($growth['new_week']) ?></b><small>Signups 7 Days</small></div>
+        <div class="stat-card"><b><?= number_format($growth['new_today']) ?></b><small>Signups Today (<?= e((string) ($growth['today_label'] ?? '')) ?>)</small></div>
+        <div class="stat-card"><b><?= number_format($growth['new_week']) ?></b><small>Signups 7 Days (<?= e((string) ($growth['week_label'] ?? '')) ?>)</small></div>
         <?php foreach (array_slice($growth['by_processor'], 0, 2) as $proc): ?>
             <div class="stat-card"><b><?= number_format((int) $proc['members']) ?> · $<?= number_format((float) $proc['mrr'], 0) ?>/mo</b><small>via <?= e((string) $proc['name']) ?></small></div>
         <?php endforeach; ?>
@@ -658,7 +661,11 @@
             <tbody>
             <?php foreach ($feed as $item): ?>
                 <tr>
-                    <td style="white-space:nowrap;width:9em;" class="muted"><?= e(substr((string) $item['at'], 5, 11)) ?></td>
+                    <?php // Every feed timestamp is UTC (the database's own
+                          // clock); the admin reads the rest of the site in the
+                          // site timezone, so the column is converted here the
+                          // same way the users list converts Created. ?>
+                    <td style="white-space:nowrap;width:9em;" class="muted"><?= e(tzdate('m-d H:i', $item['at'])) ?></td>
                     <td>
                         <?php if (!empty($item['link'])): ?>
                             <a href="<?= url((string) $item['link']) ?>"><?= e((string) $item['text']) ?></a>

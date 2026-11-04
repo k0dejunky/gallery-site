@@ -752,6 +752,61 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.stats.signup_cards_follow_the_site_day', 'Smoke · Admin UI', 'The signup cards count the site\'s day, not the database server\'s', static function () use ($root, $read, $ok, $bad): array {
+            // The two period cards counted with CURDATE(), which is the MySQL
+            // SERVER's day. Prod runs MySQL in UTC while the site is
+            // America/Denver, so a signup made after ~17:00 local time was
+            // counted on the following day while the users list beside the
+            // card showed it as today. The window now starts at the site's
+            // own midnight and the card prints which window it counted.
+            $stats    = (string) $read($root . '/app/Models/Stats.php');
+            $view     = (string) $read($root . '/views/admin/dashboard.php');
+            $problems = [];
+
+            if (preg_match('/function growth\(\): array\s*\{(.*?)\n    \}/s', $stats, $m) === 1) {
+                // Comments may mention the old query; only code counts.
+                $body = preg_replace('#//[^\n]*#', '', $m[1]);
+                if (strpos($body, 'CURDATE()') !== false) {
+                    $problems[] = 'growth() counts the database server\'s day (CURDATE())';
+                }
+                if (strpos($body, 'signupWindows(') === false) {
+                    $problems[] = 'growth() does not take its windows from signupWindows()';
+                }
+            } else {
+                $problems[] = 'Stats::growth() was not found';
+            }
+
+            if (strpos($stats, 'function signupWindows') === false) {
+                $problems[] = 'there is no site-day window helper';
+            } else {
+                if (strpos($stats, 'setTime(0, 0)') === false) {
+                    $problems[] = 'the window does not start at the site\'s midnight';
+                }
+                if (strpos($stats, 'site_timezone()') === false) {
+                    $problems[] = 'the window is not computed in the site timezone';
+                }
+            }
+
+            // The card names the window it counted, so "today" is not a
+            // guess about whose clock it is.
+            if (strpos($view, 'today_label') === false || strpos($view, 'week_label') === false) {
+                $problems[] = 'the signup cards do not show the window they counted';
+            }
+
+            // And the activity feed reads on the same clock as the users list
+            // (both site timezone), instead of slicing the raw UTC column.
+            if (strpos($view, 'tzdate(\'m-d H:i\', $item[\'at\'])') === false) {
+                $problems[] = 'the activity feed does not render timestamps in the site timezone';
+            }
+            if (strpos($view, 'substr((string) $item[\'at\'], 5, 11)') !== false) {
+                $problems[] = 'the activity feed still slices the raw database timestamp';
+            }
+
+            return $problems === []
+                ? $ok('the signup windows start at the site\'s midnight and the card says so')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.admin.bulk_jobs_stay_on_page', 'Smoke · Admin UI', 'The bulk photo actions update the page in place instead of reloading it', static function () use ($root, $ok, $bad): array {
             // The manage page used to reload itself every five seconds while a
             // background job ran, which threw the admin back to the top of a
