@@ -1366,6 +1366,30 @@ CREATE TABLE IF NOT EXISTS video_chapters (
     FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Admin access assignments (migration 092). Both tables store only the
+-- DIFFERENCE from the Auth::PERMISSIONS default map: granted = 1 adds a
+-- permission beyond the default, granted = 0 takes one away, and no row means
+-- the default applies. Auth::mayHold() re-checks the super-admin-only and
+-- admin-and-above locks when the rows are read, so a hand-edited row cannot
+-- grant mail_admin, manage_roles, system_ops or manage_admins to a role that
+-- must not hold them.
+CREATE TABLE IF NOT EXISTS admin_role_permissions (
+    role       VARCHAR(32)  NOT NULL,
+    permission VARCHAR(64)  NOT NULL,
+    granted    TINYINT(1)   NOT NULL DEFAULT 1,
+    updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (role, permission)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS admin_user_permissions (
+    user_id    INT UNSIGNED NOT NULL,
+    permission VARCHAR(64)  NOT NULL,
+    granted    TINYINT(1)   NOT NULL DEFAULT 1,
+    updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, permission),
+    CONSTRAINT fk_admin_user_permissions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Re-enable the foreign-key checks at the very end, so every table in
 -- this file is created with them off (several tables reference tables that
 -- are defined later, and the import order must not matter).

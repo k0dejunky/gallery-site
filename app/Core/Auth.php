@@ -438,12 +438,21 @@ class Auth
         return $user !== null && ($user['role'] ?? '') === 'super_admin';
     }
 
+    /**
+     * Whether the signed-in account holds a permission.
+     *
+     * The answer comes from PermissionMap, which layers the super admin's
+     * stored role/account assignments over the PERMISSIONS defaults above and
+     * re-checks the locked permissions on the way out. The defaults are never
+     * written to by the assignment screen, so an untouched install behaves
+     * exactly as it did before that screen existed.
+     */
     public static function can(string $permission): bool
     {
         $user = self::user();
         if ($user === null || !self::isAdmin()) return false;
-        $permissions = self::PERMISSIONS[$user['role']] ?? [];
-        return in_array('*', $permissions, true) || in_array($permission, $permissions, true);
+
+        return \App\Models\PermissionMap::allows($user, $permission);
     }
 
     public static function requirePermission(string $permission): void

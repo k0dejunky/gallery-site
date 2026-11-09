@@ -22,16 +22,20 @@ $navActive = static function (string $href, bool $exact = false) use ($current, 
 
 // The sidebar as data. Rendering the nav and the breadcrumb from one list keeps
 // them in step, and keeps the flat set of site-editor move keys in one place.
-// `perm` is an Auth::can() capability; `exact` marks the dashboard so /admin
-// does not stay lit while you are on /admin/users.
+// `perm` is an Auth::can() capability, or a list of them that must ALL hold -
+// a page gated by a route permission and a stricter controller guard at once
+// (System needs `dashboard` from the route and `logs` from its controller) is
+// unreachable unless both pass, so a link offered on only one is a dead end.
+// `exact` marks the dashboard so /admin does not stay lit while you are on
+// /admin/users.
 $navGroups = [
     [
         'key'   => 'nav-group-overview',
         'label' => 'Overview',
         'items' => [
             ['key' => 'nav-dashboard', 'label' => 'Dashboard', 'href' => '/admin', 'icon' => 'grid', 'exact' => true],
-            ['key' => 'nav-abandoned-uploads', 'label' => 'Abandoned Uploads', 'href' => '/admin/abandoned-uploads', 'icon' => 'upload'],
-            ['key' => 'nav-trends', 'label' => 'Trends', 'href' => '/admin/trends', 'icon' => 'trend'],
+            ['key' => 'nav-abandoned-uploads', 'label' => 'Abandoned Uploads', 'href' => '/admin/abandoned-uploads', 'icon' => 'upload', 'perm' => 'galleries'],
+            ['key' => 'nav-trends', 'label' => 'Trends', 'href' => '/admin/trends', 'icon' => 'trend', 'perm' => 'trends'],
             ['key' => 'nav-traffic', 'label' => 'Traffic', 'href' => '/admin/traffic', 'icon' => 'bars', 'perm' => 'traffic'],
             ['key' => 'nav-analytics', 'label' => 'Web Analytics', 'href' => '/admin/analytics', 'icon' => 'pie', 'perm' => 'analytics'],
         ],
@@ -40,13 +44,13 @@ $navGroups = [
         'key'   => 'nav-group-content',
         'label' => 'Content',
         'items' => [
-            ['key' => 'nav-galleries', 'label' => 'Gallery Management', 'href' => '/admin/galleries', 'icon' => 'image'],
-            ['key' => 'nav-categories', 'label' => 'Categories', 'href' => '/admin/categories', 'icon' => 'tag'],
-            ['key' => 'nav-category-suggestions', 'label' => 'AI Suggestions', 'href' => '/admin/category-suggestions', 'icon' => 'sparkle'],
-            ['key' => 'nav-description-suggestions', 'label' => 'AI Descriptions', 'href' => '/admin/description-suggestions', 'icon' => 'sparkle'],
-            ['key' => 'nav-video-projects', 'label' => 'Video Projects', 'href' => '/admin/video-projects', 'icon' => 'film'],
+            ['key' => 'nav-galleries', 'label' => 'Gallery Management', 'href' => '/admin/galleries', 'icon' => 'image', 'perm' => 'galleries'],
+            ['key' => 'nav-categories', 'label' => 'Categories', 'href' => '/admin/categories', 'icon' => 'tag', 'perm' => 'categories'],
+            ['key' => 'nav-category-suggestions', 'label' => 'AI Suggestions', 'href' => '/admin/category-suggestions', 'icon' => 'sparkle', 'perm' => 'categories'],
+            ['key' => 'nav-description-suggestions', 'label' => 'AI Descriptions', 'href' => '/admin/description-suggestions', 'icon' => 'sparkle', 'perm' => 'galleries'],
+            ['key' => 'nav-video-projects', 'label' => 'Video Projects', 'href' => '/admin/video-projects', 'icon' => 'film', 'perm' => 'videos'],
             ['key' => 'nav-profile', 'label' => 'Creator Profile', 'href' => '/admin/profile', 'icon' => 'user', 'perm' => 'site_editor'],
-            ['key' => 'nav-theme', 'label' => 'Theme', 'href' => '/admin/theme', 'icon' => 'palette'],
+            ['key' => 'nav-theme', 'label' => 'Theme', 'href' => '/admin/theme', 'icon' => 'palette', 'perm' => 'theme'],
             ['key' => 'nav-site-editor', 'label' => 'Site Editor', 'href' => '/admin/site-editor', 'icon' => 'layout', 'perm' => 'site_editor'],
         ],
     ],
@@ -54,23 +58,26 @@ $navGroups = [
         'key'   => 'nav-group-community',
         'label' => 'Community & growth',
         'items' => [
-            ['key' => 'nav-engagement', 'label' => 'Engagement', 'href' => '/admin/engagement', 'icon' => 'heart'],
-            ['key' => 'nav-users', 'label' => 'Users', 'href' => '/admin/users', 'icon' => 'users'],
+            ['key' => 'nav-engagement', 'label' => 'Engagement', 'href' => '/admin/engagement', 'icon' => 'heart', 'perm' => 'dashboard'],
+            ['key' => 'nav-users', 'label' => 'Users', 'href' => '/admin/users', 'icon' => 'users', 'perm' => 'users'],
             ['key' => 'nav-chat', 'label' => 'Chat', 'href' => '/admin/chat', 'icon' => 'chat', 'perm' => 'chat'],
             ['key' => 'nav-live-chat', 'label' => 'Live Chat', 'href' => '/admin/live-chat', 'icon' => 'broadcast', 'perm' => 'support'],
             ['key' => 'nav-operator-tokens', 'label' => 'Operator app', 'href' => '/admin/operator-tokens', 'icon' => 'phone', 'perm' => 'chat'],
             ['key' => 'nav-support', 'label' => 'Support', 'href' => '/admin/support', 'icon' => 'lifebuoy', 'perm' => 'support'],
-            ['key' => 'nav-auto-poster', 'label' => 'Auto Poster', 'href' => '/admin/auto-poster', 'icon' => 'send'],
+            ['key' => 'nav-auto-poster', 'label' => 'Auto Poster', 'href' => '/admin/auto-poster', 'icon' => 'send', 'perm' => 'autoposter'],
         ],
     ],
     [
         'key'   => 'nav-group-money',
         'label' => 'Monetization',
         'items' => [
-            ['key' => 'nav-earnings', 'label' => 'Earnings', 'href' => '/admin/earnings', 'icon' => 'dollar'],
+            ['key' => 'nav-earnings', 'label' => 'Earnings', 'href' => '/admin/earnings', 'icon' => 'dollar', 'perm' => 'membership'],
             ['key' => 'nav-plans', 'label' => 'Membership Plans', 'href' => '/admin/plans', 'icon' => 'card', 'perm' => 'membership'],
             ['key' => 'nav-subscriptions', 'label' => 'Subscriptions', 'href' => '/admin/subscriptions', 'icon' => 'repeat', 'perm' => 'membership'],
-            ['key' => 'nav-payments', 'label' => 'Payment Processors', 'href' => '/admin/payment-processors', 'icon' => 'bank', 'perm' => 'membership'],
+            // The route asks for `payments` and the controller extends
+            // MembershipAdminController, which asks for `membership`. Both
+            // must hold or the link bounces.
+            ['key' => 'nav-payments', 'label' => 'Payment Processors', 'href' => '/admin/payment-processors', 'icon' => 'bank', 'perm' => ['payments', 'membership']],
             ['key' => 'nav-emailer', 'label' => 'Emailer', 'href' => '/admin/emailer', 'icon' => 'mail', 'perm' => 'membership'],
         ],
     ],
@@ -78,13 +85,17 @@ $navGroups = [
         'key'   => 'nav-group-system',
         'label' => 'System',
         'items' => [
-            ['key' => 'nav-system', 'label' => 'System', 'href' => '/admin/system', 'icon' => 'server'],
+            // Route perm is `dashboard`, SystemController's constructor asks
+            // for `logs`. A viewer holds the first and not the second, so the
+            // link used to render and then bounce.
+            ['key' => 'nav-system', 'label' => 'System', 'href' => '/admin/system', 'icon' => 'server', 'perm' => ['dashboard', 'logs']],
+            ['key' => 'nav-roles', 'label' => 'Access & roles', 'href' => '/admin/roles', 'icon' => 'lock', 'perm' => 'manage_roles'],
             ['key' => 'nav-mail', 'label' => 'Email', 'href' => '/admin/mail', 'icon' => 'inbox', 'perm' => 'mail_admin'],
-            ['key' => 'nav-logs', 'label' => 'Logs', 'href' => '/admin/logs', 'icon' => 'doc'],
-            ['key' => 'nav-error-logs', 'label' => 'Error Logs', 'href' => '/admin/error-logs', 'icon' => 'alert'],
+            ['key' => 'nav-logs', 'label' => 'Logs', 'href' => '/admin/logs', 'icon' => 'doc', 'perm' => 'logs'],
+            ['key' => 'nav-error-logs', 'label' => 'Error Logs', 'href' => '/admin/error-logs', 'icon' => 'alert', 'perm' => 'logs'],
             ['key' => 'nav-user-monitor', 'label' => 'User Monitor', 'href' => '/admin/user-monitor', 'icon' => 'activity', 'perm' => 'user_monitor'],
-            ['key' => 'nav-test-suite', 'label' => 'Test suite', 'href' => '/admin/test-suite', 'icon' => 'check'],
-            ['key' => 'nav-help', 'label' => 'Documentation', 'href' => '/admin/help', 'icon' => 'book'],
+            ['key' => 'nav-test-suite', 'label' => 'Test suite', 'href' => '/admin/test-suite', 'icon' => 'check', 'perm' => 'logs'],
+            ['key' => 'nav-help', 'label' => 'Documentation', 'href' => '/admin/help', 'icon' => 'book', 'perm' => 'documentation'],
         ],
     ],
 ];
@@ -93,7 +104,18 @@ $navGroups = [
 // the breadcrumb can show "Admin / <group> / <page>".
 $navGroups = array_values(array_filter(array_map(static function (array $group): array {
     $group['items'] = array_values(array_filter($group['items'], static function (array $item): bool {
-        return !isset($item['perm']) || \App\Core\Auth::can($item['perm']);
+        if (!isset($item['perm'])) {
+            return true;
+        }
+        if (is_array($item['perm'])) {
+            foreach ($item['perm'] as $permission) {
+                if (!\App\Core\Auth::can($permission)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return \App\Core\Auth::can($item['perm']);
     }));
 
     return $group;

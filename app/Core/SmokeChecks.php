@@ -204,7 +204,7 @@ class SmokeChecks
         preg_match_all('/CREATE TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+`?([A-Za-z0-9_]+)`?/i', $schema, $m);
         $tables = array_map('strtolower', $m[1]);
 
-        foreach (['users', 'galleries', 'photos', 'subscriptions', 'storage_snapshots', 'support_replies', 'gallery_favorites', 'saved_searches', 'email_queue', 'content_views', 'auto_poster_queue', 'traffic_links', 'traffic_visits', 'page_ip_visits'] as $must) {
+        foreach (['users', 'galleries', 'photos', 'subscriptions', 'storage_snapshots', 'support_replies', 'gallery_favorites', 'saved_searches', 'email_queue', 'content_views', 'auto_poster_queue', 'traffic_links', 'traffic_visits', 'page_ip_visits', 'admin_role_permissions', 'admin_user_permissions'] as $must) {
             $add("smoke.schema.table.$must", 'Smoke · Schema', "schema.sql has table: $must", static function () use ($must, $tables, $ok, $bad): array {
                 return in_array($must, $tables, true) ? $ok('present') : $bad("schema.sql missing table: $must");
             });
@@ -433,6 +433,244 @@ class SmokeChecks
 
             return $problems === []
                 ? $ok('unlock codes, gift subscriptions and the purchase ledger need monetisation')
+                : $bad(implode('; ', $problems));
+        });
+
+        // ---------------------------------------------------- Access assignment
+        $add('smoke.auth.can_reads_the_permission_map', 'Smoke · Auth', 'Auth::can() answers from PermissionMap, not the raw default map', static function () use ($root, $ok, $bad): array {
+            // The assignment screen writes to admin_role_permissions /
+            // admin_user_permissions. If can() kept reading PERMISSIONS
+            // directly, every change made there would be silently ignored -
+            // the screen would look like it worked and change nothing.
+            $authCore = (string) @file_get_contents($root . '/app/Core/Auth.php');
+            if (strpos($authCore, 'PermissionMap::allows') === false) {
+                return $bad('Auth::can() must delegate to PermissionMap::allows() so stored assignments take effect');
+            }
+            return $ok('can() delegates to PermissionMap::allows()');
+        });
+
+        $add('smoke.auth.locked_permissions_stay_locked', 'Smoke · Auth', 'The privileged permissions cannot be handed to a lower role', static function () use ($root, $ok, $bad): array {
+            // SUPER_ADMIN_ONLY is declared in Auth and asserted against the
+            // DEFAULT map by the checks above, but the whole point of the
+            // assignment screen is that the map is no longer the only source.
+            // The lock has to be re-checked when the stored rows are read, or
+            // a hand-edited row grants the mail server to a moderator.
+            $map = (string) @file_get_contents($root . '/app/Models/PermissionMap.php');
+            $problems = [];
+
+            foreach (['SUPER_ADMIN_ONLY', 'mayHold'] as $needle) {
+                if (strpos($map, $needle) === false) {
+                    $problems[] = "PermissionMap must reference Auth::$needle";
+                }
+            }
+            // The read path must filter through mayHold(), not just the write
+            // path - otherwise only the UI is protected.
+            if (!preg_match('/function effectiveRole.*?array_filter\(\s*\$permissions,.*?mayHold/s', $map)) {
+                $problems[] = 'effectiveRole() must filter the result through mayHold()';
+            }
+            if (!preg_match('/function effectiveUser.*?array_filter\(\s*\$permission,.*?mayHold/s', $map)) {
+                $problems[] = 'effectiveUser() must filter the result through mayHold()';
+            }
+            // manage_admins mints admin accounts, monetisation mints free
+            // value; both must stay admin-and-above whatever a row says.
+            if (strpos($map, "'manage_admins'") === false || strpos($map, "'monetisation'") === false) {
+                $problems[] = 'ADMIN_ONLY must cover manage_admins and monetisation';
+            }
+            if (!preg_match('/ADMIN_ONLY = \[[^\]]*manage_admins[^\]]*monetisation[^\]]*\]|ADMIN_ONLY = \[[^\]]*monetisation[^\]]*manage_admins[^\]]*\]/s', $map)) {
+                $problems[] = 'ADMIN_ONLY must list both manage_admins and monetisation';
+            }
+
+            return $problems === []
+                ? $ok('locked permissions are re-checked when the stored rows are read')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.auth.assignment_surface_is_super_admin_only', 'Smoke · Auth', 'The access-assignment routes and screens sit behind manage_roles', static function () use ($root, $ok, $bad): array {
+            $routes = (string) @file_get_contents($root . '/config/routes.php');
+            $ctrl   = (string) @file_get_contents($root . '/app/Controllers/PermissionController.php');
+            $nav    = (string) @file_get_contents($root . '/views/admin/layout.php');
+            $problems = [];
+
+            foreach (['/admin/roles', '/admin/roles/reset'] as $path) {
+                if (strpos($routes, "'" . $path . "'") === false) {
+                    $problems[] = "routes.php must register $path";
+                }
+            }
+            foreach (['PermissionController@index', 'PermissionController@save', 'PermissionController@reset',
+                      'PermissionController@userPermissions', 'PermissionController@saveUserPermissions',
+                      'PermissionController@resetUserPermissions'] as $handler) {
+                if (strpos($routes, $handler) === false) {
+                    $problems[] = "routes.php must route to $handler";
+                }
+            }
+            // Every one of those routes must carry the manage_roles gate: a
+            // plain `users` permission would let a moderator rewrite the
+            // matrix and grant themselves the world.
+            if (preg_match_all("/\['(?:GET|POST)', '(\/admin\/roles[^']*|\/admin\/users\/\{id\}\/permissions[^']*)', '[^']+', '([a-z_]+)'\]/", $routes, $m)) {
+                foreach ($m[2] as $perm) {
+                    if ($perm !== 'manage_roles') {
+                        $problems[] = "an access-assignment route is gated on $perm instead of manage_roles";
+                    }
+                }
+                if (count($m[2]) < 6) {
+                    $problems[] = 'expected 6 access-assignment routes, found ' . count($m[2]);
+                }
+            } else {
+                $problems[] = 'could not parse the access-assignment route gates';
+            }
+
+            if (strpos($ctrl, "requirePermission('manage_roles')") === false) {
+                $problems[] = 'PermissionController must require manage_roles in its constructor';
+            }
+            foreach (['permissions', 'permission_user'] as $view) {
+                if (!is_file($root . '/views/admin/' . $view . '.php')) {
+                    $problems[] = "views/admin/$view.php is missing";
+                }
+            }
+            if (strpos($nav, "'key' => 'nav-roles'") === false || strpos($nav, "'perm' => 'manage_roles'") === false) {
+                $problems[] = 'the admin nav must link Access & roles behind manage_roles';
+            }
+            // The matrix view must not offer the locked ones as tickable.
+            $matrix = (string) @file_get_contents($root . '/views/admin/permissions.php');
+            if (strpos($matrix, 'mayHold') === false) {
+                $problems[] = 'the matrix must consult mayHold() so locked cells render disabled';
+            }
+
+            return $problems === []
+                ? $ok('routes, controller, views and nav all gated on manage_roles')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.auth.partial_matrix_post_cannot_wipe_a_role', 'Smoke · Auth', 'A request that omits a role leaves that role untouched', static function () use ($root, $ok, $bad): array {
+            // Unchecked checkboxes do not post. Reading them by presence made
+            // "this role was not in the request" and "every box for this role
+            // was cleared" the same case, so a partial request was read as
+            // "revoke everything" and stripped a role's access in one step -
+            // which is exactly what happened the first time this was tested
+            // over HTTP. The fix is an explicit value per permission: a
+            // hidden 0 followed by the checkbox 1, so PHP keeps the ticked
+            // one. A role the form rendered therefore always appears, and a
+            // role that does not appear was never part of the request.
+            $ctrl   = (string) @file_get_contents($root . '/app/Controllers/PermissionController.php');
+            $matrix = (string) @file_get_contents($root . '/views/admin/permissions.php');
+            $problems = [];
+
+            // The view must post an explicit 0 for every editable cell. This
+            // is a template, so the assertion is on the markup pattern, not
+            // on a count of rendered inputs.
+            if (!preg_match('/<input type="hidden" name="<\?= e\(\$fieldName\) \?>" value="0">/', $matrix)) {
+                $problems[] = 'views/admin/permissions.php must post a hidden 0 beside each checkbox so an unticked box still declares its value';
+            }
+            if (!preg_match('/\$fieldName = \'state\[\' \. \$role \. \'\]\[\' \. \$permission \. \'\]\';/', $matrix)) {
+                $problems[] = 'the hidden input and the checkbox must share the state[role][permission] field name';
+            }
+            // Both inputs must use that shared name, or PHP would not keep the
+            // ticked value over the hidden 0.
+            if (substr_count($matrix, 'name="<?= e($fieldName) ?>"') < 2) {
+                $problems[] = 'both the hidden input and the checkbox must post under $fieldName';
+            }
+
+            // The controller must read that structure, and skip what is absent.
+            if (strpos($ctrl, "post('state')") === false) {
+                $problems[] = "PermissionController::save() must read post('state')";
+            }
+            if (strpos($ctrl, 'roles_seen') !== false) {
+                $problems[] = 'the roles_seen workaround should be gone now that every cell posts a value';
+            }
+            if (!preg_match('/if\s*\(\s*\$covered\s*===\s*\[\]\s*\)/', $ctrl)) {
+                $problems[] = 'PermissionController::save() must refuse a request that covers no roles';
+            }
+            if (!preg_match('/foreach\s*\(\s*\$covered\s+as\s+\$role\s*\)/', $ctrl)) {
+                $problems[] = 'PermissionController::save() must iterate only the roles the request covered';
+            }
+
+            return $problems === []
+                ? $ok('every cell posts an explicit value, and only covered roles are written')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.auth.nav_declares_the_gate_it_links_to', 'Smoke · Auth', 'Every admin sidebar link declares the permission its target enforces', static function () use ($root, $ok, $bad): array {
+            // The sidebar used to render 18 links whose routes were gated on a
+            // permission the item never declared, so a moderator saw "Gallery
+            // Management", "Auto Poster" and "Logs" and was bounced off every
+            // one. The nav must name the gate, including pages where the route
+            // and the controller ask for DIFFERENT permissions (System needs
+            // `dashboard` from the route and `logs` from its constructor).
+            $routes  = include $root . '/config/routes.php';
+            $layout  = (string) @file_get_contents($root . '/views/admin/layout.php');
+            $problems = [];
+
+            preg_match_all(
+                "/\\['key' => 'nav-([a-z-]+)', 'label' => '([^']+)', 'href' => '([^']+)'(?:, 'icon' => '[a-z]+')?(?:, 'perm' => (\\[[^\\]]*\\]|'([a-z_]+)'))?/",
+                $layout,
+                $matches,
+                PREG_SET_ORDER
+            );
+
+            if (count($matches) < 30) {
+                $problems[] = 'only parsed ' . count($matches) . ' nav items from views/admin/layout.php';
+            }
+
+            foreach ($matches as $item) {
+                $href    = $item[3];
+                $navPerms = [];
+                if (!empty($item[4]) && preg_match_all("/'([a-z_]+)'/", $item[4], $pm)) {
+                    $navPerms = $pm[1];
+                }
+
+                $routePerm = null;
+                $handler   = null;
+                foreach ($routes as $route) {
+                    if ($route[0] === 'GET'
+                        && preg_match('#^' . preg_quote($route[1], '#') . '/?$#', $href) === 1) {
+                        $routePerm = $route[3] ?? null;
+                        $handler   = $route[2];
+                    }
+                }
+
+                if ($handler === null) {
+                    // A nav link with no matching GET route is a dead link.
+                    $problems[] = $item[1] . ' (' . $href . ') has no GET route';
+                    continue;
+                }
+
+                // The constructor guard, following the extends chain - several
+                // controllers inherit it from MembershipAdminController.
+                $ctorPerm = null;
+                [$class]  = explode('@', $handler);
+                $seen     = [];
+                while ($class !== '' && !isset($seen[$class])) {
+                    $seen[$class] = true;
+                    $file = $root . '/app/Controllers/' . $class . '.php';
+                    if (!is_file($file)) {
+                        break;
+                    }
+                    $src = (string) file_get_contents($file);
+                    if (preg_match('/function __construct.*?\n    \}/s', $src, $body)
+                        && preg_match("/requirePermission\\('([a-z_]+)'\\)/", $body[0], $found)) {
+                        $ctorPerm = $found[1];
+                        break;
+                    }
+                    if (preg_match('/^class\s+\w+\s+extends\s+(\w+)/m', $src, $parent)) {
+                        $class = $parent[1];
+                        continue;
+                    }
+                    break;
+                }
+
+                $required = array_values(array_unique(array_filter([$routePerm, $ctorPerm])));
+                sort($required);
+                $declared = $navPerms;
+                sort($declared);
+
+                if ($required !== $declared) {
+                    $problems[] = $item[1] . ' declares [' . implode(',', $declared)
+                        . '] but its target needs [' . implode(',', $required) . ']';
+                }
+            }
+
+            return $problems === []
+                ? $ok(count($matches) . ' sidebar links each declare the gate their target enforces')
                 : $bad(implode('; ', $problems));
         });
 

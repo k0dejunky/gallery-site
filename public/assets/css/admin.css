@@ -3369,6 +3369,33 @@ body.admin-theme {
 .admin-theme .adm-list-table td.act { text-align: right; white-space: nowrap; }
 .admin-theme .adm-list-table td.truncate { max-width: 22rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* The access matrix (roles x permissions). The permission name and its
+   explanation share the first cell, so the row reads as one thing rather than
+   a bare checkbox with no label; the role columns are narrow and centred so
+   the ticks line up down the column. */
+.admin-theme .perm-matrix { min-width: 46rem; }
+.admin-theme .perm-matrix th[scope="row"] { font-weight: 400; }
+.admin-theme .perm-matrix .perm-name { display: block; font-weight: 600; color: var(--adm-text); }
+.admin-theme .perm-matrix .perm-desc { display: block; margin-top: .15rem; font-size: 12px; color: var(--adm-text-dim); max-width: 34rem; }
+.admin-theme .perm-matrix .perm-col { width: 7.5rem; text-align: center; vertical-align: middle; }
+.admin-theme .perm-matrix thead .perm-col { white-space: nowrap; }
+.admin-theme .perm-matrix .perm-group th {
+    background: var(--adm-surface-2, var(--adm-surface));
+    color: var(--adm-text-dim);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    padding-top: .85rem;
+}
+.admin-theme .perm-cell, .admin-theme .perm-locked { display: inline-flex; align-items: center; justify-content: center; gap: .3rem; cursor: pointer; }
+.admin-theme .perm-cell input[type="checkbox"], .admin-theme .perm-locked input[type="checkbox"] { width: 1.05rem; height: 1.05rem; margin: 0; cursor: pointer; accent-color: var(--adm-accent); }
+/* A locked cell is not merely disabled - it says why on hover, and the lock
+   marks it for anyone who cannot use the tooltip. */
+.admin-theme .perm-locked { cursor: not-allowed; opacity: .75; }
+.admin-theme .perm-locked input[type="checkbox"] { cursor: not-allowed; accent-color: var(--adm-text-faint); }
+.admin-theme .perm-lock-mark { font-size: 12px; line-height: 1; }
+
 /* The pager, in the footer. */
 .admin-theme .adm-list-foot { display: flex; justify-content: flex-end; margin-top: .85rem; }
 .admin-theme .adm-pager { display: flex; align-items: center; gap: .3rem; flex-wrap: wrap; }

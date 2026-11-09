@@ -55,6 +55,9 @@
                 </form>
             <?php endif; ?>
             <a class="btn btn-sm" href="<?= url('/admin/users/' . (int) $user['id'] . '/edit') ?>">Edit details</a>
+            <?php if (\App\Core\Auth::can('manage_roles') && \App\Core\Auth::isAdminRole($user)): ?>
+                <a class="btn btn-sm" href="<?= url('/admin/users/' . (int) $user['id'] . '/permissions') ?>">Access overrides</a>
+            <?php endif; ?>
         </div>
         <div class="ud-actions" style="margin:.5rem 0 0;">
             <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/reset-password') ?>"

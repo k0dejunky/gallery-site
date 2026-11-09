@@ -2460,6 +2460,134 @@ class TestSuite
                 return ['pass' => false, 'detail' => $e->getMessage()];
             }
         });
+        $add('db.permission_assignments', 'Database', 'role/account access assignments round-trip, and locked permissions never leave the super admin', function () {
+            $pdo = Database::connection();
+            $own = false;
+            try {
+                if ($pdo->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'skipped (not mysql)'];
+                }
+                // Everything below happens inside one transaction and is rolled
+                // back, so a run on a live box leaves no assignments behind.
+                if (!$pdo->inTransaction()) {
+                    $pdo->beginTransaction();
+                    $own = true;
+                }
+
+                \App\Models\PermissionMap::clearCache();
+                $problems = [];
+
+                // A fresh row set means every role follows Auth::PERMISSIONS.
+                $default = \App\Models\PermissionMap::effectiveRole('viewer');
+                if ($default !== ['dashboard', 'trends', 'documentation']) {
+                    $problems[] = 'viewer default is ' . implode(',', $default);
+                }
+
+                // Grant one beyond the default: only the delta is stored.
+                \App\Models\PermissionMap::saveRole('viewer', ['dashboard', 'trends', 'documentation', 'galleries']);
+                \App\Models\PermissionMap::clearCache();
+                $rows = Database::run("SELECT permission, granted FROM admin_role_permissions WHERE role = 'viewer'")->fetchAll(\PDO::FETCH_ASSOC);
+                if (count($rows) !== 1 || (int) $rows[0]['granted'] !== 1 || $rows[0]['permission'] !== 'galleries') {
+                    $problems[] = 'expected one granted=1 row for galleries, got ' . json_encode($rows);
+                }
+                if (!in_array('galleries', \App\Models\PermissionMap::effectiveRole('viewer'), true)) {
+                    $problems[] = 'viewer did not gain galleries';
+                }
+
+                // Revoke a default: stored as granted=0, not deleted.
+                \App\Models\PermissionMap::saveRole('viewer', ['dashboard', 'documentation', 'galleries']);
+                \App\Models\PermissionMap::clearCache();
+                $rows = Database::run("SELECT permission, granted FROM admin_role_permissions WHERE role = 'viewer' ORDER BY permission")->fetchAll(\PDO::FETCH_ASSOC);
+                $got  = array_column($rows, 'granted', 'permission');
+                if (!isset($got['trends']) || (int) $got['trends'] !== 0) {
+                    $problems[] = 'revoke must be stored as granted=0, got ' . json_encode($rows);
+                }
+                if (in_array('trends', \App\Models\PermissionMap::effectiveRole('viewer'), true)) {
+                    $problems[] = 'viewer still holds trends after the revoke';
+                }
+
+                // The locks are enforced on READ, so posting a locked
+                // permission must not create a row at all.
+                \App\Models\PermissionMap::saveRole('viewer', ['dashboard', 'trends', 'documentation', 'mail_admin', 'manage_admins', 'monetisation']);
+                \App\Models\PermissionMap::clearCache();
+                $bad = (int) Database::run("SELECT COUNT(*) FROM admin_role_permissions WHERE role = 'viewer' AND permission IN ('mail_admin','manage_admins','monetisation')")->fetchColumn();
+                if ($bad !== 0) {
+                    $problems[] = "$bad locked permission rows were written for viewer";
+                }
+                foreach (['mail_admin', 'manage_admins', 'monetisation'] as $locked) {
+                    if (in_array($locked, \App\Models\PermissionMap::effectiveRole('viewer'), true)) {
+                        $problems[] = "viewer holds $locked";
+                    }
+                }
+
+                // Reset returns the role to the default and clears the flag.
+                \App\Models\PermissionMap::resetRole('viewer');
+                \App\Models\PermissionMap::clearCache();
+                if (\App\Models\PermissionMap::effectiveRole('viewer') !== ['dashboard', 'trends', 'documentation']) {
+                    $problems[] = 'resetRole did not restore the default';
+                }
+                if (\App\Models\PermissionMap::isCustomised('viewer')) {
+                    $problems[] = 'viewer still flagged as customised after reset';
+                }
+
+                // Per-account override: an explicit allow and deny on top of
+                // the role, and the same locks applied to the account.
+                $uid = (int) Database::run("SELECT id FROM users WHERE role = 'viewer' ORDER BY id LIMIT 1")->fetchColumn();
+                if ($uid === 0) {
+                    Database::run("INSERT INTO users (email, password_hash, role) VALUES ('perm-suite@example.test', 'x', 'viewer')");
+                    $uid = (int) Database::connection()->lastInsertId();
+                }
+                $user = Database::run('SELECT id, role FROM users WHERE id = ?', [$uid])->fetch(\PDO::FETCH_ASSOC);
+
+                \App\Models\PermissionMap::saveUser($uid, 'viewer', ['galleries' => '1', 'dashboard' => '0', 'mail_admin' => '1']);
+                \App\Models\PermissionMap::clearCache();
+                $user = Database::run('SELECT id, role FROM users WHERE id = ?', [$uid])->fetch(\PDO::FETCH_ASSOC);
+                $eff  = \App\Models\PermissionMap::effectiveUser($user);
+                if (!in_array('galleries', $eff, true)) {
+                    $problems[] = 'account override did not grant galleries';
+                }
+                if (in_array('dashboard', $eff, true)) {
+                    $problems[] = 'account override did not deny dashboard';
+                }
+                if (\App\Models\PermissionMap::allows($user, 'mail_admin')) {
+                    $problems[] = 'an account override granted mail_admin';
+                }
+                if (\App\Models\PermissionMap::allows($user, 'manage_admins')) {
+                    $problems[] = 'an account override granted manage_admins';
+                }
+
+                \App\Models\PermissionMap::resetUser($uid);
+                \App\Models\PermissionMap::clearCache();
+                $user = Database::run('SELECT id, role FROM users WHERE id = ?', [$uid])->fetch(\PDO::FETCH_ASSOC);
+                if (\App\Models\PermissionMap::effectiveUser($user) !== \App\Models\PermissionMap::effectiveRole('viewer')) {
+                    $problems[] = 'resetUser did not return the account to its role';
+                }
+
+                // The super admin still holds everything, whatever the rows say.
+                $super = ['id' => 0, 'role' => 'super_admin'];
+                foreach (\App\Models\PermissionMap::all() as $permission) {
+                    if (!\App\Models\PermissionMap::allows($super, $permission)) {
+                        $problems[] = "super_admin lost $permission";
+                        break;
+                    }
+                }
+
+                if ($own) {
+                    $pdo->rollBack();
+                }
+                \App\Models\PermissionMap::clearCache();
+
+                return $problems === []
+                    ? ['pass' => true, 'detail' => 'delta storage, both locks, reset and super_admin all correct']
+                    : ['pass' => false, 'detail' => implode('; ', $problems)];
+            } catch (\Throwable $e) {
+                if ($own && $pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                \App\Models\PermissionMap::clearCache();
+                return ['pass' => false, 'detail' => $e->getMessage()];
+            }
+        });
         $add('db.subscription_cancel_is_final', 'Database', 'A cancelled subscription is not resurrected by a replayed payment postback', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

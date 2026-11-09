@@ -289,10 +289,24 @@ return [
     ['POST', '/admin/users/{id}/flag', 'UserController@setFlag', 'users'],
     ['POST', '/admin/users/{id}/role', 'UserController@updateRole', 'users'],
     ['GET', '/admin/users/{id}/edit', 'UserController@edit', 'users'],
+    // Access assignments. Gated on manage_roles (super admin only) at the
+    // router as well as in the controller: these routes widen or narrow what
+    // an account may reach, so they must not sit behind the plain `users`
+    // permission a moderator holds.
+    ['GET', '/admin/users/{id}/permissions', 'PermissionController@userPermissions', 'manage_roles'],
+    ['POST', '/admin/users/{id}/permissions', 'PermissionController@saveUserPermissions', 'manage_roles'],
+    ['POST', '/admin/users/{id}/permissions/reset', 'PermissionController@resetUserPermissions', 'manage_roles'],
     ['POST', '/admin/users/{id}', 'UserController@update', 'users'],
     ['POST', '/admin/users/{id}/delete', 'UserController@destroy', 'users'],
     ['GET', '/admin/users/{id}', 'UserController@show', 'users'],
     ['POST', '/admin/impersonate/exit', 'UserController@exitImpersonation'],
+
+    // Access assignments: which parts of the console each role may reach, and
+    // per-account overrides. manage_roles is super-admin only, so these sit
+    // behind it rather than behind `dashboard` (which every role holds).
+    ['GET', '/admin/roles', 'PermissionController@index', 'manage_roles'],
+    ['POST', '/admin/roles', 'PermissionController@save', 'manage_roles'],
+    ['POST', '/admin/roles/reset', 'PermissionController@reset', 'manage_roles'],
 
     // System maintenance (admin only)
     ['GET', '/admin/system', 'SystemController@index', 'dashboard'],

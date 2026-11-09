@@ -27,6 +27,10 @@
             <option value="admin"<?= $user['role'] === 'admin' ? ' selected' : '' ?>>Admin</option>
             <?php if (\App\Core\Auth::can('manage_roles')): ?><option value="super_admin"<?= $user['role'] === 'super_admin' ? ' selected' : '' ?>>Super Admin</option><?php endif; ?>
         </select>
+        <?php if (\App\Core\Auth::can('manage_roles') && \App\Core\Auth::isAdminRole($user)): ?>
+            <br><a href="<?= url('/admin/users/' . (int) $user['id'] . '/permissions') ?>">Access overrides &rarr;</a>
+            <span class="muted">(pin individual permissions for this account)</span>
+        <?php endif; ?>
     </p>
     <p>
         <label for="password">New Password</label><br>
