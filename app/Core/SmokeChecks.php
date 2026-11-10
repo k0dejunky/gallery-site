@@ -10139,6 +10139,17 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 $problems[] = 'chat.js must keep the SSE stream and the typing ping';
             }
 
+            // The admin layout raises a full-page "Saving…" overlay on every
+            // form submit and expects a navigation to clear it. The chat
+            // composer posts with XHR, so the overlay would stay up for ever.
+            $adminView = (string) $read($root . '/views/admin/chat_show.php');
+            if (strpos($adminView, 'data-no-progress') === false) {
+                $problems[] = 'the admin chat form must opt out of the layout "Saving…" overlay (data-no-progress)';
+            }
+            if (strpos($js, 'AdminProgress.hide') === false) {
+                $problems[] = 'chat.js must dismiss the admin overlay before it posts';
+            }
+
             // The model owns the window and the reaction list.
             $model = (string) $read($root . '/app/Models/ChatMessage.php');
             foreach (['EDIT_WINDOW_MINUTES', 'public const REACTIONS', 'function softDelete', 'function toggleReaction', 'function operatorTyping'] as $needle) {

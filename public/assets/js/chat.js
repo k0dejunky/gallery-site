@@ -151,7 +151,17 @@
         }
 
         if (this.form) {
-            this.form.addEventListener('submit', function (e) { e.preventDefault(); self.send(); });
+            this.form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                // The admin layout puts a full-page "Saving…" overlay over any
+                // form submit and expects a navigation to clear it. This form
+                // never navigates, so the overlay must not be raised; the
+                // composer's own progress bar reports the upload instead.
+                if (window.AdminProgress && typeof window.AdminProgress.hide === 'function') {
+                    window.AdminProgress.hide();
+                }
+                self.send();
+            });
         }
 
         if (this.fileInput) {
@@ -682,10 +692,26 @@
         if (ticks) { ticks.textContent = '◷'; ticks.removeAttribute('aria-label'); }
         var bubble = qs('.chat-bubble', row);
         if (file && bubble) {
-            var tag = document.createElement('div');
-            tag.className = 'chat-file';
-            tag.textContent = '📎 ' + file.name;
-            bubble.appendChild(tag);
+            if (/^image\//.test(file.type)) {
+                // Show the picture the operator just picked rather than a
+                // paperclip: the server's thumbnail replaces it on reload.
+                var preview = document.createElement('a');
+                preview.className = 'chat-media';
+                preview.href = URL.createObjectURL(file);
+                preview.target = '_blank';
+                preview.rel = 'noopener';
+                var img = document.createElement('img');
+                img.src = preview.href;
+                img.alt = file.name;
+                img.loading = 'lazy';
+                preview.appendChild(img);
+                bubble.appendChild(preview);
+            } else {
+                var tag = document.createElement('div');
+                tag.className = 'chat-file';
+                tag.textContent = '📎 ' + file.name;
+                bubble.appendChild(tag);
+            }
         }
         this.scrollToBottom(false);
 

@@ -132,7 +132,12 @@ class ChatController extends Controller
             }
             $attachment = ChatMessage::storeAttachment($file);
             if ($attachment === null) {
-                $this->json(['ok' => false, 'error' => 'That file type is not supported. Images, video, audio, PDF and text files only.']);
+                // A storage failure is not a bad file type: saying "not
+                // supported" for a permission problem sends the member (and
+                // the operator reading the report) to the wrong place.
+                $this->json(['ok' => false, 'error' => ChatMessage::attachmentError() === 'storage'
+                    ? 'The file could not be saved on the server. Please try again, or contact support if it keeps failing.'
+                    : 'That file type is not supported. Images, video, audio, PDF and text files only.']);
                 return;
             }
         }

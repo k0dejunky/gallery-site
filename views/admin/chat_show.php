@@ -141,8 +141,12 @@ $endpoints = [
         <div class="chat-progress" aria-hidden="true"><i></i></div>
         <div class="chat-emoji" role="group" aria-label="Emoji"></div>
 
+        <?php /* data-no-progress: the client posts this form with XHR and
+            shows its own upload bar, so the admin layout must not throw its
+            full-page "Saving…" overlay (it would stay up, because the page
+            never navigates). */ ?>
         <form class="chat-inputrow" id="reply-form" method="post" enctype="multipart/form-data"
-              action="<?= url('/admin/chat/' . $cid . '/reply') ?>" novalidate>
+              action="<?= url('/admin/chat/' . $cid . '/reply') ?>" data-no-progress novalidate>
             <?= csrf_field() ?>
             <label class="chat-btn chat-attach-label" for="attachment-input" title="Attach a file" aria-label="Attach a file">📎</label>
             <input type="file" name="attachment" id="attachment-input" class="chat-file-input" hidden

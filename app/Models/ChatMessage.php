@@ -747,10 +747,21 @@ class ChatMessage
      * @param array{tmp_name:string, name:string, type:string, size:int} $file
      * @return array{name:string, type:string, path:string}|null
      */
+    /** Why the last storeAttachment() refused a file: '' | type | storage. */
+    private static string $attachmentError = '';
+
+    public static function attachmentError(): string
+    {
+        return self::$attachmentError;
+    }
+
     public static function storeAttachment(array $file): ?array
     {
+        self::$attachmentError = '';
+
         $tmp = (string) ($file['tmp_name'] ?? '');
         if (!is_file($tmp)) {
+            self::$attachmentError = 'storage';
             return null;
         }
 
@@ -780,6 +791,7 @@ class ChatMessage
         // Reject by content before it ever reaches storage: sniffed MIME must
         // be in the allowlist, and the extension must match one too.
         if (!in_array(strtolower($realType), $allowedMime, true)) {
+            self::$attachmentError = 'type';
             return null;
         }
 
@@ -791,6 +803,7 @@ class ChatMessage
         $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', $name) ?: 'attachment';
         $ext = strtolower(pathinfo($safeName, PATHINFO_EXTENSION));
         if (!in_array($ext, $allowedExt, true)) {
+            self::$attachmentError = 'type';
             return null;
         }
 
@@ -802,6 +815,10 @@ class ChatMessage
 
         if (!@move_uploaded_file($tmp, $dest)) {
             if (!@copy($tmp, $dest)) {
+                // A permissions problem is not an unsupported file type, and
+                // saying so sends the operator looking in the wrong place.
+                self::$attachmentError = 'storage';
+                error_log('[chat-attachment] the upload could not be written to ' . $dir . ' (check ownership/permissions)');
                 return null;
             }
         }
