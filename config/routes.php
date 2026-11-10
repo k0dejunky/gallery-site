@@ -322,6 +322,7 @@ return [
     ['POST', '/admin/system/ai-rebuild', 'SystemController@aiRebuild', 'system_ops'],
     ['POST', '/admin/system/maintenance', 'SystemController@maintenanceToggle', 'system_ops'],
     ['POST', '/admin/system/age-gate', 'SystemController@saveAgeGate', 'system_ops'],
+    ['POST', '/admin/system/php-errors/ack', 'SystemController@ackPhpErrors', 'dashboard'],
     ['POST', '/admin/system/housekeeping', 'SystemController@housekeepingRun', 'dashboard'],
     ['POST', '/admin/system/paypal-reconcile', 'SystemController@paypalReconcile', 'dashboard'],
     ['POST', '/admin/system/duplicates/scan', 'SystemController@duplicateScan', 'dashboard'],

@@ -10001,6 +10001,76 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad("dedupe returned {$unique} copies of one event across " . count($merged) . ' rows');
         });
 
+        $add('smoke.system.php_errors_are_a_surface', 'Smoke · System page', 'New PHP fatals are shown on the System page and acknowledging them never edits the log', static function () use ($root, $read, $ok, $bad): array {
+            $problems = [];
+
+            $routes = (string) $read($root . '/config/routes.php');
+            if (strpos($routes, "'/admin/system/php-errors/ack'") === false) {
+                $problems[] = 'the acknowledgement route is missing';
+            }
+
+            $ctrl = (string) $read($root . '/app/Controllers/SystemController.php');
+            if (strpos($ctrl, 'PhpErrorLog::summary(') === false) {
+                $problems[] = 'the System page must read the fatal errors through PhpErrorLog::summary()';
+            }
+            if (strpos($ctrl, "'phpErrors'") === false) {
+                $problems[] = 'the System page must receive the summary';
+            }
+            if (strpos($ctrl, 'PhpErrorLog::acknowledge(') === false) {
+                $problems[] = 'the acknowledgement must move the reviewed pointer';
+            }
+
+            $view = (string) $read($root . '/views/admin/system.php');
+            if (strpos($view, 'id="php-errors"') === false) {
+                $problems[] = 'the System page needs the PHP errors card';
+            }
+            if (strpos($view, '/admin/system/php-errors/ack') === false) {
+                $problems[] = 'the card needs the "mark as reviewed" action';
+            }
+
+            $class = (string) $read($root . '/app/Core/PhpErrorLog.php');
+            // The log is the record: an acknowledgement must never delete or
+            // rewrite it (the alerting offset belongs to Housekeeping).
+            if (strpos($class, 'unlink(') !== false) {
+                $problems[] = 'the error log must never be deleted by the reader';
+            }
+            if (preg_match('/file_put_contents\\(\\$path/', $class)) {
+                $problems[] = 'the error log must never be rewritten by the reader';
+            }
+            if (strpos($class, 'reviewed > $size') === false) {
+                $problems[] = 'a rotated log must reset the reviewed pointer, or the errors after it are hidden';
+            }
+
+            return $problems === []
+                ? $ok('the System page counts new fatals, and the ack only moves its own pointer')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.system.no_open_basedir_noise', 'Smoke · System page', 'Probing a system binary does not log an open_basedir warning on every encode', static function () use ($root, $read, $ok, $bad): array {
+            $helpers = (string) $read($root . '/app/Core/helpers.php');
+            $queue   = (string) $read($root . '/app/Models/AutoPostQueue.php');
+            $problems = [];
+
+            // prod's FPM pool restricts open_basedir to the app tree, so
+            // is_executable('/usr/bin/ffmpeg') raises E_WARNING and returns
+            // false. The code already falls back to PATH - but it logged three
+            // warnings per encode, which filled php-error.log with noise that
+            // hid the real errors.
+            if (preg_match('/(?<!@)is_executable\\(/', $helpers)) {
+                $problems[] = 'helpers.php must probe the binary without raising a warning';
+            }
+            if (preg_match('/(?<!@)is_executable\\(/', $queue)) {
+                $problems[] = 'AutoPostQueue must probe the binary without raising a warning';
+            }
+            if (strpos($helpers, '@is_executable(') === false) {
+                $problems[] = 'the suppressed probe is missing from helpers.php';
+            }
+
+            return $problems === []
+                ? $ok('every /usr/bin probe is suppressed, so the error log carries only real errors')
+                : $bad(implode('; ', $problems));
+        });
+
         // ------------------------------------------------------ Media variants
         $add('smoke.media.bmp_variants', 'Smoke · Media', 'BMP uploads produce web + thumb renditions (never the full original)', static function () use ($ok, $bad): array {
             foreach (['imagecreatetruecolor', 'imagebmp', 'imagecreatefrombmp', 'getimagesize'] as $fn) {

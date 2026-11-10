@@ -148,6 +148,47 @@ $canOperate = \App\Core\Auth::can('system_ops');
     </div>
     <?php endif; ?>
 
+    <?php
+    // The fatal-error alert is an email, and 76 of them were never acted on.
+    // This is the same information as a surface: a count, the newest lines,
+    // and a button that moves the reviewed pointer (the log is never edited).
+    $phpErrors = $phpErrors ?? ['since' => 0, 'lines' => [], 'reviewed_at' => null, 'size' => 0, 'truncated' => false];
+    ?>
+    <div class="sys-card" id="php-errors">
+        <h2>PHP errors
+            <?php if ((int) $phpErrors['since'] > 0): ?>
+                <span class="sys-bad"><?= (int) $phpErrors['since'] ?> new</span>
+            <?php endif; ?>
+        </h2>
+        <p class="muted" style="font-size:.8rem;margin:0 0 .5rem;">
+            Newest fatal / parse errors from <code>storage/logs/php-error.log</code>.
+            <?php if (!empty($phpErrors['reviewed_at'])): ?>
+                Last reviewed <?= e((string) $phpErrors['reviewed_at']) ?>.
+            <?php else: ?>
+                Never reviewed.
+            <?php endif; ?>
+            <?= (int) $phpErrors['size'] ?> bytes logged.
+        </p>
+        <?php if (empty($phpErrors['lines'])): ?>
+            <p class="sys-ok">No PHP fatal or parse errors in the log.</p>
+        <?php else: ?>
+            <?php if (!empty($phpErrors['truncated'])): ?>
+                <p class="muted" style="font-size:.8rem;">Showing the newest errors only.</p>
+            <?php endif; ?>
+            <pre class="u-fs-075" style="max-height:14rem;overflow:auto;margin:0 0 .6rem;white-space:pre-wrap;"><?php
+                foreach (array_slice($phpErrors['lines'], -10) as $phpLine) {
+                    echo e($phpLine), "\n";
+                }
+            ?></pre>
+            <?php if ((int) $phpErrors['since'] > 0): ?>
+                <form method="post" action="<?= url('/admin/system/php-errors/ack') ?>">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="btn btn-sm">Mark as reviewed</button>
+                </form>
+            <?php endif; ?>
+        <?php endif; ?>
+    </div>
+
     <!-- Video export queue -->
     <div class="sys-card">
         <h2>Background jobs</h2>

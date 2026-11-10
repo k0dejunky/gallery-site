@@ -583,7 +583,7 @@ function video_display_dimensions(string $path): ?array
         return null;
     }
 
-    $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
+    $ffprobe = @is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
     $raw     = [];
     $rc      = 0;
     @exec(
@@ -892,7 +892,7 @@ function create_video_rendition(string $src, string $dest, array $rung, int $tim
         return false;
     }
 
-    $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
+    $ffmpeg = @is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
     $vf     = '';
 
     // Size the output from the DISPLAY dimensions. ffmpeg's default
@@ -953,7 +953,7 @@ function create_video_sample_clip(string $src, string $dest): bool
         @mkdir($dir, 0775, true);
     }
 
-    $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
+    $ffmpeg = @is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
     // Fit within 480x480 preserving aspect, then snap both dimensions to even
     // (H.264 requires even width/height) without upscaling, then apply a heavy
     // boxblur so no recognizable content leaks through the public clip. The
@@ -1009,7 +1009,7 @@ function faststart_video_if_needed(string $path): bool
     }
 
     $tmp = $path . '.faststart.tmp';
-    $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
+    $ffmpeg = @is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
     // -f mp4 forces the mp4 muxer because the temp filename's extension is
     // not .mp4 (ffmpeg would otherwise reject the unknown muxer).
     $cmd = escapeshellarg($ffmpeg) . ' -nostdin -y -i ' . escapeshellarg($path)
@@ -1037,7 +1037,7 @@ function video_duration_seconds(string $path): int
         return 0;
     }
 
-    $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
+    $ffprobe = @is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
     $probe   = [];
     $rc      = 0;
 
@@ -1066,7 +1066,7 @@ function video_has_stream(string $path): bool
         return false;
     }
 
-    $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
+    $ffprobe = @is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : 'ffprobe';
     $probe   = [];
     $rc      = 0;
 
@@ -1632,7 +1632,7 @@ function _load_image(string $src)
 
     if (max($info[0], $info[1]) > $maxWorking
         && in_array($type, [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)) {
-        $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
+        $ffmpeg = @is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
         $prescaled = tempnam(gallery_temp_dir(), 'imgload');
 
         if ($prescaled !== false) {
@@ -2030,7 +2030,7 @@ function burn_video_watermark(string $src, string $dest, ?string $logoPath = nul
 
     [$logoW, $logoH] = $logoInfo;
 
-    $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
+    $ffmpeg = @is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
 
     // Probe the real frame size so the logo size/placement are computed
     // against the pixels (rotation metadata can differ from the container).
@@ -2194,7 +2194,7 @@ function create_image_variants(string $src, string $webDest, string $thumbDest, 
     $webpWebDest   = preg_replace('/\.[^.]+$/', '.webp', $webDest);
     $webpThumbDest = preg_replace('/\.[^.]+$/', '.webp', $thumbDest);
 
-    if ($nativeJpeg && is_executable('/usr/bin/ffmpeg')) {
+    if ($nativeJpeg && @is_executable('/usr/bin/ffmpeg')) {
         $orientation = exif_orientation_of($src);
 
         // Orientations 5-8 swap width/height relative to the stored pixels.
@@ -2292,7 +2292,7 @@ function create_image_variants(string $src, string $webDest, string $thumbDest, 
  */
 function _make_avif(string $variant): void
 {
-    if (!is_file($variant) || !is_executable('/usr/bin/ffmpeg')) {
+    if (!is_file($variant) || !@is_executable('/usr/bin/ffmpeg')) {
         return;
     }
 
@@ -2327,7 +2327,7 @@ function _make_webp(string $variant): void
         return;
     }
 
-    if (is_executable('/usr/bin/ffmpeg')) {
+    if (@is_executable('/usr/bin/ffmpeg')) {
         exec(
             escapeshellarg('/usr/bin/ffmpeg') . ' -y -hide_banner -loglevel error -i '
             . escapeshellarg($variant)
@@ -2670,7 +2670,7 @@ function create_video_poster_frame(string $src, string $dest): bool
  */
 function create_video_frame(string $src, string $dest, int $width, int $height, int $second, int $timeout = 60, string $fit = 'crop'): bool
 {
-    $ffmpeg = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
+    $ffmpeg = @is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg';
     if ($fit === 'pad') {
         // min(...,iw/ih) keeps a small source from being upscaled; the
         // decrease keeps the aspect; the pad centres the result.

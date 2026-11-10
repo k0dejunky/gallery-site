@@ -78,6 +78,12 @@ class SystemController extends Controller
             'exportQueue' => $this->videoExportQueue(),
             'photoEditQueue' => $this->photoEditQueue(),
             'slowQueries' => \App\Core\Database::recentSlowQueries(),
+            // The fatal-error emails went unread (76 of them), so the same
+            // errors are shown here with a count and an acknowledgement.
+            'phpErrors'   => \App\Core\PhpErrorLog::summary(
+                $this->storage . '/logs/php-error.log',
+                $this->storage . '/logs/.php_errors_reviewed'
+            ),
             'apiHealth'  => $this->apiHealth(),
             'ai'         => $this->aiStatus(),
             'duplicateReport' => \App\Core\DuplicateGalleries::report(),
@@ -1262,6 +1268,35 @@ PHP;
         }
 
         $this->redirect('/admin/system');
+    }
+
+    /**
+     * Mark the current end of the PHP error log as reviewed.
+     *
+     * This does NOT delete or edit the log - the log is the record. It only
+     * moves the pointer, so the System card stops counting the errors the
+     * operator has already looked at.
+     */
+    public function ackPhpErrors(): void
+    {
+        Auth::requirePermission('dashboard');
+
+        $offset = \App\Core\PhpErrorLog::acknowledge(
+            $this->storage . '/logs/.php_errors_reviewed',
+            $this->storage . '/logs/php-error.log',
+            (int) (Auth::user()['id'] ?? 0)
+        );
+
+        AuditLog::record(
+            Auth::user()['id'] ?? null,
+            'ack',
+            'php_errors',
+            null,
+            'PHP errors marked as reviewed up to byte ' . $offset
+        );
+
+        $this->flash('success', 'PHP errors marked as reviewed. The log itself is untouched.');
+        $this->redirect('/admin/system#php-errors');
     }
 
     /**

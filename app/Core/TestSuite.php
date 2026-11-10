@@ -3397,6 +3397,67 @@ class TestSuite
             return ['pass' => is_dir($dir) && is_writable($dir), 'detail' => $dir];
         });
 
+        $add('system.php_errors_surface', 'System', 'The System page counts NEW PHP fatals, the ack moves only its own pointer, and a rotated log starts over', function () {
+            $dir   = sys_get_temp_dir();
+            $pid   = getmypid();
+            $log   = $dir . '/probe_php_error_' . $pid . '.log';
+            $state = $dir . '/probe_php_state_' . $pid . '.json';
+
+            @unlink($log);
+            @unlink($state);
+
+            try {
+                // One old fatal, never reviewed.
+                file_put_contents($log, "[01-Jan-2026 10:00:00 UTC] PHP Fatal error:  Uncaught Error: old\n");
+                $first = \App\Core\PhpErrorLog::summary($log, $state);
+
+                // Acknowledged: nothing is new, and the log itself is intact
+                // (the alerting offset belongs to Housekeeping and must not
+                // be consumed here).
+                \App\Core\PhpErrorLog::acknowledge($state, $log, 1);
+                $afterAck = \App\Core\PhpErrorLog::summary($log, $state);
+                $logIntact = strpos((string) file_get_contents($log), 'old') !== false;
+
+                // One new parse error after the review.
+                file_put_contents($log, "[01-Jan-2026 10:05:00 UTC] PHP Parse error:  syntax error\n", FILE_APPEND);
+                $oneNew = \App\Core\PhpErrorLog::summary($log, $state);
+
+                // A rotated log (smaller than the pointer) must not hide the
+                // errors that follow the rotation. The operator has reviewed
+                // everything up to here, then the log is replaced by a
+                // shorter one.
+                \App\Core\PhpErrorLog::acknowledge($state, $log, 1);
+                file_put_contents($log, "[01-Jan-2026 10:06:00 UTC] PHP Fatal error:  Uncaught RuntimeException: after rotate\n");
+                $rotated = \App\Core\PhpErrorLog::summary($log, $state);
+
+                // Two matching tokens on ONE line is one error, not two.
+                $double = \App\Core\PhpErrorLog::count("PHP Fatal error:  Uncaught Error: both\n");
+
+                $ok = $first['since'] === 1
+                    && $afterAck['since'] === 0
+                    && $logIntact
+                    && $oneNew['since'] === 1
+                    && count($oneNew['lines']) === 2
+                    && $rotated['since'] === 1
+                    && $double === 1;
+
+                return [
+                    'pass'   => $ok,
+                    'detail' => $ok
+                        ? 'new errors counted, the ack keeps the log intact, a rotation resets the count, one line counts once'
+                        : json_encode([
+                            'first' => $first['since'], 'afterAck' => $afterAck['since'],
+                            'intact' => $logIntact, 'oneNew' => $oneNew['since'],
+                            'lines' => count($oneNew['lines']), 'rotated' => $rotated['since'],
+                            'double' => $double,
+                        ]),
+                ];
+            } finally {
+                @unlink($log);
+                @unlink($state);
+            }
+        });
+
         $add('media.video_frame_quality', 'Media', 'a real video yields a readable poster frame and garbage yields nothing', function () {
             $ff = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : '';
             if ($ff === '') {

@@ -2044,8 +2044,8 @@ class AutoPostQueue
      */
     private static function videoScreenshots(string $path, int $count = 1): array
     {
-        $ffmpeg  = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : null;
-        $ffprobe = is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : null;
+        $ffmpeg  = @is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : null;
+        $ffprobe = @is_executable('/usr/bin/ffprobe') ? '/usr/bin/ffprobe' : null;
 
         if ($ffmpeg === null) {
             return [];

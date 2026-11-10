@@ -421,7 +421,7 @@ The PPV/tip/unlock surface stays dormant. This phase is about the
 | 11.5 | The restore-drill script is **not in the repo** - the restore path is partly outside version control | pending | - |
 | 11.6 | `.env` is excluded from the backup - a full-box loss needs the secrets re-supplied by hand | pending | - |
 | 11.7 | `RateLimiter` is a single global JSON file with an exclusive `flock` and a whole-file rewrite per request | `app/Core/RateLimiter.php` | done - sharded over 16 files | `cd781f9` |
-| 11.8 | The dashboard's php-fatal alert is throttled to hourly and nobody acted on 76 of them | pending | - |
+| 11.8 | The dashboard's php-fatal alert is throttled to hourly and nobody acted on 76 of them | done - the same errors are a System-page card with a count and an acknowledgement | `5884577` |
 
 ---
 
@@ -438,7 +438,7 @@ the numbers below are measurements, not guesses.
 | 13.3 | The theme title-image upload is **broken** (the file is served from a path nothing routes, and the watermark silently stops with it), it accepts an **SVG with no validation**, and `update()` is gated on `requireLogin()` - so a **member** can restyle the site | `app/Controllers/ThemeController.php`, `app/Models/Theme.php`, `views/layout.php`, `install.sh` | planned | - |
 | 13.4 | The Braintree pages override the whole CSP with `'unsafe-inline'` and **no nonce** (the nonce the view emits is inert), and both the override AND the site policy are missing `https://assets.braintreegateway.com` from `frame-src` - the Hosted Fields iframe | `public/index.php`, `app/Controllers/MembershipController.php` | planned | - |
 | 13.5 | The tooltip and the terms say saving is disabled; nothing enforces it (the media is served inline, no `Content-Disposition`) | `views/partials/gallery_grid_item.php`, `views/terms.php` | done - the tooltip states the licence rule; the terms were already a licence term, not a technical claim | `dd44c63` |
-| 13.6 | The php-fatal alert is mailed once an hour and **nobody acted on 76 of them** - the log is the only record | `app/Core/Housekeeping.php`, `app/Controllers/SystemController.php`, `views/admin/system.php` | planned | - |
+| 13.6 | The php-fatal alert is mailed once an hour and **nobody acted on 76 of them** - the log is the only record | `app/Core/PhpErrorLog.php`, `app/Controllers/SystemController.php`, `views/admin/system.php` | done - the count and the newest lines are on the System page; the ack only moves a pointer | `5884577` |
 | 13.7 | `.env` stays out of the backup. No code change; the restore drill's output and this plan say so | `scripts/restore-drill.sh` | decided - no change | - |
 
 ### 13.1 The worker that is burning the box right now
