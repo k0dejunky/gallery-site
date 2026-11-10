@@ -184,6 +184,7 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/user.css')) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/public.css')) ?>">
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/wall.css')) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('/assets/css/chat.css')) ?>">
 </head>
 <?php
 // The body carries the compact scale and, while an admin is impersonating a
@@ -935,6 +936,7 @@ document.addEventListener('error',function(e){
          can never be published without the cache busting with it (the assets
          are served immutable). -->
     <script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('/assets/js/user.js')) ?>" defer></script>
+    <script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('/assets/js/chat.js')) ?>" defer></script>
     <script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('/assets/js/tour.js')) ?>" defer></script>
 </body>
 </html>

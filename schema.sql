@@ -730,6 +730,9 @@ CREATE TABLE IF NOT EXISTS chat_conversations (
     status      ENUM('open','closed') NOT NULL DEFAULT 'open',
     member_reply_enabled TINYINT(1) NOT NULL DEFAULT 1,
     member_typing_at DATETIME NULL,
+    -- The mirror of member_typing_at: the member sees "Amethyst is typing…"
+    -- while the operator writes in the admin panel.
+    operator_typing_at DATETIME NULL,
     last_read_message_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
     operator_read_through_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -751,6 +754,14 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     max_views       INT UNSIGNED NULL,
     view_count      INT UNSIGNED NOT NULL DEFAULT 0,
     content_refs    TEXT NULL,
+    -- The message this one quotes. The quote is rendered from the row it
+    -- points at, so an edited or deleted original is reflected in it.
+    reply_to_id     BIGINT UNSIGNED NULL DEFAULT NULL,
+    -- Set when the sender edits their own message ("edited" in the thread).
+    edited_at       DATETIME NULL DEFAULT NULL,
+    -- A SOFT delete: the row stays and the bubble reads "This message was
+    -- deleted", so a quote and the other side's answer still make sense.
+    deleted_at      DATETIME NULL DEFAULT NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- The operator can pin a message to keep it at hand. The thread shows
     -- pinned messages separately.
@@ -758,8 +769,23 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     KEY idx_chat_msg_conv_date (conversation_id, created_at),
     KEY idx_chat_msg_conv_id (conversation_id, id),
     KEY idx_chat_msg_pinned (conversation_id, pinned_at),
+    KEY idx_chat_msg_reply (reply_to_id),
     CONSTRAINT fk_chat_msg_conv FOREIGN KEY (conversation_id)
         REFERENCES chat_conversations(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- One row per (message, actor, emoji). There is exactly one member and one
+-- operator per conversation, so the actor identifies who reacted.
+CREATE TABLE IF NOT EXISTS chat_reactions (
+    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    message_id BIGINT UNSIGNED NOT NULL,
+    actor      ENUM('user', 'operator') NOT NULL,
+    emoji      VARCHAR(16) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_chat_reaction (message_id, actor, emoji),
+    KEY idx_chat_reaction_msg (message_id),
+    CONSTRAINT fk_chat_reaction_msg FOREIGN KEY (message_id)
+        REFERENCES chat_messages(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Chat site-wide settings (AI switch, default mode, daily message, fine-tuned

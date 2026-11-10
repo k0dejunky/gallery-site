@@ -3397,6 +3397,122 @@ class TestSuite
             return ['pass' => is_dir($dir) && is_writable($dir), 'detail' => $dir];
         });
 
+        $add('db.chat_client_features', 'Database', 'A reply quotes, an edit is bounded, a delete keeps the row, and a reaction toggles', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix = bin2hex(random_bytes(3));
+                    $uid    = self::scratchUserId('chat-' . $suffix);
+                    $other  = self::scratchUserId('chat-other-' . $suffix);
+
+                    $cid  = \App\Models\ChatMessage::openFor($uid, \App\Models\ChatMessage::MODE_OPERATOR);
+                    $cid2 = \App\Models\ChatMessage::openFor($other, \App\Models\ChatMessage::MODE_OPERATOR);
+
+                    $first = \App\Models\ChatMessage::addMessage($cid, \App\Models\ChatMessage::ROLE_USER, 'First message in this thread');
+                    $otherMsg = \App\Models\ChatMessage::addMessage($cid2, \App\Models\ChatMessage::ROLE_USER, 'Another member thread');
+
+                    // A quote points at a live message in the SAME thread.
+                    $quoted = \App\Models\ChatMessage::addMessage($cid, \App\Models\ChatMessage::ROLE_USER, 'A reply', null, null, null, null, $first);
+                    $foreign = \App\Models\ChatMessage::addMessage($cid, \App\Models\ChatMessage::ROLE_USER, 'Trying to quote another thread', null, null, null, null, $otherMsg);
+
+                    $q1 = (int) Database::run('SELECT reply_to_id FROM chat_messages WHERE id = ?', [$quoted])->fetchColumn();
+                    $q2 = Database::run('SELECT reply_to_id FROM chat_messages WHERE id = ?', [$foreign])->fetchColumn();
+
+                    // Edit: own message, inside the window.
+                    [$okEdit, $editErr] = \App\Models\ChatMessage::editMessage($quoted, $uid, 'Edited text');
+                    $editedRow = Database::run('SELECT message, edited_at FROM chat_messages WHERE id = ?', [$quoted])->fetch();
+
+                    // Edit: not yours, and after the window.
+                    [$okForeign] = \App\Models\ChatMessage::editMessage($quoted, $other, 'Not mine');
+                    Database::run('UPDATE chat_messages SET created_at = DATE_SUB(NOW(), INTERVAL 30 MINUTE) WHERE id = ?', [$first]);
+                    [$okLate, $lateErr] = \App\Models\ChatMessage::editMessage($first, $uid, 'Too late');
+
+                    // Reactions: on, off, and a refused emoji.
+                    $on  = \App\Models\ChatMessage::toggleReaction($quoted, \App\Models\ChatMessage::ROLE_USER, '🔥');
+                    $map = \App\Models\ChatMessage::reactionsFor([$quoted]);
+                    $off = \App\Models\ChatMessage::toggleReaction($quoted, \App\Models\ChatMessage::ROLE_USER, '🔥');
+                    $bad = \App\Models\ChatMessage::toggleReaction($quoted, \App\Models\ChatMessage::ROLE_USER, '<script>');
+
+                    // Soft delete: the row stays, the text is gone from the
+                    // decorated payload, and it stops being a quote source.
+                    $deleted = \App\Models\ChatMessage::softDelete($first, $uid);
+                    $decorated = \App\Models\ChatMessage::decorateMessages(
+                        \App\Models\ChatMessage::messagesLatest($cid, 20),
+                        '/chat/attachment'
+                    );
+                    $deletedRow = null;
+                    $labelOk = false;
+                    foreach ($decorated as $row) {
+                        if ((int) $row['id'] === $first) { $deletedRow = $row; }
+                        if ((int) $row['id'] === $quoted) { $labelOk = ($row['time_label'] ?? '') !== '' && ($row['day'] ?? '') !== ''; }
+                    }
+                    $deleteHidesText = $deletedRow !== null && !empty($deletedRow['deleted']) && $deletedRow['message'] === '';
+                    // A deleted message cannot be quoted any more.
+                    $reqDeleted = \App\Models\ChatMessage::addMessage($cid, \App\Models\ChatMessage::ROLE_USER, 'Quote a deleted one', null, null, null, null, $first);
+                    $q3 = Database::run('SELECT reply_to_id FROM chat_messages WHERE id = ?', [$reqDeleted])->fetchColumn();
+
+                    // Search ignores deleted rows.
+                    $hits = \App\Models\ChatMessage::search($cid, 'Edited text');
+                    $miss = \App\Models\ChatMessage::search($cid, 'First message in this thread');
+
+                    // Typing + read pointer.
+                    \App\Models\ChatMessage::markOperatorTyping($cid);
+                    $typing = \App\Models\ChatMessage::operatorTyping($cid, 30);
+                    Database::run('UPDATE chat_conversations SET operator_read_through_id = ? WHERE id = ?', [$quoted, $cid]);
+                    $read = \App\Models\ChatMessage::operatorReadThrough($cid);
+
+                    $ok = $q1 === $first
+                        && $q2 === null
+                        && $okEdit === true
+                        && ($editedRow['message'] ?? '') === 'Edited text'
+                        && !empty($editedRow['edited_at'])
+                        && $okForeign === false
+                        && $okLate === false
+                        && $on['ok'] === true && $on['active'] === true
+                        && !empty($map[$quoted])
+                        && $off['active'] === false
+                        && $bad['ok'] === false
+                        && $deleted === true
+                        && $deleteHidesText
+                        && $labelOk
+                        && $q3 === null
+                        && count($hits) === 1
+                        && count($miss) === 0
+                        && $typing === true
+                        && $read === $quoted;
+
+                    return [
+                        'pass'   => $ok,
+                        'detail' => $ok
+                            ? 'quote is same-thread; edit is own+15min; reactions toggle; delete keeps the row and hides it from quotes, search and display'
+                            : json_encode([
+                                'q1' => $q1, 'q2' => $q2, 'okEdit' => $okEdit, 'edited' => $editedRow,
+                                'okForeign' => $okForeign, 'okLate' => $okLate,
+                                'on' => $on, 'off' => $off, 'bad' => $bad,
+                                'deleted' => $deleted, 'hides' => $deleteHidesText, 'labels' => $labelOk,
+                                'q3' => $q3, 'hits' => count($hits), 'miss' => count($miss),
+                                'typing' => $typing, 'read' => $read,
+                            ]),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('system.php_errors_surface', 'System', 'The System page counts NEW PHP fatals, the ack moves only its own pointer, and a rotated log starts over', function () {
             $dir   = sys_get_temp_dir();
             $pid   = getmypid();

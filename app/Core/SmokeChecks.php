@@ -1753,7 +1753,7 @@ class SmokeChecks
                 // in the view; both are 3.93:1 on the page background, and
                 // the text is 12.8px.
                 ['views/chat/index.php',
-                    'chat-status-online', '#15803d',
+                    'chat-sub', '#15803d',
                     '--status-online', '--page-bg', 4.5],
                 ['public/assets/css/user.css',
                     'color: var(--status-online)', '',
@@ -2273,7 +2273,11 @@ class SmokeChecks
                     [],
                 ],
                 'views/chat/index.php' => [
-                    ['chat-shell', 'qn-panel', 'chat-daily', 'chat-attachment-link', 'chat-file-input', 'qn-form'],
+                    ['chat-shell', 'qn-panel', 'chat-daily', 'chat-file-input', 'qn-form', 'chat-app'],
+                    [],
+                ],
+                'views/partials/chat_message.php' => [
+                    ['chat-bubble', 'chat-media', 'chat-quote', 'chat-reactions', 'chat-ticks'],
                     [],
                 ],
             ];
@@ -3622,7 +3626,7 @@ $add('smoke.ui.hero_buttons_are_compact_and_centred', 'Smoke \u00b7 UI', 'The he
             // silently: the element gets the browser's default and nobody
             // says anything. There were 51 of them.
             $css = '';
-            foreach (['public/assets/css/admin.css', 'public/assets/css/user.css', 'public/assets/css/utilities.css', 'public/assets/css/support.css', 'public/assets/css/public.css', 'public/assets/css/wall.css', 'app/Core/theme_base.css'] as $file) {
+            foreach (['public/assets/css/admin.css', 'public/assets/css/user.css', 'public/assets/css/utilities.css', 'public/assets/css/support.css', 'public/assets/css/public.css', 'public/assets/css/wall.css', 'public/assets/css/chat.css', 'app/Core/theme_base.css'] as $file) {
                 $css .= (string) @file_get_contents($root . '/' . $file);
             }
             $js = '';
@@ -7329,7 +7333,7 @@ $add('smoke.ui.hero_buttons_are_compact_and_centred', 'Smoke \u00b7 UI', 'The he
                 "\$this->request->file('attachment')",
                 'storeAttachment($file)',
                 'MAX_ATTACHMENT_BYTES',
-                'addMessage($cid, ChatMessage::ROLE_USER, $message, $attachment)',
+                'ChatMessage::ROLE_USER, $message, $attachment',
                 "\$message !== ''",
             ];
             $missing = [];
@@ -7341,15 +7345,23 @@ $add('smoke.ui.hero_buttons_are_compact_and_centred', 'Smoke \u00b7 UI', 'The he
                 : $bad('ChatController::send() must accept an attachment through storeAttachment with a 25 MB cap'
                     . ($missing !== [] ? ' (missing: ' . implode(', ', $missing) . ')' : ''));
         });
-        $add('smoke.chat_ui.member_attach_compose', 'Smoke · Chat correctness', 'Member composer offers a gated file attachment', static function () use ($chatIndex, $ok, $bad): array {
-            $needed = ['id="chat-file"', "body.append('attachment', file)", '25 * 1024 * 1024'];
+        $add('smoke.chat_ui.member_attach_compose', 'Smoke · Chat correctness', 'Member composer offers a gated file attachment', static function () use ($root, $chatIndex, $ok, $bad): array {
+            // The markup carries the input; the shared client carries the
+            // upload and its client-side size guard.
+            $chatJs = (string) @file_get_contents($root . '/public/assets/js/chat.js');
+            $neededView = ['id="chat-file"', 'class="chat-file-input"'];
+            $neededJs   = ["body.append('attachment', file)", 'this.limit', 'f.size > this.limit'];
             $missing = [];
-            foreach ($needed as $n) {
+            foreach ($neededView as $n) {
                 if (strpos($chatIndex, $n) === false) $missing[] = $n;
             }
+            foreach ($neededJs as $n) {
+                if (strpos($chatJs, $n) === false) $missing[] = 'chat.js: ' . $n;
+            }
+            if (strpos($chatIndex, '25 * 1024 * 1024') === false) $missing[] = '25 MB cap in the markup';
             return $missing === []
                 ? $ok('composer file input sizes files client-side before upload')
-                : $bad('views/chat/index.php composer must offer a file input that rides FormData'
+                : $bad('the chat composer must offer a file input that rides FormData'
                     . ($missing !== [] ? ' (missing: ' . implode(', ', $missing) . ')' : ''));
         });
 
@@ -10068,6 +10080,109 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
 
             return $problems === []
                 ? $ok('every /usr/bin probe is suppressed, so the error log carries only real errors')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.chat.client_surface', 'Smoke · Chat', 'The chat client has its routes, its shared kit and a CSRF token on every write', static function () use ($root, $read, $ok, $bad): array {
+            $problems = [];
+
+            $routes = (string) $read($root . '/config/routes.php');
+            foreach ([
+                "'/chat/edit'", "'/chat/delete'", "'/chat/react'", "'/chat/search'",
+                "'/admin/chat/{id}/message/{messageId}/pin'",
+                "'/admin/chat/{id}/message/{messageId}/delete'",
+                "'/admin/chat/{id}/message/{messageId}/react'",
+                "'/admin/chat/{id}/typing'", "'/admin/chat/poll'", "'/admin/chat/search'",
+            ] as $needle) {
+                if (strpos($routes, $needle) === false) {
+                    $problems[] = 'missing route ' . $needle;
+                }
+            }
+
+            // A literal route below the {id} wildcard is dead code.
+            $idAt   = strpos($routes, "'/admin/chat/{id}'");
+            $search = strpos($routes, "'/admin/chat/search'");
+            if ($idAt !== false && $search !== false && $search > $idAt) {
+                $problems[] = '/admin/chat/search is registered after the {id} wildcard, so it is unreachable';
+            }
+
+            foreach ([
+                'public/assets/css/chat.css',
+                'public/assets/js/chat.js',
+                'views/partials/chat_message.php',
+            ] as $file) {
+                if (!is_file($root . '/' . $file)) {
+                    $problems[] = 'missing ' . $file;
+                }
+            }
+
+            $memberLayout = (string) $read($root . '/views/layout.php');
+            $adminLayout  = (string) $read($root . '/views/admin/layout.php');
+            foreach (['chat.css', 'chat.js'] as $asset) {
+                if (strpos($memberLayout, $asset) === false) {
+                    $problems[] = 'the member layout does not load ' . $asset;
+                }
+                if (strpos($adminLayout, $asset) === false) {
+                    $problems[] = 'the admin layout does not load ' . $asset;
+                }
+            }
+
+            // The client must send the CSRF token with every write, and the
+            // admin endpoints are addressed through the __MID__ placeholder.
+            $js = (string) $read($root . '/public/assets/js/chat.js');
+            foreach (["body.append('_token', this.token())", "replace('__MID__'" ] as $needle) {
+                if (strpos($js, $needle) === false) {
+                    $problems[] = 'chat.js is missing ' . $needle;
+                }
+            }
+            if (strpos($js, 'pingTyping') === false || strpos($js, 'connectStream') === false) {
+                $problems[] = 'chat.js must keep the SSE stream and the typing ping';
+            }
+
+            // The model owns the window and the reaction list.
+            $model = (string) $read($root . '/app/Models/ChatMessage.php');
+            foreach (['EDIT_WINDOW_MINUTES', 'public const REACTIONS', 'function softDelete', 'function toggleReaction', 'function operatorTyping'] as $needle) {
+                if (strpos($model, $needle) === false) {
+                    $problems[] = 'ChatMessage is missing ' . $needle;
+                }
+            }
+
+            return $problems === []
+                ? $ok('routes, shared kit, CSRF on writes and the model rules are all in place')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.chat.no_inline_thread_styles', 'Smoke · Chat', 'The chat thread is styled by the kit, not by inline attributes', static function () use ($root, $read, $ok, $bad): array {
+            $view   = (string) $read($root . '/views/chat/index.php');
+            $admin  = (string) $read($root . '/views/admin/chat_show.php');
+            $partial = (string) $read($root . '/views/partials/chat_message.php');
+            $css    = (string) $read($root . '/public/assets/css/chat.css');
+            $problems = [];
+
+            foreach (['views/chat/index.php' => $view, 'views/admin/chat_show.php' => $admin, 'views/partials/chat_message.php' => $partial] as $name => $src) {
+                if (substr_count($src, 'style="') > 4) {
+                    $problems[] = $name . ' still carries ' . substr_count($src, 'style="') . ' inline styles';
+                }
+            }
+            if (strpos($partial, 'chat-bubble') === false || strpos($partial, 'chat-quote') === false) {
+                $problems[] = 'the shared partial must render the bubble and the quote';
+            }
+            foreach (['.chat-bubble', '.chat-quote', '.chat-reactions', '.chat-composer-bar', '.chat-typing', '.chat-lightbox'] as $rule) {
+                if (strpos($css, $rule) === false) {
+                    $problems[] = 'chat.css is missing the ' . $rule . ' rules';
+                }
+            }
+            // The old skin painted the thread with inline styles in the admin
+            // view and a second set in user.css; the kit is the only source.
+            if (strpos($admin, 'display:inline-block;text-align:left;max-width:100%;padding:2px 7px') !== false) {
+                $problems[] = 'the admin thread still carries the old inline bubble markup';
+            }
+            if (strpos($view, "alert(") !== false || strpos($partial, "alert(") !== false) {
+                $problems[] = 'a send failure must be an inline state, not an alert()';
+            }
+
+            return $problems === []
+                ? $ok('one kit renders both threads; no inline bubble styling is left')
                 : $bad(implode('; ', $problems));
         });
 

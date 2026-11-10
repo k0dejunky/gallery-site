@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\Database;
 use App\Core\ChatAi;
 use App\Core\RateLimiter;
 use App\Models\ChatMessage;
@@ -69,6 +70,11 @@ class ChatController extends Controller
             'messages'     => $messages,
             'hasMore'      => $hasMore,
             'latestId'     => $conv['id'] > 0 ? ChatMessage::latestId((int) $conv['id']) : 0,
+            // "Seen" ticks: the member's own messages up to this id have
+            // been read by the operator.
+            'operatorReadThrough' => $conv['id'] > 0 ? (int) ($conv['operator_read_through_id'] ?? 0) : 0,
+            'memberLastRead'      => $conv['id'] > 0 ? (int) ($conv['last_read_message_id'] ?? 0) : 0,
+            'pinnedMessages'      => $conv['id'] > 0 ? ChatMessage::pinnedMessages((int) $conv['id']) : [],
             'aiStatus'     => ChatAi::ping(),
         ]);
     }
@@ -146,7 +152,8 @@ class ChatController extends Controller
         }
         $conv = ChatMessage::find($cid);
 
-        ChatMessage::addMessage($cid, ChatMessage::ROLE_USER, $message, $attachment);
+        $replyTo = max(0, (int) $this->request->post('reply_to', 0));
+        ChatMessage::addMessage($cid, ChatMessage::ROLE_USER, $message, $attachment, null, null, null, $replyTo > 0 ? $replyTo : null);
 
         $result = ['ok' => true, 'user_message_id' => ChatMessage::latestId($cid)];
 
@@ -239,6 +246,125 @@ class ChatController extends Controller
     }
 
     /**
+     * The member edits one of their own messages (15 minutes).
+     */
+    public function edit(): void
+    {
+        $user = Auth::requireUser();
+        $userId = (int) $user['id'];
+
+        if (!RateLimiter::allow(['chat_edit:' . $userId], 30, 60)) {
+            http_response_code(429);
+            $this->json(['ok' => false, 'error' => 'Too many changes. Please wait a moment.']);
+            return;
+        }
+
+        $id   = (int) $this->request->post('id', 0);
+        $text = (string) $this->request->post('message', '');
+
+        [$ok, $error] = ChatMessage::editMessage($id, $userId, $text);
+
+        if (!$ok) {
+            $this->json(['ok' => false, 'error' => $error]);
+            return;
+        }
+
+        $this->json([
+            'ok'      => true,
+            'id'      => $id,
+            'message' => mb_substr(trim($text), 0, ChatMessage::MAX_MESSAGE_LENGTH),
+        ]);
+    }
+
+    /**
+     * The member takes one of their own messages back (soft delete: the
+     * bubble stays, reading "This message was deleted").
+     */
+    public function destroy(): void
+    {
+        $user = Auth::requireUser();
+        $id   = (int) $this->request->post('id', 0);
+
+        if (!ChatMessage::softDelete($id, (int) $user['id'])) {
+            $this->json(['ok' => false, 'error' => 'That message cannot be deleted.']);
+            return;
+        }
+
+        $this->json(['ok' => true, 'id' => $id]);
+    }
+
+    /**
+     * Toggle a reaction on a message in the member's own conversation.
+     */
+    public function react(): void
+    {
+        $user = Auth::requireUser();
+        $userId = (int) $user['id'];
+
+        if (!RateLimiter::allow(['chat_react:' . $userId], 60, 60)) {
+            http_response_code(429);
+            $this->json(['ok' => false, 'error' => 'Too many reactions. Please wait a moment.']);
+            return;
+        }
+
+        $conv = ChatMessage::forUser($userId);
+        if ($conv === null) {
+            $this->json(['ok' => false, 'error' => 'No conversation.']);
+            return;
+        }
+
+        $messageId = (int) $this->request->post('message_id', 0);
+        $emoji     = (string) $this->request->post('emoji', '');
+
+        // The message must belong to THIS member's conversation: a guessed
+        // id must not let one member react into another's thread.
+        $belongs = (int) Database::run(
+            'SELECT COUNT(*) FROM chat_messages WHERE id = ? AND conversation_id = ?',
+            [$messageId, (int) $conv['id']]
+        )->fetchColumn();
+        if ($belongs === 0) {
+            $this->json(['ok' => false, 'error' => 'That message was not found.']);
+            return;
+        }
+
+        $result = ChatMessage::toggleReaction($messageId, ChatMessage::ROLE_USER, $emoji);
+        $this->json([
+            'ok'        => $result['ok'],
+            'active'    => $result['active'],
+            'message_id' => $messageId,
+            'reactions' => ChatMessage::reactionsFor([$messageId])[$messageId] ?? [],
+        ]);
+    }
+
+    /**
+     * Search the member's own conversation.
+     */
+    public function search(): void
+    {
+        $user  = Auth::requireUser();
+        $query = (string) $this->request->query('q', '');
+
+        $conv = ChatMessage::forUser((int) $user['id']);
+        if ($conv === null) {
+            $this->json(['ok' => true, 'results' => []]);
+            return;
+        }
+
+        $rows = ChatMessage::search((int) $conv['id'], $query, 30);
+        $results = [];
+        foreach ($rows as $row) {
+            $results[] = [
+                'id'         => (int) $row['id'],
+                'role'       => (string) $row['sender_role'],
+                'excerpt'    => mb_substr(trim(preg_replace('/\s+/', ' ', (string) $row['message']) ?? ''), 0, 160),
+                'created_at' => (string) $row['created_at'],
+            ];
+        }
+
+        $this->json(['ok' => true, 'results' => $results]);
+    }
+
+    /**
      * Poll for new messages (id > since). Returns JSON for the polling JS so
      * model/operator responses appear live.
      */
@@ -264,10 +390,14 @@ class ChatController extends Controller
         $messages = \App\Models\ChatMessage::decorateMessages(ChatMessage::messages($cid, $since), '/chat/attachment');
 
         $this->json([
-            'ok'       => true,
-            'messages' => $messages,
-            'latestId' => ChatMessage::latestId($cid),
-            'mode'     => (string) ($conv['ai_mode'] ?? 'retrieval'),
+            'ok'           => true,
+            'messages'     => $messages,
+            'latestId'     => ChatMessage::latestId($cid),
+            'mode'         => (string) ($conv['ai_mode'] ?? 'retrieval'),
+            // The same state the stream carries, so the client can run on
+            // polling alone when a proxy buffers the event stream.
+            'typing'       => ChatMessage::operatorTyping($cid),
+            'read_through' => (int) ($conv['operator_read_through_id'] ?? 0),
         ]);
     }
 
@@ -353,7 +483,14 @@ class ChatController extends Controller
         // Initial snapshot of anything already newer than the client.
         $new = \App\Models\ChatMessage::decorateMessages(ChatMessage::messages($cid, $since), '/chat/attachment');
         if ($new !== []) {
-            echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'mode' => (string) ($conv['ai_mode'] ?? 'retrieval')]) . "\n\n";
+            echo 'data: ' . json_encode([
+                'ok'           => true,
+                'messages'     => $new,
+                'latestId'     => $latestId,
+                'mode'         => (string) ($conv['ai_mode'] ?? 'retrieval'),
+                'typing'       => ChatMessage::operatorTyping($cid),
+                'read_through' => ChatMessage::operatorReadThrough($cid),
+            ]) . "\n\n";
             flush();
             $since = $latestId;
             ChatMessage::markRead($cid, $latestId);
@@ -364,17 +501,48 @@ class ChatController extends Controller
         // when a newer row actually exists, halving the per-tick query cost
         // and keeping idle chat tabs off the busiest path.
         $start = time();
+        $lastTyping    = false;
+        $lastRead      = 0;
+        $lastStateEmit = 0.0;
         while (time() - $start < 30) {
             $headId = ChatMessage::latestId($cid);
             if ($headId > $since) {
                 $new = \App\Models\ChatMessage::decorateMessages(ChatMessage::messages($cid, $since), '/chat/attachment');
                 if ($new !== []) {
                     $latestId = $headId;
-                    echo 'data: ' . json_encode(['ok' => true, 'messages' => $new, 'latestId' => $latestId, 'mode' => (string) ($conv['ai_mode'] ?? 'retrieval')]) . "\n\n";
+                    echo 'data: ' . json_encode([
+                        'ok'           => true,
+                        'messages'     => $new,
+                        'latestId'     => $latestId,
+                        'mode'         => (string) ($conv['ai_mode'] ?? 'retrieval'),
+                        'typing'       => ChatMessage::operatorTyping($cid),
+                        'read_through' => ChatMessage::operatorReadThrough($cid),
+                    ]) . "\n\n";
                     flush();
                     $since = $latestId;
                     ChatMessage::markRead($cid, $latestId);
                     continue;
+                }
+            }
+
+            // Typing / read state. Emitted only when it CHANGES (or while
+            // the operator is typing), so an idle tab stays silent - the
+            // busy-loop lesson from the operator stream.
+            $typing = ChatMessage::operatorTyping($cid);
+            $read   = ChatMessage::operatorReadThrough($cid);
+            if ($typing !== $lastTyping || $read !== $lastRead || $typing) {
+                if ($typing !== $lastTyping || $read !== $lastRead || (microtime(true) - $lastStateEmit) >= 1.0) {
+                    echo 'data: ' . json_encode([
+                        'ok'           => true,
+                        'messages'     => [],
+                        'latestId'     => $since,
+                        'typing'       => $typing,
+                        'read_through' => $read,
+                    ]) . "\n\n";
+                    flush();
+                    $lastTyping    = $typing;
+                    $lastRead      = $read;
+                    $lastStateEmit = microtime(true);
                 }
             }
 

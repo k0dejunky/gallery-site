@@ -41,12 +41,13 @@ $nextShow = \App\Models\LiveShow::toApi(\App\Models\LiveShow::next());
         </div>
 
         <div class="live-chat">
-            <h2>Live chat <span class="muted" style="font-weight:400;">(everyone watching)</span></h2>
+            <h2 class="live-chat-head">Live chat <span class="live-chat-head-sub">everyone watching</span></h2>
             <div class="live-chat-messages" id="live-chat-messages" role="log" aria-live="polite" aria-relevant="additions" aria-label="Live chat"></div>
+            <p class="live-chat-error" id="live-chat-error" role="alert" hidden></p>
             <form class="live-chat-form" id="live-chat-form">
                 <?= csrf_field() ?>
                 <input type="text" id="live-chat-input" maxlength="500" placeholder="Say something…" aria-label="Chat message" autocomplete="off">
-                <button type="submit" class="btn btn-sm">Send</button>
+                <button type="submit" class="btn btn-sm" aria-label="Send chat message">Send</button>
             </form>
         </div>
     </div>
@@ -150,15 +151,43 @@ $nextShow = \App\Models\LiveShow::toApi(\App\Models\LiveShow::next());
         tickCountdown();
     }
 
+    // Grouping: a new block starts when the speaker changes or five minutes
+    // pass, like the private chat. Consecutive lines from one person read as
+    // one statement instead of a wall of repeated names.
+    var lastRole = '';
+    var lastAt = 0;
+
+    function msgTime(s) {
+        var t = new Date(String(s == null ? '' : s).replace(' ', 'T') + 'Z');
+        return isNaN(t) ? 0 : t.getTime();
+    }
+
     function addMsg(m) {
         if (m.id && m.id <= latestId) return;
         if (m.id) latestId = m.id;
+
+        var role = m.sender_role === 'user' ? 'user' : (m.sender_role === 'operator' ? 'operator' : 'system');
+        var mine = role === 'user' && m.mine !== false;
+        var at = msgTime(m.created_at);
+        var first = role !== lastRole || !lastAt || Math.abs(at - lastAt) > 300000;
+        lastRole = role;
+        lastAt = at || lastAt;
+
         var div = document.createElement('div');
-        div.className = 'live-chat-msg ' + esc(m.sender_role);
-        div.innerHTML = '<span class="who">' + esc(m.name) + '</span>' +
-            '<span class="when">' + esc(hm(m.created_at)) + '</span><br>' + esc(m.message);
+        div.className = 'live-chat-msg ' + role + (first ? ' is-group-start' : ' is-cont') + (mine ? ' is-self' : '');
+
+        var initial = esc(String(m.name || '?').trim().charAt(0).toUpperCase());
+        var head = first
+            ? '<span class="live-chat-who"><span class="live-chat-avatar" aria-hidden="true">' + initial + '</span>' +
+              '<span class="who">' + esc(m.name) + '</span>' +
+              '<span class="when">' + esc(hm(m.created_at)) + '</span></span>'
+            : '';
+
+        div.innerHTML = head + '<span class="live-chat-text">' + esc(m.message) + '</span>';
         chatMessages.appendChild(div);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        var near = (chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight) < 90;
+        if (near || mine) { chatMessages.scrollTop = chatMessages.scrollHeight; }
     }
 
     function resetChat(initial) {
@@ -411,6 +440,16 @@ $nextShow = \App\Models\LiveShow::toApi(\App\Models\LiveShow::next());
         watchStall(s);
     }
 
+    var chatErrorEl = document.getElementById('live-chat-error');
+
+    function showChatError(message) {
+        if (!chatErrorEl) { return; }
+        chatErrorEl.textContent = message;
+        chatErrorEl.hidden = false;
+        clearTimeout(showChatError._t);
+        showChatError._t = setTimeout(function () { chatErrorEl.hidden = true; }, 4000);
+    }
+
     if (chatForm) {
         chatForm.addEventListener('submit', function (e) {
             e.preventDefault();
@@ -423,9 +462,9 @@ $nextShow = \App\Models\LiveShow::toApi(\App\Models\LiveShow::next());
             fetch(sendUrl, { method: 'POST', body: body })
                 .then(function (r) { return r.json(); })
                 .then(function (res) {
-                    if (!res.ok) { chatInput.value = text; alert(res.error || 'Could not send.'); }
+                    if (!res.ok) { chatInput.value = text; showChatError(res.error || 'Could not send.'); }
                 })
-                .catch(function () { chatInput.value = text; });
+                .catch(function () { chatInput.value = text; showChatError('Could not send. Check your connection.'); });
         });
     }
 

@@ -1,77 +1,100 @@
 <?php $title = 'Chat'; ?>
+<?php
+$me    = 'user';
+$mode  = 'member';
+$readThrough = (int) ($operatorReadThrough ?? 0);
 
+// Grouping: a new group starts when the sender changes, the day changes, or
+// five minutes pass. Same rule as the JavaScript client, so a message that
+// streams in looks like the ones around it.
+$prev = null;
+$firstFlags = [];
+foreach ($messages as $i => $m) {
+    $first = true;
+    if ($prev !== null) {
+        $sameRole = (string) $prev['sender_role'] === (string) $m['sender_role'];
+        $sameDay  = (string) ($prev['day'] ?? '') === (string) ($m['day'] ?? '');
+        $t1 = strtotime(((string) $prev['created_at']) . ' UTC');
+        $t2 = strtotime(((string) $m['created_at']) . ' UTC');
+        $close    = ($t1 !== false && $t2 !== false) ? abs($t2 - $t1) <= 300 : false;
+        $first = !($sameRole && $sameDay && $close);
+    }
+    $firstFlags[$i] = $first;
+    $prev = $m;
+}
+?>
 <div class="chat-page page-shell chat-shell">
-            <?php if (!empty($questionnaires)): ?>
-                <div class="card u-mb-1">
-                    <h2 class="section-title" style="margin-bottom:.5rem;">Questionnaires</h2>
-                    <?php foreach ($questionnaires as $q): ?>
-                        <?php $qAnswered = !empty($q['answered']); ?>
-                        <div id="questionnaire-<?= (int)$q['id'] ?>" class="qn-panel<?= $qAnswered ? ' qn-panel-done' : '' ?>">
-                            <strong class="qn-title"><?= e((string)$q['title']) ?></strong>
-                            <?php if ($qAnswered): ?>
-                                <span class="chat-submitted">✓ Submitted</span>
-                            <?php endif; ?>
-                            <?php if (!empty($q['intro'])): ?><p class="qn-intro"><?= e((string)$q['intro']) ?></p><?php endif; ?>
+    <?php if (!empty($questionnaires)): ?>
+        <div class="card u-mb-1">
+            <h2 class="section-title" style="margin-bottom:.5rem;">Questionnaires</h2>
+            <?php foreach ($questionnaires as $q): ?>
+                <?php $qAnswered = !empty($q['answered']); ?>
+                <div id="questionnaire-<?= (int)$q['id'] ?>" class="qn-panel<?= $qAnswered ? ' qn-panel-done' : '' ?>">
+                    <strong class="qn-title"><?= e((string)$q['title']) ?></strong>
+                    <?php if ($qAnswered): ?>
+                        <span class="chat-submitted">✓ Submitted</span>
+                    <?php endif; ?>
+                    <?php if (!empty($q['intro'])): ?><p class="qn-intro"><?= e((string)$q['intro']) ?></p><?php endif; ?>
 
-                            <?php if ($qAnswered): ?>
-                                <?php foreach ($q['questions'] as $qq): ?>
-                                    <?php $qqid=(int)$qq['id']; $my = $q['my_answers'][$qqid] ?? ''; ?>
-                                    <div class="qn-question">
-                                        <label class="qn-label"><?= e((string)$qq['prompt']) ?></label>
-                                        <?php if ($qq['qtype']==='text'): ?>
-                                            <textarea rows="2" disabled class="chat-answer"><?= e((string)$my) ?></textarea>
-                                        <?php elseif ($qq['qtype']==='choice' || $qq['qtype']==='rating'): ?>
-                                            <?php if ($qq['qtype']==='choice'): $opts=$qq['options_decoded']??[]; else: $opts=$qq['options_decoded']??['min'=>1,'max'=>5]; $tmp=[]; for($r=(int)$opts['min'];$r<=(int)$opts['max'];$r++){ $tmp[]=$r; } $opts=$tmp; endif; ?>
-                                            <?php foreach ($opts as $opt): ?>
-                                                <label class="qn-option"><input type="radio" disabled <?= (string)$my === (string)$opt ? 'checked' : '' ?>> <?= e((string)$opt) ?></label>
-                                            <?php endforeach; ?>
-                                        <?php elseif ($qq['qtype']==='multichoice'): ?>
-                                            <?php $vals=json_decode((string)$my,true); if(!is_array($vals)){$vals=array_filter([(string)$my]);} ?>
-                                            <?php foreach (($qq['options_decoded']??[]) as $opt): ?>
-                                                <label class="qn-option"><input type="checkbox" disabled <?= in_array((string)$opt, array_map('strval',$vals), true) ? 'checked' : '' ?>> <?= e((string)$opt) ?></label>
-                                            <?php endforeach; ?>
-                                        <?php elseif ($qq['qtype']==='number'): ?>
-                                            <input type="text" disabled value="<?= e((string)$my) ?>" class="chat-answer">
-                                        <?php endif; ?>
-                                    </div>
-                                <?php endforeach; ?>
-                                <p class="muted u-m0"><strong>Submitted.</strong> You can view your answers above; they can't be changed.</p>
-                            <?php elseif ((int)$q['allow_replies'] === 1): ?>
-                                <form method="post" action="<?= url('/chat/questionnaire/' . (int)$q['id'] . '/answer') ?>" class="qn-form">
-                                    <?= csrf_field() ?>
-                                    <?php foreach ($q['questions'] as $qq): ?>
-                                        <?php $qqid=(int)$qq['id']; $key='q'.$qqid; ?>
-                                        <div>
-                                            <label class="qn-label"><?= e((string)$qq['prompt']) ?><?= (int)$qq['required']===1?'*':'' ?></label>
-                                            <?php if ($qq['qtype']==='text'): ?>
-                                                <textarea name="answers[<?= $key ?>]" rows="2" aria-label="<?= e((string)$qq['prompt']) ?>" <?= (int)$qq['required']===1?'required':'' ?>></textarea>
-                                            <?php elseif ($qq['qtype']==='choice'): ?>
-                                                <?php foreach (($qq['options_decoded']??[]) as $opt): ?>
-                                                    <label class="qn-option"><input type="radio" name="answers[<?= $key ?>]" value="<?= e((string)$opt) ?>" <?= (int)$qq['required']===1?'required':'' ?>> <?= e((string)$opt) ?></label>
-                                                <?php endforeach; ?>
-                                            <?php elseif ($qq['qtype']==='multichoice'): ?>
-                                                <?php foreach (($qq['options_decoded']??[]) as $opt): ?>
-                                                    <label class="qn-option"><input type="checkbox" name="answers[<?= $key ?>][]" value="<?= e((string)$opt) ?>"> <?= e((string)$opt) ?></label>
-                                                <?php endforeach; ?>
-                                            <?php elseif ($qq['qtype']==='rating'): ?>
-                                                <?php $opts=$qq['options_decoded']??['min'=>1,'max'=>5]; $min=(int)$opts['min']; $max=(int)$opts['max']; ?>
-                                                <?php for ($r=$min;$r<=$max;$r++): ?>
-                                                    <label class="qn-option"><input type="radio" name="answers[<?= $key ?>]" value="<?= $r ?>" <?= (int)$qq['required']===1?'required':'' ?>> <?= $r ?></label>
-                                                <?php endfor; ?>
-                                            <?php elseif ($qq['qtype']==='number'): ?>
-                                                <input type="number" name="answers[<?= $key ?>]" aria-label="<?= e((string)$qq['prompt']) ?>" <?= (int)$qq['required']===1?'required':'' ?>>
-                                            <?php endif; ?>
-                                        </div>
+                    <?php if ($qAnswered): ?>
+                        <?php foreach ($q['questions'] as $qq): ?>
+                            <?php $qqid=(int)$qq['id']; $my = $q['my_answers'][$qqid] ?? ''; ?>
+                            <div class="qn-question">
+                                <label class="qn-label"><?= e((string)$qq['prompt']) ?></label>
+                                <?php if ($qq['qtype']==='text'): ?>
+                                    <textarea rows="2" disabled class="chat-answer"><?= e((string)$my) ?></textarea>
+                                <?php elseif ($qq['qtype']==='choice' || $qq['qtype']==='rating'): ?>
+                                    <?php if ($qq['qtype']==='choice'): $opts=$qq['options_decoded']??[]; else: $opts=$qq['options_decoded']??['min'=>1,'max'=>5]; $tmp=[]; for($r=(int)$opts['min'];$r<=(int)$opts['max'];$r++){ $tmp[]=$r; } $opts=$tmp; endif; ?>
+                                    <?php foreach ($opts as $opt): ?>
+                                        <label class="qn-option"><input type="radio" disabled <?= (string)$my === (string)$opt ? 'checked' : '' ?>> <?= e((string)$opt) ?></label>
                                     <?php endforeach; ?>
-                                    <div><button type="submit" class="btn btn-sm">Submit answers</button></div>
-                                </form>
-                            <?php else: ?>
-                                <p class="muted">This questionnaire is closed for new replies.</p>
-                            <?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
+                                <?php elseif ($qq['qtype']==='multichoice'): ?>
+                                    <?php $vals=json_decode((string)$my,true); if(!is_array($vals)){$vals=array_filter([(string)$my]);} ?>
+                                    <?php foreach (($qq['options_decoded']??[]) as $opt): ?>
+                                        <label class="qn-option"><input type="checkbox" disabled <?= in_array((string)$opt, array_map('strval',$vals), true) ? 'checked' : '' ?>> <?= e((string)$opt) ?></label>
+                                    <?php endforeach; ?>
+                                <?php elseif ($qq['qtype']==='number'): ?>
+                                    <input type="text" disabled value="<?= e((string)$my) ?>" class="chat-answer">
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                        <p class="muted u-m0"><strong>Submitted.</strong> You can view your answers above; they can't be changed.</p>
+                    <?php elseif ((int)$q['allow_replies'] === 1): ?>
+                        <form method="post" action="<?= url('/chat/questionnaire/' . (int)$q['id'] . '/answer') ?>" class="qn-form">
+                            <?= csrf_field() ?>
+                            <?php foreach ($q['questions'] as $qq): ?>
+                                <?php $qqid=(int)$qq['id']; $key='q'.$qqid; ?>
+                                <div>
+                                    <label class="qn-label"><?= e((string)$qq['prompt']) ?><?= (int)$qq['required']===1?'*':'' ?></label>
+                                    <?php if ($qq['qtype']==='text'): ?>
+                                        <textarea name="answers[<?= $key ?>]" rows="2" aria-label="<?= e((string)$qq['prompt']) ?>" <?= (int)$qq['required']===1?'required':'' ?>></textarea>
+                                    <?php elseif ($qq['qtype']==='choice'): ?>
+                                        <?php foreach (($qq['options_decoded']??[]) as $opt): ?>
+                                            <label class="qn-option"><input type="radio" name="answers[<?= $key ?>]" value="<?= e((string)$opt) ?>" <?= (int)$qq['required']===1?'required':'' ?>> <?= e((string)$opt) ?></label>
+                                        <?php endforeach; ?>
+                                    <?php elseif ($qq['qtype']==='multichoice'): ?>
+                                        <?php foreach (($qq['options_decoded']??[]) as $opt): ?>
+                                            <label class="qn-option"><input type="checkbox" name="answers[<?= $key ?>][]" value="<?= e((string)$opt) ?>"> <?= e((string)$opt) ?></label>
+                                        <?php endforeach; ?>
+                                    <?php elseif ($qq['qtype']==='rating'): ?>
+                                        <?php $opts=$qq['options_decoded']??['min'=>1,'max'=>5]; $min=(int)$opts['min']; $max=(int)$opts['max']; ?>
+                                        <?php for ($r=$min;$r<=$max;$r++): ?>
+                                            <label class="qn-option"><input type="radio" name="answers[<?= $key ?>]" value="<?= $r ?>" <?= (int)$qq['required']===1?'required':'' ?>> <?= $r ?></label>
+                                        <?php endfor; ?>
+                                    <?php elseif ($qq['qtype']==='number'): ?>
+                                        <input type="number" name="answers[<?= $key ?>]" aria-label="<?= e((string)$qq['prompt']) ?>" <?= (int)$qq['required']===1?'required':'' ?>>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                            <div><button type="submit" class="btn btn-sm">Submit answers</button></div>
+                        </form>
+                    <?php else: ?>
+                        <p class="muted">This questionnaire is closed for new replies.</p>
+                    <?php endif; ?>
                 </div>
-            <?php endif; ?>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
 
     <?php if (empty($eligible)): ?>
         <h1>Chat</h1>
@@ -83,294 +106,140 @@
         <?php endif; ?>
         <p class="muted">Chat is available to members on the <strong>Platinum</strong>, <strong>Yearly</strong>, <strong>Lifetime</strong>, or <strong>Chat add-on</strong> plans. Upgrade in <a href="<?= url('/membership') ?>">Membership</a> to start chatting.</p>
     <?php else: ?>
-        <h1>Chat</h1>
+        <?php
+        $endpoints = [
+            'send'     => url('/chat'),
+            'history'  => url('/chat/history'),
+            'stream'   => url('/chat/stream'),
+            'edit'     => url('/chat/edit'),
+            'delete'   => url('/chat/delete'),
+            'react'    => url('/chat/react'),
+            'search'   => url('/chat/search'),
+            'typing'   => url('/chat/typing'),
+        ];
+        $online = !empty($operatorOnline);
+        ?>
+        <div class="chat-app" id="chat-app"
+             data-mode="member"
+             data-me="user"
+             data-conversation="<?= (int) ($conversation['id'] ?? 0) ?>"
+             data-latest-id="<?= (int) ($latestId ?? 0) ?>"
+             data-oldest-id="<?= !empty($messages) ? (int) $messages[0]['id'] : 0 ?>"
+             data-has-more="<?= !empty($hasMore) ? '1' : '0' ?>"
+             data-read-through="<?= $readThrough ?>"
+             data-csrf="<?= e(\App\Core\Csrf::token()) ?>"
+             data-upload-limit="<?= 25 * 1024 * 1024 ?>"
+             <?php foreach ($endpoints as $key => $value): ?>data-endpoint-<?= e($key) ?>="<?= e($value) ?>"<?php endforeach; ?>>
 
-        <p class="chat-status">
-            <?php if (!empty($operatorOnline)): ?>
-                <span class="chat-status-online">&#9679; Amethyst is online — you'll get a reply shortly.</span>
-            <?php else: ?>
-                <span class="chat-status-away">&#9679; Amethyst is away right now — messages are answered automatically and personally as soon as possible.</span>
+            <header class="chat-head">
+                <span class="chat-avatar" aria-hidden="true">A<span class="chat-presence<?= $online ? ' is-online' : '' ?>"></span></span>
+                <div class="chat-who">
+                    <h2 class="chat-name">Amethyst</h2>
+                    <p class="chat-sub<?= $online ? ' is-online' : '' ?>" id="chat-presence">
+                        <?= $online ? 'Online now' : 'Away — replies as soon as possible' ?>
+                    </p>
+                </div>
+                <div class="chat-head-actions">
+                    <button type="button" class="chat-btn" data-chat-search-toggle aria-expanded="false"
+                            aria-label="Search this conversation" title="Search">⌕</button>
+                </div>
+            </header>
+
+            <div class="chat-search" role="search">
+                <input type="search" class="chat-search-input" placeholder="Search this conversation…" aria-label="Search this conversation">
+                <span class="chat-search-status" role="status" aria-live="polite"></span>
+            </div>
+
+            <?php if (!empty($pinnedMessages)): ?>
+                <div class="chat-pinned is-visible" role="note" aria-label="Pinned message">
+                    <span aria-hidden="true">📌</span>
+                    <span><b>Pinned:</b> <?= e(mb_substr(trim((string) ($pinnedMessages[0]['message'] ?? '')), 0, 180)) ?></span>
+                </div>
             <?php endif; ?>
-        </p>
 
-        <?php /* role=log + aria-live: a new message (it arrives over SSE) must
-            be announced - before this the thread was a silent region and a
-            member only found the reply by scrolling. */ ?>
-        <div class="chat-thread" id="chat-thread" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversation with the studio">
-            <?php if (empty($messages)): ?>
-                <div class="chat-empty empty-state">
-                    <p class="muted u-mt-0">No messages yet. Say hello to start chatting.</p>
-                    <button type="button" class="btn btn-sm" data-action="chatFocusInput">Say hello</button>
+            <div class="chat-body">
+                <div class="chat-list" id="chat-thread" role="log" aria-live="polite" aria-relevant="additions"
+                     aria-label="Conversation with Amethyst" tabindex="0">
+                    <?php if (empty($messages)): ?>
+                        <div class="chat-empty" id="chat-empty">
+                            <span class="chat-empty-ico" aria-hidden="true">💬</span>
+                            <h3>Say hello</h3>
+                            <p>This is a private conversation with the studio. Ask about a set, a custom request, or anything else.</p>
+                        </div>
+                    <?php else: ?>
+                        <?php $lastDay = ''; ?>
+                        <?php foreach ($messages as $i => $m): ?>
+                            <?php if ((string) ($m['day'] ?? '') !== $lastDay): ?>
+                                <?php $lastDay = (string) ($m['day'] ?? ''); ?>
+                                <div class="chat-day" data-day="<?= e($lastDay) ?>"><?= e((string) ($m['day_label'] ?? '')) ?></div>
+                            <?php endif; ?>
+                            <?php
+                            $m['content_refs'] = $m['content_refs'] ?? [];
+                            $first = $firstFlags[$i] ?? true;
+                            require __DIR__ . '/../partials/chat_message.php';
+                            ?>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+
+                <div class="chat-typing" role="status" aria-live="polite">
+                    <span class="chat-typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                    <span>Amethyst is typing…</span>
+                </div>
+
+                <button type="button" class="chat-jump" aria-label="Jump to the newest messages">
+                    <b>↓</b> <span>New messages</span>
+                </button>
+
+                <div class="chat-drop" aria-hidden="true">Drop a file to attach it</div>
+            </div>
+
+            <?php if (!empty($replyEnabled)): ?>
+                <div class="chat-composer-bar">
+                    <div class="chat-reply-bar">
+                        <div class="chat-reply-text">
+                            <span class="chat-reply-label">Replying</span>
+                            <span class="chat-reply-quote"></span>
+                        </div>
+                        <button type="button" class="chat-btn" data-chat-cancel-reply aria-label="Cancel reply">✕</button>
+                    </div>
+
+                    <div class="chat-attach-preview"></div>
+                    <div class="chat-progress" aria-hidden="true"><i></i></div>
+                    <div class="chat-emoji" role="group" aria-label="Emoji"></div>
+
+                    <form class="chat-inputrow" id="chat-form" novalidate>
+                        <label class="chat-btn chat-attach-label" for="chat-file"
+                               title="Attach a file (images, video, audio, PDF, text; max 25 MB)"
+                               aria-label="Attach a file">📎</label>
+                        <input type="file" id="chat-file" class="chat-file-input" hidden
+                               accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.oga,.wav,.pdf,.txt"
+                               aria-label="Attach a file">
+                        <button type="button" class="chat-btn" data-chat-emoji-toggle aria-expanded="false"
+                                aria-label="Emoji" title="Emoji">😊</button>
+                        <textarea class="chat-input" id="chat-input" rows="1" maxlength="2000"
+                                  placeholder="Write a message…" aria-label="Message" autocomplete="off"></textarea>
+                        <button type="submit" class="chat-send" id="chat-send" aria-label="Send message" title="Send">➤</button>
+                    </form>
+
+                    <div class="chat-hint">
+                        <span>Enter sends · Shift+Enter adds a line</span>
+                        <span class="chat-count" aria-hidden="true">0/2000</span>
+                    </div>
                 </div>
             <?php else: ?>
-                <?php foreach ($messages as $m): ?>
-                    <div class="chat-msg <?= e((string) $m['sender_role']) ?>"<?= !empty($m['content_refs']) ? ' data-refs="' . e(json_encode($m['content_refs'], JSON_UNESCAPED_SLASHES)) . '"' : '' ?>>
-                        <?php if ($m['sender_role'] === 'user'): ?>
-                            <span class="who">You</span>
-                        <?php endif; ?>
-                        <?= e((string) $m['message']) ?>
-                        <?php if (!empty($m['attachment_name'])): ?>
-                            <?php if (empty($m['attachment_url'])): ?>
-                                <span class="chat-attachment chat-expired">🔒 Media expired</span>
-                            <?php elseif (!empty($m['attachment_thumb_url']) && str_starts_with((string) $m['attachment_type'], 'image/')): ?>
-                                <a href="<?= e($m['attachment_url']) ?>" target="_blank" rel="noopener" class="chat-attachment-link" title="Open full image">
-                                    <img class="chat-image" loading="lazy" src="<?= e($m['attachment_thumb_url']) ?>" alt="<?= e($m['attachment_name']) ?>" draggable="false" data-nocontext>
-                                </a>
-                            <?php else: ?>
-                                <span class="chat-attachment">📎 <?= e($m['attachment_name']) ?></span>
-                            <?php endif; ?>
-                        <?php endif; ?>
-                    </div>
-                <?php endforeach; ?>
+                <div class="chat-composer-bar">
+                    <p class="muted u-m0" style="font-size:.85rem">
+                        Replies are currently disabled for this conversation. Messages from the site will still appear here.
+                        If this looks wrong, <a href="<?= e(url('/support')) ?>">contact support</a>.
+                    </p>
+                </div>
             <?php endif; ?>
         </div>
 
-        <?php if (!empty($replyEnabled)): ?>
-        <form class="chat-composer" id="chat-form">
-            <?= csrf_field() ?>
-            <textarea id="chat-input" rows="2" maxlength="2000" placeholder="Type a message…" aria-label="Message"></textarea>
-            <label class="btn btn-outline chat-attach-btn" for="chat-file" title="Attach a file (images, video, audio, PDF, text; max 25 MB)">📎</label>
-            <input type="file" id="chat-file" class="chat-file-input" accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mp3,.ogg,.oga,.wav,.pdf,.txt" aria-label="Attach a file">
-            <button type="submit" class="btn" id="chat-send">Send</button>
-        </form>
-        <p class="muted" id="chat-file-name" style="display:none;margin:.35rem 0 0;"></p>
-        <?php else: ?>
-        <p class="muted">Replies are currently disabled for this conversation. Messages from the site will still appear here. If this looks wrong, <a href="<?= e(url('/support')) ?>">contact support</a>.</p>
-        <?php endif; ?>
+        <div class="chat-lightbox" id="chat-lightbox" role="dialog" aria-modal="true" aria-label="Image viewer">
+            <button type="button" class="chat-lightbox-close" aria-label="Close">✕</button>
+            <img src="" alt="">
+        </div>
     <?php endif; ?>
 </div>
-
-<script nonce="<?= csp_nonce() ?>">
-(function () {
-    var thread = document.getElementById('chat-thread');
-    var form = document.getElementById('chat-form');
-    var input = document.getElementById('chat-input');
-    var fileInput = document.getElementById('chat-file');
-    var fileName = document.getElementById('chat-file-name');
-    if (!form || !input) { return; }
-
-    if (fileInput && fileName) {
-        fileInput.addEventListener('change', function () {
-            var f = fileInput.files && fileInput.files[0];
-            if (f) {
-                fileName.textContent = '📎 ' + f.name + ' (' + Math.max(1, Math.round(f.size / 1048576)) + ' MB)';
-                fileName.style.display = '';
-            } else {
-                fileName.textContent = '';
-                fileName.style.display = 'none';
-            }
-        });
-    }
-
-    var csrf = document.querySelector('#chat-form input[name="_token"]').value;
-    var latestId = <?= (int) ($latestId ?? 0) ?>;
-    // Messages we optimistically rendered that the stream has not yet echoed.
-    var pendingSends = [];
-    // Oldest message id currently rendered; used for lazy scroll-up loading.
-    var oldestId = <?= !empty($messages) ? (int) $messages[0]['id'] : 0 ?>;
-    var hasMore = <?= !empty($hasMore) ? 'true' : 'false' ?>;
-    var loadingOlder = false;
-
-    function esc(s) {
-        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-        });
-    }
-
-    // Turn exact gallery titles mentioned in a message into clickable links
-    // (longest title first, so a title that is a substring of another still
-    // resolves correctly). Refs come from the server; nothing is invented here.
-    function linkRefs(el, refs) {
-        if (!el || !refs || !refs.length) return;
-        var html = el.innerHTML;
-        var linked = refs.slice().sort(function (a, b) {
-            return String(b.title || '').length - String(a.title || '').length;
-        });
-        linked.forEach(function (r) {
-            if (!r.title || !r.url) return;
-            var t = esc(r.title);
-            var re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-            html = html.replace(re, '<a class="chat-ref" href="' + esc(r.url) + '" target="_blank" rel="noopener">$&</a>');
-        });
-        el.innerHTML = html;
-    }
-
-    function append(msg, atTop) {
-        var div = document.createElement('div');
-        var isUser = msg.sender_role === 'user';
-        div.className = 'chat-msg ' + esc(msg.sender_role);
-        var html = (isUser ? '<span class="who">You</span>' : '') + esc(msg.message);
-        if (msg.attachment_name) {
-            if (msg.media_expired || !msg.attachment_url) {
-                html += ' <span class="chat-attachment chat-expired">🔒 Media expired</span>';
-            } else if (msg.attachment_thumb_url) {
-                html += ' <a href="' + esc(msg.attachment_url) + '" target="_blank" rel="noopener" class="chat-attachment-link" title="Open full image">' +
-                    ' <img class="chat-image" loading="lazy" src="' + esc(msg.attachment_thumb_url) + '" alt="' + esc(msg.attachment_name) + '" draggable="false" data-nocontext></a>';
-            } else {
-                html += ' <span class="chat-attachment">📎 ' + esc(msg.attachment_name) + '</span>';
-            }
-        }
-        div.innerHTML = html;
-        linkRefs(div, msg.content_refs || []);
-        if (atTop) {
-            thread.insertBefore(div, thread.firstChild);
-        } else {
-            thread.appendChild(div);
-            thread.scrollTop = thread.scrollHeight;
-        }
-        return div;
-    }
-
-    /** Prepend a batch of older messages, keeping the scroll position stable. */
-    function prependOlder(messages) {
-        if (!messages || messages.length === 0) return;
-        var prevHeight = thread.scrollHeight;
-        var first = thread.firstChild;
-        messages.forEach(function (m) {
-            if ((m.id || 0) < oldestId || oldestId === 0) {
-                append(m, true);
-            }
-        });
-        oldestId = messages[0].id || oldestId;
-        // Restore scroll so the view doesn't jump.
-        thread.scrollTop += thread.scrollHeight - prevHeight;
-        return first;
-    }
-
-    /** Lazy-load older messages when the user scrolls to the top. */
-    function loadOlder() {
-        if (loadingOlder || !hasMore || oldestId <= 0) return;
-        loadingOlder = true;
-        fetch('<?= url('/chat/history') ?>?before=' + oldestId + '&limit=50', {
-            headers: { 'Accept': 'application/json' }
-        })
-            .then(function (r) { return r.json(); })
-            .then(function (res) {
-                if (res && res.messages && res.messages.length) {
-                    prependOlder(res.messages);
-                }
-                hasMore = !!(res && res.has_more);
-            })
-            .catch(function () { /* transient; allow retry */ })
-            .finally(function () { loadingOlder = false; });
-    }
-
-    thread.addEventListener('scroll', function () {
-        if (thread.scrollTop < 60) loadOlder();
-    });
-
-    function handleIncoming(messages) {
-        if (!messages) { return; }
-        messages.forEach(function (m) {
-            // Skip the stream echo of a message we already rendered optimistically.
-            if (m.sender_role === 'user') {
-                var echoKey = String(m.message || '').trim() || (m.attachment_name ? '\u0000attach' : '');
-                var idx = echoKey === '' ? -1 : pendingSends.indexOf(echoKey);
-                if (idx >= 0) {
-                    pendingSends.splice(idx, 1);
-                    latestId = Math.max(latestId, m.id);
-                    return;
-                }
-            }
-            if ((m.id || 0) > latestId) {
-                append(m);
-                latestId = m.id;
-            }
-        });
-    }
-
-    form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var text = input.value.trim();
-        var file = (fileInput && fileInput.files && fileInput.files[0]) ? fileInput.files[0] : null;
-        if (!text && !file) { return; }
-        if (file && file.size > 25 * 1024 * 1024) {
-            alert('Attachments must be 25 MB or smaller.');
-            return;
-        }
-        var body = new FormData();
-        body.append('_token', csrf);
-        body.append('message', text);
-        if (file) { body.append('attachment', file); }
-        input.value = '';
-        if (fileInput) { fileInput.value = ''; }
-        if (fileName) { fileName.textContent = ''; fileName.style.display = 'none'; }
-        // Optimistic: show your message immediately, don't wait for the POST.
-        var optimistic = append({ id: 0, sender_role: 'user', message: text, attachment_name: file ? file.name : null, attachment_url: null, attachment_thumb_url: null });
-        pendingSends.push(text || '\u0000attach');
-hideBadge();
-
-    // Start scrolled to the bottom so the newest messages are visible.
-    setTimeout(function () {
-        thread.scrollTop = thread.scrollHeight;
-    }, 50);
-        fetch('<?= url('/chat') ?>', { method: 'POST', body: body })
-            .then(function (r) {
-                if (!r.ok) { throw new Error('send-failed'); }
-                return r.json();
-            })
-            .then(function (res) {
-                if (!res.ok) { throw new Error(res.error || 'Could not send.'); }
-            })
-            .catch(function (err) {
-                alert(err && err.message && err.message !== 'send-failed' ? err.message : 'Could not send.');
-                if (optimistic && optimistic.parentNode) { optimistic.parentNode.removeChild(optimistic); }
-                var pi = pendingSends.indexOf(text);
-                if (pi >= 0) { pendingSends.splice(pi, 1); }
-                input.value = text;
-            });
-    });
-
-    // Typing presence: ping the server (throttled to every 3 s) while the
-    // member writes, so the operator app can show "Member is typing…".
-    var lastTypingPing = 0;
-    input.addEventListener('input', function () {
-        var now = Date.now();
-        if (now - lastTypingPing < 3000 || !input.value) { return; }
-        lastTypingPing = now;
-        var ping = new FormData();
-        ping.append('_token', csrf);
-        fetch('<?= url('/chat/typing') ?>', { method: 'POST', body: ping }).catch(function () {});
-    });
-
-    // Enter sends the message; Shift+Enter inserts a newline. The isComposing
-    // guard keeps CJK/IME Enter-to-confirm from firing a send.
-    input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
-            e.preventDefault();
-            form.requestSubmit();
-        }
-    });
-
-    // Clear the sidebar unread badge once the member is reading the chat.
-    function hideBadge() {
-        document.querySelectorAll('.nav-item[href$="/chat"] .nav-unread, .nav-unread').forEach(function (b) {
-            if (b && b.closest('a') && /\/chat$/.test(b.closest('a').getAttribute('href') || '')) { b.remove(); }
-        });
-    }
-hideBadge();
-
-    // Link gallery titles already rendered server-side (the AI reply refs
-    // are carried in data-refs so they survive a page reload).
-    Array.prototype.forEach.call(thread.querySelectorAll('.chat-msg'), function (bubble) {
-        var refs = [];
-        try { refs = JSON.parse(bubble.getAttribute('data-refs') || '[]'); } catch (err) { refs = []; }
-        linkRefs(bubble, refs);
-    });
-
-    // Real-time push via Server-Sent Events (no manual refresh / polling).
-    var es = new EventSource('<?= url('/chat/stream') ?>?since=' + latestId);
-    es.onmessage = function (e) {
-        try {
-            var data = JSON.parse(e.data);
-            if (data && data.messages) {
-                handleIncoming(data.messages);
-                latestId = data.latestId || latestId;
-            }
-        } catch (err) { /* ignore malformed */ }
-    };
-    es.onerror = function () {
-        // EventSource auto-reconnects; nothing to do here.
-    };
-})();
-</script>

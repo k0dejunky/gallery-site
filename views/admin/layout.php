@@ -169,6 +169,7 @@ $icon = static fn (string $name): string => \App\Core\Icon::svg($name);
         .admin-theme a { color: var(--adm-accent-strong); }
     </style>
     <link rel="stylesheet" href="<?= e(asset_url('/assets/css/admin.css')) ?>">
+    <link rel="stylesheet" href="<?= e(asset_url('/assets/css/chat.css')) ?>">
 </head>
 <?php
 // A per-page class on the body. The page-specific CSS that used to live in
@@ -941,6 +942,7 @@ $_tplJson = json_encode($_tplChanges, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
     </script>
     <?php require __DIR__ . '/../partials/tour_targets.php'; ?>
     <script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('/assets/js/admin.js')) ?>" defer></script>
+    <script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('/assets/js/chat.js')) ?>" defer></script>
     <script nonce="<?= csp_nonce() ?>" src="<?= e(url('/assets/js/tour.js')) ?>?v=9" defer></script>
 </body>
 </html>

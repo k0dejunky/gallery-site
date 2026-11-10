@@ -218,6 +218,9 @@ class AdminChatController extends Controller
             'user_email' => $user['email'] ?? 'user#' . $conv['user_id'],
             'messages'   => $messages,
             'hasMore'    => $hasMore,
+            // "Seen by the member" ticks: their own read pointer.
+            'memberLastRead' => (int) ($conv['last_read_message_id'] ?? 0),
+            'pinnedMessages' => ChatMessage::pinnedMessages($id),
         ]);
     }
 
@@ -366,7 +369,8 @@ class AdminChatController extends Controller
             $expiresAt = gmdate('Y-m-d H:i:s', time() + $expiresIn * 60);
         }
 
-        $newId = ChatMessage::addMessage($id, ChatMessage::ROLE_OPERATOR, $message, $attachment, null, $expiresAt, $maxViews > 0 ? $maxViews : null);
+        $replyTo = max(0, (int) $this->request->post('reply_to', 0));
+        $newId = ChatMessage::addMessage($id, ChatMessage::ROLE_OPERATOR, $message, $attachment, null, $expiresAt, $maxViews > 0 ? $maxViews : null, $replyTo > 0 ? $replyTo : null);
 
         $userMsg = Database::run(
             "SELECT message FROM chat_messages WHERE conversation_id = ? AND sender_role = 'user' ORDER BY id DESC LIMIT 1",
@@ -390,8 +394,178 @@ class AdminChatController extends Controller
             [ChatMessage::latestId($id), $id]
         );
 
+        // The new chat client posts with XHR and needs the id of the message
+        // it just sent (to pin it, quote it, or show its delivery state). A
+        // plain form post still gets the flash + redirect.
+        if ($this->request->wantsJson()) {
+            $this->json([
+                'ok'         => true,
+                'message_id' => $newId,
+                'created_at' => gmdate('Y-m-d H:i:s'),
+            ]);
+            return;
+        }
+
         $this->flash('success', 'Operator reply sent (message #' . $newId . ').');
         $this->redirect('/admin/chat/' . $id);
+    }
+
+    /**
+     * Pin or unpin one message (a promise, a price, a correction).
+     *
+     * The operator app could already do this; the web panel could not.
+     */
+    public function pinMessage(int $id, int $messageId): void
+    {
+        $conv = ChatMessage::find($id);
+        if ($conv === null) {
+            $this->notFound();
+            return;
+        }
+
+        $row = Database::run(
+            'SELECT pinned_at FROM chat_messages WHERE id = ? AND conversation_id = ? LIMIT 1',
+            [$messageId, $id]
+        )->fetch();
+        if ($row === false) {
+            $this->notFound();
+            return;
+        }
+
+        $nowPinned = empty($row['pinned_at']);
+        ChatMessage::setPinned($messageId, $nowPinned);
+
+        if ($this->request->wantsJson()) {
+            $this->json(['ok' => true, 'pinned' => $nowPinned, 'message_id' => $messageId]);
+            return;
+        }
+
+        $this->flash('success', $nowPinned ? 'Message pinned.' : 'Message unpinned.');
+        $this->redirect('/admin/chat/' . $id);
+    }
+
+    /**
+     * Delete one message from the conversation (operator moderation).
+     */
+    public function deleteMessage(int $id, int $messageId): void
+    {
+        $conv = ChatMessage::find($id);
+        if ($conv === null) {
+            $this->notFound();
+            return;
+        }
+
+        $owned = (int) Database::run(
+            'SELECT COUNT(*) FROM chat_messages WHERE id = ? AND conversation_id = ?',
+            [$messageId, $id]
+        )->fetchColumn();
+        if ($owned === 0) {
+            $this->notFound();
+            return;
+        }
+
+        ChatMessage::deleteMessage($messageId);
+
+        if ($this->request->wantsJson()) {
+            $this->json(['ok' => true, 'message_id' => $messageId]);
+            return;
+        }
+
+        $this->flash('success', 'Message deleted.');
+        $this->redirect('/admin/chat/' . $id);
+    }
+
+    /**
+     * New messages since an id, for the admin panel's live poll.
+     *
+     * The admin page has no SSE stream (the member one is per-member and
+     * session-bound); a five-second poll is enough to make the conversation
+     * feel live without holding a worker for 30 seconds per tab.
+     */
+    public function poll(): void
+    {
+        \App\Core\ChatSettings::markOperatorOnline();
+
+        $cid   = max(0, (int) $this->request->query('conversation', 0));
+        $since = max(0, (int) $this->request->query('since', 0));
+
+        if ($cid <= 0) {
+            $this->json(['ok' => true, 'messages' => [], 'latestId' => 0]);
+            return;
+        }
+
+        $messages = \App\Models\ChatMessage::decorateMessages(ChatMessage::messages($cid, $since), '/admin/chat/attachment');
+
+        $this->json([
+            'ok'           => true,
+            'messages'     => $messages,
+            'latestId'     => ChatMessage::latestId($cid),
+            'typing'       => ChatMessage::memberTyping($cid),
+            'read_through' => (int) (ChatMessage::find($cid)['last_read_message_id'] ?? 0),
+        ]);
+    }
+
+    /**
+     * The operator reacts to a message (the member sees it immediately).
+     */
+    public function reactMessage(int $id, int $messageId): void
+    {
+        $owned = (int) Database::run(
+            'SELECT COUNT(*) FROM chat_messages WHERE id = ? AND conversation_id = ?',
+            [$messageId, $id]
+        )->fetchColumn();
+        if ($owned === 0) {
+            $this->json(['ok' => false, 'error' => 'That message was not found.']);
+            return;
+        }
+
+        $result = ChatMessage::toggleReaction($messageId, ChatMessage::ROLE_OPERATOR, (string) $this->request->post('emoji', ''));
+        $this->json([
+            'ok'         => $result['ok'],
+            'active'     => $result['active'],
+            'message_id' => $messageId,
+            'reactions'  => ChatMessage::reactionsFor([$messageId])[$messageId] ?? [],
+        ]);
+    }
+
+    /**
+     * Search one conversation (the admin's own search box).
+     */
+    public function searchMessages(): void
+    {
+        $cid   = max(0, (int) $this->request->query('conversation', 0));
+        $query = (string) $this->request->query('q', '');
+
+        $rows = ChatMessage::search($cid, $query, 30);
+        $results = [];
+        foreach ($rows as $row) {
+            $results[] = [
+                'id'         => (int) $row['id'],
+                'role'       => (string) $row['sender_role'],
+                'excerpt'    => mb_substr(trim(preg_replace('/\s+/', ' ', (string) $row['message']) ?? ''), 0, 160),
+                'created_at' => (string) $row['created_at'],
+            ];
+        }
+
+        $this->json(['ok' => true, 'results' => $results]);
+    }
+
+    /**
+     * The operator's composer pings this while they write, so the member sees
+     * "Amethyst is typing…" (the mirror of the member's /chat/typing).
+     */
+    public function typingPing(int $id): void
+    {
+        \App\Core\ChatSettings::markOperatorOnline();
+
+        $conv = ChatMessage::find($id);
+        if ($conv === null) {
+            $this->json(['ok' => false]);
+            return;
+        }
+
+        ChatMessage::markOperatorTyping($id);
+        $this->json(['ok' => true]);
     }
 
     /** Site-wide AI mode default used for new conversations. */

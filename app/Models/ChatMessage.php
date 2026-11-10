@@ -123,7 +123,7 @@ class ChatMessage
      * @param string|null $expiresAt when the attachment stops being viewable (UTC)
      * @param int|null $maxViews how many member views the attachment allows
      */
-    public static function addMessage(int $conversationId, string $role, string $message, ?array $attachment = null, ?array $contentRefs = null, ?string $expiresAt = null, ?int $maxViews = null): int
+    public static function addMessage(int $conversationId, string $role, string $message, ?array $attachment = null, ?array $contentRefs = null, ?string $expiresAt = null, ?int $maxViews = null, ?int $replyToId = null): int
     {
         $message = mb_substr(trim($message), 0, self::MAX_MESSAGE_LENGTH);
         if ($message === '' && $attachment === null) {
@@ -136,9 +136,24 @@ class ChatMessage
             $maxViews  = null;
         }
 
+        // A quote must point at a live message in the SAME conversation: an
+        // id from another conversation would leak its text into this thread.
+        if ($replyToId !== null && $replyToId > 0) {
+            $ok = Database::run(
+                'SELECT id FROM chat_messages
+                 WHERE id = ? AND conversation_id = ? AND deleted_at IS NULL LIMIT 1',
+                [$replyToId, $conversationId]
+            )->fetchColumn();
+            if ($ok === false) {
+                $replyToId = null;
+            }
+        } else {
+            $replyToId = null;
+        }
+
         Database::run(
-            'INSERT INTO chat_messages (conversation_id, sender_role, message, attachment_name, attachment_type, attachment_path, expires_at, max_views, view_count, content_refs)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)',
+            'INSERT INTO chat_messages (conversation_id, sender_role, message, attachment_name, attachment_type, attachment_path, expires_at, max_views, view_count, content_refs, reply_to_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)',
             [
                 $conversationId,
                 $role,
@@ -149,12 +164,241 @@ class ChatMessage
                 $expiresAt,
                 $maxViews !== null && $maxViews > 0 ? $maxViews : null,
                 $contentRefs === null || $contentRefs === [] ? null : json_encode(array_values($contentRefs), JSON_UNESCAPED_SLASHES),
+                $replyToId,
             ]
         );
 
         \App\Core\Cache::bump('chat');
 
         return (int) Database::connection()->lastInsertId();
+    }
+
+    /** How long a member may edit their own message. */
+    public const EDIT_WINDOW_MINUTES = 15;
+
+    /** The reactions the client offers. Anything else is refused. */
+    public const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+
+    /**
+     * Edit one of your own messages. Returns [ok, error].
+     *
+     * The age is measured in SQL (TIMESTAMPDIFF against NOW()), not in PHP
+     * against time(): created_at is written by MySQL in the session time
+     * zone, and a box whose session zone differs from PHP's would otherwise
+     * report a brand-new message as hours old.
+     *
+     * @return array{0:bool, 1:string}
+     */
+    public static function editMessage(int $id, int $userId, string $text): array
+    {
+        $text = mb_substr(trim($text), 0, self::MAX_MESSAGE_LENGTH);
+        if ($text === '') {
+            return [false, 'Write something to save.'];
+        }
+
+        $row = Database::run(
+            'SELECT m.id, m.sender_role, m.deleted_at, c.user_id,
+                    TIMESTAMPDIFF(SECOND, m.created_at, NOW()) AS age
+             FROM chat_messages m
+             JOIN chat_conversations c ON c.id = m.conversation_id
+             WHERE m.id = ? LIMIT 1',
+            [$id]
+        )->fetch();
+
+        if ($row === false || (int) $row['user_id'] !== $userId) {
+            return [false, 'That message was not found.'];
+        }
+        if ((string) $row['sender_role'] !== self::ROLE_USER) {
+            return [false, 'Only your own messages can be edited.'];
+        }
+        if (!empty($row['deleted_at'])) {
+            return [false, 'That message was deleted.'];
+        }
+        if ((int) $row['age'] > self::EDIT_WINDOW_MINUTES * 60) {
+            return [false, 'A message can only be edited for ' . self::EDIT_WINDOW_MINUTES . ' minutes after it is sent.'];
+        }
+
+        Database::run(
+            'UPDATE chat_messages SET message = ?, edited_at = UTC_TIMESTAMP() WHERE id = ?',
+            [$text, $id]
+        );
+        \App\Core\Cache::bump('chat');
+
+        return [true, ''];
+    }
+
+    /**
+     * Soft-delete one of your own messages. The row stays so a quote and the
+     * other side's answer still make sense; the bubble reads "deleted".
+     */
+    public static function softDelete(int $id, int $userId): bool
+    {
+        return Database::run(
+            'UPDATE chat_messages m
+             JOIN chat_conversations c ON c.id = m.conversation_id
+             SET m.deleted_at = UTC_TIMESTAMP()
+             WHERE m.id = ? AND c.user_id = ? AND m.sender_role = ? AND m.deleted_at IS NULL',
+            [$id, $userId, self::ROLE_USER]
+        )->rowCount() > 0;
+    }
+
+    /**
+     * Toggle one reaction on a message.
+     *
+     * @return array{ok:bool, active:bool}
+     */
+    public static function toggleReaction(int $messageId, string $actor, string $emoji): array
+    {
+        if ($messageId <= 0 || !in_array($actor, [self::ROLE_USER, self::ROLE_OPERATOR], true)) {
+            return ['ok' => false, 'active' => false];
+        }
+        if (!in_array($emoji, self::REACTIONS, true)) {
+            return ['ok' => false, 'active' => false];
+        }
+
+        $exists = Database::run(
+            'SELECT id FROM chat_messages WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+            [$messageId]
+        )->fetchColumn();
+        if ($exists === false) {
+            return ['ok' => false, 'active' => false];
+        }
+
+        $removed = Database::run(
+            'DELETE FROM chat_reactions WHERE message_id = ? AND actor = ? AND emoji = ?',
+            [$messageId, $actor, $emoji]
+        )->rowCount();
+
+        if ($removed > 0) {
+            \App\Core\Cache::bump('chat');
+
+            return ['ok' => true, 'active' => false];
+        }
+
+        Database::run(
+            'INSERT IGNORE INTO chat_reactions (message_id, actor, emoji, created_at)
+             VALUES (?, ?, ?, UTC_TIMESTAMP())',
+            [$messageId, $actor, $emoji]
+        );
+        \App\Core\Cache::bump('chat');
+
+        return ['ok' => true, 'active' => true];
+    }
+
+    /**
+     * The reactions on a set of messages, keyed by message id.
+     *
+     * One query for the whole thread: a chat with fifty messages must not run
+     * fifty queries to draw its emoji.
+     *
+     * @param array<int, int|string> $messageIds
+     * @return array<int, array<int, array{emoji:string, actors:array<int,string>}>>
+     */
+    public static function reactionsFor(array $messageIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $messageIds))));
+        if ($ids === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $rows = Database::run(
+            "SELECT message_id, actor, emoji FROM chat_reactions
+             WHERE message_id IN ($placeholders)
+             ORDER BY id ASC",
+            $ids
+        )->fetchAll();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $mid    = (int) $row['message_id'];
+            $emoji  = (string) $row['emoji'];
+            $out[$mid] = $out[$mid] ?? [];
+            $found = false;
+            foreach ($out[$mid] as &$entry) {
+                if ($entry['emoji'] === $emoji) {
+                    $entry['actors'][] = (string) $row['actor'];
+                    $found = true;
+                    break;
+                }
+            }
+            unset($entry);
+            if (!$found) {
+                $out[$mid][] = ['emoji' => $emoji, 'actors' => [(string) $row['actor']]];
+            }
+        }
+
+        return $out;
+    }
+
+    /** How far the operator has read (their "seen" pointer). */
+    public static function operatorReadThrough(int $conversationId): int
+    {
+        if ($conversationId <= 0) {
+            return 0;
+        }
+
+        return (int) Database::run(
+            'SELECT operator_read_through_id FROM chat_conversations WHERE id = ? LIMIT 1',
+            [$conversationId]
+        )->fetchColumn();
+    }
+
+    /** Mark the operator as typing in this conversation (admin panel). */
+    public static function markOperatorTyping(int $conversationId): void
+    {
+        if ($conversationId <= 0) {
+            return;
+        }
+        Database::run(
+            'UPDATE chat_conversations SET operator_typing_at = NOW() WHERE id = ?',
+            [$conversationId]
+        );
+    }
+
+    /**
+     * Whether the operator typed within the last $windowSec seconds.
+     *
+     * The comparison runs entirely in SQL for the same reason memberTyping()
+     * does: a box whose MySQL session zone differs from PHP's would otherwise
+     * report a live indicator as hours old.
+     */
+    public static function operatorTyping(int $conversationId, int $windowSec = 7): bool
+    {
+        if ($conversationId <= 0) {
+            return false;
+        }
+
+        $live = Database::run(
+            'SELECT (operator_typing_at IS NOT NULL
+                      AND TIMESTAMPDIFF(SECOND, operator_typing_at, NOW()) <= ?) AS live
+             FROM chat_conversations WHERE id = ? LIMIT 1',
+            [max(1, $windowSec), $conversationId]
+        )->fetchColumn();
+
+        return (int) $live === 1;
+    }
+
+    /**
+     * Search this conversation's text. Deleted messages are not results.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function search(int $conversationId, string $query, int $limit = 30): array
+    {
+        $query = trim($query);
+        if ($conversationId <= 0 || $query === '') {
+            return [];
+        }
+        $query = mb_substr($query, 0, 100);
+        $limit = max(1, min(100, $limit));
+
+        return Database::run(
+            'SELECT id, sender_role, message, created_at FROM chat_messages
+             WHERE conversation_id = ? AND deleted_at IS NULL AND message LIKE ?
+             ORDER BY id DESC LIMIT ' . $limit,
+            [$conversationId, '%' . $query . '%']
+        )->fetchAll();
     }
 
     /** Whether a message's attachment is expired (time passed or view limit hit). */
@@ -401,8 +645,94 @@ class ChatMessage
             $m['content_refs'] = !empty($m['content_refs'])
                 ? json_decode((string) $m['content_refs'], true)
                 : [];
+
+            // A deleted message keeps its place in the thread but nothing
+            // else: no text, no media, no quote source.
+            $m['deleted'] = !empty($m['deleted_at']);
+            if ($m['deleted']) {
+                $m['message'] = '';
+                $m['attachment_name'] = null;
+                $m['attachment_url'] = null;
+                $m['attachment_thumb_url'] = null;
+                $m['media_expired'] = false;
+                $m['content_refs'] = [];
+                $m['reply_to_id'] = null;
+            }
+            $m['edited'] = !empty($m['edited_at']);
+            $m['pinned'] = !empty($m['pinned_at']);
+
+            // Display labels are computed HERE, in the site time zone, and
+            // shipped with the message. A browser does not know the site's
+            // zone (the boxes disagree with their own MySQL session zone), so
+            // letting JS format the timestamp drifts by hours on some boxes.
+            $created = (string) ($m['created_at'] ?? '');
+            $m['time_label'] = $created !== '' ? tzdate('g:i A', $created) : '';
+            $m['day']        = $created !== '' ? tzdate('Y-m-d', $created) : '';
+            $m['day_label']  = '';
+            if ($m['day'] !== '') {
+                if ($m['day'] === tzdate('Y-m-d')) {
+                    $m['day_label'] = 'Today';
+                } elseif ($m['day'] === tzdate('Y-m-d', time() - 86400)) {
+                    $m['day_label'] = 'Yesterday';
+                } else {
+                    $m['day_label'] = tzdate('j F Y', $created);
+                }
+            }
+            $m['reactions'] = [];
+            $m['reply_to'] = null;
         }
         unset($m);
+
+        if ($messages === []) {
+            return [];
+        }
+
+        // Reactions and quotes are loaded for the WHOLE batch in two queries.
+        // A thread must not run two queries per bubble.
+        $reactions = self::reactionsFor(array_column($messages, 'id'));
+        foreach ($messages as &$m) {
+            $m['reactions'] = $reactions[(int) $m['id']] ?? [];
+        }
+        unset($m);
+
+        $quoteIds = [];
+        foreach ($messages as $m) {
+            if (!empty($m['reply_to_id'])) {
+                $quoteIds[] = (int) $m['reply_to_id'];
+            }
+        }
+        $quoteIds = array_values(array_unique($quoteIds));
+
+        if ($quoteIds !== []) {
+            $placeholders = implode(',', array_fill(0, count($quoteIds), '?'));
+            $quotes = Database::run(
+                "SELECT id, sender_role, message, attachment_name, deleted_at
+                 FROM chat_messages WHERE id IN ($placeholders)",
+                $quoteIds
+            )->fetchAll();
+
+            $byId = [];
+            foreach ($quotes as $quote) {
+                $excerpt = trim(preg_replace('/\s+/', ' ', (string) $quote['message']) ?? '');
+                if (!empty($quote['deleted_at'])) {
+                    $excerpt = '';
+                } elseif ($excerpt === '' && !empty($quote['attachment_name'])) {
+                    $excerpt = '📎 ' . (string) $quote['attachment_name'];
+                }
+                $byId[(int) $quote['id']] = [
+                    'id'      => (int) $quote['id'],
+                    'role'    => (string) $quote['sender_role'],
+                    'excerpt' => mb_substr($excerpt, 0, 140),
+                    'deleted' => !empty($quote['deleted_at']),
+                ];
+            }
+
+            foreach ($messages as &$m) {
+                $rid = (int) ($m['reply_to_id'] ?? 0);
+                $m['reply_to'] = $rid > 0 ? ($byId[$rid] ?? null) : null;
+            }
+            unset($m);
+        }
 
         return $messages;
     }

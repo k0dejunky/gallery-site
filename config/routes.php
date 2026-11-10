@@ -156,6 +156,10 @@ return [
     ['GET', '/chat/stream', 'ChatController@stream'],
     ['GET', '/chat/attachment', 'ChatController@attachment'],
     ['POST', '/chat/typing', 'ChatController@typing'],
+    ['POST', '/chat/edit', 'ChatController@edit'],
+    ['POST', '/chat/delete', 'ChatController@destroy'],
+    ['POST', '/chat/react', 'ChatController@react'],
+    ['GET', '/chat/search', 'ChatController@search'],
     ['POST', '/chat/questionnaire/{id}/answer', 'QuestionnaireController@answer'],
 
     // Chat bridge webhooks (Android app + training PC; Bearer GALLERY_CHAT_KEY)
@@ -373,12 +377,20 @@ return [
     ['GET', '/admin/chat', 'AdminChatController@index', 'chat'],
     ['GET', '/admin/chat/attachment', 'AdminChatController@attachment', 'chat'],
     ['GET', '/admin/chat/history', 'AdminChatController@history', 'chat'],
+    // Literal routes go ABOVE the {id} wildcard, or /admin/chat/search
+    // would be read as conversation id "search".
+    ['GET', '/admin/chat/search', 'AdminChatController@searchMessages', 'chat'],
+    ['GET', '/admin/chat/poll', 'AdminChatController@poll', 'chat'],
     ['GET', '/admin/chat/training-count', 'AdminChatController@trainingCountJson', 'chat'],
     ['GET', '/admin/chat/{id}', 'AdminChatController@show', 'chat'],
     ['POST', '/admin/chat/new', 'AdminChatController@newConversation', 'chat'],
     ['POST', '/admin/chat/{id}/reply-toggle', 'AdminChatController@toggleReply', 'chat'],
     ['POST', '/admin/chat/{id}/mode', 'AdminChatController@mode', 'chat'],
     ['POST', '/admin/chat/{id}/reply', 'AdminChatController@operatorReply', 'chat'],
+    ['POST', '/admin/chat/{id}/typing', 'AdminChatController@typingPing', 'chat'],
+    ['POST', '/admin/chat/{id}/message/{messageId}/pin', 'AdminChatController@pinMessage', 'chat'],
+    ['POST', '/admin/chat/{id}/message/{messageId}/delete', 'AdminChatController@deleteMessage', 'chat'],
+    ['POST', '/admin/chat/{id}/message/{messageId}/react', 'AdminChatController@reactMessage', 'chat'],
     ['POST', '/admin/chat/settings', 'AdminChatController@saveSettings', 'chat'],
     ['POST', '/admin/chat/ai-toggle', 'AdminChatController@toggleAi', 'chat'],
     ['POST', '/admin/chat/daily-message', 'AdminChatController@saveDailyMessage', 'chat'],

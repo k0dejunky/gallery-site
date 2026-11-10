@@ -1,18 +1,40 @@
 <?php $title = 'Chat #' . (int) $conversation['id']; ?>
+<?php
+$me   = 'operator';
+$mode = 'admin';
+$readThrough = (int) ($memberLastRead ?? 0);
+$cid  = (int) $conversation['id'];
 
-<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
-    <h2 class="adm-h1">Chat #<?= (int) $conversation['id'] ?> &middot; <?= e((string) $user_email) ?></h2>
-    <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
-        <form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/reply-toggle') ?>">
+// Same grouping rule as the member thread and the JS client.
+$prev = null;
+$endpoints = [
+    'reply'   => url('/admin/chat/' . $cid . '/reply'),
+    'history' => url('/admin/chat/history'),
+    'search'  => url('/admin/chat/search?conversation=' . $cid),
+    'react'   => url('/admin/chat/' . $cid . '/message/__MID__/react'),
+    'typing'  => url('/admin/chat/' . $cid . '/typing'),
+    'poll'    => url('/admin/chat/poll'),
+    'pin'     => url('/admin/chat/' . $cid . '/message/__MID__/pin'),
+    'remove'  => url('/admin/chat/' . $cid . '/message/__MID__/delete'),
+];
+?>
+
+<div class="adm-chat-head">
+    <div class="adm-chat-title">
+        <h2 class="adm-h1">Chat #<?= $cid ?></h2>
+        <p class="adm-chat-sub"><?= e((string) $user_email) ?></p>
+    </div>
+    <div class="adm-chat-actions">
+        <form method="post" action="<?= url('/admin/chat/' . $cid . '/reply-toggle') ?>">
             <?= csrf_field() ?>
             <button type="submit" class="btn btn-sm <?= !empty($member_reply_enabled) ? '' : 'btn-outline' ?>">
                 Member replies: <?= !empty($member_reply_enabled) ? 'ON' : 'OFF' ?>
             </button>
         </form>
-        <form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/mode') ?>" style="display:flex;align-items:center;gap:.5rem;">
+        <form method="post" action="<?= url('/admin/chat/' . $cid . '/mode') ?>" class="adm-chat-mode">
             <?= csrf_field() ?>
-            <label class="muted u-fs-085">AI mode:</label>
-            <select name="ai_mode">
+            <label class="muted u-fs-085" for="ai-mode">AI mode:</label>
+            <select name="ai_mode" id="ai-mode">
                 <option value="retrieval" <?= ($conversation['ai_mode'] ?? '') === 'retrieval' ? 'selected' : '' ?>>Retrieval (AI)</option>
                 <option value="finetuned" <?= ($conversation['ai_mode'] ?? '') === 'finetuned' ? 'selected' : '' ?>>Fine-tuned (AI)</option>
                 <option value="operator" <?= ($conversation['ai_mode'] ?? '') === 'operator' ? 'selected' : '' ?>>Operator only (no AI)</option>
@@ -22,188 +44,145 @@
     </div>
 </div>
 
-<div id="chat-thread" style="display:flex;flex-direction:column;gap:.3rem;margin-bottom:1rem;max-height:60vh;overflow-y:auto;padding:.5rem;">
-    <?php if (empty($messages)): ?>
-        <?= admin_empty('chat', 'No messages yet', 'The conversation starts with the first message.') ?>
-    <?php else: ?>
-        <?php foreach ($messages as $m): ?>
-            <div style="align-self:<?= $m['sender_role'] === 'user' ? 'flex-end' : 'flex-start' ?>;max-width:80%;text-align:<?= $m['sender_role'] === 'user' ? 'right' : 'left' ?>;">
-                <small style="display:block;font-size:.7rem;opacity:.7;text-transform:uppercase;letter-spacing:.04em;">
-                    <?= $m['sender_role'] === 'user' ? 'Member' : ($m['sender_role'] === 'model' ? 'AI' : 'Operator') ?> &middot; <?= e(tzdate('g:i A', (string) $m['created_at'])) ?>
-                </small>
-                <div style="display:inline-block;text-align:left;max-width:100%;padding:2px 7px;border-radius:12px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;
-                     <?= $m['sender_role'] === 'user' ? 'background:var(--purple-600,#9333ea);color:var(--adm-inverse);border-bottom-right-radius:3px;' : 'background:var(--pink-100,#fdf2f8);color:var(--purple-900,#4a044e);border:1px solid var(--pink-300,#f9a8d4);border-bottom-left-radius:3px;' ?>">
-                    <?= e((string) $m['message']) ?>
-                    <?php if (!empty($m['attachment_name'])): ?>
-                        <?php if (empty($m['attachment_url'])): ?>
-                            <span style="display:block;margin-top:.5rem;font-size:.85rem;opacity:.7;">🔒 Media expired</span>
-                        <?php elseif (!empty($m['attachment_thumb_url'])): ?>
-                            <a href="<?= e($m['attachment_url']) ?>" target="_blank" rel="noopener" style="display:block;margin-top:.5rem;border-radius:8px;overflow:hidden;border:1px solid rgba(0,0,0,.08);background:var(--adm-surface);">
-                                <img src="<?= e($m['attachment_thumb_url']) ?>" alt="<?= e($m['attachment_name']) ?>" style="display:block;max-width:220px;max-height:220px;width:auto;height:auto;">
-                            </a>
-                        <?php else: ?>
-                            <a href="<?= e($m['attachment_url']) ?>" target="_blank" rel="noopener" style="display:inline-block;margin-top:.5rem;">📎 <?= e($m['attachment_name']) ?></a>
-                        <?php endif; ?>
-                    <?php endif; ?>
-                </div>
-            </div>
-        <?php endforeach; ?>
+<div class="chat-app chat-app--admin" id="chat-app"
+     data-mode="admin"
+     data-me="operator"
+     data-conversation="<?= $cid ?>"
+     data-latest-id="<?= !empty($messages) ? (int) $messages[count($messages) - 1]['id'] : 0 ?>"
+     data-oldest-id="<?= !empty($messages) ? (int) $messages[0]['id'] : 0 ?>"
+     data-has-more="<?= !empty($hasMore) ? '1' : '0' ?>"
+     data-read-through="<?= $readThrough ?>"
+     data-upload-limit="<?= 25 * 1024 * 1024 ?>"
+     <?php foreach ($endpoints as $key => $value): ?>data-endpoint-<?= e($key) ?>="<?= e($value) ?>"<?php endforeach; ?>>
+
+    <header class="chat-head">
+        <span class="chat-avatar" aria-hidden="true"><?= e(mb_strtoupper(mb_substr((string) $user_email, 0, 1))) ?></span>
+        <div class="chat-who">
+            <h2 class="chat-name"><?= e((string) $user_email) ?></h2>
+            <p class="chat-sub">
+                <?= !empty($member_reply_enabled) ? 'Member can reply' : 'Member replies are OFF' ?>
+                &middot; <?= e(ucfirst((string) ($conversation['ai_mode'] ?? 'retrieval'))) ?> mode
+            </p>
+        </div>
+        <div class="chat-head-actions">
+            <button type="button" class="chat-btn" data-chat-search-toggle aria-expanded="false"
+                    aria-label="Search this conversation" title="Search">⌕</button>
+        </div>
+    </header>
+
+    <div class="chat-search" role="search">
+        <input type="search" class="chat-search-input" placeholder="Search this conversation…" aria-label="Search this conversation">
+        <span class="chat-search-status" role="status" aria-live="polite"></span>
+    </div>
+
+    <?php if (!empty($pinnedMessages)): ?>
+        <div class="chat-pinned is-visible" role="note" aria-label="Pinned message">
+            <span aria-hidden="true">📌</span>
+            <span><b>Pinned:</b> <?= e(mb_substr(trim((string) ($pinnedMessages[0]['message'] ?? '')), 0, 180)) ?></span>
+        </div>
     <?php endif; ?>
+
+    <div class="chat-body">
+        <div class="chat-list" id="chat-thread" role="log" aria-live="polite" aria-relevant="additions"
+             aria-label="Conversation with the member" tabindex="0">
+            <?php if (empty($messages)): ?>
+                <div class="chat-empty" id="chat-empty">
+                    <span class="chat-empty-ico" aria-hidden="true">💬</span>
+                    <h3>No messages yet</h3>
+                    <p>The conversation starts with the member's first message, or with yours.</p>
+                </div>
+            <?php else: ?>
+                <?php $lastDay = ''; ?>
+                <?php foreach ($messages as $m): ?>
+                    <?php
+                    $first = true;
+                    if ($prev !== null) {
+                        $sameRole = (string) $prev['sender_role'] === (string) $m['sender_role'];
+                        $sameDay  = (string) ($prev['day'] ?? '') === (string) ($m['day'] ?? '');
+                        $t1 = strtotime(((string) $prev['created_at']) . ' UTC');
+                        $t2 = strtotime(((string) $m['created_at']) . ' UTC');
+                        $close    = ($t1 !== false && $t2 !== false) ? abs($t2 - $t1) <= 300 : false;
+                        $first = !($sameRole && $sameDay && $close);
+                    }
+                    $prev = $m;
+                    ?>
+                    <?php if ((string) ($m['day'] ?? '') !== $lastDay): ?>
+                        <?php $lastDay = (string) ($m['day'] ?? ''); ?>
+                        <div class="chat-day" data-day="<?= e($lastDay) ?>"><?= e((string) ($m['day_label'] ?? '')) ?></div>
+                    <?php endif; ?>
+                    <?php $m['content_refs'] = $m['content_refs'] ?? []; ?>
+                    <?php require __DIR__ . '/../partials/chat_message.php'; ?>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+
+        <div class="chat-typing" role="status" aria-live="polite">
+            <span class="chat-typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span>The member is typing…</span>
+        </div>
+
+        <button type="button" class="chat-jump" aria-label="Jump to the newest messages">
+            <b>↓</b> <span>New messages</span>
+        </button>
+
+        <div class="chat-drop" aria-hidden="true">Drop a file to attach it</div>
+    </div>
+
+    <div class="chat-composer-bar">
+        <div class="chat-reply-bar">
+            <div class="chat-reply-text">
+                <span class="chat-reply-label">Replying</span>
+                <span class="chat-reply-quote"></span>
+            </div>
+            <button type="button" class="chat-btn" data-chat-cancel-reply aria-label="Cancel reply">✕</button>
+        </div>
+
+        <div class="chat-attach-preview"></div>
+        <div class="chat-progress" aria-hidden="true"><i></i></div>
+        <div class="chat-emoji" role="group" aria-label="Emoji"></div>
+
+        <form class="chat-inputrow" id="reply-form" method="post" enctype="multipart/form-data"
+              action="<?= url('/admin/chat/' . $cid . '/reply') ?>" novalidate>
+            <?= csrf_field() ?>
+            <label class="chat-btn chat-attach-label" for="attachment-input" title="Attach a file" aria-label="Attach a file">📎</label>
+            <input type="file" name="attachment" id="attachment-input" class="chat-file-input" hidden
+                   accept="image/*,video/*,text/*,.pdf,.txt,.csv,.log" aria-label="Attach a file">
+            <button type="button" class="chat-btn" data-chat-emoji-toggle aria-expanded="false"
+                    aria-label="Emoji" title="Emoji">😊</button>
+            <textarea class="chat-input" name="message" id="reply-text" rows="1" maxlength="2000"
+                      placeholder="Write a reply…" aria-label="Reply" autocomplete="off"></textarea>
+            <button type="submit" class="chat-send" aria-label="Send reply" title="Send">➤</button>
+        </form>
+
+        <div class="chat-hint">
+            <span>Enter sends · Shift+Enter adds a line</span>
+            <span class="chat-expiry">
+                <label class="muted u-fs-08">Expire
+                    <select name="expires_in" id="expires-in" class="chat-expiry-select">
+                        <option value="0">never</option>
+                        <option value="5">5 min</option>
+                        <option value="15">15 min</option>
+                        <option value="60">1 h</option>
+                        <option value="1440">24 h</option>
+                    </select>
+                </label>
+                <label class="muted u-fs-08">Views
+                    <select name="max_views" id="max-views" class="chat-expiry-select">
+                        <option value="0">∞</option>
+                        <option value="1">1</option>
+                        <option value="3">3</option>
+                        <option value="10">10</option>
+                    </select>
+                </label>
+            </span>
+        </div>
+        <p class="muted u-fs-08 u-mt-05 u-m0">The expiry applies to the attached picture or video only.</p>
+    </div>
 </div>
 
-<h2>Reply as operator</h2>
-<form method="post" action="<?= url('/admin/chat/' . (int) $conversation['id'] . '/reply') ?>" enctype="multipart/form-data" id="reply-form" data-no-progress>
-    <?= csrf_field() ?>
-
-    <div id="emoji-bar" style="display:none;flex-wrap:wrap;gap:.2rem;margin-bottom:.5rem;padding:.4rem;border:1px solid var(--pink-300,#f9a8d4);border-radius:8px;background:var(--pink-100,#fdf2f8);max-width:520px;">
-        <?php foreach (['😀','😁','😂','🤣','😊','😍','😘','😗','😚','🙂','🤗','🤩','😎','😏','😉','🙃','😋','🤪','😜','🥰','😇','🤓','😴','🤤','😌','😔','😢','😭','😤','😡','🤬','😱','😳','🤯','😷','🤒','🥳','🤠','👽','👍','👎','👌','✌️','🤞','👊','✊','🤛','🤜','🙏','👏','💪','🖤','❤️','🧡','💛','💚','💙','💜','💖','💗','💕','💞','💘','💝','💋','👅','🔥','✨','⭐','🌟','💫','🎉','🎊','🎂','🎁','💯','🎯','🚀','💎','🌸','🌹','🥀','🌺','🍑','🍆','🍒','🍓','🍉','🥂','🍾','☕','🌞','🌙','⚡','☀️','🌈','❄️','💦','🍀','🐱','🐶','🦄','🦋','🐝','🐣'] as $emoji): ?>
-            <button type="button" class="btn btn-sm btn-outline emoji-btn" data-emoji="<?= e($emoji) ?>"><?= e($emoji) ?></button>
-        <?php endforeach; ?>
-    </div>
-
-    <textarea class="u-w-full-box" name="message" id="reply-text" rows="3" maxlength="2000" placeholder="Type an operator reply (emojis welcome)…"></textarea>
-
-    <div style="display:flex;gap:.5rem;margin-top:.5rem;align-items:center;flex-wrap:wrap;">
-        <button type="button" class="btn btn-sm btn-outline" id="emoji-toggle">😊 Emoji</button>
-        <label class="btn btn-sm btn-outline" style="cursor:pointer;">
-            📎 Attach file
-            <input type="file" name="attachment" id="attachment-input" style="display:none;" accept="image/*,video/*,text/*,.pdf,.txt,.csv,.log">
-        </label>
-        <span id="attach-name" class="muted u-fs-085"></span>
-    </div>
-
-    <div id="expiry-row" style="display:none;margin-top:.5rem;gap:.75rem;align-items:center;flex-wrap:wrap;">
-        <label class="muted u-fs-085">Expire media after
-            <select name="expires_in" id="expires-in" style="margin-left:.3rem;">
-                <option value="0">Never</option>
-                <option value="5">5 minutes</option>
-                <option value="15">15 minutes</option>
-                <option value="30">30 minutes</option>
-                <option value="60">1 hour</option>
-                <option value="360">6 hours</option>
-                <option value="1440">24 hours</option>
-            </select>
-        </label>
-        <label class="muted u-fs-085">or after
-            <select name="max_views" id="max-views" style="margin-left:.3rem;">
-                <option value="0">Unlimited views</option>
-                <option value="1">1 view</option>
-                <option value="3">3 views</option>
-                <option value="5">5 views</option>
-                <option value="10">10 views</option>
-            </select>
-        </label>
-        <span class="muted u-fs-08">(applies to the attached picture/video only)</span>
-    </div>
-
-    <button type="submit" class="btn u-mt-05">Send operator reply</button>
-</form>
-
-<script nonce="<?= csp_nonce() ?>">
-(function () {
-    var emojiToggle = document.getElementById('emoji-toggle');
-    var emojiBar = document.getElementById('emoji-bar');
-    var replyText = document.getElementById('reply-text');
-    var attachInput = document.getElementById('attachment-input');
-    var attachName = document.getElementById('attach-name');
-    var replyForm = document.getElementById('reply-form');
-    var expiryRow = document.getElementById('expiry-row');
-
-    emojiToggle.addEventListener('click', function () {
-        emojiBar.style.display = emojiBar.style.display === 'none' ? 'flex' : 'none';
-    });
-    emojiBar.querySelectorAll('.emoji-btn').forEach(function (b) {
-        b.addEventListener('click', function () {
-            replyText.value += b.getAttribute('data-emoji');
-            replyText.focus();
-        });
-    });
-    attachInput.addEventListener('change', function () {
-        attachName.textContent = attachInput.files && attachInput.files[0]
-            ? attachInput.files[0].name
-            : '';
-        expiryRow.style.display = attachInput.files && attachInput.files.length > 0 ? 'flex' : 'none';
-    });
-    replyForm.addEventListener('submit', function (ev) {
-        var hasText = replyText.value.trim() !== '';
-        var hasFile = attachInput.files && attachInput.files.length > 0;
-        if (!hasText && !hasFile) {
-            alert('Type a reply or attach a file.');
-            ev.preventDefault();
-        }
-    });
-
-    // Enter sends the operator reply; Shift+Enter inserts a newline. The
-    // isComposing guard keeps CJK/IME Enter-to-confirm from firing a send.
-    replyText.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
-            e.preventDefault();
-            replyForm.requestSubmit();
-        }
-    });
-
-    // Lazy-load older messages when the user scrolls to the top of the thread.
-    var thread = document.getElementById('chat-thread');
-    var convId = <?= (int) ($conversation['id'] ?? 0) ?>;
-    var oldestId = <?= !empty($messages) ? (int) $messages[0]['id'] : 0 ?>;
-    var hasMore = <?= !empty($hasMore) ? 'true' : 'false' ?>;
-    var loadingOlder = false;
-
-    function appendOlderMessage(m) {
-        var wrap = document.createElement('div');
-        wrap.style.cssText = 'align-self:' + (m.sender_role === 'user' ? 'flex-end' : 'flex-start') + ';max-width:80%;text-align:' + (m.sender_role === 'user' ? 'right' : 'left') + ';';
-        var who = m.sender_role === 'user' ? 'Member' : (m.sender_role === 'model' ? 'AI' : 'Operator');
-        var time = (m.created_at || '').replace('T', ' ').substring(0, 16);
-        wrap.innerHTML =
-            '<small style="display:block;font-size:.7rem;opacity:.7;text-transform:uppercase;letter-spacing:.04em;">' + esc(who) + ' &middot; ' + esc(time) + '</small>' +
-            '<div style="display:inline-block;text-align:left;max-width:100%;padding:2px 7px;border-radius:12px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word;' +
-            (m.sender_role === 'user' ? 'background:var(--purple-600,#9333ea);color:var(--adm-inverse);border-bottom-right-radius:3px;' : 'background:var(--pink-100,#fdf2f8);color:var(--purple-900,#4a044e);border:1px solid var(--pink-300,#f9a8d4);border-bottom-left-radius:3px;') +
-            '">' + esc(m.message) +
-            (m.attachment_name ? (m.media_expired
-                ? '<div style="margin-top:.3rem;">🔒 Media expired</div>'
-                : '<div style="margin-top:.3rem;">📎 ' + esc(m.attachment_name) + '</div>')
-                : '') +
-            '</div>';
-        thread.insertBefore(wrap, thread.firstChild);
-    }
-
-    function loadOlder() {
-        if (loadingOlder || !hasMore || oldestId <= 0) return;
-        loadingOlder = true;
-        fetch('<?= url('/admin/chat/history') ?>?conversation=' + convId + '&before=' + oldestId + '&limit=50', {
-            headers: { 'Accept': 'application/json' }
-        })
-            .then(function (r) { return r.json(); })
-            .then(function (res) {
-                if (res && res.messages && res.messages.length) {
-                    var prevHeight = thread.scrollHeight;
-                    res.messages.forEach(function (m) {
-                        if ((m.id || 0) < oldestId || oldestId === 0) appendOlderMessage(m);
-                    });
-                    oldestId = res.messages[0].id || oldestId;
-                    thread.scrollTop += thread.scrollHeight - prevHeight;
-                }
-                hasMore = !!(res && res.has_more);
-            })
-            .catch(function () { /* transient; allow retry */ })
-            .finally(function () { loadingOlder = false; });
-    }
-
-    thread.addEventListener('scroll', function () {
-        if (thread.scrollTop < 60) loadOlder();
-    });
-
-    // Start scrolled to the bottom so the newest messages are visible.
-    setTimeout(function () {
-        thread.scrollTop = thread.scrollHeight;
-    }, 50);
-
-    function esc(s) {
-        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-        });
-    }
-})();
-</script>
+<div class="chat-lightbox" id="chat-lightbox" role="dialog" aria-modal="true" aria-label="Image viewer">
+    <button type="button" class="chat-lightbox-close" aria-label="Close">✕</button>
+    <img src="" alt="">
+</div>
 
 <p class="u-mt-075"><a class="btn btn-sm btn-outline" href="<?= url('/admin/chat') ?>">Back to conversations</a></p>
