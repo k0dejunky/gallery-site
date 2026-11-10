@@ -3397,6 +3397,56 @@ class TestSuite
             return ['pass' => is_dir($dir) && is_writable($dir), 'detail' => $dir];
         });
 
+        $add('media.video_frame_quality', 'Media', 'a real video yields a readable poster frame and garbage yields nothing', function () {
+            $ff = is_executable('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : '';
+            if ($ff === '') {
+                return ['pass' => true, 'detail' => 'no ffmpeg on this box'];
+            }
+
+            $dir  = sys_get_temp_dir();
+            $pid  = getmypid();
+            $bad  = $dir . '/probe_bad_' . $pid . '.txt';
+            $src  = $dir . '/probe_src_' . $pid . '.mp4';
+            $dest = $dir . '/probe_frame_' . $pid . '.jpg';
+
+            @unlink($dest);
+            file_put_contents($bad, 'this is not a video');
+
+            // Garbage must be a FAILURE, and it must not leave a file behind:
+            // an unreadable frame reported as success is what made the
+            // rendition worker rebuild the same poster on every tick.
+            $rejected = create_video_frame($bad, $dest, 320, 180, 0, 10) === false
+                && !is_file($dest);
+
+            // A real source must still produce a frame anyone can read - the
+            // guard must reject EMPTY output, not valid small ones.
+            $o = [];
+            $st = 1;
+            exec(escapeshellarg($ff) . ' -nostdin -y -f lavfi -i color=c=red:s=320x180:d=1'
+                . ' -pix_fmt yuv420p ' . escapeshellarg($src) . ' 2>/dev/null', $o, $st);
+
+            $valid = false;
+            $size  = 0;
+            if ($st === 0 && is_file($src)) {
+                $valid = create_video_frame($src, $dest, 320, 180, 0, 20) === true
+                    && is_file($dest)
+                    && @getimagesize($dest) !== false;
+                $size = is_file($dest) ? (int) filesize($dest) : 0;
+            }
+
+            @unlink($bad);
+            @unlink($src);
+            @unlink($dest);
+
+            $pass = $rejected && $valid;
+            return [
+                'pass'   => $pass,
+                'detail' => $pass
+                    ? 'garbage is rejected with no file left; a real video yields a readable frame (' . $size . ' bytes)'
+                    : 'rejected=' . var_export($rejected, true) . ' valid=' . var_export($valid, true) . ' size=' . $size,
+            ];
+        });
+
         $add('system.storage_integrity', 'System', 'Expected storage subdirectories exist & writable', function () use ($storage) {
             $needed = ['backups', 'logs', 'cache', 'cron', 'mail-outbox', 'themes', 'uploads'];
             $bad = [];

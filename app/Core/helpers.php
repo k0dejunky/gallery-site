@@ -2561,10 +2561,14 @@ function create_video_thumbnail(string $src, string $dest, int $width, int $heig
             // rather than moving the probe, so the final file is written by
             // the same single code path as every other frame capture.
             @unlink($scratch);
-            return create_video_frame($src, $dest, $width, $height, $best, 60, $fit);
+            if (create_video_frame($src, $dest, $width, $height, $best, 60, $fit)) {
+                return true;
+            }
+            // The winner failed on the real extraction: fall through to the
+            // last-resort attempts below rather than giving up on the video.
+        } else {
+            @unlink($scratch);
         }
-
-        @unlink($scratch);
     }
 
     foreach ([1, 0] as $second) {
@@ -2707,7 +2711,26 @@ function create_video_frame(string $src, string $dest, int $width, int $height, 
 
     exec($cmd, $output, $status);
 
-    return $status === 0 && is_file($dest);
+    if ($status !== 0 || !is_file($dest)) {
+        return false;
+    }
+
+    // A frame nobody can READ is not a frame. ffmpeg exits 0 on some sources
+    // whose frames are unreadable and leaves a 0-byte file behind. The
+    // rendition worker treated that as a built poster, then could not read it
+    // back to decide whether it was padded, so it rebuilt the SAME poster on
+    // every tick for ever - a loop that burned a whole cron slot. Removing
+    // the empty file here turns that into a counted failure the worker logs.
+    clearstatcache(true, $dest);
+    // The readable-image check is the real test; the size floor only keeps a
+    // truncated stub from reaching the decoder. It is deliberately low: a
+    // flat-colour frame of a tiny clip is a few hundred bytes and is valid.
+    if ((int) @filesize($dest) < 64 || @getimagesize($dest) === false) {
+        @unlink($dest);
+        return false;
+    }
+
+    return true;
 }
 
 /**

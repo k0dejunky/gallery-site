@@ -7836,6 +7836,41 @@ $add('smoke.ui.hero_buttons_are_compact_and_centred', 'Smoke \u00b7 UI', 'The he
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.media.poster_frame_not_empty', 'Smoke · Media', 'An unreadable frame is a failure, not a 0-byte poster the worker rebuilds for ever', static function () use ($root, $read, $ok, $bad): array {
+            $helpers = (string) $read($root . '/app/Core/helpers.php');
+            $worker  = (string) $read($root . '/bin/video_rendition_worker.php');
+            $problems = [];
+
+            // The old code returned success on is_file() alone. A 0-byte file
+            // therefore counted as a built poster; it cannot be decoded, so
+            // the "is it padded?" repair check said no, so it was rebuilt on
+            // every tick - the tick's whole budget in one file.
+            if (strpos($helpers, 'if ($status !== 0 || !is_file($dest))') === false) {
+                $problems[] = 'a frame capture must fail when ffmpeg fails or writes nothing';
+            }
+            if (strpos($helpers, 'filesize($dest)') === false || strpos($helpers, 'getimagesize($dest)') === false) {
+                $problems[] = 'a frame capture must prove the file is a READABLE image, not merely present';
+            }
+            if (preg_match('/return \\$status === 0 && is_file\\(\\$dest\\);/', $helpers)) {
+                $problems[] = 'the "exists therefore success" return must be gone';
+            }
+            if (strpos($worker, 'create_video_poster_frame($src, $poster)') === false) {
+                $problems[] = 'the worker must still build the poster through create_video_poster_frame()';
+            }
+            // A failed build has to be counted and cleaned, not retried as a
+            // success with a stale/empty file left on disk.
+            if (preg_match('/create_video_poster_frame\\(\\$src, \\$poster\\)\\) \\{\\s*@chmod/', $worker) !== 1) {
+                $problems[] = 'the worker must only treat a real poster as built';
+            }
+            if (strpos($worker, '@unlink($poster);') === false) {
+                $problems[] = 'a failed poster build must remove the file';
+            }
+
+            return $problems === []
+                ? $ok('the frame capture checks the status and the decoded image, and the worker counts a bad poster as a failure')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.media.variant_orientation', 'Smoke · Media', 'A preview applies the EXIF orientation once', static function () use ($root, $read, $ok, $bad): array {
             $helpers = $read("$root/app/Core/helpers.php");
             // ffmpeg's autorotate applies the EXIF orientation itself. A
