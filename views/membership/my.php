@@ -16,7 +16,9 @@ $user = $user ?? \App\Core\Auth::user();
         <p><strong>First name:</strong> <?= e($user['billing_first_name'] ?? '') ?: '&mdash;' ?></p>
         <p><strong>Last name:</strong> <?= e($user['billing_last_name'] ?? '') ?: '&mdash;' ?></p>
              <p><strong>Access level:</strong>
-                 <?= $activeSub !== null ? (int) ($activeSub['plan_level'] ?? $activeSub['access_level'] ?? 0) : 'No active access' ?>
+                 <?= $activeSub !== null
+                     ? e(\App\Models\Subscription::levelLabel((int) ($activeSub['plan_level'] ?? $activeSub['access_level'] ?? 0)))
+                     : 'No active access' ?>
              </p>
              <p><strong>Membership type:</strong>
             <?= $activeSub !== null ? e($activeSub['plan_name']) : 'None' ?>

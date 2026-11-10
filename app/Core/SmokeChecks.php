@@ -10072,6 +10072,30 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
         });
 
         // ------------------------------------------------------ Media variants
+        $add('smoke.membership.level_label_is_honest', 'Smoke · Membership', 'A plan stored above Platinum says what it opens, not the internal number', static function () use ($ok, $bad): array {
+            $sub = \App\Models\Subscription::class;
+            $cases = [
+                0  => 'Free',
+                1  => 'Silver',
+                2  => 'Gold',
+                3  => 'Platinum',
+                9  => 'Platinum',
+                10 => 'Platinum',
+                -1 => 'Free',
+            ];
+            $wrong = [];
+            foreach ($cases as $level => $want) {
+                $got = $sub::levelLabel($level);
+                if ($got !== $want) {
+                    $wrong[] = $level . ' => ' . $got . ' (want ' . $want . ')';
+                }
+            }
+
+            return $wrong === []
+                ? $ok('0-3 keep their tier names; anything above 3 reads Platinum')
+                : $bad(implode('; ', $wrong));
+        });
+
         $add('smoke.media.bmp_variants', 'Smoke · Media', 'BMP uploads produce web + thumb renditions (never the full original)', static function () use ($ok, $bad): array {
             foreach (['imagecreatetruecolor', 'imagebmp', 'imagecreatefrombmp', 'getimagesize'] as $fn) {
                 if (!function_exists($fn)) {

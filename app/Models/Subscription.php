@@ -666,12 +666,22 @@ class Subscription
     /**
      * Human-readable tier name for a membership level (the "min_level" /
      * plan "level" column). 0 = Free, 1-3 = the paid silver-to-platinum tiers.
+     *
+     * Installations exist whose Yearly plan is stored at level 9 and whose
+     * Lifetime plan is level 10 (hand-edited rows). No gallery is above
+     * min_level 3, so anything over 3 opens exactly what Platinum opens; the
+     * label says what the member GETS instead of echoing the internal number
+     * ("This gallery needs a 9 membership" was the old wording).
      */
     public static function levelLabel(int $level): string
     {
         $labels = [0 => 'Free', 1 => 'Silver', 2 => 'Gold', 3 => 'Platinum'];
 
-        return $labels[$level] ?? 'Level ' . $level;
+        if ($level < 0) {
+            return 'Free';
+        }
+
+        return $labels[$level] ?? 'Platinum';
     }
 
     /**

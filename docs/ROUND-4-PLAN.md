@@ -404,7 +404,7 @@ The PPV/tip/unlock surface stays dormant. This phase is about the
 | 10.7 | A gift purchase | pending | - |
 | 10.8 | Receipt numbering | done - `INV-P####` / `INV-M####` from the immutable row id. Tax is not itemised: the site charges one amount per plan and nowhere computes tax | `dd44c63` |
 | 10.9 | Payout processing - the earnings page says outright that it does not ship | pending | - |
-| 10.10 | The level numbering: the yearly plan is level 9 and lifetime is 10, but **no gallery exceeds level 3** | pending | - |
+| 10.10 | The level numbering: the yearly plan is level 9 and lifetime is 10, but **no gallery exceeds level 3** | done - labels, not data: 3+ reads Platinum, so a member never sees "level 9" | `561bcd8` |
 | 10.11 | An honest answer to downloads - the terms forbid it and the tooltip says "saving is disabled", but a member can still save the 720p file they are served | done - the notice names the rule instead of claiming a control | `dd44c63` |
 | 10.12 | A download allowance or a watermark tier | pending | - |
 
@@ -434,7 +434,7 @@ the numbers below are measurements, not guesses.
 | id | what | files | status | commit |
 |---|---|---|---|---|
 | 13.1 | The video-rendition worker is **stalled**: it spends ~90 s of every 10-minute tick rebuilding ONE poster and produces nothing else. The poster is a **0-byte file**, so the build "succeeds", the poster is never "padded", and it is rebuilt forever | `app/Core/helpers.php`, `bin/video_rendition_worker.php` | done - a frame must be a READABLE image, and the "try 0 s" fallback now runs | `08104b3` |
-| 13.2 | The level numbering: prod's Yearly is level 9 and Lifetime level 10 (hand-edited rows), the seed says 1, the tier labels only know 0-3, and **no gallery exceeds `min_level` 3** | `app/Models/Subscription.php`, `app/Models/TrialLink.php`, `app/Models/Stats.php`, `app/Controllers/PlanController.php`, a migration | planned | - |
+| 13.2 | The level numbering: prod's Yearly is level 9 and Lifetime level 10 (hand-edited rows), the seed says 1, the tier labels only know 0-3, and **no gallery exceeds `min_level` 3** | `app/Models/Subscription.php` | partial - the LABEL now says what the level opens (anything above 3 reads Platinum) and `/membership/my` uses it; the stored levels are untouched on purpose (changing them is a product decision) | `561bcd8` |
 | 13.3 | The theme title-image upload is **broken** (the file is served from a path nothing routes, and the watermark silently stops with it), it accepts an **SVG with no validation**, and `update()` is gated on `requireLogin()` - so a **member** can restyle the site | `app/Controllers/ThemeController.php`, `app/Models/Theme.php`, `views/layout.php`, `install.sh` | planned | - |
 | 13.4 | The Braintree pages override the whole CSP with `'unsafe-inline'` and **no nonce** (the nonce the view emits is inert), and both the override AND the site policy are missing `https://assets.braintreegateway.com` from `frame-src` - the Hosted Fields iframe | `public/index.php`, `app/Controllers/MembershipController.php` | planned | - |
 | 13.5 | The tooltip and the terms say saving is disabled; nothing enforces it (the media is served inline, no `Content-Disposition`) | `views/partials/gallery_grid_item.php`, `views/terms.php` | done - the tooltip states the licence rule; the terms were already a licence term, not a technical claim | `dd44c63` |
