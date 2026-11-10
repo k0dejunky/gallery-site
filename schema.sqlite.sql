@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS galleries (
     type         VARCHAR(10) NOT NULL DEFAULT 'images' CHECK (type IN ('images', 'videos')),
     min_level    INTEGER NOT NULL DEFAULT 0,
     is_nsfw      INTEGER NOT NULL DEFAULT 1,
+    is_ai        INTEGER NOT NULL DEFAULT 0,
+    is_xxx       INTEGER NOT NULL DEFAULT 0,
     is_secret    INTEGER NOT NULL DEFAULT 0,
     published_at DATETIME,
     views        INTEGER NOT NULL DEFAULT 0,

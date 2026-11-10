@@ -1382,6 +1382,7 @@ body.site-compact .home-layout { grid-template-columns: 224px minmax(0, 1fr); }
 .card-badge-live{background:var(--btn-danger-bg,#3b1024);color:var(--btn-danger-color,#fecdd3);border-color:var(--btn-danger-border,#f43f5e)}
 .card-badge-count{margin-left:auto}
 .card-badge-sfw{background:var(--flash-success-bg,#1f2a14);color:var(--flash-success-color,#d9f99d);border-color:var(--flash-success-border,#84cc16)}
+.card-badge-ai{background:var(--purple-900,#3b0764);color:var(--link-color,#e9aefc);border-color:var(--purple-400,#a855f7)}
 .pill{
     display:inline-flex;align-items:center;gap:.3rem;
     padding:.18rem .6rem;border-radius:999px;white-space:nowrap;

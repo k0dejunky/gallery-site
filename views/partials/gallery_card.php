@@ -19,6 +19,7 @@ $canOpen      = $isGuest
     : ($memberLevel >= $galleryLevel);
 $coverSize    = $canOpen ? 'thumb' : 'blur';
 $isAdult      = (int) ($gallery['is_nsfw'] ?? 1) === 1;
+$isAi         = (int) ($gallery['is_ai'] ?? 0) === 1;
 $coverUrl     = static function (string $size, string $format = '') use ($cover, $canOpen, $isGuest): string {
     if ($size === 'blur' || ($isGuest && $canOpen)) {
         return public_file_url((string) $cover['filename'], $size, $format);
@@ -86,6 +87,7 @@ $asyncDecodeAttr    = $heroCard ? '' : ' decoding="async"';
             <div class="card-scrim"></div>
             <div class="card-badges">
                 <?php if ($isAdult): ?><span class="card-badge nsfw-badge card-badge-adult" title="Adult content">18+</span><span class="sr-only">Adult content</span><?php else: ?><span class="card-badge card-badge-sfw" title="Safe for work">SFW</span><?php endif; ?>
+                <?php if ($isAi): ?><span class="card-badge card-badge-ai" title="AI-generated set">AI</span><span class="sr-only">AI-generated</span><?php endif; ?>
                 <?php if ($isVideoCard): ?><span class="card-badge">&#9654; Video</span><?php endif; ?>
                 <?php if ($isViewed): ?><span class="card-badge viewed-badge" title="You have seen this gallery">&#10003;</span><span class="sr-only">Already viewed</span><?php endif; ?>
             </div>

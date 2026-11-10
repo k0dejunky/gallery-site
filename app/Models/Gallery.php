@@ -808,16 +808,25 @@ class Gallery
      * $isNsfw defaults to TRUE: a caller that does not know (an import, a
      * script, the video editor) must never publish adult-unvetted content as
      * safe. The owner flips it on the gallery form.
+     *
+     * $isAi / $isXxx are content labels the owner sets by hand. They default
+     * to FALSE so an import or a script creates an unflagged gallery rather
+     * than guessing. An explicit set is always adult: is_xxx is a stricter
+     * label than is_nsfw, so setting it forces is_nsfw on and the two can
+     * never disagree.
      */
-    public static function create(string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, bool $isSecret = false, bool $isTest = false, bool $isNsfw = true): int
+    public static function create(string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, bool $isSecret = false, bool $isTest = false, bool $isNsfw = true, bool $isAi = false, bool $isXxx = false): int
     {
         $type = $type === 'videos' ? 'videos' : 'images';
 
         $isTest = $isTest || is_test_gallery(['title' => $title]);
+        if ($isXxx) {
+            $isNsfw = true;
+        }
 
         Database::run(
-            'INSERT INTO galleries (title, description, type, min_level, is_nsfw, is_secret, is_test, published_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-            [$title, $description, $type, $minLevel, $isNsfw ? 1 : 0, $isSecret ? 1 : 0, $isTest ? 1 : 0, $publishedAt]
+            'INSERT INTO galleries (title, description, type, min_level, is_nsfw, is_ai, is_xxx, is_secret, is_test, published_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+            [$title, $description, $type, $minLevel, $isNsfw ? 1 : 0, $isAi ? 1 : 0, $isXxx ? 1 : 0, $isSecret ? 1 : 0, $isTest ? 1 : 0, $publishedAt]
         );
 
         \App\Core\Cache::bump('gallery');
@@ -830,13 +839,20 @@ class Gallery
     /**
      * Update a gallery's title, description and type.
      *
-     * $isSecret, $isTest and $isNsfw are applied only when given; passing
-     * null leaves that flag alone, so a form that only posts one of them
-     * cannot wipe the other.
+     * $isSecret, $isTest, $isNsfw, $isAi and $isXxx are applied only when
+     * given; passing null leaves that flag alone, so a form that only posts
+     * one of them cannot wipe the other.
+     *
+     * An explicit set is always adult: when $isXxx is true, is_nsfw is forced
+     * on in the same statement so the two flags can never disagree.
      */
-    public static function update(int $id, string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, ?bool $isSecret = null, ?bool $isTest = null, ?bool $isNsfw = null): void
+    public static function update(int $id, string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, ?bool $isSecret = null, ?bool $isTest = null, ?bool $isNsfw = null, ?bool $isAi = null, ?bool $isXxx = null): void
     {
         $type = $type === 'videos' ? 'videos' : 'images';
+
+        if ($isXxx === true) {
+            $isNsfw = true;
+        }
 
         $sets   = ['title = ?', 'description = ?', 'type = ?', 'min_level = ?', 'published_at = ?'];
         $values = [$title, $description, $type, $minLevel, $publishedAt];
@@ -852,6 +868,14 @@ class Gallery
         if ($isNsfw !== null) {
             $sets[]   = 'is_nsfw = ?';
             $values[] = $isNsfw ? 1 : 0;
+        }
+        if ($isAi !== null) {
+            $sets[]   = 'is_ai = ?';
+            $values[] = $isAi ? 1 : 0;
+        }
+        if ($isXxx !== null) {
+            $sets[]   = 'is_xxx = ?';
+            $values[] = $isXxx ? 1 : 0;
         }
 
         $values[] = $id;

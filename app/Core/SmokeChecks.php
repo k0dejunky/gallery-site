@@ -10602,6 +10602,97 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.gallery.content_flags', 'Smoke · Galleries', 'The AI and XXX labels are stored, editable, forced-consistent with the rating and shown', static function () use ($root, $read, $ok, $bad): array {
+            $gallery  = (string) $read($root . '/app/Models/Gallery.php');
+            $gc       = (string) $read($root . '/app/Controllers/GalleryController.php');
+            $list     = (string) $read($root . '/views/admin/galleries.php');
+            $card     = (string) $read($root . '/views/partials/gallery_card.php');
+            $show     = (string) $read($root . '/views/gallery/show.php');
+            $export   = (string) $read($root . '/app/Controllers/ExportController.php');
+            $schema   = (string) $read($root . '/schema.sql');
+            $sqlite   = (string) $read($root . '/schema.sqlite.sql');
+            $migration = (string) $read($root . '/database/migrations/093_gallery_flags.sql');
+            $problems = [];
+
+            // 1. The columns exist, born "not claimed".
+            foreach ([$schema, $sqlite] as $i => $src) {
+                $file = $i === 0 ? 'schema.sql' : 'schema.sqlite.sql';
+                if (strpos($src, 'is_ai') === false || strpos($src, 'is_xxx') === false) {
+                    $problems[] = $file . ' must carry galleries.is_ai and galleries.is_xxx';
+                }
+            }
+            if (strpos($migration, 'ADD COLUMN is_ai') === false
+                || strpos($migration, 'ADD COLUMN is_xxx') === false
+                || substr_count($migration, 'DEFAULT 0') < 2) {
+                $problems[] = 'migration 093 must add is_ai and is_xxx NOT NULL DEFAULT 0 (existing galleries are unflagged)';
+            }
+
+            // 2. The model writes them on create and only touches them on
+            //    update when the caller passed a value.
+            if (strpos($gallery, 'bool $isAi = false, bool $isXxx = false') === false) {
+                $problems[] = 'Gallery::create() must take isAi/isXxx, defaulting to false';
+            }
+            if (strpos($gallery, 'is_nsfw, is_ai, is_xxx') === false) {
+                $problems[] = 'Gallery::create() must INSERT is_ai and is_xxx';
+            }
+            if (strpos($gallery, '?bool $isAi = null, ?bool $isXxx = null') === false) {
+                $problems[] = 'Gallery::update() must take isAi/isXxx, null meaning leave alone';
+            }
+            if (substr_count($gallery, 'if ($isXxx === true)') < 1 || strpos($gallery, '$isNsfw = true;') === false) {
+                $problems[] = 'the model must force is_nsfw on when is_xxx is set, so the two can never disagree';
+            }
+
+            // 3. Every form that sets the rating sets the labels beside it,
+            //    and an unticked box posts an explicit 0.
+            foreach (['create', 'edit', 'manage'] as $form) {
+                $src = (string) $read($root . '/views/admin/' . $form . '.php');
+                foreach (['is_ai', 'is_xxx'] as $flag) {
+                    $hidden = 'type="hidden" name="' . $flag . '" value="0"';
+                    $box    = 'name="' . $flag . '" value="1"';
+                    $h      = strpos($src, $hidden);
+                    $c      = strpos($src, $box);
+                    if ($h === false) {
+                        $problems[] = 'views/admin/' . $form . '.php must post a hidden ' . $flag . '=0 beside the box';
+                    }
+                    if ($c === false) {
+                        $problems[] = 'views/admin/' . $form . '.php must offer the ' . $flag . ' checkbox';
+                    }
+                    if ($h !== false && $c !== false && $h > $c) {
+                        $problems[] = 'views/admin/' . $form . '.php must put the hidden ' . $flag . '=0 BEFORE the checkbox (PHP keeps the last value)';
+                    }
+                }
+            }
+
+            // 4. The controller reads them, and an explicit set is always adult.
+            if (strpos($gc, "post('is_ai')") === false || strpos($gc, "post('is_xxx')") === false) {
+                $problems[] = 'store() must read is_ai and is_xxx';
+            }
+            if (strpos($gc, "post('is_ai', null)") === false || strpos($gc, "post('is_xxx', null)") === false) {
+                $problems[] = 'update() must leave the labels alone when the form did not post them';
+            }
+            if (substr_count($gc, '$isNsfw = true;') < 3) {
+                $problems[] = 'store(), update() and the CSV import must each force the adult rating for an explicit set';
+            }
+
+            // 5. Visible in the console and on the site, and in the export.
+            if (strpos($list, "is_ai") === false || strpos($list, "is_xxx") === false) {
+                $problems[] = 'the gallery list must show the AI and XXX pills';
+            }
+            if (strpos($card, 'card-badge-ai') === false || strpos($card, '$isAi') === false) {
+                $problems[] = 'the public card must carry the AI badge';
+            }
+            if (strpos($show, 'AI generated') === false) {
+                $problems[] = 'the gallery page must say when a set is AI generated';
+            }
+            if (strpos($export, 'g.is_ai, g.is_xxx') === false) {
+                $problems[] = 'the CSV export must carry is_ai and is_xxx';
+            }
+
+            return $problems === []
+                ? $ok('stored, editable on all three forms, forced-consistent, shown and exported')
+                : $bad(implode('; ', $problems));
+        });
+
         $cache = $tests;
 
         return $cache;

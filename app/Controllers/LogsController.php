@@ -413,7 +413,15 @@ class LogsController extends Controller
                         (string) $before['type'],
                         (int) ($before['min_level'] ?? 0),
                         isset($before['published_at']) ? (string) $before['published_at'] : null,
-                        isset($before['is_secret']) ? !empty($before['is_secret']) : null
+                        isset($before['is_secret']) ? !empty($before['is_secret']) : null,
+                        // is_test is never rolled back (it guards announcements),
+                        // but the content rating and labels are part of "the
+                        // gallery as it was" and are restored when the audit
+                        // row carries them (rows written before 093 do not).
+                        null,
+                        isset($before['is_nsfw']) ? !empty($before['is_nsfw']) : null,
+                        isset($before['is_ai']) ? !empty($before['is_ai']) : null,
+                        isset($before['is_xxx']) ? !empty($before['is_xxx']) : null
                     );
                     if (isset($before['categories'])) {
                         $restoreBefore = array_map('intval', array_column(

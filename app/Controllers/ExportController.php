@@ -55,7 +55,7 @@ class ExportController extends Controller
                     g.published_at, g.created_at, g.views,
                     GROUP_CONCAT(DISTINCT c.name ORDER BY c.name SEPARATOR ' | ') AS categories,
                     (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count,
-                    g.is_nsfw
+                    g.is_nsfw, g.is_ai, g.is_xxx
              FROM galleries g
              LEFT JOIN gallery_category gc ON gc.gallery_id = g.id
              LEFT JOIN categories c ON c.id = gc.category_id

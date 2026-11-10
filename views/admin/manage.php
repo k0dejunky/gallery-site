@@ -26,6 +26,8 @@
         <strong class="type-switch-label"><?= ($gallery['type'] ?? 'images') === 'videos' ? 'Video Gallery' : 'Image Gallery' ?></strong>
     </label>
     <?php $manageNsfw = (int) ($gallery['is_nsfw'] ?? 1) === 1; ?>
+    <?php $manageAi = (int) ($gallery['is_ai'] ?? 0) === 1; ?>
+    <?php $manageXxx = (int) ($gallery['is_xxx'] ?? 0) === 1; ?>
     <p class="muted" style="margin-top: var(--spacing-sm);">
         <label>Content rating</label><br>
         <label class="chip <?= !$manageNsfw ? 'active' : '' ?>">
@@ -37,6 +39,22 @@
             NSFW &mdash; adult
         </label>
         <span class="muted">A safe gallery is open to everyone regardless of the level below.</span>
+    </p>
+    <?php /* The two tracking labels sit with the rating. The hidden 0 travels
+        with each box so an unticked box clears the flag. */ ?>
+    <p class="muted" style="margin-top: var(--spacing-sm);">
+        <label>Content flags</label><br>
+        <label class="chip">
+            <input type="hidden" name="is_ai" value="0">
+            <input type="checkbox" name="is_ai" value="1" <?= $manageAi ? 'checked' : '' ?>>
+            AI generated
+        </label>
+        <label class="chip">
+            <input type="hidden" name="is_xxx" value="0">
+            <input type="checkbox" name="is_xxx" value="1" <?= $manageXxx ? 'checked' : '' ?>>
+            XXX &mdash; explicit
+        </label>
+        <span class="muted">AI marks a set made with an image model. XXX marks an explicit set and always forces the adult rating.</span>
     </p>
     <p class="muted" style="margin-top: var(--spacing-sm);">
         <label for="manage-min-level">Membership level required to view</label>

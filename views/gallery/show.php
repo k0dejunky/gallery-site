@@ -43,6 +43,9 @@ $breadcrumbItems = [
 <h1><?= e($gallery['title']) ?></h1>
 <p><?= e($gallery['description']) ?></p>
 <p class="muted"><?= number_format((int) ($gallery['views'] ?? 0)) ?> views &middot; <?= number_format((int) ($gallery['unique_views'] ?? 0)) ?> unique viewers &middot; <?= number_format($itemCount) ?> items</p>
+<?php if ((int) ($gallery['is_ai'] ?? 0) === 1): ?>
+    <p class="muted"><span class="pill pill-soft" title="This set was generated with an image model">AI generated</span></p>
+<?php endif; ?>
 
 <?php require __DIR__ . '/../partials/star_rating.php'; ?>
 

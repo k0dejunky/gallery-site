@@ -4,7 +4,7 @@
 
 <section class="card" style="padding:1rem;margin-bottom:1rem;">
     <h2 class="section-title">Upload a CSV</h2>
-    <p class="muted u-fs-085">Columns (optional header): <code>title, description, type, min_level, is_secret, published_at, categories, is_nsfw</code>. Type is <code>images</code> or <code>videos</code>; min_level 0–3; is_secret 0/1; published_at is a site-timezone datetime (blank = publish now); categories are pipe-separated names (existing categories only); <strong>is_nsfw</strong> is optional and defaults to <code>1</code> (adult) — set it to <code>0</code> for a safe-for-work gallery, which is then open to every visitor.</p>
+    <p class="muted u-fs-085">Columns (optional header): <code>title, description, type, min_level, is_secret, published_at, categories, is_nsfw, is_ai, is_xxx</code>. Type is <code>images</code> or <code>videos</code>; min_level 0–3; is_secret 0/1; published_at is a site-timezone datetime (blank = publish now); categories are pipe-separated names (existing categories only); <strong>is_nsfw</strong> is optional and defaults to <code>1</code> (adult) — set it to <code>0</code> for a safe-for-work gallery, which is then open to every visitor; <strong>is_ai</strong> and <strong>is_xxx</strong> are optional labels and default to <code>0</code> (setting is_xxx also forces is_nsfw to <code>1</code>).</p>
     <form method="post" action="<?= url('/admin/galleries/import') ?>" enctype="multipart/form-data" class="settings-form" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
         <?= csrf_field() ?>
         <input type="file" name="csv" accept=".csv,text/csv" required>
@@ -25,7 +25,7 @@
         </p>
         <?php if (!empty($preview)): ?>
             <table style="width:100%;font-size:.85rem;">
-                <thead><tr><th>Row</th><th>Title</th><th>Type</th><th>Level</th><th>Rating</th><th>Secret</th><th>Published</th><th>Categories</th></tr></thead>
+                <thead><tr><th>Row</th><th>Title</th><th>Type</th><th>Level</th><th>Rating</th><th>Labels</th><th>Secret</th><th>Published</th><th>Categories</th></tr></thead>
                 <tbody>
                     <?php foreach ($preview as $p): ?>
                         <tr>
@@ -34,6 +34,7 @@
                             <td><?= e($p['type']) ?></td>
                             <td><?= (int) $p['min_level'] ?></td>
                             <td><?= e($p['rating'] ?? 'adult') ?></td>
+                            <td><?= e($p['labels'] ?? '(none)') ?></td>
                             <td><?= e($p['secret']) ?></td>
                             <td><?= e($p['published']) ?></td>
                             <td><?= (int) $p['categories'] ?></td>

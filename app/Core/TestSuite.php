@@ -1359,6 +1359,78 @@ class TestSuite
             }
         });
 
+        $add('db.gallery_content_flags', 'Database', 'the AI / XXX labels round-trip, an explicit set is always adult, and a form that omits them leaves them alone', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix = bin2hex(random_bytes(3));
+                    $flags = static function (int $id): array {
+                        $row = Database::run('SELECT is_nsfw, is_ai, is_xxx FROM galleries WHERE id = ?', [$id])->fetch(\PDO::FETCH_ASSOC);
+                        return [
+                            'nsfw' => (int) ($row['is_nsfw'] ?? -1),
+                            'ai'   => (int) ($row['is_ai'] ?? -1),
+                            'xxx'  => (int) ($row['is_xxx'] ?? -1),
+                        ];
+                    };
+
+                    // A plain gallery is neither AI nor XXX.
+                    $plain = \App\Models\Gallery::create('PROBE plain ' . $suffix, 'scratch');
+                    $p = $flags($plain);
+
+                    // An explicit set is always adult, even when the caller
+                    // asked for a safe gallery.
+                    $explicit = \App\Models\Gallery::create('PROBE explicit ' . $suffix, 'scratch', 'images', 0, null, false, true, false, true, true);
+                    $e = $flags($explicit);
+
+                    // create() with is_xxx=0 but is_ai=1 keeps the two apart.
+                    $aiOnly = \App\Models\Gallery::create('PROBE ai ' . $suffix, 'scratch', 'images', 0, null, false, true, false, true, false);
+                    $a = $flags($aiOnly);
+
+                    // update(): null leaves a flag alone.
+                    \App\Models\Gallery::update($plain, 'PROBE plain ' . $suffix, 'scratch', 'images', 0, null, null, null, null, true, null);
+                    $u1 = $flags($plain);
+
+                    // update(): is_xxx=1 forces the adult rating on.
+                    \App\Models\Gallery::update($plain, 'PROBE plain ' . $suffix, 'scratch', 'images', 0, null, null, null, false, null, true);
+                    $u2 = $flags($plain);
+
+                    // update(): clearing both leaves a safe, unflagged gallery.
+                    \App\Models\Gallery::update($plain, 'PROBE plain ' . $suffix, 'scratch', 'images', 0, null, null, null, false, false, false);
+                    $u3 = $flags($plain);
+
+                    $ok = $p === ['nsfw' => 1, 'ai' => 0, 'xxx' => 0]
+                        && $e === ['nsfw' => 1, 'ai' => 1, 'xxx' => 1]
+                        && $a === ['nsfw' => 0, 'ai' => 1, 'xxx' => 0]
+                        && $u1 === ['nsfw' => 1, 'ai' => 1, 'xxx' => 0]
+                        && $u2 === ['nsfw' => 1, 'ai' => 1, 'xxx' => 1]
+                        && $u3 === ['nsfw' => 0, 'ai' => 0, 'xxx' => 0];
+
+                    return [
+                        'pass'   => $ok,
+                        'detail' => $ok
+                            ? 'labels round-trip; is_xxx forces is_nsfw; an omitted flag is left alone'
+                            : 'plain=' . json_encode($p) . ' explicit=' . json_encode($e) . ' aiOnly=' . json_encode($a)
+                                . ' updateAi=' . json_encode($u1) . ' updateXxx=' . json_encode($u2) . ' cleared=' . json_encode($u3),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.gallery_nsfw_flag', 'Database', 'a safe-for-work gallery is open at any level and keeps its own level when it is adult', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

@@ -37,6 +37,8 @@
         <?php endif; ?>
     </p>
     <?php $editNsfw = (int) ($gallery['is_nsfw'] ?? 1) === 1; ?>
+    <?php $editAi = (int) ($gallery['is_ai'] ?? 0) === 1; ?>
+    <?php $editXxx = (int) ($gallery['is_xxx'] ?? 0) === 1; ?>
     <p>
         <label>Content rating</label><br>
         <label class="chip <?= !$editNsfw ? 'active' : '' ?>">
@@ -48,6 +50,23 @@
             NSFW &mdash; adult
         </label>
         <span class="muted">A safe gallery is open to everyone regardless of the membership level below.</span>
+    </p>
+    <?php /* Two tracking labels beside the rating. The hidden 0 travels with
+        each box so an unticked box clears the flag instead of leaving it
+        stale; the visual state comes from :has()/the chip JS. */ ?>
+    <p>
+        <label>Content flags</label><br>
+        <label class="chip">
+            <input type="hidden" name="is_ai" value="0">
+            <input type="checkbox" name="is_ai" value="1" <?= $editAi ? 'checked' : '' ?>>
+            AI generated
+        </label>
+        <label class="chip">
+            <input type="hidden" name="is_xxx" value="0">
+            <input type="checkbox" name="is_xxx" value="1" <?= $editXxx ? 'checked' : '' ?>>
+            XXX &mdash; explicit
+        </label>
+        <span class="muted">AI marks a set made with an image model. XXX marks an explicit set and always forces the adult rating.</span>
     </p>
     <p>
         <label for="min_level">Minimum membership level required</label><br>
