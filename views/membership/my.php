@@ -26,6 +26,8 @@ $user = $user ?? \App\Core\Auth::user();
     <p class="u-center">
         <a href="<?= url('/membership') ?>">View plans</a>
         &middot;
+        <a href="<?= url('/membership/receipts') ?>">Receipts &amp; charges</a>
+        &middot;
         <a href="<?= url('/galleries') ?>">Browse galleries</a>
     </p>
 

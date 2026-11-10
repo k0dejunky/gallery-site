@@ -1446,6 +1446,98 @@ class TestSuite
             }
         });
 
+        $add('db.refund_request_cycle', 'Database', 'a member can see every charge, ask for a refund of one, withdraw it, and only the owner or an admin can decide it', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix  = bin2hex(random_bytes(4));
+                    $userId  = self::scratchUserId('refund-' . $suffix);
+                    $otherId = self::scratchUserId('other-' . $suffix);
+
+                    $purchaseA = \App\Models\Purchase::create($userId, \App\Models\Purchase::TYPE_GALLERY, 1, 12.50, 'offline', 'probe-' . $suffix, 'probe A');
+                    $purchaseB = \App\Models\Purchase::create($userId, \App\Models\Purchase::TYPE_TIP, 0, 3.00, 'offline', 'probe-b-' . $suffix, 'probe B');
+
+                    // The receipt list is this member's own money, with a
+                    // stable number per charge.
+                    $receipts = \App\Models\Receipt::forUser($userId);
+                    $numbers  = array_column($receipts, 'receipt_no');
+                    $hasA     = in_array(\App\Models\Receipt::purchaseNumber($purchaseA), $numbers, true);
+                    $hasB     = in_array(\App\Models\Receipt::purchaseNumber($purchaseB), $numbers, true);
+                    $ownOnly  = \App\Models\Receipt::findForUser($otherId, \App\Models\Receipt::KIND_PURCHASE, $purchaseA) === null
+                        && \App\Models\Receipt::findForUser($userId, \App\Models\Receipt::KIND_PURCHASE, $purchaseA) !== null;
+
+                    // Ask for a refund of A, then refuse a second open one.
+                    $requestId = \App\Models\RefundRequest::create($userId, \App\Models\Receipt::KIND_PURCHASE, $purchaseA, 'The video would not play.');
+                    $duplicate = false;
+                    try {
+                        \App\Models\RefundRequest::create($userId, \App\Models\Receipt::KIND_PURCHASE, $purchaseA, 'Again.');
+                    } catch (\InvalidArgumentException $e) {
+                        $duplicate = true;
+                    }
+
+                    // A different member cannot ask for someone else's charge.
+                    $crossUser = false;
+                    try {
+                        \App\Models\RefundRequest::create($otherId, \App\Models\Receipt::KIND_PURCHASE, $purchaseA, 'Not mine.');
+                    } catch (\InvalidArgumentException $e) {
+                        $crossUser = true;
+                    }
+
+                    // Only the owner can withdraw it.
+                    $wrongWithdraw = \App\Models\RefundRequest::withdraw($requestId, $otherId);
+                    $rightWithdraw = \App\Models\RefundRequest::withdraw($requestId, $userId);
+
+                    // A declined request can be decided once and only once.
+                    $second = \App\Models\RefundRequest::create($userId, \App\Models\Receipt::KIND_PURCHASE, $purchaseA, 'Second attempt.');
+                    $deny   = \App\Models\RefundRequest::decide($second, \App\Models\RefundRequest::STATUS_DENIED, 'No.', $userId);
+                    $again  = \App\Models\RefundRequest::decide($second, \App\Models\RefundRequest::STATUS_APPROVED, 'Changed my mind.', $userId);
+
+                    // Approving an OFFLINE purchase: no money moved at a
+                    // processor, so there is nothing to send back - but the
+                    // ledger must stop counting it as revenue and the unlock
+                    // must close.
+                    $third     = \App\Models\RefundRequest::create($userId, \App\Models\Receipt::KIND_PURCHASE, $purchaseB, 'Tip sent by mistake.');
+                    $approve   = \App\Models\RefundRequest::decide($third, \App\Models\RefundRequest::STATUS_APPROVED, 'Refunded as a courtesy.', $userId);
+                    $bStatus   = (string) Database::run('SELECT status FROM purchases WHERE id = ?', [$purchaseB])->fetchColumn();
+
+                    $ok = $hasA && $hasB && $ownOnly
+                        && $duplicate && $crossUser
+                        && $wrongWithdraw === false && $rightWithdraw === true
+                        && $deny === \App\Models\RefundRequest::STATUS_DENIED
+                        && $again === 'already'
+                        && $approve === \App\Models\RefundRequest::STATUS_APPROVED
+                        && $bStatus === \App\Models\Purchase::STATUS_REFUNDED;
+
+                    return [
+                        'pass'   => $ok,
+                        'detail' => $ok
+                            ? 'receipts are per member with INV-P numbers; one open request per charge; owner-only withdraw; decided once; an approval closes the local ledger row too'
+                            : json_encode([
+                                'hasA' => $hasA, 'hasB' => $hasB, 'ownOnly' => $ownOnly,
+                                'duplicate' => $duplicate, 'crossUser' => $crossUser,
+                                'wrongWithdraw' => $wrongWithdraw, 'rightWithdraw' => $rightWithdraw,
+                                'deny' => $deny, 'again' => $again, 'approve' => $approve, 'bStatus' => $bStatus,
+                            ]),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.gallery_nsfw_flag', 'Database', 'a safe-for-work gallery is open at any level and keeps its own level when it is adult', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
@@ -3450,6 +3542,23 @@ class TestSuite
         } catch (\Throwable $ex) {
             return ['pass' => false, 'detail' => 'exception: ' . $ex->getMessage()];
         }
+    }
+
+    /**
+     * A throwaway member for a DB test. The caller runs inside a transaction
+     * that is rolled back, so the row never survives the test - and no live
+     * inbox is ever touched.
+     */
+    private static function scratchUserId(string $prefix): int
+    {
+        $email = $prefix . '-' . bin2hex(random_bytes(3)) . '@example.invalid';
+        Database::run(
+            "INSERT INTO users (email, password_hash, role, status, email_verified_at, created_at)
+             VALUES (?, 'x', 'user', 'active', NOW(), NOW())",
+            [$email]
+        );
+
+        return (int) Database::connection()->lastInsertId();
     }
 
     /** Perform a GET and return the HTTP status code (fake-browser UA). */

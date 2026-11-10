@@ -8,6 +8,8 @@ use App\Models\Comment;
 use App\Models\Gallery;
 use App\Models\Notification;
 use App\Models\Purchase;
+use App\Models\Receipt;
+use App\Models\RefundRequest;
 use App\Models\SaleCode;
 use App\Models\Tag;
 use App\Models\UnlockCode;
@@ -158,7 +160,50 @@ class ModerationController extends Controller
             'purchases' => Purchase::recent(500),
             'tipsTotal' => Purchase::totalFor(Purchase::TYPE_TIP),
             'unlockTotal' => Purchase::totalFor(Purchase::TYPE_GALLERY),
+            // The member's own refund requests. They live on this page
+            // because this page IS the ledger: a decision about a charge is
+            // made where the charge is.
+            'refundRequests' => RefundRequest::recent(100),
         ]);
+    }
+
+    /**
+     * Answer a member's refund request.
+     *
+     * An approval on a one-off charge refunds the MONEY first; the request is
+     * only marked approved when the processor confirms. A membership term
+     * cannot be refunded by the site (it stores the subscription id, not the
+     * id of each charge), so the approval records the decision and the owner
+     * refunds in the processor.
+     */
+    public function refundDecide(int $id): void
+    {
+        Auth::requirePermission('monetisation');
+
+        $status = (string) $this->request->post('status', '');
+        $note   = (string) $this->request->post('admin_note', '');
+
+        $result = RefundRequest::decide($id, $status, $note, (int) Auth::user()['id']);
+
+        switch ($result) {
+            case RefundRequest::STATUS_APPROVED:
+                $this->flash('success', 'Refund approved. A one-off charge was refunded at the processor; a membership term must be refunded in the processor by hand.');
+                break;
+            case RefundRequest::STATUS_DENIED:
+                $this->flash('success', 'Refund request declined.');
+                break;
+            case 'refund_failed':
+                $this->flash('error', 'The processor did not confirm the refund, so the request is still open. Check the processor and try again.');
+                break;
+            case 'already':
+                $this->flash('error', 'That request has already been decided.');
+                break;
+            default:
+                $this->flash('error', 'That refund request was not found.');
+                break;
+        }
+
+        $this->redirect('/admin/engagement/purchases');
     }
 
     public function purchaseStatus(int $id): void

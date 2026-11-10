@@ -1392,6 +1392,34 @@ CREATE TABLE IF NOT EXISTS admin_user_permissions (
     CONSTRAINT fk_admin_user_permissions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- A member's refund request: exactly one of purchase_id / subscription_id is
+-- set. A purchase holds the processor's transaction id, so an approval can
+-- refund the money; a subscription stores the SUBSCRIPTION id rather than
+-- each monthly charge, so an approval records the decision and the money is
+-- refunded in the processor. Only 'open' can be decided.
+CREATE TABLE IF NOT EXISTS refund_requests (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT UNSIGNED NOT NULL,
+    purchase_id     BIGINT UNSIGNED NULL DEFAULT NULL,
+    subscription_id INT UNSIGNED NULL DEFAULT NULL,
+    reason          VARCHAR(1000) NOT NULL,
+    status          ENUM('open', 'approved', 'denied', 'withdrawn') NOT NULL DEFAULT 'open',
+    admin_note      VARCHAR(1000) NULL DEFAULT NULL,
+    decided_by      INT UNSIGNED NULL DEFAULT NULL,
+    decided_at      DATETIME NULL DEFAULT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_refund_status (status, created_at),
+    INDEX idx_refund_user (user_id, created_at),
+    INDEX idx_refund_purchase (purchase_id),
+    INDEX idx_refund_subscription (subscription_id),
+    FOREIGN KEY (user_id)     REFERENCES users(id)     ON DELETE CASCADE,
+    FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE,
+    FOREIGN KEY (decided_by)  REFERENCES users(id)     ON DELETE SET NULL
+    -- No FK on subscription_id on purpose: installations differ on whether
+    -- subscriptions.id is INT or INT UNSIGNED. Subscription::delete() cleans
+    -- the requests up instead.
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- Re-enable the foreign-key checks at the very end, so every table in
 -- this file is created with them off (several tables reference tables that
 -- are defined later, and the import order must not matter).

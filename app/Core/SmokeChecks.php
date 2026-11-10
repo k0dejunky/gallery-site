@@ -3046,10 +3046,18 @@ $add('smoke.ui.hero_buttons_are_compact_and_centred', 'Smoke \u00b7 UI', 'The he
             if (strpos($js, 'img[data-protect]') === false) {
                 $problems[] = 'the image protection must offer an explicit data-protect opt-in';
             }
-            // It has to announce itself, not just die silently.
+            // It has to announce itself, not just die silently - and it must
+            // tell the TRUTH. The old copy said "saving is disabled", which
+            // no browser can promise: right-click and drag are blocked, the
+            // bytes are still in the page. A notice that names the rule
+            // ("personal viewing only") is honest; a notice that claims a
+            // control the site does not have is not.
             $grid = (string) @file_get_contents($root . '/views/partials/gallery_grid_item.php');
-            if (strpos($grid, 'Saving is disabled') === false) {
-                $problems[] = 'the media must say that saving is disabled';
+            if (strpos($grid, 'For personal viewing only') === false) {
+                $problems[] = 'the media must say it is for personal viewing only';
+            }
+            if (stripos($grid, 'Saving is disabled') !== false) {
+                $problems[] = 'the media must not claim that saving is disabled - no browser enforces it';
             }
 
             return $problems === []
@@ -7711,6 +7719,91 @@ $add('smoke.ui.hero_buttons_are_compact_and_centred', 'Smoke \u00b7 UI', 'The he
                 ? $ok('a sandbox processor is not offered to a member, and the admin still has it')
                 : $bad(implode('; ', $problems));
         });
+        $add('smoke.billing.receipts_and_refunds', 'Smoke · Membership', 'A member sees every charge with a stable receipt number and can ask for one of them back', static function () use ($root, $read, $ok, $bad): array {
+            $problems = [];
+
+            $routes = (string) $read($root . '/config/routes.php');
+            foreach ([
+                "'/membership/receipts'",
+                "'/membership/receipts/{kind}/{id}'",
+                "'/membership/refund-request'",
+                "'/membership/refund-request/withdraw'",
+                "'/admin/engagement/refunds/{id}'",
+            ] as $needle) {
+                if (strpos($routes, $needle) === false) {
+                    $problems[] = 'the route ' . $needle . ' is missing';
+                }
+            }
+
+            // A receipt is a VIEW: a second ledger would drift from the money.
+            $receipt = (string) $read($root . '/app/Models/Receipt.php');
+            if (strpos($receipt, "return 'INV-P'") === false || strpos($receipt, "return 'INV-M'") === false) {
+                $problems[] = 'a receipt number must be INV-P (purchase) / INV-M (membership)';
+            }
+            if (stripos($receipt, 'INSERT INTO') !== false) {
+                $problems[] = 'a receipt must be derived from subscriptions + purchases, not inserted into a second ledger';
+            }
+
+            // The request itself has to refuse the two ways it can go wrong:
+            // someone else's charge, and a second open request for the same
+            // charge.
+            $request = (string) $read($root . '/app/Models/RefundRequest.php');
+            if (strpos($request, 'was not found on your account') === false) {
+                $problems[] = 'a member must only be able to ask for a refund of their own charge';
+            }
+            if (strpos($request, 'already have an open request') === false) {
+                $problems[] = 'a charge must not accumulate open requests';
+            }
+            // An approval on a one-off charge must move the money BEFORE the
+            // request is marked approved.
+            if (strpos($request, 'Purchase::refundAtGateway(') === false) {
+                $problems[] = 'approving a one-off refund must call the processor';
+            }
+            if (strpos($request, 'if ($gateway === false) {') === false) {
+                $problems[] = 'a processor that refuses must leave the request open';
+            }
+
+            if (!is_file($root . '/views/membership/receipts.php') || !is_file($root . '/views/membership/receipt.php')) {
+                $problems[] = 'the member receipts page and the single-receipt page must exist';
+            } else {
+                $list = (string) $read($root . '/views/membership/receipts.php');
+                if (strpos($list, 'receipt_no') === false) {
+                    $problems[] = 'the receipts list must show the receipt number';
+                }
+                $single = (string) $read($root . '/views/membership/receipt.php');
+                if (strpos($single, 'refund-request') === false || strpos($single, 'charge_id') === false) {
+                    $problems[] = 'the single receipt must offer the refund form for that one charge';
+                }
+            }
+
+            $my = (string) $read($root . '/views/membership/my.php');
+            if (strpos($my, "'/membership/receipts'") === false) {
+                $problems[] = 'the membership page must link to the receipts page';
+            }
+
+            $admin = (string) $read($root . '/views/admin/engagement_purchases.php');
+            if (strpos($admin, 'refundRequests') === false) {
+                $problems[] = 'the admin purchases page must list the refund requests';
+            }
+            if (strpos($admin, '/admin/engagement/refunds/') === false) {
+                $problems[] = 'the admin must be able to answer a request';
+            }
+            if (stripos($admin, 'refunded in the processor by hand') === false) {
+                $problems[] = 'the admin page must say that a membership term is refunded in the processor';
+            }
+
+            if (!is_file($root . '/database/migrations/094_refund_requests.sql')) {
+                $problems[] = 'migration 094 must exist';
+            }
+            if (strpos((string) $read($root . '/schema.sql'), 'CREATE TABLE IF NOT EXISTS refund_requests') === false) {
+                $problems[] = 'schema.sql must carry refund_requests';
+            }
+
+            return $problems === []
+                ? $ok('receipts carry INV-P/INV-M numbers, one open request per charge, and an approval moves the money first')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.media.variant_orientation', 'Smoke · Media', 'A preview applies the EXIF orientation once', static function () use ($root, $read, $ok, $bad): array {
             $helpers = $read("$root/app/Core/helpers.php");
             // ffmpeg's autorotate applies the EXIF orientation itself. A

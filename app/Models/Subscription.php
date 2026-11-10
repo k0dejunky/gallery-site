@@ -637,6 +637,13 @@ class Subscription
      */
     public static function delete(int $id): void
     {
+        // A refund request names a charge on this subscription. With the
+        // subscription gone there is nothing left to refund, and the admin
+        // queue would show a request whose plan can no longer be named.
+        // (There is no FK on that column: installations differ on whether
+        // subscriptions.id is INT or INT UNSIGNED, so it is cleaned here.)
+        Database::run('DELETE FROM refund_requests WHERE subscription_id = ?', [$id]);
+
         Database::run('DELETE FROM subscriptions WHERE id = ?', [$id]);
     }
 

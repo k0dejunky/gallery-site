@@ -18,6 +18,8 @@ use App\Models\Subscription;
 use App\Models\Sale;
 use App\Models\Gallery;
 use App\Models\Photo;
+use App\Models\Receipt;
+use App\Models\RefundRequest;
 
 /**
  * Membership flows for regular users: the pricing page, the user's own
@@ -675,6 +677,109 @@ class MembershipController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * The member's receipts: everything the site has charged them, with a
+     * stable invoice number, and a way to ask for a refund.
+     *
+     * A receipt is a view over subscriptions + purchases rather than a
+     * second ledger, so it can never disagree with the money.
+     */
+    public function receipts(): void
+    {
+        Auth::requireLogin();
+
+        $user   = Auth::user();
+        $userId = (int) $user['id'];
+
+        $receipts = Receipt::forUser($userId);
+        $requests = RefundRequest::forUser($userId);
+
+        $this->view('membership/receipts', [
+            'user'      => $user,
+            'receipts'  => $receipts,
+            'requests'  => $requests,
+            'totalPaid' => Receipt::totalPaid($userId),
+        ]);
+    }
+
+    /**
+     * One printable receipt. It is addressed by kind + the immutable row id,
+     * and the row's owner is checked here: an invoice number is guessable, so
+     * it must never be the only thing standing between two members.
+     */
+    public function receipt(string $kind, string $id): void
+    {
+        Auth::requireLogin();
+
+        $user     = Auth::user();
+        $receipt  = Receipt::findForUser((int) $user['id'], $kind, (int) $id);
+
+        if ($receipt === null) {
+            $this->notFound();
+            return;
+        }
+
+        $open = null;
+        foreach (RefundRequest::forUser((int) $user['id']) as $request) {
+            if ((string) ($request['status'] ?? '') !== RefundRequest::STATUS_OPEN) {
+                continue;
+            }
+            $hit = $kind === Receipt::KIND_PURCHASE
+                ? (int) ($request['purchase_id'] ?? 0) === (int) $id
+                : (int) ($request['subscription_id'] ?? 0) === (int) $id;
+            if ($hit) {
+                $open = $request;
+                break;
+            }
+        }
+
+        $this->view('membership/receipt', [
+            'user'    => $user,
+            'receipt' => $receipt,
+            'open'    => $open,
+        ]);
+    }
+
+    /** Ask for a refund of one charge. */
+    public function requestRefund(): void
+    {
+        Auth::requireLogin();
+
+        $user   = Auth::user();
+        $kind   = (string) $this->request->post('kind', '');
+        $charge = (int) $this->request->post('charge_id', 0);
+        $reason = (string) $this->request->post('reason', '');
+
+        try {
+            RefundRequest::create((int) $user['id'], $kind, $charge, $reason);
+            $this->flash('success', 'Your refund request was sent. We will review it and reply by email.');
+        } catch (\InvalidArgumentException $e) {
+            $this->flash('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            error_log('[membership/refund] ' . $e->getMessage());
+            $this->flash('error', 'The request could not be sent. Please try again or contact support.');
+        }
+
+        $this->redirect('/membership/receipts');
+    }
+
+    /** Withdraw an open request. */
+    public function withdrawRefund(): void
+    {
+        Auth::requireLogin();
+
+        $user = Auth::user();
+        $id   = (int) $this->request->post('request_id', 0);
+
+        if (RefundRequest::withdraw($id, (int) $user['id'])) {
+            $this->flash('success', 'Your refund request was withdrawn.');
+        } else {
+            $this->flash('error', 'That request could not be withdrawn.');
+        }
+
+        $this->redirect('/membership/receipts');
     }
 
     /**
