@@ -395,17 +395,17 @@ The PPV/tip/unlock surface stays dormant. This phase is about the
 
 | id | what | status | commit |
 |---|---|---|---|
-| 10.1 | A member-facing refund request | pending | - |
-| 10.2 | An invoice / receipt (the member can see their charges at all) | pending | - |
-| 10.3 | A card update | pending | - |
+| 10.1 | A member-facing refund request | done - tied to one charge, one open request, refunds at the processor before approval | `dd44c63` |
+| 10.2 | An invoice / receipt (the member can see their charges at all) | done - a view over subscriptions + purchases, `INV-P`/`INV-M` numbers | `dd44c63` |
+| 10.3 | A card update | done - the same hosted-fields form now serves an ACTIVE card membership, not only a past-due one | `288b61b` |
 | 10.4 | A membership pause / freeze | pending | - |
 | 10.5 | A dunning ladder the site owns | pending | - |
 | 10.6 | A chargeback / dispute state | pending | - |
 | 10.7 | A gift purchase | pending | - |
-| 10.8 | Tax / receipt numbering | pending | - |
+| 10.8 | Receipt numbering | done - `INV-P####` / `INV-M####` from the immutable row id. Tax is not itemised: the site charges one amount per plan and nowhere computes tax | `dd44c63` |
 | 10.9 | Payout processing - the earnings page says outright that it does not ship | pending | - |
 | 10.10 | The level numbering: the yearly plan is level 9 and lifetime is 10, but **no gallery exceeds level 3** | pending | - |
-| 10.11 | An honest answer to downloads - the terms forbid it and the tooltip says "saving is disabled", but a member can still save the 720p file they are served | pending | - |
+| 10.11 | An honest answer to downloads - the terms forbid it and the tooltip says "saving is disabled", but a member can still save the 720p file they are served | done - the notice names the rule instead of claiming a control | `dd44c63` |
 | 10.12 | A download allowance or a watermark tier | pending | - |
 
 ---
@@ -437,7 +437,7 @@ the numbers below are measurements, not guesses.
 | 13.2 | The level numbering: prod's Yearly is level 9 and Lifetime level 10 (hand-edited rows), the seed says 1, the tier labels only know 0-3, and **no gallery exceeds `min_level` 3** | `app/Models/Subscription.php`, `app/Models/TrialLink.php`, `app/Models/Stats.php`, `app/Controllers/PlanController.php`, a migration | planned | - |
 | 13.3 | The theme title-image upload is **broken** (the file is served from a path nothing routes, and the watermark silently stops with it), it accepts an **SVG with no validation**, and `update()` is gated on `requireLogin()` - so a **member** can restyle the site | `app/Controllers/ThemeController.php`, `app/Models/Theme.php`, `views/layout.php`, `install.sh` | planned | - |
 | 13.4 | The Braintree pages override the whole CSP with `'unsafe-inline'` and **no nonce** (the nonce the view emits is inert), and both the override AND the site policy are missing `https://assets.braintreegateway.com` from `frame-src` - the Hosted Fields iframe | `public/index.php`, `app/Controllers/MembershipController.php` | planned | - |
-| 13.5 | The tooltip and the terms say saving is disabled; nothing enforces it (the media is served inline, no `Content-Disposition`) | `views/partials/gallery_card.php`, `views/terms.php` | planned | - |
+| 13.5 | The tooltip and the terms say saving is disabled; nothing enforces it (the media is served inline, no `Content-Disposition`) | `views/partials/gallery_grid_item.php`, `views/terms.php` | done - the tooltip states the licence rule; the terms were already a licence term, not a technical claim | `dd44c63` |
 | 13.6 | The php-fatal alert is mailed once an hour and **nobody acted on 76 of them** - the log is the only record | `app/Core/Housekeeping.php`, `app/Controllers/SystemController.php`, `views/admin/system.php` | planned | - |
 | 13.7 | `.env` stays out of the backup. No code change; the restore drill's output and this plan say so | `scripts/restore-drill.sh` | decided - no change | - |
 

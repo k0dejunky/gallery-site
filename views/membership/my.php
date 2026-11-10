@@ -63,11 +63,13 @@ $user = $user ?? \App\Core\Auth::user();
             </form>
         </div>
 
-        <?php // A past-due membership: the card failed, and the member needs
-              // somewhere to put a new one. Without this the past-due email
-              // linked here and there was nothing to do. ?>
-        <?php if (!empty($pastDueSub)): ?>
-        <div class="card">
+        <?php // The card on a card-billed membership. A past-due one MUST be
+              // fixable (the dunning email links here), and an active one
+              // should be changeable BEFORE it expires - it used to be
+              // unchangeable until a charge had already failed. ?>
+        <?php if (!empty($cardSub)): ?>
+        <div class="card" id="payment-method">
+            <?php if (!empty($pastDueSub)): ?>
             <h2>Your payment failed</h2>
             <p>
                 We could not charge the card on your <strong><?= e((string) ($pastDueSub['plan_name'] ?? 'membership')) ?></strong>
@@ -75,10 +77,17 @@ $user = $user ?? \App\Core\Auth::user();
                 <strong><?= (int) \App\Models\Subscription::pastDueGraceDays() ?> days</strong>
                 while the card is retried.
             </p>
+            <?php else: ?>
+            <h2>Payment method</h2>
+            <p class="muted">
+                The card billed for your <strong><?= e((string) ($cardSub['plan_name'] ?? 'membership')) ?></strong>
+                membership. Updating it here changes the card the next renewal uses.
+            </p>
+            <?php endif; ?>
             <?php if (!empty($cardToken)): ?>
             <form method="post" action="<?= url('/membership/update-card') ?>" id="update-card-form">
                 <?= csrf_field() ?>
-                <input type="hidden" name="subscription_id" value="<?= (int) $pastDueSub['id'] ?>">
+                <input type="hidden" name="subscription_id" value="<?= (int) $cardSub['id'] ?>">
                 <input type="hidden" name="payment_method_nonce" id="update-card-nonce">
                 <div id="update-card-fields"></div>
                 <p class="muted" id="update-card-status">Loading the card form&hellip;</p>

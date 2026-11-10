@@ -7804,6 +7804,38 @@ $add('smoke.ui.hero_buttons_are_compact_and_centred', 'Smoke \u00b7 UI', 'The he
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.membership.card_update_for_active', 'Smoke · Membership', 'A member can change the card on an ACTIVE membership, not only after a charge failed', static function () use ($root, $read, $ok, $bad): array {
+            $ctrl = (string) $read($root . '/app/Controllers/MembershipController.php');
+            $view = (string) $read($root . '/views/membership/my.php');
+            $problems = [];
+
+            if (strpos($ctrl, '$cardSub = $activeSub;') === false) {
+                $problems[] = 'the card form must be offered for an active card membership too, not only a past-due one';
+            }
+            if (strpos($ctrl, 'clientToken($customerId)') === false) {
+                $problems[] = 'an active card membership needs the Braintree client token as well';
+            }
+            if (strpos($view, 'id="payment-method"') === false) {
+                $problems[] = 'the page must render one payment-method card for either state';
+            }
+            if (strpos($view, "value=\"<?= (int) \$cardSub['id'] ?>\"") === false) {
+                $problems[] = 'the form must target the subscription whose card is being changed';
+            }
+            // "Your membership is active again" is a lie when it never
+            // stopped being active.
+            if (strpos($ctrl, '$wasPastDue') === false) {
+                $problems[] = 'the confirmation must say what actually happened (cleared a past-due, or changed a card)';
+            }
+            // The old copy must not come back unconditionally.
+            if (preg_match("/flash\\('success', 'Your card has been updated\\. Your membership is active again\\.'\\);/", $ctrl)) {
+                $problems[] = 'the past-due-only confirmation must not be the only message';
+            }
+
+            return $problems === []
+                ? $ok('an active card membership can change its card, and the confirmation matches what happened')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.media.variant_orientation', 'Smoke · Media', 'A preview applies the EXIF orientation once', static function () use ($root, $read, $ok, $bad): array {
             $helpers = $read("$root/app/Core/helpers.php");
             // ffmpeg's autorotate applies the EXIF orientation itself. A

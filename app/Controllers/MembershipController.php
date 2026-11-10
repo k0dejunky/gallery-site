@@ -132,16 +132,28 @@ class MembershipController extends Controller
         $activeSub = Subscription::activeFor($userId);
 
         // A past-due membership needs a way to fix the card, so the page
-        // needs the Braintree client token for the hosted fields.
+        // needs the Braintree client token for the hosted fields. The SAME
+        // form is the way an ACTIVE card membership changes its card before
+        // it expires - the card used to be unchangeable until a charge had
+        // already failed.
         $pastDueSub = null;
-        $cardToken  = null;
         foreach (Subscription::forUser($userId) as $sub) {
             if ((string) ($sub['status'] ?? '') === 'past_due') {
                 $pastDueSub = $sub;
                 break;
             }
         }
-        if ($pastDueSub !== null && strpos((string) ($pastDueSub['transaction_ref'] ?? ''), 'BT-') === 0) {
+
+        $cardSub = $pastDueSub;
+        if ($cardSub === null
+            && $activeSub !== null
+            && (string) ($activeSub['status'] ?? '') === 'active'
+            && strpos((string) ($activeSub['transaction_ref'] ?? ''), 'BT-') === 0) {
+            $cardSub = $activeSub;
+        }
+
+        $cardToken = null;
+        if ($cardSub !== null && strpos((string) ($cardSub['transaction_ref'] ?? ''), 'BT-') === 0) {
             try {
                 $processor = $this->braintreeProcessor();
                 $gateway   = $processor !== null ? BraintreeGateway::fromConfig($processor) : null;
@@ -167,6 +179,7 @@ class MembershipController extends Controller
             'activeSub'     => $activeSub,
             'pendingSub'    => Subscription::pendingFor($userId),
             'pastDueSub'    => $pastDueSub,
+            'cardSub'       => $cardSub,
             'cardToken'     => $cardToken,
             'user'          => $user,
         ]);
@@ -294,8 +307,11 @@ class MembershipController extends Controller
                 throw new \RuntimeException('the subscription did not accept the new card');
             }
 
-            // The subscription is healthy again: clear the past-due marker
-            // and put the access back.
+            // A past-due membership is healthy again: clear the marker and
+            // put the access back. An ACTIVE membership is only changing its
+            // card, so there is nothing to clear and nothing to promise.
+            $wasPastDue = (string) ($subscription['status'] ?? '') === 'past_due';
+
             Database::run(
                 "UPDATE subscriptions
                  SET status = 'active', past_due_at = NULL, updated_at = CURRENT_TIMESTAMP
@@ -303,7 +319,9 @@ class MembershipController extends Controller
                 [$subscriptionId]
             );
 
-            $this->flash('success', 'Your card has been updated. Your membership is active again.');
+            $this->flash('success', $wasPastDue
+                ? 'Your card has been updated. Your membership is active again.'
+                : 'Your card has been updated. The next renewal will use it.');
         } catch (\Throwable $e) {
             error_log('[membership/update-card] ' . $e->getMessage());
             $this->flash('error', 'The card could not be updated. Please check the details and try again.');
