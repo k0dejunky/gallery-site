@@ -18,7 +18,12 @@
 
 declare(strict_types=1);
 
-const SITE_ROOT = '/var/www/gallery';
+// The install directory is the parent of bin/, not a fixed path: install.sh
+// supports a custom INSTALL_DIR, and it invokes THIS copy of the script (the
+// sudoers rule it writes names that copy). A hardcoded /var/www/gallery made a
+// custom install read another tree's schedules.json and write cron rules
+// pointing at a directory that does not exist.
+define('SITE_ROOT', dirname(__DIR__));
 
 $schedulesFile = SITE_ROOT . '/storage/cron/schedules.json';
 $envFile       = SITE_ROOT . '/.env';

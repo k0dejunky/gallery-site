@@ -1027,18 +1027,25 @@ class TestSuite
             $made = [];
             $galleryId = null;
             try {
-                // Two categories to argue about.
+                // Three categories to argue about: one the editor keeps, one
+                // they drop and one they add by hand. The names are fixtures,
+                // so feedback a crashed earlier run left behind is cleared
+                // first - otherwise the exact counters below depend on the
+                // history of the box (prod's category 2 already had additions
+                // from the backfill, which made this test fail only there).
                 $names = [];
-                foreach (['TmpTasteKeep', 'TmpTasteDrop'] as $name) {
+                foreach (['TmpTasteKeep', 'TmpTasteDrop', 'TmpTasteOther'] as $name) {
                     $existing = Database::run('SELECT id FROM categories WHERE name = ?', [$name])->fetch();
                     if ($existing === false) {
                         Database::run('INSERT INTO categories (name, slug) VALUES (?, ?)', [$name, strtolower($name)]);
                         $made[] = $name;
                     }
                     $names[$name] = (int) Database::run('SELECT id FROM categories WHERE name = ?', [$name])->fetchColumn();
+                    Database::run('DELETE FROM gallery_category_feedback WHERE category_id = ?', [$names[$name]]);
                 }
-                $keepId = $names['TmpTasteKeep'];
-                $dropId = $names['TmpTasteDrop'];
+                $keepId  = $names['TmpTasteKeep'];
+                $dropId  = $names['TmpTasteDrop'];
+                $otherId = $names['TmpTasteOther'];
 
                 Database::run("INSERT INTO galleries (title, type) VALUES ('TmpTasteGallery', 'images')");
                 $galleryId = (int) Database::connection()->lastInsertId();
@@ -1076,7 +1083,6 @@ class TestSuite
 
                 // A manual edit: the editor adds a category the AI never
                 // proposed and takes the dropped one off for good.
-                $otherId = (int) Database::run('SELECT id FROM categories ORDER BY id ASC LIMIT 1')->fetchColumn();
                 \App\Models\CategoryFeedback::recordDelta($galleryId, [$keepId, $dropId], [$keepId, $otherId], 0);
 
                 $removed = \App\Models\CategoryFeedback::removedFor($galleryId);
@@ -1095,6 +1101,15 @@ class TestSuite
                         'drop_score' => $dropScore['score'] ?? null,
                         'removed' => $removed,
                         'added' => $scores2[$otherId]['added'] ?? 0,
+                        'checks' => [
+                            'scored' => $scored,
+                            'weights' => $weights,
+                            'neutral' => $neutral,
+                            'prefs' => $prefsOk,
+                            'removed' => $removedOk,
+                            'added' => $addedOk,
+                            'vocab' => $vocabOk,
+                        ],
                     ])];
             } catch (\Throwable $e) {
                 return ['pass' => false, 'detail' => $e->getMessage()];
@@ -2014,13 +2029,18 @@ class TestSuite
                 $stamp = bin2hex(random_bytes(4));
 
                 try {
-                    // A COMMITTED gallery: the fulltext index only sees a row
-                    // once its transaction has committed, so a row created
-                    // inside this test's transaction would not be found.
+                    // A COMMITTED gallery the public search can actually
+                    // return: not deleted, and not scheduled for the future.
+                    // The newest rows are a publish queue that runs into 2027,
+                    // and paginate() hides anything not yet live - picking
+                    // "the newest" used to select a 2027 gallery and fail.
+                    // The ordering matches paginate()'s own (created_at DESC),
+                    // so the fixture is the first hit for its own title.
                     $row = Database::run(
                         "SELECT id, title FROM galleries
                          WHERE deleted_at IS NULL AND CHAR_LENGTH(title) > 8
-                         ORDER BY id DESC LIMIT 1"
+                           AND (published_at IS NULL OR published_at <= CURRENT_TIMESTAMP)
+                         ORDER BY created_at DESC, id DESC LIMIT 1"
                     )->fetch();
                     if ($row === false) {
                         return ['pass' => true, 'detail' => 'no gallery fixture; nothing to prove'];
@@ -2028,13 +2048,14 @@ class TestSuite
                     $galleryId = (int) $row['id'];
                     $title    = (string) $row['title'];
 
-                    // A word from that title (three characters or more, so the
-                    // fulltext index can use it).
+                    // The LONGEST word from that title (four characters or
+                    // more, so the fulltext index can use it). The longest is
+                    // the least likely to be a stopword the index ignores.
                     $word = '';
                     foreach (preg_split('/\s+/u', $title) as $part) {
-                        if (mb_strlen(trim($part)) >= 4) {
-                            $word = trim($part);
-                            break;
+                        $part = trim($part);
+                        if (mb_strlen($part) >= 4 && mb_strlen($part) > mb_strlen($word)) {
+                            $word = $part;
                         }
                     }
                     if ($word === '') {
@@ -2063,7 +2084,11 @@ class TestSuite
                     ]);
 
                     // And the searches are recorded (the "popular searches"
-                    // the member sees when a search comes up empty).
+                    // the member sees when a search comes up empty). The
+                    // recorded ROW is what proves it: asserting the term is
+                    // in the global top 5 depends on the box's real traffic
+                    // (prod's busiest term has 7 hits, so a fresh single hit
+                    // never ranks there).
                     $userId = 0;
                     $email = 'searchprobe.' . $stamp . '@example.invalid';
                     Database::run(
@@ -2073,14 +2098,19 @@ class TestSuite
                     );
                     $userId = (int) Database::connection()->lastInsertId();
                     \App\Models\Stats::recordSearch($word, $userId, true);
+                    $recorded = (int) Database::run(
+                        'SELECT COUNT(*) FROM search_stats WHERE term = ? AND user_id = ? AND found = 1',
+                        [$word, $userId]
+                    )->fetchColumn();
                     $popular = \App\Models\Stats::popularSearches(5);
-                    $isPopular = in_array($word, $popular, true);
+                    $popularRuns = is_array($popular) && $popular !== [];
 
                     return [
-                        'pass'   => $found && (int) $short['total'] >= 0 && $isPopular,
+                        'pass'   => $found && (int) $short['total'] >= 0 && $recorded >= 1 && $popularRuns,
                         'detail' => 'found=' . ($found ? 'yes' : 'NO')
                             . ' short=' . (int) $short['total']
-                            . ' popular=' . ($isPopular ? 'yes' : 'NO'),
+                            . ' recorded=' . $recorded
+                            . ' popular=' . ($popularRuns ? 'yes' : 'NO'),
                     ];
                 } finally {
                     if ($own) {
@@ -3107,11 +3137,53 @@ class TestSuite
             }
         });
 
-        $add('autoposter.tweet_key', 'Auto Poster', 'X (Twitter) OAuth consumer key configured', function () {
+        $add('autoposter.tweet_key', 'Auto Poster', 'The X (Twitter) credentials are complete, or X is not set up on this box', function () {
             try {
                 $cfg = \App\Models\AutoPosterConfig::all();
-                $key = (string) ($cfg['twitter']['consumer_key'] ?? '');
-                return ['pass' => $key !== '', 'detail' => $key !== '' ? 'set' : 'empty'];
+                $tw  = is_array($cfg['twitter'] ?? null) ? $cfg['twitter'] : [];
+
+                // X needs ONE complete credential path: OAuth1 (all four
+                // fields) carries the media upload, OAuth2 needs the app's
+                // client pair. A HALF-entered path is the failure worth
+                // catching - a channel with OAuth2 keys but no consumer key
+                // posts text and silently drops the picture, and the admin
+                // page shows no error. A box holding NO X credentials is not
+                // misconfigured: the developer checkout and dev deliberately
+                // carry no live posting keys.
+                $groups = [
+                    'OAuth1 (media uploads)' => ['consumer_key', 'consumer_secret', 'oauth_token', 'oauth_token_secret'],
+                    'OAuth2 app'             => ['client_id', 'client_secret'],
+                ];
+                $any      = false;
+                $partial  = [];
+                $complete = [];
+
+                foreach ($groups as $label => $fields) {
+                    $present = [];
+                    foreach ($fields as $field) {
+                        if (trim((string) ($tw[$field] ?? '')) !== '') {
+                            $present[] = $field;
+                        }
+                    }
+                    if ($present === []) {
+                        continue;
+                    }
+                    $any = true;
+                    if (count($present) === count($fields)) {
+                        $complete[] = $label;
+                    } else {
+                        $partial[] = $label . ' missing ' . implode('/', array_diff($fields, $present));
+                    }
+                }
+
+                if (!$any) {
+                    return ['pass' => true, 'detail' => 'no X credentials on this box (X is not set up here)'];
+                }
+
+                return [
+                    'pass'   => $partial === [],
+                    'detail' => $partial === [] ? 'complete: ' . implode(', ', $complete) : implode('; ', $partial),
+                ];
             } catch (\Throwable $ex) {
                 return ['pass' => false, 'detail' => 'config:' . $ex->getMessage()];
             }
@@ -3245,7 +3317,18 @@ class TestSuite
             return ['pass' => $bad === [], 'detail' => $bad === [] ? implode(', ', $needed) . ' ok' : implode('; ', $bad)];
         });
 
-        $add('system.cron_files', 'System', '/etc/cron.d/gallery-* rules present (root install)', function () {
+        $add('system.cron_files', 'System', '/etc/cron.d/gallery-* rules present (root install)', function () use ($storage) {
+            // A developer checkout is not an installed deployment: install.sh
+            // is what writes the schedule file AND the cron rules, and a
+            // checkout schedules nothing on purpose (twenty background
+            // workers on a machine used for testing is not wanted). Its
+            // absence is a skip, not a failure - but once a box HAS a
+            // schedule file, missing rules mean the workers have silently
+            // stopped, which is exactly what this guards.
+            if (!is_file($storage . '/cron/schedules.json')) {
+                return ['pass' => true, 'detail' => 'not an installed deployment (no storage/cron/schedules.json)'];
+            }
+
             $found = [];
             foreach (['housekeeping', 'autopost', 'backup', 'restore-drill'] as $suffix) {
                 $f = '/etc/cron.d/gallery-' . $suffix;

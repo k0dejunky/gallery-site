@@ -441,6 +441,31 @@ else
     warn "gallery-root-files.conf not found; robots.txt will not be served from the host root."
 fi
 
+# The bare server IP is not a canonical origin. mod_rewrite rules in the
+# SERVER context are NOT inherited by virtual hosts, so the redirect has to
+# be INSIDE the vhost that answers the IP. Insert it into the distro default
+# vhost (the :80 fallback); a production :443 vhost carries the same block.
+log "Installing the bare-IP redirect (gallery-ip-redirect.conf)..."
+IP_REDIRECT="$INSTALL_DIR/config/gallery-ip-redirect.conf"
+DEFAULT_VHOST=/etc/apache2/sites-available/000-default.conf
+if [[ -f "$IP_REDIRECT" && -f "$DEFAULT_VHOST" ]]; then
+    if grep -q 'gallery-ip-redirect' "$DEFAULT_VHOST"; then
+        ok "Bare-IP redirect already present in the default vhost."
+    else
+        awk -v file="$IP_REDIRECT" '
+            !done && /<\/VirtualHost>/ {
+                while ((getline line < file) > 0) print line
+                close(file)
+                done = 1
+            }
+            { print }
+        ' "$DEFAULT_VHOST" > "$DEFAULT_VHOST.new" && mv "$DEFAULT_VHOST.new" "$DEFAULT_VHOST"
+        ok "Bare-IP redirect installed in the default vhost."
+    fi
+else
+    warn "gallery-ip-redirect.conf or the default vhost not found; skipping."
+fi
+
 # The Sitemap: line in robots.txt has to point at THIS install. The file in
 # the repository carries the production address, so a fresh install would
 # tell every crawler to fetch a sitemap that belongs to another site.
