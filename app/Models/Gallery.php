@@ -452,14 +452,15 @@ class Gallery
                 // whole galleries table, so the listing could not use its
                 // own index. This is the shape inCategories() already uses.
                 $items = Database::run(
-                    'SELECT g.*, (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count, '
-                    . self::videoCountSql() . '
+                    'SELECT g.*
                      FROM galleries g'
                     . $whereSql . '
                      ORDER BY ' . $orderBy . ', g.id DESC
                      LIMIT ' . (int) $perPage . ' OFFSET ' . (int) $offset,
                     $params
                 )->fetchAll();
+
+                $items = self::attachCounts($items);
 
                 return json_encode(compact('items', 'total', 'page', 'pages', 'perPage'));
             }
@@ -519,18 +520,21 @@ class Gallery
             $accessCondition = ' AND ' . $condition;
         }
 
-        // Scalar subqueries instead of a LEFT JOIN ... GROUP BY so a gallery
-        // in several categories is never row-multiplied and the whole query
-        // scales with the number of matching galleries, not total media.
+        // The counts used to be two correlated subqueries on every row. A
+        // gallery filed under six categories is six rows, so the same count
+        // was computed six times - 2,024 subquery pairs for the 111-category
+        // listing, ~0.20s of a 0.21s query. The rows themselves cost 0.007s;
+        // the counts are attached afterwards in two grouped queries.
         $rows = Database::run(
-            'SELECT g.*, gc.category_id,
-                    (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count, ' . self::videoCountSql() . '
+            'SELECT g.*, gc.category_id
              FROM galleries g
              INNER JOIN gallery_category gc ON gc.gallery_id = g.id
              WHERE gc.category_id IN (' . $placeholders . ') AND ' . self::publishedVisibleSql('g') . $accessCondition . $typeCondition . $levelCondition . $contentCondition . '
              ORDER BY g.created_at DESC, g.id DESC',
             array_merge($ids, $accessParams)
         )->fetchAll();
+
+        $rows = self::attachCounts($rows);
 
         foreach ($rows as $row) {
             $result[(int) $row['category_id']][] = $row;
@@ -563,15 +567,16 @@ class Gallery
             $accessCondition = ' AND ' . $condition;
         }
 
-        return Database::run(
-            'SELECT g.*, NULL AS category_id,
-                    (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count, ' . self::videoCountSql() . '
+        $rows = Database::run(
+            'SELECT g.*, NULL AS category_id
              FROM galleries g
              WHERE ' . self::publishedVisibleSql('g') . $accessCondition . '
                AND NOT EXISTS (SELECT 1 FROM gallery_category gc WHERE gc.gallery_id = g.id)' . $typeCondition . $levelCondition . $contentCondition . '
              ORDER BY g.created_at DESC, g.id DESC',
             $accessParams
         )->fetchAll();
+
+        return self::attachCounts($rows);
     }
 
     /**
@@ -664,6 +669,57 @@ class Gallery
      * Correlated subquery counting videos per gallery, joined into list
      * queries as the video_count column.
      */
+    /**
+     * Attach photo_count / video_count to a set of gallery rows in bulk.
+     *
+     * Two grouped queries for the whole set instead of two correlated
+     * subqueries per row. When the same gallery appears several times (one
+     * row per category) the count is computed once, not once per row.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private static function attachCounts(array $rows): array
+    {
+        if ($rows === []) {
+            return $rows;
+        }
+
+        $ids = array_values(array_unique(array_filter(
+            array_map(static fn (array $row): int => (int) ($row['id'] ?? 0), $rows),
+            static fn (int $id): bool => $id > 0
+        )));
+
+        if ($ids === []) {
+            return $rows;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        $photoCounts = Database::run(
+            "SELECT gallery_id, COUNT(*) FROM gallery_photo
+             WHERE gallery_id IN ($placeholders) GROUP BY gallery_id",
+            $ids
+        )->fetchAll(\PDO::FETCH_KEY_PAIR);
+
+        $videoCounts = Database::run(
+            "SELECT gp.gallery_id, COUNT(*) FROM gallery_photo gp
+             INNER JOIN photos p ON p.id = gp.photo_id
+             WHERE gp.gallery_id IN ($placeholders) AND p.is_video = 1
+             GROUP BY gp.gallery_id",
+            $ids
+        )->fetchAll(\PDO::FETCH_KEY_PAIR);
+
+        foreach ($rows as &$row) {
+            $gid = (int) ($row['id'] ?? 0);
+            $row['photo_count'] = (int) ($photoCounts[$gid] ?? 0);
+            $row['video_count'] = (int) ($videoCounts[$gid] ?? 0);
+        }
+        unset($row);
+
+        return $rows;
+    }
+
     public static function videoCountSql(): string
     {
         return '(SELECT COUNT(*) FROM photos p2
@@ -1230,15 +1286,26 @@ class Gallery
 
         $placeholders = implode(',', array_fill(0, count($galleryIds), '?'));
 
+        // The first photo of each gallery, via a window function.
+        //
+        // The previous shape asked, per candidate row, for the MIN position
+        // of that gallery: MySQL answered that correlated subquery for every
+        // photo in the table, so the plan started with a FULL SCAN of photos
+        // (9,591 rows) plus a temporary table and a filesort. With 229
+        // galleries on the listing that measured 0.41s on production.
+        // ROW_NUMBER() over the `(gallery_id, position)` index reads only the
+        // galleries asked for and joins 229 primary-key rows: 0.010s, with
+        // byte-identical covers.
         $rows = Database::run(
             "SELECT gp.gallery_id, p.*, gp.position
-             FROM photos p
-             INNER JOIN gallery_photo gp ON gp.photo_id = p.id
-             WHERE gp.gallery_id IN ($placeholders)
-               AND gp.position = (
-                   SELECT MIN(g2.position) FROM gallery_photo g2
-                   WHERE g2.gallery_id = gp.gallery_id
-               )
+             FROM (
+                 SELECT gallery_id, photo_id, position,
+                        ROW_NUMBER() OVER (PARTITION BY gallery_id ORDER BY position ASC, photo_id ASC) AS rn
+                 FROM gallery_photo
+                 WHERE gallery_id IN ($placeholders)
+             ) gp
+             INNER JOIN photos p ON p.id = gp.photo_id
+             WHERE gp.rn = 1
              ORDER BY gp.gallery_id ASC, p.id ASC",
             $galleryIds
         )->fetchAll();

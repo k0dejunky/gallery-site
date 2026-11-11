@@ -3397,6 +3397,80 @@ class TestSuite
             return ['pass' => is_dir($dir) && is_writable($dir), 'detail' => $dir];
         });
 
+        $add('db.gallery_covers_and_counts', 'Database', 'The cover is the first photo by position and the counts are per gallery', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix = bin2hex(random_bytes(3));
+
+                    // Two galleries; the first holds three photos whose
+                    // positions are deliberately out of insertion order.
+                    $a = \App\Models\Gallery::create('PROBE covers ' . $suffix, 'scratch');
+                    $b = \App\Models\Gallery::create('PROBE covers b ' . $suffix, 'scratch');
+
+                    $mkPhoto =	static function (string $name, int $video) use ($suffix): int {
+                        Database::run(
+                            'INSERT INTO photos (filename, is_video, hash, caption, created_at) VALUES (?, ?, ?, ?, NOW())',
+                            [$name . $suffix . '.jpg', $video, sha1($name . $suffix . bin2hex(random_bytes(4))), '']
+                        );
+                        return (int) Database::connection()->lastInsertId();
+                    };
+
+                    $p1 = $mkPhoto('cover-a1-', 0);
+                    $p2 = $mkPhoto('cover-a2-', 1);
+                    $p3 = $mkPhoto('cover-a3-', 0);
+                    $p4 = $mkPhoto('cover-b1-', 0);
+
+                    Database::run('INSERT INTO gallery_photo (gallery_id, photo_id, position) VALUES (?,?,?),(?,?,?),(?,?,?)', [
+                        $a, $p1, 2,  $a, $p2, 0,  $a, $p3, 1,
+                    ]);
+                    Database::run('INSERT INTO gallery_photo (gallery_id, photo_id, position) VALUES (?,?,?)', [$b, $p4, 5]);
+
+                    $covers = \App\Models\Gallery::firstPhotos([$a, $b]);
+                    $coverA = (int) ($covers[$a]['id'] ?? 0);
+                    $coverB = (int) ($covers[$b]['id'] ?? 0);
+
+                    // A gallery filed under a category is counted once.
+                    $catId = \App\Models\Category::create('ProbeCat ' . $suffix);
+                    Database::run('INSERT INTO gallery_category (gallery_id, category_id) VALUES (?,?),(?,?)', [$a, $catId, $b, $catId]);
+
+                    $byCat = \App\Models\Gallery::inCategories([$catId]);
+                    $rows = $byCat[$catId] ?? [];
+                    $counts = [];
+                    foreach ($rows as $row) {
+                        $counts[(int) $row['id']] = [(int) $row['photo_count'], (int) $row['video_count']];
+                    }
+
+                    $ok = $coverA === $p2
+                        && $coverB === $p4
+                        && ($counts[$a] ?? null) === [3, 1]
+                        && ($counts[$b] ?? null) === [1, 0];
+
+                    return [
+                        'pass'   => $ok,
+                        'detail' => $ok
+                            ? 'cover = lowest position; counts = 3/1 and 1/0'
+                            : json_encode(['coverA' => $coverA, 'wantA' => $p2, 'coverB' => $coverB, 'wantB' => $p4, 'counts' => $counts]),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.chat_client_features', 'Database', 'A reply quotes, an edit is bounded, a delete keeps the row, and a reaction toggles', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
