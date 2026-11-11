@@ -314,7 +314,9 @@ class AuthController extends Controller
          $this->flash('success', ($mailSent
              ? 'Account created. Welcome! Check your email to verify your address.'
              : 'Account created. We could not send the verification email yet. You can resend it from your account settings.') . $promoNote);
-         $this->redirect('/account' . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
+         // A new account lands where every signed-in account lands: the
+         // Wall, not the dashboard behind it.
+         $this->redirect(Auth::homePath() . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
     }
 
     /**

@@ -485,15 +485,15 @@ class Auth
     }
 
     /**
-     * Where a logged-in user should land after login: admins go to the admin
-     * panel, everyone else to their member Wall (the site landing page).
+     * Where a logged-in user lands after login.
+     *
+     * The Wall, for EVERY account - admins included. It is the member's home,
+     * and the owner should see what a member sees when they arrive. The admin
+     * console is one link away in the rail, /admin still works when typed,
+     * and the admin login form (POST /admin) still returns to /admin.
      */
     public static function homePath(): string
     {
-        if (self::isAdmin()) {
-            return '/admin';
-        }
-
         return '/wall';
     }
 

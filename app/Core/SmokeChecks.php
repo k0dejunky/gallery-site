@@ -9852,6 +9852,39 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.auth.wall_is_the_landing_page', 'Smoke · Auth', 'Every signed-in account lands on the Wall, admins included', static function () use ($root, $read, $ok, $bad): array {
+            $problems = [];
+
+            $auth = (string) $read($root . '/app/Core/Auth.php');
+            if (preg_match('/function homePath\(\): string\s*\{\s*if \(self::isAdmin\(\)\)/', $auth) === 1) {
+                $problems[] = 'homePath() still sends admins to the admin panel instead of the Wall';
+            }
+            if (preg_match("/function homePath\(\): string\s*\{\s*return '\/wall';/", $auth) !== 1) {
+                $problems[] = "homePath() must return '/wall' for every account";
+            }
+
+            $home = (string) $read($root . '/app/Controllers/HomeController.php');
+            if (strpos($home, 'Auth::homePath()') === false) {
+                $problems[] = 'the site root must send a signed-in visitor to homePath()';
+            }
+
+            // A brand-new account is a signed-in account too.
+            $authCtrl = (string) $read($root . '/app/Controllers/AuthController.php');
+            if (preg_match("/redirect\('\/account'/", $authCtrl) === 1) {
+                $problems[] = 'signup still lands on /account instead of the Wall';
+            }
+
+            // The admin console stays one link away.
+            $layout = (string) $read($root . '/views/layout.php');
+            if (strpos($layout, "url('/admin')") === false) {
+                $problems[] = 'the member rail must keep an Admin link for admins';
+            }
+
+            return $problems === []
+                ? $ok('login, the site root and signup all land on /wall; /admin stays reachable')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.usability.discovery', 'Smoke · Usability', 'The wall carries the rails, the header search suggests, and the browse chips keep every filter', static function () use ($root, $read, $ok, $bad): array {
             $problems = [];
 
