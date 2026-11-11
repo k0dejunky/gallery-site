@@ -19,9 +19,9 @@ $planId    = (int) $plan['id'];
 <title>Checkout — <?= $planName ?></title>
 <style>
 :root {
-    --purple-900:#f5edf7;--purple-800:#ffffff;--purple-700:#b9a0c4;--purple-600:#e11d48;
-    --purple-500:#fb7185;--purple-400:#fda4af;--purple-300:#fb7185;
-    --pink-100:#0d0612;--pink-200:#050208;--pink-300:#2a1638;--pink-400:#e11d48;
+    --purple-900:#f5edf7;--purple-800:#ffffff;--purple-700:#b9a0c4;--purple-600:#d946ef;
+    --purple-500:#e879f9;--purple-400:#e9aefc;--purple-300:#c084fc;
+    --pink-100:#0d0612;--pink-200:#050208;--pink-300:#2a1638;--pink-400:#d946ef;
     --card-bg:#150a1d;--card-border:#2a1638;--card-radius:12px;--border-radius:10px;
     --shadow:0 8px 32px rgba(0,0,0,.5);--input-padding:.55rem .75rem;
     --input-border-width:1px;--input-radius:8px;
@@ -52,9 +52,9 @@ label{display:block;font-size:.82rem;font-weight:600;margin-bottom:.3rem;color:v
                      padding:1rem;text-align:center;color:var(--purple-700);opacity:.6;
                      font-size:.9rem;margin-bottom:.75rem;}
 .btn{display:block;width:100%;padding:.75rem;border:none;border-radius:var(--border-radius);
-     background:var(--purple-600);color:#ffffff;font-size:1rem;font-weight:600;cursor:pointer;
+     background:var(--purple-600);color:#0a0210;font-size:1rem;font-weight:600;cursor:pointer;
      transition:background .15s;margin-top:.5rem;}
-.btn:hover{background:var(--purple-500);color:#0a0210;}
+.btn:hover{background:var(--purple-500);}
 .btn:disabled{opacity:.5;cursor:not-allowed;}
 .btn-outline{background:var(--pink-100);color:var(--purple-700);border:1px solid var(--pink-400);}
 .btn-outline:hover{background:var(--pink-200);}

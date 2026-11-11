@@ -1,5 +1,13 @@
 # Site UI redesign (2026-10-28) — OLED member + modern admin
 
+> **MEMBER-SIDE DESIGN ROLLED BACK (Nov 10 2026).** The member redesign (the
+> OLED/crimson palette, the shell rewrite and the member page rework) was
+> never deployed to production and has been **dropped**: the repository now
+> carries production's member UI again (title-image header, production
+> palette, production card/hero markup). The admin console changes (fonts,
+> accent, KPI type) stay - those ARE live. The phase table below is history,
+> not a plan of record.
+
 **Recovery anchor for this programme.** If a session dies, read this file first:
 it says what shipped, what is in flight, and the exact next step. Update it at
 the end of every phase (and commit it with that phase's work).

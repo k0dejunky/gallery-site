@@ -17,46 +17,45 @@ $tags            = (array) ($tags ?? []);
     <div class="hero-cover-media">
         <?php if (!empty($covers) && !empty(reset($covers))): ?>
             <?php $c = reset($covers); ?>
-            <img src="<?= e(public_file_url((string) $c['filename'], 'blur')) ?>" alt="" loading="eager" fetchpriority="high" data-fallback="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 360'%3E%3Crect width='640' height='360' fill='%23150a1d'/%3E%3C/svg%3E">
+            <img src="<?= e(file_url($c['filename'], 'thumb')) ?>" alt="" loading="eager" fetchpriority="high">
         <?php endif; ?>
     </div>
     <div class="hero-cover-scrim"></div>
     <div class="hero-cover-inner">
         <p class="hero-cover-kicker">Adults only &middot; Verified creators</p>
-        <h1 class="hero-cover-title"><span class="glass-word"><?= e(config('app.site_name')) ?></span></h1>
+        <h1 class="hero-cover-title"><?= e(config('app.site_name')) ?></h1>
         <p class="hero-cover-lede">
-            <strong>Original photos, videos and live streams</strong> — updated regularly.
-            Safe-for-work galleries are open to everyone; adult galleries open in the free tier
-            and beyond with a membership.
+            Original photos, videos and live streams — updated regularly. Safe-for-work galleries
+            are open to everyone; adult galleries open in the free tier and beyond with a membership.
         </p>
         <div class="hero-cover-actions">
             <a class="btn btn-grad btn-lg" href="<?= url('/signup') ?>">Join now — free preview</a>
             <a class="btn btn-ghost btn-lg" href="<?= url('/login') ?>">Log in</a>
             <a class="btn btn-ghost btn-lg" href="<?= url('/membership') ?>">See membership</a>
         </div>
-        <div class="stat-chip-row">
+        <div class="stat-chip-row" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.8rem;justify-content:center;">
             <?php if (!empty($mediaCounts['images'])): ?>
                 <div class="stat-chip">
                     <b><?= number_format((int) $mediaCounts['images']) ?></b>
-                    <span>Photos</span>
+                    <span class="muted" style="font-size:.75rem;">Photos</span>
                 </div>
             <?php endif; ?>
             <?php if (!empty($mediaCounts['videos'])): ?>
                 <div class="stat-chip">
                     <b><?= number_format((int) $mediaCounts['videos']) ?></b>
-                    <span>Videos</span>
+                    <span class="muted" style="font-size:.75rem;">Videos</span>
                 </div>
             <?php endif; ?>
             <div class="stat-chip">
                 <b>18+</b>
-                <span>Age verified</span>
+                <span class="muted" style="font-size:.75rem;">Age verified</span>
             </div>
         </div>
-        <nav class="guest-browse" aria-label="Quick browse">
+        <div class="guest-browse" style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem;justify-content:center;">
             <a class="pill" href="<?= url('/galleries') ?>">All galleries</a>
             <a class="pill" href="<?= url('/galleries?type=videos') ?>">Videos</a>
             <a class="pill" href="<?= url('/galleries?content=sfw') ?>">Safe for work</a>
-        </nav>
+        </div>
     </div>
 </div>
 

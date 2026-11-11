@@ -14,8 +14,8 @@
   input[type=password], input[type=text] { width: 100%; box-sizing: border-box; padding: .6rem; border: 1px solid #2a1638; border-radius: 8px; background: #0d0612; color: #f5edf7; }
   .err { background: #2a1010; border: 1px solid #7f1d1d; color: #fca5a5; padding: .5rem .7rem; border-radius: 8px; font-size: .85rem; margin-bottom: .6rem; }
   .row { display: flex; gap: .6rem; margin-top: 1rem; }
-  button { background: #e11d48; color: #ffffff; border: 0; border-radius: 8px; padding: .6rem 1.1rem; cursor: pointer; }
-  a { color: #fda4af; text-decoration: none; font-size: .9rem; align-self: center; }
+  button { background: #d946ef; color: #0a0210; border: 0; border-radius: 8px; padding: .6rem 1.1rem; cursor: pointer; }
+  a { color: #e9aefc; text-decoration: none; font-size: .9rem; align-self: center; }
 </style>
 </head>
 <body>

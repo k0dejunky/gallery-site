@@ -249,7 +249,7 @@ if (!empty($_SESSION['impersonator_id'])) {
     <header class="glass-header">
         <div class="glass-header-inner">
             <a class="glass-brand" href="<?= e(url('/')) ?>" aria-label="<?= e(config('app.site_name')) ?> - home">
-                <span class="glass-word"><?= e(config('app.site_name')) ?></span>
+                <img src="<?= e(url(\App\Models\Theme::userTheme($userThemePreset)['title_image'])) ?>" alt="<?= e(config('app.site_name')) ?>">
             </a>
             <?php if (!$isAuthPage && ($user === null || !$sidebarNav)): ?>
             <nav class="nav<?= $user === null ? ' public-nav' : '' ?>" aria-label="Primary">
