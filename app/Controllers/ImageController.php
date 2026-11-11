@@ -68,6 +68,21 @@ class ImageController extends Controller
             Photo::recordView($id, (int) $user['id']);
         }
 
+        // The funnel: was the wall shown, and was a video started?
+        if (!$canViewFull) {
+            \App\Models\FunnelEvent::record(
+                \App\Models\FunnelEvent::PAYWALL_SEEN,
+                $user !== null ? (int) $user['id'] : null,
+                $requireVideo ? 'video' : 'image'
+            );
+        } elseif ($requireVideo) {
+            \App\Models\FunnelEvent::record(
+                \App\Models\FunnelEvent::VIDEO_START,
+                $user !== null ? (int) $user['id'] : null,
+                (string) $id
+            );
+        }
+
         // The canonical URL of this page. It is the SAME for every visitor:
         //
         //  - a photo whose bytes are PUBLIC (safe for work, or an adult one

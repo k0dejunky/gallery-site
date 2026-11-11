@@ -23,6 +23,86 @@
     <?php endif; ?>
 </header>
 
+<?php
+/* The landing rails: where you left off, what is new, and more like what you
+   were watching. They sit ABOVE the feed because they are the shortest path
+   back into the library, and the feed is the news. */
+$rails = $rails ?? [];
+$railCards = static function (array $galleries, array $railsData, string $returnTo): void {
+    foreach ($galleries as $gallery) {
+        $cover              = $railsData['covers'][(int) $gallery['id']] ?? null;
+        $galleryCategories  = $railsData['categories'][(int) $gallery['id']] ?? [];
+        $viewedIds          = $railsData['viewedIds'];
+        $favoriteGalleryIds = $railsData['favoriteGalleryIds'];
+        $listingReturnTo    = $returnTo;
+        echo '<div class="wall-rail-item">';
+        require __DIR__ . '/partials/gallery_card.php';
+        echo '</div>';
+    }
+};
+?>
+<?php if (!empty($rails['continue']) || !empty($rails['new']) || !empty($rails['like'])): ?>
+<section class="wall-rails" aria-label="Back to the library">
+    <?php if (!empty($rails['continue'])): ?>
+        <div class="wall-rail" role="region" aria-labelledby="rail-continue">
+            <div class="wall-rail-head">
+                <h2 id="rail-continue">Continue watching</h2>
+                <a class="section-link" href="<?= e(url('/account')) ?>">All activity</a>
+            </div>
+            <div class="wall-rail-scroll">
+                <?php foreach ($rails['continue'] as $cw): ?>
+                    <?php
+                    $position = (float) ($cw['position_seconds'] ?? 0);
+                    $total    = (float) ($cw['duration_seconds'] ?? 0);
+                    $percent  = $total > 0 ? max(1, min(100, (int) round($position / $total * 100))) : 0;
+                    $label    = trim((string) ($cw['caption'] ?? '')) !== '' ? (string) $cw['caption'] : 'Video';
+                    // A video's "thumb" is not always generated; its poster
+                    // frame is, and it is the right crop for a 16:9 card.
+                    $cwImage  = video_poster_url((string) ($cw['filename'] ?? ''));
+                    if ($cwImage === '') {
+                        $cwImage = file_url((string) ($cw['filename'] ?? ''), 'thumb');
+                    }
+                    ?>
+                    <a class="wall-cw" href="<?= e(url('/videos/' . (int) $cw['photo_id'] . '?t=' . (int) $position)) ?>">
+                        <span class="wall-cw-media">
+                            <img src="<?= e($cwImage) ?>" alt="" loading="lazy" decoding="async" data-hide-on-error>
+                            <span class="wall-cw-progress" aria-hidden="true"><i style="width: <?= $percent ?>%"></i></span>
+                            <span class="wall-cw-play" aria-hidden="true">&#9654;</span>
+                        </span>
+                        <span class="wall-cw-title"><?= e($label) ?></span>
+                        <span class="wall-cw-meta"><?= $percent ?>% watched &middot; <?= e(gmdate('i:s', (int) $position)) ?> in</span>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if (!empty($rails['new'])): ?>
+        <div class="wall-rail" role="region" aria-labelledby="rail-new">
+            <div class="wall-rail-head">
+                <h2 id="rail-new">New this week</h2>
+                <a class="section-link" href="<?= e(url('/galleries')) ?>">Browse all</a>
+            </div>
+            <div class="wall-rail-scroll">
+                <?php $railCards($rails['new'], $rails, '/wall'); ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if (!empty($rails['like'])): ?>
+        <div class="wall-rail" role="region" aria-labelledby="rail-like">
+            <div class="wall-rail-head">
+                <h2 id="rail-like"><?= $rails['likeSource'] !== '' ? 'More like ' . e(mb_substr($rails['likeSource'], 0, 40)) : 'More to explore' ?></h2>
+                <a class="section-link" href="<?= e(url('/galleries')) ?>">Browse all</a>
+            </div>
+            <div class="wall-rail-scroll">
+                <?php $railCards($rails['like'], $rails, '/wall'); ?>
+            </div>
+        </div>
+    <?php endif; ?>
+</section>
+<?php endif; ?>
+
 <?php if ($items === []): ?>
     <section class="favorites-section">
         <div class="empty-state">

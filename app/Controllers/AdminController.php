@@ -104,6 +104,9 @@ class AdminController extends Controller
             'supportStats' => \App\Models\Stats::supportStats(),
             'autopostFailed' => \App\Models\AutoPostQueue::failed(6),
             'autopostCounts' => \App\Models\AutoPostQueue::statusCounts(),
+            // One strip with the things that need a human, each linking to
+            // the page that fixes it. Only rendered when something is wrong.
+            'attention'      => $this->attentionItems(),
             'chatStats'  => $chatStats,
             'liveStatus' => \App\Models\LiveSession::status(),
         ]);
@@ -653,4 +656,89 @@ class AdminController extends Controller
      * that is not readable (permissions), falls back to the sum of model sizes
      * reported by the Ollama /api/tags endpoint.
      */
+
+    /**
+     * The things that need a human, in one place.
+     *
+     * The dashboard already warned about a failed backup, a quiet cron and a
+     * login spike. The rest of the operational state (AI queues, PHP fatals,
+     * slow queries) lived on the System page, which nobody opens unless
+     * something is already wrong.
+     *
+     * @return array<int, array{label:string, count:int, url:string, tone:string}>
+     */
+    private function attentionItems(): array
+    {
+        $root  = dirname(__DIR__, 2);
+        $items = [];
+
+        try {
+            $catPending  = (int) Database::run("SELECT COUNT(*) FROM gallery_category_jobs WHERE status IN ('queued','running')")->fetchColumn();
+            $descPending = (int) Database::run("SELECT COUNT(*) FROM gallery_description_jobs WHERE status IN ('queued','running')")->fetchColumn();
+            if ($catPending > 0) {
+                $items[] = ['label' => 'galleries waiting for categories', 'count' => $catPending, 'url' => url('/admin/category-suggestions'), 'tone' => 'info'];
+            }
+            if ($descPending > 0) {
+                $items[] = ['label' => 'galleries waiting for descriptions', 'count' => $descPending, 'url' => url('/admin/description-suggestions'), 'tone' => 'info'];
+            }
+        } catch (\Throwable $e) {
+            // An older install without the AI tables: nothing to report.
+        }
+
+        try {
+            $errors = \App\Core\PhpErrorLog::summary(
+                $root . '/storage/logs/php-error.log',
+                $root . '/storage/logs/.php_errors_reviewed'
+            );
+            if ((int) $errors['since'] > 0) {
+                $items[] = ['label' => 'new PHP error' . ((int) $errors['since'] === 1 ? '' : 's'), 'count' => (int) $errors['since'], 'url' => url('/admin/system') . '#php-errors', 'tone' => 'err'];
+            }
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
+        try {
+            $slow = count(Database::recentSlowQueries());
+            if ($slow > 0) {
+                $items[] = ['label' => 'slow quer' . ($slow === 1 ? 'y' : 'ies') . ' logged', 'count' => $slow, 'url' => url('/admin/system') . '#slow-queries', 'tone' => 'warn'];
+            }
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
+        return $items;
+    }
+
+    /**
+     * The usability funnel: what people searched for, where the paywall was
+     * seen, and what they did next. Seven and thirty day windows.
+     */
+    public function funnel(): void
+    {
+        Auth::requirePermission('dashboard');
+
+        $week   = \App\Models\FunnelEvent::counts(7);
+        $month  = \App\Models\FunnelEvent::counts(30);
+        $labels = [];
+        foreach (\App\Models\FunnelEvent::ALL as $name) {
+            $labels[$name] = \App\Models\FunnelEvent::label($name);
+        }
+
+        // A rate that is honest about a zero denominator.
+        $rate = static function (int $part, int $whole): string {
+            return $whole > 0 ? round($part / $whole * 100, 1) . '%' : '&mdash;';
+        };
+
+        $this->viewAdmin('funnel', [
+            'week'    => $week,
+            'month'   => $month,
+            'labels'  => $labels,
+            'rates'   => [
+                'search_empty'  => $rate((int) $week['search_empty'], (int) $week['search']),
+                'paywall_click' => $rate((int) $week['upgrade_click'], (int) $week['paywall_seen']),
+                'video_finish'  => $rate((int) $week['video_finish'], (int) $week['video_start']),
+            ],
+        ]);
+    }
+
 }

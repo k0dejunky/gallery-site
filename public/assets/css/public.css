@@ -114,3 +114,4 @@
     .wall-actions .btn{flex:1 1 100%;justify-content:center;text-align:center}
     .wall-18{display:block;margin:.35rem 0 0}
 }
+.wall-count { margin: .5rem 0 0; font-size: var(--font-size-sm); color: var(--link-color, #e9aefc); font-weight: 600; }

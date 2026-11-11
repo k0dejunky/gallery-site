@@ -380,6 +380,8 @@ class AdminChatController extends Controller
             ChatMessage::insertTrainingPair((string) $userMsg, $message);
         }
 
+        \App\Models\FunnelEvent::record(\App\Models\FunnelEvent::CHAT_REPLY, (int) Auth::user()['id']);
+
         // Let the member know the operator replied (honours their opt-out).
         \App\Models\EmailQueue::notifyChatReply($id);
         ChatMessage::notifyMemberReply($id, $message);

@@ -180,3 +180,92 @@
     .wall-photo{max-height:120px}
     .wall-post-open{margin-left:0}
 }
+
+/* --- landing rails -------------------------------------------------------
+   The shortest path back into the library: where you left off, what is new,
+   and more like what you were watching. Horizontal on every width - a rail
+   is a shelf, not a grid. */
+.wall-rails { margin: 0 0 1.6rem; display: flex; flex-direction: column; gap: 1.1rem; }
+.wall-rail { display: block; min-width: 0; }
+.wall-rail-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .75rem;
+    margin: 0 0 .55rem;
+}
+.wall-rail-head h2 {
+    margin: 0;
+    font-family: var(--font-family-display, 'Playfair Display', Georgia, serif);
+    font-size: clamp(1.05rem, 2vw, 1.3rem);
+    color: var(--heading-color, #fff);
+}
+.wall-rail-scroll {
+    display: flex;
+    gap: .85rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    padding: 0 0 .5rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border, #2a1638) transparent;
+}
+.wall-rail-scroll::-webkit-scrollbar { height: 8px; }
+.wall-rail-scroll::-webkit-scrollbar-thumb { background: var(--border, #2a1638); border-radius: 99px; }
+.wall-rail-item {
+    flex: 0 0 clamp(210px, 38vw, 260px);
+    scroll-snap-align: start;
+    min-width: 0;
+}
+
+.wall-cw {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 clamp(210px, 38vw, 260px);
+    scroll-snap-align: start;
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+    border: 1px solid var(--card-border, #2a1638);
+    border-radius: var(--card-radius, 12px);
+    background: var(--card-bg, #150a1d);
+    overflow: hidden;
+    transition: border-color var(--motion-fast, .15s) ease, transform var(--motion-fast, .15s) ease;
+}
+.wall-cw:hover, .wall-cw:focus-visible { border-color: var(--btn-bg, #d946ef); transform: translateY(-2px); }
+.wall-cw:focus-visible { outline: 2px solid var(--btn-bg, #d946ef); outline-offset: 2px; }
+.wall-cw-media { position: relative; display: block; aspect-ratio: 16 / 9; background: var(--surface-2, #150a1d); overflow: hidden; }
+.wall-cw-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.wall-cw-progress {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 4px;
+    background: rgba(0, 0, 0, .45);
+}
+.wall-cw-progress i { display: block; height: 100%; background: var(--btn-bg, #d946ef); }
+.wall-cw-play {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-size: 1.3rem;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, .55);
+    opacity: .92;
+}
+.wall-cw-title {
+    display: block;
+    padding: .55rem .65rem .1rem;
+    font-size: .9rem;
+    font-weight: 600;
+    line-height: 1.3;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+.wall-cw-meta { display: block; padding: 0 .65rem .6rem; font-size: .75rem; color: var(--muted, #b9a0c4); }
+
+@media (max-width: 640px) {
+    .wall-rail-item, .wall-cw { flex-basis: 72vw; }
+}

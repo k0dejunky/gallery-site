@@ -42,6 +42,7 @@ class VideoController extends ImageController
         if ($finished) {
             // A finished video is not "in progress" any more.
             MediaProgress::forget($userId, $photoId);
+            \App\Models\FunnelEvent::record(\App\Models\FunnelEvent::VIDEO_FINISH, $userId, (string) $photoId);
             $this->json(['ok' => true, 'finished' => true]);
             return;
         }

@@ -93,10 +93,18 @@ class WallController extends Controller
             Notification::markManyRead($unreadIds, (int) $user['id']);
         }
 
+        // The landing rails. They live on the WALL because the wall is where
+        // a member lands: Continue watching and the related sets used to be
+        // only on /dashboard, which most members never open.
+        $rails = $page === 1
+            ? $this->buildRails((int) $user['id'], (int) \App\Core\Auth::effectiveLevel())
+            : ['continue' => [], 'new' => [], 'like' => [], 'likeSource' => '', 'covers' => [], 'categories' => [], 'viewedIds' => [], 'favoriteGalleryIds' => []];
+
         $this->view('wall', [
             // The merged timeline (studio updates + the member's
             // notifications), newest first.
             'items'         => $items,
+            'rails'         => $rails,
             'posts'         => $posts,
             // The comments of every post in ONE query. The view used to
             // call forEntity() once per post - 20 queries for a 20-post
@@ -108,6 +116,72 @@ class WallController extends Controller
             'paginator'     => ['page' => $page, 'pages' => $pages, 'total' => $total],
             'baseUrl'       => url('/wall'),
         ]);
+    }
+
+    /**
+     * The three landing rails: where you left off, what is new, and more like
+     * what you were watching.
+     *
+     * Every query here already existed for the dashboard or the gallery
+     * page; this puts them where the member actually arrives.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildRails(int $userId, int $level): array
+    {
+        $continue = \App\Models\MediaProgress::recent($userId, 6);
+
+        // "New this week" falls back to the newest sets when the week is
+        // quiet, so the rail is never empty on a site that posts monthly.
+        $new = \App\Models\Gallery::paginate(1, 8, [
+            'user_id'   => $userId,
+            'max_level' => $level,
+            'since_days'=> 7,
+        ]);
+        if (count($new['items']) < 4) {
+            $new = \App\Models\Gallery::paginate(1, 8, [
+                'user_id'   => $userId,
+                'max_level' => $level,
+            ]);
+        }
+
+        // "More like what you were watching": the gallery of the most recent
+        // video the member started. MediaProgress has no gallery id, so the
+        // photo's first gallery is used.
+        $like = [];
+        $likeSource = '';
+        foreach ($continue as $cw) {
+            $gid = (int) \App\Core\Database::run(
+                'SELECT gallery_id FROM gallery_photo WHERE photo_id = ? LIMIT 1',
+                [(int) ($cw['photo_id'] ?? 0)]
+            )->fetchColumn();
+            if ($gid > 0) {
+                $like = \App\Models\Gallery::related($gid, 8, $level);
+                $likeSource = (string) \App\Core\Database::run(
+                    'SELECT title FROM galleries WHERE id = ? LIMIT 1',
+                    [$gid]
+                )->fetchColumn();
+                break;
+            }
+        }
+
+        $ids = array_values(array_unique(array_merge(
+            array_map(static fn (array $g): int => (int) $g['id'], $new['items']),
+            array_map(static fn (array $g): int => (int) $g['id'], $like)
+        )));
+
+        $preload = $ids === [] ? ['covers' => [], 'categories' => []] : \App\Models\Gallery::preloadCards($ids);
+
+        return [
+            'continue'           => $continue,
+            'new'                => $new['items'],
+            'like'               => $like,
+            'likeSource'         => $likeSource,
+            'covers'             => $preload['covers'],
+            'categories'         => $preload['categories'],
+            'viewedIds'          => $ids === [] ? [] : \App\Models\Gallery::viewedByIds($userId, $ids),
+            'favoriteGalleryIds' => $ids === [] ? [] : \App\Models\Gallery::favoriteIds($userId, $ids),
+        ];
     }
 
     /**

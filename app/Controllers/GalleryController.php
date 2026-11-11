@@ -382,6 +382,17 @@ class GalleryController extends Controller
             ? Gallery::paginate($page, 24, $filters + ['include_gated' => true])
             : ['items' => [], 'total' => 0, 'page' => $page, 'pages' => 1];
 
+        // How much of the result set the member can actually open. The
+        // search reaches every category (gated sets are shown blurred), so
+        // without this the page looks like it found twenty things when nine
+        // of them are behind the member's tier.
+        $openTotal  = 0;
+        $gatedTotal = 0;
+        if ($q !== '') {
+            $openTotal  = (int) Gallery::paginate(1, 1, $filters)['total'];
+            $gatedTotal = max(0, (int) $paginator['total'] - $openTotal);
+        }
+
         // The category the search names, if any. It gets a link above the
         // results, so a member who searched a category lands on the
         // category even when its galleries are behind their level.
@@ -391,6 +402,24 @@ class GalleryController extends Controller
         // member facing an empty result can see what others are looking for.
         if ($q !== '' && $user !== null) {
             Stats::recordSearch($q, (int) $user['id'], (int) $paginator['total'] > 0);
+        }
+
+        // The usability funnel: what people search for, and what finds
+        // nothing. Guests are counted too (user_id NULL) - they are the
+        // people the paywall is trying to convert.
+        if ($q !== '') {
+            \App\Models\FunnelEvent::record(
+                \App\Models\FunnelEvent::SEARCH,
+                $user !== null ? (int) $user['id'] : null,
+                $q
+            );
+            if ((int) $paginator['total'] === 0) {
+                \App\Models\FunnelEvent::record(
+                    \App\Models\FunnelEvent::SEARCH_EMPTY,
+                    $user !== null ? (int) $user['id'] : null,
+                    $q
+                );
+            }
         }
 
         $viewedIds = [];
@@ -461,8 +490,14 @@ class GalleryController extends Controller
             'cardCovers'    => $cardCovers,
             'lcpPreload'    => $lcpPreload,
             'sort'          => $sort,
-            'content'       => $content,
+            // NOT 'content': Controller::view() uses $content for the
+            // rendered page, so a data key named 'content' is always
+            // shadowed by the view path. That is why the Content chips
+            // never activated and built a URL with the path in it.
+            'contentFilter' => $content,
             'categoryMatch' => $categoryMatch,
+            'openTotal'     => $openTotal,
+            'gatedTotal'    => $gatedTotal,
             'viewedIds'     => $viewedIds,
             'recentlyViewed' => $recentlyViewed,
             'favoriteGalleryIds' => $favoriteGalleryIds,
@@ -570,7 +605,7 @@ class GalleryController extends Controller
             'q'              => $q,
             'type'           => $type,
             'sort'           => $sort,
-            'content'        => $content,
+            'contentFilter'  => $content,
             'currentUser'    => $user,
             'hasActive'      => Auth::hasActiveSubscription(),
             'cardCovers'     => $this->preloadCardData([], $imagePaginator, $videoPaginator),
@@ -2183,4 +2218,81 @@ if ($publishAtRaw !== '') {
             'categories' => Gallery::categoriesBulk($ids),
         ];
     }
+
+    /**
+     * Type-ahead suggestions for the header search box.
+     *
+     * Cheap on purpose: three small indexed queries and the covers of at most
+     * five galleries. A suggestion must never cost more than the search it is
+     * suggesting.
+     */
+    public function suggest(): void
+    {
+        $q = trim((string) $this->request->query('q', ''));
+        if (mb_strlen($q) < 2) {
+            $this->json(['ok' => true, 'galleries' => [], 'categories' => [], 'tags' => []]);
+            return;
+        }
+        $q = mb_substr($q, 0, 60);
+        $like = '%' . $q . '%';
+
+        // Secret galleries are never suggested: their titles are not public.
+        $galleries = Database::run(
+            'SELECT g.id, g.title FROM galleries g
+             WHERE g.is_secret = 0 AND ' . Gallery::publishedVisibleSql('g') . '
+               AND g.title LIKE ?
+             ORDER BY g.created_at DESC, g.id DESC
+             LIMIT 5',
+            [$like]
+        )->fetchAll();
+
+        $covers = $galleries === [] ? [] : Gallery::firstPhotos(array_map(
+            static fn (array $g): int => (int) $g['id'],
+            $galleries
+        ));
+
+        foreach ($galleries as &$g) {
+            $cover = $covers[(int) $g['id']] ?? null;
+            $thumb = null;
+            if ($cover !== null && !empty($cover['filename'])) {
+                $filename = (string) $cover['filename'];
+                // A video's thumb is not always generated; its poster frame
+                // is, and it is the right crop for a 38x30 suggestion.
+                $thumb = is_video($filename)
+                    ? (video_poster_url($filename) ?: file_url($filename, 'thumb'))
+                    : public_file_url($filename, 'thumb');
+            }
+            $g['thumb'] = $thumb;
+            $g['url'] = url('/galleries/' . (int) $g['id']);
+        }
+        unset($g);
+
+        $categories = Database::run(
+            'SELECT id, name, slug FROM categories WHERE name LIKE ? ORDER BY name ASC LIMIT 4',
+            [$like]
+        )->fetchAll();
+        foreach ($categories as &$c) {
+            $c['url'] = url('/galleries/category/' . (string) $c['slug']);
+        }
+        unset($c);
+
+        $tags = Database::run(
+            'SELECT name, slug FROM tags WHERE name LIKE ? ORDER BY name ASC LIMIT 4',
+            [$like]
+        )->fetchAll();
+        foreach ($tags as &$t) {
+            $t['url'] = url('/tags/' . (string) $t['slug']);
+        }
+        unset($t);
+
+        $this->json([
+            'ok'         => true,
+            'q'          => $q,
+            'galleries'  => $galleries,
+            'categories' => $categories,
+            'tags'       => $tags,
+            'all_url'    => url('/galleries?q=' . urlencode($q)),
+        ]);
+    }
+
 }

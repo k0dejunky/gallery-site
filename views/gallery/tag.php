@@ -26,6 +26,58 @@ require __DIR__ . '/../partials/breadcrumbs.php';
 <h1>#<?= e($tag['name']) ?></h1>
 <p class="muted">Galleries tagged &ldquo;<?= e($tag['name']) ?>&rdquo;.</p>
 
+<?php
+// The same Type / Content / Sort chips as the catalogue and the category
+// pages, built from ONE state so a chip never drops another filter. A plain
+// loop, not a closure: a closure between the card and its captured variables
+// confuses the guard that checks the card receives the member's own state.
+$tagBase  = url('/galleries/tag/' . rawurlencode((string) $tag['slug']));
+$tagState = [];
+foreach (['type' => (string) ($type ?? ''), 'content' => (string) ($contentFilter ?? ''), 'sort' => (string) ($sort ?? '')] as $k => $v) {
+    if ($v !== '') {
+        $tagState[$k] = $v;
+    }
+}
+$tagChipUrls = [];
+foreach (['type' => ['', 'images', 'videos'], 'content' => ['', 'sfw', 'nsfw'], 'sort' => ['', 'views', 'title']] as $key => $values) {
+    foreach ($values as $value) {
+        $p = $tagState;
+        if ($value === '') {
+            unset($p[$key]);
+        } else {
+            $p[$key] = $value;
+        }
+        $tagChipUrls[$key][$value] = $p === [] ? $tagBase : $tagBase . '?' . http_build_query($p);
+    }
+}
+?>
+<div class="filter-bar">
+    <p class="filter-bar-label">Type</p>
+    <div class="chips" style="margin:0">
+        <a class="chip <?= ($type ?? '') === '' ? 'active' : '' ?>" href="<?= e($tagChipUrls['type']['']) ?>">All</a>
+        <a class="chip <?= ($type ?? '') === 'images' ? 'active' : '' ?>" href="<?= e($tagChipUrls['type']['images']) ?>">Image galleries</a>
+        <a class="chip <?= ($type ?? '') === 'videos' ? 'active' : '' ?>" href="<?= e($tagChipUrls['type']['videos']) ?>">Video galleries</a>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <p class="filter-bar-label">Content</p>
+    <div class="chips content-chips" style="margin:0">
+        <?php foreach (['' => 'All', 'sfw' => 'Safe for work', 'nsfw' => 'Adult'] as $val => $label): ?>
+            <a class="chip <?= ($contentFilter ?? '') === $val ? 'active' : '' ?>" href="<?= e($tagChipUrls['content'][$val]) ?>"><?= e($label) ?></a>
+        <?php endforeach; ?>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <p class="filter-bar-label">Sort</p>
+    <div class="chips" style="margin:0">
+        <?php foreach (['' => 'Newest', 'views' => 'Most viewed', 'title' => 'A–Z'] as $val => $label): ?>
+            <a class="chip <?= ($sort ?? '') === $val ? 'active' : '' ?>" href="<?= e($tagChipUrls['sort'][$val]) ?>"><?= e($label) ?></a>
+        <?php endforeach; ?>
+    </div>
+</div>
+
 <?php if (empty($galleries)): ?>
     <div class="empty-state">
         <p class="muted">No galleries use this tag yet.</p>

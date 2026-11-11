@@ -54,18 +54,49 @@ if ($gateLevel > 0) {
         <p class="wall-eyebrow"><?= e(strtoupper($gateTier)) ?></p>
         <h2 class="wall-title"><?= e($gateTitle) ?></h2>
         <p class="wall-text"><?= e($gateText) ?></p>
+        <?php
+        // What the tier actually opens. "Upgrade to Gold" means nothing on
+        // its own; "Gold opens 51 sets" is a reason. The counts are one
+        // cached query for the whole site.
+        $gateTierCount = 0;
+        if ($gateLevel > 0) {
+            $gateCounts = \App\Models\Gallery::countByLevel();
+            foreach ($gateCounts as $lvl => $n) {
+                if ((int) $lvl >= $gateLevel) {
+                    $gateTierCount += (int) $n;
+                }
+            }
+        }
+        ?>
         <div class="wall-actions">
+            <?php
+            // from=gate lets the plans page count a real paywall click (the
+            // funnel), and tier tells it which wall was hit.
+            $gateCta = url('/membership') . '?' . http_build_query([
+                'from' => 'gate',
+                'tier' => $gateLevel,
+                // So the plans page can offer a way straight back to what the
+                // visitor was looking at.
+                'return_to' => safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? '',
+            ]);
+            ?>
             <?php if ($gateLogged): ?>
-                <a class="btn" href="<?= e(url('/membership')) ?>">
+                <a class="btn" href="<?= e($gateCta) ?>">
                     <?= $gateLevel > 0 ? 'Upgrade to ' . e($gateLabel) : 'See membership' ?>
                 </a>
             <?php else: ?>
-                <a class="btn" href="<?= e(url('/membership')) ?>">
+                <a class="btn" href="<?= e($gateCta) ?>">
                     <?= $gateLevel > 0 ? 'See ' . e($gateLabel) . ' membership' : 'See membership' ?>
                 </a>
                 <a class="btn btn-outline" href="<?= e(url('/signup')) ?>">Create a free account</a>
             <?php endif; ?>
         </div>
+        <?php if ($gateTierCount > 0): ?>
+            <p class="wall-count">
+                <?= number_format($gateTierCount) ?>
+                <?= $gateTierCount === 1 ? 'set' : 'sets' ?> open at <?= e($gateLabel) ?> and above.
+            </p>
+        <?php endif; ?>
         <p class="wall-note">
             <?php if ($gateLogged): ?>
                 Your current plan: <?= e(\App\Models\Subscription::levelLabel(\App\Core\Auth::effectiveLevel())) ?>.

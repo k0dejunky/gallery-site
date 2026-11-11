@@ -18,6 +18,7 @@ return [
     ['GET', '/videositemap.xml', 'StaticPageController@videoSitemap'],
     ['GET', '/theme.css', 'AssetController@themeCss'],
     ['GET', '/feed.xml', 'StaticPageController@feed'],
+    ['GET', '/search/suggest', 'GalleryController@suggest'],
     ['GET', '/galleries', 'GalleryController@index'],
     ['GET', '/images', 'GalleryController@indexType'],
     ['GET', '/videos', 'GalleryController@indexType'],
@@ -440,6 +441,7 @@ return [
 
     // Engagement: wall + comments + codes + gifts + purchases + tags (admin only)
     ['GET', '/admin/engagement', 'ModerationController@index', 'dashboard'],
+    ['GET', '/admin/funnel', 'AdminController@funnel', 'dashboard'],
     ['GET', '/admin/earnings', 'EarningsController@index', 'membership'],
     ['POST', '/admin/engagement/wall', 'ModerationController@wallStore', 'membership'],
     ['POST', '/admin/engagement/wall/{id}/delete', 'ModerationController@wallDelete', 'membership'],

@@ -161,6 +161,7 @@ class ChatController extends Controller
         ChatMessage::addMessage($cid, ChatMessage::ROLE_USER, $message, $attachment, null, null, null, $replyTo > 0 ? $replyTo : null);
 
         $result = ['ok' => true, 'user_message_id' => ChatMessage::latestId($cid)];
+        \App\Models\FunnelEvent::record(\App\Models\FunnelEvent::CHAT_SEND, $userId);
 
         // AI reply in AI modes (retrieval/finetuned). In operator mode the
         // message waits for a human via the Android app or admin panel.

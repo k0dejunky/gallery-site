@@ -27,22 +27,47 @@ $ldJson = [
 // search and category so switching a chip never loses the active filter.
 // The left navigation sidebar is rendered by the shared layout.
 $base = url('/galleries');
-$query = [];
-if ($q !== '') {
-    $query['q'] = $q;
-}
-if ($categoryId > 0) {
-    $query['category'] = $categoryId;
-}
-if (($sort ?? '') !== '') {
-    $query['sort'] = $sort;
-}
-$allUrl = $query ? $base . '?' . http_build_query($query) : $base;
-$imgUrl = url('/images') . ($query ? '?' . http_build_query($query) : '');
-$vidUrl = url('/videos') . ($query ? '?' . http_build_query($query) : '');
 
-// Back links from a gallery/media opened here return to this exact listing
-// (search/category/type/sort preserved) instead of the generic gallery page.
+// ONE state for the browse chips. Every chip keeps every OTHER filter, so
+// switching "Videos" no longer drops "Safe for work" and switching the sort
+// no longer drops the type. Built with plain loops (no closure) because the
+// cards below capture the member's state in a closure and the guard that
+// checks it looks for the nearest captured-variable list.
+$browseState = [];
+foreach ([
+    'q'        => (string) $q,
+    'category' => $categoryId > 0 ? (string) $categoryId : '',
+    'type'     => (string) $type,
+    'content'  => (string) ($contentFilter ?? ''),
+    'sort'     => (string) ($sort ?? ''),
+] as $key => $value) {
+    if ($value !== '') {
+        $browseState[$key] = $value;
+    }
+}
+$browseChipUrls = [];
+foreach ([
+    'type'    => ['', 'images', 'videos'],
+    'content' => ['', 'sfw', 'nsfw'],
+    'sort'    => ['', 'views', 'title'],
+] as $key => $values) {
+    foreach ($values as $value) {
+        $p = $browseState;
+        if ($value === '') {
+            unset($p[$key]);
+        } else {
+            $p[$key] = $value;
+        }
+        $browseChipUrls[$key][$value] = $p === [] ? $base : $base . '?' . http_build_query($p);
+    }
+}
+$allUrl = $browseChipUrls['type'][''];
+$imgUrl = $browseChipUrls['type']['images'];
+$vidUrl = $browseChipUrls['type']['videos'];
+
+// Back links from a gallery or media page opened here return to THIS exact
+// listing (search/category/type/content/sort preserved) instead of the
+// generic gallery page.
 $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galleries');
 ?>
 
@@ -68,19 +93,8 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
 <div class="filter-bar">
     <p class="filter-bar-label">Content</p>
     <div class="chips content-chips" style="margin:0">
-        <?php
-        $contentParams = $query;
-        if ($type !== '') {
-            $contentParams['type'] = $type;
-        }
-        foreach (['' => 'All', 'sfw' => 'Safe for work', 'nsfw' => 'Adult'] as $val => $label):
-            $p = $contentParams;
-            if ($val !== '') {
-                $p['content'] = $val;
-            }
-            $href = $p ? $base . '?' . http_build_query($p) : $base;
-        ?>
-            <a class="chip <?= ($content ?? '') === $val ? 'active' : '' ?>" href="<?= e($href) ?>"<?= ($content ?? '') === $val ? ' aria-current="page"' : '' ?>><?= e($label) ?></a>
+        <?php foreach (['' => 'All', 'sfw' => 'Safe for work', 'nsfw' => 'Adult'] as $val => $label): ?>
+            <a class="chip <?= ($contentFilter ?? '') === $val ? 'active' : '' ?>" href="<?= e($browseChipUrls['content'][$val]) ?>"<?= ($contentFilter ?? '') === $val ? ' aria-current="page"' : '' ?>><?= e($label) ?></a>
         <?php endforeach; ?>
     </div>
 </div>
@@ -88,19 +102,8 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
 <div class="filter-bar">
     <p class="filter-bar-label">Sort</p>
     <div class="chips" style="margin:0">
-        <?php
-        $sortBase = url('/galleries');
-        $sortParams = [];
-        if ($q !== '') $sortParams['q'] = $q;
-        if ($categoryId > 0) $sortParams['category'] = $categoryId;
-        if ($type !== '') $sortParams['type'] = $type;
-        $sortOptions = ['' => 'Newest', 'views' => 'Most Viewed', 'title' => 'A–Z'];
-        foreach ($sortOptions as $val => $label):
-            $p = $sortParams;
-            if ($val !== '') $p['sort'] = $val;
-            $href = $p ? $sortBase . '?' . http_build_query($p) : $sortBase;
-        ?>
-            <a class="chip <?= ($sort ?? '') === $val ? 'active' : '' ?>" href="<?= e($href) ?>"<?= ($sort ?? '') === $val ? ' aria-current="page"' : '' ?>><?= $label ?></a>
+        <?php foreach (['' => 'Newest', 'views' => 'Most Viewed', 'title' => 'A–Z'] as $val => $label): ?>
+            <a class="chip <?= ($sort ?? '') === $val ? 'active' : '' ?>" href="<?= e($browseChipUrls['sort'][$val]) ?>"<?= ($sort ?? '') === $val ? ' aria-current="page"' : '' ?>><?= e($label) ?></a>
         <?php endforeach; ?>
     </div>
 </div>
@@ -231,6 +234,21 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
         <?php if ($type === 'videos'): ?>showing video galleries<?php endif; ?>
         <a href="<?= url('/galleries') ?>">(clear)</a>
     </p>
+    <?php
+    // How much of the result set the member can actually open. The search
+    // reaches every category, so without this the page looks like it found
+    // twenty things when nine are behind the member's tier.
+    $openTotal  = (int) ($openTotal ?? 0);
+    $gatedTotal = (int) ($gatedTotal ?? 0);
+    ?>
+    <?php if ($gatedTotal > 0): ?>
+        <p class="muted search-tier-split">
+            <strong><?= number_format($openTotal) ?></strong> you can open now
+            &middot; <strong><?= number_format($gatedTotal) ?></strong> behind your membership
+            &mdash; <a href="<?= e(url('/membership')) ?>">see the tiers</a>
+        </p>
+    <?php endif; ?>
+
     <form class="save-search" method="post" action="<?= e(url('/saved-searches')) ?>">
         <?= csrf_field() ?>
         <input type="hidden" name="q" value="<?= e($q) ?>">
@@ -263,6 +281,26 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
                     There is a category called &ldquo;<?= e((string) ($categoryMatch['name'] ?? '')) ?>&rdquo; &mdash;
                     <a class="thin-link" href="<?= e(url('/galleries/category/' . e((string) ($categoryMatch['slug'] ?? '')))) ?>">open it</a>.
                 </p>
+            <?php endif; ?>
+            <?php
+            // Recovery: the categories that actually have galleries, so an
+            // empty result still leads somewhere instead of stopping.
+            $emptyCategories = array_values(array_filter(
+                $categories ?? [],
+                static fn (array $c): bool => (int) ($c['gallery_count'] ?? 0) > 0
+            ));
+            $emptyCategories = array_slice($emptyCategories, 0, 8);
+            ?>
+            <?php if (!empty($emptyCategories)): ?>
+                <p class="muted u-fs-085" style="margin:.5rem 0 .35rem;">Browse a category instead</p>
+                <div class="chips" style="justify-content:center">
+                    <?php foreach ($emptyCategories as $cat): ?>
+                        <a class="chip" href="<?= e(url('/galleries/category/' . e((string) $cat['slug']))) ?>">
+                            <?= e((string) $cat['name']) ?>
+                            <span class="muted">(<?= number_format((int) ($cat['gallery_count'] ?? 0)) ?>)</span>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
             <?php endif; ?>
             <?php if (!empty($popularSearches)): ?>
                 <p class="muted u-fs-085" style="margin:.5rem 0 .35rem;">Popular searches</p>

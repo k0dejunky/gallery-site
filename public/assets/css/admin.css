@@ -3572,3 +3572,44 @@ th.adm-inline-pending {
     background: color-mix(in srgb, var(--adm-accent, #7b3fa0) 14%, transparent);
     box-shadow: inset 3px 0 0 var(--adm-accent, #7b3fa0);
 }
+
+/* --- needs-attention strip ----------------------------------------------
+   One row of small, colour-coded links at the top of the dashboard. It only
+   renders when something is waiting, so it is never decorative. */
+.attention-strip {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .4rem;
+    margin: 0 0 1rem;
+    padding: .5rem .6rem;
+    border: 1px solid var(--adm-warn-border, #fde68a);
+    border-radius: 10px;
+    background: var(--adm-warn-bg, #fffbeb);
+}
+.attention-label {
+    font-size: .72rem;
+    font-weight: 800;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--adm-warn, #b45309);
+    margin-right: .2rem;
+}
+.attention-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .3rem;
+    padding: .22rem .55rem;
+    border-radius: 999px;
+    border: 1px solid var(--adm-border, #e2e5ee);
+    background: var(--adm-surface, #fff);
+    color: var(--adm-text, #1e2330);
+    font-size: .78rem;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.attention-item:hover { border-color: var(--adm-accent, #d946ef); text-decoration: none; }
+.attention-item b { font-variant-numeric: tabular-nums; }
+.attention-err { border-color: var(--adm-err-border, #fecaca); background: var(--adm-err-bg, #fef2f2); color: var(--adm-err, #b91c1c); }
+.attention-warn { border-color: var(--adm-warn-border, #fde68a); background: var(--adm-warn-bg, #fffbeb); color: var(--adm-warn, #b45309); }
+.attention-info { border-color: var(--adm-border, #e2e5ee); }

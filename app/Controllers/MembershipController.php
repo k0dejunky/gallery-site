@@ -78,6 +78,16 @@ class MembershipController extends Controller
     {
         $user = Auth::user();
 
+        // A paywall CTA carries ?from=gate, so this counts the clicks that
+        // actually land on the plans (the gate itself records the view).
+        if ((string) $this->request->query('from', '') === 'gate') {
+            \App\Models\FunnelEvent::record(
+                \App\Models\FunnelEvent::UPGRADE_CLICK,
+                $user !== null ? (int) $user['id'] : null,
+                (string) $this->request->query('tier', '')
+            );
+        }
+
         $plans = Plan::active();
         foreach ($plans as &$plan) {
             $plan['sale'] = Sale::activeForPlan((int) $plan['id']);
@@ -94,6 +104,8 @@ class MembershipController extends Controller
             // How many galleries each tier opens - the plan cards say it, so
             // the member can see what the money buys.
             'levelCounts' => Gallery::countByLevel(),
+            // Set by the paywall's CTA: the page the visitor was on.
+            'returnTo' => safe_return_to((string) $this->request->query('return_to', '')),
         ];
 
         if ($user === null) {

@@ -28,6 +28,9 @@ $ldJson = [
 
     <div class="auth-panel" style="max-width: 720px; text-align:center; display:flex; flex-direction:column;">
     <h1 style="order:1;">Membership</h1>
+    <?php if (!empty($returnTo)): ?>
+        <p style="order:1;"><a class="btn btn-sm btn-outline" href="<?= e($returnTo) ?>">&larr; Back to what you were viewing</a></p>
+    <?php endif; ?>
 
 
     <?php if ($user !== null): ?>
@@ -184,6 +187,10 @@ $ldJson = [
                 <div class="card plan-card<?= (int) $plan['id'] === $goldPlanId ? ' plan-popular' : '' ?>">
                     <div style="order:1;">
                         <?php if ((int) $plan['id'] === $goldPlanId): ?><span class="pill pill-accent plan-popular-tag">Most popular</span><?php endif; ?>
+                        <?php // The member should not have to compare dates to find their own plan. ?>
+                        <?php if ($activeSub !== null && (int) ($activeSub['plan_id'] ?? 0) === (int) $plan['id']): ?>
+                            <span class="pill plan-current-tag">Your plan</span>
+                        <?php endif; ?>
                         <h2 class="u-mt-0"><?= e($plan['name']) ?></h2>
                         <p class="plan-price" style="margin:0.5rem 0;">
                             <?php if (!empty($plan['sale'])): ?>

@@ -268,6 +268,14 @@ class Gallery
             $where[] = 'g.is_secret = 0';
         }
 
+        // "New this week": a window on the publish date, for the landing
+        // rails. created_at is the upload date, which is what a member means
+        // by "new".
+        if (!empty($filters['since_days'])) {
+            $where[]  = 'g.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)';
+            $params[] = max(1, min(365, (int) $filters['since_days']));
+        }
+
         if (!empty($filters['type']) && in_array($filters['type'], ['images', 'videos'], true)) {
             $where[] = 'g.type = ?';
             $params[] = $filters['type'];
@@ -1964,8 +1972,36 @@ class Gallery
     /**
      * Galleries carrying a tag (public visibility only), newest first.
      */
-    public static function byTag(string $slug, int $limit = 24, int $offset = 0): array
+    public static function byTag(string $slug, int $limit = 24, int $offset = 0, array $filters = []): array
     {
+        $where  = [];
+        $params = [$slug];
+
+        // The tag page carries the same Type / Content / Sort filters as the
+        // catalogue. Without them it was the one browse surface where a
+        // member could not narrow anything down.
+        if (!empty($filters['type']) && in_array($filters['type'], ['images', 'videos'], true)) {
+            $where[] = self::mediaTypeCondition($filters['type']);
+        }
+        if (isset($filters['content']) && in_array($filters['content'], ['sfw', 'nsfw'], true)) {
+            $where[] = $filters['content'] === 'sfw' ? 'g.is_nsfw = 0' : 'g.is_nsfw = 1';
+        }
+        if (array_key_exists('max_level', $filters)) {
+            $maxLevel = (int) $filters['max_level'];
+            if ($maxLevel < PHP_INT_MAX) {
+                $where[]  = '(g.is_secret = 1 OR ' . self::accessLevelSql('g') . ' <= ?)';
+                $params[] = $maxLevel;
+            }
+        }
+
+        $orderBy = match ($filters['sort'] ?? '') {
+            'views' => 'g.unique_views DESC, g.views DESC',
+            'title' => 'g.title ASC',
+            default => 'g.created_at DESC',
+        };
+
+        $extra = $where === [] ? '' : ' AND ' . implode(' AND ', $where);
+
         return Database::run(
             'SELECT g.*,
                     (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count,
@@ -1973,10 +2009,10 @@ class Gallery
              FROM galleries g
              INNER JOIN tag_gallery tg ON tg.gallery_id = g.id
              INNER JOIN tags t ON t.id = tg.tag_id
-             WHERE t.slug = ? AND g.is_secret = 0 AND ' . self::publishedVisibleSql('g') . '
-             ORDER BY g.created_at DESC, g.id DESC
+             WHERE t.slug = ? AND g.is_secret = 0 AND ' . self::publishedVisibleSql('g') . $extra . '
+             ORDER BY ' . $orderBy . ', g.id DESC
              LIMIT ' . max(1, (int) $limit) . ' OFFSET ' . max(0, (int) $offset),
-            [$slug]
+            $params
         )->fetchAll();
     }
 }

@@ -22,6 +22,23 @@
     </div>
 <?php endif; ?>
 
+<?php
+// Things that need a human, each linking to the page that fixes it. The
+// strip only exists when something is actually waiting.
+$attention = $attention ?? [];
+?>
+<?php if ($attention !== []): ?>
+    <div class="attention-strip" role="status" aria-label="Needs attention">
+        <span class="attention-label">Needs attention</span>
+        <?php foreach ($attention as $item): ?>
+            <a class="attention-item attention-<?= e((string) ($item['tone'] ?? 'info')) ?>"
+               href="<?= e((string) $item['url']) ?>">
+                <b><?= number_format((int) $item['count']) ?></b> <?= e((string) $item['label']) ?>
+            </a>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
+
 <?php // One-click entry points for the most common admin tasks, plus an
      // optional auto-refresh toggle that reloads the dashboard every minute. ?>
 <div class="quick-actions">
@@ -30,6 +47,7 @@
     <a class="btn btn-sm" href="<?= url('/admin/galleries') ?>">Manage Galleries</a>
     <a class="btn btn-sm" href="<?= url('/admin/auto-poster') ?>">Auto-Poster<?php if ((int) ($autopostCounts['failed'] ?? 0) > 0): ?> <span class="pill pill-err"><?= (int) $autopostCounts['failed'] ?> failed</span><?php endif; ?></a>
     <a class="btn btn-sm" href="<?= url('/admin/test-suite') ?>">Run Test Suite</a>
+    <a class="btn btn-sm btn-outline" href="<?= e(url('/admin/funnel')) ?>">Funnel</a>
     <form class="inline" method="post" action="<?= url('/admin/system/backup') ?>" data-confirm="Create a full site backup now?">
         <?= csrf_field() ?>
         <button type="submit" class="btn btn-sm btn-outline" aria-label="Create a site backup now">Backup now</button>

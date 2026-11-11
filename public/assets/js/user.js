@@ -1982,3 +1982,132 @@ document.addEventListener('leavepictureinpicture', function(){
     e.preventDefault();
   });
 })();
+
+/* --- search type-ahead ---------------------------------------------------
+   The header search was a form that navigated. It now suggests galleries,
+   categories and tags as you type, with the keyboard (Up/Down/Enter/Escape)
+   and the pointer. The form still submits normally without JS. */
+(function () {
+  var BASE = document.body.getAttribute('data-base') || '';
+  var endpoint = BASE + '/search/suggest';
+  var forms = document.querySelectorAll('.site-search');
+  if (!forms.length) return;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  forms.forEach(function (form) {
+    var input = form.querySelector('input[name="q"]');
+    if (!input) return;
+
+    var panel = document.createElement('div');
+    panel.className = 'search-suggest';
+    panel.setAttribute('role', 'listbox');
+    panel.setAttribute('aria-label', 'Search suggestions');
+    panel.hidden = true;
+    form.appendChild(panel);
+
+    var items = [];
+    var active = -1;
+    var timer = null;
+    var seq = 0;
+    var lastQ = '';
+
+    function close() {
+      panel.hidden = true;
+      panel.innerHTML = '';
+      items = [];
+      active = -1;
+      input.setAttribute('aria-expanded', 'false');
+    }
+
+    function paint() {
+      if (!items.length) { close(); return; }
+      panel.innerHTML = items.map(function (item, i) {
+        var icon = item.kind === 'gallery' ? (item.thumb
+          ? '<img src="' + esc(item.thumb) + '" alt="" loading="lazy">'
+          : '<span class="search-suggest-ico" aria-hidden="true">&#9633;</span>')
+          : '<span class="search-suggest-ico" aria-hidden="true">' + (item.kind === 'category' ? '#' : '&#9670;') + '</span>';
+        return '<a role="option" id="search-opt-' + i + '" class="search-suggest-item' +
+          (i === active ? ' is-active' : '') + '" href="' + esc(item.url) + '" data-i="' + i + '"' +
+          ' aria-selected="' + (i === active ? 'true' : 'false') + '">' +
+          icon + '<span class="search-suggest-text"><b>' + esc(item.label) + '</b>' +
+          (item.sub ? '<small>' + esc(item.sub) + '</small>' : '') + '</span></a>';
+      }).join('') +
+        '<a role="option" class="search-suggest-all" href="' + esc(BASE + '/galleries?q=' + encodeURIComponent(input.value.trim())) + '">See all results for &ldquo;' + esc(input.value.trim()) + '&rdquo;</a>';
+
+      panel.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+      input.setAttribute('aria-controls', 'search-suggest-list');
+    }
+
+    function setActive(i) {
+      active = i;
+      Array.prototype.forEach.call(panel.querySelectorAll('.search-suggest-item'), function (el, idx) {
+        el.classList.toggle('is-active', idx === active);
+        el.setAttribute('aria-selected', idx === active ? 'true' : 'false');
+      });
+      var el = panel.querySelector('.search-suggest-item.is-active');
+      if (el) { el.scrollIntoView({ block: 'nearest' }); }
+    }
+
+    function fetchSuggestions(q) {
+      var mine = ++seq;
+      fetch(endpoint + '?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (mine !== seq || !res || !res.ok) return;
+          items = [];
+          (res.galleries || []).forEach(function (g) {
+            items.push({ kind: 'gallery', label: g.title, sub: 'Gallery', url: g.url, thumb: g.thumb });
+          });
+          (res.categories || []).forEach(function (c) {
+            items.push({ kind: 'category', label: c.name, sub: 'Category', url: c.url });
+          });
+          (res.tags || []).forEach(function (t) {
+            items.push({ kind: 'tag', label: t.name, sub: 'Tag', url: t.url });
+          });
+          active = -1;
+          paint();
+        })
+        .catch(function () { /* the form still works */ });
+    }
+
+    input.addEventListener('input', function () {
+      var q = input.value.trim();
+      if (q === lastQ) return;
+      lastQ = q;
+      clearTimeout(timer);
+      if (q.length < 2) { close(); return; }
+      timer = setTimeout(function () { fetchSuggestions(q); }, 180);
+    });
+
+    input.addEventListener('keydown', function (e) {
+      if (panel.hidden) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(items.length - 1, active + 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(0, active - 1)); }
+      else if (e.key === 'Enter' && active >= 0 && items[active]) { e.preventDefault(); window.location.href = items[active].url; }
+      else if (e.key === 'Escape') { close(); input.blur(); }
+    });
+
+    input.addEventListener('blur', function () {
+      // A click on a suggestion must land before the panel disappears.
+      setTimeout(close, 160);
+    });
+
+    form.addEventListener('submit', function () { close(); });
+
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && active < 0) { close(); }
+    });
+  });
+
+  document.addEventListener('click', function (e) {
+    document.querySelectorAll('.search-suggest').forEach(function (p) {
+      if (!p.hidden && !p.contains(e.target) && !p.parentNode.contains(e.target)) { p.hidden = true; }
+    });
+  });
+})();

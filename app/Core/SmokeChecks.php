@@ -10197,6 +10197,107 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.usability.discovery', 'Smoke · Usability', 'The wall carries the rails, the header search suggests, and the browse chips keep every filter', static function () use ($root, $read, $ok, $bad): array {
+            $problems = [];
+
+            // The landing page brings the member back into the library.
+            $wallCtrl = (string) $read($root . '/app/Controllers/WallController.php');
+            $wallView = (string) $read($root . '/views/wall.php');
+            foreach (['buildRails(', 'MediaProgress::recent', "since_days", 'Gallery::related'] as $needle) {
+                if (strpos($wallCtrl, $needle) === false) {
+                    $problems[] = 'WallController is missing ' . $needle;
+                }
+            }
+            foreach (['Continue watching', 'New this week', "wall-rail"] as $needle) {
+                if (strpos($wallView, $needle) === false) {
+                    $problems[] = 'views/wall.php is missing ' . $needle;
+                }
+            }
+
+            // Type-ahead.
+            $routes = (string) $read($root . '/config/routes.php');
+            if (strpos($routes, "'/search/suggest'") === false) {
+                $problems[] = 'the search suggestion route is missing';
+            }
+            $galleryCtrl = (string) $read($root . '/app/Controllers/GalleryController.php');
+            if (strpos($galleryCtrl, 'public function suggest(): void') === false) {
+                $problems[] = 'GalleryController::suggest() is missing';
+            }
+            $userJs = (string) $read($root . '/public/assets/js/user.js');
+            if (strpos($userJs, 'search-suggest') === false || strpos($userJs, 'fetchSuggestions') === false) {
+                $problems[] = 'user.js does not drive the suggestion panel';
+            }
+            if (strpos($galleryCtrl, 'openTotal') === false || strpos($galleryCtrl, 'gatedTotal') === false) {
+                $problems[] = 'the search results must split what the member can open from what is behind their tier';
+            }
+
+            // $content is the rendered page in Controller::view(); a data key
+            // named 'content' is shadowed by the view path, which is why the
+            // Content chips never activated.
+            if (preg_match("/'content'\s*=>\s*\$content/", $galleryCtrl)) {
+                $problems[] = "GalleryController must pass the filter as contentFilter, not content (Controller::view() owns \$content)";
+            }
+            foreach (['views/gallery/index.php', 'views/gallery/category.php', 'views/gallery/tag.php'] as $file) {
+                if (strpos((string) $read($root . '/' . $file), '$contentFilter') === false) {
+                    $problems[] = $file . ' must read the content filter from $contentFilter';
+                }
+            }
+
+            return $problems === []
+                ? $ok('the landing rails, the header suggestions and the filter chips are wired')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.usability.funnel', 'Smoke · Usability', 'The funnel events are recorded, stored, and reported to the admin', static function () use ($root, $read, $ok, $bad): array {
+            $problems = [];
+
+            if (!is_file($root . '/database/migrations/096_funnel_events.sql')) {
+                $problems[] = 'migration 096 (funnel_events) is missing';
+            }
+            if (strpos((string) $read($root . '/schema.sql'), 'CREATE TABLE IF NOT EXISTS funnel_events') === false) {
+                $problems[] = 'schema.sql does not carry funnel_events';
+            }
+
+            $model = (string) $read($root . '/app/Models/FunnelEvent.php');
+            foreach (['function record(', 'function counts(', 'SEARCH_EMPTY', 'PAYWALL_SEEN', 'UPGRADE_CLICK', 'VIDEO_FINISH'] as $needle) {
+                if (strpos($model, $needle) === false) {
+                    $problems[] = 'FunnelEvent is missing ' . $needle;
+                }
+            }
+
+            // Each event must have at least one real producer.
+            foreach ([
+                'app/Controllers/GalleryController.php'      => 'FunnelEvent::SEARCH',
+                'app/Controllers/ImageController.php'        => 'PAYWALL_SEEN',
+                'app/Controllers/MembershipController.php'   => 'UPGRADE_CLICK',
+                'app/Controllers/VideoController.php'        => 'VIDEO_FINISH',
+                'app/Controllers/ChatController.php'         => 'CHAT_SEND',
+                'app/Controllers/AdminChatController.php'    => 'CHAT_REPLY',
+            ] as $file => $needle) {
+                if (strpos((string) $read($root . '/' . $file), $needle) === false) {
+                    $problems[] = $file . ' does not record ' . $needle;
+                }
+            }
+
+            $routes = (string) $read($root . '/config/routes.php');
+            if (strpos($routes, "'/admin/funnel'") === false) {
+                $problems[] = 'the admin funnel page has no route';
+            }
+            if (!is_file($root . '/views/admin/funnel.php')) {
+                $problems[] = 'views/admin/funnel.php is missing';
+            }
+
+            // The dashboard strip.
+            $dash = (string) $read($root . '/views/admin/dashboard.php');
+            if (strpos($dash, 'attention-strip') === false) {
+                $problems[] = 'the dashboard needs the needs-attention strip';
+            }
+
+            return $problems === []
+                ? $ok('every funnel event has a producer, a table, and an admin page')
+                : $bad(implode('; ', $problems));
+        });
+
         // ------------------------------------------------------ Media variants
         $add('smoke.membership.level_label_is_honest', 'Smoke · Membership', 'A plan stored above Platinum says what it opens, not the internal number', static function () use ($ok, $bad): array {
             $sub = \App\Models\Subscription::class;

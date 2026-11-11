@@ -73,7 +73,7 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
     <span class="label">Content:</span>
     <?php foreach (['' => 'All', 'sfw' => 'Safe for work', 'nsfw' => 'Adult'] as $value => $label): ?>
         <?php $contentQuery = $query; if ($value === '') unset($contentQuery['content']); else $contentQuery['content'] = $value; ?>
-        <a class="chip <?= ($content ?? '') === $value ? 'active' : '' ?>" href="<?= e($base . ($contentQuery ? '?' . http_build_query($contentQuery) : '')) ?>"<?= ($content ?? '') === $value ? ' aria-current="page"' : '' ?>><?= e($label) ?></a>
+        <a class="chip <?= ($contentFilter ?? '') === $value ? 'active' : '' ?>" href="<?= e($base . ($contentQuery ? '?' . http_build_query($contentQuery) : '')) ?>"<?= ($contentFilter ?? '') === $value ? ' aria-current="page"' : '' ?>><?= e($label) ?></a>
     <?php endforeach; ?>
 </div>
 
@@ -89,7 +89,7 @@ $vidUrl = $base . '?' . http_build_query(array_merge($query, ['type' => 'videos'
 $paginationQuery = $q !== '' ? ['q' => $q] : [];
 if ($type !== '') $paginationQuery['type'] = $type;
 if (($sort ?? '') !== '') $paginationQuery['sort'] = $sort;
-if (($content ?? '') !== '') $paginationQuery['content'] = $content;
+if (($contentFilter ?? '') !== '') $paginationQuery['content'] = $contentFilter;
 $searchSuffix = $q !== '' ? ' match your search' : '';
 $sectionBaseUrl = $base . ($paginationQuery ? '?' . http_build_query($paginationQuery) : '');
 // A section's pager link keeps the other section on the page it was on.

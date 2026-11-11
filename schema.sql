@@ -1446,6 +1446,19 @@ CREATE TABLE IF NOT EXISTS refund_requests (
     -- the requests up instead.
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- Usability funnel: one append-only row per product event (search, paywall,
+-- video start/finish, chat). Deliberately without foreign keys so an event
+-- survives the deletion of the member it came from.
+CREATE TABLE IF NOT EXISTS funnel_events (
+    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name       VARCHAR(40) NOT NULL,
+    user_id    INT UNSIGNED NULL DEFAULT NULL,
+    meta       VARCHAR(255) NULL DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_funnel_name_date (name, created_at),
+    INDEX idx_funnel_date (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- Re-enable the foreign-key checks at the very end, so every table in
 -- this file is created with them off (several tables reference tables that
 -- are defined later, and the import order must not matter).
