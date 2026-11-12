@@ -255,6 +255,20 @@ $ldJson = [
                             <?php endif; ?>
                         </div>
                     <?php else: ?>
+                        <?php /* This plan has no instant processor (Yearly and
+                                 Lifetime live here). A guest used to get a form
+                                 that posted to a login redirect, which lost the
+                                 plan they had chosen. Carry it through signup
+                                 and come straight back to this card. */ ?>
+                        <?php if ($user === null): ?>
+                            <div style="order:2;">
+                                <a class="btn btn-grad u-w-full"
+                                   href="<?= e(url('/signup') . '?return_to=' . rawurlencode(url('/membership?plan=' . (int) $plan['id']))) ?>">
+                                    Create an account to subscribe
+                                </a>
+                                <p class="muted u-fs-085" style="margin:.4rem 0 0;">Takes a minute — you come straight back to this plan.</p>
+                            </div>
+                        <?php else: ?>
                         <form method="post" action="<?= url('/membership/subscribe') ?>" style="order:2;" id="subForm_<?= (int) $plan['id'] ?>">
                             <?= csrf_field() ?>
                             <input type="hidden" name="plan_id" value="<?= (int) $plan['id'] ?>">
@@ -272,6 +286,7 @@ $ldJson = [
                             <?php endif; ?>
                             <button type="submit" class="btn btn-grad u-w-full">Subscribe</button>
                         </form>
+                        <?php endif; ?>
                     <?php endif; ?>
                     <?php if ($braintreeAvailable && !$hasActive && $pendingSub === null && !$isLifetime && !$useBraintreeOnly && !$useOffline): ?>
                         <p style="order:3; margin-bottom:0;">

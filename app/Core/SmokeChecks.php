@@ -9885,6 +9885,253 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.auth.two_factor_required_for_privileged_roles', 'Smoke · Auth', 'A privileged account must enrol in two-factor before it can use the site', static function () use ($root, $read, $ok, $bad): array {
+            // TOTP shipped as an option and nobody used it: 0 of 65 accounts,
+            // the super admin included. The guard makes it a requirement for
+            // the roles that can change galleries, money and members - and
+            // keeps a way back in when a phone is lost.
+            $problems  = [];
+            $auth      = (string) $read($root . '/app/Core/Auth.php');
+            $baseCtrl  = (string) $read($root . '/app/Core/Controller.php');
+            $settings  = (string) $read($root . '/app/Controllers/SettingsController.php');
+            $setupView = (string) $read($root . '/views/admin/settings_2fa_setup.php');
+
+            if (preg_match("/REQUIRED_2FA_ROLES\s*=\s*\[[^\]]*'super_admin'[^\]]*'admin'[^\]]*'moderator'/s", $auth) !== 1) {
+                $problems[] = 'Auth::REQUIRED_2FA_ROLES must list super_admin, admin and moderator';
+            }
+            foreach (['function requiresTwoFactor(', 'function needsTwoFactorSetup(', 'function enforceTwoFactor('] as $needle) {
+                if (strpos($auth, $needle) === false) {
+                    $problems[] = 'Auth is missing ' . $needle;
+                }
+            }
+            if (strpos($auth, "'/settings/two-factor/setup'") === false) {
+                $problems[] = 'the guard does not let the enrolment page through';
+            }
+            if (strpos($baseCtrl, 'Auth::enforceTwoFactor(') === false) {
+                $problems[] = 'the base controller does not enforce the two-factor guard';
+            }
+            if (strpos($settings, 'Auth::requiresTwoFactor($user)') === false) {
+                $problems[] = 'a mandatory account can still disable two-factor';
+            }
+            if (strpos($setupView, 'Two-factor is required for your role') === false) {
+                $problems[] = 'the enrolment page does not say the step is mandatory';
+            }
+            if (!is_file($root . '/bin/disable_totp.php')) {
+                $problems[] = 'no command-line recovery path for a lost authenticator (bin/disable_totp.php)';
+            }
+
+            return $problems === []
+                ? $ok('privileged roles are forced through enrolment, cannot disable it, and have a CLI recovery path')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.seo.galleries_page_is_named', 'Smoke · SEO', 'The catalogue has its own title and one <h1>, and the age gate is not a heading', static function () use ($root, $read, $ok, $bad): array {
+            // Search Console's "crawled - not indexed" for /galleries came
+            // partly from the page calling itself "amethyst2213" and having
+            // no <h1> of its own: the age-gate dialog was the only h1 on the
+            // page a guest (or Googlebot) ever sees.
+            $problems = [];
+            $view     = (string) $read($root . '/views/gallery/index.php');
+            $layout   = (string) $read($root . '/views/layout.php');
+
+            if (preg_match("/^\s*<\?php\s*\\\$title\s*=\s*'Galleries';/m", $view) !== 1) {
+                $problems[] = 'views/gallery/index.php must set $title to Galleries, not the site name';
+            }
+            if (strpos($view, '<h1 class="section-title">Galleries</h1>') === false) {
+                $problems[] = 'the catalogue has no <h1> of its own';
+            }
+            if (strpos($layout, '<h1 id="age-gate-title">') !== false) {
+                $problems[] = 'the age gate is still an <h1>, so guest pages have two and the catalogue has one that is the dialog';
+            }
+            if (strpos($layout, '<h2 id="age-gate-title">') === false) {
+                $problems[] = 'the age-gate heading must be an <h2>';
+            }
+
+            return $problems === []
+                ? $ok('catalogue titled "Galleries", one <h1> per page, the dialog is an <h2>')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.ui.partials_do_not_clobber_layout_vars', 'Smoke · UI', 'A partial may not assign the layout variables of the page that includes it', static function () use ($root, $read, $ok, $bad): array {
+            // views/wall.php sets $title = 'Wall', then includes wall_post.php,
+            // which assigned $title = the post title. Because include shares
+            // scope, /wall shipped <title>Being sexy in my red top</title>.
+            $problems = [];
+            $files    = glob($root . '/views/partials/*.php') ?: [];
+
+            foreach ($files as $file) {
+                $src = (string) $read($file);
+                if (preg_match('/(?<![\w$])\$(title|pageTitle|metaDescription|canonicalUrl)\s*=/', $src, $m) === 1) {
+                    $problems[] = basename($file) . ' assigns $' . $m[1] . ', which overwrites the including page';
+                }
+            }
+
+            $wallPost = (string) $read($root . '/views/partials/wall_post.php');
+            if (strpos($wallPost, '$postTitle') === false) {
+                $problems[] = 'wall_post.php must keep the post title in $postTitle, not $title';
+            }
+
+            return $problems === []
+                ? $ok('no partial assigns a layout variable; the wall post keeps its own name')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.analytics.visit_agent_matches_close_visit', 'Smoke · Analytics', 'A session keeps the browser, OS and device the parser classified', static function () use ($root, $read, $ok, $bad): array {
+            // closeVisit() returns browser/os/device FLAT. insertVisits() read
+            // only $v['agent']['device'], so production held 33,320 sessions
+            // with an empty device while web_stats_agents was correct.
+            $problems = [];
+            $agg      = (string) $read($root . '/app/Core/AccessLogAggregator.php');
+            $parser   = (string) $read($root . '/app/Core/AccessLogParser.php');
+
+            if (strpos($agg, "\$agent['device'] ?? \$v['device']") === false) {
+                $problems[] = 'insertVisits() must read the flat $v[\'device\'] that closeVisit() returns';
+            }
+            if (strpos($agg, "\$agent['browser'] ?? \$v['browser']") === false) {
+                $problems[] = 'insertVisits() must read the flat $v[\'browser\']';
+            }
+            if (strpos($parser, "'device'      => \$agent['device'],") === false
+                && strpos($parser, "'device' => \$agent['device'],") === false) {
+                $problems[] = 'closeVisit() no longer returns a flat device key';
+            }
+
+            return $problems === []
+                ? $ok('sessions carry the classified browser/OS/device; both shapes are accepted')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.admin.galleries_ppv_bulk', 'Smoke · Admin', 'A pay-per-view price can be set on a selection of galleries', static function () use ($root, $read, $ok, $bad): array {
+            // PPV shipped with an unlock flow and a ledger but no way to price
+            // a set: ppv_price was NULL on all 262 galleries.
+            $problems  = [];
+            $ctrl      = (string) $read($root . '/app/Controllers/GalleryController.php');
+            $view      = (string) $read($root . '/views/admin/galleries.php');
+            $model     = (string) $read($root . '/app/Models/Gallery.php');
+
+            foreach (["'set_ppv'", "'clear_ppv'", 'function setPpvPrice'] as $needle) {
+                if (strpos($ctrl . $model, $needle) === false) {
+                    $problems[] = 'missing ' . $needle . ' in the bulk path';
+                }
+            }
+            if (strpos($view, 'name="ppv_price"') === false) {
+                $problems[] = 'the bulk bar has no ppv_price input';
+            }
+            if (strpos($view, 'value="set_ppv"') === false) {
+                $problems[] = 'the bulk bar has no set_ppv option';
+            }
+            if (strpos($model, 'function setPpvPrice') === false) {
+                $problems[] = 'Gallery::setPpvPrice() is missing';
+            }
+
+            return $problems === []
+                ? $ok('the gallery list can price (or clear) PPV on a selection, with an audit row')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.auth.signup_keeps_the_plan', 'Smoke · Auth', 'Signing up from a plan card returns the buyer to that plan', static function () use ($root, $read, $ok, $bad): array {
+            // Yearly and Lifetime have no instant processor, so their card was
+            // a form that bounced a guest to login and lost the plan.
+            $problems = [];
+            $mem      = (string) $read($root . '/views/membership/index.php');
+            $auth     = (string) $read($root . '/app/Controllers/AuthController.php');
+            $form     = (string) $read($root . '/views/auth/partials/signup_form.php');
+
+            if (strpos($mem, 'return_to=') === false || strpos($mem, 'Create an account to subscribe') === false) {
+                $problems[] = 'a guest plan card does not carry the plan into signup';
+            }
+            if (strpos($auth, "safe_return_to((string) \$this->request->post('return_to'") === false) {
+                $problems[] = 'signup() does not validate the return_to it was given';
+            }
+            if (strpos($auth, '$this->redirect($returnTo ??') === false) {
+                $problems[] = 'signup() still lands on /wall instead of the chosen plan';
+            }
+            if (strpos($form, 'name="return_to"') === false) {
+                $problems[] = 'the signup form does not post return_to';
+            }
+            if (strpos($auth, "'return_to' => \$returnTo ?? ''") === false) {
+                $problems[] = 'a validation bounce drops the plan';
+            }
+
+            return $problems === []
+                ? $ok('a plan card survives signup and validation errors, and returns to the plan')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.pwa.installable', 'Smoke · PWA', 'The member site is installable and caches only its own assets', static function () use ($root, $read, $ok, $bad): array {
+            // A manifest alone does not make an Android app installable; the
+            // service worker is required. It must never touch HTML, media or
+            // the admin panel, or a gated photo could be served from a cache.
+            $problems = [];
+            $manifestRaw = (string) $read($root . '/public/manifest.json');
+            $manifest    = json_decode($manifestRaw, true);
+            $sw          = (string) $read($root . '/public/sw.js');
+            $layout      = (string) $read($root . '/views/layout.php');
+
+            if (!is_array($manifest)) {
+                $problems[] = 'public/manifest.json is missing or not valid JSON';
+            } else {
+                foreach (['name', 'short_name', 'start_url', 'display', 'icons'] as $key) {
+                    if (empty($manifest[$key])) {
+                        $problems[] = 'the manifest is missing ' . $key;
+                    }
+                }
+                $sizes = array_column($manifest['icons'] ?? [], 'sizes');
+                if (!in_array('192x192', $sizes, true) || !in_array('512x512', $sizes, true)) {
+                    $problems[] = 'the manifest needs 192x192 and 512x512 icons (the install criteria)';
+                }
+            }
+
+            if (strpos($sw, "request.method !== 'GET'") === false) {
+                $problems[] = 'sw.js must ignore non-GET requests';
+            }
+            if (strpos($sw, "assets\\/(css|js|fonts|img)") === false) {
+                $problems[] = 'sw.js must only handle the versioned asset paths';
+            }
+            if (preg_match('/caches\.(put|match)\([^)]*files\//', $sw) === 1) {
+                $problems[] = 'sw.js must never cache the token-gated media route';
+            }
+
+            foreach (['icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'favicon-32.png'] as $icon) {
+                if (!is_file($root . '/public/assets/img/' . $icon)) {
+                    $problems[] = 'missing icon public/assets/img/' . $icon;
+                }
+            }
+            foreach (['rel="manifest"', 'apple-touch-icon', 'serviceWorker.register'] as $needle) {
+                if (strpos($layout, $needle) === false) {
+                    $problems[] = 'views/layout.php is missing ' . $needle;
+                }
+            }
+
+            return $problems === []
+                ? $ok('manifest + icons + a service worker limited to /assets/; registration is nonced')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.backup.secrets_are_packaged', 'Smoke · Backup', 'The encrypted offsite package carries the secrets, not only the database', static function () use ($root, $read, $ok, $bad): array {
+            // A database dump restores the rows, not the PayPal keys or the
+            // SMTP password. A full-box loss meant re-supplying every secret
+            // by hand, so .env travels encrypted with the same passphrase.
+            $problems = [];
+            $script   = (string) $read($root . '/bin/backup_offsite_package.php');
+
+            if (strpos($script, "\$root . '/.env'") === false) {
+                $problems[] = 'the offsite package does not include .env';
+            }
+            if (strpos($script, 'gallery-secrets-') === false) {
+                $problems[] = 'there is no secrets package name to look for on the puller';
+            }
+            if (strpos($script, "openssl enc -aes-256-cbc") === false) {
+                $problems[] = 'the secrets package is not encrypted';
+            }
+            if (strpos($script, 'autoposter.json') === false) {
+                $problems[] = 'the API-key file (storage/autoposter.json) is not included';
+            }
+
+            return $problems === []
+                ? $ok('.env and the API-key file travel encrypted beside the database dump')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.usability.discovery', 'Smoke · Usability', 'The wall carries the rails, the header search suggests, and the browse chips keep every filter', static function () use ($root, $read, $ok, $bad): array {
             $problems = [];
 

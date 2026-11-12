@@ -17,7 +17,7 @@
 $item     = is_array($item ?? null) ? $item : [];
 $badge    = (string) ($item['badge'] ?? 'Update');
 $tone     = (string) ($item['tone'] ?? 'default');
-$title    = (string) ($item['title'] ?? '');
+$postTitle = (string) ($item['title'] ?? '');
 $body     = (string) ($item['body'] ?? '');
 $url      = (string) ($item['url'] ?? '');
 $preview  = is_array($item['preview'] ?? null) ? $item['preview'] : null;
@@ -52,8 +52,8 @@ $extra    = max(0, $count - $visible);
         <?php endif; ?>
     </header>
 
-    <?php if ($title !== ''): ?>
-        <a class="wall-post-title" href="<?= e($url) ?>"><?= e($title) ?></a>
+    <?php if ($postTitle !== ''): ?>
+        <a class="wall-post-title" href="<?= e($url) ?>"><?= e($postTitle) ?></a>
     <?php endif; ?>
     <?php if ($body !== '' && $preview === null): ?>
         <p class="wall-post-body"><?= e($body) ?></p>
@@ -67,7 +67,7 @@ $extra    = max(0, $count - $visible);
                 $src  = file_url($photo['filename'], $size);
                 ?>
                 <span class="wall-photo">
-                    <img src="<?= e($src) ?>" alt="<?= e($photo['caption'] !== '' ? $photo['caption'] : ($title !== '' ? $title : $badge)) ?>" loading="lazy" decoding="async">
+                    <img src="<?= e($src) ?>" alt="<?= e($photo['caption'] !== '' ? $photo['caption'] : ($postTitle !== '' ? $postTitle : $badge)) ?>" loading="lazy" decoding="async">
                     <?php if (!empty($photo['is_video'])): ?><span class="video-badge" aria-hidden="true">&#9654;</span><?php endif; ?>
                     <?php if ($locked && $idx === 0): ?>
                         <span class="wall-photo-lock"><span class="chip">Members only</span></span>

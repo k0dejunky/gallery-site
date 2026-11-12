@@ -15,6 +15,10 @@
 
 <form method="post" action="<?= url('/signup') ?>">
     <?= csrf_field() ?>
+    <?php // Carried from a plan card: signup must land back on that plan. ?>
+    <?php if (!empty($returnTo)): ?>
+        <input type="hidden" name="return_to" value="<?= e((string) $returnTo) ?>">
+    <?php endif; ?>
     <p style="position:absolute;left:-9999px" aria-hidden="true">
         <label for="website">Leave this field empty</label>
         <input type="text" name="website" id="website" tabindex="-1" autocomplete="off">

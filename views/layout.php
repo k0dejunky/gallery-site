@@ -102,6 +102,12 @@ $gaShowBanner = $gaId !== '' && !$gaConsent && $gaPageOk;
         <link rel="canonical" href="<?= e($canonicalUrl) ?>">
     <?php endif; ?>
     <link rel="alternate" type="application/rss+xml" title="<?= e(config('app.site_name')) ?> — latest galleries" href="<?= e(absolute_url('/feed.xml')) ?>">
+    <?php // Installable member site. The manifest makes "Add to Home Screen"
+          // a real standalone app; sw.js caches only the versioned assets
+          // (never HTML, media or /admin). ?>
+    <link rel="manifest" href="<?= e(url('/manifest.json')) ?>">
+    <link rel="icon" type="image/png" sizes="32x32" href="<?= e(asset_url('/assets/img/favicon-32.png')) ?>">
+    <link rel="apple-touch-icon" sizes="180x180" href="<?= e(asset_url('/assets/img/apple-touch-icon.png')) ?>">
     <?php if (isset($ogImage) && $ogImage !== ''): ?>
         <meta property="og:image" content="<?= e($ogImage) ?>">
         <meta property="og:image:alt" content="<?= e($fullTitle) ?>">
@@ -203,7 +209,9 @@ if (!empty($_SESSION['impersonator_id'])) {
 <div class="age-gate" role="dialog" aria-modal="true" aria-labelledby="age-gate-title">
     <div class="age-gate-panel">
         <p class="age-gate-logos">Adults only &middot; 18+</p>
-        <h1 id="age-gate-title">Are you over 18?</h1>
+        <?php // A dialog is not the page's subject: an <h1> here made every guest
+          // page (and every crawler fetch) start with "Are you over 18?". ?>
+    <h2 id="age-gate-title">Are you over 18?</h2>
         <p>This site contains sexually explicit material intended for adults. By entering you confirm you are at least 18 (or 21 where applicable) and you agree to the <a class="thin-link" href="<?= url('/terms') ?>">Terms of Service</a>. <a class="thin-link" href="<?= url('/2257') ?>">2257</a> &middot; <a class="thin-link" href="<?= url('/dmca') ?>">DMCA</a></p>
         <form method="post" action="<?= url('/age-verify') ?>">
             <?= csrf_field() ?>
@@ -938,5 +946,16 @@ document.addEventListener('error',function(e){
     <script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('/assets/js/user.js')) ?>" defer></script>
     <script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('/assets/js/chat.js')) ?>" defer></script>
     <script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('/assets/js/tour.js')) ?>" defer></script>
+    <?php // Registration is deferred to load so it never competes with the
+          // page. A browser without service workers (or a private window that
+          // refuses them) simply ignores it. ?>
+    <script nonce="<?= csp_nonce() ?>">
+    (function () {
+        if (!('serviceWorker' in navigator)) { return; }
+        window.addEventListener('load', function () {
+            navigator.serviceWorker.register('<?= e(url('/sw.js')) ?>').catch(function () {});
+        });
+    })();
+    </script>
 </body>
 </html>

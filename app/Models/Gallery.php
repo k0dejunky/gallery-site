@@ -963,6 +963,19 @@ class Gallery
     }
 
     /**
+     * Set (or clear, with null/0) the one-off unlock price for a gallery. The
+     * bulk action uses this; the manage form still posts everything through
+     * update(). A price of 0 or null means "subscription only".
+     */
+    public static function setPpvPrice(int $id, ?float $price): void
+    {
+        $value = ($price === null || $price <= 0) ? null : round($price, 2);
+        Database::run('UPDATE galleries SET ppv_price = ? WHERE id = ?', [$value, $id]);
+        \App\Core\Cache::bump('gallery');
+        \App\Core\PageCache::invalidate();
+    }
+
+    /**
      * Replace only the description (the AI description accept path - the
      * manage form still posts everything through update()).
      */

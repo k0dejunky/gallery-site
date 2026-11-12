@@ -69,5 +69,63 @@ foreach (array_slice($existing, $keep) as $old) {
     @unlink($old);
 }
 
+// ---------------------------------------------------------------------------
+// The secrets. A database dump restores the rows, not the keys that let the
+// site talk to PayPal, the mail server or the operators, so a full-box loss
+// needed every secret re-supplied by hand. They travel ENCRYPTED with the
+// same passphrase, in their own package.
+// ---------------------------------------------------------------------------
+$secretFiles = [];
+foreach ([$root . '/.env', $root . '/storage/autoposter.json'] as $candidate) {
+    if (is_file($candidate) && is_readable($candidate)) {
+        $secretFiles[] = $candidate;
+    }
+}
+
+if ($secretFiles !== []) {
+    $secretsOut = $outDir . '/gallery-secrets-' . $stamp . '.tar.gz.enc';
+    $tarTmp     = tempnam(sys_get_temp_dir(), 'gallery-secrets-');
+    $listFile   = tempnam(sys_get_temp_dir(), 'gallery-secrets-list-');
+
+    if ($tarTmp !== false && $listFile !== false) {
+        // Relative names inside the archive, so a restore is `tar -xzf`.
+        $names = [];
+        foreach ($secretFiles as $file) {
+            $names[] = ltrim(str_replace($root, '', $file), '/');
+        }
+        file_put_contents($listFile, implode("\n", $names) . "\n");
+
+        @exec('tar -czf ' . escapeshellarg($tarTmp) . ' -C ' . escapeshellarg($root)
+            . ' -T ' . escapeshellarg($listFile) . ' 2>&1', $tarLines, $tarRc);
+
+        if ($tarRc === 0 && is_file($tarTmp) && filesize($tarTmp) > 128) {
+            @exec('openssl enc -aes-256-cbc -pbkdf2 -salt -in ' . escapeshellarg($tarTmp)
+                . ' -out ' . escapeshellarg($secretsOut)
+                . ' -pass file:' . escapeshellarg($passFile) . ' 2>&1', $encLines, $encRc);
+
+            if ($encRc !== 0 || !is_file($secretsOut) || filesize($secretsOut) < 128) {
+                @unlink($secretsOut);
+                fwrite(STDERR, "WARNING: the secrets package could not be encrypted\n");
+            } else {
+                @chmod($secretsOut, 0644);
+                echo 'packaged ' . basename($secretsOut) . ' (' . count($secretFiles) . ' secret files, '
+                    . filesize($secretsOut) . " bytes encrypted)\n";
+            }
+        } else {
+            fwrite(STDERR, "WARNING: the secrets tar could not be built\n");
+        }
+
+        @unlink($tarTmp);
+        @unlink($listFile);
+
+        // Prune old secrets packages with the same retention.
+        $oldSecrets = glob($outDir . '/gallery-secrets-*.tar.gz.enc') ?: [];
+        usort($oldSecrets, static fn (string $a, string $b): int => filemtime($b) <=> filemtime($a));
+        foreach (array_slice($oldSecrets, $keep) as $old) {
+            @unlink($old);
+        }
+    }
+}
+
 echo 'packaged ' . basename($out) . ' (' . filesize($out) . ' bytes) from ' . basename($src) . "\n";
 exit(0);

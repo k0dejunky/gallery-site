@@ -16,6 +16,13 @@ class Controller
     public function __construct(Request $request)
     {
         $this->request = $request;
+
+        // A privileged account that has not enrolled in two-factor cannot go
+        // anywhere except the enrolment page and logout. TOTP used to be
+        // optional, so the super admin (and every admin) was protected by a
+        // password alone. The guard is a no-op for members, for guests and
+        // for token-authenticated API calls, which carry no session here.
+        Auth::enforceTwoFactor($request->uri());
     }
 
     /**

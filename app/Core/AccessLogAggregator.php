@@ -749,7 +749,15 @@ class AccessLogAggregator
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
         foreach ($visits as $v) {
-            $agent = $v['agent'] ?? [];
+            // closeVisit() returns browser/os/device FLAT; an older caller
+            // nested them under 'agent'. Reading only the nested shape wrote
+            // '' into all three columns for every session (production held
+            // 33,320 sessions with an empty device), while web_stats_agents -
+            // built from the day accumulators - was correct. Accept both.
+            $agent   = is_array($v['agent'] ?? null) ? $v['agent'] : [];
+            $browser = (string) ($agent['browser'] ?? $v['browser'] ?? '');
+            $os      = (string) ($agent['os'] ?? $v['os'] ?? '');
+            $device  = (string) ($agent['device'] ?? $v['device'] ?? '');
 
             Database::run($sql, [
                 (string) $v['day'],
@@ -762,9 +770,9 @@ class AccessLogAggregator
                 (string) $v['entry_url'],
                 (string) $v['exit_url'],
                 (string) $v['referrer'],
-                (string) ($agent['browser'] ?? ''),
-                (string) ($agent['os'] ?? ''),
-                (string) ($agent['device'] ?? ''),
+                $browser,
+                $os,
+                $device,
                 (int) ($v['is_bot'] ?? 0),
             ]);
         }

@@ -2123,7 +2123,7 @@ if ($publishAtRaw !== '') {
         $ids = array_values(array_filter(array_map('intval', (array) ($this->request->post('ids') ?? []))));
         $action = (string) $this->request->post('action', '');
 
-        if ($ids === [] || !in_array($action, ['delete', 'category', 'mark_sfw', 'mark_nsfw'], true)) {
+        if ($ids === [] || !in_array($action, ['delete', 'category', 'mark_sfw', 'mark_nsfw', 'set_ppv', 'clear_ppv'], true)) {
             $this->flash('error', 'Nothing to do — select galleries and an action first.');
             $this->redirect('/admin/galleries');
         }
@@ -2131,6 +2131,15 @@ if ($publishAtRaw !== '') {
         $categoryId = (int) $this->request->post('category_id', 0);
         if ($action === 'category' && $categoryId <= 0) {
             $this->flash('error', 'Pick a category to assign.');
+            $this->redirect('/admin/galleries');
+        }
+
+        // One-off unlock price. PPV is the middle rung between "free" and a
+        // subscription, and it was implemented but never used because there
+        // was no way to price a set in bulk.
+        $ppvPrice = (float) $this->request->post('ppv_price', 0);
+        if ($action === 'set_ppv' && ($ppvPrice <= 0 || $ppvPrice > 500)) {
+            $this->flash('error', 'Enter a pay-per-view price between 0.01 and 500.');
             $this->redirect('/admin/galleries');
         }
 
@@ -2156,6 +2165,16 @@ if ($publishAtRaw !== '') {
                     ['is_nsfw' => (int) ($gallery['is_nsfw'] ?? 1) === 1],
                     ['is_nsfw' => $nsfw]);
                 $done++;
+            } elseif ($action === 'set_ppv' || $action === 'clear_ppv') {
+                $newPrice = $action === 'set_ppv' ? $ppvPrice : null;
+                Gallery::setPpvPrice($id, $newPrice);
+                AuditLog::record($adminId, 'update', 'gallery', $id,
+                    $newPrice === null
+                        ? 'Cleared the pay-per-view price on "' . $gallery['title'] . '"'
+                        : 'Set the pay-per-view price on "' . $gallery['title'] . '" to $' . number_format($newPrice, 2),
+                    ['ppv_price' => $gallery['ppv_price'] ?? null],
+                    ['ppv_price' => $newPrice]);
+                $done++;
             } elseif ($action === 'delete') {
                 if ($gallery['deleted_at'] === null) {
                     AuditLog::record($adminId, 'delete', 'gallery', $id,
@@ -2176,7 +2195,9 @@ if ($publishAtRaw !== '') {
 
         $verb = $action === 'delete' ? 'Deleted'
             : ($action === 'category' ? 'Recategorized'
-            : ($action === 'mark_sfw' ? 'Marked SFW' : 'Marked NSFW'));
+            : ($action === 'mark_sfw' ? 'Marked SFW'
+            : ($action === 'mark_nsfw' ? 'Marked NSFW'
+            : ($action === 'set_ppv' ? 'Priced' : 'Cleared the price on'))));
         $this->flash('success', $verb . " {$done} gallery(ies).");
         $this->redirect('/admin/galleries');
     }

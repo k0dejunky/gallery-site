@@ -373,6 +373,10 @@ class SettingsController extends Controller
         $this->viewAdmin('settings_2fa_setup', [
             'secret' => $secret,
             'uri'    => $uri,
+            // A privileged account that has not enrolled is FORCED here: the
+            // base controller blocks every other page until this is done, so
+            // the page must not offer a "Cancel" that leads nowhere.
+            'required' => Auth::needsTwoFactorSetup(),
         ]);
     }
 
@@ -412,6 +416,13 @@ class SettingsController extends Controller
         $user = Auth::user();
         if ($user === null) {
             $this->redirect('/login');
+        }
+
+        // Two-factor is mandatory for privileged roles: a stolen session must
+        // not be able to turn the protection off.
+        if (Auth::requiresTwoFactor($user)) {
+            $this->flash('error', 'Two-factor authentication is required for your role and cannot be disabled.');
+            $this->redirect('/settings?se=admin#two-factor');
         }
 
         $code = (string) $this->request->post('code', '');

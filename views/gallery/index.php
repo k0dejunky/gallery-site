@@ -1,4 +1,4 @@
-<?php $title = config('app.site_name'); ?>
+<?php $title = 'Galleries'; ?>
 
 <?php
 // The card partial needs the member's own state (seen, favourited). It is
@@ -16,10 +16,10 @@ $canonicalUrl = absolute_url('/galleries');
 $ldJson = [
     '@context' => 'https://schema.org',
     '@type'    => 'CollectionPage',
-    'name'     => $title . ' — Galleries',
+    'name'     => config('app.site_name') . ' — Galleries',
     'url'      => $canonicalUrl,
     'description' => $metaDescription,
-    'isPartOf' => ['@type' => 'WebSite', 'name' => $title, 'url' => absolute_url('')],
+    'isPartOf' => ['@type' => 'WebSite', 'name' => config('app.site_name'), 'url' => absolute_url('')],
 ];
 ?>
 <?php
@@ -70,6 +70,11 @@ $vidUrl = $browseChipUrls['type']['videos'];
 // generic gallery page.
 $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galleries');
 ?>
+
+<?php // The page's own heading. Without it the only <h1> on a guest view was
+      // the age-gate dialog, so Google read "Are you over 18?" as the subject
+      // of the catalogue. ?>
+<h1 class="section-title">Galleries</h1>
 
 <div class="hero">
     <form method="get" action="<?= url('/galleries') ?>">

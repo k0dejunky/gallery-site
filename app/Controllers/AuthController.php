@@ -168,12 +168,18 @@ class AuthController extends Controller
                 : ['ok' => false];
         }
 
+        // A plan card that has no instant processor (Yearly, Lifetime) sends a
+        // guest here with the plan in return_to, so signup ends on that plan
+        // instead of the Wall.
+        $returnTo = safe_return_to((string) $this->request->query('return_to', ''));
+
         $this->view('auth/signup', [
             'recentImages' => Photo::recentImages(25),
             'recentVideos' => Photo::recentVideos(25),
             'mediaCounts'  => Photo::siteCounts(),
             'promo'        => $promo,
             'promoInfo'    => $promoInfo,
+            'returnTo'     => $returnTo ?? '',
             'title'        => 'Sign Up',
             'noindex'      => true,
             'canonicalUrl' => absolute_url('/signup'),
@@ -199,7 +205,16 @@ class AuthController extends Controller
 
         // Re-route back to the signup form keeping the promo code so a
         // validation failure doesn't drop the pre-filled promotion.
-        $signupBack = static fn (): string => '/signup' . ($promo !== '' ? '?promo=' . rawurlencode($promo) : '');
+        $returnTo = safe_return_to((string) $this->request->post('return_to', ''));
+
+        // Every validation bounce keeps the promo code AND the plan the guest
+        // came from, or the second attempt silently forgets both.
+        $signupBack = static fn (): string => '/signup' . (($promo !== '' || $returnTo !== null)
+            ? '?' . http_build_query(array_filter([
+                'promo'     => $promo,
+                'return_to' => $returnTo ?? '',
+            ]))
+            : '');
 
         if ($honey !== '') {
             $this->redirect('/signup');
@@ -315,8 +330,9 @@ class AuthController extends Controller
              ? 'Account created. Welcome! Check your email to verify your address.'
              : 'Account created. We could not send the verification email yet. You can resend it from your account settings.') . $promoNote);
          // A new account lands where every signed-in account lands: the
-         // Wall, not the dashboard behind it.
-         $this->redirect(Auth::homePath() . ($this->request->query('se', '') === '1' ? '?se=1' : ''));
+         // Wall, not the dashboard behind it - unless a plan card sent them
+         // here, in which case they return to that plan.
+         $this->redirect($returnTo ?? (Auth::homePath() . ($this->request->query('se', '') === '1' ? '?se=1' : '')));
     }
 
     /**

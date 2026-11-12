@@ -36,6 +36,28 @@ class Auth
         'moderator'  => ['dashboard', 'users', 'membership', 'logs', 'documentation', 'user_monitor'],
         'viewer'     => ['dashboard', 'trends', 'documentation'],
     ];
+
+    /**
+     * Roles that must have two-factor authentication enabled before they can
+     * reach anything else. TOTP shipped as an OPTION, so every privileged
+     * account - the super admin included - sat behind a single password.
+     *
+     * A role listed here that has not enrolled yet is redirected to the setup
+     * page on every request; the login itself still succeeds, which keeps the
+     * enrolment reachable (see enforceTwoFactor()).
+     */
+    public const REQUIRED_2FA_ROLES = ['super_admin', 'admin', 'moderator'];
+
+    /**
+     * The only paths a privileged account may reach while its 2FA enrolment is
+     * outstanding. Everything else redirects to the setup page.
+     */
+    public const TWO_FACTOR_ALLOWED_PATHS = [
+        '/settings/two-factor/setup',
+        '/settings/two-factor/enable',
+        '/settings/two-factor/disable',
+        '/logout',
+    ];
     /**
      * Begin the PHP session if it has not already been started. Called before
      * any session access so the session cookie is set consistently.
@@ -436,6 +458,59 @@ class Auth
         $user = self::user();
 
         return $user !== null && ($user['role'] ?? '') === 'super_admin';
+    }
+
+    /** Whether this account's role is one that must use two-factor. */
+    public static function requiresTwoFactor(array $user): bool
+    {
+        return in_array((string) ($user['role'] ?? ''), self::REQUIRED_2FA_ROLES, true);
+    }
+
+    /**
+     * Whether the SIGNED-IN account still has to enrol in two-factor. False
+     * for members, and false for a privileged account that already enrolled.
+     */
+    public static function needsTwoFactorSetup(): bool
+    {
+        $user = self::user();
+
+        if ($user === null || !self::requiresTwoFactor($user)) {
+            return false;
+        }
+
+        return empty($user['totp_enabled']);
+    }
+
+    /**
+     * Block a privileged account that has not enrolled in two-factor yet.
+     *
+     * Called from the base controller for every request. The account stays
+     * signed in (so the enrolment page is reachable); every other path,
+     * including the whole admin panel, redirects to the setup page. Only the
+     * enrolment endpoints and logout are allowed through.
+     *
+     * Static assets never reach PHP, and API controllers authenticate with
+     * tokens instead of a session, so neither is affected.
+     */
+    public static function enforceTwoFactor(string $path): void
+    {
+        if (!self::needsTwoFactorSetup()) {
+            return;
+        }
+
+        $clean = '/' . ltrim((string) parse_url($path, PHP_URL_PATH), '/');
+
+        foreach (self::TWO_FACTOR_ALLOWED_PATHS as $allowed) {
+            if ($clean === $allowed || str_starts_with($clean, $allowed . '/')) {
+                return;
+            }
+        }
+
+        if (!headers_sent()) {
+            header('Location: ' . url('/settings/two-factor/setup?required=1'), true, 303);
+        }
+
+        exit;
     }
 
     /**

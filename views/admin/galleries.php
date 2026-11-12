@@ -285,6 +285,8 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                     <option value="category">Set category</option>
                     <option value="mark_sfw">Mark SFW (safe for work)</option>
                     <option value="mark_nsfw">Mark NSFW (adult)</option>
+                    <option value="set_ppv">Set pay-per-view price</option>
+                    <option value="clear_ppv">Clear pay-per-view price</option>
                     <option value="delete">Delete</option>
                 </select>
                 <select name="category_id" id="mg-bulk-category">
@@ -293,6 +295,11 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                         <option value="<?= (int) $cat['id'] ?>"><?= e((string) $cat['name']) ?></option>
                     <?php endforeach; ?>
                 </select>
+                <?php // Only used by "Set pay-per-view price": a one-off unlock
+                      // sits between the free tier and a subscription. ?>
+                <label for="mg-bulk-ppv" class="muted" style="font-size:var(--font-size-sm);">PPV price ($)</label>
+                <input type="number" step="0.01" min="0.01" max="500" name="ppv_price" id="mg-bulk-ppv"
+                       placeholder="4.99" style="width:6.5rem;">
                 <button type="submit" class="btn btn-sm">Apply</button>
             </div>
         </div>
