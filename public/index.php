@@ -39,6 +39,42 @@ $renderError = static function (int $status, string $message = 'Something went w
 };
 
 set_exception_handler(function (Throwable $e) use ($appLog, $renderError): void {
+    // A database that is restarting is not an application bug. Database::run()
+    // already retried once; if it STILL cannot reach MySQL, the honest answer
+    // is 503 + Retry-After (search engines and browsers retry those) rather
+    // than a 500 and an "Uncaught ..." line that reads like six code faults.
+    // Seen on 2026-11-12 when unattended-upgrades restarted mysqld for 13s.
+    if (\App\Core\Database::isUnavailable($e)) {
+        @file_put_contents($appLog, sprintf(
+            "[%s] [db-unavailable] %s in %s:%d\n",
+            date('Y-m-d H:i:s'),
+            $e->getMessage(),
+            $e->getFile(),
+            $e->getLine()
+        ), FILE_APPEND | LOCK_EX);
+
+        if (!headers_sent()) {
+            http_response_code(503);
+            header('Retry-After: 5');
+        }
+
+        try {
+            $view = __DIR__ . '/../views/errors/503.php';
+            if (is_file($view)) {
+                require $view;
+            } else {
+                echo 'Temporarily unavailable. Please try again in a moment.';
+            }
+        } catch (Throwable $inner) {
+            // The error page itself must never throw: no database, no theme.
+            header('Content-Type: text/html; charset=utf-8');
+            echo '<!doctype html><meta name="robots" content="noindex"><title>Briefly unavailable</title>'
+                . '<h1>Briefly unavailable</h1><p>Please try again in a moment.</p>';
+        }
+
+        return;
+    }
+
     $line = sprintf(
         '[%s] Uncaught %s: %s in %s:%d%s',
         date('Y-m-d H:i:s'),

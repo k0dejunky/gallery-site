@@ -27,6 +27,15 @@ class Database
      */
     private const SLOW_LOG_MAX = 50;
 
+    /**
+     * How long to wait before reconnecting to a database that just dropped the
+     * connection. An immediate retry lands on the same closed listener while
+     * mysqld is restarting; a quarter of a second is enough for the common
+     * "service restarted" case and imperceptible on a request that would
+     * otherwise fail.
+     */
+    private const RETRY_DELAY_US = 250000;
+
     private static function slowLogPath(): string
     {
         $dir = dirname(__DIR__, 2) . '/storage/logs';
@@ -82,13 +91,60 @@ class Database
         if (!$e instanceof \PDOException) {
             return false;
         }
-        $sqlState = (string) ($e->errorInfo[0] ?? '');
+
+        // 40001 is a deadlock / serialization failure: the connection is fine,
+        // but the statement can be replayed.
+        if ((string) ($e->errorInfo[0] ?? '') === '40001') {
+            return true;
+        }
+
+        return self::isUnavailable($e);
+    }
+
+    /**
+     * Whether the database itself was unreachable, as opposed to the query
+     * being wrong.
+     *
+     * This is the MySQL-is-restarting case: unattended-upgrades stops the
+     * service for a few seconds (2026-11-12 06:27), the site answers every
+     * request in that window with an uncaught PDOException, and the error card
+     * reads like six application bugs. The codes are:
+     *
+     *   - 2002 "Connection refused"      - nothing is listening (service down)
+     *   - 2006 / 2013                    - the connection died mid-request
+     *   - 08S01 / 1053                   - "Server shutdown in progress"
+     *
+     * A request that hits these should pause briefly and retry; one that still
+     * fails should answer 503 (try again), not 500 (something is broken).
+     */
+    public static function isUnavailable(\Throwable $e): bool
+    {
+        if (!$e instanceof \PDOException) {
+            return false;
+        }
+
+        $sqlState   = (string) ($e->errorInfo[0] ?? '');
         $driverCode = (int) ($e->errorInfo[1] ?? 0);
 
-        // 2006 server has gone away, 2013 lost connection during query.
-        return ($sqlState === 'HY000' && ($driverCode === 2006 || $driverCode === 2013))
-            || $sqlState === '40001'
-            || stripos($e->getMessage(), 'server has gone away') !== false;
+        if ($sqlState === '08S01'
+            || in_array($driverCode, [2002, 2006, 2013, 1053], true)) {
+            return true;
+        }
+
+        $message = strtolower($e->getMessage());
+        foreach ([
+            'connection refused',
+            'server shutdown in progress',
+            'server has gone away',
+            'lost connection',
+            'error while sending',
+        ] as $needle) {
+            if (strpos($message, $needle) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -133,6 +189,10 @@ class Database
             if (!self::isLostConnection($e)) {
                 throw $e;
             }
+            // Give a restarting server a moment before reconnecting. Without
+            // the pause the retry reconnects while mysqld is still down and
+            // fails with the same "connection refused" it was retrying.
+            usleep(self::RETRY_DELAY_US);
             self::reset();
             $stmt = self::connection()->prepare($sql);
             $stmt->execute($params);

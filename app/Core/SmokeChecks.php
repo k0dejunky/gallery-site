@@ -10018,6 +10018,42 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.db.restart_is_a_503_not_a_500', 'Smoke · Database', 'A MySQL restart is retried once, then answered 503 instead of a 500', static function () use ($root, $read, $ok, $bad): array {
+            // unattended-upgrades stopped mysqld for 13 seconds on 2026-11-12;
+            // six requests were logged as uncaught PDOExceptions and read like
+            // six application bugs.
+            $problems = [];
+            $db       = (string) $read($root . '/app/Core/Database.php');
+            $index    = (string) $read($root . '/public/index.php');
+
+            if (strpos($db, 'function isUnavailable(') === false) {
+                $problems[] = 'Database::isUnavailable() is missing';
+            }
+            foreach (['2002', '2006', '2013', '1053', '08S01'] as $code) {
+                if (strpos($db, (string) $code) === false) {
+                    $problems[] = 'the unavailable check does not cover ' . $code;
+                }
+            }
+            if (strpos($db, 'usleep(self::RETRY_DELAY_US)') === false) {
+                $problems[] = 'the reconnect retry has no pause, so it retries into the same closed listener';
+            }
+
+            $guard = strpos($index, 'Database::isUnavailable($e)');
+            $log   = strpos($index, "'[%s] Uncaught %s");
+            if ($guard === false) {
+                $problems[] = 'the exception handler does not special-case an unreachable database';
+            } elseif ($log !== false && $guard > $log) {
+                $problems[] = 'the database check must run BEFORE the uncaught line is written';
+            }
+            if (strpos($index, "http_response_code(503)") === false || strpos($index, "'Retry-After: 5'") === false) {
+                $problems[] = 'the database-down response must be 503 with Retry-After';
+            }
+
+            return $problems === []
+                ? $ok('a restarting database is retried once, then answered 503 + Retry-After and kept out of the fatal card')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.admin.galleries_ppv_bulk', 'Smoke · Admin', 'A pay-per-view price can be set on a selection of galleries', static function () use ($root, $read, $ok, $bad): array {
             // PPV shipped with an unlock flow and a ledger but no way to price
             // a set: ppv_price was NULL on all 262 galleries.
