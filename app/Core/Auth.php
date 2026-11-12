@@ -460,9 +460,20 @@ class Auth
         return $user !== null && ($user['role'] ?? '') === 'super_admin';
     }
 
-    /** Whether this account's role is one that must use two-factor. */
+    /**
+     * Whether this account's role is one that must use two-factor.
+     *
+     * REQUIRE_2FA=false in .env is the break-glass switch: an operator who is
+     * locked out (lost phone, never enrolled) turns the requirement off
+     * without a code change, signs in, enrols, and removes the line again.
+     * The enrolment page keeps working either way.
+     */
     public static function requiresTwoFactor(array $user): bool
     {
+        if (in_array(strtolower(trim((string) env_value('REQUIRE_2FA', '1'))), ['0', 'false', 'no', 'off'], true)) {
+            return false;
+        }
+
         return in_array((string) ($user['role'] ?? ''), self::REQUIRED_2FA_ROLES, true);
     }
 

@@ -360,8 +360,26 @@ class SettingsController extends Controller
             $this->redirect('/login');
         }
 
-        $secret = \App\Core\Totp::generateSecret();
-        \App\Models\User::setTotpSecret((int) $user['id'], $secret);
+        // An account that is already enrolled must NOT be shown the enrolment
+        // screen: it would display a live secret, and "generate a new key"
+        // would overwrite the stored one behind an enabled flag - the current
+        // authenticator would stop working while the account still demanded a
+        // code. Disabling first (which needs a current code) is the safe path.
+        if ((int) ($user['totp_enabled'] ?? 0) === 1) {
+            $this->flash('success', 'Two-factor is already enabled. Disable it first (you will be asked for a current code) to enrol a new device.');
+            $this->redirect('/settings?se=admin#two-factor');
+        }
+
+        // Reuse the secret already on the account. Generating one on every GET
+        // meant a reload (or a second tab) replaced the secret while the code
+        // in the app still came from the previous one, and the enrolment then
+        // failed with "invalid code" - the worst possible moment for it.
+        $secret = (string) ($user['totp_secret'] ?? '');
+
+        if ($secret === '' || $this->request->query('reset', '') === '1') {
+            $secret = \App\Core\Totp::generateSecret();
+            \App\Models\User::setTotpSecret((int) $user['id'], $secret);
+        }
 
         $uri = \App\Core\Totp::provisioningUri(
             $secret,
@@ -369,7 +387,7 @@ class SettingsController extends Controller
             (string) $user['email']
         );
 
-        $this->flash('success', 'Scan the QR code with your authenticator app, then enter a code to enable two-factor.');
+        $this->flash('success', 'Scan the QR code (or type the secret key) into your authenticator app, then enter the 6-digit code to enable two-factor.');
         $this->viewAdmin('settings_2fa_setup', [
             'secret' => $secret,
             'uri'    => $uri,

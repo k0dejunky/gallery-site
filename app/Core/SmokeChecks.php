@@ -9920,8 +9920,26 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 $problems[] = 'no command-line recovery path for a lost authenticator (bin/disable_totp.php)';
             }
 
+            // The setup page promised a QR code that did not exist, and the
+            // first deployment of the guard locked the owner out. The code is
+            // drawn locally (the otpauth URI carries the secret, so it must
+            // never go to an external image service) and the secret stays
+            // readable underneath it.
+            if (strpos($setupView, 'id="totp-qr"') === false || strpos($setupView, 'qrcode.min.js') === false) {
+                $problems[] = 'the enrolment page does not draw a QR code locally';
+            }
+            if (!is_file($root . '/public/assets/js/qrcode.min.js')) {
+                $problems[] = 'public/assets/js/qrcode.min.js is missing';
+            }
+            if (strpos($auth, "env_value('REQUIRE_2FA'") === false) {
+                $problems[] = 'there is no break-glass switch for a locked-out operator (REQUIRE_2FA=false)';
+            }
+            if (strpos($settings, "totp_enabled'] ?? 0) === 1") === false) {
+                $problems[] = 'an already-enrolled account can reach the enrolment page and overwrite its own secret';
+            }
+
             return $problems === []
-                ? $ok('privileged roles are forced through enrolment, cannot disable it, and have a CLI recovery path')
+                ? $ok('privileged roles are forced through enrolment, cannot disable it, and have a QR + CLI + env escape path')
                 : $bad(implode('; ', $problems));
         });
 
