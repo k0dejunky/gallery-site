@@ -30,7 +30,10 @@
 
     <div class="auth-panel">
         <div class="auth-hero">
-            <h1><?= e($authHeroTitle) ?></h1>
+            <?php // The brand block is not the page's subject: "Login" and
+                  // "Create an Account" are. Two page-level headings also
+                  // failed axe's heading checks. ?>
+            <h2><?= e($authHeroTitle) ?></h2>
             <p class="muted"><?= e($authHeroText) ?></p>
         </div>
 

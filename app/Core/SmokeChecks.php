@@ -1695,6 +1695,100 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.ui.a11y_scan_fixes', 'Smoke · UI', 'The fixes from the axe scan stay fixed', static function () use ($root, $read, $ok, $bad): array {
+            // Measured with axe-core 4.10.2 (WCAG 2.2 AA) on the live site.
+            // Each assertion here is one of those findings.
+            $problems = [];
+            $home     = (string) $read($root . '/views/home.php');
+            $auth     = (string) $read($root . '/views/auth/partials/auth_shell.php');
+            $layout   = (string) $read($root . '/views/layout.php');
+            $userCss  = (string) $read($root . '/public/assets/css/user.css');
+            $adminCss = (string) $read($root . '/public/assets/css/admin.css');
+            $galleries = (string) $read($root . '/views/admin/galleries.php');
+            $users    = (string) $read($root . '/views/admin/users.php');
+            $system   = (string) $read($root . '/views/admin/system.php');
+            $opts     = (string) $read($root . '/app/Models/ServerOptimizations.php');
+
+            // 1. The home page called itself the site name (12 characters).
+            if (preg_match("/^<\?php\s*\\\$title\s*=\s*config\('app\.site_name'\);/m", $home) === 1) {
+                $problems[] = 'views/home.php is back to the bare site name as its title';
+            }
+
+            // 2. One <h1> per auth page: the brand block is an <h2>.
+            if (strpos($auth, '<h2><?= e($authHeroTitle) ?></h2>') === false) {
+                $problems[] = 'the auth hero is not an <h2>';
+            }
+            if (substr_count($auth, '<h1') !== 1) {
+                $problems[] = 'the auth shell must render exactly one <h1>';
+            }
+
+            // 3. <aside> may not carry role="dialog".
+            if (strpos($layout, '<aside id="member-onboarding"') !== false) {
+                $problems[] = 'the onboarding dialog is an <aside role="dialog"> again';
+            }
+            if (strpos($layout, '<div id="member-onboarding"') === false) {
+                $problems[] = 'the onboarding dialog container is missing';
+            }
+
+            // 4. Links inside muted text must not rely on colour (1.4.1).
+            if (strpos($userCss, '.muted a { text-decoration: underline') === false) {
+                $problems[] = 'links inside .muted are not underlined';
+            }
+
+            // 5. The admin faint text failed AA at 3.07:1.
+            $lum = static function (string $hex): float {
+                $hex = ltrim($hex, '#');
+                $c = [];
+                foreach ([0, 2, 4] as $i) {
+                    $v = hexdec(substr($hex, $i, 2)) / 255;
+                    $c[] = $v <= 0.03928 ? $v / 12.92 : (($v + 0.055) / 1.055) ** 2.4;
+                }
+                return 0.2126 * $c[0] + 0.7152 * $c[1] + 0.0722 * $c[2];
+            };
+            $ratio = static function (string $a, string $b) use ($lum): float {
+                $la = $lum($a); $lb = $lum($b);
+                $hi = max($la, $lb); $lo = min($la, $lb);
+                return ($hi + 0.05) / ($lo + 0.05);
+            };
+            if (preg_match('/--adm-text-faint:\s*(#[0-9a-fA-F]{6})/', $adminCss, $m) !== 1) {
+                $problems[] = 'the admin faint-text token is missing';
+            } else {
+                foreach (['#ffffff' => 'a card', '#f4f5fa' => 'the page'] as $bg => $label) {
+                    if ($ratio($m[1], $bg) < 4.5) {
+                        $problems[] = '--adm-text-faint ' . $m[1] . ' is only '
+                            . round($ratio($m[1], $bg), 2) . ':1 on ' . $label;
+                    }
+                }
+            }
+
+            // 6. Bulk controls: checkboxes and selects need accessible names.
+            foreach (['Select all galleries', 'aria-label="Select gallery'] as $needle) {
+                if (strpos($galleries, $needle) === false) {
+                    $problems[] = 'the gallery bulk controls lost "' . $needle . '"';
+                }
+            }
+            if (strpos($galleries, 'for="mg-bulk-action"') === false) {
+                $problems[] = 'the bulk action select has no label';
+            }
+            if (strpos($users, 'aria-label="Select <?=') === false) {
+                $problems[] = 'the user row checkbox has no accessible name';
+            }
+
+            // 7. A scrollable log must be reachable by keyboard.
+            if (strpos($system, '<pre tabindex="0"') === false) {
+                $problems[] = 'the system log <pre> is not focusable';
+            }
+
+            // 8. The cast must wrap the whole expression, or the fallback is dead.
+            if (strpos($opts, "(int) (self::all()['cache_'") === false) {
+                $problems[] = 'ServerOptimizations::cacheTtl() casts before the ?? again';
+            }
+
+            return $problems === []
+                ? $ok('home title, one <h1>, dialog role, muted links, admin contrast, bulk labels, focusable log')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.ui.contrast_floor', 'Smoke · UI', 'Every text colour on the member skin meets its contrast floor', static function () use ($root, $ok, $bad): array {
             // The ratios are COMPUTED from the palette the site actually ships,
             // so a change to the palette can never quietly break a pair - and

@@ -281,6 +281,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
         <div class="adm-bulk">
             <strong>With selected:</strong>
             <div class="adm-bulk-controls">
+                <label for="mg-bulk-action" class="adm-sr-only">Bulk action</label>
                 <select name="action" id="mg-bulk-action">
                     <option value="category">Set category</option>
                     <option value="mark_sfw">Mark SFW (safe for work)</option>
@@ -289,6 +290,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                     <option value="clear_ppv">Clear pay-per-view price</option>
                     <option value="delete">Delete</option>
                 </select>
+                <label for="mg-bulk-category" class="adm-sr-only">Category to assign</label>
                 <select name="category_id" id="mg-bulk-category">
                     <option value="">Choose a category…</option>
                     <?php foreach (($categories ?? []) as $cat): ?>
@@ -307,7 +309,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
         <table id="mg-table">
             <thead>
                 <tr>
-                    <th><input type="checkbox" id="mg-check-all" title="Select all"></th>
+                    <th><input type="checkbox" id="mg-check-all" title="Select all" aria-label="Select all galleries"></th>
                     <th>Cover</th>
                     <th>Gallery</th>
                     <th>Type</th>
@@ -325,7 +327,7 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                     <?php $cover = $covers[$gid] ?? null; ?>
                     <?php $level = (int) ($gallery['min_level'] ?? 0); ?>
                     <tr data-gallery-id="<?= $gid ?>">
-                        <td><input type="checkbox" name="ids[]" value="<?= $gid ?>" class="mg-check"></td>
+                        <td><input type="checkbox" name="ids[]" value="<?= $gid ?>" class="mg-check" aria-label="Select gallery <?= e((string) ($gallery['title'] ?? $gid)) ?>"></td>
                         <td>
                             <?php if ($cover !== null): ?>
                                 <img class="mg-cover" src="<?= e(file_url((string) $cover['filename'], 'thumb')) ?>" alt="" loading="lazy">

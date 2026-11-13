@@ -794,6 +794,12 @@ body:not(.admin-theme) h4,
 body:not(.admin-theme) h5,
 body:not(.admin-theme) h6 { color: var(--heading-color); }
 body:not(.admin-theme) .muted { color: var(--muted-color); }
+/* WCAG 1.4.1: a link inside muted text was only distinguishable by colour
+   (#e9aefc on #b9a0c4 = 1.34:1). Underline it instead of darkening the copy. */
+body:not(.admin-theme) .muted a { text-decoration: underline; text-underline-offset: .15em; }
+/* The auth brand block is an <h2> now (one <h1> per page); keep the size it
+   had as an <h1> so the splash does not change. */
+body:not(.admin-theme) .auth-hero h2 { font-size: var(--font-size-h1); margin: 0 0 .35rem; }
 body:not(.admin-theme) .section-title { color: var(--sidebar-heading); border-color: var(--card-border); }
 body:not(.admin-theme) .fav-section h2 { color: var(--sidebar-heading); border-color: var(--card-border); }
 body:not(.admin-theme) .nav { border-color: var(--card-border); }

@@ -715,7 +715,7 @@ class WebStats
         if ($status >= 500 || $status === 403 || $status === 401) {
             return 'bad';
         }
-        if ($status >= 400 || $status === 429) {
+        if ($status >= 400) {
             return 'warn';
         }
 

@@ -183,7 +183,8 @@ final class Receipt
 
         $description = (string) ($sub['plan_name'] ?? 'Membership');
         if ($periods > 1) {
-            $description .= ' — ' . $periods . ' ' . $periodLabel . ($periods === 1 ? '' : 's') . ' paid';
+            // Inside if ($periods > 1) this is always plural; the ternary was dead.
+            $description .= ' — ' . $periods . ' ' . $periodLabel . 's paid';
         }
 
         $date = (string) ($sub['starts_at'] ?? $sub['created_at'] ?? '');

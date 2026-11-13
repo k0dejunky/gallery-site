@@ -175,7 +175,7 @@ $canOperate = \App\Core\Auth::can('system_ops');
             <?php if (!empty($phpErrors['truncated'])): ?>
                 <p class="muted" style="font-size:.8rem;">Showing the newest errors only.</p>
             <?php endif; ?>
-            <pre class="u-fs-075" style="max-height:14rem;overflow:auto;margin:0 0 .6rem;white-space:pre-wrap;"><?php
+            <pre tabindex="0" class="u-fs-075" style="max-height:14rem;overflow:auto;margin:0 0 .6rem;white-space:pre-wrap;"><?php
                 foreach (array_slice($phpErrors['lines'], -10) as $phpLine) {
                     echo e($phpLine), "\n";
                 }

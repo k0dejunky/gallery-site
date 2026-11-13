@@ -1,4 +1,7 @@
-<?php $title = config('app.site_name'); ?>
+<?php // The home page used to call itself "amethyst2213" (12 characters, no
+      // keywords). The layout appends " — amethyst2213" only when the title
+      // does not already end with it, so this stays a single brand. ?>
+<?php $title = 'Original photos, videos and live streams'; ?>
 <?php
 $metaDescription = $metaDescription ?? ('Join ' . config('app.site_name') . ' for full access to original photos, videos and live streams.');
 $canonicalUrl    = $canonicalUrl ?? absolute_url('/');

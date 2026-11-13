@@ -110,7 +110,7 @@
 </ul>
 
 <h2 class="section-title">How the code is organized</h2>
-<pre>
+<pre tabindex="0">
 gallery-mvc/
 ├── public/index.php              Entry point (loads helpers, router, dispatches the request)
 ├── config/
@@ -252,7 +252,7 @@ gallery-mvc/
 
 <h2 class="section-title">Routing</h2>
 <p>Every page maps to a controller method in <code>config/routes.php</code> (209 routes total: 83 GET + 126 POST):</p>
-<pre>['GET', '/admin/mail', 'EmailController@index', 'dashboard'],</pre>
+<pre tabindex="0">['GET', '/admin/mail', 'EmailController@index', 'dashboard'],</pre>
 <p>means <code>GET /gallery/admin/mail</code> calls <code>EmailController::index()</code> and requires the
 <code>dashboard</code> permission (the optional 4th element — enforced by the router before the controller runs).
 Placeholders like <code>{id}</code> become method arguments. All <code>POST</code> routes are CSRF-checked automatically.
@@ -446,7 +446,7 @@ dispatched to <code>/admin/users/{id}</code>).</p>
     <li><strong>What a backup contains</strong> — <em>Create backup now</em> (System page) dumps the database (<code>gallery-db-&lt;stamp&gt;.sql.gz</code>) and archives <code>storage/uploads</code> as <code>gallery-backup-&lt;stamp&gt;.tar.gz</code>. The archive is verified with <code>gzip -t</code>, then split into 4&nbsp;GB chunks (<code>.tar.gz.part-00</code>, <code>.part-01</code>, …) plus a <code>.sha256</code> checksum file, so the offsite sync can upload several chunks in parallel.</li>
     <li><strong>Offsite sync</strong> — if <code>BACKUP_SYNC_CMD</code> is set in <code>.env</code>, every verified artifact is synced offsite after each backup (currently Google Drive via rclone, target <code>gdrive:gallery-site/backups</code>). The result code is recorded in <code>storage/backups/.last_sync</code>.</li>
     <li><strong>Restore from parts</strong> — download all <code>.part-</code> files of one backup (the admin <em>Download</em> button streams them back as one file automatically), then verify and extract:
-        <pre>cat gallery-backup-&lt;stamp&gt;.tar.gz.part-* &gt; gallery-backup-&lt;stamp&gt;.tar.gz
+        <pre tabindex="0">cat gallery-backup-&lt;stamp&gt;.tar.gz.part-* &gt; gallery-backup-&lt;stamp&gt;.tar.gz
 sha256sum -c gallery-backup-&lt;stamp&gt;.sha256
 mkdir -p storage/uploads &amp;&amp; tar -xzf gallery-backup-&lt;stamp&gt;.tar.gz -C /path/to/site
 gunzip &lt; gallery-db-&lt;stamp&gt;.sql.gz | mysql -u &lt;user&gt; -p &lt;database&gt;</pre>

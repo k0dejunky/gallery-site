@@ -96,7 +96,7 @@ echo AdminTable::shell([
         ?>
         <?php foreach ($users as $user): ?>
             <tr>
-                <td><?php if ((int) $user['id'] !== (int) \App\Core\Auth::user()['id']): ?><input type="checkbox" name="ids[]" value="<?= (int) $user['id'] ?>" class="user-check"><?php endif; ?></td>
+                <td><?php if ((int) $user['id'] !== (int) \App\Core\Auth::user()['id']): ?><input type="checkbox" name="ids[]" value="<?= (int) $user['id'] ?>" class="user-check" aria-label="Select <?= e((string) $user['email']) ?>"><?php endif; ?></td>
                 <td class="user-email"><?= e($user['email']) ?>
                     <?php if (!empty($user['flag'])): ?>
                         <form method="post" action="<?= url('/admin/users/' . (int) $user['id'] . '/flag') ?>" class="inline">

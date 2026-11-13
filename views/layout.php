@@ -644,7 +644,7 @@ if (!empty($_SESSION['impersonator_id'])) {
     </div>
     <?php endif; ?>
     <?php if ($user !== null && !\App\Core\Auth::isAdmin()): ?>
-    <aside id="member-onboarding" class="member-onboarding" hidden role="dialog" aria-modal="true" aria-labelledby="member-onboarding-title">
+    <div id="member-onboarding" class="member-onboarding" hidden role="dialog" aria-modal="true" aria-labelledby="member-onboarding-title">
         <div class="member-onboarding-card">
             <h2 id="member-onboarding-title">Welcome to your member area</h2>
             <p>Use these shortcuts to get the most from your account:</p>
@@ -656,7 +656,7 @@ if (!empty($_SESSION['impersonator_id'])) {
             </ul>
             <button type="button" class="btn btn-sm" data-dismiss-onboarding>Got it</button>
         </div>
-    </aside>
+    </div>
     <?php endif; ?>
     <script nonce="<?= csp_nonce() ?>">
         // Gallery cards: if a card's category chips don't all fit on one row,

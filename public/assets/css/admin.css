@@ -21,7 +21,11 @@
     /* Text */
     --adm-text: #1e2330;
     --adm-text-dim: #5c6478;
-    --adm-text-faint: #8b93a7;
+    /* Was #8b93a7: 3.07:1 on white, so breadcrumbs, KPI labels and every
+       secondary table cell failed WCAG AA (axe counted ~470 nodes on the
+       gallery list alone). #5f6779 is 5.2:1 on the page grey and 5.7:1 on a
+       card, still clearly quieter than --adm-text-dim. */
+    --adm-text-faint: #5f6779;
 
     /* Brand (theme driven, with sane fallbacks) */
     /* The admin accent follows the brand CTA: fuchsia, not the old rose.
@@ -638,6 +642,10 @@ body.admin-theme {
 }
 
 .admin-theme .muted { color: var(--adm-text-dim); opacity: 1; }
+/* Visible to screen readers only: used for bulk-selection controls whose
+   visual label is the row they sit in. */
+.admin-theme .adm-sr-only { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; border:0; }
+
 .admin-theme .page-sub { margin: 0 0 1.25rem; color: var(--adm-text-dim); font-size: 13.5px; }
 
 /* ---------- Buttons ----------------------------------------------------- */

@@ -95,7 +95,9 @@ class ServerOptimizations
     /** Cache TTLs used by the application cache. */
     public static function cacheTtl(string $which): int
     {
-        return (int) self::all()['cache_' . $which . '_ttl'] ?? 60;
+        // The cast binds tighter than ??, so (int) X ?? 60 is (int) X and a
+        // missing key disabled the cache (TTL 0) instead of falling back.
+        return (int) (self::all()['cache_' . $which . '_ttl'] ?? 60);
     }
 
     /**
