@@ -187,6 +187,98 @@ final class Lifecycle
     }
 
     /**
+     * The site's own dunning ladder for a failed payment.
+     *
+     * The gateway decides when it retries the charge. The site owns what the
+     * member is TOLD, and what happens when the grace window closes: the paid
+     * membership ends and the account drops to the FREE tier. The owner's
+     * rule (2026-11-13) is explicit - a failed payment must never leave the
+     * member on a cheaper PAID level for free, so there is no "downgrade to
+     * Silver" step anywhere in this code.
+     *
+     * Two notices, each keyed once per subscription by subscription_email_log
+     * (so the 15-minute housekeeping cadence cannot repeat one):
+     *   payment_still_failing  three days after the failure, while grace remains
+     *   access_ending          when the grace window is inside two days
+     *
+     * $onlyUserId narrows the scan to one member so tests can run the real
+     * queries without touching live inboxes (0 = all).
+     *
+     * @return array{still_failing: int, access_ending: int}
+     */
+    public static function runPaymentDunning(int $onlyUserId = 0): array
+    {
+        $grace = \App\Models\Subscription::pastDueGraceDays();
+        $out   = ['still_failing' => 0, 'access_ending' => 0];
+
+        if ($grace <= 0) {
+            // No grace window exists, so there is nothing to warn about: the
+            // past-due row is ended by the housekeeping immediately.
+            return $out;
+        }
+
+        $scope = $onlyUserId > 0 ? ' AND s.user_id = ?' : '';
+
+        if ($grace > 3) {
+            $params = array_merge(['past_due', $grace], $onlyUserId > 0 ? [$onlyUserId] : []);
+            $rows = Database::run(
+                'SELECT s.id
+                 FROM subscriptions s
+                 WHERE s.status = ?
+                   AND s.past_due_at IS NOT NULL
+                   AND s.past_due_at <= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 3 DAY)
+                   AND DATE_ADD(s.past_due_at, INTERVAL ? DAY) > CURRENT_TIMESTAMP' . $scope,
+                $params
+            )->fetchAll();
+
+            foreach ($rows as $row) {
+                $sub = self::subscription((int) $row['id']);
+                if ($sub === null) {
+                    continue;
+                }
+                $graceEnds = \App\Models\Subscription::pastDueGraceEndsAt($sub);
+                if (self::send('payment_still_failing', (int) $row['id'], 'payment_still_failing', "We still can't charge your card", [
+                    'planName'      => (string) ($sub['plan_name'] ?? 'your membership'),
+                    'amount'        => (float) ((float) ($sub['price_paid'] ?? 0) > 0 ? $sub['price_paid'] : $sub['price']),
+                    'graceEndsOn'   => $graceEnds !== null ? \tzdate('F j, Y', $graceEnds) : '',
+                    'manageUrl'     => absolute_url('/membership/my'),
+                ])) {
+                    $out['still_failing']++;
+                }
+            }
+        }
+
+        $params = array_merge(['past_due', $grace, $grace], $onlyUserId > 0 ? [$onlyUserId] : []);
+        $rows = Database::run(
+            'SELECT s.id
+             FROM subscriptions s
+             WHERE s.status = ?
+               AND s.past_due_at IS NOT NULL
+               AND DATE_ADD(s.past_due_at, INTERVAL ? DAY) > CURRENT_TIMESTAMP
+               AND DATE_ADD(s.past_due_at, INTERVAL ? DAY) <= DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 2 DAY)' . $scope,
+            $params
+        )->fetchAll();
+
+        foreach ($rows as $row) {
+            $sub = self::subscription((int) $row['id']);
+            if ($sub === null) {
+                continue;
+            }
+            $graceEnds = \App\Models\Subscription::pastDueGraceEndsAt($sub);
+            if (self::send('access_ending', (int) $row['id'], 'access_ending', 'Your paid access ends soon', [
+                'planName'    => (string) ($sub['plan_name'] ?? 'your membership'),
+                'endsOn'      => $graceEnds !== null ? \tzdate('F j, Y', $graceEnds) : '',
+                'manageUrl'   => absolute_url('/membership/my'),
+                'membershipUrl' => \App\Models\Traffic::buildUrl('/membership', 'email-digest'),
+            ])) {
+                $out['access_ending']++;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * Scan for lapsed members (latest subscription expired/cancelled more than
      * $daysAfter ago, with no active sub) and queue a win-back to those who
      * have not opted out. Returns the number of win-backs queued.

@@ -153,7 +153,15 @@ use App\Core\AdminTable;
                     <?= !empty($sub['payment_name']) ? e($sub['payment_name']) : '&mdash;' ?>
                     <?php if (!empty($sub['transaction_ref'])): ?><br><span class="muted u-fs-08"><?= e($sub['transaction_ref']) ?></span><?php endif; ?>
                 </td>
-                <td><?= e(\App\Models\Subscription::statusLabel($sub['status'])) ?></td>
+                <td>
+                    <?= e(\App\Models\Subscription::statusLabel($sub['status'])) ?>
+                    <?php if ($sub['status'] === 'past_due'): ?>
+                        <?php $graceEnds = \App\Models\Subscription::pastDueGraceEndsAt($sub); ?>
+                        <?php if ($graceEnds !== null): ?>
+                            <br><span class="muted u-fs-08">free tier from <?= e(tzdate('Y-m-d', $graceEnds)) ?></span>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </td>
                 <td><?= !empty($sub['starts_at']) ? e(tzdate('Y-m-d', $sub['starts_at'])) : '&mdash;' ?></td>
                 <td><?= !empty($sub['expires_at']) ? e(tzdate('Y-m-d', $sub['expires_at'])) : '&mdash;' ?></td>
                 <td><?= e(tzdate('Y-m-d H:i', $sub['created_at'])) ?></td>

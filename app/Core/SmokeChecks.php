@@ -5026,6 +5026,81 @@ class SmokeChecks
                 : $bad(implode('; ', $probs));
         });
 
+        $add('smoke.lifecycle.free_tier_dunning', 'Smoke · Membership', 'A failed payment is chased, then leaves the account on the FREE tier - never a cheaper paid level', static function () use ($root, $read, $ok, $bad): array {
+            $lifecycle = (string) $read($root . '/app/Core/Lifecycle.php');
+            $house     = (string) $read($root . '/app/Core/Housekeeping.php');
+            $sub       = (string) $read($root . '/app/Models/Subscription.php');
+            $view      = (string) $read($root . '/views/membership/my.php');
+            $adminView = (string) $read($root . '/views/admin/subscriptions.php');
+            $probs     = [];
+
+            if (strpos($lifecycle, 'public static function runPaymentDunning(') === false) {
+                $probs[] = 'Lifecycle must own the dunning ladder';
+            }
+            foreach (["'payment_still_failing'", "'access_ending'"] as $event) {
+                if (strpos($lifecycle, $event) === false) {
+                    $probs[] = 'the ladder is missing the ' . $event . ' notice';
+                }
+            }
+            if (strpos($house, 'Lifecycle::runPaymentDunning(') === false) {
+                $probs[] = 'housekeeping must run the ladder';
+            }
+            if (substr_count($house, 'Subscription::endPaidTerm(') < 2) {
+                $probs[] = 'both expiry paths must END the paid term (the free tier)';
+            }
+
+            if (strpos($sub, 'public static function endPaidTerm(') === false) {
+                $probs[] = 'Subscription must have endPaidTerm()';
+            }
+            $endAt = strpos($sub, 'public static function endPaidTerm(');
+            if ($endAt !== false) {
+                $end   = strpos($sub, "
+    }", $endAt);
+                $body  = substr($sub, $endAt, ($end === false ? 1200 : $end - $endAt));
+                // The owner's rule: no cheaper PAID level for free. The level
+                // must be left alone (a later payment revives the same row).
+                if (strpos($body, 'access_level') !== false) {
+                    $probs[] = 'ending a paid term must not touch access_level - a later payment would revive the row at the wrong level';
+                }
+            }
+
+            // The grace promise: a past-due row keeps access until the grace
+            // ends. activeFor() is what Auth/effectiveLevel use, so a missing
+            // clause silently revoked access on the first failed charge.
+            $forAt = strpos($sub, 'public static function activeFor(');
+            $forEnd = $forAt === false ? false : strpos($sub, "
+    }", $forAt);
+            $forBody = $forAt === false ? '' : substr($sub, $forAt, ($forEnd === false ? 1800 : $forEnd - $forAt));
+            if (strpos($forBody, 'past_due_at') === false) {
+                $probs[] = 'activeFor() must honour the past-due grace window';
+            }
+
+            foreach ([
+                'views/emails/payment_still_failing.php',
+                'views/emails/payment_still_failing.text.php',
+                'views/emails/access_ending.php',
+                'views/emails/access_ending.text.php',
+            ] as $file) {
+                if (!is_file($root . '/' . $file)) {
+                    $probs[] = 'missing template: ' . $file;
+                }
+            }
+            $expired = (string) $read($root . '/views/emails/expired.php');
+            if (stripos($expired, 'free tier') === false) {
+                $probs[] = 'the ended-membership email must say the account is on the free tier';
+            }
+            if (stripos($view, 'free tier') === false) {
+                $probs[] = 'the membership page must say what a failed payment leaves behind (the free tier)';
+            }
+            if (stripos($adminView, 'free tier from') === false) {
+                $probs[] = 'the admin list must show when a past-due row becomes free';
+            }
+
+            return $probs === []
+                ? $ok('the ladder chases the card, then ends the paid term into the free tier with the level preserved')
+                : $bad(implode('; ', $probs));
+        });
+
         $add('smoke.ops.rate_limiter_sharded', 'Smoke · Ops', 'The rate limiter does not serialise every request on one lock', static function () use ($root, $read, $ok, $bad): array {
             // The limiter's state used to live in ONE file that every
             // rate-limited request locked exclusively, read, changed and

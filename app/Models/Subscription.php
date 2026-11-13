@@ -47,6 +47,57 @@ class Subscription
     }
 
     /**
+     * When a past-due membership's grace window closes (null when the row is
+     * not past due).
+     *
+     * The dunning emails and the membership page both quote this date, and
+     * the housekeeping step that converts the row to the free tier uses the
+     * same arithmetic, so the promise and the action cannot drift.
+     *
+     * @param array<string, mixed> $sub
+     */
+    public static function pastDueGraceEndsAt(array $sub): ?string
+    {
+        $at = $sub['past_due_at'] ?? null;
+        if ($at === null || $at === '') {
+            return null;
+        }
+
+        $ts = strtotime((string) $at);
+        if ($ts === false) {
+            return null;
+        }
+
+        return date('Y-m-d H:i:s', $ts + self::pastDueGraceDays() * 86400);
+    }
+
+    /**
+     * End a paid term and leave the ACCOUNT on the free tier.
+     *
+     * The user's decision (2026-11-13): a failed payment must never hand the
+     * member a cheaper PAID level for free. When the grace window closes the
+     * membership simply stops being usable, which is exactly the free tier -
+     * the account stays active, the login, favorites and free galleries stay,
+     * and only the paid access ends.
+     *
+     * access_level is deliberately LEFT ALONE: the row is the one a later
+     * successful payment revives (Subscription::renew), and a zeroed level
+     * would revive them as an "active" member with no paid access.
+     */
+    public static function endPaidTerm(int $id): bool
+    {
+        $stmt = Database::run(
+            "UPDATE subscriptions
+             SET status = 'expired', expires_at = CURRENT_TIMESTAMP,
+                 paused_at = NULL, paused_until = NULL, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ? AND status IN ('active', 'past_due')",
+            [$id]
+        );
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
      * User ids holding a chat-eligible subscription (a plan flagged
      * can_chat). Shared by the chat feature, broadcasts and the operator
      * bridge so "who can chat" is decided in exactly one place.
@@ -88,12 +139,14 @@ class Subscription
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
              WHERE s.user_id = ?
-               AND s.status IN (?, ?)
+               AND (s.status IN (?, ?)
+                    OR (s.status = ? AND s.past_due_at IS NOT NULL
+                        AND s.past_due_at > DATE_SUB(NOW(), INTERVAL ' . self::pastDueGraceDays() . ' DAY)))
                AND (s.paused_until IS NULL OR s.paused_until <= CURRENT_TIMESTAMP)
                AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
              ORDER BY s.id DESC
              LIMIT 1',
-            [$userId, 'active', 'cancelled']
+            [$userId, 'active', 'cancelled', 'past_due']
         )->fetch();
 
         return $row ?: null;

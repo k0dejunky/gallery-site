@@ -1940,6 +1940,104 @@ class TestSuite
             }
         });
 
+        $add('db.dunning_free_tier', 'Database', 'failed payments are chased twice and then the account drops to the FREE tier, never a cheaper paid level', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix = bin2hex(random_bytes(4));
+                    $userId = self::scratchUserId('dunning-' . $suffix);
+
+                    Database::run(
+                        "INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, level, active)
+                         VALUES (?, ?, 30.00, 'monthly', 'probe', 0, 3, 1)",
+                        ['PROBE dunning ' . $suffix, 'probe-dunning-' . $suffix]
+                    );
+                    $planId = (int) $pdo->lastInsertId();
+
+                    // Day 4 of a 7-day grace: still failing is due, the
+                    // "access ends" notice is not (3 days remain).
+                    Database::run(
+                        "INSERT INTO subscriptions (user_id, plan_id, status, past_due_at, price_paid, access_level, transaction_ref, expires_at, created_at, updated_at)
+                         VALUES (?, ?, 'past_due', DATE_SUB(NOW(), INTERVAL 4 DAY), 30.00, 3, 'BT-probe', DATE_ADD(NOW(), INTERVAL 3 DAY), NOW(), NOW())",
+                        [$userId, $planId]
+                    );
+                    $subId = (int) $pdo->lastInsertId();
+
+                    $activeInGrace = \App\Models\Subscription::isActive($userId);
+
+                    $first  = \App\Core\Lifecycle::runPaymentDunning($userId);
+                    $second = \App\Core\Lifecycle::runPaymentDunning($userId);
+
+                    // Day 6: the grace window is inside two days, so the
+                    // second notice is due - once.
+                    Database::run('UPDATE subscriptions SET past_due_at = DATE_SUB(NOW(), INTERVAL 6 DAY) WHERE id = ?', [$subId]);
+                    $third = \App\Core\Lifecycle::runPaymentDunning($userId);
+                    $fourth = \App\Core\Lifecycle::runPaymentDunning($userId);
+
+                    $logged = (int) Database::run(
+                        'SELECT COUNT(*) FROM subscription_email_log WHERE subscription_id = ?',
+                        [$subId]
+                    )->fetchColumn();
+
+                    // Grace over: the paid term ends, the account is free.
+                    $ended      = \App\Models\Subscription::endPaidTerm($subId);
+                    $status     = (string) Database::run('SELECT status FROM subscriptions WHERE id = ?', [$subId])->fetchColumn();
+                    $freeActive = \App\Models\Subscription::isActive($userId);
+                    $activeFor  = \App\Models\Subscription::activeFor($userId);
+                    $level      = (int) Database::run('SELECT access_level FROM subscriptions WHERE id = ?', [$subId])->fetchColumn();
+
+                    // A later successful payment revives the SAME row with its
+                    // original paid level - proving endPaidTerm must not zero it.
+                    \App\Models\Subscription::renew($subId, 'probe-payment-' . $suffix, date('Y-m-d H:i:s'));
+                    $revived = \App\Models\Subscription::activeFor($userId);
+                    $revivedLevel = (int) ($revived['plan_level'] ?? -1);
+
+                    $ok = $activeInGrace
+                        && $first['still_failing'] === 1 && $first['access_ending'] === 0
+                        && $second['still_failing'] === 0 && $second['access_ending'] === 0
+                        && $third['still_failing'] === 0 && $third['access_ending'] === 1
+                        && $fourth['access_ending'] === 0
+                        && $logged === 2
+                        && $ended
+                        && $status === 'expired'
+                        && !$freeActive
+                        && $activeFor === null
+                        && $level === 3
+                        && \App\Models\Subscription::levelLabel(0) === 'Free'
+                        && $revived !== null
+                        && $revivedLevel === 3;
+
+                    return [
+                        'pass'   => $ok,
+                        'detail' => $ok
+                            ? 'two dunning notices queue once each; the grace end ends the paid term and leaves the account on the free tier; the paid level is preserved so a later payment restores it'
+                            : json_encode([
+                                'activeInGrace' => $activeInGrace, 'first' => $first, 'second' => $second,
+                                'third' => $third, 'fourth' => $fourth, 'logged' => $logged,
+                                'ended' => $ended, 'status' => $status, 'freeActive' => $freeActive,
+                                'activeFor' => $activeFor !== null, 'level' => $level,
+                                'revived' => $revived !== null, 'revivedLevel' => $revivedLevel,
+                            ]),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.gallery_nsfw_flag', 'Database', 'a safe-for-work gallery is open at any level and keeps its own level when it is adult', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

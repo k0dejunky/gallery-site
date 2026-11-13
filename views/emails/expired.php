@@ -8,15 +8,17 @@
 $planName  = (string) ($planName ?? 'your membership');
 $rejoinUrl = (string) ($rejoinUrl ?? absolute_url('/membership'));
 
-$emailTitle  = 'Your membership has ended';
+$emailTitle  = 'Your paid membership has ended';
 $headerHref  = $rejoinUrl;
 $emailFooter = 'transactional';
 ?>
                 <tr>
                     <td style="padding:28px 28px 8px;">
-                        <h1 style="margin:0 0 8px;font-size:22px;line-height:1.3;color:#3b2550;">Your membership has ended</h1>
+                        <h1 style="margin:0 0 8px;font-size:22px;line-height:1.3;color:#3b2550;">Your paid membership has ended</h1>
                         <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#6b5b82;">Your <strong><?= e($planName) ?></strong> membership has now
-                        ended, so some galleries may no longer be available to you. It was great having you with us — you can rejoin at any time.</p>
+                        ended, so the members-only galleries have closed for your account.</p>
+                        <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#6b5b82;">Your account is still open on the <strong>free tier</strong>:
+                        you can sign in, keep your favorites and browse the free galleries. Nothing has been deleted. You can rejoin at any time.</p>
                     </td>
                 </tr>
                 <tr>

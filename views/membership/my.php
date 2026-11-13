@@ -38,7 +38,12 @@ $pauseBlock = $pauseBlock ?? null;
     <?php if ($hasActive): ?>
          <div class="card">
             <h2>Current membership</h2>
-            <?php $isRecurring = strpos((string) ($activeSub['transaction_ref'] ?? ''), 'BT-') === 0; ?>
+            <?php
+            $subRef      = (string) ($activeSub['transaction_ref'] ?? '');
+            $isRecurring = strpos($subRef, 'BT-') === 0
+                || strpos($subRef, 'PAYPAL-') === 0
+                || strpos($subRef, 'I-') === 0;
+            ?>
             <?php $isTrial = strpos((string) ($activeSub['transaction_ref'] ?? ''), 'TRIAL-') === 0; ?>
             <?php $hasExpiry = !empty($activeSub['expires_at']); ?>
             <p>
@@ -111,11 +116,17 @@ $pauseBlock = $pauseBlock ?? null;
         <div class="card" id="payment-method">
             <?php if (!empty($pastDueSub)): ?>
             <h2>Your payment failed</h2>
+            <?php $graceEnds = \App\Models\Subscription::pastDueGraceEndsAt($pastDueSub); ?>
             <p>
                 We could not charge the card on your <strong><?= e((string) ($pastDueSub['plan_name'] ?? 'membership')) ?></strong>
                 membership, so it has been marked past due. You keep your access for
                 <strong><?= (int) \App\Models\Subscription::pastDueGraceDays() ?> days</strong>
-                while the card is retried.
+                while the card is retried<?= $graceEnds !== null ? ', until ' . e(tzdate('F j, Y', $graceEnds)) : '' ?>.
+            </p>
+            <p class="muted">
+                If the payment is still failing when that window closes, the paid membership ends and your
+                account stays open on the <strong>free tier</strong>: your login, favorites and the free
+                galleries remain, and nothing is deleted. You can upgrade again at any time.
             </p>
             <?php else: ?>
             <h2>Payment method</h2>
@@ -205,13 +216,17 @@ $pauseBlock = $pauseBlock ?? null;
         </div>
     <?php else: ?>
         <div class="card">
-            <h2><?= !empty($subscriptions) ? e(\App\Models\Subscription::statusLabel((string) ($subscriptions[0]['status'] ?? 'expired'))) : 'No active membership' ?></h2>
-            <p class="muted">You currently do not have usable gallery access. Choose a plan on the <a href="<?= e(url('/membership')) ?>">membership page</a> to continue browsing.</p>
+            <h2><?= !empty($subscriptions) ? e(\App\Models\Subscription::statusLabel((string) ($subscriptions[0]['status'] ?? 'expired'))) : 'Free account' ?></h2>
+            <p class="muted">
+                Your account is on the <strong>free tier</strong>. You can sign in, keep your favorites and browse the
+                free galleries; the members-only sets are closed. Choose a plan on the
+                <a href="<?= e(url('/membership')) ?>">membership page</a> to open the rest.
+            </p>
         </div>
     <?php endif; ?>
 
     <?php if (!empty($subscriptions)): ?>
-        <p class="muted">Cancelled memberships remain available through their expiry date. Expired memberships no longer grant gallery access.</p>
+        <p class="muted">Cancelled memberships remain available through their expiry date. An ended membership leaves the account on the free tier: nothing is deleted, and a new payment restores the paid access.</p>
     <?php endif; ?>
 
     <h2 style="text-align:center; margin-top:1.5rem;">History</h2>

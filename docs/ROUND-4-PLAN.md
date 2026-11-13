@@ -70,11 +70,11 @@ check that locks it in travels in the same commit).
 | 7 | The heavy admin pages | **done, except the incremental aggregator** | `b73b21f`, `208fa09`, `61ea184` |
 | 8 | The cache and the queries | **done, except the N+1s in the media path** | `91d9f8b`, `b73b21f` |
 | 9 | Discoverability | **done** | `c0137e7`, `61ea184` |
-| 10 | The member-facing money | **done except 10.5 dunning** (10.9, 10.12 dropped by the 2026-10-22 decisions) | `dd44c63`, `288b61b`, `561bcd8`, `this commit` |
+| 10 | The member-facing money | **done** (10.9, 10.12 dropped by the 2026-10-22 decisions) | `dd44c63`, `288b61b`, `561bcd8`, `this commit` |
 | 11 | Ops hardening | **done** | `c5ddb22`, `751b30a`, `cd781f9`, `5884577`, `37cdb53`, `3f339b8`, `backup_offsite_package.php` |
 | 12 | The operator app, rebuilt | **done** | `40b4039`, `57ba5ff`, `ffa5db8` |
 | 13 | The last hard edges | **done** (13.2 stays partial on purpose) | `this commit` |
-| 14 | The member money, final scope | **14a.4, 14b.2 and 14c.1 done; 14b.1 planned** | `this commit` |
+| 14 | The member money, final scope | **done** | `this commit` |
 | Final | local smoke/unit -> dev -> prod verify -> commit + push | **done for phases 1-9 and 12** | - |
 
 ### The last sweep (2026-10-21, after phase 12)
@@ -107,6 +107,8 @@ was closed:
 | A 100%-off code still required a card | and a free membership sat pending for an admin | `this commit` |
 | Gifts did not exist | a member can now buy a plan as a gift; one payment issues one single-use code, the recipient redeems it at checkout for a $0 membership | `this commit` |
 | A membership could not be paused | and a naive pause would have stopped access while a card/PayPal charge continued; manual memberships now pause with their paid days kept, and processor-billed ones are refused with the reason | `this commit` |
+| A past-due member lost access on the FIRST failed charge | `activeFor()` (which Auth and every level check use) did not carry the past-due grace clause that `activeWhere()` had, so the advertised 7-day grace never applied to gallery access and the card-update form never rendered for a past-due member | `this commit` |
+| A failed payment simply expired | no second notice, no "access ends" notice, and the plan's "downgrade to Silver" would have handed out a paid tier for free; the ladder now chases the card twice and then ends the paid term into the free tier with the level preserved for a later payment | `this commit` |
 | `totalsBetween` overwrote a bucket when two gateways had sales | it assigned per (type, gateway) row; braintree and paypal sales of the same type left only one counted | `this commit` |
 | The PayPal button on the shared checkout sent only `_token` + `provider` | a PayPal tip arrived with no amount | `this commit` |
 | 6.5, 7.1, 7.2, 8.3, 11.3-11.6 marked pending although done | verified against the tree (rendition drain, `DiskUsage`, cached schema read, Redis cap, nonce CSP, title-image route, `scripts/restore-drill.sh`, encrypted secrets package) and the table updated | - |
@@ -119,9 +121,9 @@ second refund would send the money twice). The smoke check
 `smoke.money.dispute_state` and the suite test `db.purchase_dispute_cycle`
 both bite when the state is put back.
 
-Smoke is **1117** checks locally and on dev (prod deliberately keeps its
+Smoke is **1118** checks locally and on dev (prod deliberately keeps its
 older `SmokeChecks.php`, so it stays below that); the difference is the
-member-side checks prod's copy predates. The local suite is **1215** tests,
+member-side checks prod's copy predates. The local suite is **1217** tests,
 all passing.
 
 ### Phase 12 - the operator app, rebuilt (2026-10-21)
@@ -429,7 +431,7 @@ The PPV/tip/unlock surface stays dormant. This phase is about the
 | 10.2 | An invoice / receipt (the member can see their charges at all) | done - a view over subscriptions + purchases, `INV-P`/`INV-M` numbers | `dd44c63` |
 | 10.3 | A card update | done - the same hosted-fields form now serves an ACTIVE card membership, not only a past-due one | `288b61b` |
 | 10.4 | A membership pause / freeze | done - the site bills manual/comped memberships, so those can pause: access stops, the expiry moves back by the pause, and resuming early takes the unused part back. A card/PayPal membership is REFUSED with the reason (the processor would keep charging) | `this commit` |
-| 10.5 | A dunning ladder the site owns | pending | - |
+| 10.5 | A dunning ladder the site owns | done - two notices keyed per subscription (still failing at day 3, access ending inside the last 2 days); the grace window is the gateway's retry time, and when it closes the paid term ENDS into the **free tier** (owner rule: no cheaper paid level is ever granted for free) | `this commit` |
 | 10.6 | A chargeback / dispute state | done - `disputed` is a purchase state of its own: it grants nothing, stops counting as revenue, and only a won dispute restores it | `this commit` |
 | 10.7 | A gift purchase | done - a one-off purchase of a plan issues a single-use 100%-off code; the recipient redeems it at checkout and the membership starts at $0 | `this commit` |
 | 10.8 | Receipt numbering | done - `INV-P####` / `INV-M####` from the immutable row id. Tax is not itemised: the site charges one amount per plan and nowhere computes tax | `dd44c63` |
@@ -639,7 +641,7 @@ close **removed** rather than left hanging:
 
 | id | what | where it starts from |
 |---|---|---|
-| 14b.1 | A **dunning ladder the site drives**: retry days, a **downgrade** step (a Gold member whose payment fails drops to Silver instead of being cancelled), then an explicit cancel. Today the cadence is the gateway's | the existing sequence is `payment_failed` mail -> `past_due` mail -> 7-day grace -> expiry (`Lifecycle.php:50-78`, `Subscription.php:21-44`, `Housekeeping.php:414-441`); it needs a schedule table and a job |
+| 14b.1 | A **dunning ladder the site drives**: retry days, a **downgrade** step (a Gold member whose payment fails drops to Silver instead of being cancelled), then an explicit cancel. Today the cadence is the gateway's | **done - with the owner's rule instead of a paid downgrade**: the gateway owns the retry schedule; the site sends a "still failing" notice at day 3 and an "access ends" notice inside the last 2 days of grace, and when the grace closes `Subscription::endPaidTerm()` ends the paid term into the **FREE tier** (level 0). A failed payment never leaves the member on a cheaper paid level for free. `access_level` is preserved so a later successful payment revives the same row at its real tier | `this commit` |
 | 14b.2 | A **dispute / chargeback state**: `purchase_events.event` already had the room (the column comment names `chargeback`) but **nothing wrote it**. A `disputed` status on `purchases` (an enum ALTER) plus the ledger events, and a disputed purchase stops counting as revenue. **Done** - `Purchase::openDispute()`/`closeDispute()`, ledger events `chargeback` / `chargeback_won` / `chargeback_lost`, and an admin action that refuses to refund a lost chargeback twice | `this commit` |
 
 ### 14c - gifting
@@ -659,7 +661,7 @@ restore the fix. A check that has never failed is not a check.
 names must exist in the real schema) · `smoke.housekeeping.isolated` (one
 step cannot abort the rest) · `smoke.braintree.can_cancel` ·
 `smoke.money.ledger` · `smoke.money.dispute_state` · `smoke.money.free_code_skips_the_card` ·
-`smoke.money.gift_flow` · `smoke.membership.pause_is_honest` · `smoke.access.one_predicate` ·
+`smoke.money.gift_flow` · `smoke.membership.pause_is_honest` · `smoke.lifecycle.free_tier_dunning` · `smoke.access.one_predicate` ·
 `smoke.access.browse_filtered` · `smoke.access.share_link` ·
 `smoke.live.no_stream_key_for_members` ·
 `smoke.live.publish_secret_reaches_mediamtx` (the real url builder run

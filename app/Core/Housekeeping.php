@@ -120,15 +120,12 @@ class Housekeeping
                 )->fetchAll();
             }, $out) ?? [];
             $out['expired_subs'] = count($expiredRows);
-            if ($expiredRows !== []) {
-                $ids = array_column($expiredRows, 'id');
-                $marks = implode(',', array_fill(0, count($ids), '?'));
-                Database::run(
-                    "UPDATE subscriptions SET status = 'expired' WHERE id IN ($marks)",
-                    $ids
-                );
-                foreach ($ids as $expiredId) {
-                    Lifecycle::onExpired((int) $expiredId);
+            foreach ($expiredRows as $row) {
+                // Ending the paid term IS the free tier: the account stays
+                // active, only the paid access goes. No cheaper PAID level is
+                // ever granted for free (owner decision, 2026-11-13).
+                if (\App\Models\Subscription::endPaidTerm((int) $row['id'])) {
+                    Lifecycle::onExpired((int) $row['id']);
                 }
             }
 
@@ -138,6 +135,13 @@ class Housekeeping
             // per subscription/member, so the 15-minute cadence cannot repeat one.
             $emailerCfg = self::step('emailer_config', fn () => EmailerConfig::all(), $out) ?? [];
             $out['renewal_reminders'] = self::step('renewal_reminders', fn () => !empty($emailerCfg['lifecycle_renewal_reminders']) ? Lifecycle::runRenewalReminders(7) : 0, $out);
+            // The site's own dunning ladder: a second "we still cannot
+            // charge you" notice and an "access ends on X" notice, both keyed
+            // once per subscription. Billing notices are account-critical,
+            // so they are not behind a marketing toggle.
+            $dunning = self::step('payment_dunning', fn () => Lifecycle::runPaymentDunning(), $out) ?? [];
+            $out['dunning_still_failing'] = (int) ($dunning['still_failing'] ?? 0);
+            $out['dunning_access_ending'] = (int) ($dunning['access_ending'] ?? 0);
             $out['winbacks']          = self::step('winbacks', fn () => !empty($emailerCfg['lifecycle_winbacks']) ? Lifecycle::runWinbacks(7) : 0, $out);
             $out['trial_endings']     = self::step('trial_endings', fn () => !empty($emailerCfg['lifecycle_trial_endings']) ? Lifecycle::runTrialEndings(3) : 0, $out);
             $out['inactive_winbacks'] = self::step('inactive_winbacks', fn () => !empty($emailerCfg['lifecycle_inactive_winbacks']) ? Lifecycle::runInactiveWinbacks(30) : 0, $out);
@@ -431,13 +435,12 @@ class Housekeeping
         $expired = 0;
         foreach ($rows as $row) {
             $id = (int) $row['id'];
-            Database::run(
-                "UPDATE subscriptions SET status = 'expired', expires_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                 WHERE id = ? AND status = 'past_due'",
-                [$id]
-            );
-            \App\Core\Lifecycle::onExpired($id);
-            $expired++;
+            // The grace ran out: the paid term ends and the account becomes
+            // free. No paid level is granted for free.
+            if (\App\Models\Subscription::endPaidTerm($id)) {
+                \App\Core\Lifecycle::onExpired($id);
+                $expired++;
+            }
         }
 
         return $expired;
