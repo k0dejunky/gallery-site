@@ -174,16 +174,22 @@ if (!headers_sent() && defined('CSP_NONCE')) {
     header(
         "Content-Security-Policy: default-src 'self'; "
         . "script-src 'self' 'nonce-" . CSP_NONCE . "' 'strict-dynamic' "
-        . 'https://www.googletagmanager.com https://js.braintreegateway.com https://www.paypal.com; '
+        . 'https://www.googletagmanager.com https://js.braintreegateway.com https://assets.braintreegateway.com https://www.paypal.com; '
         . "object-src 'none'; base-uri 'self'; form-action 'self'; "
         . "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: "
         . 'https://www.paypalobjects.com https://www.paypal.com; '
         . "font-src 'self' data: https://assets.braintreegateway.com; "
         . "media-src 'self' blob:; connect-src 'self' "
-        . 'https://api.braintreegateway.com https://api.paypal.com https://api-m.paypal.com '
+        . 'https://api.braintreegateway.com https://client-analytics.braintreegateway.com https://*.braintree-api.com '
+        . 'https://api.paypal.com https://api-m.paypal.com '
         . 'https://www.paypal.com https://www.sandbox.paypal.com '
         . 'https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com; '
-        . "frame-src 'self' https://client-analytics.braintreegateway.com https://www.sandbox.paypal.com https://www.paypal.com; "
+        // assets.braintreegateway.com hosts the Hosted Fields iframe itself,
+        // and c.paypal.com / cardinalcommerce are the PayPal and 3-D Secure
+        // frames the checkout can open. Their absence is why the Braintree
+        // pages used to replace this whole policy with a weaker one.
+        . "frame-src 'self' https://assets.braintreegateway.com https://client-analytics.braintreegateway.com "
+        . 'https://c.paypal.com https://*.paypal.com https://*.cardinalcommerce.com; '
         // The report-uri has to be ABSOLUTE: the CSP grammar wants a URI,
         // and a relative one is not a valid target, so the browser had
         // nowhere to post the violation reports to.

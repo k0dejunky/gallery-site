@@ -22,7 +22,7 @@ $commentReplies   = $commentReplies ?? [];
 $commentReactions = $commentReactions ?? [];
 $myReactions     = $myReactions ?? [];
 $viewerId        = (int) (\App\Core\Auth::user()['id'] ?? 0);
-$reactions       = ['like' => '\u{1F44D}', 'love' => '\u{2764}\u{FE0F}'];
+$reactions       = ['like' => '👍', 'love' => '❤️'];
 
 if (!$hasReplies || !$hasReactions || !$hasMine) {
     $commentIds = array_map(static fn (array $c): int => (int) $c['id'], $comments);

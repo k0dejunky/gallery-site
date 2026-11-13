@@ -17,6 +17,7 @@ return [
     ['GET', '/sitemap.xml', 'StaticPageController@sitemap'],
     ['GET', '/videositemap.xml', 'StaticPageController@videoSitemap'],
     ['GET', '/theme.css', 'AssetController@themeCss'],
+    ['GET', '/title-image/{file}', 'AssetController@titleImage'],
     ['GET', '/feed.xml', 'StaticPageController@feed'],
     ['GET', '/search/suggest', 'GalleryController@suggest'],
     ['GET', '/galleries', 'GalleryController@index'],

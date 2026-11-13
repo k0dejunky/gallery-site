@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\MediaUploader;
 use App\Core\Request;
 use App\Models\AuditLog;
 use App\Models\Theme;
@@ -11,13 +12,15 @@ use App\Models\Theme;
 class ThemeController extends Controller
 {
     /**
-     * Theme editing requires a logged-in account. Regular accounts can edit
-     * the user-facing site theme; admins can also edit the admin theme.
+     * Theme editing is an ADMIN surface (the router already gates every theme
+     * route on the `theme` permission; this constructor repeats the gate so
+     * a future route cannot accidentally expose the editor to a member).
      */
     public function __construct(Request $request)
     {
         parent::__construct($request);
         Auth::requireLogin();
+        Auth::requirePermission('theme');
     }
 
     /**
@@ -98,14 +101,29 @@ class ThemeController extends Controller
 
         // Handle title image upload
         $beforeTitleImage = Theme::titleImage($scope);
+        $titleImageError  = null;
 
         if ($this->request->post('reset_title_image') === '1') {
             Theme::saveTitleImage('/assets/images/AmethystTitleImage.png', $scope);
         } elseif (isset($_FILES['title_image']) && $_FILES['title_image']['error'] === UPLOAD_ERR_OK) {
             $file = $_FILES['title_image'];
-            $ext  = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
 
-            if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'], true)) {
+            // The allow-list is decided by the BYTES, not the uploaded name:
+            // an SVG (active content, and served from our own origin) never
+            // passes sniff_mime + image_can_decode, and the stored extension
+            // comes from the detected type. A 16-byte random name means the
+            // endpoint cannot be walked, and the size/dimension caps keep a
+            // 100 MP "logo" from being stored.
+            $mime = sniff_mime((string) $file['tmp_name']);
+            $ext  = $mime !== '' ? MediaUploader::extensionForMime($mime) : '';
+            $info = $mime !== '' ? @getimagesize((string) $file['tmp_name']) : false;
+            $bytes = (int) ($file['size'] ?? 0);
+
+            if (in_array($ext, ['jpg', 'png', 'gif', 'webp'], true)
+                && $info !== false && $info[0] > 0 && $info[1] > 0
+                && $info[0] <= 8000 && $info[1] <= 8000
+                && $bytes > 0 && $bytes <= 8 * 1024 * 1024
+                && image_can_decode((string) $file['tmp_name'])) {
                 $dir = dirname(__DIR__, 2) . '/storage/uploads';
 
                 if (!is_dir($dir)) {
@@ -114,7 +132,9 @@ class ThemeController extends Controller
 
                 $name = 'title-' . bin2hex(random_bytes(8)) . '.' . $ext;
                 move_uploaded_file($file['tmp_name'], $dir . '/' . $name);
-                Theme::saveTitleImage('/storage/uploads/' . $name, $scope);
+                Theme::saveTitleImage('/title-image/' . $name, $scope);
+            } else {
+                $titleImageError = 'That title image was not saved: upload a PNG, JPEG, GIF or WebP under 8 MB.';
             }
         }
 
@@ -134,7 +154,11 @@ class ThemeController extends Controller
             );
         }
 
-        $this->flash('success', 'Theme updated.');
+        if ($titleImageError !== null) {
+            $this->flash('error', $titleImageError);
+        } else {
+            $this->flash('success', 'Theme updated.');
+        }
         $this->redirect('/admin/theme');
     }
 
@@ -224,6 +248,10 @@ class ThemeController extends Controller
         ];
 
         file_put_contents($dir . '/' . $slug . '.json', json_encode($data, JSON_PRETTY_PRINT));
+
+        // The stylesheet is versioned by URL; a new/updated preset must mint
+        // a fresh version or a browser keeps the old immutable CSS.
+        \App\Core\Cache::bump('theme');
 
         return $slug;
     }

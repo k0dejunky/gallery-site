@@ -6144,6 +6144,32 @@ class SmokeChecks
                 ? $ok('enforced nonce CSP (script-src strict, script-src-attr unsafe-inline) + collector')
                 : $bad('index.php must emit an enforced nonce CSP and CspController must log reports');
         });
+        $secMemberCtrl = $read("$root/app/Controllers/MembershipController.php");
+        $add('smoke.sec.braintree_csp', 'Smoke · Security', 'The Braintree pages keep the nonce policy and allow the Hosted Fields frame', static function () use ($secIndex, $secMemberCtrl, $ok, $bad): array {
+            // The checkout and card pages used to REPLACE the site policy
+            // with one that allowed 'unsafe-inline' scripts and left
+            // assets.braintreegateway.com (the Hosted Fields iframe) out of
+            // frame-src. The nonce the views emit was inert.
+            $problems = [];
+
+            if (strpos($secIndex, 'https://assets.braintreegateway.com') === false) {
+                $problems[] = 'the site frame-src must allow assets.braintreegateway.com';
+            }
+            if (strpos($secIndex, 'https://client-analytics.braintreegateway.com') === false) {
+                $problems[] = 'the site connect-src must allow client-analytics.braintreegateway.com';
+            }
+            if (strpos($secMemberCtrl, 'header("Content-Security-Policy') !== false) {
+                $problems[] = 'MembershipController must not emit a second CSP';
+            }
+            if (strpos($secMemberCtrl, "'unsafe-inline'") !== false
+                && preg_match('/header\\(\\s*[\'"]Content-Security-Policy[^;]*unsafe-inline/', $secMemberCtrl) === 1) {
+                $problems[] = 'no Braintree page may allow inline scripts';
+            }
+
+            return $problems === []
+                ? $ok('one nonce policy covers Braintree: no page override, Hosted Fields frame allowed')
+                : $bad('braintree csp: ' . implode('; ', $problems));
+        });
         $add('smoke.sec.offsite_backup', 'Smoke · Security', 'Encrypted off-site backup packaging + pull endpoint', static function () use ($secBackup, $secPullC, $ok, $bad): array {
             return strpos($secBackup, 'openssl enc -aes-256-cbc') !== false
                 && strpos($secBackup, 'gallery-backup.pass') !== false
@@ -7863,6 +7889,19 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 && strpos($galleryCtrl, 'Comment::countForGallery(') !== false
                 ? $ok('gallery page aggregates wall-post comments')
                 : $bad('Comment::forGallery/countForGallery must union gallery comments with the comments on wall posts whose gallery_id is the gallery, and GalleryController::show must use them');
+        });
+        $add('smoke.comments.reaction_glyphs', 'Smoke · Comments', 'The reaction buttons show the emoji, not a PHP escape', static function () use ($root, $read, $ok, $bad): array {
+            // '\u{1F44D}' is a JavaScript escape. In a PHP single-quoted
+            // string it is nine literal characters, so the wall and every
+            // media page printed the escape instead of the thumbs-up.
+            $th = $read("$root/views/partials/comment_thread.php");
+
+            $hasGlyphs = strpos($th, '👍') !== false && strpos($th, '❤️') !== false;
+            $hasEscape = strpos($th, '\\u{') !== false;
+
+            return $hasGlyphs && !$hasEscape
+                ? $ok('the reaction map carries the emoji characters')
+                : $bad('comment_thread.php must hold the emoji themselves (a \\u{...} escape in single quotes renders literally)');
         });
         $add('smoke.comments.photo_thread', 'Smoke · Comments', 'Image/video pages host a per-media comment thread', static function () use ($root, $read, $imageCtrl, $ok, $bad): array {
             $img = $read("$root/views/gallery/image_full.php");
@@ -10601,6 +10640,69 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             return ($readsTheme && $resolvesAssets && $returnsNull)
                 ? $ok('watermark_logo_path() reads Theme::titleImage() and maps /assets + /storage')
                 : $bad('watermark_logo_path() must resolve Theme::titleImage() (theme=' . var_export($readsTheme, true) . ' assets=' . var_export($resolvesAssets, true) . ' signature=' . var_export($returnsNull, true) . ')');
+        });
+
+        $add('smoke.theme.title_image_served', 'Smoke · Theme', 'An uploaded title image is served, validated and found by the watermark', static function () use ($root, $read, $ok, $bad): array {
+            // The upload landed in storage/uploads and the stored URL was
+            // /storage/uploads/... - a path no route and no alias serves. So
+            // the header logo 404'd and the watermark silently stopped.
+            $ctrl   = $read("$root/app/Controllers/ThemeController.php");
+            $asset  = $read("$root/app/Controllers/AssetController.php");
+            $routes = $read("$root/config/routes.php");
+            $theme  = $read("$root/app/Models/Theme.php");
+            $helper = $read("$root/app/Core/helpers.php");
+            $problems = [];
+
+            if (strpos($routes, "'/title-image/{file}'") === false) {
+                $problems[] = 'no /title-image/{file} route';
+            }
+            if (strpos($asset, 'function titleImage(') === false
+                || strpos($asset, 'title-[a-f0-9]{16}') === false) {
+                $problems[] = 'AssetController::titleImage must accept only the generated name';
+            }
+            if (strpos($ctrl, "'/title-image/'") === false) {
+                $problems[] = 'the upload must store the served path';
+            }
+            if (strpos($ctrl, "'svg'") !== false) {
+                $problems[] = 'the title image allow-list must not accept svg';
+            }
+            if (strpos($ctrl, 'image_can_decode(') === false) {
+                $problems[] = 'the upload must decode the bytes before keeping them';
+            }
+            if (strpos($theme, '/storage/uploads/(title-') === false) {
+                $problems[] = 'an old /storage/uploads path must still resolve';
+            }
+            if (strpos($helper, '/storage/uploads/') === false) {
+                $problems[] = 'the watermark must map the upload to storage/uploads';
+            }
+
+            return $problems === []
+                ? $ok('the title image has a route, a byte-level allow-list and a watermark path')
+                : $bad('title image: ' . implode('; ', $problems));
+        });
+
+        $add('smoke.theme.css_version_moves_on_save', 'Smoke · Theme', 'The theme stylesheet URL is re-minted the moment a theme changes', static function () use ($root, $read, $ok, $bad): array {
+            // /theme.css is immutable for a year, so its ?v= must follow a
+            // theme write at once. The version used to be a five-minute
+            // cache, and a saved palette kept the old URL (and the old CSS
+            // in the browser) until it expired.
+            $theme = $read("$root/app/Models/Theme.php");
+            $ctrl  = $read("$root/app/Controllers/ThemeController.php");
+            $problems = [];
+
+            if (strpos($theme, "genKey('theme', 'version.") === false) {
+                $problems[] = 'themeCssVersion must be generation-scoped';
+            }
+            if (substr_count($theme, "Cache::bump('theme')") < 3) {
+                $problems[] = 'save(), saveLayout() and deletePreset() must bump the theme generation';
+            }
+            if (strpos($ctrl, "Cache::bump('theme')") === false) {
+                $problems[] = 'saving a preset must bump the theme generation';
+            }
+
+            return $problems === []
+                ? $ok('theme writes bump the generation the stylesheet version is keyed on')
+                : $bad('theme css version: ' . implode('; ', $problems));
         });
 
         $add('smoke.watermark.runs_in_the_background_worker', 'Smoke · Watermark', 'Batch watermarking is queued and done by the supervised worker, never inline', static function () use ($photo, $worker, $routes, $ok, $bad): array {

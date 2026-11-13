@@ -420,13 +420,23 @@ class Theme
 
     /**
      * Get the title image path for a scope (relative to /gallery/).
+     *
+     * Uploaded files used to be stored as /storage/uploads/title-<hex>.<ext>,
+     * a URL that no route served. Such a value (an installation that already
+     * has one) is read back as the served /title-image/... form, so an old
+     * upload starts working without a data migration.
      */
     public static function titleImage(string $scope = self::SCOPE_SITE): string
     {
         $file  = self::file($scope);
         $saved = is_file($file) ? json_decode((string) file_get_contents($file), true) : [];
+        $path  = is_array($saved) ? (string) ($saved['_title_image'] ?? '') : '';
 
-        return $saved['_title_image'] ?? '/assets/images/AmethystTitleImage.png';
+        if (preg_match('#^/storage/uploads/(title-[a-f0-9]{16}\.(?:png|jpe?g|gif|webp))$#i', $path, $m) === 1) {
+            $path = '/title-image/' . $m[1];
+        }
+
+        return $path !== '' ? $path : '/assets/images/AmethystTitleImage.png';
     }
 
     /**
@@ -452,6 +462,11 @@ class Theme
         }
 
         file_put_contents($file, json_encode($saved, JSON_PRETTY_PRINT));
+
+        // The title image rides in every page's header, and guest pages are
+        // cached whole: a new logo must drop those copies or the old one
+        // stays on the front page until the cache expires.
+        \App\Core\PageCache::invalidate();
     }
 
     /**
@@ -507,6 +522,7 @@ class Theme
         file_put_contents($file, json_encode($theme, JSON_PRETTY_PRINT));
 
         self::clearCssCache($scope);
+        \App\Core\Cache::bump('theme');
     }
 
     /**
@@ -530,6 +546,7 @@ class Theme
         file_put_contents($file, json_encode($theme, JSON_PRETTY_PRINT));
 
         self::clearCssCache($scope);
+        \App\Core\Cache::bump('theme');
     }
 
     /**
@@ -643,11 +660,21 @@ class Theme
      */
     public static function themeCssVersion(?string $slug = null, string $selector = ':root'): string
     {
-        return \App\Core\Cache::remember('theme.file.version.' . md5($selector . '|' . (string) $slug), 300, function () use ($slug, $selector) {
-            $base = is_file(__DIR__ . '/theme_base.css') ? (string) file_get_contents(__DIR__ . '/theme_base.css') : '';
+        // The version sits in the URL of a stylesheet served immutable for a
+        // year, so it must move the MOMENT a theme changes. It used to be the
+        // hash of the rendered CSS kept for five minutes, so a saved palette
+        // kept the old ?v= and a browser that had fetched it went on showing
+        // the old colours. A generation bump on every write invalidates it
+        // atomically (Cache::bump in save/savePresetDirect/deletePreset).
+        return \App\Core\Cache::remember(
+            \App\Core\Cache::genKey('theme', 'version.' . md5($selector . '|' . (string) $slug)),
+            300,
+            function () use ($slug, $selector) {
+                $base = is_file(__DIR__ . '/theme_base.css') ? (string) file_get_contents(__DIR__ . '/theme_base.css') : '';
 
-            return md5(self::cssUser($slug, $selector) . "\n" . self::cssLayoutUser($slug, $selector) . "\n" . $base);
-        });
+                return md5(self::cssUser($slug, $selector) . "\n" . self::cssLayoutUser($slug, $selector) . "\n" . $base);
+            }
+        );
     }
 
     // ── Theme presets ──────────────────────────────────────────────────
@@ -729,6 +756,11 @@ class Theme
         if (!is_file($file)) {
             return false;
         }
+
+        // A member may still have this preset selected; the stylesheet they
+        // cached under its ?v= must be re-minted (the theme falls back to
+        // the site palette, which is different CSS).
+        \App\Core\Cache::bump('theme');
 
         return unlink($file);
     }

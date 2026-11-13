@@ -178,12 +178,11 @@ class MembershipController extends Controller
             }
         }
 
-        // The card-update form loads Braintree's JS from its CDN, so this
-        // page needs the same CSP relaxation the checkout page has. The
-        // header replaces the one the front controller sends.
-        if ($cardToken !== null) {
-            header("Content-Security-Policy: default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://js.braintreegateway.com; font-src 'self' data: https://assets.braintreegateway.com; media-src 'self' blob:; connect-src 'self' https://api.braintreegateway.com; frame-src https://client-analytics.braintreegateway.com https://*.sandbox.paypal.com https://*.paypal.com; frame-ancestors 'self'");
-        }
+        // The card-update form loads Braintree's JS from its CDN. The front
+        // controller's policy already carries the nonce, js.braintreegateway,
+        // the Hosted Fields frame origin and the analysis endpoints, so this
+        // page needs no relaxation of its own (it used to REPLACE the policy
+        // with one that allowed 'unsafe-inline').
 
         $this->view('membership/my', [
             'subscriptions' => Subscription::forUser($userId),
@@ -363,9 +362,9 @@ class MembershipController extends Controller
 
         $sale = Sale::activeForPlan((int) $plan['id']);
 
-        // Override the Apache-set CSP so Braintree's external JS/CDN can
-        // load on this page. This header replaces the one Apache sends.
-        header("Content-Security-Policy: default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://js.braintreegateway.com; font-src 'self' data: https://assets.braintreegateway.com; media-src 'self' blob:; connect-src 'self' https://api.braintreegateway.com; frame-src https://client-analytics.braintreegateway.com https://www.sandbox.paypal.com https://www.paypal.com; frame-ancestors 'self'");
+        // Braintree's scripts and the Hosted Fields iframe are covered by the
+        // front controller's nonce policy (see public/index.php); no page may
+        // replace it with a weaker one.
 
         $this->viewStandalone('membership/braintree_checkout', [
             'plan'      => $plan,

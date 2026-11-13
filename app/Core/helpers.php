@@ -1969,9 +1969,18 @@ function watermark_logo_path(): ?string
 
     $root  = dirname(__DIR__, 2);
     $path  = '/' . ltrim($rel, '/');
-    $full  = strpos($path, '/public/') === 0
-        ? $root . $path
-        : ($root . '/public' . $path);
+
+    // An uploaded title image lives in storage/uploads (the writable dir)
+    // and is served through /title-image/<name>. The old stored form
+    // (/storage/uploads/<name>) is accepted too, so an installation that
+    // uploaded one before the route existed still gets its watermark.
+    if (preg_match('#^/(?:title-image|storage/uploads)/(title-[a-f0-9]{16}\.(?:png|jpe?g|gif|webp))$#i', $path, $m) === 1) {
+        $full = $root . '/storage/uploads/' . $m[1];
+    } else {
+        $full = strpos($path, '/public/') === 0
+            ? $root . $path
+            : ($root . '/public' . $path);
+    }
 
     return is_file($full) && is_readable($full) ? $full : null;
 }
