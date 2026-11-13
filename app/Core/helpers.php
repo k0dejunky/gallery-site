@@ -216,6 +216,55 @@ function media_token_valid(string $path, string $given): bool
  * minted by one and resolved as a different file by the other.
  * 'web_lo'/'web_hi' read their prefix from the ladder config.
  */
+/**
+ * Every prefix a generated derivative can carry, LONGEST FIRST.
+ *
+ * Order matters: `blur_thumb_` must be tested before `thumb_`, and the ladder
+ * prefixes (`weblo_`, `webhi_`) before `web_`. The ladder is configurable, so
+ * the list is built from video_ladder() instead of being hardcoded twice.
+ *
+ * Any code that needs to know whether a file in uploads is an original or a
+ * derivative must come through here. The orphan report and the cleanup script
+ * each carried their own list; both were written before the video ladder
+ * existed, so every rendition of a live video looked like garbage (and the
+ * cleanup script would have deleted all of them).
+ *
+ * @return array<int, string>
+ */
+function media_variant_prefixes(): array
+{
+    $fixed = ['blur_thumb_', 'thumb_', 'web_', 'poster_'];
+
+    $ladder = [];
+    foreach (video_ladder() as $rung) {
+        if (!empty($rung['prefix'])) {
+            $ladder[] = (string) $rung['prefix'];
+        }
+    }
+
+    $all = array_values(array_unique(array_merge($fixed, $ladder)));
+    usort($all, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+
+    return $all;
+}
+
+/**
+ * The stored file a derivative was generated from.
+ *
+ * `web_abc.mp4` -> `abc.mp4`, `blur_thumb_abc.webp` -> `abc.webp`. A file with
+ * no known prefix is returned unchanged, so callers can test every name.
+ */
+function media_derivative_base(string $file): string
+{
+    foreach (media_variant_prefixes() as $prefix) {
+        if ($prefix !== '' && strpos($file, $prefix) === 0) {
+            return substr($file, strlen($prefix));
+        }
+    }
+
+    return $file;
+}
+
 function media_variant_prefix(string $size): string
 {
     switch ($size) {

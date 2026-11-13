@@ -9994,6 +9994,42 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.media.orphans_know_every_variant', 'Smoke · Media', 'The orphan report and the cleanup script understand every derivative prefix', static function () use ($root, $read, $ok, $bad): array {
+            // Both carried their own prefix list, written before the video
+            // ladder existed. The report called 655 renditions of LIVE videos
+            // orphans, and cleanup_orphan_uploads.php would have deleted every
+            // weblo_/webhi_/poster_ file and every blur_thumb_ teaser.
+            $problems = [];
+            $helpers  = (string) $read($root . '/app/Core/helpers.php');
+            $system   = (string) $read($root . '/app/Controllers/SystemController.php');
+            $cleanup  = (string) $read($root . '/bin/cleanup_orphan_uploads.php');
+            $photo    = (string) $read($root . '/app/Models/Photo.php');
+
+            foreach (['function media_variant_prefixes(', 'function media_derivative_base('] as $needle) {
+                if (strpos($helpers, $needle) === false) {
+                    $problems[] = 'helpers.php is missing ' . $needle;
+                }
+            }
+            foreach ([
+                'SystemController.php'             => $system,
+                'cleanup_orphan_uploads.php'       => $cleanup,
+            ] as $label => $src) {
+                if (strpos($src, 'media_derivative_base(') === false) {
+                    $problems[] = $label . ' does not use the shared derivative resolver';
+                }
+            }
+            if (preg_match("/preg_replace\('\/\^\(web_\\|thumb_\)\/'/", $cleanup) === 1) {
+                $problems[] = 'cleanup_orphan_uploads.php is back to a two-prefix list';
+            }
+            if (strpos($photo, 'media_variant_prefixes()') === false || strpos($photo, 'glob(') === false) {
+                $problems[] = 'Photo::deleteIfOrphan() does not remove every derivative of the photo';
+            }
+
+            return $problems === []
+                ? $ok('one resolver for the prefixes; deleting a photo removes its originals, webp/avif copies and video renditions')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.analytics.visit_agent_matches_close_visit', 'Smoke · Analytics', 'A session keeps the browser, OS and device the parser classified', static function () use ($root, $read, $ok, $bad): array {
             // closeVisit() returns browser/os/device FLAT. insertVisits() read
             // only $v['agent']['device'], so production held 33,320 sessions

@@ -3,15 +3,18 @@
  * Remove the files in storage/uploads that no photo points at.
  *
  * A file is written to disk before the photo row is made, so a file the site
- * already holds (the same hash) leaves a copy behind that nothing refers
- * to. Re-importing a folder does that for every file in it, and the copies
- * pile up until the disk fills.
+ * already holds (the same hash) leaves a copy behind that nothing refers to,
+ * and a deleted photo leaves its derivatives behind (Photo::deleteIfOrphan
+ * now removes those itself).
  *
- * Usage: php bin/cleanup_orphan_uploads.php [--dry-run] [--yes]
+ * Usage: php bin/cleanup_orphan_uploads.php [--dry-run] [--yes] [--limit=N]
  *
- * The file of a photo is its own name; the preview and the web copy are
- * web_<name> and thumb_<name>. A file whose name (without that prefix) is
- * not a photo's file is an orphan.
+ * A file is an orphan when the photo it derives from no longer exists. The
+ * derivative prefixes come from media_variant_prefixes() - blur_thumb_,
+ * thumb_, web_, poster_ and every configured ladder rung (weblo_, webhi_).
+ * This script used to know only web_ and thumb_, so a --yes run would have
+ * deleted EVERY video rendition and every blurred teaser. Do not reintroduce
+ * a local prefix list.
  */
 declare(strict_types=1);
 
@@ -36,8 +39,13 @@ if (!is_dir($dir)) {
 }
 
 $names = [];
+$stems = [];
 foreach (Database::run('SELECT filename FROM photos')->fetchAll() as $row) {
-    $names[(string) $row['filename']] = true;
+    $name = (string) $row['filename'];
+    $names[$name] = true;
+    // Derivatives can change the extension (web_<stem>.webp for <stem>.jpg),
+    // so the stem is the reliable second test.
+    $stems[pathinfo($name, PATHINFO_FILENAME)] = true;
 }
 
 $orphans = [];
@@ -51,8 +59,8 @@ foreach (scandir($dir) as $entry) {
     if (!is_file($path)) {
         continue;
     }
-    $base = preg_replace('/^(web_|thumb_)/', '', $entry);
-    if (isset($names[$base])) {
+    $base = media_derivative_base($entry);
+    if (isset($names[$base]) || isset($stems[pathinfo($base, PATHINFO_FILENAME)])) {
         $kept++;
         continue;
     }

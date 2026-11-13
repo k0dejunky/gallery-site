@@ -1457,23 +1457,36 @@ PHP;
         $uploads = $this->storage . '/uploads';
         $known = Database::run('SELECT filename FROM photos')->fetchAll(\PDO::FETCH_COLUMN);
         $known = array_flip((array) $known);
+
+        // A derivative can carry a DIFFERENT extension from its source: the
+        // AVIF/WebP copies are `web_<stem>.webp`, `thumb_<stem>.avif`, and the
+        // source itself may be `x.jpg`. Comparing full names alone therefore
+        // reported nothing useful, and the old prefix exemption hid real
+        // garbage. Compare the stem as a second chance.
+        $stems = [];
+        foreach (array_keys($known) as $name) {
+            $stems[pathinfo((string) $name, PATHINFO_FILENAME)] = true;
+        }
+
         $orphans = [];
 
         foreach (scandir($uploads) ?: [] as $file) {
             if ($file === '.' || $file === '..' || $file === 'pending' || $file === 'exports') {
                 continue;
             }
-            if (is_dir($uploads . '/' . $file) || isset($known[$file])) {
+            if (is_dir($uploads . '/' . $file)) {
                 continue;
             }
-            // Generated variants (thumb_/web_/blur_thumb_ prefixes) are never
-            // orphans: they derive from a canonical name and are rebuilt on
-            // demand, so deleting them here would break thumbnails (and the
-            // blurred "Members-only" teaser previews) sitewide.
-            if (strpos($file, 'thumb_') === 0 || strpos($file, 'web_') === 0
-                || strpos($file, 'blur_thumb_') === 0) {
+
+            // `web_abc.mp4` -> `abc.mp4`; `blur_thumb_abc.webp` -> `abc.webp`.
+            // A derivative is live when its base - or the stem of its base -
+            // is a photo, whatever prefix or extension it carries. Only a
+            // derivative whose source is GONE is an orphan.
+            $base = media_derivative_base($file);
+            if (isset($known[$base]) || isset($stems[pathinfo($base, PATHINFO_FILENAME)])) {
                 continue;
             }
+
             $orphans[] = [
                 'name' => $file,
                 'size' => (int) filesize($uploads . '/' . $file),

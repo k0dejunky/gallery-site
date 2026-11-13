@@ -625,11 +625,32 @@ class Photo
 
         $dir = config('app.uploads.dir');
 
-        foreach ([$photo['filename'], 'thumb_' . $photo['filename'], 'web_' . $photo['filename']] as $file) {
-            $path = $dir . '/' . $file;
+        // Remove the original AND every derivative, not just the three JPEG
+        // names this used to know. A photo also has .webp/.avif copies
+        // (web_<stem>.webp, thumb_<stem>.avif, blur_thumb_<stem>.webp) and a
+        // video has a poster plus the ladder renditions (weblo_, webhi_).
+        // Those were left behind on every delete: production had 10,662
+        // orphaned derivatives (~0.57 GB) from photos removed in October.
+        $stem     = pathinfo((string) $photo['filename'], PATHINFO_FILENAME);
+        $prefixes = array_merge([''], media_variant_prefixes());
 
+        $targets = [];
+        if (strpbrk($stem, '*?[]') === false) {
+            foreach ($prefixes as $prefix) {
+                foreach (glob($dir . '/' . $prefix . $stem . '.*') ?: [] as $match) {
+                    $targets[] = $match;
+                }
+            }
+        } else {
+            // A name with glob metacharacters: fall back to the exact three.
+            foreach ([$photo['filename'], 'thumb_' . $photo['filename'], 'web_' . $photo['filename']] as $file) {
+                $targets[] = $dir . '/' . $file;
+            }
+        }
+
+        foreach (array_unique($targets) as $path) {
             if (is_file($path)) {
-                unlink($path);
+                @unlink($path);
             }
         }
 
