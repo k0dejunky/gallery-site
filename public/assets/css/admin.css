@@ -645,6 +645,9 @@ body.admin-theme {
 /* Visible to screen readers only: used for bulk-selection controls whose
    visual label is the row they sit in. */
 .admin-theme .adm-sr-only { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; border:0; }
+/* A long recommendation link rendered 16px tall in a table row; give it a
+   target the size WCAG 2.5.8 asks for. */
+.admin-theme .ap-link { display:inline-block; padding:.35rem 0; }
 
 .admin-theme .page-sub { margin: 0 0 1.25rem; color: var(--adm-text-dim); font-size: 13.5px; }
 

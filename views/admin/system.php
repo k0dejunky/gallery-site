@@ -525,7 +525,7 @@ $canOperate = \App\Core\Auth::can('system_ops');
             <?= admin_empty('upload', 'No staging folders', 'Nothing to clean.') ?>
         <?php else: ?>
             <table>
-                <tr><th>Folder</th><th>Files</th><th>Size</th><th>Age</th><th></th></tr>
+                <tr><th>Folder</th><th>Files</th><th>Size</th><th>Age</th><th><span class="adm-sr-only">Actions</span></th></tr>
                 <?php foreach ($pendingDirs as $dir): ?>
                     <tr>
                         <td><code><?= e($dir['name']) ?></code></td>
@@ -654,7 +654,7 @@ $canOperate = \App\Core\Auth::can('system_ops');
         </form>
         <?php if (!empty($backups)): ?>
             <table class="u-mt-075">
-                <tr><th>File</th><th>Size</th><th>Created</th><th></th></tr>
+                <tr><th>File</th><th>Size</th><th>Created</th><th><span class="adm-sr-only">Actions</span></th></tr>
                 <?php foreach ($backups as $backup): ?>
                     <tr>
                         <td><code><?= e($backup['name']) ?></code></td>
@@ -708,7 +708,7 @@ $canOperate = \App\Core\Auth::can('system_ops');
     <div class="sys-card">
         <h2>Database</h2>
         <table>
-            <tr><th>Table</th><th>Rows</th><th>Size</th><th></th></tr>
+            <tr><th>Table</th><th>Rows</th><th>Size</th><th><span class="adm-sr-only">Actions</span></th></tr>
             <?php foreach ($dbTables as $table): ?>
                 <tr>
                     <td><code><?= e((string) $table['name']) ?></code></td>

@@ -9,7 +9,7 @@
         <div class="sys-card">
             <h2>Users</h2>
             <table>
-                <thead><tr><th>ID</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>ID</th><th>Email</th><th>Role</th><th>Status</th><th><span class="adm-sr-only">Actions</span></th></tr></thead>
                 <tbody>
                 <?php foreach ($users as $u): ?>
                     <tr>
@@ -29,7 +29,7 @@
         <div class="sys-card">
             <h2>Galleries</h2>
             <table>
-                <thead><tr><th>ID</th><th>Title</th><th>Created</th><th></th></tr></thead>
+                <thead><tr><th>ID</th><th>Title</th><th>Created</th><th><span class="adm-sr-only">Actions</span></th></tr></thead>
                 <tbody>
                 <?php foreach ($galleries as $g): ?>
                     <tr>
@@ -48,7 +48,7 @@
         <div class="sys-card">
             <h2>Transactions</h2>
             <table>
-                <thead><tr><th>ID</th><th>Reference</th><th>Status</th><th>User</th><th></th></tr></thead>
+                <thead><tr><th>ID</th><th>Reference</th><th>Status</th><th>User</th><th><span class="adm-sr-only">Actions</span></th></tr></thead>
                 <tbody>
                 <?php foreach ($transactions as $t): ?>
                     <tr>
@@ -68,7 +68,7 @@
         <div class="sys-card">
             <h2>Photos</h2>
             <table>
-                <thead><tr><th>ID</th><th>Filename</th><th></th></tr></thead>
+                <thead><tr><th>ID</th><th>Filename</th><th><span class="adm-sr-only">Actions</span></th></tr></thead>
                 <tbody>
                 <?php foreach ($photos as $p): ?>
                     <tr>

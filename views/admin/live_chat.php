@@ -60,7 +60,7 @@
                         <th>Member</th>
                         <th>Message</th>
                         <th>Stream</th>
-                        <th></th>
+                        <th><span class="adm-sr-only">Message</span></th>
                     </tr>
                 </thead>
                 <tbody>

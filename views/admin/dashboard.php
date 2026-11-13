@@ -251,7 +251,7 @@ $attention = $attention ?? [];
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:center;margin-top:.75rem;">
             <div style="flex:1 1 320px;min-width:260px;max-width:320px;">
-                <?= \App\Core\Charts::pie($diskSlices, 260, 260, static fn (float $b): string => format_bytes($b)) ?>
+                <?= \App\Core\Charts::pie($diskSlices, 260, 260, static fn (float $b): string => format_bytes($b), 'Storage by folder') ?>
             </div>
             <div style="flex:1 1 520px;min-width:380px;">
                 <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.55rem 1.5rem;align-items:center;">
@@ -394,7 +394,7 @@ $attention = $attention ?? [];
         </div>
         <div style="flex:1 1 200px;">
             <table style="width:auto;">
-                <tr><th></th><th>New paid</th><th>Churn</th></tr>
+                <tr><th><span class="adm-sr-only">Period</span></th><th>New paid</th><th>Churn</th></tr>
                 <?php foreach ($finance['labels'] as $i => $label): ?>
                     <tr>
                         <td><b><?= e($label) ?></b></td>
@@ -611,9 +611,11 @@ $attention = $attention ?? [];
 <details class="sys-card u-mt-lg" data-collapse-key="plans" open>
     <summary>
         <h2 class="u-m0">Membership by plan</h2>
-        <span class="collapsible-meta"><a href="<?= url('/admin/subscriptions') ?>" class="btn btn-sm">Subscriptions</a></span>
     </summary>
     <div style="display:flex;flex-wrap:wrap;gap:1.5rem;">
+        <?php // Outside <summary>: a focusable control inside a summary is a
+              // nested interactive element (axe nested-interactive). ?>
+        <p style="flex:1 1 100%;margin:0 0 .5rem;"><a href="<?= url('/admin/subscriptions') ?>" class="btn btn-sm">Subscriptions</a></p>
         <div style="flex:1 1 340px;min-width:280px;">
             <table>
                 <thead><tr><th>Plan</th><th>Tier</th><th class="u-right">Members</th><th class="u-right">MRR</th></tr></thead>

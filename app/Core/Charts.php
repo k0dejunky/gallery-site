@@ -119,7 +119,7 @@ class Charts
      *        the hover <title> (e.g. a human-readable byte helper); defaults
      *        to the raw number with no decimals.
      */
-    public static function pie(array $slices, int $w = 220, int $h = 220, ?callable $format = null): string
+    public static function pie(array $slices, int $w = 220, int $h = 220, ?callable $format = null, string $label = 'Chart'): string
     {
         $slices = array_values(array_filter($slices, static function (array $s): bool {
             return (float) $s['value'] > 0;
@@ -128,7 +128,8 @@ class Charts
         $total = array_sum(array_map(static fn (array $s): float => (float) $s['value'], $slices));
 
         if ($total <= 0) {
-            return '<svg viewBox="0 0 ' . $w . ' ' . $h . '" width="100%" role="img" style="display:block;width:100%;height:auto"></svg>';
+            return '<svg viewBox="0 0 ' . $w . ' ' . $h . '" width="100%" role="img" style="display:block;width:100%;height:auto">'
+                . '<title>' . htmlspecialchars($label, ENT_QUOTES) . '</title></svg>';
         }
 
         $fmt = static function (float $v) use ($format): string {
@@ -138,9 +139,14 @@ class Charts
         $cx = $w / 2;
         $cy = $h / 2;
         $r  = min($w, $h) / 2 - 4;
+        // The <svg> needs its own accessible name: the per-slice <title>
+        // elements live on the paths, so axe still reported "svg with role=img
+        // has no title" (31 nodes across the dashboard, system and analytics).
         $svg = sprintf(
-            '<svg viewBox="0 0 %d %d" width="100%%" role="img" style="display:block;width:100%%;height:auto">',
-            $w, $h
+            '<svg viewBox="0 0 %d %d" width="100%%" role="img" style="display:block;width:100%%;height:auto">'
+            . '<title>%s</title>',
+            $w, $h,
+            htmlspecialchars($label, ENT_QUOTES)
         );
 
         $angle = -M_PI / 2;

@@ -185,13 +185,13 @@ $paletteGrid = [
                 <div class="pv-site-layout">
                     <div class="pv-sidebar">
                         <div class="pv-sidebar-box">
-                            <h5>Menu</h5>
+                            <h4>Menu</h4>
                             <a class="pv-sidebar-link active" href="#">Galleries</a>
                             <a class="pv-sidebar-link" href="#">Membership</a>
                             <a class="pv-sidebar-link" href="#">Settings</a>
                         </div>
                         <div class="pv-sidebar-box">
-                            <h5>Favorites</h5>
+                            <h4>Favorites</h4>
                             <a class="pv-sidebar-link" href="#">Nature</a>
                             <a class="pv-sidebar-link" href="#">Travel</a>
                             <a class="pv-sidebar-link" href="#">Portraits</a>

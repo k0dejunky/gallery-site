@@ -326,7 +326,7 @@ $humanShare    = $trafficRows > 0
             return ['label' => $row['label'], 'value' => (float) $row['value'], 'color' => $colors[$i % 3]];
         }, $mix, array_keys($mix));
         ?>
-        <?= Charts::pie($mixSlices, 200, 200, static fn (float $v): string => $num($v) . ' requests') ?>
+        <?= Charts::pie($mixSlices, 200, 200, static fn (float $v): string => $num($v) . ' requests', 'Request mix') ?>
         <table>
             <tbody>
             <?php foreach ($mix as $row): ?>
