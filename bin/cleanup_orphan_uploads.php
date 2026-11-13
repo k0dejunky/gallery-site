@@ -48,6 +48,11 @@ foreach (Database::run('SELECT filename FROM photos')->fetchAll() as $row) {
     $stems[pathinfo($name, PATHINFO_FILENAME)] = true;
 }
 
+// The site's own title images (uploaded through the theme editor) live in
+// this directory and have no photo row. A --yes run must never delete the
+// logo; unreferenced title-* files are still reported as orphans.
+$themeFiles = \App\Models\Theme::referencedTitleImages();
+
 $orphans = [];
 $bytes   = 0;
 $kept    = 0;
@@ -57,6 +62,10 @@ foreach (scandir($dir) as $entry) {
     }
     $path = $dir . '/' . $entry;
     if (!is_file($path)) {
+        continue;
+    }
+    if (isset($themeFiles[$entry])) {
+        $kept++;
         continue;
     }
     $base = media_derivative_base($entry);

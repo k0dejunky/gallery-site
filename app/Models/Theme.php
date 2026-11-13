@@ -440,6 +440,41 @@ class Theme
     }
 
     /**
+     * Basenames of the uploaded title images the site is actually using.
+     *
+     * They live in storage/uploads but no photo row refers to them, so the
+     * orphan report and bin/cleanup_orphan_uploads.php would otherwise offer
+     * the site's own logo for deletion. The answer comes from the whole
+     * generated name (title-<16 hex>), never from the file's mtime: a title
+     * image is a live asset the moment it is saved.
+     *
+     * @return array<string,true> basename => true
+     */
+    public static function referencedTitleImages(): array
+    {
+        $out = [];
+        $collect = static function (string $path) use (&$out): void {
+            if (preg_match('#/(title-[a-f0-9]{16}\.(?:png|jpe?g|gif|webp))$#i', $path, $m) === 1) {
+                $out[$m[1]] = true;
+            }
+        };
+
+        $collect(self::titleImage(self::SCOPE_SITE));
+        $collect(self::titleImage(self::SCOPE_ADMIN));
+
+        // A preset can carry its own title image; its FILE lives in the same
+        // uploads directory when it was uploaded through the editor.
+        foreach (self::presets() as $preset) {
+            $data = self::loadPreset((string) ($preset['slug'] ?? ''));
+            if (is_array($data)) {
+                $collect((string) ($data['title_image'] ?? ''));
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * Get the title image URL for a scope.
      */
     public static function titleImageUrl(string $scope = self::SCOPE_SITE): string

@@ -7,6 +7,7 @@ use App\Core\Controller;
 use App\Core\Database;
 use App\Core\Housekeeping;
 use App\Models\AuditLog;
+use App\Models\Theme;
 
 /**
  * Admin "System" page: housekeeping tools that would otherwise need SSH —
@@ -1504,6 +1505,11 @@ PHP;
             $stems[pathinfo((string) $name, PATHINFO_FILENAME)] = true;
         }
 
+        // Uploaded title images (the site logo) are live files with no photo
+        // row. Keep the ones a theme or preset points at; an old, unreferenced
+        // one is still a genuine orphan.
+        $themeFiles = Theme::referencedTitleImages();
+
         $orphans = [];
 
         foreach (scandir($uploads) ?: [] as $file) {
@@ -1511,6 +1517,9 @@ PHP;
                 continue;
             }
             if (is_dir($uploads . '/' . $file)) {
+                continue;
+            }
+            if (isset($themeFiles[$file])) {
                 continue;
             }
 

@@ -10163,6 +10163,40 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.media.orphans_keep_theme_images', 'Smoke · Media', 'The orphan report and cleanup never offer the site logo for deletion', static function () use ($root, $read, $ok, $bad): array {
+            // A title image uploaded through the theme editor sits in
+            // storage/uploads with no photo row, so the orphan scan reported
+            // the live logo as garbage and the cleanup button deleted it.
+            $problems = [];
+            $theme    = (string) $read($root . '/app/Models/Theme.php');
+            $system   = (string) $read($root . '/app/Controllers/SystemController.php');
+            $cleanup  = (string) $read($root . '/bin/cleanup_orphan_uploads.php');
+
+            if (strpos($theme, 'function referencedTitleImages(') === false) {
+                $problems[] = 'Theme::referencedTitleImages() is missing';
+            }
+            foreach ([
+                'SystemController.php'       => [$system, 'isset($themeFiles[$file])'],
+                'cleanup_orphan_uploads.php' => [$cleanup, 'isset($themeFiles[$entry])'],
+            ] as $label => [$src, $guard]) {
+                if (strpos($src, 'referencedTitleImages()') === false) {
+                    $problems[] = $label . ' does not keep the referenced title images';
+                } elseif (strpos($src, $guard) === false) {
+                    $problems[] = $label . ' reads the title images but never skips them';
+                }
+            }
+            if (strpos($theme, "\$collect(self::titleImage(self::SCOPE_ADMIN))") === false) {
+                $problems[] = 'the admin theme title image must count as referenced';
+            }
+            if (strpos($theme, 'loadPreset(') === false) {
+                $problems[] = 'a preset title image must count as referenced';
+            }
+
+            return $problems === []
+                ? $ok('the orphan scan keeps every title image a theme or preset points at')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.analytics.visit_agent_matches_close_visit', 'Smoke · Analytics', 'A session keeps the browser, OS and device the parser classified', static function () use ($root, $read, $ok, $bad): array {
             // closeVisit() returns browser/os/device FLAT. insertVisits() read
             // only $v['agent']['device'], so production held 33,320 sessions
