@@ -487,6 +487,9 @@ return [
     ['GET', '/membership/checkout', 'MembershipController@braintreeCheckout'],
     ['GET', '/membership/braintree-token', 'MembershipController@braintreeToken'],
     ['POST', '/membership/update-card', 'MembershipController@braintreeUpdateCard'],
+    ['GET', '/membership/gifts', 'PurchaseController@gifts'],
+    ['POST', '/gift/live', 'PurchaseController@giftLive'],
+    ['POST', '/gift/request', 'PurchaseController@giftRequest'],
     ['POST', '/membership/braintree-token', 'MembershipController@braintreeToken'],
 
     // Plans (admin only)

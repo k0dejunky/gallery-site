@@ -9,8 +9,10 @@ use App\Core\Database;
 use App\Core\PayPalGateway;
 use App\Core\RateLimiter;
 use App\Models\Gallery;
+use App\Models\Gift;
 use App\Models\Notification;
 use App\Models\PaymentProcessor;
+use App\Models\Plan;
 use App\Models\Purchase;
 use App\Models\UnlockCode;
 
@@ -370,6 +372,145 @@ class PurchaseController extends Controller
             : $this->chargeCard((int) $user['id'], Purchase::TYPE_TIP, 0, $amount, $note, $nonce, $this->idempotencyKey());
 
         $this->respondCheckout($result, $back);
+    }
+
+    /**
+     * GET /membership/gifts
+     *
+     * The gift shop and "gifts I sent". A gift is a one-off purchase of a
+     * plan plus the single-use 100%-off code that pays for the recipient's
+     * membership; the code is issued once the charge settles.
+     */
+    public function gifts(): void
+    {
+        Auth::requireLogin();
+
+        $this->view('membership/gifts', [
+            'title' => 'Gift a membership',
+            'plans' => array_values(array_filter(Plan::active(), static function (array $plan): bool {
+                return (float) ($plan['price'] ?? 0) > 0;
+            })),
+            'gifts' => Gift::forPurchaser((int) Auth::user()['id']),
+            'user'  => Auth::user(),
+        ]);
+    }
+
+    /**
+     * POST /gift/live
+     *
+     * Charge a gift to a card (Braintree nonce) or start a PayPal order. The
+     * price comes from the PLAN, never from the request, so the form cannot
+     * name its own amount.
+     */
+    public function giftLive(): void
+    {
+        Auth::requireLogin();
+
+        if (!Auth::recentlyAuthenticated()) {
+            $this->json(['error' => 'Please confirm your password first.'], 428);
+            return;
+        }
+
+        $user = Auth::user();
+
+        if (!RateLimiter::allow(['gift-live:' . $this->request->ip(), 'gift-live:u' . (int) $user['id']], 5, 900)) {
+            $this->json(['error' => 'Too many gift purchases from your connection right now.'], 429);
+            return;
+        }
+
+        $plan = Plan::find((int) $this->request->post('plan_id', 0));
+        if ($plan === null || (int) $plan['active'] !== 1) {
+            $this->json(['error' => 'That plan is not available.'], 400);
+            return;
+        }
+
+        $price = round((float) ($plan['price'] ?? 0), 2);
+        if ($price < 0.01) {
+            $this->json(['error' => 'That plan cannot be bought as a gift.'], 400);
+            return;
+        }
+
+        $back = $this->request->header('HTTP_REFERER') ?: '/membership/gifts';
+        $note = 'Gift: ' . (string) $plan['name'];
+
+        $provider = strtolower((string) $this->request->post('provider', 'braintree'));
+
+        if ($provider === 'paypal') {
+            $this->chargePayPal(
+                (int) $user['id'],
+                Purchase::TYPE_GIFT,
+                (int) $plan['id'],
+                $price,
+                $note,
+                $back
+            );
+            return;
+        }
+
+        $nonce = trim((string) $this->request->post('payment_method_nonce', ''));
+        $result = $nonce === ''
+            ? ['ok' => false, 'error' => 'Payment details are missing.']
+            : $this->chargeCard(
+                (int) $user['id'],
+                Purchase::TYPE_GIFT,
+                (int) $plan['id'],
+                $price,
+                $note,
+                $nonce,
+                $this->idempotencyKey()
+            );
+
+        $this->respondCheckout($result, $back);
+    }
+
+    /**
+     * POST /gift/request
+     *
+     * "I would like to buy this as a gift, but not with a card right now."
+     * Records a pending gift purchase so an admin can take payment through
+     * the ledger; the code is issued when it is marked paid.
+     */
+    public function giftRequest(): void
+    {
+        Auth::requireLogin();
+
+        $user = Auth::user();
+
+        if (!RateLimiter::allow(['gift-request:' . $this->request->ip(), 'gift-request:u' . (int) $user['id']], 5, 600)) {
+            $this->flash('error', 'Too many gift requests right now. Please try again shortly.');
+            $this->redirect('/membership/gifts');
+            return;
+        }
+
+        $plan = Plan::find((int) $this->request->post('plan_id', 0));
+        if ($plan === null || (int) $plan['active'] !== 1 || (float) ($plan['price'] ?? 0) < 0.01) {
+            $this->flash('error', 'That plan is not available as a gift.');
+            $this->redirect('/membership/gifts');
+            return;
+        }
+
+        $open = Database::run(
+            "SELECT id FROM purchases
+             WHERE user_id = ? AND item_type = 'gift' AND item_id = ? AND status = 'pending'
+             LIMIT 1",
+            [(int) $user['id'], (int) $plan['id']]
+        )->fetchColumn();
+
+        if ($open === false) {
+            Purchase::create(
+                (int) $user['id'],
+                Purchase::TYPE_GIFT,
+                (int) $plan['id'],
+                round((float) $plan['price'], 2),
+                'offline',
+                null,
+                'Gift request: ' . (string) $plan['name'],
+                Purchase::STATUS_PENDING
+            );
+        }
+
+        $this->flash('success', 'Your gift request is recorded. Once the payment is confirmed, your code appears on this page.');
+        $this->redirect('/membership/gifts');
     }
 
     /**

@@ -13,6 +13,7 @@ class Purchase
 {
     public const TYPE_GALLERY = 'gallery';
     public const TYPE_TIP     = 'tip';
+    public const TYPE_GIFT    = 'gift';
 
     public const STATUS_PENDING  = 'pending';
     public const STATUS_PAID     = 'paid';
@@ -390,7 +391,7 @@ class Purchase
             [$from, $to]
         )->fetchAll();
 
-        $result = ['gallery' => 0.0, 'tip' => 0.0, 'total' => 0.0, 'offline' => 0.0];
+        $result = ['gallery' => 0.0, 'tip' => 0.0, 'gift' => 0.0, 'total' => 0.0, 'offline' => 0.0];
         foreach ($rows as $row) {
             $v = (float) ($row['total'] ?? 0);
             $isRevenue = in_array((string) ($row['gateway'] ?? ''), self::REVENUE_GATEWAYS, true);
@@ -399,7 +400,9 @@ class Purchase
                 $result['offline'] += $v;
                 continue;
             }
-            $result[(string) ($row['item_type'] ?? '') === 'tip' ? 'tip' : 'gallery'] = $v;
+            $type = (string) ($row['item_type'] ?? '');
+            $key  = $type === self::TYPE_TIP ? 'tip' : ($type === self::TYPE_GIFT ? 'gift' : 'gallery');
+            $result[$key] += $v;
             $result['total'] += $v;
         }
 
@@ -474,10 +477,11 @@ class Purchase
     public static function recent(int $limit = 100): array
     {
         return Database::run(
-            'SELECT p.*, u.email AS user_email, g.title AS gallery_title
+            'SELECT p.*, u.email AS user_email, g.title AS gallery_title, pl.name AS plan_name
              FROM purchases p
              JOIN users u ON u.id = p.user_id
              LEFT JOIN galleries g ON g.id = p.item_id AND p.item_type = \'gallery\'
+             LEFT JOIN plans pl ON pl.id = p.item_id AND p.item_type = \'gift\'
              ORDER BY p.created_at DESC, p.id DESC
              LIMIT ' . max(1, (int) $limit)
         )->fetchAll();
@@ -567,10 +571,11 @@ class Purchase
             $ym   = (string) $row['ym'];
             $v    = (float) ($row['total'] ?? 0);
             if (!isset($series[$ym])) {
-                $series[$ym] = ['gallery' => 0.0, 'tip' => 0.0, 'total' => 0.0];
+                $series[$ym] = ['gallery' => 0.0, 'tip' => 0.0, 'gift' => 0.0, 'total' => 0.0];
             }
-            $key = (string) ($row['item_type'] ?? '') === 'tip' ? 'tip' : 'gallery';
-            $series[$ym][$key] = $v;
+            $type = (string) ($row['item_type'] ?? '');
+            $key  = $type === self::TYPE_TIP ? 'tip' : ($type === self::TYPE_GIFT ? 'gift' : 'gallery');
+            $series[$ym][$key] += $v;
             $series[$ym]['total'] += $v;
         }
 

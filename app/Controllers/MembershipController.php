@@ -16,6 +16,7 @@ use App\Models\PaymentProcessor;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\Sale;
+use App\Models\SaleCode;
 use App\Models\Gallery;
 use App\Models\Photo;
 use App\Models\Receipt;
@@ -397,13 +398,28 @@ class MembershipController extends Controller
         $userId = (int) Auth::user()['id'];
         $saleCode = trim((string) $this->request->post('sale_code', ''));
 
+        // A code can cover the WHOLE price. Resolve it before a processor is
+        // chosen, because a $0 membership must not be sent to a card
+        // processor: the card path charged the undiscounted plan price.
+        $freeWithCode = false;
+        if ($saleCode !== '') {
+            try {
+                $quote = Subscription::quote($planId, $saleCode);
+            } catch (\RuntimeException $e) {
+                $this->flash('error', $e->getMessage());
+                $this->redirect('/membership');
+                return;
+            }
+            $freeWithCode = SaleCode::isFree($quote['price']);
+        }
+
         // Optional payment processor chosen at checkout. An explicit selection
         // of "none" (manual/offline) leaves the processor null; otherwise the
         // submitted processor must exist, be enabled AND be one a member may
         // pick (a sandbox processor is not offered while the site has a live
         // one, so a crafted request must not be able to select it either).
         $paymentProcessorId = null;
-        $paymentChoice = (int) $this->request->post('payment_processor', 0);
+        $paymentChoice = $freeWithCode ? 0 : (int) $this->request->post('payment_processor', 0);
         if ($paymentChoice > 0) {
             $processor = PaymentProcessor::find($paymentChoice);
             if ($processor === null || (int) $processor['enabled'] !== 1
@@ -451,6 +467,15 @@ class MembershipController extends Controller
             $this->redirect('/membership');
         }
         AuditLog::record($userId, 'create', 'subscription', $subscriptionId, 'Requested "' . $plan['name'] . '" membership', null, ['plan_id' => $planId, 'sale_code' => $saleCode ?: null, 'payment_processor_id' => $paymentProcessorId, 'transaction_ref' => $transactionRef]);
+
+        // Nothing left to pay: the code covered the whole price, so there is
+        // no processor to wait for and no admin decision to make.
+        if ($freeWithCode) {
+            Subscription::approve($subscriptionId);
+            $this->flash('success', 'Your code covered the whole price. Your "' . $plan['name'] . '" membership is now active.');
+            $this->redirect('/membership/my');
+            return;
+        }
 
         // Hosted-checkout billers (CCBill/Epoch/SegPay) take over from here:
         // send the visitor to the biller's signup page; its postback will
@@ -569,6 +594,7 @@ class MembershipController extends Controller
         if ($gateway === null) {
             $this->flash('error', 'Braintree credentials are incomplete. Please try again later.');
             $this->redirect('/membership');
+            return;
         }
 
         $cfg = PaymentProcessor::decodeConfig($processorRow);
@@ -582,7 +608,53 @@ class MembershipController extends Controller
         if ($btPlanId === '') {
             $this->flash('error', 'Braintree plan ID is not configured. Please contact support.');
             $this->redirect('/membership');
+            return;
         }
+
+        // ----------------------------------------------------------------
+        // Resolve the code BEFORE anything is charged.
+        //
+        // The old code looked the sale code up AFTER creating the Braintree
+        // subscription, and it did so with a `plan_id` column that does not
+        // exist on sale_codes. The query threw, so the member was subscribed
+        // (and charged) at Braintree while the local row was never written.
+        // An invalid code was also ignored: the member paid full price.
+        // ----------------------------------------------------------------
+        try {
+            $quote = Subscription::quote((int) $plan['id'], trim($saleCode) !== '' ? $saleCode : null);
+        } catch (\RuntimeException $e) {
+            $this->flash('error', $e->getMessage());
+            $this->redirect('/membership');
+            return;
+        }
+
+        $codeRow = $quote['sale_code'];
+        $sale    = $quote['sale'];
+        $price   = $quote['price'];
+        $level   = $quote['level'];
+
+        // A fully discounted membership has nothing to charge, so it must
+        // never reach a card. It is created on the manual path and approved
+        // at once (there is no payment to wait for).
+        if (SaleCode::isFree($price)) {
+            try {
+                $freeId = Subscription::create($userId, (int) $plan['id'], $saleCode, true);
+                Subscription::approve($freeId);
+                AuditLog::record($userId, 'create', 'subscription', $freeId, 'A 100% code covered "' . $plan['name'] . '"', null, [
+                    'plan_id'   => (int) $plan['id'],
+                    'sale_code' => $saleCode,
+                ]);
+
+                $this->flash('success', 'Your "' . $plan['name'] . '" membership is now active.');
+                $this->redirect('/membership/my');
+            } catch (\RuntimeException $e) {
+                $this->flash('error', $e->getMessage());
+                $this->redirect('/membership');
+            }
+            return;
+        }
+
+        $btSubscriptionId = null;
 
         try {
             $user = Auth::user();
@@ -608,70 +680,63 @@ class MembershipController extends Controller
             $pm = $gateway->createPaymentMethod($customerId, $nonce, true);
             $paymentMethodToken = (string) $pm['token'];
 
-            // 3. Work out the price (respect sale codes)
-            $price = (float) $plan['price'];
-            if ($saleCode !== '') {
-                $sale = Sale::activeForPlan((int) $plan['id']);
-                if ($sale !== null) {
-                    $price = (float) $sale['sale_price'];
-                }
-            }
-
-            // 4. Create the Braintree subscription
+            // 3. Create the Braintree subscription at the DISCOUNTED price
             $btSubscription = $gateway->createSubscription($paymentMethodToken, $btPlanId, $price);
             $btSubscriptionId = (string) $btSubscription['id'];
 
-            // 5. Create the local subscription and activate immediately
-            //    (Braintree has already charged / will charge per its schedule)
-            $transactionRef = 'BT-' . $btSubscriptionId;
-            $saleId = null;
-            $saleCodeId = null;
+            // 4. The local row: written in a transaction with the code
+            //    redemption, so a half-written subscription can never grant
+            //    access for a code that was not actually used up.
+            $db = Database::connection();
+            $db->beginTransaction();
 
-            // Resolve sale/saleCode for local records
-            if ($saleCode !== '') {
-                $sale = Sale::activeForPlan((int) $plan['id']);
-                if ($sale !== null) {
-                    $saleId = (int) $sale['id'];
+            try {
+                $transactionRef = 'BT-' . $btSubscriptionId;
+                $saleId = $sale !== null ? (int) $sale['id'] : null;
+                if ($codeRow !== null && !empty($codeRow['sale_id'])) {
+                    $saleId = (int) $codeRow['sale_id'];
                 }
-                // Look up the sale_code_id by code value
-                $scRow = Database::run(
-                    'SELECT id FROM sale_codes WHERE code = ? AND plan_id = ? LIMIT 1',
-                    [$saleCode, (int) $plan['id']]
-                )->fetch();
-                if ($scRow !== false) {
-                    $saleCodeId = (int) $scRow['id'];
+                $saleCodeId = $codeRow !== null ? (int) $codeRow['id'] : null;
+
+                Database::run(
+                    'INSERT INTO subscriptions (user_id, plan_id, status, sale_id, sale_code_id, price_paid, access_level, payment_processor_id, transaction_ref, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+                    [$userId, (int) $plan['id'], 'active', $saleId, $saleCodeId, $price, $level, (int) $processorRow['id'], $transactionRef]
+                );
+
+                $subscriptionId = (int) $db->lastInsertId();
+                Database::run("UPDATE subscriptions SET membership_number = LPAD(CAST(id AS CHAR), 5, '0') WHERE id = ?", [$subscriptionId]);
+
+                // Set expiry based on billing cycle
+                $expires = null;
+                if (($plan['billing_cycle'] ?? '') === 'monthly') {
+                    $expires = date('Y-m-d H:i:s', strtotime('+1 month'));
+                } elseif (($plan['billing_cycle'] ?? '') === 'yearly') {
+                    $expires = date('Y-m-d H:i:s', strtotime('+1 year'));
                 }
-            } elseif (Sale::activeForPlan((int) $plan['id']) !== null) {
-                $saleId = (int) Sale::activeForPlan((int) $plan['id'])['id'];
-            }
 
-            Database::run(
-                'INSERT INTO subscriptions (user_id, plan_id, status, sale_id, sale_code_id, price_paid, access_level, payment_processor_id, transaction_ref, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
-                [$userId, (int) $plan['id'], 'active', $saleId, $saleCodeId, $price, (int) ($plan['level'] ?? 1), (int) $processorRow['id'], $transactionRef]
-            );
+                if ($expires !== null) {
+                    Database::run(
+                        'UPDATE subscriptions SET expires_at = ?, starts_at = CURRENT_TIMESTAMP WHERE id = ?',
+                        [$expires, $subscriptionId]
+                    );
+                } else {
+                    Database::run(
+                        'UPDATE subscriptions SET starts_at = CURRENT_TIMESTAMP WHERE id = ?',
+                        [$subscriptionId]
+                    );
+                }
 
-             $subscriptionId = (int) Database::connection()->lastInsertId();
-             Database::run("UPDATE subscriptions SET membership_number = LPAD(CAST(id AS CHAR), 5, '0') WHERE id = ?", [$subscriptionId]);
+                if ($codeRow !== null && !SaleCode::redeem((int) $codeRow['id'])) {
+                    throw new \RuntimeException('That sale code has just reached its usage limit.');
+                }
 
-            // Set expiry based on billing cycle
-            $expires = null;
-            if (($plan['billing_cycle'] ?? '') === 'monthly') {
-                $expires = date('Y-m-d H:i:s', strtotime('+1 month'));
-            } elseif (($plan['billing_cycle'] ?? '') === 'yearly') {
-                $expires = date('Y-m-d H:i:s', strtotime('+1 year'));
-            }
-
-            if ($expires !== null) {
-                Database::run(
-                    'UPDATE subscriptions SET expires_at = ?, starts_at = CURRENT_TIMESTAMP WHERE id = ?',
-                    [$expires, $subscriptionId]
-                );
-            } else {
-                Database::run(
-                    'UPDATE subscriptions SET starts_at = CURRENT_TIMESTAMP WHERE id = ?',
-                    [$subscriptionId]
-                );
+                $db->commit();
+            } catch (\Throwable $localError) {
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                }
+                throw $localError;
             }
 
             AuditLog::record($userId, 'create', 'subscription', $subscriptionId, 'Braintree payment for "' . $plan['name'] . '"', null, [
@@ -688,8 +753,19 @@ class MembershipController extends Controller
             $this->redirect('/membership/my');
 
         } catch (\Throwable $e) {
+            // The subscription may exist at Braintree even though the local
+            // row could not be written. Cancel it so the member is not billed
+            // for access they do not have.
+            if ($btSubscriptionId !== null) {
+                try {
+                    $gateway->cancelSubscription($btSubscriptionId);
+                } catch (\Throwable $cancelError) {
+                    error_log('[membership/subscribe/braintree] the orphaned Braintree subscription '
+                        . $btSubscriptionId . ' could not be cancelled: ' . $cancelError->getMessage());
+                }
+            }
             error_log('[membership/subscribe/braintree] user=' . $userId . ' ' . $e->getMessage());
-            $this->flash('error', 'Payment failed: ' . $e->getMessage());
+            $this->flash('error', 'We could not finish activating your membership. Please contact support before trying again.');
             $this->redirect('/membership');
         }
     }

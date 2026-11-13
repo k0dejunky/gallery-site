@@ -74,9 +74,10 @@ final class Receipt
         }
 
         $purchases = Database::run(
-            'SELECT p.*, g.title AS gallery_title
+            'SELECT p.*, g.title AS gallery_title, pl.name AS plan_name
              FROM purchases p
              LEFT JOIN galleries g ON g.id = p.item_id AND p.item_type = \'gallery\'
+             LEFT JOIN plans pl ON pl.id = p.item_id AND p.item_type = \'gift\'
              WHERE p.user_id = ?
              ORDER BY p.created_at DESC, p.id DESC',
             [$userId]
@@ -226,6 +227,10 @@ final class Receipt
         if ($type === Purchase::TYPE_TIP) {
             $description = 'Tip';
             $detail      = 'A one-off tip';
+        } elseif ($type === Purchase::TYPE_GIFT) {
+            $planName    = trim((string) ($purchase['plan_name'] ?? ''));
+            $description = $planName !== '' ? 'Gift membership — ' . $planName : 'Gift membership';
+            $detail      = 'A one-off gift membership';
         } else {
             $description = $title !== '' ? 'Gallery unlock — ' . $title : 'Gallery unlock';
             $detail      = 'A one-off gallery unlock';

@@ -14,6 +14,9 @@ $ccId     = preg_replace('/[^A-Za-z0-9_-]/', '-', (string) ($ccId ?? 'cc'));
 $ccAmount = (string) ($ccAmount ?? '0.00');
 $ccLabel  = (string) ($ccLabel ?? '');
 $ccAmountInput = !empty($ccAmountInput);
+// Extra hidden fields (e.g. a gift's plan_id). The block never invents an
+// amount: the server must take the price from its own data.
+$ccExtraFields = (isset($ccExtraFields) && is_array($ccExtraFields)) ? $ccExtraFields : [];
 $ccTokenUrl = url('/checkout/token');
 $ccCsrf   = \App\Core\Csrf::token();
 $ccUser   = \App\Core\Auth::check();
@@ -42,6 +45,9 @@ foreach (\App\Models\PaymentProcessor::enabled() as $__pp) {
                   // purchase, so a double-click cannot charge twice. It is
                   // rendered once per form, so both clicks carry it. ?>
             <input type="hidden" name="idempotency_key" value="<?= e(bin2hex(random_bytes(16))) ?>">
+            <?php foreach ($ccExtraFields as $ccName => $ccValue): ?>
+                <input type="hidden" name="<?= e((string) $ccName) ?>" value="<?= e((string) $ccValue) ?>">
+            <?php endforeach; ?>
             <?php if ($ccAmountInput): ?>
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem;">
                     <input type="number" step="0.01" min="0.01" name="amount" value="<?= (float) $ccAmount > 0 ? e($ccAmount) : '' ?>" placeholder="Amount" aria-label="Amount in dollars" style="width:130px;" required>
@@ -128,7 +134,14 @@ foreach (\App\Models\PaymentProcessor::enabled() as $__pp) {
     var pp = root.querySelector('[data-cc-paypal]');
     if (pp) pp.addEventListener('click', function () {
         if (busy) return; busy = true; status('Redirecting to PayPal…');
-        post({ _token: '<?= e($ccCsrf) ?>', provider: 'paypal' })
+        // Serialise the FORM, not a fresh object: the PayPal request needs
+        // the same hidden fields as the card one (the amount on a tip, the
+        // plan on a gift). The PayPal button used to send only _token +
+        // provider, so a PayPal tip arrived with no amount.
+        var fields = {};
+        new FormData(form).forEach(function (value, key) { fields[key] = value; });
+        fields.provider = 'paypal';
+        post(fields)
             .then(function (r) { busy = false; if (r && r.redirect) { window.location.href = r.redirect; } else { status((r && r.error) || 'PayPal could not start.'); } })
             .catch(function () { busy = false; status('PayPal is unavailable right now.'); });
     });

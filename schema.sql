@@ -425,6 +425,12 @@ CREATE TABLE IF NOT EXISTS sale_codes (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     sale_id     INT UNSIGNED NULL,
     name        VARCHAR(120) NULL,
+    -- A GIFT code: who bought it, for which plan, and the purchase that paid
+    -- for it. The unique key is what makes issuing one code per purchase
+    -- idempotent (a NULL is allowed on every ordinary code).
+    gift_purchaser_id INT UNSIGNED NULL DEFAULT NULL,
+    gift_plan_id      INT UNSIGNED NULL DEFAULT NULL,
+    gift_purchase_id  BIGINT UNSIGNED NULL DEFAULT NULL,
     code        VARCHAR(120) NOT NULL UNIQUE,
     max_uses    INT UNSIGNED NULL,
     used_count  INT UNSIGNED NOT NULL DEFAULT 0,
@@ -434,6 +440,8 @@ CREATE TABLE IF NOT EXISTS sale_codes (
     upgrade_level INT NULL,
     target_level INT NOT NULL DEFAULT 1,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_sale_codes_gift_purchase (gift_purchase_id),
+    INDEX idx_sale_codes_gift_purchaser (gift_purchaser_id),
     FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE SET NULL
 );
 
@@ -1175,7 +1183,7 @@ CREATE TABLE IF NOT EXISTS purchase_events (
 CREATE TABLE IF NOT EXISTS purchases (
     id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id     INT UNSIGNED NOT NULL,
-    item_type   ENUM('gallery','tip') NOT NULL,
+    item_type   ENUM('gallery','tip','gift') NOT NULL,
     item_id     INT UNSIGNED NOT NULL DEFAULT 0,
     amount      DECIMAL(10,2) NOT NULL DEFAULT 0,
     currency    CHAR(3) NOT NULL DEFAULT 'USD',

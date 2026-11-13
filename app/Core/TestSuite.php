@@ -1630,6 +1630,211 @@ class TestSuite
             }
         });
 
+        $add('db.sale_code_quote_and_free_membership', 'Database', 'a code means the same price on every checkout path, and a 100% code needs no card at all', function () {
+            // This test cannot sit inside its own transaction: Subscription::
+            // create() opens one, and MySQL has no nested transactions. It
+            // creates uniquely-named scratch rows and deletes them itself.
+            if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+            }
+
+            $suffix  = bin2hex(random_bytes(4));
+            $userIds = [];
+            $planId  = 0;
+            $codeIds = [];
+
+            try {
+                $userIds[] = self::scratchUserId('gift-' . $suffix);
+                $userIds[] = self::scratchUserId('gift2-' . $suffix);
+
+                Database::run(
+                    "INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, level, active)
+                     VALUES (?, ?, 40.00, 'monthly', 'probe', 0, 2, 1)",
+                    ['PROBE gift plan ' . $suffix, 'probe-gift-' . $suffix]
+                );
+                $planId = (int) Database::connection()->lastInsertId();
+
+                $fullCode   = 'GIFT-' . strtoupper($suffix);
+                $partCode   = 'QUARTER-' . strtoupper($suffix);
+                $tierCode   = 'TIER-' . strtoupper($suffix);
+
+                $codeIds[] = \App\Models\SaleCode::create(null, $fullCode, 1, 'percent', 100, null, 2, 'probe gift');
+                $codeIds[] = \App\Models\SaleCode::create(null, $partCode, 5, 'percent', 25, null, 2, 'probe quarter');
+                $codeIds[] = \App\Models\SaleCode::create(null, $tierCode, 5, 'percent', 10, null, 1, 'probe tier');
+
+                $quoteFull = \App\Models\Subscription::quote($planId, $fullCode);
+                $quotePart = \App\Models\Subscription::quote($planId, $partCode);
+
+                $wrongTier = false;
+                try {
+                    // A code for level 1 cannot be used on a level-2 plan.
+                    \App\Models\Subscription::quote($planId, $tierCode);
+                } catch (\RuntimeException $e) {
+                    $wrongTier = true;
+                }
+
+                // The free path: no processor, no pending row.
+                $subId = \App\Models\Subscription::create($userIds[0], $planId, $fullCode);
+                \App\Models\Subscription::approve($subId);
+
+                $sub         = \App\Models\Subscription::find($subId);
+                $codeAfter   = \App\Models\SaleCode::findValid($fullCode, $planId);
+                $activeAfter = \App\Models\Subscription::isActive($userIds[0]);
+
+                // The same single-use code cannot be redeemed twice.
+                $second = false;
+                try {
+                    \App\Models\Subscription::create($userIds[1], $planId, $fullCode);
+                } catch (\RuntimeException $e) {
+                    $second = true;
+                }
+
+                $ok = $quoteFull['price'] === 0.0
+                    && $quoteFull['level'] === 2
+                    && abs($quotePart['price'] - 30.0) < 0.005
+                    && $wrongTier
+                    && abs((float) $sub['price_paid']) < 0.005
+                    && (int) $sub['sale_code_id'] === $codeIds[0]
+                    && $codeAfter === null
+                    && $activeAfter
+                    && $second;
+
+                return [
+                    'pass'   => $ok,
+                    'detail' => $ok
+                        ? 'a 100% code quotes $0 for the right tier, the created membership carries the code, the code is used up after one redemption, and a code for another tier is refused'
+                        : json_encode([
+                            'full' => $quoteFull['price'] ?? null, 'level' => $quoteFull['level'] ?? null,
+                            'part' => $quotePart['price'] ?? null, 'wrongTier' => $wrongTier,
+                            'paid' => $sub['price_paid'] ?? null, 'codeId' => $sub['sale_code_id'] ?? null,
+                            'codeAfter' => $codeAfter, 'active' => $activeAfter, 'second' => $second,
+                        ]),
+                ];
+            } finally {
+                if ($userIds !== []) {
+                    $marks = implode(',', array_fill(0, count($userIds), '?'));
+                    Database::run("DELETE FROM subscriptions WHERE user_id IN ($marks)", $userIds);
+                    Database::run("DELETE FROM users WHERE id IN ($marks)", $userIds);
+                }
+                if ($codeIds !== []) {
+                    $marks = implode(',', array_fill(0, count($codeIds), '?'));
+                    Database::run("DELETE FROM sale_codes WHERE id IN ($marks)", $codeIds);
+                }
+                if ($planId > 0) {
+                    Database::run('DELETE FROM plans WHERE id = ?', [$planId]);
+                }
+            }
+        });
+
+        $add('db.gift_cycle', 'Database', 'a gift is bought once, issues exactly one code, and that code pays for the recipient membership', function () {
+            // Subscription::create() opens its own transaction, so this test
+            // cleans up its uniquely-named scratch rows instead of wrapping
+            // them in one (MySQL cannot nest transactions).
+            if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+            }
+
+            $suffix  = bin2hex(random_bytes(4));
+            $userIds = [];
+            $planId  = 0;
+            $codeId  = 0;
+            $purchaseId = 0;
+
+            try {
+                $buyer     = self::scratchUserId('giftbuy-' . $suffix);
+                $recipient = self::scratchUserId('giftrec-' . $suffix);
+                $userIds   = [$buyer, $recipient];
+
+                Database::run(
+                    "INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, level, active)
+                     VALUES (?, ?, 25.00, 'monthly', 'probe', 0, 2, 1)",
+                    ['PROBE gift cycle ' . $suffix, 'probe-giftcycle-' . $suffix]
+                );
+                $planId = (int) Database::connection()->lastInsertId();
+
+                $purchaseId = \App\Models\Purchase::create(
+                    $buyer,
+                    \App\Models\Purchase::TYPE_GIFT,
+                    $planId,
+                    25.00,
+                    'offline',
+                    'probe-gift-' . $suffix,
+                    'Gift: probe',
+                    \App\Models\Purchase::STATUS_PENDING
+                );
+
+                // A pending purchase issues nothing; the settlement issues
+                // the code, and reading it twice is still one code.
+                $beforePayment = \App\Models\Gift::ensureCode($purchaseId);
+                \App\Models\Purchase::settleById($purchaseId);
+                $code          = \App\Models\Gift::ensureCode($purchaseId);
+                $again         = \App\Models\Gift::ensureCode($purchaseId);
+                $codeId        = (int) ($code['id'] ?? 0);
+
+                $list = \App\Models\Gift::forPurchaser($buyer);
+                $stateAvailable = (string) ($list[0]['state'] ?? '') === \App\Models\Gift::STATE_AVAILABLE;
+
+                // The recipient redeems it like any promotion code.
+                $subId = \App\Models\Subscription::create($recipient, $planId, (string) $code['code']);
+                \App\Models\Subscription::approve($subId);
+
+                $sub          = \App\Models\Subscription::find($subId);
+                $active       = \App\Models\Subscription::isActive($recipient);
+                $codeAfterUse = \App\Models\SaleCode::findValid((string) $code['code'], $planId);
+                $listAfter    = \App\Models\Gift::forPurchaser($buyer);
+                $stateRedeemed = (string) ($listAfter[0]['state'] ?? '') === \App\Models\Gift::STATE_REDEEMED;
+
+                // A refunded gift's code is dead: ensureCode returns the SAME
+                // code (the unique key) but the page reports the purchase void.
+                \App\Models\Purchase::setStatus($purchaseId, \App\Models\Purchase::STATUS_REFUNDED);
+                $voidList = \App\Models\Gift::forPurchaser($buyer);
+                $stateVoid = (string) ($voidList[0]['state'] ?? '') === \App\Models\Gift::STATE_VOID;
+
+                $ok = $beforePayment === null
+                    && is_array($code) && $codeId > 0
+                    && is_array($again) && (int) $again['id'] === $codeId
+                    && (int) $code['target_level'] === 2
+                    && (float) $code['discount_value'] === 100.0
+                    && (int) $code['max_uses'] === 1
+                    && $stateAvailable
+                    && abs((float) $sub['price_paid']) < 0.005
+                    && (int) $sub['sale_code_id'] === $codeId
+                    && $active
+                    && $codeAfterUse === null
+                    && $stateRedeemed
+                    && $stateVoid;
+
+                return [
+                    'pass'   => $ok,
+                    'detail' => $ok
+                        ? 'a pending gift issues nothing; a paid one issues exactly one 100% single-use code for the plan tier; the recipient redeems it for a $0 membership; the list says available -> redeemed -> refunded'
+                        : json_encode([
+                            'beforePayment' => $beforePayment, 'codeId' => $codeId,
+                            'again' => $again['id'] ?? null, 'target' => $code['target_level'] ?? null,
+                            'discount' => $code['discount_value'] ?? null, 'maxUses' => $code['max_uses'] ?? null,
+                            'stateAvailable' => $stateAvailable, 'paid' => $sub['price_paid'] ?? null,
+                            'saleCodeId' => $sub['sale_code_id'] ?? null, 'active' => $active,
+                            'codeAfterUse' => $codeAfterUse, 'stateRedeemed' => $stateRedeemed,
+                            'stateVoid' => $stateVoid,
+                        ]),
+                ];
+            } finally {
+                if ($userIds !== []) {
+                    $marks = implode(',', array_fill(0, count($userIds), '?'));
+                    Database::run("DELETE FROM subscriptions WHERE user_id IN ($marks)", $userIds);
+                    Database::run("DELETE FROM purchases WHERE user_id IN ($marks)", $userIds);
+                    Database::run("DELETE FROM sale_codes WHERE gift_purchaser_id IN ($marks)", $userIds);
+                    Database::run("DELETE FROM users WHERE id IN ($marks)", $userIds);
+                }
+                if ($codeId > 0) {
+                    Database::run('DELETE FROM sale_codes WHERE id = ?', [$codeId]);
+                }
+                if ($planId > 0) {
+                    Database::run('DELETE FROM plans WHERE id = ?', [$planId]);
+                }
+            }
+        });
+
         $add('db.gallery_nsfw_flag', 'Database', 'a safe-for-work gallery is open at any level and keeps its own level when it is adult', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

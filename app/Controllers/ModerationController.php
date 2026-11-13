@@ -160,6 +160,7 @@ class ModerationController extends Controller
             'purchases' => Purchase::recent(500),
             'tipsTotal' => Purchase::totalFor(Purchase::TYPE_TIP),
             'unlockTotal' => Purchase::totalFor(Purchase::TYPE_GALLERY),
+            'giftTotal' => Purchase::totalFor(Purchase::TYPE_GIFT),
             // The member's own refund requests. They live on this page
             // because this page IS the ledger: a decision about a charge is
             // made where the charge is.

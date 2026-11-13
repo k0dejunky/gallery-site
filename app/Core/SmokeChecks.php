@@ -4806,6 +4806,140 @@ class SmokeChecks
                 : $bad(implode('; ', $probs));
         });
 
+        $add('smoke.money.free_code_skips_the_card', 'Smoke · Money', 'A code that covers the whole price is never sent to a card, and both checkout paths quote it the same', static function () use ($root, $read, $ok, $bad): array {
+            // The Braintree checkout resolved a sale code AFTER charging and
+            // looked it up by a `plan_id` column sale_codes does not have, so
+            // the member was subscribed at Braintree while the local row was
+            // never written. It also charged the undiscounted price.
+            $membership = (string) $read($root . '/app/Controllers/MembershipController.php');
+            $saleCode   = (string) $read($root . '/app/Models/SaleCode.php');
+            $sub        = (string) $read($root . '/app/Models/Subscription.php');
+            $probs      = [];
+
+            if (strpos($saleCode, 'public static function apply(') === false
+                || strpos($saleCode, 'public static function isFree(') === false) {
+                $probs[] = 'SaleCode must own the discount math and the isFree() test';
+            }
+            if (strpos($sub, 'public static function quote(') === false) {
+                $probs[] = 'Subscription::quote() must be the one quote both paths use';
+            }
+
+            // The manual checkout must resolve the code before a processor is
+            // chosen and auto-approve a $0 membership.
+            if (strpos($membership, 'Subscription::quote($planId, $saleCode)') === false) {
+                $probs[] = 'the manual checkout must quote the code';
+            }
+            if (strpos($membership, 'SaleCode::isFree($quote[\'price\'])') === false) {
+                $probs[] = 'the manual checkout must detect a free membership';
+            }
+            if (strpos($membership, '$paymentChoice = $freeWithCode ? 0 :') === false) {
+                $probs[] = 'a free membership must not carry a payment processor';
+            }
+
+            // The card path must quote before charging and must never look up
+            // a sale code by the non-existent plan_id.
+            $btAt = strpos($membership, 'private function subscribeBraintree(');
+            $body = $btAt === false ? '' : substr($membership, $btAt, 9000);
+            if (strpos($body, 'Subscription::quote(') === false) {
+                $probs[] = 'the card checkout must quote the code before charging';
+            }
+            if (strpos($body, 'plan_id = ?') !== false && strpos($body, 'sale_codes WHERE code = ? AND plan_id = ?') !== false) {
+                $probs[] = 'sale_codes has no plan_id column - that lookup is what broke the card path';
+            }
+            if (strpos($body, 'SaleCode::redeem(') === false) {
+                $probs[] = 'the card path must redeem the one-use code';
+            }
+            if (strpos($body, 'cancelSubscription(') === false) {
+                $probs[] = 'a local failure after the card charge must cancel the orphaned subscription';
+            }
+
+            return $probs === []
+                ? $ok('a free code never reaches a card and both paths quote it identically')
+                : $bad(implode('; ', $probs));
+        });
+
+        $add('smoke.money.gift_flow', 'Smoke · Money', 'A gift is one payment, one single-use code, and the plan sets the price', static function () use ($root, $read, $ok, $bad): array {
+            // A gift reuses the sale-code mechanism: the code IS the gift.
+            // The price must come from the PLAN (never the form), and one
+            // purchase must never mint two codes.
+            $schema   = (string) $read($root . '/schema.sql');
+            $routes   = (string) $read($root . '/config/routes.php');
+            $purchase = (string) $read($root . '/app/Models/Purchase.php');
+            $saleCode = (string) $read($root . '/app/Models/SaleCode.php');
+            $gift     = (string) $read($root . '/app/Models/Gift.php');
+            $ctrl     = (string) $read($root . '/app/Controllers/PurchaseController.php');
+            $partial  = (string) $read($root . '/views/partials/card_checkout.php');
+            $viewFile = $root . '/views/membership/gifts.php';
+            $probs    = [];
+
+            if (!is_file($root . '/database/migrations/100_gifts.sql')) {
+                $probs[] = 'the gifts migration must exist';
+            }
+            if (strpos($schema, "ENUM('gallery','tip','gift')") === false) {
+                $probs[] = 'purchases must carry the gift item type';
+            }
+            if (strpos($schema, 'uq_sale_codes_gift_purchase') === false) {
+                $probs[] = 'one purchase must be able to mint only one code (the unique key)';
+            }
+            if (strpos($purchase, 'public const TYPE_GIFT') === false) {
+                $probs[] = 'Purchase must name the gift type';
+            }
+            if (strpos($saleCode, 'public static function createGift(') === false) {
+                $probs[] = 'SaleCode must be able to issue a gift code';
+            }
+            if (strpos($gift, 'public static function ensureCode(') === false
+                || strpos($gift, 'public static function forPurchaser(') === false) {
+                $probs[] = 'Gift must issue codes lazily and list a purchaser\'s gifts';
+            }
+            if (strpos($gift, 'gift_purchase_id') === false) {
+                $probs[] = 'the code must be tied to its purchase';
+            }
+
+            foreach ([
+                "['GET', '/membership/gifts'",
+                "['POST', '/gift/live'",
+                "['POST', '/gift/request'",
+            ] as $route) {
+                if (strpos($routes, $route) === false) {
+                    $probs[] = 'missing route: ' . $route;
+                }
+            }
+
+            $at = strpos($ctrl, 'public function giftLive(');
+            $body = $at === false ? '' : substr($ctrl, $at, 3500);
+            if (strpos($body, "\$plan['price']") === false || strpos($body, "post('amount'") !== false) {
+                $probs[] = 'the gift price must come from the plan, never from the request';
+            }
+            if (strpos($body, 'Purchase::TYPE_GIFT') === false) {
+                $probs[] = 'the charge must be recorded as a gift';
+            }
+
+            if (!is_file($viewFile)) {
+                $probs[] = 'the gifts page must exist';
+            } else {
+                $view = (string) $read($viewFile);
+                if (strpos($view, 'card_checkout.php') === false) {
+                    $probs[] = 'the gift page must offer the shared card/PayPal checkout';
+                }
+                if (strpos($view, "data-copy=") === false) {
+                    $probs[] = 'the buyer must be able to copy the code';
+                }
+            }
+
+            // A PayPal gift carries the plan in a hidden field, and the
+            // PayPal button must send the whole form or the plan is lost.
+            if (strpos($partial, 'ccExtraFields') === false) {
+                $probs[] = 'the checkout partial must accept extra hidden fields';
+            }
+            if (strpos($partial, 'new FormData(form)') === false) {
+                $probs[] = 'the PayPal button must serialise the form (a PayPal tip used to arrive with no amount)';
+            }
+
+            return $probs === []
+                ? $ok('a gift charges the plan price once and issues one single-use code')
+                : $bad(implode('; ', $probs));
+        });
+
         $add('smoke.ops.rate_limiter_sharded', 'Smoke · Ops', 'The rate limiter does not serialise every request on one lock', static function () use ($root, $read, $ok, $bad): array {
             // The limiter's state used to live in ONE file that every
             // rate-limited request locked exclusively, read, changed and

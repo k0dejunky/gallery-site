@@ -47,11 +47,15 @@
             <small>Of which tips</small>
             <b>$<?= number_format($oneOff['tip'], 2) ?></b>
         </div>
+        <div class="stat-card kpi">
+            <small>Of which gifts</small>
+            <b>$<?= number_format($oneOff['gift'] ?? 0, 2) ?></b>
+        </div>
         <?php if (($oneOff['offline'] ?? 0) > 0): ?>
         <div class="stat-card kpi">
-            <small>Offline tips (not collected)</small>
+            <small>Offline (not collected)</small>
             <b>$<?= number_format($oneOff['offline'], 2) ?></b>
-            <small>Posted by members. No money moved, so they are not in the revenue above.</small>
+            <small>Recorded by members or taken outside the site. No money moved here, so they are not in the revenue above.</small>
         </div>
         <?php endif; ?>
     </div>
@@ -67,13 +71,14 @@
         <?= admin_empty('trend', 'No one-off revenue', 'PPV unlocks and tips land here once a member pays.') ?>
     <?php else: ?>
         <table>
-            <thead><tr><th>Month</th><th class="num">PPV unlocks</th><th class="num">Tips</th><th class="num">Total</th></tr></thead>
+            <thead><tr><th>Month</th><th class="num">PPV unlocks</th><th class="num">Tips</th><th class="num">Gifts</th><th class="num">Total</th></tr></thead>
             <tbody>
                 <?php foreach ($series as $ym => $row): ?>
                     <tr>
                         <td><?= e($ym) ?></td>
                         <td class="num">$<?= number_format($row['gallery'], 2) ?></td>
                         <td class="num">$<?= number_format($row['tip'], 2) ?></td>
+                        <td class="num">$<?= number_format($row['gift'] ?? 0, 2) ?></td>
                         <td class="num"><strong>$<?= number_format($row['total'], 2) ?></strong></td>
                     </tr>
                 <?php endforeach; ?>

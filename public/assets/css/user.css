@@ -1725,3 +1725,10 @@ body:not(.admin-theme) .settings-card-accent{border-left:4px solid var(--btn-bg)
         scroll-behavior: auto !important;
     }
 }
+
+/* Gifts (views/membership/gifts.php): the plans sit side by side and stack
+   on a phone; the checkout block is pushed to the bottom of its card so the
+   buttons line up across cards of different heights. */
+.gift-shop{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1rem 0;}
+.gift-plan{display:flex;flex-direction:column;}
+.gift-plan .cc-block{margin-top:auto;}

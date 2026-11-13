@@ -15,6 +15,10 @@
         <div class="muted">Tips recorded</div>
         <div style="font-size:1.6rem;">$<?= e(number_format((float) $tipsTotal, 2)) ?></div>
     </div>
+    <div style="border:1px solid var(--card-border,#ddd);border-radius:8px;padding:1rem;background:var(--card-bg,#fff);">
+        <div class="muted">Gift revenue</div>
+        <div style="font-size:1.6rem;">$<?= e(number_format((float) ($giftTotal ?? 0), 2)) ?></div>
+    </div>
 </div>
 
 <p class="muted" style="margin-top:-.75rem;">
@@ -137,6 +141,8 @@ $openRefunds = array_values(array_filter($refundRequests, static function (array
                     <td class="u-pad-04-05">
                         <?php if ($purchase['item_type'] === 'gallery'): ?>
                             <a href="<?= url('/galleries/' . (int) $purchase['item_id']) ?>" target="_blank" rel="noopener"><?= e((string) ($purchase['gallery_title'] ?? ('#' . $purchase['item_id']))) ?></a>
+                        <?php elseif ($purchase['item_type'] === 'gift'): ?>
+                            Gift &mdash; <?= e((string) ($purchase['plan_name'] ?? ('Plan #' . (int) $purchase['item_id']))) ?>
                         <?php else: ?>
                             <?= e(mb_substr((string) ($purchase['note'] ?? ''), 0, 80)) ?>
                         <?php endif; ?>

@@ -180,6 +180,48 @@ class Subscription
     }
 
     /**
+     * What a plan costs, with an optional sale code, without creating
+     * anything.
+     *
+     * ONE place for the math: the plan price, the active sale and the code's
+     * discount/upgrade. Both checkout paths use it, so a code cannot mean one
+     * price on the manual path and another on the card path.
+     *
+     * @return array{price: float, level: int, sale: ?array, sale_code: ?array}
+     */
+    public static function quote(int $planId, ?string $code = null): array
+    {
+        $plan = Plan::find($planId);
+        if ($plan === null) {
+            throw new \RuntimeException('That plan is not available.');
+        }
+
+        $sale     = Sale::activeForPlan($planId);
+        $saleCode = null;
+
+        if ($code !== null && trim($code) !== '') {
+            $saleCode = SaleCode::findValid($code, $planId);
+            if ($saleCode === null) {
+                throw new \RuntimeException('That sale code is invalid, expired, or used up.');
+            }
+            if (!empty($saleCode['sale_id'])) {
+                $sale = Sale::find((int) $saleCode['sale_id']) ?: $sale;
+            }
+        }
+
+        $price = $sale !== null ? (float) $sale['sale_price'] : (float) $plan['price'];
+        $level = (int) ($plan['level'] ?? Plan::SILVER_LEVEL);
+
+        if ($saleCode !== null) {
+            $applied = SaleCode::apply($saleCode, $price, $level);
+            $price   = $applied['price'];
+            $level   = $applied['level'];
+        }
+
+        return ['price' => $price, 'level' => $level, 'sale' => $sale, 'sale_code' => $saleCode];
+    }
+
+    /**
      * Create a subscription request. Payments are manual/placeholder, so new
      * subscriptions start as "pending" until an admin approves them. When a
      * payment processor was selected at checkout, its id and a transaction
@@ -221,13 +263,9 @@ class Subscription
             $price = $sale !== null ? (float) $sale['sale_price'] : (float) $plan['price'];
             $accessLevel = (int) ($plan['level'] ?? Plan::SILVER_LEVEL);
             if ($saleCode !== null) {
-                if ($saleCode['discount_type'] === 'percent') {
-                    $price -= $price * ((float) $saleCode['discount_value'] / 100);
-                } elseif ($saleCode['discount_type'] === 'fixed') {
-                    $price -= (float) $saleCode['discount_value'];
-                }
-                $price = max(0, round($price, 2));
-                $accessLevel = max($accessLevel, (int) ($saleCode['upgrade_level'] ?? 0));
+                $quote = SaleCode::apply($saleCode, $price, $accessLevel);
+                $price = $quote['price'];
+                $accessLevel = $quote['level'];
             }
             Database::run(
                 'INSERT INTO subscriptions (user_id, plan_id, status, sale_id, sale_code_id, price_paid, access_level, payment_processor_id, transaction_ref, created_at, updated_at)

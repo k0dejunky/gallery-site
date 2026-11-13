@@ -70,11 +70,11 @@ check that locks it in travels in the same commit).
 | 7 | The heavy admin pages | **done, except the incremental aggregator** | `b73b21f`, `208fa09`, `61ea184` |
 | 8 | The cache and the queries | **done, except the N+1s in the media path** | `91d9f8b`, `b73b21f` |
 | 9 | Discoverability | **done** | `c0137e7`, `61ea184` |
-| 10 | The member-facing money | **done except 10.4 pause / 10.5 dunning / 10.7 gift** (10.9, 10.12 dropped by the 2026-10-22 decisions) | `dd44c63`, `288b61b`, `561bcd8`, `this commit` |
+| 10 | The member-facing money | **done except 10.4 pause / 10.5 dunning** (10.9, 10.12 dropped by the 2026-10-22 decisions) | `dd44c63`, `288b61b`, `561bcd8`, `this commit` |
 | 11 | Ops hardening | **done** | `c5ddb22`, `751b30a`, `cd781f9`, `5884577`, `37cdb53`, `3f339b8`, `backup_offsite_package.php` |
 | 12 | The operator app, rebuilt | **done** | `40b4039`, `57ba5ff`, `ffa5db8` |
 | 13 | The last hard edges | **done** (13.2 stays partial on purpose) | `this commit` |
-| 14 | The member money, final scope | **14b.2 done; 14a.4 / 14b.1 / 14c planned** | `this commit` |
+| 14 | The member money, final scope | **14b.2 and 14c.1 done; 14a.4 / 14b.1 planned** | `this commit` |
 | Final | local smoke/unit -> dev -> prod verify -> commit + push | **done for phases 1-9 and 12** | - |
 
 ### The last sweep (2026-10-21, after phase 12)
@@ -103,6 +103,11 @@ was closed:
 | what | the finding | commit |
 |---|---|---|
 | A chargeback stayed `paid` | the money was in dispute, but the purchase counted as revenue and the member kept the unlock; `purchase_events` reserved the name `chargeback` and nothing wrote it | `this commit` |
+| The card checkout charged the full price on a sale code, then failed to write the local row | it looked the code up by a `sale_codes.plan_id` column that does not exist, AFTER Braintree had already created the subscription: the member was billed with no access | `this commit` |
+| A 100%-off code still required a card | and a free membership sat pending for an admin | `this commit` |
+| Gifts did not exist | a member can now buy a plan as a gift; one payment issues one single-use code, the recipient redeems it at checkout for a $0 membership | `this commit` |
+| `totalsBetween` overwrote a bucket when two gateways had sales | it assigned per (type, gateway) row; braintree and paypal sales of the same type left only one counted | `this commit` |
+| The PayPal button on the shared checkout sent only `_token` + `provider` | a PayPal tip arrived with no amount | `this commit` |
 | 6.5, 7.1, 7.2, 8.3, 11.3-11.6 marked pending although done | verified against the tree (rendition drain, `DiskUsage`, cached schema read, Redis cap, nonce CSP, title-image route, `scripts/restore-drill.sh`, encrypted secrets package) and the table updated | - |
 
 The dispute state is `disputed`: it grants nothing (every access check asks
@@ -113,9 +118,10 @@ second refund would send the money twice). The smoke check
 `smoke.money.dispute_state` and the suite test `db.purchase_dispute_cycle`
 both bite when the state is put back.
 
-Smoke is **1109** checks locally and on dev (prod deliberately keeps its
-older `SmokeChecks.php`, so it stays at **1072**); the differences are the
-member-side checks prod's copy predates.
+Smoke is **1114** checks locally and on dev (prod deliberately keeps its
+older `SmokeChecks.php`, so it stays at **1072**); the difference is the
+member-side checks prod's copy predates. The local suite is **1211** tests,
+all passing.
 
 ### Phase 12 - the operator app, rebuilt (2026-10-21)
 
@@ -424,7 +430,7 @@ The PPV/tip/unlock surface stays dormant. This phase is about the
 | 10.4 | A membership pause / freeze | pending | - |
 | 10.5 | A dunning ladder the site owns | pending | - |
 | 10.6 | A chargeback / dispute state | done - `disputed` is a purchase state of its own: it grants nothing, stops counting as revenue, and only a won dispute restores it | `this commit` |
-| 10.7 | A gift purchase | pending | - |
+| 10.7 | A gift purchase | done - a one-off purchase of a plan issues a single-use 100%-off code; the recipient redeems it at checkout and the membership starts at $0 | `this commit` |
 | 10.8 | Receipt numbering | done - `INV-P####` / `INV-M####` from the immutable row id. Tax is not itemised: the site charges one amount per plan and nowhere computes tax | `dd44c63` |
 | 10.9 | Payout processing - the earnings page says outright that it does not ship | pending | - |
 | 10.10 | The level numbering: the yearly plan is level 9 and lifetime is 10, but **no gallery exceeds level 3** | done - labels, not data: 3+ reads Platinum, so a member never sees "level 9" | `561bcd8` |
@@ -639,7 +645,7 @@ close **removed** rather than left hanging:
 
 | id | what | where it starts from |
 |---|---|---|
-| 14c.1 | A **member-facing gift purchase**, built on the mechanism that already exists: a sale code (`SaleCode::generate()`) pinned to a plan, 100 % off, one use. The member buys the plan as a gift, the site issues the code, the recipient redeems it at checkout through the existing `sale_code` field, and the member sees "gifts I sent" with each code's state. **No new recipient entity, no delivery token, no redemption audit** - the sale code IS the token, and the redemption is already recorded on the subscription (`sale_code_id`) and in the audit log | `SaleCode.php:48-70`, `MembershipController.php:364` and `:599-612` |
+| 14c.1 | A **member-facing gift purchase**, built on the mechanism that already exists: a sale code (`SaleCode::generate()`) pinned to a plan, 100 % off, one use. The member buys the plan as a gift, the site issues the code, the recipient redeems it at checkout through the existing `sale_code` field, and the member sees "gifts I sent" with each code's state. **No new recipient entity, no delivery token, no redemption audit** - the sale code IS the token, and the redemption is already recorded on the subscription (`sale_code_id`) and in the audit log | **done** - `/membership/gifts`, card/PayPal via the shared one-off checkout or a request the admin settles in the ledger; `Gift::ensureCode()` issues one code per paid purchase (the unique key on `gift_purchase_id`), and `db.gift_cycle` proves the whole loop | `this commit` |
 
 ---
 
@@ -651,7 +657,8 @@ restore the fix. A check that has never failed is not a check.
 `smoke.housekeeping.columns_exist` (every column a housekeeping query
 names must exist in the real schema) · `smoke.housekeeping.isolated` (one
 step cannot abort the rest) · `smoke.braintree.can_cancel` ·
-`smoke.money.ledger` · `smoke.money.dispute_state` · `smoke.access.one_predicate` ·
+`smoke.money.ledger` · `smoke.money.dispute_state` · `smoke.money.free_code_skips_the_card` ·
+`smoke.money.gift_flow` · `smoke.access.one_predicate` ·
 `smoke.access.browse_filtered` · `smoke.access.share_link` ·
 `smoke.live.no_stream_key_for_members` ·
 `smoke.live.publish_secret_reaches_mediamtx` (the real url builder run
