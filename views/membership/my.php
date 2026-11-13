@@ -3,6 +3,8 @@ $title = 'My Membership';
 // The fragment renders before layout.php, so $user must come from the
 // controller's view data (MembershipController@my passes it).
 $user = $user ?? \App\Core\Auth::user();
+$pausedSub  = $pausedSub ?? null;
+$pauseBlock = $pauseBlock ?? null;
 ?>
 <?php $pendingSub = $pendingSub ?? null; ?>
 
@@ -21,7 +23,7 @@ $user = $user ?? \App\Core\Auth::user();
                      : 'No active access' ?>
              </p>
              <p><strong>Membership type:</strong>
-            <?= $activeSub !== null ? e($activeSub['plan_name']) : 'None' ?>
+            <?= $activeSub !== null ? e($activeSub['plan_name']) : ($pausedSub !== null ? e($pausedSub['plan_name']) . ' (paused)' : 'None') ?>
         </p>
     </div>
 
@@ -64,6 +66,42 @@ $user = $user ?? \App\Core\Auth::user();
                 <button type="submit" class="btn btn-sm btn-danger">Cancel membership</button>
             </form>
         </div>
+
+        <?php // A pause is offered only where the SITE owns the billing. A
+              // card/PayPal membership would keep being charged, so it gets
+              // the explanation instead of a button. ?>
+        <?php if ($pauseBlock === null): ?>
+        <div class="card" id="pause-membership">
+            <h2>Take a break</h2>
+            <p>
+                Pause your membership for a while. You keep every paid day: the expiry moves back by the
+                whole pause, and you can resume early at any time (the unused days are then taken back
+                off the expiry).
+            </p>
+            <p class="muted">There is no gallery access while the membership is paused.</p>
+            <form class="inline" method="post" action="<?= url('/membership/pause') ?>">
+                <?= csrf_field() ?>
+                <label for="pause-days" class="muted">Pause for</label>
+                <select name="days" id="pause-days" style="width:auto;">
+                    <option value="7">7 days</option>
+                    <option value="14" selected>14 days</option>
+                    <option value="30">30 days</option>
+                </select>
+                <button type="submit" class="btn btn-sm">Pause membership</button>
+            </form>
+        </div>
+        <?php elseif ($pauseBlock === 'gateway'): ?>
+        <div class="card" id="pause-membership">
+            <h2>Pausing a card membership</h2>
+            <p class="muted" style="margin-bottom:0;">
+                Your membership is billed by your card or PayPal. The processor owns the billing
+                schedule, so a pause here would stop your access while the charges continued.
+                Use <strong>Cancel membership</strong> above instead: your access stays available
+                through the period you have already paid for, and the processor is told to stop
+                the next charge.
+            </p>
+        </div>
+        <?php endif; ?>
 
         <?php // The card on a card-billed membership. A past-due one MUST be
               // fixable (the dunning email links here), and an active one
@@ -135,6 +173,30 @@ $user = $user ?? \App\Core\Auth::user();
             <?php endif; ?>
         </div>
         <?php endif; ?>
+    <?php elseif ($pausedSub !== null): ?>
+        <div class="card" id="paused-membership">
+            <h2>Your membership is paused</h2>
+            <p>
+                <strong><?= e((string) $pausedSub['plan_name']) ?></strong> is paused until
+                <strong><?= e(tzdate('F j, Y', (string) $pausedSub['paused_until'])) ?></strong>.
+            </p>
+            <p class="muted">
+                You have no gallery access while it is paused. Your expiry already moved back by the
+                pause, so no paid days are lost. Resume early and the unused part of the pause is taken
+                back off the expiry.
+            </p>
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;">
+                <form class="inline" method="post" action="<?= url('/membership/resume') ?>">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="btn btn-sm">Resume now</button>
+                </form>
+                <form class="inline" method="post" action="<?= url('/membership/cancel') ?>"
+                      data-confirm="Cancel your membership? The pause ends, your remaining paid days are available, and then the membership ends.">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="btn btn-sm btn-danger">Cancel membership</button>
+                </form>
+            </div>
+        </div>
     <?php elseif ($pendingSub !== null): ?>
         <div class="card">
             <h2>Pending approval</h2>

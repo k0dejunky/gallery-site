@@ -143,6 +143,10 @@ class MembershipController extends Controller
         $user      = Auth::user();
         $userId    = (int) $user['id'];
         $activeSub = Subscription::activeFor($userId);
+        // A pause is not an active subscription (the access predicates
+        // exclude it), but the page still has to show it and its Resume.
+        $pausedSub = Subscription::pausedFor($userId);
+        $pauseBlock = $activeSub !== null ? Subscription::pauseBlockReason($activeSub) : null;
 
         // A past-due membership needs a way to fix the card, so the page
         // needs the Braintree client token for the hosted fields. The SAME
@@ -189,6 +193,8 @@ class MembershipController extends Controller
             'subscriptions' => Subscription::forUser($userId),
             'hasActive'     => $activeSub !== null,
             'activeSub'     => $activeSub,
+            'pausedSub'     => $pausedSub,
+            'pauseBlock'    => $pauseBlock,
             'pendingSub'    => Subscription::pendingFor($userId),
             'pastDueSub'    => $pastDueSub,
             'cardSub'       => $cardSub,
@@ -507,17 +513,86 @@ class MembershipController extends Controller
         Auth::requireLogin();
 
         $userId = (int) Auth::user()['id'];
-        $active = Subscription::activeFor($userId);
+        // A paused membership has no ACCESS, but the member must still be
+        // able to end it. Resume first so the remaining paid term is what
+        // the cancellation keeps, not a still-paused clock.
+        $active = Subscription::activeFor($userId) ?? Subscription::pausedFor($userId);
 
         if ($active === null) {
             $this->flash('error', 'You do not have an active membership to cancel.');
             $this->redirect('/membership/my');
+            return;
+        }
+
+        if (Subscription::pausedFor($userId) !== null) {
+            Subscription::resume((int) $active['id']);
         }
 
         Subscription::cancel((int) $active['id']);
         AuditLog::record($userId, 'update', 'subscription', (int) $active['id'], 'Cancelled membership', null, ['plan_id' => (int) $active['plan_id']]);
 
         $this->flash('success', 'Your membership has been cancelled.');
+        $this->redirect('/membership/my');
+    }
+
+    /**
+     * POST /membership/pause
+     *
+     * Pause a membership the SITE bills. A card/PayPal membership is refused
+     * with the reason: its processor keeps charging, so a local pause would
+     * take the access and leave the charge.
+     */
+    public function pause(): void
+    {
+        Auth::requireLogin();
+
+        $userId = (int) Auth::user()['id'];
+        $sub    = Subscription::activeFor($userId) ?? Subscription::pausedFor($userId);
+
+        if ($sub === null) {
+            $this->flash('error', 'You do not have a membership to pause.');
+            $this->redirect('/membership/my');
+            return;
+        }
+
+        $days = (int) $this->request->post('days', 14);
+        $result = Subscription::pause((int) $sub['id'], $days);
+
+        if (!$result['ok']) {
+            $this->flash('error', Subscription::pauseReasonLabel((string) $result['reason']));
+            $this->redirect('/membership/my');
+            return;
+        }
+
+        AuditLog::record($userId, 'update', 'subscription', (int) $sub['id'], 'Paused membership for ' . (int) $result['days'] . ' days', null, ['plan_id' => (int) $sub['plan_id']]);
+
+        $this->flash('success', 'Your membership is paused for ' . (int) $result['days'] . ' days. You are not being billed by the site, and your expiry has moved back by the same amount.');
+        $this->redirect('/membership/my');
+    }
+
+    /**
+     * POST /membership/resume
+     *
+     * End a pause early. The unused part of the pause comes back off the
+     * expiry, so resuming never grants bonus time.
+     */
+    public function resume(): void
+    {
+        Auth::requireLogin();
+
+        $userId = (int) Auth::user()['id'];
+        $paused = Subscription::pausedFor($userId);
+
+        if ($paused === null) {
+            $this->flash('error', 'Your membership is not paused.');
+            $this->redirect('/membership/my');
+            return;
+        }
+
+        Subscription::resume((int) $paused['id']);
+        AuditLog::record($userId, 'update', 'subscription', (int) $paused['id'], 'Resumed a paused membership', null, ['plan_id' => (int) $paused['plan_id']]);
+
+        $this->flash('success', 'Welcome back. Your membership is active again and you keep every day you had left.');
         $this->redirect('/membership/my');
     }
 

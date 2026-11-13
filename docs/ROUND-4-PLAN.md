@@ -70,11 +70,11 @@ check that locks it in travels in the same commit).
 | 7 | The heavy admin pages | **done, except the incremental aggregator** | `b73b21f`, `208fa09`, `61ea184` |
 | 8 | The cache and the queries | **done, except the N+1s in the media path** | `91d9f8b`, `b73b21f` |
 | 9 | Discoverability | **done** | `c0137e7`, `61ea184` |
-| 10 | The member-facing money | **done except 10.4 pause / 10.5 dunning** (10.9, 10.12 dropped by the 2026-10-22 decisions) | `dd44c63`, `288b61b`, `561bcd8`, `this commit` |
+| 10 | The member-facing money | **done except 10.5 dunning** (10.9, 10.12 dropped by the 2026-10-22 decisions) | `dd44c63`, `288b61b`, `561bcd8`, `this commit` |
 | 11 | Ops hardening | **done** | `c5ddb22`, `751b30a`, `cd781f9`, `5884577`, `37cdb53`, `3f339b8`, `backup_offsite_package.php` |
 | 12 | The operator app, rebuilt | **done** | `40b4039`, `57ba5ff`, `ffa5db8` |
 | 13 | The last hard edges | **done** (13.2 stays partial on purpose) | `this commit` |
-| 14 | The member money, final scope | **14b.2 and 14c.1 done; 14a.4 / 14b.1 planned** | `this commit` |
+| 14 | The member money, final scope | **14a.4, 14b.2 and 14c.1 done; 14b.1 planned** | `this commit` |
 | Final | local smoke/unit -> dev -> prod verify -> commit + push | **done for phases 1-9 and 12** | - |
 
 ### The last sweep (2026-10-21, after phase 12)
@@ -106,6 +106,7 @@ was closed:
 | The card checkout charged the full price on a sale code, then failed to write the local row | it looked the code up by a `sale_codes.plan_id` column that does not exist, AFTER Braintree had already created the subscription: the member was billed with no access | `this commit` |
 | A 100%-off code still required a card | and a free membership sat pending for an admin | `this commit` |
 | Gifts did not exist | a member can now buy a plan as a gift; one payment issues one single-use code, the recipient redeems it at checkout for a $0 membership | `this commit` |
+| A membership could not be paused | and a naive pause would have stopped access while a card/PayPal charge continued; manual memberships now pause with their paid days kept, and processor-billed ones are refused with the reason | `this commit` |
 | `totalsBetween` overwrote a bucket when two gateways had sales | it assigned per (type, gateway) row; braintree and paypal sales of the same type left only one counted | `this commit` |
 | The PayPal button on the shared checkout sent only `_token` + `provider` | a PayPal tip arrived with no amount | `this commit` |
 | 6.5, 7.1, 7.2, 8.3, 11.3-11.6 marked pending although done | verified against the tree (rendition drain, `DiskUsage`, cached schema read, Redis cap, nonce CSP, title-image route, `scripts/restore-drill.sh`, encrypted secrets package) and the table updated | - |
@@ -118,9 +119,9 @@ second refund would send the money twice). The smoke check
 `smoke.money.dispute_state` and the suite test `db.purchase_dispute_cycle`
 both bite when the state is put back.
 
-Smoke is **1114** checks locally and on dev (prod deliberately keeps its
-older `SmokeChecks.php`, so it stays at **1072**); the difference is the
-member-side checks prod's copy predates. The local suite is **1211** tests,
+Smoke is **1117** checks locally and on dev (prod deliberately keeps its
+older `SmokeChecks.php`, so it stays below that); the difference is the
+member-side checks prod's copy predates. The local suite is **1215** tests,
 all passing.
 
 ### Phase 12 - the operator app, rebuilt (2026-10-21)
@@ -427,7 +428,7 @@ The PPV/tip/unlock surface stays dormant. This phase is about the
 | 10.1 | A member-facing refund request | done - tied to one charge, one open request, refunds at the processor before approval | `dd44c63` |
 | 10.2 | An invoice / receipt (the member can see their charges at all) | done - a view over subscriptions + purchases, `INV-P`/`INV-M` numbers | `dd44c63` |
 | 10.3 | A card update | done - the same hosted-fields form now serves an ACTIVE card membership, not only a past-due one | `288b61b` |
-| 10.4 | A membership pause / freeze | pending | - |
+| 10.4 | A membership pause / freeze | done - the site bills manual/comped memberships, so those can pause: access stops, the expiry moves back by the pause, and resuming early takes the unused part back. A card/PayPal membership is REFUSED with the reason (the processor would keep charging) | `this commit` |
 | 10.5 | A dunning ladder the site owns | pending | - |
 | 10.6 | A chargeback / dispute state | done - `disputed` is a purchase state of its own: it grants nothing, stops counting as revenue, and only a won dispute restores it | `this commit` |
 | 10.7 | A gift purchase | done - a one-off purchase of a plan issues a single-use 100%-off code; the recipient redeems it at checkout and the membership starts at $0 | `this commit` |
@@ -632,7 +633,7 @@ close **removed** rather than left hanging:
 | 14a.1 | An **invoice list** with a receipt number: the charges, the amount, the date, the gateway, the status and the ledger events. The receipt number is `INV-<purchase id>` - deterministic, no sequence table | reuse `ExportController.php:27-43`'s query shape (`purchases` joined to `users` and `galleries`) with `WHERE p.user_id = ?` instead of the date window |
 | 14a.2 | A **refund request**: the member asks, the admin approves or declines, approval calls the existing `Purchase::refundAtGateway()` and appends the ledger event | `Purchase.php:218-271`; the request state rides in `purchase_events` (append-only, free `event` column) rather than a new table |
 | 14a.3 | A **card update for an active subscription**. The form and the controller already work - the only thing gating it is `status = 'past_due'` (`MembershipController.php:135`). The other three blockers (a `BT-` `transaction_ref`, a Braintree processor, a client token) apply equally to an active subscription | `MembershipController.php:121-170` and `:236-308`. NOTE: the vaulted `payment_method_token` is **not stored locally**, so "which card is on my membership" needs a column - only added if that is wanted |
-| 14a.4 | A **membership pause**: the expiry clock stops. A `paused_until` column beside the existing `PAST_DUE_GRACE_DAYS` mechanism, the access predicates exclude a paused subscription, and the expiry shifts by the paused duration. The status enum is **not** touched (no `ALTER ... ENUM`) | `Subscription.php:21-44` |
+| 14a.4 | A **membership pause**: the expiry clock stops. A `paused_until` column beside the existing `PAST_DUE_GRACE_DAYS` mechanism, the access predicates exclude a paused subscription, and the expiry shifts by the paused duration. The status enum is **not** touched (no `ALTER ... ENUM`) | **done** - `paused_at`/`paused_until` (migration 101), both access predicates exclude a pause, `Subscription::pause()/resume()` do the date arithmetic in SQL, and `db.membership_pause_cycle` proves the paid days are kept. Card/PayPal memberships are refused (`gateway`) because their processor would keep charging | `this commit` |
 
 ### 14b - what the site owns
 
@@ -658,7 +659,7 @@ restore the fix. A check that has never failed is not a check.
 names must exist in the real schema) · `smoke.housekeeping.isolated` (one
 step cannot abort the rest) · `smoke.braintree.can_cancel` ·
 `smoke.money.ledger` · `smoke.money.dispute_state` · `smoke.money.free_code_skips_the_card` ·
-`smoke.money.gift_flow` · `smoke.access.one_predicate` ·
+`smoke.money.gift_flow` · `smoke.membership.pause_is_honest` · `smoke.access.one_predicate` ·
 `smoke.access.browse_filtered` · `smoke.access.share_link` ·
 `smoke.live.no_stream_key_for_members` ·
 `smoke.live.publish_secret_reaches_mediamtx` (the real url builder run

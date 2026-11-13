@@ -371,6 +371,11 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     plan_id     INT UNSIGNED NOT NULL,
     status      ENUM('pending', 'active', 'cancelled', 'expired', 'past_due') NOT NULL DEFAULT 'pending',
     past_due_at DATETIME NULL,
+    -- A pause is a property of the term, not a status: while paused_until is
+    -- in the future the access predicates exclude the row, and expires_at was
+    -- moved forward by the whole pause (see 101_subscription_pause.sql).
+    paused_at    DATETIME NULL DEFAULT NULL,
+    paused_until DATETIME NULL DEFAULT NULL,
     starts_at   DATETIME NULL,
     expires_at  DATETIME NULL,
     sale_id     INT UNSIGNED NULL,

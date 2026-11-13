@@ -483,6 +483,8 @@ return [
     ['POST', '/membership/refund-request/withdraw', 'MembershipController@withdrawRefund'],
     ['POST', '/membership/subscribe', 'MembershipController@subscribe'],
     ['POST', '/membership/cancel', 'MembershipController@cancel'],
+    ['POST', '/membership/pause', 'MembershipController@pause'],
+    ['POST', '/membership/resume', 'MembershipController@resume'],
     ['POST', '/membership/paypal-approve', 'MembershipController@paypalApprove'],
     ['GET', '/membership/checkout', 'MembershipController@braintreeCheckout'],
     ['GET', '/membership/braintree-token', 'MembershipController@braintreeToken'],

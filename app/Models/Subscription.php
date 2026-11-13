@@ -30,6 +30,9 @@ class Subscription
         return "($alias.status IN ('active', 'cancelled')"
             . " OR ($alias.status = 'past_due' AND $alias.past_due_at IS NOT NULL"
             . " AND $alias.past_due_at > DATE_SUB(NOW(), INTERVAL " . self::pastDueGraceDays() . " DAY)))"
+            // A pause is not a status: while paused_until is ahead the row
+            // grants nothing, whatever its status says.
+            . " AND ($alias.paused_until IS NULL OR $alias.paused_until <= CURRENT_TIMESTAMP)"
             . " AND ($alias.expires_at IS NULL OR $alias.expires_at > CURRENT_TIMESTAMP)";
     }
 
@@ -86,6 +89,7 @@ class Subscription
              JOIN plans p ON p.id = s.plan_id
              WHERE s.user_id = ?
                AND s.status IN (?, ?)
+               AND (s.paused_until IS NULL OR s.paused_until <= CURRENT_TIMESTAMP)
                AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
              ORDER BY s.id DESC
              LIMIT 1',
@@ -93,6 +97,168 @@ class Subscription
         )->fetch();
 
         return $row ?: null;
+    }
+
+    /**
+     * The member's subscription that is paused right now, or null.
+     *
+     * This exists because activeFor() must say "no access" while a pause is
+     * running, while the membership page still has to show the pause and its
+     * resume button.
+     */
+    public static function pausedFor(int $userId): ?array
+    {
+        $row = Database::run(
+            'SELECT s.*, p.name AS plan_name, p.billing_cycle AS billing_cycle,
+                    COALESCE(s.access_level, p.level) AS plan_level
+             FROM subscriptions s
+             JOIN plans p ON p.id = s.plan_id
+             WHERE s.user_id = ?
+               AND s.status = ?
+               AND s.paused_until IS NOT NULL
+               AND s.paused_until > CURRENT_TIMESTAMP
+             ORDER BY s.id DESC
+             LIMIT 1',
+            [$userId, 'active']
+        )->fetch();
+
+        return $row ?: null;
+    }
+
+    /**
+     * The longest a membership can be paused in one go.
+     */
+    public const PAUSE_MAX_DAYS = 30;
+
+    /**
+     * A membership this close to its expiry has nothing worth pausing.
+     */
+    public const PAUSE_MIN_REMAINING_DAYS = 1;
+
+    /**
+     * Why this subscription cannot be paused, or null when it can.
+     *
+     * Refusals are codes, not prose: the controller shows the label and the
+     * tests assert the code.
+     *
+     * @param array<string, mixed> $row
+     */
+    public static function pauseBlockReason(array $row): ?string
+    {
+        if ((string) ($row['status'] ?? '') !== 'active') {
+            return 'not_active';
+        }
+
+        $pausedUntil = $row['paused_until'] ?? null;
+        if ($pausedUntil !== null && $pausedUntil !== ''
+            && strtotime((string) $pausedUntil) > time()) {
+            return 'already';
+        }
+
+        // The processor owns the billing schedule for a card/PayPal
+        // membership. Pausing locally would revoke access while the card
+        // keeps being charged - the member would pay for nothing.
+        $ref = (string) ($row['transaction_ref'] ?? '');
+        if (strpos($ref, 'BT-') === 0 || strpos($ref, 'PAYPAL-') === 0) {
+            return 'gateway';
+        }
+
+        $expires = $row['expires_at'] ?? null;
+        if ($expires === null || $expires === '') {
+            return 'lifetime';
+        }
+
+        $ts = strtotime((string) $expires);
+        if ($ts === false || $ts <= time() + self::PAUSE_MIN_REMAINING_DAYS * 86400) {
+            return 'too_short';
+        }
+
+        return null;
+    }
+
+    public static function pauseReasonLabel(string $code): string
+    {
+        $labels = [
+            'missing'    => 'That membership no longer exists.',
+            'not_active' => 'Only an active membership can be paused.',
+            'already'    => 'This membership is already paused.',
+            'gateway'    => 'This membership is billed by your card or PayPal. The processor owns the billing schedule, so a pause here would stop your access while the charges continued. Cancel instead, or contact support.',
+            'lifetime'   => 'A lifetime membership has no expiry date to pause.',
+            'too_short'  => 'This membership has less than a day left, so there is nothing to pause.',
+        ];
+
+        return $labels[$code] ?? 'That membership cannot be paused.';
+    }
+
+    /**
+     * Pause a membership the site bills.
+     *
+     * The whole pause is added to expires_at at once and the access
+     * predicates exclude the row while paused_until is ahead, so the member
+     * keeps every paid day and no worker is needed to end the pause. All the
+     * time arithmetic happens in SQL: PHP's clock and the database session's
+     * clock are not the same on every installation (dev runs hours apart).
+     *
+     * @return array{ok: bool, reason: string, days?: int}
+     */
+    public static function pause(int $id, int $days): array
+    {
+        $row = Database::run(
+            'SELECT s.*, p.billing_cycle AS billing_cycle
+             FROM subscriptions s
+             JOIN plans p ON p.id = s.plan_id
+             WHERE s.id = ? LIMIT 1',
+            [$id]
+        )->fetch();
+
+        if ($row === false) {
+            return ['ok' => false, 'reason' => 'missing'];
+        }
+
+        $blocked = self::pauseBlockReason($row);
+        if ($blocked !== null) {
+            return ['ok' => false, 'reason' => $blocked];
+        }
+
+        $days = max(1, min(self::PAUSE_MAX_DAYS, $days));
+
+        $stmt = Database::run(
+            'UPDATE subscriptions
+             SET paused_at = NOW(),
+                 paused_until = DATE_ADD(NOW(), INTERVAL ? DAY),
+                 expires_at = DATE_ADD(expires_at, INTERVAL ? DAY),
+                 updated_at = NOW()
+             WHERE id = ? AND status = ?
+               AND (paused_until IS NULL OR paused_until <= NOW())',
+            [$days, $days, $id, 'active']
+        );
+
+        if ($stmt->rowCount() === 0) {
+            return ['ok' => false, 'reason' => 'already'];
+        }
+
+        return ['ok' => true, 'reason' => 'paused', 'days' => $days];
+    }
+
+    /**
+     * Resume a paused membership early: the UNUSED part of the pause is taken
+     * back off the expiry, so resuming never grants bonus time.
+     */
+    public static function resume(int $id): bool
+    {
+        $stmt = Database::run(
+            'UPDATE subscriptions
+             SET expires_at = DATE_SUB(expires_at,
+                     INTERVAL (GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(), paused_until))) SECOND),
+                 paused_at = NULL,
+                 paused_until = NULL,
+                 updated_at = NOW()
+             WHERE id = ? AND status = ?
+               AND paused_until IS NOT NULL AND paused_until > NOW()',
+            [$id, 'active']
+        );
+
+        return $stmt->rowCount() > 0;
     }
 
     /**
@@ -529,7 +695,8 @@ class Subscription
         Database::run(
             'UPDATE subscriptions
              SET status = ?, past_due_at = NULL, expires_at = ?, updated_at = CURRENT_TIMESTAMP,
-                 last_payment_ref = ?, periods_granted = periods_granted + 1
+                 last_payment_ref = ?, periods_granted = periods_granted + 1,
+                 paused_at = NULL, paused_until = NULL
              WHERE id = ? AND status <> ?',
             ['active', $expires, $paymentKey, $id, 'cancelled']
         );

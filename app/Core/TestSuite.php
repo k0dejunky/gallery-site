@@ -1835,6 +1835,111 @@ class TestSuite
             }
         });
 
+        $add('db.membership_pause_cycle', 'Database', 'a pause revokes access without losing a paid day, and a card membership cannot be paused', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix = bin2hex(random_bytes(4));
+                    $userId = self::scratchUserId('pause-' . $suffix);
+
+                    Database::run(
+                        "INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, level, active)
+                         VALUES (?, ?, 10.00, 'monthly', 'probe', 0, 1, 1)",
+                        ['PROBE pause ' . $suffix, 'probe-pause-' . $suffix]
+                    );
+                    $planId = (int) $pdo->lastInsertId();
+
+                    Database::run(
+                        "INSERT INTO subscriptions (user_id, plan_id, status, price_paid, access_level, expires_at, created_at, updated_at)
+                         VALUES (?, ?, 'active', 10.00, 1, DATE_ADD(NOW(), INTERVAL 30 DAY), NOW(), NOW())",
+                        [$userId, $planId]
+                    );
+                    $subId = (int) $pdo->lastInsertId();
+
+                    $beforeActive = \App\Models\Subscription::isActive($userId);
+                    $pause        = \App\Models\Subscription::pause($subId, 10);
+                    $pausedFor    = \App\Models\Subscription::pausedFor($userId);
+                    $duringActive = \App\Models\Subscription::isActive($userId);
+                    $activeFor    = \App\Models\Subscription::activeFor($userId);
+                    $again        = \App\Models\Subscription::pause($subId, 10);
+
+                    $remainingAfterPause = (int) Database::run(
+                        'SELECT TIMESTAMPDIFF(SECOND, NOW(), expires_at) FROM subscriptions WHERE id = ?',
+                        [$subId]
+                    )->fetchColumn();
+                    $pauseLeft = (int) Database::run(
+                        'SELECT TIMESTAMPDIFF(SECOND, NOW(), paused_until) FROM subscriptions WHERE id = ?',
+                        [$subId]
+                    )->fetchColumn();
+
+                    $resume      = \App\Models\Subscription::resume($subId);
+                    $afterActive = \App\Models\Subscription::isActive($userId);
+                    $remainingAfterResume = (int) Database::run(
+                        'SELECT TIMESTAMPDIFF(SECOND, NOW(), expires_at) FROM subscriptions WHERE id = ?',
+                        [$subId]
+                    )->fetchColumn();
+                    $cleared = (int) Database::run(
+                        'SELECT COUNT(*) FROM subscriptions WHERE id = ? AND paused_until IS NULL AND paused_at IS NULL',
+                        [$subId]
+                    )->fetchColumn();
+
+                    // A card/PayPal membership, a lifetime one and one that
+                    // ends in an hour are all refused, each with its reason.
+                    Database::run("UPDATE subscriptions SET transaction_ref = 'BT-probe' WHERE id = ?", [$subId]);
+                    $gateway = \App\Models\Subscription::pause($subId, 7);
+                    Database::run("UPDATE subscriptions SET transaction_ref = NULL, expires_at = NULL WHERE id = ?", [$subId]);
+                    $lifetime = \App\Models\Subscription::pause($subId, 7);
+                    Database::run("UPDATE subscriptions SET expires_at = DATE_ADD(NOW(), INTERVAL 1 HOUR) WHERE id = ?", [$subId]);
+                    $tooShort = \App\Models\Subscription::pause($subId, 7);
+
+                    $ok = $beforeActive
+                        && $pause['ok'] === true
+                        && $pausedFor !== null
+                        && !$duringActive
+                        && $activeFor === null
+                        && $again['reason'] === 'already'
+                        && abs($remainingAfterPause - (40 * 86400)) < 120
+                        && abs($pauseLeft - (10 * 86400)) < 120
+                        && $resume
+                        && $afterActive
+                        && abs($remainingAfterResume - (30 * 86400)) < 120
+                        && $cleared === 1
+                        && $gateway['reason'] === 'gateway'
+                        && $lifetime['reason'] === 'lifetime'
+                        && $tooShort['reason'] === 'too_short';
+
+                    return [
+                        'pass'   => $ok,
+                        'detail' => $ok
+                            ? 'a pause drops access while the expiry grows by the pause; resuming restores the exact remaining term and clears the pause; card, lifetime and nearly-over memberships are refused with their own reason'
+                            : json_encode([
+                                'beforeActive' => $beforeActive, 'pause' => $pause, 'pausedFor' => $pausedFor !== null,
+                                'duringActive' => $duringActive, 'activeFor' => $activeFor !== null,
+                                'again' => $again, 'remainingAfterPause' => $remainingAfterPause,
+                                'pauseLeft' => $pauseLeft, 'resume' => $resume, 'afterActive' => $afterActive,
+                                'remainingAfterResume' => $remainingAfterResume, 'cleared' => $cleared,
+                                'gateway' => $gateway, 'lifetime' => $lifetime, 'tooShort' => $tooShort,
+                            ]),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.gallery_nsfw_flag', 'Database', 'a safe-for-work gallery is open at any level and keeps its own level when it is adult', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

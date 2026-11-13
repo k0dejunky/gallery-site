@@ -4940,6 +4940,92 @@ class SmokeChecks
                 : $bad(implode('; ', $probs));
         });
 
+        $add('smoke.membership.pause_is_honest', 'Smoke · Membership', 'A pause stops access without losing a paid day, and it is never offered where the processor keeps billing', static function () use ($root, $read, $ok, $bad): array {
+            $schema   = (string) $read($root . '/schema.sql');
+            $routes   = (string) $read($root . '/config/routes.php');
+            $sub      = (string) $read($root . '/app/Models/Subscription.php');
+            $ctrl     = (string) $read($root . '/app/Controllers/MembershipController.php');
+            $view     = (string) $read($root . '/views/membership/my.php');
+            $probs    = [];
+
+            if (!is_file($root . '/database/migrations/101_subscription_pause.sql')) {
+                $probs[] = 'the pause migration must exist';
+            } else {
+                $migration = (string) $read($root . '/database/migrations/101_subscription_pause.sql');
+                if (strpos($migration, 'paused_until') === false) {
+                    $probs[] = 'the migration must add paused_until';
+                }
+                // The plan is explicit: no ALTER on the status enum.
+                if (strpos($migration, 'MODIFY COLUMN status') !== false || strpos($migration, 'ENUM(') !== false) {
+                    $probs[] = 'a pause is not a status: the enum must not be altered';
+                }
+            }
+            if (strpos($schema, 'paused_until') === false) {
+                $probs[] = 'schema.sql must carry paused_until';
+            }
+
+            // Access must exclude a paused row in BOTH predicates. Assert the
+            // SQL clause itself, not the word: a comment mentioning
+            // paused_until must not satisfy the check.
+            foreach ([
+                ['activeWhere', '$alias.paused_until'],
+                ['activeFor', 's.paused_until'],
+            ] as [$method, $clause]) {
+                $at = strpos($sub, 'public static function ' . $method . '(');
+                if ($at === false) {
+                    $probs[] = 'Subscription::' . $method . '() was not found';
+                    continue;
+                }
+                $end  = strpos($sub, "
+    }", $at);
+                $body = substr($sub, $at, ($end === false ? 1600 : $end - $at));
+                if (strpos($body, $clause) === false) {
+                    $probs[] = 'Subscription::' . $method . '() must exclude a paused subscription in its SQL';
+                }
+            }
+
+            foreach (['public static function pausedFor(', 'public static function pause(', 'public static function resume(', 'public static function pauseBlockReason('] as $needle) {
+                if (strpos($sub, $needle) === false) {
+                    $probs[] = 'Subscription is missing ' . $needle;
+                }
+            }
+            // The processor case is the whole reason the feature is safe.
+            if (strpos($sub, "strpos(\$ref, 'PAYPAL-') === 0") === false) {
+                $probs[] = 'a PayPal-billed membership must be refused';
+            }
+
+            foreach ([
+                "['POST', '/membership/pause'",
+                "['POST', '/membership/resume'",
+            ] as $route) {
+                if (strpos($routes, $route) === false) {
+                    $probs[] = 'missing route: ' . $route;
+                }
+            }
+
+            // The controller must act on the member's OWN subscription, not
+            // on an id posted by the form.
+            $pauseAt = strpos($ctrl, 'public function pause(');
+            $pauseBody = $pauseAt === false ? '' : substr($ctrl, $pauseAt, 1800);
+            if (strpos($pauseBody, "Subscription::pause((int) \$sub['id']") === false) {
+                $probs[] = 'the pause action must use the member\'s own subscription';
+            }
+            if (strpos($pauseBody, "post('subscription_id'") !== false) {
+                $probs[] = 'the pause action must never take a subscription id from the request';
+            }
+
+            if (strpos($view, '/membership/pause') === false || strpos($view, '/membership/resume') === false) {
+                $probs[] = 'the membership page must offer pause and resume';
+            }
+            if (stripos($view, 'charges continued') === false && stripos($view, 'billing schedule') === false) {
+                $probs[] = 'the page must explain why a card membership cannot be paused';
+            }
+
+            return $probs === []
+                ? $ok('a pause revokes access, keeps the paid days, and is refused for processor-billed memberships')
+                : $bad(implode('; ', $probs));
+        });
+
         $add('smoke.ops.rate_limiter_sharded', 'Smoke · Ops', 'The rate limiter does not serialise every request on one lock', static function () use ($root, $read, $ok, $bad): array {
             // The limiter's state used to live in ONE file that every
             // rate-limited request locked exclusively, read, changed and
