@@ -94,7 +94,8 @@ $canOperate = \App\Core\Auth::can('system_ops');
             <tr><th>Base model</th><td><?= e(\App\Core\ChatAi::BASE_MODEL) ?> — <?= $ai['base_ok'] ? '<span class="sys-ok">installed</span>' : '<span class="sys-bad">missing</span>' ?></td></tr>
             <tr><th>Fine-tuned model</th><td><?= $ai['fine_tuned'] ? e($ai['fine_tuned']) : '<span class="sys-bad">none installed</span>' ?>
                 <?php if ($ai['fine_tuned_healthy'] === true): ?><span class="sys-ok"> · healthy</span>
-                <?php elseif ($ai['fine_tuned_healthy'] === false): ?><span class="sys-bad"> · broken (chat uses base)</span><?php endif; ?>
+                <?php elseif ($ai['fine_tuned_healthy'] === false): ?><span class="sys-bad"> · broken (chat uses base)</span>
+                <?php else: ?><a href="<?= e(url('/admin/system') . '?ai_check=1') ?>" class="muted"> · run the model check</a><?php endif; ?>
             </td></tr>
             <tr><th>Models</th><td class="muted"><?= e(implode(', ', $ai['models']) ?: '—') ?></td></tr>
             <?php if (!empty($ai['finetuned_meta'])): ?>

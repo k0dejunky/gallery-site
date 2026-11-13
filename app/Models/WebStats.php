@@ -524,17 +524,51 @@ class WebStats
     {
         $allowed = ['entry_url', 'exit_url'];
         $column  = in_array($column, $allowed, true) ? $column : 'entry_url';
+        $limit   = max(1, min(500, $limit));
+        $table   = $column === 'entry_url' ? 'web_stats_entry_pages' : 'web_stats_exit_pages';
 
+        // Read the per-day rollup (60 rows for a two-month range) instead of
+        // grouping 474k sessions twice per page load.
         $rows = Database::run(
-            "SELECT {$column} AS url,
-                    COUNT(*) AS entries,
-                    COALESCE(AVG(duration_sec), 0) AS avg_duration,
-                    COUNT(DISTINCT ip) AS uniq_ips
-             FROM web_visits
-             WHERE day BETWEEN ? AND ? AND is_bot = 0 AND {$column} <> ''
-             GROUP BY {$column} ORDER BY entries DESC LIMIT " . max(1, min(500, $limit)),
+            "SELECT url,
+                    SUM(visits) AS entries,
+                    COALESCE(SUM(unique_ips), 0) AS unique_ips,
+                    COALESCE(SUM(duration_sec), 0) AS total_duration
+               FROM {$table}
+              WHERE day BETWEEN ? AND ? AND url <> ''
+              GROUP BY url ORDER BY entries DESC LIMIT {$limit}",
             [$from, $to]
         )->fetchAll() ?: [];
+
+        if ($rows === []) {
+            // No rollup for this range yet (a fresh install, or a window the
+            // aggregator has not covered). Fall back to the exact scan rather
+            // than showing an empty table.
+            $rows = Database::run(
+                "SELECT {$column} AS url,
+                        COUNT(*) AS entries,
+                        COALESCE(AVG(duration_sec), 0) AS avg_duration,
+                        COUNT(DISTINCT ip) AS uniq_ips
+                 FROM web_visits
+                 WHERE day BETWEEN ? AND ? AND is_bot = 0 AND {$column} <> ''
+                 GROUP BY {$column} ORDER BY entries DESC LIMIT {$limit}",
+                [$from, $to]
+            )->fetchAll() ?: [];
+
+            return array_map([self::class, 'shapeUrlRow'], $rows);
+        }
+
+        // unique_ips is the sum of the per-day distinct addresses, the same
+        // convention the path table already uses ("Visitors/day"), so a
+        // returning visitor counts once per day. Recomputing exact uniques for
+        // the top rows cost another ~330 ms per table for a number the UI
+        // already labels as per-day.
+        foreach ($rows as &$row) {
+            $entries = (int) $row['entries'];
+            $row['uniq_ips']     = (int) ($row['unique_ips'] ?? 0);
+            $row['avg_duration'] = $entries > 0 ? (int) round((float) $row['total_duration'] / $entries) : 0;
+        }
+        unset($row);
 
         return array_map([self::class, 'shapeUrlRow'], $rows);
     }
@@ -776,23 +810,30 @@ class WebStats
      */
     public static function visitQuality(string $from, string $to): array
     {
+        // One pass. The bounce count used to be a second full scan of the same
+        // range (547 ms total); a conditional SUM answers both in one go.
         $row = Database::run(
             'SELECT COUNT(*) AS visits,
-                    COUNT(DISTINCT ip) AS visitors,
                     COALESCE(AVG(duration_sec), 0) AS avg_duration,
                     COALESCE(AVG(pages), 0) AS avg_pages,
                     COALESCE(MAX(pages), 0) AS max_pages,
-                    COALESCE(AVG(bytes), 0) AS avg_bytes
+                    COALESCE(AVG(bytes), 0) AS avg_bytes,
+                    COALESCE(SUM(pages <= 1), 0) AS bounces
              FROM web_visits WHERE day BETWEEN ? AND ? AND is_bot = 0',
             [$from, $to]
         )->fetch() ?: [];
 
         $visits = (int) ($row['visits'] ?? 0);
-        $bounce = Database::run(
-            'SELECT COUNT(*) AS c FROM web_visits
-             WHERE day BETWEEN ? AND ? AND is_bot = 0 AND pages <= 1',
+        $bounce = ['c' => (int) ($row['bounces'] ?? 0)];
+
+        // Distinct visitors for the range: web_stats_ips already holds one row
+        // per address per day (45k rows for two months) where web_visits holds
+        // 474k sessions. COUNT(DISTINCT ip) over the sessions was 280 ms of
+        // this function; over the IP rollup it is a few milliseconds.
+        $row['visitors'] = (int) Database::run(
+            'SELECT COUNT(DISTINCT ip) FROM web_stats_ips WHERE day BETWEEN ? AND ? AND is_bot = 0',
             [$from, $to]
-        )->fetch();
+        )->fetchColumn();
 
         return [
             'visits'        => $visits,

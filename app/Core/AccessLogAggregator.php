@@ -558,7 +558,8 @@ class AccessLogAggregator
     private static function deleteDay(string $day): void
     {
         $tables = ['web_stats_daily', 'web_stats_hourly', 'web_stats_urls', 'web_stats_referrers',
-                   'web_stats_agents', 'web_stats_status', 'web_stats_filetypes', 'web_stats_ips'];
+                   'web_stats_agents', 'web_stats_status', 'web_stats_filetypes', 'web_stats_ips',
+                   'web_stats_entry_pages', 'web_stats_exit_pages'];
 
         foreach ($tables as $table) {
             Database::run("DELETE FROM {$table} WHERE day = ?", [$day]);
@@ -841,6 +842,21 @@ class AccessLogAggregator
               WHERE d.day = ?',
             [$day, $day]
         );
+
+        // Entry and exit pages. The analytics page used to group two months of
+        // sessions by entry_url (489 ms) and by exit_url (471 ms) on every
+        // load; writing them per day makes the read a 60-row scan.
+        foreach (['entry_url' => 'web_stats_entry_pages', 'exit_url' => 'web_stats_exit_pages'] as $column => $table) {
+            Database::run("DELETE FROM {$table} WHERE day = ?", [$day]);
+            Database::run(
+                "INSERT INTO {$table} (day, url, visits, unique_ips, duration_sec)
+                 SELECT ?, {$column}, COUNT(*), COUNT(DISTINCT ip), COALESCE(SUM(duration_sec), 0)
+                   FROM web_visits
+                  WHERE day = ? AND is_bot = 0 AND {$column} <> ''
+                  GROUP BY {$column}",
+                [$day, $day]
+            );
+        }
 
         // Bots have no sessions, so only the human row of an address carries a
         // session count.

@@ -108,19 +108,29 @@ class SystemController extends Controller
         // seconds - and the model is often busy with the categoriser, so
         // the probe queued behind it and the page took even longer. It is
         // cached for five minutes.
-        $cached = $this->cachedValue('ai-status', 300);
-        if ($cached !== null) {
-            return $cached;
+        // The generate probe below is a REAL model call (8.9 s measured, and
+        // longer when the categoriser is using the model). Every cache expiry
+        // therefore stalled the System page - 11.2 s cold, observed. The probe
+        // now runs only when the operator asks for it (?ai_check=1); a normal
+        // load asks Ollama for its model list, which the server answers without
+        // queueing behind a running generation.
+        $deep = $this->request->query('ai_check') === '1';
+
+        if (!$deep) {
+            $cached = $this->cachedValue('ai-status', 3600);
+            if ($cached !== null) {
+                return $cached;
+            }
         }
 
-        $result = $this->computeAiStatus();
+        $result = $this->computeAiStatus($deep);
 
-        $this->storeValue('ai-status', $result, 300);
+        $this->storeValue('ai-status', $result, 3600);
 
         return $result;
     }
 
-    private function computeAiStatus(): array
+    private function computeAiStatus(bool $deep = false): array
     {
         $status = [
             'ollama_up' => false,
@@ -149,6 +159,12 @@ class SystemController extends Controller
         $fine = \App\Core\ChatAi::currentFineTunedModel();
         if ($fine !== \App\Core\ChatAi::FINETUNED_MODEL && in_array($fine, $status['models'], true)) {
             $status['fine_tuned'] = $fine;
+
+            if (!$deep) {
+                // Cheap path: report that the model exists, skip the generation.
+                return $status;
+            }
+
             [$c2, , $b2] = \App\Models\Http::request('http://127.0.0.1:11434/api/generate', [
                 'method' => 'POST',
                 'headers' => ['Content-Type' => 'application/json'],
@@ -1454,6 +1470,26 @@ PHP;
      */
     private function orphanFiles(): array
     {
+        // The scan stats every file in uploads (47k of them) and cost 429 ms on
+        // every System page load. Two minutes is short enough that a cleanup is
+        // reflected almost at once and long enough that a refresh is free;
+        // cleanupOrphans() clears the key explicitly.
+        $json = \App\Core\Cache::remember('system.orphan-files.v1', 120, function (): string {
+            return json_encode($this->computeOrphanFiles(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]';
+        });
+
+        $decoded = json_decode($json, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * The uncached orphan scan.
+     *
+     * @return array<int, array{name:string,size:int,type:string}>
+     */
+    private function computeOrphanFiles(): array
+    {
         $uploads = $this->storage . '/uploads';
         $known = Database::run('SELECT filename FROM photos')->fetchAll(\PDO::FETCH_COLUMN);
         $known = array_flip((array) $known);
@@ -1732,6 +1768,9 @@ PHP;
         // Super admin only: this one changes what every visitor
         // sees (or deletes files, or rebuilds the whole library).
         Auth::requirePermission('system_ops');
+        // The scan is cached for two minutes; this run must see the truth, and
+        // the page it redirects to must not show the pre-cleanup list.
+        \App\Core\Cache::forget('system.orphan-files.v1');
         $orphans = $this->orphanFiles();
         $removed = 0;
 
@@ -1744,6 +1783,7 @@ PHP;
 
         AuditLog::record(Auth::user()['id'] ?? null, 'delete', 'system_orphan_files', null,
             'Removed ' . $removed . ' orphaned upload file(s)', null, ['removed' => $removed]);
+        \App\Core\Cache::forget('system.orphan-files.v1');
         $this->flash('success', 'Removed ' . $removed . ' orphaned file(s).');
         $this->redirect('/admin/system');
     }
