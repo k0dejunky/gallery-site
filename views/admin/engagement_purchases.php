@@ -17,6 +17,11 @@
     </div>
 </div>
 
+<p class="muted" style="margin-top:-.75rem;">
+    A <strong>disputed</strong> charge is a chargeback the processor has not decided yet: it is not counted
+    as revenue and its unlock is closed until the dispute is won.
+</p>
+
 <?php
 // A member can ask for their money back from their own receipts page. The
 // request lands here, where the charge lives. An approval on a one-off charge
@@ -112,6 +117,17 @@ $openRefunds = array_values(array_filter($refundRequests, static function (array
             </tr>
         </thead>
         <tbody>
+            <?php
+            // "disputed" is a chargeback, not a bookkeeping state - the label
+            // says so, because "Disputed" alone reads like a member complaint.
+            $purchaseStatusLabels = [
+                'pending'   => 'Pending',
+                'paid'      => 'Paid',
+                'granted'   => 'Granted',
+                'refunded'  => 'Refunded',
+                'disputed'  => 'Disputed (chargeback)',
+            ];
+            ?>
             <?php foreach ($purchases as $purchase): ?>
                 <tr>
                     <td class="muted u-pad-04-05">#<?= (int) $purchase['id'] ?></td>
@@ -127,16 +143,17 @@ $openRefunds = array_values(array_filter($refundRequests, static function (array
                     </td>
                     <td class="u-pad-04-05">$<?= e(number_format((float) $purchase['amount'], 2)) ?></td>
                     <td class="u-pad-04-05"><?= e((string) $purchase['gateway']) ?></td>
-                    <td class="u-pad-04-05"><?= e((string) $purchase['status']) ?></td>
+                    <td class="u-pad-04-05"><?= e($purchaseStatusLabels[(string) $purchase['status']] ?? (string) $purchase['status']) ?></td>
                     <td style="padding:.4rem .5rem;text-align:right;">
                         <?php if (\App\Core\Auth::can('monetisation')): ?>
                         <form class="inline" method="post" action="<?= url('/admin/engagement/purchases/' . (int) $purchase['id']) ?>">
                             <?= csrf_field() ?>
                             <select name="status" style="width:auto;">
-                                <?php foreach (['pending', 'paid', 'granted', 'refunded'] as $status): ?>
-                                    <option value="<?= $status ?>"<?= $purchase['status'] === $status ? ' selected' : '' ?>><?= ucfirst($status) ?></option>
+                                <?php foreach (['pending', 'paid', 'granted', 'refunded', 'disputed'] as $status): ?>
+                                    <option value="<?= $status ?>"<?= $purchase['status'] === $status ? ' selected' : '' ?>><?= e($purchaseStatusLabels[$status] ?? ucfirst($status)) ?></option>
                                 <?php endforeach; ?>
                             </select>
+                            <input type="text" name="note" placeholder="Note (optional)" style="width:9rem;">
                             <button type="submit" class="btn btn-sm">Save</button>
                         </form>
                         <?php endif; ?>

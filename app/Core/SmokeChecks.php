@@ -4720,6 +4720,92 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.money.dispute_state', 'Smoke · Money', 'A chargeback is a state of its own: it stops counting as revenue and it closes the unlock', static function () use ($root, $read, $ok, $bad): array {
+            // A disputed charge used to stay 'paid': it counted as revenue
+            // and the member kept the unlock while the processor decided.
+            // The site had a 'chargeback' name reserved in the ledger and
+            // nothing ever wrote it.
+            $purchase = (string) $read($root . '/app/Models/Purchase.php');
+            $schema   = (string) $read($root . '/schema.sql');
+            $ctrl     = (string) $read($root . '/app/Controllers/ModerationController.php');
+            $view     = (string) $read($root . '/views/admin/engagement_purchases.php');
+            $probs    = [];
+
+            if (strpos($schema, "ENUM('pending','paid','granted','refunded','disputed')") === false) {
+                $probs[] = 'schema.sql must carry the disputed status on purchases';
+            }
+            if (!is_file($root . '/database/migrations/099_purchase_disputes.sql')) {
+                $probs[] = 'the migration that adds the status must exist';
+            }
+            if (strpos($purchase, "public const STATUS_DISPUTED") === false) {
+                $probs[] = 'Purchase must name the status';
+            }
+            if (strpos($purchase, 'public static function openDispute(') === false
+                || strpos($purchase, 'public static function closeDispute(') === false) {
+                $probs[] = 'Purchase must open and close a dispute';
+            }
+            foreach ([
+                ['openDispute', 'chargeback'],
+                ['closeDispute', 'chargeback_'],
+            ] as [$method, $eventNeedle]) {
+                $at = strpos($purchase, 'public static function ' . $method . '(');
+                if ($at === false) {
+                    continue;
+                }
+                $end  = strpos($purchase, "
+    }", $at);
+                $mbody = substr($purchase, $at, ($end === false ? 1600 : $end - $at));
+                if (strpos($mbody, 'recordEvent(') === false) {
+                    $probs[] = 'Purchase::' . $method . '() must append to the ledger';
+                }
+                if (strpos($mbody, $eventNeedle) === false) {
+                    $probs[] = 'Purchase::' . $method . '() must name its ledger event';
+                }
+            }
+
+            // A lost chargeback has ALREADY been reversed by the processor;
+            // calling the refund endpoint again would send the money twice.
+            $at = strpos($purchase, 'public static function closeDispute(');
+            $body = $at === false ? '' : substr($purchase, $at, 1500);
+            if (strpos($body, 'refundAtGateway(') !== false) {
+                $probs[] = 'closing a dispute must not call the refund endpoint (the processor already reversed a lost chargeback)';
+            }
+
+            // Access and revenue must both exclude a disputed row. The check
+            // reads the bodies, so adding 'disputed' to a paid/granted list
+            // is what it notices.
+            foreach (['userUnlocked(', 'unlockedGalleryIds(', 'unlocksPhoto(', 'totalsBetween(', 'seriesBetween('] as $method) {
+                $at = strpos($purchase, 'public static function ' . $method);
+                if ($at === false) {
+                    $probs[] = 'Purchase::' . $method . '() was not found';
+                    continue;
+                }
+                $end  = strpos($purchase, "
+    }", $at);
+                $mbody = substr($purchase, $at, ($end === false ? 1400 : $end - $at));
+                if (strpos($mbody, 'paid') === false || strpos($mbody, 'granted') === false) {
+                    $probs[] = 'Purchase::' . $method . '() must ask for paid/granted';
+                }
+                if (strpos($mbody, 'disputed') !== false) {
+                    $probs[] = 'Purchase::' . $method . '() must never grant or count a disputed charge';
+                }
+            }
+
+            // The admin action goes through the model, so the ledger and the
+            // revenue filters see the change.
+            if (strpos($ctrl, 'Purchase::openDispute(') === false
+                || strpos($ctrl, 'Purchase::closeDispute(') === false) {
+                $probs[] = 'the admin status action must call openDispute()/closeDispute()';
+            }
+            if (strpos($view, "'disputed'") === false || stripos($view, 'chargeback') === false) {
+                $probs[] = 'the ledger must offer the disputed state and say what it is';
+            }
+
+            return $probs === []
+                ? $ok('a chargeback closes the unlock and stops counting as revenue')
+                : $bad(implode('; ', $probs));
+        });
+
         $add('smoke.ops.rate_limiter_sharded', 'Smoke · Ops', 'The rate limiter does not serialise every request on one lock', static function () use ($root, $read, $ok, $bad): array {
             // The limiter's state used to live in ONE file that every
             // rate-limited request locked exclusively, read, changed and

@@ -1186,7 +1186,9 @@ CREATE TABLE IF NOT EXISTS purchases (
     -- purchase, so a double-click cannot charge twice.
     idempotency_key VARCHAR(80) NULL,
     note        TEXT NULL,
-    status      ENUM('pending','paid','granted','refunded') NOT NULL DEFAULT 'paid',
+    -- disputed = a chargeback in flight: it grants nothing and it is not
+    -- revenue until the processor decides it (see 099_purchase_disputes.sql).
+    status      ENUM('pending','paid','granted','refunded','disputed') NOT NULL DEFAULT 'paid',
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME NULL DEFAULT NULL,
     UNIQUE KEY uq_purchases_idempotency (idempotency_key),

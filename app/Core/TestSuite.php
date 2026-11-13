@@ -1538,6 +1538,98 @@ class TestSuite
             }
         });
 
+        $add('db.purchase_dispute_cycle', 'Database', 'a chargeback closes the unlock, leaves the revenue, and only a won dispute brings it back', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix = bin2hex(random_bytes(4));
+                    $userId = self::scratchUserId('dispute-' . $suffix);
+                    // An item id nothing else uses, so the unlock check
+                    // cannot be answered by a leftover row.
+                    $itemId = 900000 + random_int(1, 99999);
+
+                    $purchaseId = \App\Models\Purchase::create(
+                        $userId,
+                        \App\Models\Purchase::TYPE_GALLERY,
+                        $itemId,
+                        9.99,
+                        'offline',
+                        'probe-dispute-' . $suffix
+                    );
+
+                    $status = static fn (): string => (string) Database::run(
+                        'SELECT status FROM purchases WHERE id = ?',
+                        [$purchaseId]
+                    )->fetchColumn();
+
+                    $unlockedBefore = \App\Models\Purchase::userUnlocked($userId, $itemId);
+                    $open           = \App\Models\Purchase::openDispute($purchaseId, 'The cardholder raised it.', $userId);
+                    $statusOpen     = $status();
+                    $unlockedDuring = \App\Models\Purchase::userUnlocked($userId, $itemId);
+
+                    // Opening it twice is a no-op, and a closed dispute
+                    // cannot be reopened: the processor already decided.
+                    $openAgain = \App\Models\Purchase::openDispute($purchaseId, 'Again.', $userId);
+
+                    $events     = array_column(\App\Models\Purchase::events($purchaseId), 'event');
+                    $won        = \App\Models\Purchase::closeDispute($purchaseId, 'won', 'The issuer sided with the site.', $userId);
+                    $statusWon  = $status();
+                    $unlockedAfterWin = \App\Models\Purchase::userUnlocked($userId, $itemId);
+                    $events     = array_column(\App\Models\Purchase::events($purchaseId), 'event');
+
+                    // A second dispute on the same charge, this time lost:
+                    // the money is gone, so the row is refunded and stays
+                    // closed.
+                    $reopened   = \App\Models\Purchase::openDispute($purchaseId, 'The member disputed it again.', $userId);
+                    $lost       = \App\Models\Purchase::closeDispute($purchaseId, 'lost', '', $userId);
+                    $statusLost = $status();
+                    $unlockedAfterLoss = \App\Models\Purchase::userUnlocked($userId, $itemId);
+                    $closeAgain = \App\Models\Purchase::closeDispute($purchaseId, 'won', '', $userId);
+
+                    $ok = $unlockedBefore
+                        && $open && $statusOpen === \App\Models\Purchase::STATUS_DISPUTED && !$unlockedDuring
+                        && !$openAgain
+                        && in_array('chargeback', $events, true)
+                        && $won && $statusWon === \App\Models\Purchase::STATUS_PAID && $unlockedAfterWin
+                        && in_array('chargeback_won', $events, true)
+                        && $reopened && $lost
+                        && $statusLost === \App\Models\Purchase::STATUS_REFUNDED
+                        && !$unlockedAfterLoss
+                        && !$closeAgain;
+
+                    return [
+                        'pass'   => $ok,
+                        'detail' => $ok
+                            ? 'a disputed charge unlocks nothing and is not revenue; a won dispute restores the charge; a lost one refunds it and no dispute can be closed twice'
+                            : json_encode([
+                                'unlockedBefore' => $unlockedBefore, 'open' => $open,
+                                'statusOpen' => $statusOpen, 'unlockedDuring' => $unlockedDuring,
+                                'openAgain' => $openAgain, 'won' => $won, 'statusWon' => $statusWon,
+                                'unlockedAfterWin' => $unlockedAfterWin, 'reopened' => $reopened,
+                                'lost' => $lost, 'statusLost' => $statusLost,
+                                'unlockedAfterLoss' => $unlockedAfterLoss, 'closeAgain' => $closeAgain,
+                                'events' => array_column(\App\Models\Purchase::events($purchaseId), 'event'),
+                            ]),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.gallery_nsfw_flag', 'Database', 'a safe-for-work gallery is open at any level and keeps its own level when it is adult', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

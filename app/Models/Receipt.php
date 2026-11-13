@@ -290,6 +290,8 @@ final class Receipt
                 return 'Paid';
             case Purchase::STATUS_REFUNDED:
                 return 'Refunded';
+            case Purchase::STATUS_DISPUTED:
+                return 'Disputed';
             default:
                 return ucfirst($status);
         }

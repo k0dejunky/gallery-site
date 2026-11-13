@@ -211,8 +211,48 @@ class ModerationController extends Controller
         Auth::requirePermission('monetisation');
 
         $status = (string) $this->request->post('status', '');
-        if (!in_array($status, [Purchase::STATUS_PENDING, Purchase::STATUS_PAID, Purchase::STATUS_GRANTED, Purchase::STATUS_REFUNDED], true)) {
+        if (!in_array($status, [Purchase::STATUS_PENDING, Purchase::STATUS_PAID, Purchase::STATUS_GRANTED, Purchase::STATUS_REFUNDED, Purchase::STATUS_DISPUTED], true)) {
             $this->flash('error', 'Invalid purchase status.');
+            $this->redirect('/admin/engagement/purchases');
+            return;
+        }
+
+        $actorId = (int) Auth::user()['id'];
+        $note    = trim((string) $this->request->post('note', ''));
+        $current = (string) Database::run(
+            'SELECT status FROM purchases WHERE id = ? LIMIT 1',
+            [$id]
+        )->fetchColumn();
+
+        // A chargeback is a decision the processor makes, not a bookkeeping
+        // edit: it goes through openDispute()/closeDispute() so the ledger
+        // names the event and the revenue filters see it.
+        if ($status === Purchase::STATUS_DISPUTED) {
+            if (!Purchase::openDispute($id, $note, $actorId)) {
+                $this->flash('error', 'That purchase is already disputed, or it is no longer a settled charge.');
+            } else {
+                $this->flash('success', 'Purchase marked disputed. Its unlock is closed and it is not counted as revenue until the processor decides.');
+            }
+            $this->redirect('/admin/engagement/purchases');
+            return;
+        }
+
+        if ($current === Purchase::STATUS_DISPUTED) {
+            if (!in_array($status, [Purchase::STATUS_PAID, Purchase::STATUS_GRANTED, Purchase::STATUS_REFUNDED], true)) {
+                $this->flash('error', 'A disputed charge can only be marked won (paid) or lost (refunded).');
+                $this->redirect('/admin/engagement/purchases');
+                return;
+            }
+
+            // moving to paid/granted = the dispute was WON; refunded = lost.
+            // The processor has already reversed a lost chargeback, so the
+            // refund endpoint must not be called here.
+            $outcome = $status === Purchase::STATUS_REFUNDED ? 'lost' : 'won';
+            Purchase::closeDispute($id, $outcome, $note, $actorId);
+
+            $this->flash('success', $outcome === 'won'
+                ? 'Dispute marked won: the charge counts as paid again.'
+                : 'Dispute marked lost: the charge is refunded and is not counted as revenue.');
             $this->redirect('/admin/engagement/purchases');
             return;
         }
@@ -234,7 +274,7 @@ class ModerationController extends Controller
             }
             // The local row has to be marked too, or the unlock stays open
             // even though the money went back.
-            Purchase::setStatus($id, Purchase::STATUS_REFUNDED, (int) Auth::user()['id']);
+            Purchase::setStatus($id, Purchase::STATUS_REFUNDED, $actorId);
             $this->redirect('/admin/engagement/purchases');
             return;
         }

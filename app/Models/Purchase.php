@@ -18,6 +18,8 @@ class Purchase
     public const STATUS_PAID     = 'paid';
     public const STATUS_GRANTED  = 'granted';
     public const STATUS_REFUNDED = 'refunded';
+    /** A chargeback in flight: grants nothing and is not revenue. */
+    public const STATUS_DISPUTED = 'disputed';
 
     public static function create(
         int $userId,
@@ -293,6 +295,84 @@ class Purchase
         }
 
         return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Open a chargeback on a purchase.
+     *
+     * A disputed charge is money in flight: the processor has not decided
+     * whether it belongs to the site, so the row stops counting as revenue
+     * and the unlock closes (every access check asks for paid/granted).
+     *
+     * This is deliberately NOT a setStatus() call: the ledger names the
+     * event 'chargeback' so a dispute is never mistaken for a refund or an
+     * admin's bookkeeping.
+     *
+     * @return bool true when the row moved to disputed
+     */
+    public static function openDispute(int $id, string $reason = '', int $actorId = 0): bool
+    {
+        $stmt = Database::run(
+            "UPDATE purchases SET status = 'disputed', updated_at = NOW()
+             WHERE id = ? AND status IN ('pending', 'paid', 'granted')",
+            [$id]
+        );
+
+        if ($stmt->rowCount() === 0) {
+            return false;
+        }
+
+        self::recordEvent($id, 'chargeback', [
+            'actor_id' => $actorId > 0 ? $actorId : null,
+            'reason'   => $reason !== '' ? $reason : 'The payment was disputed with the processor.',
+        ]);
+
+        return true;
+    }
+
+    /**
+     * Close a chargeback once the processor has decided it.
+     *
+     * $outcome:
+     *   'won'      - the money stays with the site; the row returns to paid
+     *   'lost'     - the processor returned the money; the row is refunded
+     *   'accepted' - the site agreed to the refund; the row is refunded
+     *
+     * The gateway refund must NOT be called on this path: a lost chargeback
+     * has already been reversed by the processor, and refunding again would
+     * send the money back twice.
+     *
+     * @return bool true when the row was actually disputed
+     */
+    public static function closeDispute(int $id, string $outcome, string $note = '', int $actorId = 0): bool
+    {
+        $outcome = strtolower(trim($outcome));
+        if (!in_array($outcome, ['won', 'lost', 'accepted'], true)) {
+            throw new \InvalidArgumentException('Unknown dispute outcome.');
+        }
+
+        $status = $outcome === 'won' ? self::STATUS_PAID : self::STATUS_REFUNDED;
+
+        $stmt = Database::run(
+            "UPDATE purchases SET status = ?, updated_at = NOW()
+             WHERE id = ? AND status = 'disputed'",
+            [$status, $id]
+        );
+
+        if ($stmt->rowCount() === 0) {
+            return false;
+        }
+
+        self::recordEvent($id, $outcome === 'won' ? 'chargeback_won' : 'chargeback_lost', [
+            'actor_id' => $actorId > 0 ? $actorId : null,
+            'reason'   => $note !== ''
+                ? $note
+                : ($outcome === 'won'
+                    ? 'The processor decided the chargeback in the site\'s favour.'
+                    : 'The chargeback stands and the money was returned.'),
+        ]);
+
+        return true;
     }
 
     /**

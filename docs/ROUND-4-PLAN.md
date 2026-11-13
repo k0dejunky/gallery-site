@@ -56,7 +56,7 @@ check that locks it in travels in the same commit).
 
 ---
 
-## Where the work stands (updated 2026-10-22)
+## Where the work stands (updated 2026-11-13)
 
 | Phase | What | Status | Commit |
 |---|---|---|---|
@@ -66,15 +66,15 @@ check that locks it in travels in the same commit).
 | 3 | One access decision, not five | **done** | `9025020` |
 | 4 | The exposure: stream key, keys, health, default page | **done** | `860ce5e`, `a768c6e`, `39ee933` |
 | 5 | Abuse: rate limits and moderation | **done** | `b42881b`, `56b9738` |
-| 6 | The media path | **partial** | `b73b21f` |
+| 6 | The media path | **done** | `b73b21f` |
 | 7 | The heavy admin pages | **done, except the incremental aggregator** | `b73b21f`, `208fa09`, `61ea184` |
 | 8 | The cache and the queries | **done, except the N+1s in the media path** | `91d9f8b`, `b73b21f` |
 | 9 | Discoverability | **done** | `c0137e7`, `61ea184` |
-| 10 | The member-facing money | **not started** | - |
-| 11 | Ops hardening | **not started** | - |
+| 10 | The member-facing money | **done except 10.4 pause / 10.5 dunning / 10.7 gift** (10.9, 10.12 dropped by the 2026-10-22 decisions) | `dd44c63`, `288b61b`, `561bcd8`, `this commit` |
+| 11 | Ops hardening | **done** | `c5ddb22`, `751b30a`, `cd781f9`, `5884577`, `37cdb53`, `3f339b8`, `backup_offsite_package.php` |
 | 12 | The operator app, rebuilt | **done** | `40b4039`, `57ba5ff`, `ffa5db8` |
 | 13 | The last hard edges | **done** (13.2 stays partial on purpose) | `this commit` |
-| 14 | The member money, final scope | **planned, not started** | - |
+| 14 | The member money, final scope | **14b.2 done; 14a.4 / 14b.1 / 14c planned** | `this commit` |
 | Final | local smoke/unit -> dev -> prod verify -> commit + push | **done for phases 1-9 and 12** | - |
 
 ### The last sweep (2026-10-21, after phase 12)
@@ -93,6 +93,29 @@ Nine more items closed, each with a check that was proven to bite:
 | The rate limiter serialised every request on one lock | 16 shards, 300 parallel reads -> 76 x 429 as before | `cd781f9` |
 
 The smoke suite is **1005 checks** (was 989).
+
+### The 2026-11-13 sweep
+
+The rows that were still listed as `pending` but had already shipped were
+reconciled against the tree, and the one money hole that was genuinely open
+was closed:
+
+| what | the finding | commit |
+|---|---|---|
+| A chargeback stayed `paid` | the money was in dispute, but the purchase counted as revenue and the member kept the unlock; `purchase_events` reserved the name `chargeback` and nothing wrote it | `this commit` |
+| 6.5, 7.1, 7.2, 8.3, 11.3-11.6 marked pending although done | verified against the tree (rendition drain, `DiskUsage`, cached schema read, Redis cap, nonce CSP, title-image route, `scripts/restore-drill.sh`, encrypted secrets package) and the table updated | - |
+
+The dispute state is `disputed`: it grants nothing (every access check asks
+for `paid`/`granted`), it is not revenue, and the admin closes it with
+**won** (back to `paid`) or **lost** (to `refunded`, WITHOUT calling the
+refund endpoint - the processor already reversed a lost chargeback, so a
+second refund would send the money twice). The smoke check
+`smoke.money.dispute_state` and the suite test `db.purchase_dispute_cycle`
+both bite when the state is put back.
+
+Smoke is **1109** checks locally and on dev (prod deliberately keeps its
+older `SmokeChecks.php`, so it stays at **1072**); the differences are the
+member-side checks prod's copy predates.
 
 ### Phase 12 - the operator app, rebuilt (2026-10-21)
 
@@ -338,7 +361,7 @@ gallery shows as locked.
 | 6.2 | The media token becomes **time-limited, not session-bound** - today every non-thumb URL is unique per session, so the `immutable` header is dead and a new session re-downloads the grid | `app/Core/helpers.php` | done | 56b9738 |
 | 6.3 | 9 DB queries per media request -> **1** | `app/Controllers/StorageController.php`, `app/Models/Photo.php` | done | `02f8d2f` |
 | 6.4 | Guests get AVIF/WebP too - the blurred cover had **no** modern-format copy at all | `views/partials/gallery_card.php`, `bin/avif_backfill.php` | done | `4189fd7` |
-| 6.5 | The variant ladder backlog: 321 of 15,626 videos have a 480p rung | `bin/video_rendition_worker.php` | pending | - |
+| 6.5 | The variant ladder backlog: 321 of 15,626 videos have a 480p rung | `bin/video_rendition_worker.php` | done - the prod drain finished 2026-11-10 (`built=811 failed=0`, every video now has its `web_` rung) | - |
 
 ---
 
@@ -346,8 +369,8 @@ gallery shows as locked.
 
 | id | what | files | status | commit |
 |---|---|---|---|---|
-| 7.1 | The admin dashboard does **~280,000 `stat()` calls** per load (3.4-4.0s, 3.7-4.0s of FPM CPU) | `app/Controllers/AdminController.php` | pending | - |
-| 7.2 | `/admin/system`: 83 `SHOW COLUMNS` queries + 20,500 file stats + a **synchronous 8.9s Ollama generation** in the request path | `app/Controllers/SystemController.php` | pending | - |
+| 7.1 | The admin dashboard does **~280,000 `stat()` calls** per load (3.4-4.0s, 3.7-4.0s of FPM CPU) | `app/Controllers/AdminController.php` | done - the tree walk is cached in the background (`DiskUsage`) | `b73b21f` |
+| 7.2 | `/admin/system`: 83 `SHOW COLUMNS` queries + 20,500 file stats + a **synchronous 8.9s Ollama generation** in the request path | `app/Controllers/SystemController.php` | done - one cached schema read, no live model call | `299d56f`, `fc69da9` |
 | 7.3 | The analytics page **full-scans `web_visits` (272,942 rows) four times** - 1.03s of its 1.44s. The covering indexes | `app/Models/WebStats.php` + a migration | done | b73b21f |
 | 7.4 | The log aggregator **re-parses the whole 2-day window every hour** (19s/hour, 6.5M lines/day re-read) | `app/Core/AccessLogAggregator.php` | done - the files outside the window are skipped, not re-parsed | `367d3f7` |
 | 7.5 | The admin re-parse runs up to 31 days **inside one HTTP request** (~5 min) with no lock of its own | `app/Controllers/AnalyticsController.php` | done | 61ea184 |
@@ -360,7 +383,7 @@ gallery shows as locked.
 |---|---|---|---|---|
 | 8.1 | A lock on `Cache::remember` / `PageCache::fragment` - a cold cache makes N concurrent requests all run the producer, and `bump('listings')` invalidates the whole guest site at once | `app/Core/Cache.php`, `app/Core/PageCache.php` | done | b73b21f |
 | 8.2 | The page cache is keyed on the **raw query string** - every `?utm_*` is a separate 393 KB entry | `app/Core/Router.php` | done | b73b21f |
-| 8.3 | Redis has **no `maxmemory`** and `noeviction` | the Redis config on the box | pending | - |
+| 8.3 | Redis has **no `maxmemory`** and `noeviction` | the Redis config on the box | done - capped at 512 MB with `volatile-lru` on both boxes (every real key carries a TTL; FPM sessions live in Redis, so `allkeys-lru` is forbidden) | - |
 | 8.4 | The N+1s: the wall's comments (20), `Gallery::categories()` inside `recommended()` (8), `Comment::countFor()` per wall post in the admin engagement table (30) | `views/wall.php`, `app/Models/Gallery.php`, `views/admin/engagement.php` | done | 91d9f8b |
 | 8.5 | The operator app's SSE stream has a **busy loop** - the typing path re-queries with no sleep | `app/Controllers/ChatBridgeController.php` | done | `dc4fd12` |
 | 8.6 | The FPM pool: `pm.max_children=30` and each SSE connection holds a worker for 30s | the FPM pool config | pending | - |
@@ -400,7 +423,7 @@ The PPV/tip/unlock surface stays dormant. This phase is about the
 | 10.3 | A card update | done - the same hosted-fields form now serves an ACTIVE card membership, not only a past-due one | `288b61b` |
 | 10.4 | A membership pause / freeze | pending | - |
 | 10.5 | A dunning ladder the site owns | pending | - |
-| 10.6 | A chargeback / dispute state | pending | - |
+| 10.6 | A chargeback / dispute state | done - `disputed` is a purchase state of its own: it grants nothing, stops counting as revenue, and only a won dispute restores it | `this commit` |
 | 10.7 | A gift purchase | pending | - |
 | 10.8 | Receipt numbering | done - `INV-P####` / `INV-M####` from the immutable row id. Tax is not itemised: the site charges one amount per plan and nowhere computes tax | `dd44c63` |
 | 10.9 | Payout processing - the earnings page says outright that it does not ship | pending | - |
@@ -416,10 +439,10 @@ The PPV/tip/unlock surface stays dormant. This phase is about the
 |---|---|---|---|
 | 11.1 | The CSRF token is **one per session for the session's life**, not per form and not rotated on login | `app/Core/Csrf.php`, `app/Core/Auth.php` | done - rotated on the login, the logout and the step-up | `c5ddb22` |
 | 11.2 | `XSendfilePath /var/www/gallery/storage` is broader than it needs to be | `config/gallery-alias.conf`, `install.sh` | done - only the uploads and the APK | `751b30a` |
-| 11.3 | The Braintree checkout page overrides the whole CSP with `unsafe-inline` | pending | - |
-| 11.4 | The title image upload accepts an SVG with no content validation (admin-only, and currently unreachable) | pending | - |
-| 11.5 | The restore-drill script is **not in the repo** - the restore path is partly outside version control | pending | - |
-| 11.6 | `.env` is excluded from the backup - a full-box loss needs the secrets re-supplied by hand | pending | - |
+| 11.3 | The Braintree checkout page overrides the whole CSP with `unsafe-inline` | done - one nonce policy covers checkout and card update | `37cdb53` |
+| 11.4 | The title image upload accepts an SVG with no content validation (admin-only, and currently unreachable) | done - served from its own route, bytes sniffed, SVG refused | `7ac4216` |
+| 11.5 | The restore-drill script is **not in the repo** - the restore path is partly outside version control | done - `scripts/restore-drill.sh` | `3f339b8` |
+| 11.6 | `.env` is excluded from the backup - a full-box loss needs the secrets re-supplied by hand | done - `bin/backup_offsite_package.php` ships `.env` + `storage/autoposter.json` AES-256 encrypted with the backup passphrase | - |
 | 11.7 | `RateLimiter` is a single global JSON file with an exclusive `flock` and a whole-file rewrite per request | `app/Core/RateLimiter.php` | done - sharded over 16 files | `cd781f9` |
 | 11.8 | The dashboard's php-fatal alert is throttled to hourly and nobody acted on 76 of them | done - the same errors are a System-page card with a count and an acknowledgement | `5884577` |
 
@@ -610,7 +633,7 @@ close **removed** rather than left hanging:
 | id | what | where it starts from |
 |---|---|---|
 | 14b.1 | A **dunning ladder the site drives**: retry days, a **downgrade** step (a Gold member whose payment fails drops to Silver instead of being cancelled), then an explicit cancel. Today the cadence is the gateway's | the existing sequence is `payment_failed` mail -> `past_due` mail -> 7-day grace -> expiry (`Lifecycle.php:50-78`, `Subscription.php:21-44`, `Housekeeping.php:414-441`); it needs a schedule table and a job |
-| 14b.2 | A **dispute / chargeback state**: `purchase_events.event` already has the room (the column comment names `chargeback`) but **nothing writes it**. A `disputed` status on `purchases` (an enum ALTER) plus the ledger events, and a disputed purchase stops counting as revenue | `Purchase.php:14-20` (the status enum), `schema.sql:1118-1135` (the ledger) |
+| 14b.2 | A **dispute / chargeback state**: `purchase_events.event` already had the room (the column comment names `chargeback`) but **nothing wrote it**. A `disputed` status on `purchases` (an enum ALTER) plus the ledger events, and a disputed purchase stops counting as revenue. **Done** - `Purchase::openDispute()`/`closeDispute()`, ledger events `chargeback` / `chargeback_won` / `chargeback_lost`, and an admin action that refuses to refund a lost chargeback twice | `this commit` |
 
 ### 14c - gifting
 
@@ -628,7 +651,7 @@ restore the fix. A check that has never failed is not a check.
 `smoke.housekeeping.columns_exist` (every column a housekeeping query
 names must exist in the real schema) · `smoke.housekeeping.isolated` (one
 step cannot abort the rest) · `smoke.braintree.can_cancel` ·
-`smoke.money.ledger` · `smoke.access.one_predicate` ·
+`smoke.money.ledger` · `smoke.money.dispute_state` · `smoke.access.one_predicate` ·
 `smoke.access.browse_filtered` · `smoke.access.share_link` ·
 `smoke.live.no_stream_key_for_members` ·
 `smoke.live.publish_secret_reaches_mediamtx` (the real url builder run
