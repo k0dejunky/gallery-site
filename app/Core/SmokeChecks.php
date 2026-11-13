@@ -10184,6 +10184,46 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.admin.deep_scan_fixes', 'Smoke · Admin', 'The CSV export sends its headers first and X authorize uses the PKCE route', static function () use ($root, $read, $ok, $bad): array {
+            // Both were 500-class defects found by crawling every admin link.
+            $problems = [];
+            $emailer  = (string) $read($root . '/app/Controllers/EmailerController.php');
+            $auto     = (string) $read($root . '/app/Controllers/AutoPosterController.php');
+
+            // 1. Content-Type/Disposition must be set BEFORE anything is written
+            //    to php://output, or PHP logs "headers already sent" and the
+            //    download loses its filename.
+            $hdr  = strpos($emailer, "header('Content-Type: text/csv");
+            $open = strpos($emailer, "fopen('php://output'");
+            if ($hdr === false || $open === false) {
+                $problems[] = 'the CSV export no longer sets its headers or opens php://output';
+            } elseif ($hdr > $open) {
+                $problems[] = 'the CSV export writes to php://output before sending its headers';
+            }
+            if (substr_count($emailer, "header('Content-Type: text/csv") !== 1) {
+                $problems[] = 'the CSV Content-Type header is duplicated';
+            }
+
+            // 2. X must go through authorizeTwitter (PKCE, 3 arguments), not the
+            //    generic OAuth2 path.
+            if (strpos($auto, "if (\$platform === 'x')") === false
+                || strpos($auto, "redirect('/admin/auto-poster/twitter/authorize')") === false) {
+                $problems[] = 'authorizeChannel() does not route X to its PKCE handler';
+            }
+            // The guard must sit inside authorizeChannel, before its own client
+            // construction (the file has other `new $clientClass` call sites).
+            $guard = strpos($auto, "if (\$platform === 'x')");
+            if ($guard === false) {
+                $problems[] = 'the X guard is missing from authorizeChannel()';
+            } elseif (strpos($auto, '$client = new $clientClass($channel);', $guard) === false) {
+                $problems[] = 'authorizeChannel() no longer constructs a client after the guard';
+            }
+
+            return $problems === []
+                ? $ok('CSV headers precede output; X authorize redirects to the PKCE route')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.admin.galleries_ppv_bulk', 'Smoke · Admin', 'A pay-per-view price can be set on a selection of galleries', static function () use ($root, $read, $ok, $bad): array {
             // PPV shipped with an unlock flow and a ledger but no way to price
             // a set: ppv_price was NULL on all 262 galleries.

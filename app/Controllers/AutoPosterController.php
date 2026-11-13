@@ -285,6 +285,16 @@ class AutoPosterController extends Controller
     public function authorizeChannel(string $platform): void
     {
         $platform = Platforms::canonicalize($platform) ?: 'x';
+
+        // X has its own PKCE handler (authorizeTwitter) and its own route. This
+        // generic path used to build a TwitterClient and call its
+        // authorizationUrl() with two arguments where three are required, so
+        // the "Authorize" link answered 500 with an ArgumentCountError.
+        if ($platform === 'x') {
+            $this->redirect('/admin/auto-poster/twitter/authorize');
+            return;
+        }
+
         $meta     = Platforms::get($platform);
         $clientClass = Platforms::clientClass($platform);
         $channel  = AutoPosterConfig::channel($platform);

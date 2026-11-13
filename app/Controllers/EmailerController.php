@@ -64,6 +64,13 @@ class EmailerController extends MembershipAdminController
 
         $rows = EmailQueue::forExport(2000, $status, $kind);
 
+        // Headers FIRST. They used to be set after the CSV had been written to
+        // php://output, so every export logged "Cannot modify header
+        // information - headers already sent" and the browser got the file with
+        // no Content-Type and no filename (the download was called "export").
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="email-queue-' . date('Ymd-His') . '.csv"');
+
         $out = fopen('php://output', 'w');
         if ($out === false) {
             $this->flash('error', 'Could not build the export.');
@@ -89,8 +96,6 @@ class EmailerController extends MembershipAdminController
 
         fclose($out);
 
-        header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="email-queue-' . date('Ymd-His') . '.csv"');
         exit;
     }
 
