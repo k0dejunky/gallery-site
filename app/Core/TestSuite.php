@@ -2937,6 +2937,33 @@ class TestSuite
             }
         });
 
+        $add('db.no_test_accounts', 'Database', 'No scan/probe accounts left behind', function () {
+            // A verification session creates throwaway members (probe.*,
+            // scan.*, deep.*) and must delete them. Two were left on
+            // production on 2026-11-13; this makes the next one visible
+            // instead of silently living on the box for ever.
+            try {
+                $rows = Database::run(
+                    "SELECT id, email FROM users
+                      WHERE email LIKE '%@example.test'
+                         OR email LIKE 'probe.%'
+                         OR email LIKE 'scan.%'
+                         OR email LIKE 'deep.%'
+                      ORDER BY id LIMIT 10"
+                )->fetchAll() ?: [];
+
+                if ($rows === []) {
+                    return ['pass' => true, 'detail' => 'none'];
+                }
+
+                $list = implode(', ', array_map(static fn (array $r): string => '#' . $r['id'] . ' ' . $r['email'], $rows));
+
+                return ['pass' => false, 'detail' => count($rows) . ' test account(s): ' . $list . ' — run bin/purge_test_users.php --yes'];
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.orphan_photos', 'Database', 'No orphan photos (every photo in a gallery)', function () {
             try {
                 $n = (int) Database::run('SELECT COUNT(*) FROM photos p WHERE NOT EXISTS (SELECT 1 FROM gallery_photo gp WHERE gp.photo_id = p.id)')->fetchColumn();
