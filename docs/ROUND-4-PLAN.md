@@ -121,10 +121,9 @@ second refund would send the money twice). The smoke check
 `smoke.money.dispute_state` and the suite test `db.purchase_dispute_cycle`
 both bite when the state is put back.
 
-Smoke is **1118** checks locally and on dev (prod deliberately keeps its
-older `SmokeChecks.php`, so it stays below that); the difference is the
-member-side checks prod's copy predates. The local suite is **1217** tests,
-all passing.
+Smoke is **1119** checks locally and on dev and PROD (the production copy was
+reconciled on 2026-11-14; it used to run a stale subset). The local suite is
+**1218** tests, all passing.
 
 ### Phase 12 - the operator app, rebuilt (2026-10-21)
 
@@ -396,6 +395,21 @@ gallery shows as locked.
 | 8.4 | The N+1s: the wall's comments (20), `Gallery::categories()` inside `recommended()` (8), `Comment::countFor()` per wall post in the admin engagement table (30) | `views/wall.php`, `app/Models/Gallery.php`, `views/admin/engagement.php` | done | 91d9f8b |
 | 8.5 | The operator app's SSE stream has a **busy loop** - the typing path re-queries with no sleep | `app/Controllers/ChatBridgeController.php` | done | `dc4fd12` |
 | 8.6 | The FPM pool: `pm.max_children=30` and each SSE connection holds a worker for 30s | the FPM pool config | done - FPM 120 / Apache event 400 workers, and the PUBLIC web chat/live pages now use their JSON polls instead of SSE (an SSE stream pins one FPM worker per viewer). The app keeps its own SSE endpoint. See `docs/CAPACITY.md` | `this commit` |
+
+### The 2026-11-14 operations sweep
+
+No schema changes. The data actions (kept here so a later session knows the
+box state):
+
+| what | result |
+|---|---|
+| Reddit auto-poster stopped | `enabled_channels = ["x"]` and X is still paused, so nothing is scheduled; Reddit is explicitly paused with a reason. The browser worker was failing on every attempt (`page.goto: Target page ... closed`) |
+| Auto-poster queue cleaned | 269 queued/failed rows dismissed; nothing queued or failing remains (posted history and skips stay) |
+| AI descriptions | 4 jobs that died in an Ollama outage re-queued; 188 pending proposals accepted (every gallery that lacked a description now has one) |
+| Production test copy reconciled | the repository `SmokeChecks.php`/`TestSuite.php` are deployed; prod smoke **1119**, prod full suite **1217/0** |
+| Full media backup caught up | `rclone.conf` had gone root-owned again; fixed to `www-data`, the 13 Nov 1 parts were uploaded and verified on Drive, and the local store was emptied (52 GB freed, disk 70% -> 43%) |
+| Local retention | `bin/gallery_backup.php` now prunes the local parts + checksum + that run's DB dump ONLY after a configured sync returns 0; a failed upload keeps them (a prune without a confirmed upload would destroy the only copy) |
+| Capacity | FPM 120 / Apache event 400, web chat and live pages poll instead of SSE, HLS proxy `flushpackets=on`; numbers in `docs/CAPACITY.md` |
 
 ---
 

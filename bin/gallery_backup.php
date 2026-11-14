@@ -185,6 +185,14 @@ rm -f "\$DUMP"
 gzip -t "\$SQLT" || { echo "\$(date "+%F %T") db dump verification failed: \$SQLT" >> {$backupDir}/.failed; exit 1; }
 (cd {$backupDir} && sha256sum \$(basename "\$TARGET").part-* > \$(basename "\$TARGET").sha256)
 {$syncBlock}
+# The owner's rule (2026-11-14): keep no local copy of what the offsite store
+# already has. Prune ONLY after a verified sync - a configured sync command
+# that returned success. If the upload failed (or no sync is configured) the
+# parts stay exactly where they are, because they are then the only copy.
+if [ -n "{$syncCmd}" ] && [ "\${SYNC_RC:-1}" -eq 0 ]; then
+  rm -f "\$TARGET".part-* "\$TARGET".sha256 "\$SQLT"
+  echo "\$(date "+%F %T") local media copies pruned after a verified offsite sync"
+fi
 printf '{"ok":true,"at":"%s","file":"%s","parts":%d,"db":"%s","sync_rc":%s}\n' "\$(date +%FT%T)" "\$(basename "\$TARGET")" "\$PARTS" "\$(basename "\$SQLT")" "\${SYNC_RC:-0}" > {$backupDir}/.last_sync
 touch {$backupDir}/.last_ok
 rm -f {$backupDir}/.running

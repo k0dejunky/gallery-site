@@ -8225,6 +8225,29 @@ class SmokeChecks
                 ? $ok('pipefail + split parts stitched for verification + verification stderr recorded in the failure note')
                 : $bad('gallery_backup.php missing: ' . implode(', ', $missing));
         });
+        $add('smoke.backup.prunes_after_sync', 'Smoke · Backup', 'Local media parts are removed only after a verified offsite sync', static function () use ($root, $read, $ok, $bad): array {
+            // The owner's rule (2026-11-14): keep no local copy of what the
+            // offsite store has. The guard matters more than the delete: a
+            // prune that runs without a confirmed upload would destroy the
+            // only copy.
+            $b = (string) $read("$root/bin/gallery_backup.php");
+            $missing = [];
+            if (strpos($b, 'if [ -n "{$syncCmd}" ]') === false) {
+                $missing[] = 'the prune must require a configured sync command';
+            }
+            if (strpos($b, '[ "\${SYNC_RC:-1}" -eq 0 ]') === false) {
+                $missing[] = 'the prune must require the sync to have succeeded';
+            }
+            if (strpos($b, 'rm -f "\$TARGET".part-* "\$TARGET".sha256 "\$SQLT"') === false) {
+                $missing[] = 'the parts, the checksum and that run\'s DB dump are what gets pruned';
+            }
+            if (strpos($b, 'local media copies pruned after a verified offsite sync') === false) {
+                $missing[] = 'the prune must be logged';
+            }
+            return $missing === []
+                ? $ok('parts are pruned only with a configured, successful sync')
+                : $bad('gallery_backup.php prune guard: ' . implode('; ', $missing));
+        });
         $add('smoke.health.backup_detail', 'Smoke · API health', 'Health reports archive + failure ages for the (monthly) media backup', static function () use ($root, $read, $ok, $bad): array {
             $h = $read("$root/app/Controllers/HealthController.php");
             return strpos($h, "'last_archive_age_sec'") !== false
