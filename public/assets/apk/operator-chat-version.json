@@ -1,9 +1,9 @@
 {
   "app": "operator-chat",
-  "latestVersion": "4.0",
-  "versionCode": 70,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v4.0.apk",
-  "sha256": "746cb73cc61b0b7aeffcc79f89f9db2ab5909726b93dcfe8571e6eab8b77b306",
-  "changelog": "Rebuilt from scratch on the same server contract: one console with four tabs (Chats, Live, Shows, Settings), a new studio look, a faster inbox, richer conversation screens with attachments and message actions, live-chat notifications that follow the broadcast into the background, a passcode/biometric lock, and quieter background sync. The broadcast engine, encrypting store and verifier are the proven ones, restructured behind one state spine.",
+  "latestVersion": "4.1",
+  "versionCode": 71,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v4.1.apk",
+  "sha256": "c038fee3808395c9431c24960b9a9d7e7ca8652f5be79e297f61e75ae04c2092",
+  "changelog": "Live chat fixes: the composer and the messages stay above the keyboard (the preview collapses while typing, then comes back), typing is visible immediately, and sending works again (the server now accepts the app's Bearer token case-insensitively for the live-chat POST). Also: a sent live-chat message appears in the chat list at once.",
   "publishedAt": "2026-11-14"
 }
