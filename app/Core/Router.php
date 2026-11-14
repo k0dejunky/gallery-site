@@ -46,7 +46,10 @@ class Router
         // treated as an API call and exempt. A cookie-only request (the
         // member's browser) has to present the CSRF token, which the live
         // page's form already does.
-        $bearer = strpos((string) $request->header('Authorization', ''), 'bearer ') === 0;
+        // The scheme is case-insensitive (RFC 7235): the app sends
+        // "Bearer ...", and a case-sensitive check silently sent its live-chat
+        // POST to the CSRF gate as a 419.
+        $bearer = stripos((string) $request->header('Authorization', ''), 'bearer ') === 0;
 
         $csrfExempt = strpos($request->uri(), '/webhooks/') === 0
             || $bearer

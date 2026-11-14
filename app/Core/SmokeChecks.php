@@ -6417,6 +6417,16 @@ class SmokeChecks
                 ? $ok('POST CSRF enforced; only webhook prefix exempt')
                 : $bad('Router must keep CSRF exemptions scoped to the /webhooks/ prefix');
         });
+        $add('smoke.sec.bearer_csrf_case', 'Smoke · Security', 'The Bearer CSRF exemption is case-insensitive', static function () use ($secRouterP, $ok, $bad): array {
+            // The scheme is case-insensitive (RFC 7235). The app sends
+            // "Bearer ...", and a case-sensitive check sent its live-chat
+            // POST to the CSRF gate as a 419.
+            $insensitive = strpos($secRouterP, "stripos((string) \$request->header('Authorization', ''), 'bearer ')") !== false;
+            $sensitive = strpos($secRouterP, "strpos((string) \$request->header('Authorization', ''), 'bearer ')") !== false;
+            return $insensitive && !$sensitive
+                ? $ok('Bearer is matched case-insensitively')
+                : $bad('Router must match the Authorization scheme with stripos (the app sends "Bearer", not "bearer")');
+        });
         $add('smoke.sec.no_superglobals_in_views', 'Smoke · Security', 'Views never echo request superglobals (XSS surface)', static function () use ($secViews, $ok, $bad): array {
             $cpu = preg_match('#<\?=\s*[^?]*\$_(GET|POST|REQUEST)\b#', $secViews)
                 || preg_match('#<\?php[^?]*\becho\b[^?]*\$_(GET|POST|REQUEST)\b#', $secViews)
