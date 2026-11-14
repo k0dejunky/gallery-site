@@ -1,9 +1,9 @@
 {
   "app": "operator-chat",
-  "latestVersion": "3.6",
-  "versionCode": 68,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v3.6.apk",
-  "sha256": "8e99de3744bf53e28b57c55b09faf4f890e05dec2e0b9095027da05765610a0f",
-  "changelog": "The camera preview is fixed: it was a black box, because the preview surface arrives before the camera and the encoder are ready and was then wiped by the teardown that precedes them. The surface is kept and attached when the encoder is there, and a failed attach is tried again. The sign-in hint now points at the right place (the admin panel's Operator app page), where the device tokens live.",
-  "publishedAt": "2026-10-22"
+  "latestVersion": "4.0",
+  "versionCode": 70,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v4.0.apk",
+  "sha256": "746cb73cc61b0b7aeffcc79f89f9db2ab5909726b93dcfe8571e6eab8b77b306",
+  "changelog": "Rebuilt from scratch on the same server contract: one console with four tabs (Chats, Live, Shows, Settings), a new studio look, a faster inbox, richer conversation screens with attachments and message actions, live-chat notifications that follow the broadcast into the background, a passcode/biometric lock, and quieter background sync. The broadcast engine, encrypting store and verifier are the proven ones, restructured behind one state spine.",
+  "publishedAt": "2026-11-14"
 }
