@@ -419,11 +419,12 @@ $nextShow = \App\Models\LiveShow::toApi(\App\Models\LiveShow::next());
         }
 
         // Live: (re)build the player + chat when the broadcast starts or the
-        // stream key changes; otherwise just catch up anything SSE missed.
+        // stream key changes; the 5s state poll carries chatMessages and the
+        // client below catches up anything newer. No chat EventSource: it
+        // held an FPM worker per viewer for the life of the stream.
         if (!wasLive || keyChanged) {
             resetChat(s.chatMessages || []);
             buildPlayer(s.streamKey || '', s.token || '');
-            connectSse(latestId);
         } else {
             (s.chatMessages || []).forEach(function (m) { if (m.id > latestId) addMsg(m); });
         }

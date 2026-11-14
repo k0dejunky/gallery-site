@@ -10304,8 +10304,18 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                     $problems[] = 'chat.js is missing ' . $needle;
                 }
             }
-            if (strpos($js, 'pingTyping') === false || strpos($js, 'connectStream') === false) {
-                $problems[] = 'chat.js must keep the SSE stream and the typing ping';
+            if (strpos($js, 'pingTyping') === false || strpos($js, 'startPoll(4000)') === false) {
+                $problems[] = 'chat.js must keep the typing ping and the 4s poll';
+            }
+            // CAPACITY: an SSE stream holds a PHP-FPM worker for its whole
+            // duration, so one web viewer = one worker. The poll delivers the
+            // same messages and the request ends in milliseconds.
+            if (strpos($js, 'this.connectStream();') !== false) {
+                $problems[] = 'the member chat must not open the SSE stream: it pins one FPM worker per viewer';
+            }
+            $liveView = (string) $read($root . '/views/live.php');
+            if (strpos($liveView, 'connectSse(latestId)') !== false) {
+                $problems[] = 'the live page must not open the chat SSE: its 5s state poll carries chatMessages';
             }
 
             // The admin layout raises a full-page "Saving…" overlay on every

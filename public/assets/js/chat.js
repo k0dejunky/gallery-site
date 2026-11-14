@@ -202,12 +202,13 @@
         this.typingEl && this.typingEl.classList.remove('is-visible');
 
         if (this.mode === 'member') {
-            // The event stream is the fast path on a box that flushes it; the
-            // poll is the safety net where a proxy buffers the whole response
-            // (mod_proxy_fcgi holds it until the script ends). Both deliver
-            // the same messages and the client dedupes by id, so keeping the
-            // poll is cheap insurance rather than a second code path.
-            this.connectStream();
+            // POLLING, not SSE, on the web. An event stream holds a PHP-FPM
+            // worker for its whole duration (~30 s), so one viewer = one
+            // worker and a live audience could exhaust the pool. The 4 s
+            // poll delivers the same messages (and typing/read state) from
+            // the same endpoints, and a request is over in milliseconds.
+            // The stream stays available for a future push transport; the
+            // Android operator bridge keeps its own SSE endpoint.
             this.startPoll(4000);
         }
         if (this.mode === 'admin') { this.startPoll(5000); }

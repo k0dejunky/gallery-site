@@ -395,7 +395,7 @@ gallery shows as locked.
 | 8.3 | Redis has **no `maxmemory`** and `noeviction` | the Redis config on the box | done - capped at 512 MB with `volatile-lru` on both boxes (every real key carries a TTL; FPM sessions live in Redis, so `allkeys-lru` is forbidden) | - |
 | 8.4 | The N+1s: the wall's comments (20), `Gallery::categories()` inside `recommended()` (8), `Comment::countFor()` per wall post in the admin engagement table (30) | `views/wall.php`, `app/Models/Gallery.php`, `views/admin/engagement.php` | done | 91d9f8b |
 | 8.5 | The operator app's SSE stream has a **busy loop** - the typing path re-queries with no sleep | `app/Controllers/ChatBridgeController.php` | done | `dc4fd12` |
-| 8.6 | The FPM pool: `pm.max_children=30` and each SSE connection holds a worker for 30s | the FPM pool config | pending | - |
+| 8.6 | The FPM pool: `pm.max_children=30` and each SSE connection holds a worker for 30s | the FPM pool config | done - FPM 120 / Apache event 400 workers, and the PUBLIC web chat/live pages now use their JSON polls instead of SSE (an SSE stream pins one FPM worker per viewer). The app keeps its own SSE endpoint. See `docs/CAPACITY.md` | `this commit` |
 
 ---
 
