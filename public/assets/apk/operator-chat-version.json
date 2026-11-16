@@ -1,9 +1,9 @@
 {
   "app": "operator-chat",
-  "latestVersion": "4.1",
-  "versionCode": 71,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v4.1.apk",
-  "sha256": "c038fee3808395c9431c24960b9a9d7e7ca8652f5be79e297f61e75ae04c2092",
-  "changelog": "Live chat fixes: the composer and the messages stay above the keyboard (the preview collapses while typing, then comes back), typing is visible immediately, and sending works again (the server now accepts the app's Bearer token case-insensitively for the live-chat POST). Also: a sent live-chat message appears in the chat list at once.",
-  "publishedAt": "2026-11-14"
+  "latestVersion": "4.2",
+  "versionCode": 72,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v4.2.apk",
+  "sha256": "59626e7c4579587f8ba7250894f23bb08aa68efdf7e91747158b6640281e92dd",
+  "changelog": "Live chat is fast now: new member messages appear within about a second (the app polls a new immediate endpoint instead of waiting for the 5-second stream window). Typing is always visible: focusing the message box collapses the camera preview so the chat and the composer sit above the keyboard, and a 'Show preview' button brings it back. Sending feels instant because the app reads the chat immediately after posting.",
+  "publishedAt": "2026-11-16"
 }
