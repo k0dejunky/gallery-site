@@ -1,9 +1,9 @@
 {
   "app": "operator-chat",
-  "latestVersion": "4.3",
-  "versionCode": 73,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v4.3.apk",
-  "sha256": "6a467799151bc9fbe4e4eadb780197a083d074d49c65c44a687eb35463e2bbe9",
-  "changelog": "Android 16 support: the app now targets API 36 and respects the status and navigation bars on Android 15/16, with the composer staying above the keyboard. Chat notifications use a messaging foreground service, so Android 15's six-hour data-sync limit no longer stops them. Removed the unused USB-camera native libraries: the download is about 5 MB instead of 13 MB, and the APK is 16 KB page-size compatible. Live broadcasts now use RTMPS (encrypted RTMP) when the server provides it.",
+  "latestVersion": "4.4",
+  "versionCode": 74,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v4.4.apk",
+  "sha256": "c7f1c9ff8aa7c46c66d034489e3b44d7d8a13685b766cb91e423bbc0ba3e27db",
+  "changelog": "Android 16 support: the app now targets API 36 and respects the status and navigation bars on Android 15/16, with the composer staying above the keyboard. Status bar and navigation icons stay light even when the phone is in light mode. Chat notifications use a messaging foreground service, so Android 15's six-hour data-sync limit no longer stops them. Removed the unused USB-camera native libraries: the download is about 5 MB instead of 13 MB, and the APK is 16 KB page-size compatible. Live broadcasts now use RTMPS (encrypted RTMP) when the server provides it.",
   "publishedAt": "2026-11-16"
 }
