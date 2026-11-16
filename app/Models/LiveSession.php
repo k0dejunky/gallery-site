@@ -93,7 +93,21 @@ class LiveSession
      */
     public static function rtmpUrl(string $host, string $rawKey, string $rawPublishSecret): string
     {
-        return 'rtmp://' . $host . ':1935/'
+        // Dev publishes over plain RTMP; production publishes over RTMPS so
+        // the stream key and the publish secret are not sent in clear text.
+        // The scheme and port are configuration, not code, because the dev
+        // box has no certificate the release app would trust.
+        $scheme = strtolower(trim((string) env_value('LIVE_RTMP_SCHEME', 'rtmp')));
+        if (!in_array($scheme, ['rtmp', 'rtmps'], true)) {
+            $scheme = 'rtmp';
+        }
+        $defaultPort = $scheme === 'rtmps' ? 1936 : 1935;
+        $port = (int) env_value('LIVE_RTMP_PORT', (string) $defaultPort);
+        if ($port < 1 || $port > 65535) {
+            $port = $defaultPort;
+        }
+
+        return $scheme . '://' . $host . ':' . $port . '/'
             . rawurlencode($rawKey . '?publish=' . $rawPublishSecret);
     }
 

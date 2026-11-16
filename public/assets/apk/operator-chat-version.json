@@ -1,9 +1,9 @@
 {
   "app": "operator-chat",
-  "latestVersion": "4.2",
-  "versionCode": 72,
-  "apkUrl": "/gallery/assets/apk/OperatorChat-v4.2.apk",
-  "sha256": "59626e7c4579587f8ba7250894f23bb08aa68efdf7e91747158b6640281e92dd",
-  "changelog": "Live chat is fast now: new member messages appear within about a second (the app polls a new immediate endpoint instead of waiting for the 5-second stream window). Typing is always visible: focusing the message box collapses the camera preview so the chat and the composer sit above the keyboard, and a 'Show preview' button brings it back. Sending feels instant because the app reads the chat immediately after posting.",
+  "latestVersion": "4.3",
+  "versionCode": 73,
+  "apkUrl": "/gallery/assets/apk/OperatorChat-v4.3.apk",
+  "sha256": "6a467799151bc9fbe4e4eadb780197a083d074d49c65c44a687eb35463e2bbe9",
+  "changelog": "Android 16 support: the app now targets API 36 and respects the status and navigation bars on Android 15/16, with the composer staying above the keyboard. Chat notifications use a messaging foreground service, so Android 15's six-hour data-sync limit no longer stops them. Removed the unused USB-camera native libraries: the download is about 5 MB instead of 13 MB, and the APK is 16 KB page-size compatible. Live broadcasts now use RTMPS (encrypted RTMP) when the server provides it.",
   "publishedAt": "2026-11-16"
 }

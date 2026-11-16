@@ -4211,6 +4211,44 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.live.rtmps_is_configurable', 'Smoke · Live', 'The live ingest scheme and port come from configuration', static function () use ($root, $read, $ok, $bad): array {
+            // Dev publishes plain RTMP; production publishes RTMPS. The app
+            // gets the url from /live/start, so the switch must be
+            // configuration (and must keep the publish secret in the query).
+            $model = (string) $read($root . '/app/Models/LiveSession.php');
+            $problems = [];
+
+            if (strpos($model, "env_value('LIVE_RTMP_SCHEME'") === false) {
+                $problems[] = 'the RTMP scheme must come from LIVE_RTMP_SCHEME';
+            }
+            if (strpos($model, "env_value('LIVE_RTMP_PORT'") === false) {
+                $problems[] = 'the RTMP port must come from LIVE_RTMP_PORT';
+            }
+
+            $scheme = strtolower(trim((string) env_value('LIVE_RTMP_SCHEME', 'rtmp')));
+            if (!in_array($scheme, ['rtmp', 'rtmps'], true)) {
+                $scheme = 'rtmp';
+            }
+            $port = (int) env_value('LIVE_RTMP_PORT', $scheme === 'rtmps' ? '1936' : '1935');
+            if ($port < 1 || $port > 65535) {
+                $port = $scheme === 'rtmps' ? 1936 : 1935;
+            }
+
+            $url = \App\Models\LiveSession::rtmpUrl('h', 'abc123', 'secret');
+            if (!str_starts_with($url, $scheme . '://h:' . $port . '/')) {
+                $problems[] = 'the built url does not use the configured ' . $scheme . ':' . $port;
+            }
+
+            $target = \App\Core\SmokeChecks::rtmpPublishTarget($url);
+            if ($target['pathName'] !== 'abc123' || $target['query'] !== 'publish=secret') {
+                $problems[] = 'the configured url no longer carries the key/secret through the MediaMTX parsers';
+            }
+
+            return $problems === []
+                ? $ok('the live ingest scheme/port are configuration (' . $scheme . ':' . $port . ')')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.live.shows_can_be_scheduled', 'Smoke · Live', 'A live show can be scheduled and the member page counts down to it', static function () use ($root, $read, $ok, $bad): array {
             // The operator schedules a show from the app; the member's live
             // page shows a countdown to it. The countdown has to be the SAME
