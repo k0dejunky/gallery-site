@@ -563,6 +563,50 @@ class LiveController extends Controller
     }
 
     /** Chat rows for a session newer than $since, with the sender's name. */
+    /**
+     * A cheap, immediate read of the live chat since an id.
+     *
+     * The SSE endpoint above holds a worker for ~5 seconds; on the operator
+     * side that made a member message take up to ~9 seconds to appear (5 s
+     * window + the 4 s pause between windows). This endpoint answers at once
+     * and is polled once a second by the operator app. The member page keeps
+     * its state/SSE path.
+     */
+    public function chatPoll(): void
+    {
+        $user = $this->liveChatUser();
+        if ($user === null) {
+            http_response_code(403);
+            $this->json(['ok' => false, 'error' => 'Not authorised to read live chat.']);
+            return;
+        }
+
+        if (!RateLimiter::allow(['live_chat_poll:' . (int) $user['id']], 120, 60)) {
+            http_response_code(429);
+            $this->json(['ok' => false, 'error' => 'Slow down a moment.']);
+            return;
+        }
+
+        $since  = max(0, (int) $this->request->query('since', 0));
+        $status = LiveSession::status();
+        if (!$status['live'] || $status['session_id'] === null) {
+            $this->json(['ok' => true, 'messages' => [], 'latestId' => 0]);
+            return;
+        }
+
+        $sid      = (int) $status['session_id'];
+        $latestId = (int) Database::run(
+            'SELECT COALESCE(MAX(id), 0) FROM live_chat_messages WHERE session_id = ?',
+            [$sid]
+        )->fetchColumn();
+
+        $this->json([
+            'ok'       => true,
+            'messages' => $this->chatRows($sid, $since),
+            'latestId' => $latestId,
+        ]);
+    }
+
     private function chatRows(int $sessionId, int $since): array
     {
         $rows = Database::run(

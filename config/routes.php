@@ -81,6 +81,7 @@ return [
     ['GET', '/live/status', 'LiveController@status'],
     ['GET', '/live/state', 'LiveController@state'],
     ['POST', '/live/chat/send', 'LiveController@chatSend'],
+    ['GET', '/live/chat/poll', 'LiveController@chatPoll'],
     ['GET', '/live/chat/stream', 'LiveController@chatStream'],
 
     // Auth

@@ -4337,6 +4337,27 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.live.chat_poll_endpoint', 'Smoke · Live', 'The operator can read live chat immediately, not only through the 5-second SSE window', static function () use ($root, $read, $ok, $bad): array {
+            // The operator app polls once a second; the SSE endpoint holds a
+            // worker for ~5 s, so a member message used to take up to ~9 s
+            // to appear.
+            $routes = (string) $read($root . '/config/routes.php');
+            $ctrl   = (string) $read($root . '/app/Controllers/LiveController.php');
+            $probs  = [];
+            if (strpos($routes, "['GET', '/live/chat/poll', 'LiveController@chatPoll']") === false) {
+                $probs[] = 'the /live/chat/poll route must exist';
+            }
+            if (strpos($ctrl, 'public function chatPoll(') === false) {
+                $probs[] = 'LiveController::chatPoll() must exist';
+            }
+            if (strpos($ctrl, "'live_chat_poll:'") === false) {
+                $probs[] = 'the poll endpoint must be rate limited';
+            }
+            return $probs === []
+                ? $ok('an immediate live-chat poll exists beside the SSE stream')
+                : $bad(implode('; ', $probs));
+        });
+
         $add('smoke.live.messages_can_be_acted_on', 'Smoke · Live', 'The operator can pin, delete and block in the chat', static function () use ($root, $read, $ok, $bad): array {
             // The app had NO per-message actions at all: a message could
             // not be taken down, kept at hand or copied, and a member could
