@@ -90,10 +90,14 @@ if ($stale !== []) {
         "The watchdog found " . count($stale) . " job(s) that have not run:\n\n"
             . implode("\n", $stale) . "\n\n"
             . 'Check the logs in storage/logs/ and the cron entries in /etc/cron.d/.',
-        3600
+        21600
     );
     fwrite(STDERR, 'watchdog: ' . implode('; ', $stale) . "\n");
     exit(1);
 }
+
+// Everything is running again: drop the alert key so the next outage is
+// reported at once instead of waiting out the cooldown.
+Mailer::clearAlert('watchdog-stale');
 
 exit(0);

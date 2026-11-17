@@ -10,6 +10,9 @@ namespace App\Core;
  * adminAlert() adds per-key cooldown dedupe (storage/logs/alerts.state) so
  * recurring conditions (disk low, login spikes, cron stale) cannot flood
  * the inbox: the same alert key is only re-sent after its cooldown passed.
+ * The read-check-write runs under an exclusive lock, so two concurrent
+ * requests cannot both decide to send, and clearAlert() drops the key when
+ * the condition clears so the NEXT occurrence is not delayed by a cooldown.
  */
 class Mailer
 {
@@ -89,6 +92,8 @@ class Mailer
      */
     private static function deliver(string $to, string $subject, string $headers, string $body): bool
     {
+        $headers = self::identityHeaders($headers);
+
         if (self::smtpConfigured() && self::sendSmtp($to, $subject, $headers, $body)) {
             return true;
         }
@@ -109,8 +114,12 @@ class Mailer
                 . $headers . "\r\n\r\n"
                 . $body;
 
+            // The random suffix keeps two messages with the same subject in
+            // the same second from overwriting each other (the outbox is the
+            // last-resort fallback, and losing one there hides a real mail).
             @file_put_contents(
-                $dir . '/' . date('Ymd-His') . '-' . preg_replace('/[^a-z0-9]+/i', '-', $subject === '' ? 'mail' : $subject) . '.eml',
+                $dir . '/' . date('Ymd-His') . '-' . bin2hex(random_bytes(3)) . '-'
+                    . preg_replace('/[^a-z0-9]+/i', '-', $subject === '' ? 'mail' : $subject) . '.eml',
                 $raw
             );
         }
@@ -124,6 +133,41 @@ class Mailer
     private static function from(): string
     {
         return self::sanitizeHeader((string) env_value('MAIL_FROM', 'gallery@localhost'));
+    }
+
+    /**
+     * Add the Date and Message-ID headers every message should carry.
+     *
+     * The alert mail went out without a Message-ID (167 of them sat in the
+     * admin mailbox like that), which breaks threading in the recipient's
+     * client and is a spam signal. A Message-ID also gives the receiving
+     * server something to collapse a genuine duplicate by.
+     */
+    private static function identityHeaders(string $headers): string
+    {
+        $has = static function (string $name) use ($headers): bool {
+            return (bool) preg_match('/^' . preg_quote($name, '/') . '\s*:/mi', $headers);
+        };
+
+        $extra = [];
+        if (!$has('Date')) {
+            $extra[] = 'Date: ' . date('r');
+        }
+        if (!$has('Message-ID')) {
+            $extra[] = 'Message-ID: <' . bin2hex(random_bytes(12)) . '@' . self::messageDomain() . '>';
+        }
+
+        return $extra === [] ? $headers : implode("\r\n", $extra) . "\r\n" . $headers;
+    }
+
+    /** The domain the Message-ID is minted on (the From address's domain). */
+    private static function messageDomain(): string
+    {
+        if (preg_match('/@([A-Za-z0-9.-]+)>?$/', self::from(), $m)) {
+            return strtolower($m[1]);
+        }
+
+        return 'localhost';
     }
 
     /**
@@ -376,31 +420,106 @@ class Mailer
         }
 
         $stateFile = self::stateFile();
-        $state     = [];
+        $fh        = @fopen($stateFile, 'c+');
 
-        if (is_file($stateFile)) {
-            $decoded = json_decode((string) @file_get_contents($stateFile), true);
-            $state   = is_array($decoded) ? $decoded : [];
-        }
+        if ($fh === false) {
+            // No state file means no dedupe. Fail OPEN: a missing alert is
+            // worse than a repeated one (this is the disk-full path, and the
+            // SMTP socket still works when the disk does not). The normal
+            // case is writable, so this branch is rare.
+            self::send(self::adminEmail(), '[gallery] ' . $subject, $body);
 
-        $now = time();
-        $last = (int) ($state[$key] ?? 0);
-
-        if ($now - $last < $cooldownSec) {
             return;
         }
 
-        $state[$key] = $now;
+        $send = false;
 
-        // Keep the state file small; drop entries older than 7 days.
-        foreach ($state as $k => $ts) {
-            if ($now - (int) $ts > 604800) {
-                unset($state[$k]);
+        try {
+            if (!@flock($fh, LOCK_EX)) {
+                return;
             }
+
+            $raw   = (string) stream_get_contents($fh);
+            $state = json_decode($raw, true);
+            $state = is_array($state) ? $state : [];
+
+            $now  = time();
+            $last = (int) ($state[$key] ?? 0);
+
+            // The lock makes this check-and-set atomic. Without it two
+            // concurrent requests (a webhook retried while the reconciler
+            // runs) both read the old state and both send - the duplicate
+            // "New PayPal payment" pair that arrived in the same second.
+            if ($now - $last >= $cooldownSec) {
+                $state[$key] = $now;
+                $send        = true;
+            }
+
+            // Keep the state file small; drop entries untouched for 30 days.
+            foreach ($state as $k => $ts) {
+                if ($now - (int) $ts > 2592000) {
+                    unset($state[$k]);
+                }
+            }
+
+            ftruncate($fh, 0);
+            rewind($fh);
+            fwrite($fh, (string) json_encode($state));
+            fflush($fh);
+            flock($fh, LOCK_UN);
+        } finally {
+            fclose($fh);
         }
 
-        @file_put_contents($stateFile, json_encode($state), LOCK_EX);
-        self::send(self::adminEmail(), '[gallery] ' . $subject, $body);
+        if ($send) {
+            self::send(self::adminEmail(), '[gallery] ' . $subject, $body);
+        }
+    }
+
+    /**
+     * The condition behind an alert has cleared.
+     *
+     * Dropping the key means the next occurrence alerts immediately instead
+     * of waiting out the cooldown - and, more importantly, a condition that
+     * stays broken is reminded at most once per cooldown instead of being
+     * re-sent on every run ("Disk at 88%" went out 39 times in one day
+     * because the 30-minute default re-fired while the disk stayed full).
+     */
+    public static function clearAlert(string $key): void
+    {
+        $stateFile = self::stateFile();
+
+        if (!is_file($stateFile)) {
+            return;
+        }
+
+        $fh = @fopen($stateFile, 'c+');
+        if ($fh === false) {
+            return;
+        }
+
+        try {
+            if (!@flock($fh, LOCK_EX)) {
+                return;
+            }
+
+            $raw   = (string) stream_get_contents($fh);
+            $state = json_decode($raw, true);
+            $state = is_array($state) ? $state : [];
+
+            if (!array_key_exists($key, $state)) {
+                return;
+            }
+
+            unset($state[$key]);
+            ftruncate($fh, 0);
+            rewind($fh);
+            fwrite($fh, (string) json_encode($state));
+            fflush($fh);
+            flock($fh, LOCK_UN);
+        } finally {
+            fclose($fh);
+        }
     }
 
     private static function outboxDir(): string

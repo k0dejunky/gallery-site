@@ -31,8 +31,10 @@ class AdminController extends Controller
                 'login-spike',
                 'Login failure spike',
                 sprintf("%d failed logins in the last hour. Review /admin/system for offending IPs.", $security['fails_hour']),
-                1800
+                21600
             );
+        } else {
+            \App\Core\Mailer::clearAlert('login-spike');
         }
 
         $root = dirname(__DIR__, 2);
@@ -47,8 +49,10 @@ class AdminController extends Controller
                 'cron-stale',
                 'Housekeeping cron may be down',
                 "Last housekeeping run was {$cronAge} minutes ago (expected every ~15).\nCheck /etc/cron.d/gallery-housekeeping on the server.",
-                14400
+                86400
             );
+        } else {
+            \App\Core\Mailer::clearAlert('cron-stale');
         }
 
         // The breakdown is computed in the BACKGROUND (the housekeeping

@@ -6828,6 +6828,78 @@ class SmokeChecks
                 ? $ok('unlock/tip/live/checkout throttled')
                 : $bad('PurchaseController must RateLimiter-allow unlock, tip, unlock-live, tip-live and checkoutToken');
         });
+        $add('smoke.mail.alerts_are_deduped_and_cleared', 'Smoke · Mail', 'Admin alerts cannot flood: atomic dedupe, a daily re-nag and a clear on recovery', static function () use ($root, $read, $ok, $bad): array {
+            // The admin mailbox held 208 "Backup sync unhealthy" messages
+            // (2/day for months), 73 "Disk at 88%" (39 in one day) and two
+            // identical "New PayPal payment" mails in the same second.
+            // Causes: a 26-hour window on a MONTHLY sync, a 30-minute default
+            // re-firing while the condition persisted, and a read-modify-write
+            // race in the state file.
+            $mailer = (string) $read($root . '/app/Core/Mailer.php');
+            $house  = (string) $read($root . '/app/Core/Housekeeping.php');
+            $watch  = (string) $read($root . '/bin/watchdog.php');
+            $admin  = (string) $read($root . '/app/Controllers/AdminController.php');
+            $problems = [];
+
+            if (strpos($mailer, 'function clearAlert(') === false) {
+                $problems[] = 'Mailer::clearAlert() is missing';
+            }
+            $at = strpos($mailer, 'function adminAlert(');
+            if ($at !== false) {
+                $end  = strpos($mailer, "\n    }\n", $at);
+                $body = substr($mailer, $at, ($end === false ? 2400 : $end - $at));
+                if (strpos($body, 'flock(') === false) {
+                    $problems[] = 'the alert check-and-set must hold a lock (two requests sent the same payment mail)';
+                }
+            }
+            if (strpos($mailer, 'Message-ID: <') === false) {
+                $problems[] = 'outgoing mail must carry a Message-ID';
+            }
+
+            // The monthly sync: a 26-hour window can never pass.
+            if (strpos($house, 'BACKUP_SYNC_MAX_AGE_HOURS') === false) {
+                $problems[] = 'the backup-sync window must follow the full backup cadence (env override)';
+            }
+            if (preg_match('/function watchBackupSync\(.*?\$ageH <= 26/s', $house)) {
+                $problems[] = 'the backup-sync alert still uses the 26-hour window on a monthly sync';
+            }
+
+            // Persistent conditions: a daily re-nag, and a clear when healthy.
+            // Look INSIDE each adminAlert(...) call, not near the first
+            // mention of the key (the clearAlert line comes first in the
+            // healthy branch and would fool a naive window).
+            preg_match_all('/Mailer::adminAlert\((.*?)\);/s', $house, $calls);
+            foreach (["'disk-fill'", "'disk-low'", "'backup-sync'"] as $key) {
+                $call = '';
+                foreach ($calls[1] ?? [] as $candidate) {
+                    if (strpos($candidate, $key) !== false) {
+                        $call = $candidate;
+                        break;
+                    }
+                }
+                if ($call === '') {
+                    $problems[] = 'Housekeeping no longer raises ' . $key;
+                    continue;
+                }
+                if (strpos($call, '86400') === false) {
+                    $problems[] = $key . ' must re-nag at most once a day';
+                }
+                if (strpos($house, 'clearAlert(' . $key . ')') === false) {
+                    $problems[] = $key . ' must be cleared when the condition recovers';
+                }
+            }
+            if (strpos($watch, "clearAlert('watchdog-stale')") === false) {
+                $problems[] = 'the watchdog must clear its alert when every job is running';
+            }
+            if (strpos($admin, "clearAlert('cron-stale')") === false) {
+                $problems[] = 'the cron-stale alert must clear when housekeeping is fresh again';
+            }
+
+            return $problems === []
+                ? $ok('atomic dedupe, daily re-nag, clear on recovery')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.sec.ffmpeg_guard', 'Smoke · Security', 'Housekeeping guards an ffmpeg burst', static function () use ($secHouse, $ok, $bad): array {
             return strpos($secHouse, "pgrep -fc ffmpeg") !== false && strpos($secHouse, '$out[\'ffmpeg_count\']') !== false
                 ? $ok('ffmpeg count captured + alert once >= 6')

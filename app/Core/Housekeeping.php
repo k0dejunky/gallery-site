@@ -56,8 +56,12 @@ class Housekeeping
                     Mailer::adminAlert(
                         'ffmpeg-burst',
                         'ffmpeg burst detected',
-                        'Concurrent process count: ' . $ffmpegCount . '. Check ps aux | grep ffmpeg.'
+                        'Concurrent process count: ' . $ffmpegCount . '. Check ps aux | grep ffmpeg.',
+                        21600
                     );
+                } else {
+                    // The burst is over; let the next one alert immediately.
+                    Mailer::clearAlert('ffmpeg-burst');
                 }
             } catch (\Throwable $e) {
                 $out['ffmpeg_count'] = -1;
@@ -78,8 +82,13 @@ class Housekeeping
                             'disk-fill',
                             'Disk at ' . $usedPct . '%',
                             'Filesystem used ' . $usedPct . '% of ' . round($diskTotal / 1073741824, 0)
-                            . ' GB (' . $out['disk_free_gb'] . ' GB free). df -h / to inspect.'
+                            . ' GB (' . $out['disk_free_gb'] . ' GB free). df -h / to inspect.',
+                            86400
                         );
+                    } else {
+                        // Below the threshold again: clear the key so the next
+                        // crossing alerts at once instead of after a day.
+                        Mailer::clearAlert('disk-fill');
                     }
                 }
             } catch (\Throwable $e) {
@@ -216,8 +225,10 @@ class Housekeeping
                         'Low disk space',
                         sprintf("Only %s GB free on the gallery server (threshold %s GB).\nClean up or extend the volume soon.",
                             $freeGb, env_value('DISK_MIN_FREE_GB', '10')),
-                        43200
+                        86400
                     );
+                } else {
+                    Mailer::clearAlert('disk-low');
                 }
             }
 
@@ -576,7 +587,7 @@ class Housekeeping
             'php-fatal',
             'PHP fatal error on the gallery site',
             "New PHP fatal/parse errors detected:\n\n" . $sample . "\n\nCheck storage/logs/php-error.log for the full trace.",
-            3600
+            21600
         );
 
         return count($fresh);
@@ -804,7 +815,15 @@ class Housekeeping
      */
     /**
      * Alert when the offsite backup sync looks unhealthy: the .last_sync
-     * status file reports a failure, or no successful sync for over 26 h.
+     * status file reports a failure, or no successful sync inside the
+     * expected window.
+     *
+     * The window follows the FULL backup's cadence, not a daily one: only
+     * that run uploads to the offsite store (the daily run is a local
+     * --db-only dump), and it is scheduled monthly. The old fixed 26-hour
+     * window therefore fired twice a day for the other 29 days of every
+     * month - 208 "Backup sync unhealthy" emails by mid-November. Override
+     * with BACKUP_SYNC_MAX_AGE_HOURS when the schedule changes.
      */
     private static function watchBackupSync(string $root): void
     {
@@ -813,21 +832,26 @@ class Housekeeping
             return; // sync feature not configured
         }
 
+        $maxAgeH = max(1.0, (float) env_value('BACKUP_SYNC_MAX_AGE_HOURS', '768')); // 32 days
+
         $data  = json_decode((string) @file_get_contents($file), true);
         $ok    = is_array($data) && !empty($data['ok']) && (int) ($data['sync_rc'] ?? 1) === 0;
         $ageH  = is_array($data) && !empty($data['at']) ? (time() - strtotime((string) $data['at'])) / 3600 : null;
 
-        if ($ok && $ageH !== null && $ageH <= 26) {
+        if ($ok && $ageH !== null && $ageH <= $maxAgeH) {
+            Mailer::clearAlert('backup-sync');
+
             return;
         }
 
+        $age = $ageH === null ? 'never' : ($ageH >= 48 ? round($ageH / 24) . ' days' : round($ageH) . ' hours');
         $why = !$ok ? 'last sync reported failure (sync_rc=' . ($data['sync_rc'] ?? '?') . ')'
-                    : 'no successful sync for ' . round((float) $ageH) . ' hours';
+                    : 'no successful sync for ' . $age . ' (expected within ' . round($maxAgeH) . ' hours)';
         Mailer::adminAlert(
             'backup-sync',
             'Backup sync unhealthy',
             "Offsite backup sync problem: {$why}.\nCheck storage/backups/.last_sync and the rclone logs on the server.",
-            43200
+            86400
         );
     }
 
@@ -853,6 +877,8 @@ class Housekeeping
         $ageD = is_array($data) && !empty($data['at']) ? (time() - strtotime((string) $data['at'])) / 86400 : null;
 
         if (is_array($data) && !empty($data['ok']) && $ageD !== null && $ageD <= 8) {
+            Mailer::clearAlert('restore-drill');
+
             return;
         }
 
