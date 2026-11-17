@@ -216,10 +216,35 @@ class Photo
      */
     public static function create(string $filename, string $hash): int
     {
-        Database::run(
-            'INSERT INTO photos (filename, is_video, hash, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)',
-            [$filename, is_video($filename) ? 1 : 0, $hash]
-        );
+        // The same bytes can reach the site twice: a live recording finalized
+        // by both /live/stop and the orphan importer, a re-upload of the same
+        // file, or a duplicate folder import. `photos.hash` is UNIQUE, and
+        // without this guard the second insert threw a PDOException and left
+        // an empty live gallery behind. Reuse the existing row instead.
+        $existing = self::findByHash($hash);
+        if ($existing !== null) {
+            return (int) $existing['id'];
+        }
+
+        try {
+            Database::run(
+                'INSERT INTO photos (filename, is_video, hash, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)',
+                [$filename, is_video($filename) ? 1 : 0, $hash]
+            );
+        } catch (\PDOException $e) {
+            // A concurrent request may have inserted the same hash between
+            // the SELECT above and this INSERT. MySQL reports 1062, SQLite
+            // reports 19; both use SQLSTATE 23000. Re-read and reuse it.
+            $driverCode = (int) ($e->errorInfo[1] ?? 0);
+            if ((string) $e->getCode() !== '23000' || !in_array($driverCode, [1062, 19], true)) {
+                throw $e;
+            }
+            $existing = self::findByHash($hash);
+            if ($existing === null) {
+                throw $e;
+            }
+            return (int) $existing['id'];
+        }
 
         \App\Core\Cache::bump('media');
         \App\Core\Cache::bump('gallery');

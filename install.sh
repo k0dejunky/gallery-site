@@ -227,6 +227,11 @@ log "Creating storage directories..."
 mkdir -p "$INSTALL_DIR/storage/uploads/exports"
 mkdir -p "$INSTALL_DIR/storage/uploads/pending"
 mkdir -p "$INSTALL_DIR/storage/themes"
+# MediaMTX runs as root and its runOnReady recorder writes .ts files here.
+# Create the directory as www-data BEFORE the chown below: if the recorder
+# creates it first, it is root-owned and the PHP importer cannot unlink the
+# recording, so the orphan importer re-imports the same file forever.
+mkdir -p "$INSTALL_DIR/storage/live-recordings"
 # Optionally copy the built-in theme presets if provided in source.
 if [[ -d "$SOURCE_DIR/storage/themes" ]]; then
     cp -a "$SOURCE_DIR"/storage/themes/*.json "$INSTALL_DIR/storage/themes/" 2>/dev/null || true

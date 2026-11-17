@@ -769,6 +769,39 @@ class TestSuite
                 return ['pass' => false, 'detail' => $e->getMessage()];
             }
         });
+        $add('db.photo_create_dedupes_by_hash', 'Database', 'creating the same bytes twice reuses the photo row', function () {
+            try {
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix = bin2hex(random_bytes(4));
+                    $hash   = sha1('probe-dedupe-' . $suffix);
+                    $first  = \App\Models\Photo::create('probe-dedupe-' . $suffix . '-a.jpg', $hash);
+                    $second = \App\Models\Photo::create('probe-dedupe-' . $suffix . '-b.jpg', $hash);
+                    $count  = (int) Database::run(
+                        'SELECT COUNT(*) FROM photos WHERE hash = ?',
+                        [$hash]
+                    )->fetchColumn();
+
+                    if ($first !== $second || $count !== 1) {
+                        throw new \RuntimeException('first=' . $first . ' second=' . $second . ' count=' . $count);
+                    }
+
+                    return ['pass' => true, 'detail' => 'duplicate hash reused the same photo row'];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $e) {
+                return ['pass' => false, 'detail' => $e->getMessage()];
+            }
+        });
+
         $add('db.media_dimensions', 'Database', 'the display size of a media file is stored on the photo row', function () {
             $cols = Database::run('SHOW COLUMNS FROM photos')->fetchAll();
             $have = [];

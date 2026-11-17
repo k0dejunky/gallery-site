@@ -55,12 +55,12 @@ return static function (): bool {
         $errors[] = 'display_errors must be disabled for web requests';
     }
 
-    // These integrations are optional, but their absence is useful in logs.
-    foreach (['APP_URL', 'PAYPAL_CLIENT_SECRET'] as $optional) {
-        if (env_value($optional) === '') {
-            error_log('[config] optional setting is not configured: ' . $optional);
-        }
-    }
+    // Optional integrations are allowed to be absent, and this file runs on
+    // every request. Do NOT error_log a missing optional key here: it filled
+    // the Apache error log with one "PHP message" per request (PAYPAL_* can
+    // also live in the payment-processor config in the database, so .env is
+    // not the only source). A genuinely required setting is already in
+    // $errors above and is logged once below.
 
     if ($errors !== []) {
         error_log('[config] invalid application configuration: ' . implode('; ', $errors));

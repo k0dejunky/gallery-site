@@ -255,16 +255,25 @@ class AuthController extends Controller
             $this->redirect('/login');
         }
 
-        $dobDate = date_create($dob);
-        if ($dobDate === false) {
+        $dobDate = \DateTimeImmutable::createFromFormat('!Y-m-d', (string) $dob);
+        $dobErrors = \DateTimeImmutable::getLastErrors();
+        if ($dobDate === false || ($dobErrors !== false
+            && (($dobErrors['warning_count'] ?? 0) > 0 || ($dobErrors['error_count'] ?? 0) > 0))) {
             $this->flash('error', 'Invalid date of birth.');
             $this->redirect($signupBack());
+            return;
         }
 
-        $age = (new \DateTime())->diff($dobDate)->y;
+        // Store the canonical Y-m-d form. The validator already rejects
+        // impossible days such as 1988-08-00, but normalising here means a
+        // format accepted by strtotime() can never reach MySQL as-is.
+        $dob = $dobDate->format('Y-m-d');
+
+        $age = (new \DateTimeImmutable())->diff($dobDate)->y;
         if ($age < 18) {
             $this->flash('error', 'You must be at least 18 years old to create an account.');
             $this->redirect($signupBack());
+            return;
         }
 
         User::create($email, $password, 'user', $dob);

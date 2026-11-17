@@ -131,8 +131,22 @@ class Validator
                 break;
 
             case 'date':
-                if ($value !== null && $value !== '' && strtotime((string) $value) === false) {
-                    return ucfirst($name) . ' must be a valid date.';
+                if ($value !== null && $value !== '') {
+                    $rawDate = trim((string) $value);
+                    // HTML date inputs send Y-m-d. strtotime() happily
+                    // normalises impossible days (1988-08-00 becomes July 31),
+                    // which then reaches MySQL strict mode as an invalid date
+                    // and turns a signup into a 500. Reject those values.
+                    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $rawDate) === 1) {
+                        $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $rawDate);
+                        $dateErrors = \DateTimeImmutable::getLastErrors();
+                        if ($parsed === false || ($dateErrors !== false
+                            && (($dateErrors['warning_count'] ?? 0) > 0 || ($dateErrors['error_count'] ?? 0) > 0))) {
+                            return ucfirst($name) . ' must be a valid date.';
+                        }
+                    } elseif (strtotime($rawDate) === false) {
+                        return ucfirst($name) . ' must be a valid date.';
+                    }
                 }
                 break;
         }

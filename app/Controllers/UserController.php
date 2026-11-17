@@ -625,11 +625,13 @@ class UserController extends Controller
         $dob      = $this->request->input('date_of_birth') ?: null;
 
         $errors = \App\Core\Validator::validate([
-            'email'    => $email,
-            'password' => $password,
+            'email'         => $email,
+            'password'      => $password,
+            'date_of_birth' => (string) ($dob ?? ''),
         ], [
-            'email'    => 'required|email',
-            'password' => 'required|min:8',
+            'email'         => 'required|email',
+            'password'      => 'required|min:8',
+            'date_of_birth' => 'date',
         ]);
 
         if ($errors !== []) {
@@ -642,6 +644,7 @@ class UserController extends Controller
             $this->redirect('/admin/users/create');
         }
 
+        $dob = $this->canonicalDateOfBirth($dob);
         User::create($email, $password, $role, $dob);
         $userId = (int) Database::connection()->lastInsertId();
 
@@ -771,6 +774,18 @@ class UserController extends Controller
         }
 
         $dob   = $this->request->input('date_of_birth') ?: null;
+        if ($dob !== null && trim((string) $dob) !== '') {
+            $dobErrors = \App\Core\Validator::validate(
+                ['date_of_birth' => (string) $dob],
+                ['date_of_birth' => 'date']
+            );
+            if ($dobErrors !== []) {
+                $this->flash('error', implode(' ', $dobErrors));
+                $this->redirect('/admin/users/' . $id . '/edit');
+                return;
+            }
+            $dob = $this->canonicalDateOfBirth($dob);
+        }
         $av    = $this->request->input('age_verified') === '1';
         $bFn   = $this->request->input('billing_first_name');
         $bLn   = $this->request->input('billing_last_name');
@@ -826,5 +841,27 @@ class UserController extends Controller
 
         $this->flash('success', 'User "' . $email . '" updated.');
         $this->redirect('/admin/users');
+    }
+
+    /**
+     * Normalise a date of birth to the database's Y-m-d form. The Validator
+     * has already rejected impossible days; this is the final guard that keeps
+     * a value such as "1988-08-00" (which PHP would silently normalise) out of
+     * a MySQL strict-mode INSERT.
+     */
+    private function canonicalDateOfBirth(?string $dob): ?string
+    {
+        if ($dob === null || trim($dob) === '') {
+            return null;
+        }
+
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', trim($dob));
+        $errors = \DateTimeImmutable::getLastErrors();
+        if ($date === false || ($errors !== false
+            && (($errors['warning_count'] ?? 0) > 0 || ($errors['error_count'] ?? 0) > 0))) {
+            return null;
+        }
+
+        return $date->format('Y-m-d');
     }
 }

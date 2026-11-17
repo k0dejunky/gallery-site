@@ -33,6 +33,35 @@ class LiveRecording
         // it is normalised before it is used as a file name.
         $streamKey = LiveSession::rawKeyFromUrl($streamKey);
 
+        if (!preg_match('/^[A-Za-z0-9]+$/', $streamKey)) {
+            return null;
+        }
+
+        // Single-flight per stream. /live/stop and the orphan importer can
+        // both see the same .ts file; two ffmpeg runs then produce two MP4s
+        // with the same bytes, and the second Photo::create() used to die on
+        // photos.hash and leave an empty gallery. The loser returns null; the
+        // winner still imports the recording and the session is marked ended.
+        $lockPath = self::recordingsDir() . '/.finalize-' . $streamKey . '.lock';
+        $lock = @fopen($lockPath, 'c');
+        if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
+            if ($lock !== false) {
+                fclose($lock);
+            }
+            return null;
+        }
+
+        try {
+            return self::finalizeLocked($streamKey);
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+    }
+
+    /** The actual import; the caller must hold the per-stream finalize lock. */
+    private static function finalizeLocked(string $streamKey): ?int
+    {
         // Re-encoding a long recording can take many minutes. When finalize
         // runs from /live/stop the app's HTTP client gives up after 30s and
         // disconnects; without these, PHP would abort and kill ffmpeg mid-way.
@@ -40,10 +69,6 @@ class LiveRecording
         // recording always becomes a gallery.
         @ignore_user_abort(true);
         @set_time_limit(0);
-
-        if (!preg_match('/^[A-Za-z0-9]+$/', $streamKey)) {
-            return null;
-        }
 
         $file = self::recordingsDir() . '/' . $streamKey . '.ts';
         if (!is_file($file)) {
@@ -66,7 +91,7 @@ class LiveRecording
         // broadcast can take many minutes). Only fall back to re-encoding when
         // the copy loses the video stream (a recording that began mid-GOP).
         $cmd = 'ffmpeg -hide_banner -loglevel error -y -i ' . escapeshellarg($file)
-            . ' -map 0:v:0 -map 0:a:0 -c copy -movflags +faststart ' . escapeshellarg($mp4) . ' 2>&1';
+            . ' -map 0:v:0 -map 0:a:0? -c copy -movflags +faststart ' . escapeshellarg($mp4) . ' 2>&1';
         exec($cmd, $out, $rc);
         $ok = $rc === 0 && is_file($mp4) && (int) filesize($mp4) >= 100 * 1024
             && video_has_stream($mp4);
@@ -78,7 +103,7 @@ class LiveRecording
             error_log('[live] copy remux produced no playable video; re-encoding');
             @unlink($mp4);
             $cmd = 'ffmpeg -hide_banner -loglevel error -y -i ' . escapeshellarg($file)
-                . ' -map 0:v:0 -map 0:a:0'
+                . ' -map 0:v:0 -map 0:a:0?'
                 . ' -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p'
                 . ' -c:a aac -b:a 128k -movflags +faststart ' . escapeshellarg($mp4) . ' 2>&1';
             exec($cmd, $out, $rc);
@@ -104,9 +129,32 @@ class LiveRecording
         $when = tzdate('Y-m-d H:i', gmdate('Y-m-d H:i:s'));
         $title = 'Live Stream ' . $when;
 
-        $galleryId = Gallery::create($title, 'Recorded live on ' . $when, 'videos', 3, null, false);
-        $photoId   = Photo::create($mp4Name, (string) sha1_file($mp4));
-        Gallery::attachPhoto($galleryId, $photoId);
+        // Create the photo and the gallery in one transaction. The old order
+        // created the gallery first; when Photo::create() hit the UNIQUE hash
+        // the request died and left an empty gallery behind.
+        $db = \App\Core\Database::connection();
+        $db->beginTransaction();
+        try {
+            $hash          = (string) sha1_file($mp4);
+            $existingPhoto = Photo::findByHash($hash);
+            $photoId       = Photo::create($mp4Name, $hash);
+            if ($existingPhoto !== null) {
+                // The same bytes were already imported: the gallery will use
+                // the existing photo, so this second copy is dead weight.
+                @unlink($mp4);
+                @unlink($config['dir'] . '/thumb_' . $mp4Name);
+            }
+            $galleryId = Gallery::create($title, 'Recorded live on ' . $when, 'videos', 3, null, false);
+            Gallery::attachPhoto($galleryId, $photoId);
+            $db->commit();
+        } catch (\Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            @unlink($mp4);
+            @unlink($config['dir'] . '/thumb_' . $mp4Name);
+            throw $e;
+        }
 
         // Auto-post to X + Reddit like any new gallery.
         AutoPostQueue::enqueueGalleryPosts($galleryId, null);

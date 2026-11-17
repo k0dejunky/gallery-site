@@ -4249,6 +4249,29 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.live.recording_finalize_is_single_flight', 'Smoke · Live', 'a live recording cannot be imported twice', static function () use ($root, $read, $ok, $bad): array {
+            $recording = (string) $read($root . '/app/Models/LiveRecording.php');
+            $photo     = (string) $read($root . '/app/Models/Photo.php');
+            $problems  = [];
+
+            if (strpos($recording, 'flock($lock, LOCK_EX | LOCK_NB)') === false
+                || strpos($recording, '.finalize-') === false) {
+                $problems[] = 'LiveRecording::finalize must take a per-stream flock before importing';
+            }
+            if (strpos($recording, 'beginTransaction()') === false
+                || strpos($recording, 'rollBack()') === false) {
+                $problems[] = 'photo + gallery creation must be transactional so a failed photo cannot leave an empty gallery';
+            }
+            if (strpos($photo, 'findByHash($hash)') === false
+                || strpos($photo, "'23000'") === false) {
+                $problems[] = 'Photo::create must reuse an existing row for a duplicate hash instead of throwing';
+            }
+
+            return $problems === []
+                ? $ok('single-flight lock + idempotent photo + transaction')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.live.shows_can_be_scheduled', 'Smoke · Live', 'A live show can be scheduled and the member page counts down to it', static function () use ($root, $read, $ok, $bad): array {
             // The operator schedules a show from the app; the member's live
             // page shows a countdown to it. The countdown has to be the SAME
@@ -9364,6 +9387,35 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             return strpos($validator, 'is_array($value)') !== false && strpos($validator, 'foreach ($value as $item)') !== false
                 ? $ok('numeric arrays pass, non-numeric items rejected')
                 : $bad('Validator::check must treat an array under the numeric rule as "every value numeric", so optional checkbox fields (e.g. gallery categories) can be empty and still save');
+        });
+        $add('smoke.validator.impossible_date', 'Smoke · Validator', 'date rule rejects impossible calendar days', static function () use ($ok, $bad): array {
+            // MySQL strict mode rejects 1988-08-00; strtotime() used to
+            // normalise it to July 31, so signup reached the INSERT and died
+            // with an uncaught PDOException.
+            $badDate  = \App\Core\Validator::validate(
+                ['date_of_birth' => '1988-08-00'],
+                ['date_of_birth' => 'required|date']
+            );
+            $goodDate = \App\Core\Validator::validate(
+                ['date_of_birth' => '1988-08-01'],
+                ['date_of_birth' => 'required|date']
+            );
+            $empty    = \App\Core\Validator::validate(
+                ['date_of_birth' => ''],
+                ['date_of_birth' => 'date']
+            );
+
+            return $badDate !== [] && $goodDate === [] && $empty === []
+                ? $ok('1988-08-00 rejected; valid and empty dates accepted')
+                : $bad('Validator::date must reject impossible Y-m-d days instead of letting MySQL strict mode turn them into a 500');
+        });
+        $add('smoke.config.optional_settings_quiet', 'Smoke · Config', 'optional settings do not spam the error log on every request', static function () use ($root, $read, $ok, $bad): array {
+            $validate = (string) $read($root . '/config/validate.php');
+
+            return strpos($validate, 'optional setting is not configured') === false
+                && strpos($validate, "error_log('[config] optional") === false
+                ? $ok('optional settings are silent')
+                : $bad('config/validate.php must not error_log missing optional settings; it runs on every request and filled the Apache log with one PHP message per request');
         });
 
         // ------------------------------------------------- Security & Ops
