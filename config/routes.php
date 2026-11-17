@@ -550,6 +550,7 @@ return [
     ['POST', '/admin/auto-poster/channel/instance/remove', 'AutoPosterController@removeInstance', 'autoposter'],
     ['POST', '/admin/auto-poster/channel/post', 'AutoPosterController@postNow', 'autoposter'],
     ['POST', '/admin/auto-poster/channels/enable', 'AutoPosterController@enableChannels', 'autoposter'],
+    ['POST', '/admin/auto-poster/channel/resume', 'AutoPosterController@resumeChannel', 'autoposter'],
     ['POST', '/admin/auto-poster/post/reddit', 'AutoPosterController@postReddit', 'autoposter'],
     ['POST', '/admin/auto-poster/post/twitter', 'AutoPosterController@postTwitter', 'autoposter'],
     ['POST', '/admin/auto-poster/queue/recommend', 'AutoPosterController@queueRecommendation', 'autoposter'],

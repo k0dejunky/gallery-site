@@ -6473,6 +6473,38 @@ class SmokeChecks
                 ? $ok('homeworker polls take + runs the post script + reports')
                 : $bad('bin/browser/reddit-homeworker.mjs must poll browser-jobs, run reddit-post.mjs and POST the report');
         });
+        $add('smoke.ap.resume_paused_channel', 'Smoke · Auto Poster', 'Reactivating a channel clears its pause and refills the queue', static function () use ($root, $read, $ok, $bad): array {
+            $ctrl   = (string) $read($root . '/app/Controllers/AutoPosterController.php');
+            $view   = (string) $read($root . '/views/admin/auto_poster.php');
+            $routes = (string) $read($root . '/config/routes.php');
+            $cfg    = (string) $read($root . '/app/Models/AutoPosterConfig.php');
+            $problems = [];
+
+            if (strpos($routes, "'/admin/auto-poster/channel/resume'") === false
+                || strpos($routes, 'AutoPosterController@resumeChannel') === false) {
+                $problems[] = 'the resume route must exist';
+            }
+            if (strpos($cfg, 'function resumePlatform') === false) {
+                $problems[] = 'AutoPosterConfig::resumePlatform is missing';
+            }
+            if (strpos($ctrl, 'function resumeChannel') === false
+                || strpos($ctrl, 'AutoPosterConfig::resumePlatform($platform)') === false) {
+                $problems[] = 'resumeChannel must clear the pause';
+            }
+            $enablePos = strpos($ctrl, 'public function enableChannels');
+            $enableChunk = $enablePos !== false ? substr($ctrl, $enablePos, 2500) : '';
+            if (strpos($enableChunk, 'AutoPosterConfig::resumePlatform($platform)') === false
+                || strpos($enableChunk, 'refillAhead(24)') === false) {
+                $problems[] = 'saving the channel selection must also resume the current platform and refill';
+            }
+            if (strpos($view, 'channel/resume') === false || strpos($view, 'Resume posting') === false) {
+                $problems[] = 'the paused channel must show a Resume posting button';
+            }
+
+            return $problems === []
+                ? $ok('resume route + button + pause clear + refill')
+                : $bad(implode('; ', $problems));
+        });
 
         // ---------------------------------------------------------- Security
         $secRouterP = $read("$root/app/Core/Router.php");

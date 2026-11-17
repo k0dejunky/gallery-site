@@ -380,10 +380,40 @@ class AutoPosterController extends Controller
      */
     public function enableChannels(): void
     {
+        $platform = $this->platformFromPost();
         $keys = (array) $this->request->post('channels', []);
         AutoPosterConfig::setEnabledChannels(array_map('strval', $keys));
-        $this->flash('success', 'Channel selection updated — the queue now feeds the enabled channels.');
-        $this->redirectPath($this->platformFromPost());
+
+        // Saving the channel selection from a platform's tab is the admin
+        // saying "this channel should be active". A channel can still be
+        // paused from an earlier failure/manual stop, so clear that pause for
+        // the current tab as well; otherwise the queue stays empty and the
+        // checkbox appears to do nothing.
+        if (in_array($platform, AutoPosterConfig::enabledChannels(), true)) {
+            AutoPosterConfig::resumePlatform($platform);
+        }
+
+        $refilled = AutoPostQueue::refillAhead(24);
+        $this->flash('success', 'Channel selection updated — the queue now feeds the enabled channels.'
+            . ($refilled > 0 ? ' ' . $refilled . ' post(s) scheduled.' : ''));
+        $this->redirectPath($platform);
+    }
+
+    /**
+     * Clear a channel's pause and refill the queue. The pause is written by
+     * the circuit breaker after a run of failures (or by a manual stop), and
+     * it skips every queued row, so "reactivating" the channel in the UI did
+     * nothing until this was cleared.
+     */
+    public function resumeChannel(): void
+    {
+        $platform = $this->platformFromPost();
+        AutoPosterConfig::resumePlatform($platform);
+        $refilled = AutoPostQueue::refillAhead(24);
+
+        $this->flash('success', Platforms::label($platform) . ' posting resumed.'
+            . ($refilled > 0 ? ' ' . $refilled . ' post(s) scheduled.' : ' The queue will refill on the next worker tick.'));
+        $this->redirectPath($platform);
     }
 
     /**

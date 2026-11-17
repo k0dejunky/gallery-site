@@ -158,8 +158,13 @@ $platformPath  = $platform === 'x' ? url('/admin/auto-poster') : url('/admin/aut
     <?php if (is_array($apPause)): ?>
         <p class="ap-pill-failed" style="display:inline-block;margin:.25rem 0 .75rem;padding:.4rem .6rem;border-radius:6px;font-size:.82rem;">
             Auto-paused after <?= (int) ($apPause['streak'] ?? 0) ?> consecutive failures<?= !empty($apPause['reason']) ? ' — ' . e((string) $apPause['reason']) : '' ?>.
-            Fix the connection, then Retry a failed post below to resume. Saving this channel&rsquo;s credentials also resumes it.
+            Fix the connection, then click Resume posting (or Retry a failed post). Saving this channel&rsquo;s credentials also resumes it.
         </p>
+        <form method="post" action="<?= url('/admin/auto-poster/channel/resume') ?>" class="inline" style="margin:0 0 .75rem;">
+            <?= csrf_field() ?>
+            <input type="hidden" name="platform" value="<?= e($platform) ?>">
+            <button type="submit" class="btn btn-sm">Resume posting</button>
+        </form>
     <?php endif; ?>
     <div id="ap-queue-body">
     <?php if (empty($queue)): ?>
@@ -485,9 +490,12 @@ $platformPath  = $platform === 'x' ? url('/admin/auto-poster') : url('/admin/aut
                 session: <?= $sessionOk ? ('saved ' . (int) $sessionAge . ' day(s) ago') : '<span style="color:var(--adm-err);">none yet</span>' ?> &middot;
                 enabled: <?= $btOn ? 'yes' : 'no' ?>
                 <?php if (!$btOn || !$sessionOk || !$playwrightOk): ?>
-                    <br><span class="muted">On the server run <code>sudo bash bin/browser/setup_reddit_browser.sh</code>, log in once with
-                    <code>node bin/browser/reddit-login.mjs</code>, then tick &ldquo;Browser post&rdquo; above. Queued posts will then share to
-                    Reddit exactly like the site&rsquo;s share button.</span>
+                    <br><span class="muted">On the home-worker machine (a residential IP, not this cloud server) run
+                    <code>bash bin/browser/setup_reddit_browser.sh</code>, log in once with
+                    <code>node bin/browser/reddit-login.mjs</code>, then start
+                    <code>node bin/browser/reddit-homeworker.mjs</code>. This server&rsquo;s
+                    <code>storage/reddit-browser</code> copy is only used if the browser runs here; the home worker keeps its own
+                    session and polls this site for queued posts.</span>
                 <?php endif; ?>
             </p>
         <?php endif; ?>
