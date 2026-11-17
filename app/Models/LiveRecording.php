@@ -156,11 +156,24 @@ class LiveRecording
             throw $e;
         }
 
-        // Auto-post to X + Reddit like any new gallery.
-        AutoPostQueue::enqueueGalleryPosts($galleryId, null);
-
-        @unlink($file);
+        // The recording has been imported: delete the source BEFORE the
+        // auto-post enqueue, so a queue failure cannot leave the .ts behind
+        // for the orphan importer to import a second time. A failed unlink is
+        // logged (it means the directory is not writable by www-data, which
+        // would make the importer retry the same file forever).
+        if (!@unlink($file)) {
+            error_log('[live] imported gallery ' . $galleryId . ' but could not delete ' . $file
+                . ' (check storage/live-recordings ownership)');
+        }
         \App\Core\Cache::bump('gallery');
+
+        // Auto-post to X + Reddit like any new gallery. A queue failure must
+        // not undo a successful import.
+        try {
+            AutoPostQueue::enqueueGalleryPosts($galleryId, null);
+        } catch (\Throwable $e) {
+            error_log('[live] auto-post enqueue failed for gallery ' . $galleryId . ': ' . $e->getMessage());
+        }
 
         return $galleryId;
     }
