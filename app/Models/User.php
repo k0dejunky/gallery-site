@@ -77,8 +77,12 @@ class User
         }
 
         $sql = 'SELECT u.id, u.email, u.role, u.created_at, u.last_login_at, u.status,
+                       u.signup_trial_link_id, u.signup_trial_code,
+                       u.signup_source_link_id, u.utm_source, u.utm_campaign,
+                       tl.name AS traffic_link_name,
                        s.status AS sub_status, p.name AS sub_plan
                 FROM users u
+                LEFT JOIN traffic_links tl ON tl.id = u.signup_source_link_id
                 LEFT JOIN subscriptions s ON s.id = (
                     SELECT MAX(s2.id) FROM subscriptions s2 WHERE s2.user_id = u.id
                 )
@@ -115,6 +119,28 @@ class User
         );
 
         return true;
+    }
+
+    /**
+     * Record the trial link a signup came from. The subscription's
+     * TRIAL-... reference is random, so without this the admin cannot tell
+     * which admin-generated link (and therefore which level/days/campaign)
+     * granted the trial.
+     */
+    public static function recordTrialSource(int $userId, int $linkId, string $code): void
+    {
+        if ($userId <= 0) {
+            return;
+        }
+
+        Database::run(
+            'UPDATE users SET signup_trial_link_id = ?, signup_trial_code = ? WHERE id = ?',
+            [
+                $linkId > 0 ? $linkId : null,
+                $code !== '' ? mb_substr(trim($code), 0, 24) : null,
+                $userId,
+            ]
+        );
     }
 
     /**

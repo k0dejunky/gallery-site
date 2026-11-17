@@ -9,6 +9,7 @@ use App\Core\Request;
 use App\Models\AuditLog;
 use App\Models\Plan;
 use App\Models\Subscription;
+use App\Models\TrialLink;
 use App\Models\User;
 
 class UserController extends Controller
@@ -483,6 +484,32 @@ class UserController extends Controller
 
         $lifetimeRevenue = User::lifetimeRevenue($id);
 
+        // Where did this signup (and its trial) come from? The trial link is
+        // stored on the user; fall back to the code when the link was deleted.
+        $trialSource = null;
+        if (!empty($user['signup_trial_link_id'])) {
+            $trialSource = TrialLink::find((int) $user['signup_trial_link_id']);
+        }
+        if ($trialSource === null && !empty($user['signup_trial_code'])) {
+            $trialSource = ['code' => (string) $user['signup_trial_code']];
+        }
+
+        $trafficLink = null;
+        if (!empty($user['signup_source_link_id'])) {
+            $trafficLink = Database::run(
+                'SELECT id, code, name, target_path FROM traffic_links WHERE id = ? LIMIT 1',
+                [(int) $user['signup_source_link_id']]
+            )->fetch() ?: null;
+        }
+
+        $referrer = null;
+        if (!empty($user['referred_by_user_id'])) {
+            $referrer = Database::run(
+                'SELECT id, email FROM users WHERE id = ? LIMIT 1',
+                [(int) $user['referred_by_user_id']]
+            )->fetch() ?: null;
+        }
+
         $this->viewAdmin('user_show', [
             'user'            => $user,
             'subscriptions'   => $subscriptions,
@@ -490,6 +517,9 @@ class UserController extends Controller
             'logins'          => $logins,
             'notes'           => $notes,
             'lifetimeRevenue' => $lifetimeRevenue,
+            'trialSource'     => $trialSource,
+            'trafficLink'     => $trafficLink,
+            'referrer'        => $referrer,
         ]);
     }
 

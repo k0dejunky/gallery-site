@@ -36,10 +36,15 @@ CREATE TABLE IF NOT EXISTS users (
     notify_live TINYINT(1) NOT NULL DEFAULT 1,
     notify_chat_reply TINYINT(1) NOT NULL DEFAULT 1,
     signup_source_link_id INT UNSIGNED NULL DEFAULT NULL,
+    signup_trial_link_id INT UNSIGNED NULL DEFAULT NULL,
+    signup_trial_code VARCHAR(24) NULL DEFAULT NULL,
     referral_code CHAR(12) NULL DEFAULT NULL,
     UNIQUE KEY uq_users_referral_code (referral_code),
+    INDEX idx_users_signup_trial (signup_trial_link_id),
     CONSTRAINT fk_users_traffic_link FOREIGN KEY (signup_source_link_id)
         REFERENCES traffic_links(id) ON DELETE SET NULL,
+    CONSTRAINT fk_users_trial_link FOREIGN KEY (signup_trial_link_id)
+        REFERENCES trial_links(id) ON DELETE SET NULL,
     referred_by_user_id INT UNSIGNED NULL DEFAULT NULL,
     referred_by_rewarded_at DATETIME NULL DEFAULT NULL,
     utm_source   VARCHAR(120) NULL,

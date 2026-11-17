@@ -85,6 +85,7 @@ echo AdminTable::shell([
     'columns'  => [
         ['label' => '<input type="checkbox" id="check-all" title="Select all">'],
         ['label' => AdminTable::sortLink('email', 'Email', $sortBy ?? '', $sortDir ?? '', $baseParams, $sortBase)],
+        ['label' => 'Source'],
         ['label' => AdminTable::sortLink('role', 'Role', $sortBy ?? '', $sortDir ?? '', $baseParams, $sortBase)],
         ['label' => AdminTable::sortLink('status', 'Status', $sortBy ?? '', $sortDir ?? '', $baseParams, $sortBase)],
         ['label' => 'Last login'],
@@ -111,6 +112,17 @@ echo AdminTable::shell([
                                 <?php endif; ?>
                             </select>
                         </form>
+                    <?php endif; ?>
+                </td>
+                <td class="user-source">
+                    <?php if (!empty($user['signup_trial_code'])): ?>
+                        <span title="Trial link">Trial · <?= e((string) $user['signup_trial_code']) ?></span>
+                    <?php elseif (!empty($user['traffic_link_name'])): ?>
+                        <?= e((string) $user['traffic_link_name']) ?>
+                    <?php elseif (!empty($user['utm_source'])): ?>
+                        <?= e((string) $user['utm_source']) ?><?= !empty($user['utm_campaign']) ? ' / ' . e((string) $user['utm_campaign']) : '' ?>
+                    <?php else: ?>
+                        <span class="muted">—</span>
                     <?php endif; ?>
                 </td>
                 <td>

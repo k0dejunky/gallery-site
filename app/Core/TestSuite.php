@@ -802,6 +802,40 @@ class TestSuite
             }
         });
 
+        $add('db.trial_source_recorded', 'Database', 'a trial signup records the trial link it came from', function () {
+            try {
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $adminId = self::scratchUserId('probe.trial.admin');
+                    $linkId  = \App\Models\TrialLink::create($adminId, 1, 3, 1);
+                    $link    = \App\Models\TrialLink::find($linkId);
+                    $code    = (string) ($link['code'] ?? '');
+                    $userId  = self::scratchUserId('probe.trial.source');
+                    \App\Models\User::recordTrialSource($userId, $linkId, $code);
+                    $row = Database::run(
+                        'SELECT signup_trial_link_id, signup_trial_code FROM users WHERE id = ?',
+                        [$userId]
+                    )->fetch();
+                    $ok = (int) ($row['signup_trial_link_id'] ?? 0) === $linkId
+                        && (string) ($row['signup_trial_code'] ?? '') === $code
+                        && $code !== '';
+
+                    return ['pass' => $ok, 'detail' => json_encode($row)];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $e) {
+                return ['pass' => false, 'detail' => $e->getMessage()];
+            }
+        });
+
         $add('db.media_dimensions', 'Database', 'the display size of a media file is stored on the photo row', function () {
             $cols = Database::run('SHOW COLUMNS FROM photos')->fetchAll();
             $have = [];

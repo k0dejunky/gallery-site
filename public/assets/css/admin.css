@@ -1645,6 +1645,7 @@ body.admin-theme {
 .admin-theme .user-email { font-weight: 700; color: var(--heading-color); }
 .admin-theme .user-date { white-space: nowrap; color: var(--muted-text-color); font-size: 12px; }
 .admin-theme .user-date-nowrap { white-space: nowrap; }
+.admin-theme .user-source { white-space: nowrap; color: var(--muted-text-color); font-size: 12px; }
 .admin-theme .users-footer { margin-top: 1rem; display: flex; justify-content: flex-end; }
 
 @media (max-width: 760px) {

@@ -33,6 +33,46 @@
         <div class="ud-kv"><span>Status</span><b><?= e($user['status'] ?? 'active') ?></b></div>
     </div>
     <div class="ud-card">
+        <h3>Signup source</h3>
+        <div class="ud-kv"><span>Trial link</span><b>
+            <?php if (!empty($trialSource['code'])): ?>
+                <code><?= e((string) $trialSource['code']) ?></code>
+                <?php if (!empty($trialSource['level'])): ?>
+                    · <?= e(\App\Models\TrialLink::levelLabel((int) $trialSource['level'])) ?>
+                    <?= (int) ($trialSource['days'] ?? 0) ?>-day
+                <?php endif; ?>
+                <?php if (!empty($trialSource['id'])): ?> · link #<?= (int) $trialSource['id'] ?><?php endif; ?>
+            <?php else: ?>
+                <span class="muted">none recorded</span>
+            <?php endif; ?>
+        </b></div>
+        <div class="ud-kv"><span>Traffic link</span><b>
+            <?php if (!empty($trafficLink['name'])): ?>
+                <?= e((string) $trafficLink['name']) ?>
+                <span class="muted">(<?= e((string) $trafficLink['code']) ?>)</span>
+            <?php else: ?>
+                <span class="muted">none recorded</span>
+            <?php endif; ?>
+        </b></div>
+        <div class="ud-kv"><span>UTM</span><b>
+            <?php
+            $utmParts = array_filter([
+                (string) ($user['utm_source'] ?? ''),
+                (string) ($user['utm_medium'] ?? ''),
+                (string) ($user['utm_campaign'] ?? ''),
+            ], static fn (string $v): bool => $v !== '');
+            echo $utmParts !== [] ? e(implode(' / ', $utmParts)) : '<span class="muted">none</span>';
+            ?>
+        </b></div>
+        <div class="ud-kv"><span>Referred by</span><b>
+            <?php if (!empty($referrer['email'])): ?>
+                <a href="<?= url('/admin/users/' . (int) $referrer['id']) ?>"><?= e((string) $referrer['email']) ?></a>
+            <?php else: ?>
+                <span class="muted">none</span>
+            <?php endif; ?>
+        </b></div>
+    </div>
+    <div class="ud-card">
         <h3>Billing on file</h3>
         <div class="ud-kv"><span>Card</span><b><?= e(trim(($user['card_brand'] ?? '') . ' ··' . ($user['card_last_four'] ?? '')) ?: 'none') ?></b></div>
         <div class="ud-kv"><span>Expires</span><b><?= e(($user['card_exp_month'] ?? '') ? ((int) $user['card_exp_month'] . '/' . $user['card_exp_year']) : '—') ?></b></div>
@@ -98,7 +138,7 @@
         </span>
     </summary>
     <div class="users-table-wrap"><table class="users-table">
-        <thead><tr><th>Plan</th><th>Processor</th><th>Status</th><th>Reference</th><th>Created</th><th>Expires</th></tr></thead>
+        <thead><tr><th>Plan</th><th>Processor</th><th>Status</th><th>Reference</th><th>Source</th><th>Created</th><th>Expires</th></tr></thead>
         <tbody>
         <?php foreach ($subscriptions as $sub): ?>
             <tr>
@@ -106,11 +146,18 @@
                 <td><?= e((string) ($sub['processor_name'] ?? '—')) ?></td>
                 <td><span class="status-badge <?= e((string) $sub['status']) ?>"><?= e((string) $sub['status']) ?></span></td>
                 <td><code><?= e((string) ($sub['transaction_ref'] ?? '')) ?></code></td>
+                <td>
+                    <?php if (str_starts_with((string) ($sub['transaction_ref'] ?? ''), 'TRIAL-') && !empty($trialSource['code'])): ?>
+                        Trial link <code><?= e((string) $trialSource['code']) ?></code>
+                    <?php else: ?>
+                        <span class="muted">—</span>
+                    <?php endif; ?>
+                </td>
                 <td class="user-date"><?= e(tzdate('Y-m-d H:i', $sub['created_at'])) ?></td>
                 <td class="user-date"><?= !empty($sub['expires_at']) ? e(tzdate('Y-m-d H:i', $sub['expires_at'])) : '—' ?></td>
             </tr>
         <?php endforeach; ?>
-        <?php if (!$subscriptions): ?><tr><td colspan="6" class="muted">No membership history.</td></tr><?php endif; ?>
+        <?php if (!$subscriptions): ?><tr><td colspan="7" class="muted">No membership history.</td></tr><?php endif; ?>
         </tbody>
     </table></div>
 </details>

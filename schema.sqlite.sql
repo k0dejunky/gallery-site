@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS users (
     recovery_email_sent_at DATETIME,
     marketing_opt_out INTEGER NOT NULL DEFAULT 0,
     signup_source_link_id INTEGER,
+    signup_trial_link_id INTEGER,
+    signup_trial_code VARCHAR(24),
     utm_source   VARCHAR(120),
     utm_medium   VARCHAR(120),
     utm_campaign VARCHAR(120),

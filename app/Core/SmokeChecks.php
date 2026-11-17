@@ -6505,6 +6505,35 @@ class SmokeChecks
                 ? $ok('resume route + button + pause clear + refill')
                 : $bad(implode('; ', $problems));
         });
+        $add('smoke.users.trial_source_documented', 'Smoke · Users', 'A trial signup records and displays the trial link it came from', static function () use ($root, $read, $ok, $bad): array {
+            $userModel = (string) $read($root . '/app/Models/User.php');
+            $auth      = (string) $read($root . '/app/Controllers/AuthController.php');
+            $ctrl      = (string) $read($root . '/app/Controllers/UserController.php');
+            $show      = (string) $read($root . '/views/admin/user_show.php');
+            $list      = (string) $read($root . '/views/admin/users.php');
+            $problems  = [];
+
+            if (strpos($userModel, 'function recordTrialSource') === false
+                || strpos($userModel, 'signup_trial_link_id') === false) {
+                $problems[] = 'User::recordTrialSource / the trial source columns are missing';
+            }
+            if (strpos($auth, 'User::recordTrialSource(') === false) {
+                $problems[] = 'signup must record the redeemed trial link';
+            }
+            if (strpos($ctrl, '$trialSource') === false || strpos($ctrl, 'TrialLink::find') === false) {
+                $problems[] = 'the user detail controller must load the trial link';
+            }
+            if (strpos($show, 'Signup source') === false || strpos($show, '$trialSource') === false) {
+                $problems[] = 'the user detail page must render the signup source';
+            }
+            if (strpos($list, "['label' => 'Source']") === false || strpos($list, 'signup_trial_code') === false) {
+                $problems[] = 'the users list must show the source';
+            }
+
+            return $problems === []
+                ? $ok('trial link recorded and shown in detail + list')
+                : $bad(implode('; ', $problems));
+        });
 
         // ---------------------------------------------------------- Security
         $secRouterP = $read("$root/app/Core/Router.php");

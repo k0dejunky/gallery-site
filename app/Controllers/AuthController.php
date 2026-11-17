@@ -325,6 +325,7 @@ class AuthController extends Controller
                 $trialId = Subscription::grantTrialFor($userId, (int) $link['level'], (int) $link['days']);
                 if ($trialId !== null) {
                     TrialLink::consume((int) $link['id']);
+                    User::recordTrialSource($userId, (int) $link['id'], (string) $link['code']);
                     $promoNote = ' Your ' . (int) $link['days'] . '-day '
                         . TrialLink::levelLabel((int) $link['level']) . ' trial is active — enjoy!';
                 } else {
