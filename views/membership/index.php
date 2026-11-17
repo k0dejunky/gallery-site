@@ -184,14 +184,29 @@ $ldJson = [
         ?>
         <div class="plans-grid" style="order:7;">
             <?php foreach ($plans as $plan): ?>
+                <?php
+                // Is this the member's OWN plan, and is it a free trial? A
+                // trial must never read as "$5 / month" - that made a free
+                // trial look like a paid Silver membership.
+                $ownPlan  = $activeSub !== null && (int) ($activeSub['plan_id'] ?? 0) === (int) $plan['id'];
+                $ownTrial = $ownPlan && \App\Models\Subscription::isTrial($activeSub);
+                ?>
                 <div class="card plan-card<?= (int) $plan['id'] === $goldPlanId ? ' plan-popular' : '' ?>">
                     <div style="order:1;">
                         <?php if ((int) $plan['id'] === $goldPlanId): ?><span class="pill pill-accent plan-popular-tag">Most popular</span><?php endif; ?>
                         <?php // The member should not have to compare dates to find their own plan. ?>
-                        <?php if ($activeSub !== null && (int) ($activeSub['plan_id'] ?? 0) === (int) $plan['id']): ?>
-                            <span class="pill plan-current-tag">Your plan</span>
+                        <?php if ($ownPlan): ?>
+                            <span class="pill plan-current-tag"><?= $ownTrial ? 'Your free trial' : 'Your plan' ?></span>
                         <?php endif; ?>
                         <h2 class="u-mt-0"><?= e($plan['name']) ?></h2>
+                        <?php if ($ownTrial): ?>
+                            <p class="plan-price" style="margin:0.5rem 0;">
+                                Free
+                                <span class="muted" style="font-size:0.85rem; font-weight:normal;">
+                                    trial<?= !empty($activeSub['expires_at']) ? ' until ' . e(tzdate('F j, Y', $activeSub['expires_at'])) : '' ?>
+                                </span>
+                            </p>
+                        <?php else: ?>
                         <p class="plan-price" style="margin:0.5rem 0;">
                             <?php if (!empty($plan['sale'])): ?>
                                 <del class="muted" style="font-size:0.95rem;">$<?= number_format((float) $plan['price'], 2) ?></del>
@@ -201,7 +216,8 @@ $ldJson = [
                             <?php endif; ?>
                             <span class="muted" style="font-size:0.85rem; font-weight:normal;">/ <?= e(\App\Models\Plan::cycleLabel($plan['billing_cycle'])) ?></span>
                         </p>
-                        <?php if (!empty($plan['sale'])): ?>
+                        <?php endif; ?>
+                        <?php if (!empty($plan['sale']) && !$ownTrial): ?>
                             <p><strong><?= e($plan['sale']['name']) ?></strong>
                                 <?php if ($plan['sale']['max_subscriptions'] !== null): ?>
                                     <span class="muted">Limited offer</span>

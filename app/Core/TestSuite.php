@@ -836,6 +836,103 @@ class TestSuite
             }
         });
 
+        $add('db.trial_is_not_revenue', 'Database', 'a free trial is free: never priced at the plan, never counted as revenue', function () {
+            try {
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $plan = Database::run(
+                        "SELECT id, price FROM plans WHERE active = 1 AND billing_cycle = 'monthly' ORDER BY price ASC LIMIT 1"
+                    )->fetch();
+                    if ($plan === false) {
+                        return ['pass' => false, 'detail' => 'no active monthly plan to test with'];
+                    }
+                    $planId    = (int) $plan['id'];
+                    $planPrice = (float) $plan['price'];
+
+                    $trialUser = self::scratchUserId('probe.trial.money');
+                    $paidUser  = self::scratchUserId('probe.trial.paid');
+
+                    Database::run(
+                        "INSERT INTO subscriptions (user_id, plan_id, status, price_paid, access_level, transaction_ref, starts_at, expires_at, created_at, updated_at)
+                         VALUES (?, ?, 'active', 0.00, ?, 'TRIAL-probe-money', NOW(), DATE_ADD(NOW(), INTERVAL 3 DAY), NOW(), NOW())",
+                        [$trialUser, $planId, $planId]
+                    );
+                    $trialId = (int) $pdo->lastInsertId();
+
+                    Database::run(
+                        "INSERT INTO subscriptions (user_id, plan_id, status, price_paid, access_level, transaction_ref, starts_at, expires_at, created_at, updated_at)
+                         VALUES (?, ?, 'active', ?, ?, 'BT-probe-money', NOW(), DATE_ADD(NOW(), INTERVAL 30 DAY), NOW(), NOW())",
+                        [$paidUser, $planId, $planPrice, $planId]
+                    );
+                    $paidId = (int) $pdo->lastInsertId();
+
+                    // A manually granted membership: the admin took the money
+                    // outside the site, so transaction_ref is NULL. It used to
+                    // disappear from every revenue query (NULL NOT LIKE ... is
+                    // NULL), which is the opposite error to the trial one.
+                    $manualUser = self::scratchUserId('probe.trial.manual');
+                    Database::run(
+                        "INSERT INTO subscriptions (user_id, plan_id, status, price_paid, access_level, transaction_ref, starts_at, expires_at, created_at, updated_at)
+                         VALUES (?, ?, 'active', ?, ?, NULL, NOW(), DATE_ADD(NOW(), INTERVAL 30 DAY), NOW(), NOW())",
+                        [$manualUser, $planId, $planPrice, $planId]
+                    );
+                    $manualId = (int) $pdo->lastInsertId();
+
+                    $load = static fn (int $id): array => Database::run(
+                        'SELECT s.*, p.price AS plan_price FROM subscriptions s JOIN plans p ON p.id = s.plan_id WHERE s.id = ?',
+                        [$id]
+                    )->fetch() ?: [];
+                    $amounts = static fn (int $id): array => Database::run(
+                        'SELECT ' . \App\Models\Subscription::paidAmountSql() . ' AS paid, '
+                        . \App\Models\Subscription::mrrSql() . ' AS mrr
+                         FROM subscriptions s JOIN plans p ON p.id = s.plan_id WHERE s.id = ?',
+                        [$id]
+                    )->fetch() ?: [];
+
+                    $trialRow = $load($trialId);
+                    $paidRow  = $load($paidId);
+                    $trialSql = $amounts($trialId);
+                    $paidSql  = $amounts($paidId);
+                    $manualSql = $amounts($manualId);
+
+                    $checks = [
+                        'isTrial'    => \App\Models\Subscription::isTrial($trialRow) && !\App\Models\Subscription::isTrial($paidRow),
+                        'isFree'     => \App\Models\Subscription::isFree($trialRow) && !\App\Models\Subscription::isFree($paidRow),
+                        'paidAmount' => \App\Models\Subscription::paidAmount($trialRow, $planPrice) === 0.0
+                            && abs(\App\Models\Subscription::paidAmount($paidRow, $planPrice) - $planPrice) < 0.001,
+                        'paidSql'    => (float) ($trialSql['paid'] ?? -1) === 0.0
+                            && abs((float) ($paidSql['paid'] ?? -1) - $planPrice) < 0.001,
+                        'mrrSql'     => (float) ($trialSql['mrr'] ?? -1) === 0.0
+                            && abs((float) ($paidSql['mrr'] ?? -1) - $planPrice) < 0.001,
+                        'lifetime'   => \App\Models\User::lifetimeRevenue($trialUser) === 0.0
+                            && abs(\App\Models\User::lifetimeRevenue($paidUser) - $planPrice) < 0.001,
+                        'manualGrant' => abs((float) ($manualSql['paid'] ?? -1) - $planPrice) < 0.001
+                            && abs((float) ($manualSql['mrr'] ?? -1) - $planPrice) < 0.001
+                            && abs(\App\Models\User::lifetimeRevenue($manualUser) - $planPrice) < 0.001,
+                    ];
+                    $failed = array_keys(array_filter($checks, static fn (bool $v): bool => !$v));
+
+                    return [
+                        'pass'   => $failed === [],
+                        'detail' => $failed === []
+                            ? 'trial=0, paid=' . $planPrice
+                            : 'failed: ' . implode(', ', $failed) . ' ' . json_encode([$trialSql, $paidSql]),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $e) {
+                return ['pass' => false, 'detail' => $e->getMessage()];
+            }
+        });
+
         $add('db.media_dimensions', 'Database', 'the display size of a media file is stored on the photo row', function () {
             $cols = Database::run('SHOW COLUMNS FROM photos')->fetchAll();
             $have = [];

@@ -3928,6 +3928,78 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.money.trials_are_free', 'Smoke · Money', 'A free trial is shown and counted as free, never at the plan price', static function () use ($root, $read, $ok, $bad): array {
+            // A trial subscription stores price_paid 0.00. Every revenue
+            // aggregate used COALESCE(NULLIF(price_paid, 0), plan price), so
+            // a free trial was priced at the plan ($5) on the earnings page,
+            // in the dashboard MRR and on the member's plan card.
+            $sub     = (string) $read($root . '/app/Models/Subscription.php');
+            $earn    = (string) $read($root . '/app/Controllers/EarningsController.php');
+            $stats   = (string) $read($root . '/app/Models/Stats.php');
+            $user    = (string) $read($root . '/app/Models/User.php');
+            $export  = (string) $read($root . '/app/Controllers/ExportController.php');
+            $admSubs = (string) $read($root . '/views/admin/subscriptions.php');
+            $admEarn = (string) $read($root . '/views/admin/earnings.php');
+            $plans   = (string) $read($root . '/views/membership/index.php');
+            $my      = (string) $read($root . '/views/membership/my.php');
+            $problems = [];
+
+            foreach (['paidAmountSql', 'mrrSql', 'notPendingSql', 'isTrial', 'isFree', 'paidAmount'] as $method) {
+                if (strpos($sub, 'function ' . $method . '(') === false) {
+                    $problems[] = 'Subscription::' . $method . '() is missing';
+                }
+            }
+            // The one place that decides a trial costs nothing.
+            $at = strpos($sub, 'function paidAmountSql(');
+            if ($at !== false) {
+                $end  = strpos($sub, "\n    }\n", $at);
+                $body = substr($sub, $at, ($end === false ? 900 : $end - $at));
+                if (strpos($body, "TRIAL-%") === false) {
+                    $problems[] = 'paidAmountSql() must never fall back to the plan price for a trial';
+                }
+            }
+
+            // No revenue aggregate may keep the bare fallback.
+            foreach (['EarningsController.php' => $earn, 'Stats.php' => $stats, 'User.php' => $user] as $name => $src) {
+                if (strpos($src, 'COALESCE(NULLIF(s.price_paid, 0), p.price)') !== false) {
+                    $problems[] = $name . ' still prices a subscription at the plan when price_paid is 0';
+                }
+                // NOT LIKE on a NULL reference is NULL, so a manually granted
+                // subscription vanished from revenue entirely.
+                if (strpos($src, "s.transaction_ref NOT LIKE 'PENDING-%'") !== false) {
+                    $problems[] = $name . ' drops a manually granted subscription (transaction_ref NULL) from revenue';
+                }
+            }
+            if (strpos($earn, 'Subscription::paidAmountSql()') === false || strpos($earn, 'Subscription::mrrSql()') === false) {
+                $problems[] = 'the earnings dashboard must use the shared revenue expressions';
+            }
+            if (strpos($stats, 'Subscription::mrrSql()') === false || strpos($stats, 'Subscription::paidAmountSql()') === false) {
+                $problems[] = 'the dashboard stats must use the shared revenue expressions';
+            }
+            if (strpos($user, 'Subscription::paidAmountSql()') === false) {
+                $problems[] = 'lifetime revenue must use the shared revenue expression';
+            }
+
+            // And the screens have to SAY free.
+            foreach ([
+                'admin/subscriptions.php' => $admSubs,
+                'admin/earnings.php'      => $admEarn,
+                'membership/index.php'    => $plans,
+                'membership/my.php'       => $my,
+            ] as $name => $src) {
+                if (strpos($src, 'Subscription::isTrial(') === false) {
+                    $problems[] = $name . ' must label a trial as free';
+                }
+            }
+            if (strpos($export, 's.price_paid AS paid') === false) {
+                $problems[] = 'the subscriptions CSV must export what was actually charged';
+            }
+
+            return $problems === []
+                ? $ok('trials are labelled and counted as free')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.money.past_due_grace', 'Smoke · Money', 'A failed card is a bump, not a lockout', static function () use ($root, $read, $ok, $bad): array {
             // The Braintree webhook has always said "flag but don't cancel -
             // give a grace period". There was no grace period: the flag was

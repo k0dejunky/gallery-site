@@ -47,6 +47,93 @@ class Subscription
     }
 
     /**
+     * A subscription that never took money: a free trial or a checkout the
+     * processor never confirmed. It grants access, but it is NOT revenue and
+     * must never be priced at the plan's list price.
+     *
+     * @param array<string, mixed> $sub
+     */
+    public static function isFree(array $sub): bool
+    {
+        $ref = (string) ($sub['transaction_ref'] ?? '');
+
+        return strpos($ref, 'TRIAL-') === 0 || strpos($ref, 'PENDING-') === 0;
+    }
+
+    /**
+     * A free trial specifically (not an unconfirmed checkout).
+     *
+     * @param array<string, mixed> $sub
+     */
+    public static function isTrial(array $sub): bool
+    {
+        return strpos((string) ($sub['transaction_ref'] ?? ''), 'TRIAL-') === 0;
+    }
+
+    /**
+     * SQL for "this row is not an unconfirmed checkout".
+     *
+     * NOT LIKE on a NULL reference is NULL, not TRUE, so a manually granted
+     * subscription (transaction_ref NULL - real money an admin took outside
+     * the site) used to vanish from every revenue query.
+     */
+    public static function notPendingSql(string $sub = 's'): string
+    {
+        return "({$sub}.transaction_ref IS NULL OR {$sub}.transaction_ref NOT LIKE 'PENDING-%')";
+    }
+
+    /**
+     * SQL for what a subscription actually charged, for the given aliases.
+     *
+     * price_paid is the truth; the plan price is only a fallback for rows
+     * created before the column was recorded. A trial stores 0.00 and MUST
+     * NOT fall back - that fallback is what made a free trial show (and
+     * count) as the plan's price.
+     */
+    public static function paidAmountSql(string $sub = 's', string $plan = 'p'): string
+    {
+        return "CASE WHEN {$sub}.transaction_ref LIKE 'TRIAL-%'"
+            . " OR {$sub}.transaction_ref LIKE 'PENDING-%' THEN 0"
+            . " ELSE COALESCE(NULLIF({$sub}.price_paid, 0), {$plan}.price) END";
+    }
+
+    /**
+     * Monthly-equivalent recurring revenue for a subscription row, in SQL.
+     *
+     * Built on paidAmountSql(), so it is what the member actually pays (a
+     * discounted term counts at its discount) and a free trial or an
+     * unconfirmed checkout contributes nothing.
+     */
+    public static function mrrSql(string $sub = 's', string $plan = 'p'): string
+    {
+        $paid = self::paidAmountSql($sub, $plan);
+
+        return "CASE {$plan}.billing_cycle"
+            . " WHEN 'monthly' THEN ({$paid})"
+            . " WHEN 'yearly' THEN ({$paid}) / 12"
+            . " ELSE ({$paid}) / 24 END";
+    }
+
+    /**
+     * What a subscription row charged, in PHP (mirrors paidAmountSql()).
+     *
+     * @param array<string, mixed> $sub
+     */
+    public static function paidAmount(array $sub, float $planPrice = 0.0): float
+    {
+        if (self::isFree($sub)) {
+            return 0.0;
+        }
+
+        $paid = $sub['price_paid'] ?? null;
+        if ($paid !== null && (float) $paid > 0) {
+            return (float) $paid;
+        }
+
+        return $planPrice;
+    }
+
+    /**
      * When a past-due membership's grace window closes (null when the row is
      * not past due).
      *

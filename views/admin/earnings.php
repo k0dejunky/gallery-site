@@ -104,7 +104,7 @@
                     <tr>
                         <td class="muted"><?= (int) $s['id'] ?></td>
                         <td><?= e((string) $s['plan']) ?></td>
-                        <td class="num">$<?= number_format((float) $s['amount'], 2) ?></td>
+                        <td class="num"><?php if (\App\Models\Subscription::isTrial($s)): ?><span class="pill pill-soft">Free trial</span><?php else: ?>$<?= number_format((float) $s['amount'], 2) ?><?php endif; ?></td>
                         <td><?= e((string) $s['status']) ?></td>
                         <td class="adm-clip"><?= e((string) $s['email']) ?></td>
                         <td class="muted mg-date"><?= e(tzdate('Y-m-d H:i', (string) $s['created_at'])) ?></td>

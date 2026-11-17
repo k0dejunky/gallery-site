@@ -23,7 +23,9 @@ $pauseBlock = $pauseBlock ?? null;
                      : 'No active access' ?>
              </p>
              <p><strong>Membership type:</strong>
-            <?= $activeSub !== null ? e($activeSub['plan_name']) : ($pausedSub !== null ? e($pausedSub['plan_name']) . ' (paused)' : 'None') ?>
+            <?= $activeSub !== null
+                ? e($activeSub['plan_name']) . (\App\Models\Subscription::isTrial($activeSub) ? ' (free trial)' : '')
+                : ($pausedSub !== null ? e($pausedSub['plan_name']) . ' (paused)' : 'None') ?>
         </p>
     </div>
 
@@ -257,7 +259,7 @@ $pauseBlock = $pauseBlock ?? null;
                     <tr>
                         <td><code>#<?= e((string) ($sub['membership_number'] ?? sprintf('%05d', (int) $sub['id']))) ?></code></td>
                         <td><?= e($sub['plan_name']) ?></td>
-                        <td><?= $sub['price_paid'] !== null ? '$' . number_format((float) $sub['price_paid'], 2) : '&mdash;' ?></td>
+                        <td><?php if (\App\Models\Subscription::isTrial($sub)): ?><span class="pill pill-soft">Free trial</span><?php else: ?><?= $sub['price_paid'] !== null ? '$' . number_format((float) $sub['price_paid'], 2) : '&mdash;' ?><?php endif; ?></td>
                         <td><?= !empty($sub['sale_name']) ? e($sub['sale_name']) : '&mdash;' ?></td>
                         <td><?= !empty($sub['payment_name']) ? e($sub['payment_name']) : '&mdash;' ?></td>
                         <?php $historyStatus = $sub['status'] === 'active' && !empty($sub['expires_at']) && strtotime($sub['expires_at']) <= time() ? 'expired' : (string) $sub['status']; ?>

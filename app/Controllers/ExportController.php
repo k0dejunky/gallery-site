@@ -29,7 +29,8 @@ class ExportController extends Controller
         Auth::requirePermission('membership');
 
         $rows = Database::run(
-            'SELECT s.id, u.email, p.name AS plan, p.billing_cycle, p.price,
+            'SELECT s.id, u.email, p.name AS plan, p.billing_cycle, p.price AS plan_price,
+                    s.price_paid AS paid,
                     s.status, s.transaction_ref, pp.name AS processor,
                     s.starts_at, s.created_at, s.expires_at
              FROM subscriptions s

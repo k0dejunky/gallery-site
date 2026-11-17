@@ -163,16 +163,14 @@ class Stats
      * Membership growth figures for the admin dashboard: monthly-equivalent
      * recurring revenue of active subscriptions, recent signups, and how
      * active members are distributed across payment processors.
+     *
+     * A free trial is an active membership but it is NOT recurring revenue,
+     * so trials contribute nothing to the MRR figures.
      */
     public static function growth(): array
     {
         $mrr = (float) Database::run(
-            'SELECT COALESCE(SUM(
-                CASE p.billing_cycle
-                    WHEN "monthly" THEN p.price
-                    WHEN "yearly" THEN p.price / 12
-                    ELSE p.price / 24
-                END), 0)
+            'SELECT COALESCE(SUM(' . Subscription::mrrSql() . '), 0)
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
              WHERE s.status = ? AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)',
@@ -192,7 +190,7 @@ class Stats
 
         $byProcessor = Database::run(
             'SELECT COALESCE(pp.name, "(none selected)") AS name, COUNT(DISTINCT s.user_id) AS members,
-                    COALESCE(SUM(CASE p.billing_cycle WHEN "monthly" THEN p.price WHEN "yearly" THEN p.price / 12 ELSE p.price / 24 END), 0) AS mrr
+                    COALESCE(SUM(' . Subscription::mrrSql() . '), 0) AS mrr
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
              LEFT JOIN payment_processors pp ON pp.id = s.payment_processor_id
@@ -224,11 +222,11 @@ class Stats
         $revRows = Database::run(
             "SELECT DATE_FORMAT(COALESCE(s.starts_at, s.created_at), '%b') AS label,
                     DATE_FORMAT(COALESCE(s.starts_at, s.created_at), '%Y-%m') AS ym,
-                    SUM(COALESCE(NULLIF(s.price_paid, 0), p.price)) AS revenue,
-                    COUNT(*) AS paid
+                    SUM(" . Subscription::paidAmountSql() . ") AS revenue,
+                    SUM(CASE WHEN s.transaction_ref LIKE 'TRIAL-%' THEN 0 ELSE 1 END) AS paid
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
-             WHERE s.transaction_ref NOT LIKE 'PENDING-%'
+             WHERE " . Subscription::notPendingSql() . "
                AND COALESCE(s.starts_at, s.created_at) >= ?
              GROUP BY label, ym ORDER BY ym",
             [$since]
@@ -274,10 +272,10 @@ class Stats
 
         // Current month-to-date revenue vs the same point last month.
         $mtd = (float) Database::run(
-            "SELECT COALESCE(SUM(COALESCE(NULLIF(s.price_paid, 0), p.price)), 0)
+            "SELECT COALESCE(SUM(" . Subscription::paidAmountSql() . "), 0)
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
-             WHERE s.transaction_ref NOT LIKE 'PENDING-%'
+             WHERE " . Subscription::notPendingSql() . "
                AND COALESCE(s.starts_at, s.created_at) >= ?",
             [date('Y-m-01 00:00:00')]
         )->fetchColumn();
@@ -289,9 +287,9 @@ class Stats
             'churn' => array_values($churn),
             'mtd_revenue' => $mtd,
             'total_12mo' => (float) Database::run(
-                "SELECT COALESCE(SUM(COALESCE(NULLIF(s.price_paid, 0), p.price)), 0)
+                "SELECT COALESCE(SUM(" . Subscription::paidAmountSql() . "), 0)
                  FROM subscriptions s JOIN plans p ON p.id = s.plan_id
-                 WHERE s.transaction_ref NOT LIKE 'PENDING-%'
+                 WHERE " . Subscription::notPendingSql() . "
                    AND COALESCE(s.starts_at, s.created_at) >= ?",
                 [date('Y-m-d 00:00:00', strtotime('-12 months'))]
             )->fetchColumn(),
@@ -390,7 +388,7 @@ class Stats
              FROM subscriptions s
              LEFT JOIN users u ON u.id = s.user_id
              LEFT JOIN plans p ON p.id = s.plan_id
-             WHERE s.status = 'active' AND s.transaction_ref NOT LIKE 'PENDING-%'
+             WHERE s.status = 'active' AND " . Subscription::notPendingSql() . "
              ORDER BY s.updated_at DESC LIMIT 5"
         )->fetchAll() as $s) {
             $items[] = [
@@ -857,13 +855,17 @@ class Stats
      * Membership plan distribution for the dashboard: how many active members
      * each plan has (with its tier/level and recurring revenue), plus a
      * per-tier rollup. Only currently-active subscriptions are counted.
+     *
+     * Two things used to inflate this: a plan with NO members still reported
+     * its own list price as MRR (the LEFT JOIN row was summed), and a free
+     * trial was counted at the plan's price. Both contribute 0 now.
      */
     public static function planDistribution(): array
     {
         $rows = Database::run(
             'SELECT p.id, p.name, p.level, p.billing_cycle, p.price,
                     COUNT(DISTINCT s.user_id) AS members,
-                    SUM(CASE p.billing_cycle WHEN "monthly" THEN p.price WHEN "yearly" THEN p.price / 12 ELSE p.price / 24 END) AS mrr
+                    SUM(CASE WHEN s.id IS NULL THEN 0 ELSE ' . Subscription::mrrSql() . ' END) AS mrr
              FROM plans p
              LEFT JOIN subscriptions s ON s.plan_id = p.id
                  AND s.status = ?

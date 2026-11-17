@@ -147,7 +147,7 @@ use App\Core\AdminTable;
                 <td><code>#<?= e((string) ($sub['membership_number'] ?? sprintf('%05d', (int) $sub['id']))) ?></code></td>
                 <td><?= e($sub['user_email']) ?></td>
                 <td><?= e($sub['plan_name']) ?></td>
-                <td class="num"><?= $sub['price_paid'] !== null ? '$' . number_format((float) $sub['price_paid'], 2) : '&mdash;' ?></td>
+                <td class="num"><?php if (\App\Models\Subscription::isTrial($sub)): ?><span class="pill pill-soft">Free trial</span><?php else: ?><?= $sub['price_paid'] !== null ? '$' . number_format((float) $sub['price_paid'], 2) : '&mdash;' ?><?php endif; ?></td>
                 <td><?= !empty($sub['sale_name']) ? e($sub['sale_name']) . (!empty($sub['sale_code']) ? ' (' . e($sub['sale_code']) . ')' : '') : '&mdash;' ?></td>
                 <td>
                     <?= !empty($sub['payment_name']) ? e($sub['payment_name']) : '&mdash;' ?>

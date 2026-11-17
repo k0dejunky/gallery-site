@@ -8,6 +8,7 @@ use App\Core\Auth;
 use App\Core\Database;
 use App\Core\Request;
 use App\Models\Purchase;
+use App\Models\Subscription;
 
 /**
  * Admin: creator earnings dashboard (single-creator brand). Shows recurring
@@ -76,55 +77,47 @@ class EarningsController extends MembershipAdminController
 
     /**
      * Recurring revenue in the window: subscriptions whose created_at falls in
-     * it and which are (or were) paid — active, cancelled or expired.
+     * it and which are (or were) paid — active, cancelled or expired. A free
+     * trial never took money, so it contributes nothing.
      */
     private function subscriptionRevenue(string $from, string $to): float
     {
         return (float) Database::run(
-            "SELECT COALESCE(SUM(COALESCE(NULLIF(s.price_paid, 0), p.price)), 0)
+            "SELECT COALESCE(SUM(" . Subscription::paidAmountSql() . "), 0)
              FROM subscriptions s JOIN plans p ON p.id = s.plan_id
              WHERE s.created_at >= ? AND s.created_at < ?
                AND s.status IN ('active', 'cancelled', 'expired')
-               AND s.transaction_ref NOT LIKE 'PENDING-%'",
+               AND " . Subscription::notPendingSql(),
             [$from, $to]
         )->fetchColumn();
     }
 
     /**
      * Current monthly recurring revenue: active subscriptions normalised to a
-     * monthly figure (monthly -> whole, yearly -> /12, lifetime -> 0).
+     * monthly figure (monthly -> whole, yearly -> /12, lifetime -> 0). A free
+     * trial contributes nothing; see Subscription::mrrSql().
      */
     private function mrr(): float
     {
-        $rows = Database::run(
-            "SELECT p.billing_cycle, COALESCE(NULLIF(s.price_paid, 0), p.price) AS value
+        return (float) Database::run(
+            "SELECT COALESCE(SUM(" . Subscription::mrrSql() . "), 0)
              FROM subscriptions s JOIN plans p ON p.id = s.plan_id
-             WHERE s.status = 'active' AND s.transaction_ref NOT LIKE 'PENDING-%'"
-        )->fetchAll();
-
-        $mrr = 0.0;
-        foreach ($rows as $row) {
-            $v = (float) ($row['value'] ?? 0);
-            if ($row['billing_cycle'] === 'yearly') {
-                $mrr += $v / 12;
-            } elseif ($row['billing_cycle'] === 'monthly') {
-                $mrr += $v;
-            }
-        }
-
-        return round($mrr, 2);
+             WHERE s.status = 'active' AND " . Subscription::notPendingSql() . "
+               AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)"
+        )->fetchColumn();
     }
 
     private function subscriptionRows(string $from, string $to, int $limit): array
     {
         return Database::run(
-            "SELECT s.id, s.status, COALESCE(NULLIF(s.price_paid, 0), p.price) AS amount,
+            "SELECT s.id, s.status, s.transaction_ref,
+                    " . Subscription::paidAmountSql() . " AS amount,
                     p.name AS plan, u.email, s.created_at
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
              LEFT JOIN users u ON u.id = s.user_id
              WHERE s.created_at >= ? AND s.created_at < ?
-               AND s.transaction_ref NOT LIKE 'PENDING-%'
+               AND " . Subscription::notPendingSql() . "
              ORDER BY s.id DESC LIMIT " . max(1, $limit),
             [$from, $to]
         )->fetchAll();

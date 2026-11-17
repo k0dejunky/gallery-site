@@ -409,11 +409,14 @@ class User
      * rather than the plan list price; 'completed' was never a valid status in
      * the subscriptions ENUM (pending/active/cancelled/expired/past_due), so
      * it has been dropped.
+     *
+     * A free trial charged nothing, so it never counts as revenue (it used to
+     * fall back to the plan price and show a trial account as $5 spent).
      */
     public static function lifetimeRevenue(int $userId): float
     {
         return (float) Database::run(
-            'SELECT COALESCE(SUM(COALESCE(NULLIF(s.price_paid, 0), p.price)), 0)
+            'SELECT COALESCE(SUM(' . Subscription::paidAmountSql() . '), 0)
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
              WHERE s.user_id = ? AND s.status IN (\'active\', \'cancelled\')',
