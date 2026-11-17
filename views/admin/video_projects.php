@@ -1,4 +1,4 @@
-$title = 'Video Projects';
+<?php $title = 'Video Projects'; ?>
 <div class="subhead">
     <a class="btn" href="<?= url('/admin/videos') ?>">Video list</a>
 </div>

@@ -1,4 +1,4 @@
-$title = 'Error Logs';
+<?php $title = 'Error Logs'; ?>
 <div class="card">
     <div class="table-responsive">
         <table>

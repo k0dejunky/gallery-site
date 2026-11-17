@@ -2972,6 +2972,35 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.views.start_with_php', 'Smoke · UI', 'Every view opens with a PHP tag (a missing <?php prints the code)', static function () use ($root, $ok, $bad): array {
+            // Three admin views (video projects, error logs, test suite) had
+            // lost their opening <?php tag, so "$title = 'Video Projects';"
+            // was printed at the top of the page AND the layout never got a
+            // title. A view must start with a PHP tag; only the plain-text
+            // email bodies legitimately start with prose.
+            $badFiles = [];
+            $walk = static function (string $dir) use (&$walk, &$badFiles, $root): void {
+                foreach (glob($dir . '/*') ?: [] as $path) {
+                    if (is_dir($path)) {
+                        $walk($path);
+                        continue;
+                    }
+                    if (!str_ends_with($path, '.php') || str_contains($path, '/views/emails/')) {
+                        continue;
+                    }
+                    $head = ltrim((string) @file_get_contents($path, false, null, 0, 24), "\xEF\xBB\xBF \t\r\n");
+                    if (strpos($head, '<?php') !== 0 && strpos($head, '<?=') !== 0) {
+                        $badFiles[] = str_replace($root . '/', '', $path);
+                    }
+                }
+            };
+            $walk($root . '/views');
+
+            return $badFiles === []
+                ? $ok('every view opens with a PHP tag')
+                : $bad('these views print their code on the page: ' . implode(', ', $badFiles));
+        });
+
         $add('smoke.ui.no_stray_colours', 'Smoke · UI', 'The member views carry no stray colours', static function () use ($root, $ok, $bad): array {
             // The member views are on the dark skin, so a light literal is
             // a hole in the page: the paywall headline at 1.60:1 and the

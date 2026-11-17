@@ -1,4 +1,4 @@
-$title = 'Test Suite';
+<?php $title = 'Test Suite'; ?>
 
 <div class="test-hero">
     <div class="test-tools">
