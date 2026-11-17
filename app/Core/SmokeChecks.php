@@ -3944,7 +3944,7 @@ class SmokeChecks
             $my      = (string) $read($root . '/views/membership/my.php');
             $problems = [];
 
-            foreach (['paidAmountSql', 'mrrSql', 'notPendingSql', 'isTrial', 'isFree', 'paidAmount'] as $method) {
+            foreach (['paidAmountSql', 'notPendingSql', 'notTrialSql', 'isTrial', 'isFree', 'paidAmount'] as $method) {
                 if (strpos($sub, 'function ' . $method . '(') === false) {
                     $problems[] = 'Subscription::' . $method . '() is missing';
                 }
@@ -3970,10 +3970,11 @@ class SmokeChecks
                     $problems[] = $name . ' drops a manually granted subscription (transaction_ref NULL) from revenue';
                 }
             }
-            if (strpos($earn, 'Subscription::paidAmountSql()') === false || strpos($earn, 'Subscription::mrrSql()') === false) {
+            if (strpos($earn, 'Subscription::paidAmountSql()') === false || strpos($earn, 'Subscription::recurringWhereSql()') === false) {
                 $problems[] = 'the earnings dashboard must use the shared revenue expressions';
             }
-            if (strpos($stats, 'Subscription::mrrSql()') === false || strpos($stats, 'Subscription::paidAmountSql()') === false) {
+            if (strpos($stats, 'Subscription::paidAmountSql()') === false
+                || (strpos($stats, 'Subscription::recurringWhereSql()') === false && strpos($stats, 'Subscription::recurringValueSql()') === false)) {
                 $problems[] = 'the dashboard stats must use the shared revenue expressions';
             }
             if (strpos($user, 'Subscription::paidAmountSql()') === false) {
@@ -3997,6 +3998,82 @@ class SmokeChecks
 
             return $problems === []
                 ? $ok('trials are labelled and counted as free')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.money.recurring_is_monthly_members_only', 'Smoke · Money', 'Monthly recurring and subscription revenue count active paid monthly memberships on member accounts', static function () use ($root, $read, $ok, $bad): array {
+            // The owner's definition (Nov 17 2026): monthly plans only, real
+            // member accounts only. A yearly plan, a lifetime plan, a free
+            // trial, a cancelled membership and a staff comp all contribute
+            // nothing. Both cards show this same figure.
+            $sub    = (string) $read($root . '/app/Models/Subscription.php');
+            $earn   = (string) $read($root . '/app/Controllers/EarningsController.php');
+            $stats  = (string) $read($root . '/app/Models/Stats.php');
+            $dash   = (string) $read($root . '/views/admin/dashboard.php');
+            $earnV  = (string) $read($root . '/views/admin/earnings.php');
+            $problems = [];
+
+            foreach (['paidMemberWhereSql', 'recurringWhereSql', 'recurringValueSql'] as $method) {
+                if (strpos($sub, 'function ' . $method . '(') === false) {
+                    $problems[] = 'Subscription::' . $method . '() is missing';
+                }
+            }
+
+            // The predicate itself: active, monthly, member accounts.
+            $at = strpos($sub, 'function recurringWhereSql(');
+            if ($at !== false) {
+                $end  = strpos($sub, "\n    }\n", $at);
+                $body = substr($sub, $at, ($end === false ? 700 : $end - $at));
+                if (strpos($body, "billing_cycle = 'monthly'") === false) {
+                    $problems[] = 'recurring revenue must be monthly plans only';
+                }
+                if (strpos($body, 'paidMemberWhereSql') === false) {
+                    $problems[] = 'recurring revenue must use the paid-member set';
+                }
+            }
+            $at = strpos($sub, 'function paidMemberWhereSql(');
+            if ($at !== false) {
+                $end  = strpos($sub, "\n    }\n", $at);
+                $body = substr($sub, $at, ($end === false ? 900 : $end - $at));
+                if (strpos($body, "status = 'active'") === false) {
+                    $problems[] = 'only an ACTIVE membership counts as revenue';
+                }
+                if (strpos($body, "role = 'user'") === false) {
+                    $problems[] = 'staff and comp accounts must not count as revenue';
+                }
+            }
+
+            // The earnings page: one definition, no windowed cancelled/expired
+            // sum, and both cards on it.
+            if (strpos($earn, 'Subscription::recurringWhereSql()') === false) {
+                $problems[] = 'the earnings page must use the recurring predicate';
+            }
+            if (strpos($earn, "'active', 'cancelled', 'expired'") !== false) {
+                $problems[] = 'subscription revenue must not sum cancelled and expired memberships';
+            }
+            if (strpos($earn, 'private function subscriptionRevenue(') !== false) {
+                $problems[] = 'the windowed subscriptionRevenue() is gone; subscription revenue is the monthly value';
+            }
+            if (strpos($earnV, 'Active paid monthly memberships') === false) {
+                $problems[] = 'the earnings cards must say what they count';
+            }
+
+            // The dashboard has to agree with it.
+            if (strpos($stats, 'Subscription::recurringWhereSql()') === false) {
+                $problems[] = 'the dashboard MRR must use the recurring predicate';
+            }
+            if (strpos($stats, 'Subscription::recurringValueSql()') === false) {
+                $problems[] = 'the per-plan MRR must use the recurring value';
+            }
+            if (strpos($stats, "u.role = 'user'") === false) {
+                $problems[] = 'collected revenue must exclude staff accounts';
+            }
+            if (strpos($dash, "\$growth['paying_members']") === false) {
+                $problems[] = 'ARPU must divide by the members who actually pay';
+            }
+
+            return $problems === []
+                ? $ok('monthly plans on member accounts only')
                 : $bad(implode('; ', $problems));
         });
 

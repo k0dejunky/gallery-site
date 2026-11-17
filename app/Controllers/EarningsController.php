@@ -29,8 +29,12 @@ class EarningsController extends MembershipAdminController
 
         $oneOff      = Purchase::totalsBetween($from, $to);
         $series      = Purchase::seriesBetween($from, $to);
-        $subRevenue  = $this->subscriptionRevenue($from, $to);
+        // The owner's definition (Nov 17 2026): subscription revenue IS the
+        // monthly value of the active paid memberships - monthly plans only,
+        // real member accounts only. It is a snapshot, not a cash-in-window
+        // figure, so both cards show the same number.
         $mrr         = $this->mrr();
+        $subRevenue  = $mrr;
         $industrySubs = $this->subscriptionRows($from, $to, 8);
         $recent      = Purchase::recent(50);
 
@@ -76,34 +80,20 @@ class EarningsController extends MembershipAdminController
     }
 
     /**
-     * Recurring revenue in the window: subscriptions whose created_at falls in
-     * it and which are (or were) paid — active, cancelled or expired. A free
-     * trial never took money, so it contributes nothing.
-     */
-    private function subscriptionRevenue(string $from, string $to): float
-    {
-        return (float) Database::run(
-            "SELECT COALESCE(SUM(" . Subscription::paidAmountSql() . "), 0)
-             FROM subscriptions s JOIN plans p ON p.id = s.plan_id
-             WHERE s.created_at >= ? AND s.created_at < ?
-               AND s.status IN ('active', 'cancelled', 'expired')
-               AND " . Subscription::notPendingSql(),
-            [$from, $to]
-        )->fetchColumn();
-    }
-
-    /**
-     * Current monthly recurring revenue: active subscriptions normalised to a
-     * monthly figure (monthly -> whole, yearly -> /12, lifetime -> 0). A free
-     * trial contributes nothing; see Subscription::mrrSql().
+     * Monthly recurring revenue: the monthly value of the active paid
+     * memberships on real member accounts (monthly plans only - see
+     * Subscription::recurringWhereSql()). This is also what "Subscription
+     * revenue" shows: the owner's definition is the same number, not a
+     * cash-in-window figure that counts cancelled and expired memberships.
      */
     private function mrr(): float
     {
         return (float) Database::run(
-            "SELECT COALESCE(SUM(" . Subscription::mrrSql() . "), 0)
-             FROM subscriptions s JOIN plans p ON p.id = s.plan_id
-             WHERE s.status = 'active' AND " . Subscription::notPendingSql() . "
-               AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)"
+            "SELECT COALESCE(SUM(" . Subscription::paidAmountSql() . "), 0)
+             FROM subscriptions s
+             JOIN plans p ON p.id = s.plan_id
+             JOIN users u ON u.id = s.user_id
+             WHERE " . Subscription::recurringWhereSql()
         )->fetchColumn();
     }
 
@@ -115,9 +105,10 @@ class EarningsController extends MembershipAdminController
                     p.name AS plan, u.email, s.created_at
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
-             LEFT JOIN users u ON u.id = s.user_id
+             JOIN users u ON u.id = s.user_id
              WHERE s.created_at >= ? AND s.created_at < ?
                AND " . Subscription::notPendingSql() . "
+               AND u.role = 'user' AND u.deleted_at IS NULL
              ORDER BY s.id DESC LIMIT " . max(1, $limit),
             [$from, $to]
         )->fetchAll();

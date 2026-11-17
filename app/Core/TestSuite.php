@@ -889,8 +889,11 @@ class TestSuite
                     )->fetch() ?: [];
                     $amounts = static fn (int $id): array => Database::run(
                         'SELECT ' . \App\Models\Subscription::paidAmountSql() . ' AS paid, '
-                        . \App\Models\Subscription::mrrSql() . ' AS mrr
-                         FROM subscriptions s JOIN plans p ON p.id = s.plan_id WHERE s.id = ?',
+                        . \App\Models\Subscription::recurringValueSql() . ' AS recurring
+                         FROM subscriptions s
+                         JOIN plans p ON p.id = s.plan_id
+                         JOIN users u ON u.id = s.user_id
+                         WHERE s.id = ?',
                         [$id]
                     )->fetch() ?: [];
 
@@ -907,12 +910,12 @@ class TestSuite
                             && abs(\App\Models\Subscription::paidAmount($paidRow, $planPrice) - $planPrice) < 0.001,
                         'paidSql'    => (float) ($trialSql['paid'] ?? -1) === 0.0
                             && abs((float) ($paidSql['paid'] ?? -1) - $planPrice) < 0.001,
-                        'mrrSql'     => (float) ($trialSql['mrr'] ?? -1) === 0.0
-                            && abs((float) ($paidSql['mrr'] ?? -1) - $planPrice) < 0.001,
+                        'recurring'  => (float) ($trialSql['recurring'] ?? -1) === 0.0
+                            && abs((float) ($paidSql['recurring'] ?? -1) - $planPrice) < 0.001,
                         'lifetime'   => \App\Models\User::lifetimeRevenue($trialUser) === 0.0
                             && abs(\App\Models\User::lifetimeRevenue($paidUser) - $planPrice) < 0.001,
                         'manualGrant' => abs((float) ($manualSql['paid'] ?? -1) - $planPrice) < 0.001
-                            && abs((float) ($manualSql['mrr'] ?? -1) - $planPrice) < 0.001
+                            && abs((float) ($manualSql['recurring'] ?? -1) - $planPrice) < 0.001
                             && abs(\App\Models\User::lifetimeRevenue($manualUser) - $planPrice) < 0.001,
                     ];
                     $failed = array_keys(array_filter($checks, static fn (bool $v): bool => !$v));
@@ -922,6 +925,75 @@ class TestSuite
                         'detail' => $failed === []
                             ? 'trial=0, paid=' . $planPrice
                             : 'failed: ' . implode(', ', $failed) . ' ' . json_encode([$trialSql, $paidSql]),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $e) {
+                return ['pass' => false, 'detail' => $e->getMessage()];
+            }
+        });
+
+        $add('db.recurring_is_monthly_members_only', 'Database', 'monthly recurring counts active paid monthly memberships on member accounts only', function () {
+            try {
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $sumSql = 'SELECT COALESCE(SUM(' . \App\Models\Subscription::recurringValueSql() . '), 0)
+                               FROM subscriptions s
+                               JOIN plans p ON p.id = s.plan_id
+                               JOIN users u ON u.id = s.user_id';
+                    $before = (float) Database::run($sumSql)->fetchColumn();
+
+                    $monthly = Database::run(
+                        "SELECT id, price FROM plans WHERE active = 1 AND billing_cycle = 'monthly' ORDER BY price ASC LIMIT 1"
+                    )->fetch();
+                    if ($monthly === false) {
+                        return ['pass' => false, 'detail' => 'no active monthly plan to test with'];
+                    }
+                    $yearly   = Database::run("SELECT id, price FROM plans WHERE active = 1 AND billing_cycle = 'yearly' LIMIT 1")->fetch();
+                    $lifetime = Database::run("SELECT id, price FROM plans WHERE active = 1 AND billing_cycle = 'lifetime' LIMIT 1")->fetch();
+                    $price    = (float) $monthly['price'];
+
+                    $addSub = static function (int $userId, int $planId, string $status, float $paid, ?string $ref, bool $expires): void {
+                        Database::run(
+                            "INSERT INTO subscriptions (user_id, plan_id, status, price_paid, access_level, transaction_ref, starts_at, expires_at, created_at, updated_at)
+                             VALUES (?, ?, ?, ?, ?, ?, NOW(), " . ($expires ? 'DATE_ADD(NOW(), INTERVAL 30 DAY)' : 'NULL') . ", NOW(), NOW())",
+                            [$userId, $planId, $status, $paid, $planId, $ref]
+                        );
+                    };
+
+                    $member = self::scratchUserId('probe.rec.member');
+                    $staff  = self::scratchUserId('probe.rec.staff');
+                    Database::run("UPDATE users SET role = 'admin' WHERE id = ?", [$staff]);
+
+                    // The ONE row that counts.
+                    $addSub($member, (int) $monthly['id'], 'active', $price, 'BT-rec-member', true);
+                    // None of these do: yearly, lifetime, free trial,
+                    // cancelled, and a staff comp.
+                    if ($yearly !== false) {
+                        $addSub($member, (int) $yearly['id'], 'active', (float) $yearly['price'], 'BT-rec-yearly', true);
+                    }
+                    if ($lifetime !== false) {
+                        $addSub($member, (int) $lifetime['id'], 'active', (float) $lifetime['price'], 'BT-rec-lifetime', false);
+                    }
+                    $addSub($member, (int) $monthly['id'], 'active', 0.0, 'TRIAL-rec', true);
+                    $addSub($member, (int) $monthly['id'], 'cancelled', $price, 'BT-rec-cancelled', true);
+                    $addSub($staff, (int) $monthly['id'], 'active', $price, 'BT-rec-staff', true);
+
+                    $after = (float) Database::run($sumSql)->fetchColumn();
+                    $delta = round($after - $before, 2);
+                    $ok    = abs($delta - $price) < 0.001;
+
+                    return [
+                        'pass'   => $ok,
+                        'detail' => 'delta=' . $delta . ' expected=' . $price . ' (yearly/lifetime/trial/cancelled/staff all ignored)',
                     ];
                 } finally {
                     if ($own) {

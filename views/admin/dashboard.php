@@ -375,7 +375,9 @@ $attention = $attention ?? [];
     <summary><h2>Revenue &amp; churn — last 6 months</h2></summary>
     <?php
         $mrrNow = (float) $growth['mrr'];
-        $activeMembers = max(1, (int) $summary['total_members']);
+        // ARPU divides the recurring revenue by the members who actually pay
+        // it. Using every member (trials, comps, free accounts) understated it.
+        $payingMembers = max(1, (int) ($growth['paying_members'] ?? 0));
     ?>
     <div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:flex-start;">
         <div style="flex:2 1 420px;min-width:320px;">
@@ -402,7 +404,7 @@ $attention = $attention ?? [];
                         <td<?= (int) $finance['churn'][$i] > 0 ? ' style="color:var(--adm-warn);"' : '' ?>><?= number_format((int) $finance['churn'][$i]) ?></td>
                     </tr>
                 <?php endforeach; ?>
-                <tr><td><b>ARPU</b></td><td colspan="2">$<?= number_format($mrrNow / $activeMembers, 2) ?>/mo</td></tr>
+                <tr><td><b>ARPU</b></td><td colspan="2">$<?= number_format($mrrNow / $payingMembers, 2) ?>/mo</td></tr>
             </table>
         </div>
     </div>

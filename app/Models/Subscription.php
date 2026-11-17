@@ -83,6 +83,59 @@ class Subscription
     }
 
     /**
+     * SQL for "this row is not a free trial". NULL-safe for the same reason
+     * as notPendingSql(): a manually granted membership has no reference.
+     */
+    public static function notTrialSql(string $sub = 's'): string
+    {
+        return "({$sub}.transaction_ref IS NULL OR {$sub}.transaction_ref NOT LIKE 'TRIAL-%')";
+    }
+
+    /**
+     * SQL for a membership that counts as revenue: active, still in term,
+     * paid (not a trial, not an unconfirmed checkout) and held by a REAL
+     * member account.
+     *
+     * Staff and comp accounts (any role other than "user") are excluded so the
+     * owner's own grants - a $999.99 lifetime comp on an admin account, for
+     * example - do not inflate the revenue figures.
+     */
+    public static function paidMemberWhereSql(string $sub = 's', string $user = 'u'): string
+    {
+        return "({$sub}.status = 'active'"
+            . " AND " . self::notTrialSql($sub)
+            . " AND " . self::notPendingSql($sub)
+            . " AND ({$sub}.expires_at IS NULL OR {$sub}.expires_at > CURRENT_TIMESTAMP)"
+            . " AND {$user}.role = 'user'"
+            . " AND {$user}.deleted_at IS NULL)";
+    }
+
+    /**
+     * SQL for the memberships that count as MONTHLY RECURRING revenue: the
+     * paid-member set above, billed monthly.
+     *
+     * The owner's definition (Nov 17 2026): monthly plans only. A yearly plan
+     * does recur, but it is not part of the "monthly recurring" figure, and a
+     * lifetime plan never recurs at all.
+     */
+    public static function recurringWhereSql(string $sub = 's', string $plan = 'p', string $user = 'u'): string
+    {
+        return '(' . self::paidMemberWhereSql($sub, $user)
+            . " AND {$plan}.billing_cycle = 'monthly')";
+    }
+
+    /**
+     * The recurring value of a subscription row, in SQL: what it pays per
+     * month when it qualifies, 0 otherwise. Used where a LEFT JOIN means the
+     * condition cannot live in the WHERE clause (the per-plan table).
+     */
+    public static function recurringValueSql(string $sub = 's', string $plan = 'p', string $user = 'u'): string
+    {
+        return 'CASE WHEN ' . self::recurringWhereSql($sub, $plan, $user)
+            . ' THEN ' . self::paidAmountSql($sub, $plan) . ' ELSE 0 END';
+    }
+
+    /**
      * SQL for what a subscription actually charged, for the given aliases.
      *
      * price_paid is the truth; the plan price is only a fallback for rows
@@ -95,23 +148,6 @@ class Subscription
         return "CASE WHEN {$sub}.transaction_ref LIKE 'TRIAL-%'"
             . " OR {$sub}.transaction_ref LIKE 'PENDING-%' THEN 0"
             . " ELSE COALESCE(NULLIF({$sub}.price_paid, 0), {$plan}.price) END";
-    }
-
-    /**
-     * Monthly-equivalent recurring revenue for a subscription row, in SQL.
-     *
-     * Built on paidAmountSql(), so it is what the member actually pays (a
-     * discounted term counts at its discount) and a free trial or an
-     * unconfirmed checkout contributes nothing.
-     */
-    public static function mrrSql(string $sub = 's', string $plan = 'p'): string
-    {
-        $paid = self::paidAmountSql($sub, $plan);
-
-        return "CASE {$plan}.billing_cycle"
-            . " WHEN 'monthly' THEN ({$paid})"
-            . " WHEN 'yearly' THEN ({$paid}) / 12"
-            . " ELSE ({$paid}) / 24 END";
     }
 
     /**

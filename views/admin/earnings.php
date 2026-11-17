@@ -7,7 +7,7 @@
 <section class="adm-section">
     <div class="adm-section-head">
         <h2>Revenue</h2>
-        <p>Recurring subscriptions plus one-off PPV unlocks and tips.</p>
+        <p>Active paid monthly memberships plus one-off PPV unlocks and tips.</p>
     </div>
     <div class="sys-card adm-toolbar">
         <form method="get" action="<?= url('/admin/earnings') ?>" class="adm-inline-form adm-inline-form-compact">
@@ -30,10 +30,12 @@
         <div class="stat-card kpi">
             <small>Monthly recurring</small>
             <b>$<?= number_format($mrr, 2) ?></b>
+            <small>Active paid monthly memberships only</small>
         </div>
         <div class="stat-card kpi">
             <small>Subscription revenue</small>
             <b>$<?= number_format($subRevenue, 2) ?></b>
+            <small>Same memberships, monthly value (not the date window)</small>
         </div>
         <div class="stat-card kpi">
             <small>One-off revenue</small>
@@ -91,7 +93,7 @@
 <section class="adm-section">
     <div class="adm-section-head">
         <h2>Subscriptions this window</h2>
-        <p><?= count($industrySubs) ? number_format(count($industrySubs)) . ' created' : 'None yet' ?></p>
+        <p><?= count($industrySubs) ? number_format(count($industrySubs)) . ' created' : 'None yet' ?> &middot; member accounts only</p>
     </div>
     <div class="sys-card">
     <?php if (empty($industrySubs)): ?>

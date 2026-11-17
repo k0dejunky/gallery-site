@@ -160,21 +160,32 @@ class Stats
     }
 
     /**
-     * Membership growth figures for the admin dashboard: monthly-equivalent
-     * recurring revenue of active subscriptions, recent signups, and how
-     * active members are distributed across payment processors.
+     * Membership growth figures for the admin dashboard: monthly recurring
+     * revenue of the active paid memberships, recent signups, and how those
+     * members are distributed across payment processors.
      *
-     * A free trial is an active membership but it is NOT recurring revenue,
-     * so trials contribute nothing to the MRR figures.
+     * The definition (owner, Nov 17 2026): monthly plans only, real member
+     * accounts only. A free trial, a yearly plan, a lifetime plan and a staff
+     * comp all contribute nothing - see Subscription::recurringWhereSql().
      */
     public static function growth(): array
     {
         $mrr = (float) Database::run(
-            'SELECT COALESCE(SUM(' . Subscription::mrrSql() . '), 0)
+            'SELECT COALESCE(SUM(' . Subscription::paidAmountSql() . '), 0)
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
-             WHERE s.status = ? AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)',
-            ['active']
+             JOIN users u ON u.id = s.user_id
+             WHERE ' . Subscription::recurringWhereSql()
+        )->fetchColumn();
+
+        // The number of members behind that figure, for ARPU: dividing the
+        // monthly revenue by every member (comps included) understated it.
+        $payingMembers = (int) Database::run(
+            'SELECT COUNT(DISTINCT s.user_id)
+             FROM subscriptions s
+             JOIN plans p ON p.id = s.plan_id
+             JOIN users u ON u.id = s.user_id
+             WHERE ' . Subscription::recurringWhereSql()
         )->fetchColumn();
 
         // The windows are computed in the SITE's day (see signupWindows()),
@@ -190,22 +201,23 @@ class Stats
 
         $byProcessor = Database::run(
             'SELECT COALESCE(pp.name, "(none selected)") AS name, COUNT(DISTINCT s.user_id) AS members,
-                    COALESCE(SUM(' . Subscription::mrrSql() . '), 0) AS mrr
+                    COALESCE(SUM(' . Subscription::paidAmountSql() . '), 0) AS mrr
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
+             JOIN users u ON u.id = s.user_id
              LEFT JOIN payment_processors pp ON pp.id = s.payment_processor_id
-             WHERE s.status = ? AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
-             GROUP BY pp.id, pp.name ORDER BY mrr DESC',
-            ['active']
+             WHERE ' . Subscription::recurringWhereSql() . '
+             GROUP BY pp.id, pp.name ORDER BY mrr DESC'
         )->fetchAll();
 
         return [
-            'mrr'          => $mrr,
-            'new_today'    => (int) ($signups['today'] ?? 0),
-            'new_week'     => (int) ($signups['week'] ?? 0),
-            'today_label'  => $window['today_label'],
-            'week_label'   => $window['week_label'],
-            'by_processor' => $byProcessor,
+            'mrr'            => $mrr,
+            'paying_members' => $payingMembers,
+            'new_today'      => (int) ($signups['today'] ?? 0),
+            'new_week'       => (int) ($signups['week'] ?? 0),
+            'today_label'    => $window['today_label'],
+            'week_label'     => $window['week_label'],
+            'by_processor'   => $byProcessor,
         ];
     }
 
@@ -226,7 +238,9 @@ class Stats
                     SUM(CASE WHEN s.transaction_ref LIKE 'TRIAL-%' THEN 0 ELSE 1 END) AS paid
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
+             JOIN users u ON u.id = s.user_id
              WHERE " . Subscription::notPendingSql() . "
+               AND u.role = 'user'
                AND COALESCE(s.starts_at, s.created_at) >= ?
              GROUP BY label, ym ORDER BY ym",
             [$since]
@@ -275,7 +289,9 @@ class Stats
             "SELECT COALESCE(SUM(" . Subscription::paidAmountSql() . "), 0)
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
+             JOIN users u ON u.id = s.user_id
              WHERE " . Subscription::notPendingSql() . "
+               AND u.role = 'user'
                AND COALESCE(s.starts_at, s.created_at) >= ?",
             [date('Y-m-01 00:00:00')]
         )->fetchColumn();
@@ -288,8 +304,11 @@ class Stats
             'mtd_revenue' => $mtd,
             'total_12mo' => (float) Database::run(
                 "SELECT COALESCE(SUM(" . Subscription::paidAmountSql() . "), 0)
-                 FROM subscriptions s JOIN plans p ON p.id = s.plan_id
+                 FROM subscriptions s
+                 JOIN plans p ON p.id = s.plan_id
+                 JOIN users u ON u.id = s.user_id
                  WHERE " . Subscription::notPendingSql() . "
+                   AND u.role = 'user'
                    AND COALESCE(s.starts_at, s.created_at) >= ?",
                 [date('Y-m-d 00:00:00', strtotime('-12 months'))]
             )->fetchColumn(),
@@ -856,20 +875,22 @@ class Stats
      * each plan has (with its tier/level and recurring revenue), plus a
      * per-tier rollup. Only currently-active subscriptions are counted.
      *
-     * Two things used to inflate this: a plan with NO members still reported
-     * its own list price as MRR (the LEFT JOIN row was summed), and a free
-     * trial was counted at the plan's price. Both contribute 0 now.
+     * "Members" is a headcount (a trial or a comp is still a member), while
+     * the MRR column is the owner's recurring figure: monthly plans on real
+     * member accounts only. A yearly or lifetime plan - and a staff comp -
+     * shows 0 there.
      */
     public static function planDistribution(): array
     {
         $rows = Database::run(
             'SELECT p.id, p.name, p.level, p.billing_cycle, p.price,
                     COUNT(DISTINCT s.user_id) AS members,
-                    SUM(CASE WHEN s.id IS NULL THEN 0 ELSE ' . Subscription::mrrSql() . ' END) AS mrr
+                    SUM(CASE WHEN s.id IS NULL THEN 0 ELSE ' . Subscription::recurringValueSql() . ' END) AS mrr
              FROM plans p
              LEFT JOIN subscriptions s ON s.plan_id = p.id
                  AND s.status = ?
                  AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
+             LEFT JOIN users u ON u.id = s.user_id
              WHERE p.active = 1
              GROUP BY p.id, p.name, p.level, p.billing_cycle, p.price
              ORDER BY p.level ASC, p.name ASC',
