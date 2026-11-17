@@ -136,13 +136,43 @@ class TestSuite
         });
 
         $add('db.tables_present', 'Database', 'All expected core tables exist', function () {
-            $expected = ['users', 'galleries', 'photos', 'categories', 'auto_poster_queue', 'auto_poster_log'];
+            $expected = ['users', 'galleries', 'photos', 'categories', 'auto_poster_queue', 'auto_poster_log',
+                         'admin_role_permissions', 'admin_user_permissions'];
             try {
                 $rows = Database::run('SHOW TABLES')->fetchAll(\PDO::FETCH_COLUMN);
                 $missing = array_values(array_diff($expected, $rows));
                 return ['pass' => $missing === [], 'detail' => $missing === [] ? count($rows) . ' tables' : 'missing: ' . implode(', ', $missing)];
             } catch (\Throwable $ex) {
                 return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
+        $add('db.missing_table_detection', 'Database', 'A missing table is recognised so the operator is told to migrate', function () {
+            // The permission save used to 500 when its table was not there
+            // yet (code deployed before migration 092). The controller now
+            // asks this predicate; it must not confuse a schema that is
+            // behind the code with a database that is down.
+            try {
+                $missing = new \PDOException("SQLSTATE[42S02]: Base table or view not found: 1146 Table 'gallery_mvc.admin_role_permissions' doesn't exist");
+                $missing->errorInfo = ['42S02', 1146, "Table 'gallery_mvc.admin_role_permissions' doesn't exist"];
+
+                $down = new \PDOException('SQLSTATE[HY000] [2002] Connection refused');
+                $down->errorInfo = ['HY000', 2002, 'Connection refused'];
+
+                $sqlite = new \PDOException('SQLSTATE[HY000]: General error: 1 no such table: admin_role_permissions');
+                $sqlite->errorInfo = ['HY000', 1, 'no such table: admin_role_permissions'];
+
+                $checks = [
+                    'mysql'    => \App\Core\Database::isMissingTable($missing) === true,
+                    'sqlite'   => \App\Core\Database::isMissingTable($sqlite) === true,
+                    'down'     => \App\Core\Database::isMissingTable($down) === false,
+                    'notPdo'   => \App\Core\Database::isMissingTable(new \RuntimeException('nope')) === false,
+                ];
+                $failed = array_keys(array_filter($checks, static fn (bool $v): bool => !$v));
+
+                return ['pass' => $failed === [], 'detail' => $failed === [] ? 'mysql + sqlite recognised, outage is not' : 'failed: ' . implode(', ', $failed)];
+            } catch (\Throwable $e) {
+                return ['pass' => false, 'detail' => $e->getMessage()];
             }
         });
 

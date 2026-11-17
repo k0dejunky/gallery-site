@@ -148,6 +148,35 @@ class Database
     }
 
     /**
+     * Whether a failed query failed because a TABLE IS MISSING.
+     *
+     * That is not a bug in the query: it means the database schema is behind
+     * the code (a migration has not run yet). A deploy that lands the code
+     * before the migration, or an install restored from an older dump, hits
+     * it - the permission matrix's save was a 500 because of exactly this.
+     * Callers that can explain it to an operator use this to say "run the
+     * migrations" instead of showing a stack trace.
+     */
+    public static function isMissingTable(\Throwable $e): bool
+    {
+        if (!$e instanceof \PDOException) {
+            return false;
+        }
+
+        $sqlState   = (string) ($e->errorInfo[0] ?? '');
+        $driverCode = (int) ($e->errorInfo[1] ?? 0);
+
+        if ($sqlState === '42S02' || $driverCode === 1146) {
+            return true;
+        }
+
+        $message = strtolower($e->getMessage());
+
+        return strpos($message, 'no such table') !== false
+            || strpos($message, "doesn't exist") !== false;
+    }
+
+    /**
      * Prepare and execute a parameterised query. Always pass values as
      * parameters (never interpolated) so input cannot change the query.
      * Queries that take longer than the slow threshold are recorded and

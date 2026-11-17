@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\Database;
 use App\Core\Request;
 use App\Models\AuditLog;
 use App\Models\PermissionMap;
@@ -25,6 +26,30 @@ class PermissionController extends Controller
     {
         parent::__construct($request);
         Auth::requirePermission('manage_roles');
+    }
+
+    /**
+     * Run a permission write, turning "the table is not there" into a message
+     * an operator can act on.
+     *
+     * The permission tables arrived in migration 092. On 2026-11-09 the code
+     * was live before that migration ran and saving the matrix died with an
+     * uncaught "Table 'gallery_mvc.admin_role_permissions' doesn't exist"
+     * (a 500 with a stack trace). A schema behind the code is a deployment
+     * fact, not a bug in the request: say so instead of crashing.
+     */
+    private function attemptPermissionWrite(callable $write, string $back): void
+    {
+        try {
+            $write();
+        } catch (\PDOException $ex) {
+            if (!Database::isMissingTable($ex)) {
+                throw $ex;
+            }
+
+            $this->flash('error', 'The access-control tables are missing, so nothing was saved. The database schema is behind the code - run the database migrations (php scripts/migrate.php) and try again.');
+            $this->redirect($back);
+        }
     }
 
     /**
@@ -88,22 +113,24 @@ class PermissionController extends Controller
         }
 
         $changed = [];
-        foreach ($covered as $role) {
-            $desired = [];
-            foreach ((array) $state[$role] as $permission => $value) {
-                if ((string) $value === '1') {
-                    $desired[] = (string) $permission;
+        $this->attemptPermissionWrite(function () use ($covered, $state, &$changed): void {
+            foreach ($covered as $role) {
+                $desired = [];
+                foreach ((array) $state[$role] as $permission => $value) {
+                    if ((string) $value === '1') {
+                        $desired[] = (string) $permission;
+                    }
+                }
+
+                $before = PermissionMap::effectiveRole($role);
+                PermissionMap::saveRole($role, $desired);
+                $after = PermissionMap::effectiveRole($role);
+
+                if ($before !== $after) {
+                    $changed[$role] = ['before' => $before, 'after' => $after];
                 }
             }
-
-            $before = PermissionMap::effectiveRole($role);
-            PermissionMap::saveRole($role, $desired);
-            $after = PermissionMap::effectiveRole($role);
-
-            if ($before !== $after) {
-                $changed[$role] = ['before' => $before, 'after' => $after];
-            }
-        }
+        }, '/admin/roles');
 
         if ($changed !== []) {
             AuditLog::record(
@@ -134,7 +161,9 @@ class PermissionController extends Controller
         }
 
         $before = PermissionMap::effectiveRole($role);
-        PermissionMap::resetRole($role);
+        $this->attemptPermissionWrite(static function () use ($role): void {
+            PermissionMap::resetRole($role);
+        }, '/admin/roles');
         $after = PermissionMap::effectiveRole($role);
 
         AuditLog::record(
@@ -205,7 +234,9 @@ class PermissionController extends Controller
         $states = is_array($posted) ? $posted : [];
 
         $before = PermissionMap::effectiveUser($user);
-        PermissionMap::saveUser($id, $role, $states);
+        $this->attemptPermissionWrite(static function () use ($id, $role, $states): void {
+            PermissionMap::saveUser($id, $role, $states);
+        }, '/admin/users/' . $id);
 
         // Re-read: effectiveUser() memoises per user, and saveUser() has
         // already dropped this account's rows from the memo.

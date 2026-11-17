@@ -541,6 +541,59 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.auth.permission_save_survives_a_missing_table', 'Smoke · Auth', 'A permission save against a schema that is behind the code says so instead of crashing', static function () use ($root, $ok, $bad): array {
+            // 2026-11-09: the access-control code was live before migration
+            // 092 ran, so saving the matrix died with an uncaught
+            // "Table 'gallery_mvc.admin_role_permissions' doesn't exist" (a
+            // 500). The read path already degraded to the built-in defaults;
+            // the write path now explains the problem and changes nothing.
+            $db    = (string) @file_get_contents($root . '/app/Core/Database.php');
+            $ctrl  = (string) @file_get_contents($root . '/app/Controllers/PermissionController.php');
+            $map   = (string) @file_get_contents($root . '/app/Models/PermissionMap.php');
+            $problems = [];
+
+            if (strpos($db, 'function isMissingTable(') === false) {
+                $problems[] = 'Database::isMissingTable() is missing';
+            }
+            $at = strpos($db, 'function isMissingTable(');
+            if ($at !== false) {
+                $end  = strpos($db, "\n    }\n", $at);
+                $body = substr($db, $at, ($end === false ? 900 : $end - $at));
+                if (strpos($body, "'42S02'") === false || strpos($body, '1146') === false) {
+                    $problems[] = 'isMissingTable() must recognise SQLSTATE 42S02 / MySQL 1146';
+                }
+            }
+
+            if (substr_count($ctrl, 'attemptPermissionWrite(') < 4) {
+                // 1 definition + save + reset + saveUser
+                $problems[] = 'every permission write must go through attemptPermissionWrite()';
+            }
+            if (strpos($ctrl, 'Database::isMissingTable(') === false) {
+                $problems[] = 'the controller must ask isMissingTable() before deciding it is a crash';
+            }
+            if (strpos($ctrl, 'scripts/migrate.php') === false) {
+                $problems[] = 'the message must tell the operator to run the migrations';
+            }
+
+            // The READ path keeps degrading to the defaults rather than 500.
+            foreach (['function roleDeltas(', 'function userDeltas('] as $fn) {
+                $at = strpos($map, $fn);
+                if ($at === false) {
+                    $problems[] = $fn . ' is missing';
+                    continue;
+                }
+                $end  = strpos($map, "\n    }\n", $at);
+                $body = substr($map, $at, ($end === false ? 900 : $end - $at));
+                if (strpos($body, 'catch (') === false) {
+                    $problems[] = $fn . ' must still catch a missing table and fall back to the defaults';
+                }
+            }
+
+            return $problems === []
+                ? $ok('writes explain a missing table, reads fall back to defaults')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.auth.partial_matrix_post_cannot_wipe_a_role', 'Smoke · Auth', 'A request that omits a role leaves that role untouched', static function () use ($root, $ok, $bad): array {
             // Unchecked checkboxes do not post. Reading them by presence made
             // "this role was not in the request" and "every box for this role
