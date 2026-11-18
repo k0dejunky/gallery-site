@@ -39,6 +39,12 @@ class Mailer
             return false;
         }
 
+        if (\App\Models\EmailSuppression::isSuppressed($to)) {
+            error_log('[mail] skipped a suppressed recipient: ' . $to);
+
+            return false;
+        }
+
         $headers = implode("\r\n", [
             'From: ' . self::from(),
             'X-Mailer: gallery-mvc',
@@ -60,6 +66,12 @@ class Mailer
         $html    = trim($html);
 
         if ($to === '' || $subject === '' || $html === '') {
+            return false;
+        }
+
+        if (\App\Models\EmailSuppression::isSuppressed($to)) {
+            error_log('[mail] skipped a suppressed recipient: ' . $to);
+
             return false;
         }
 
@@ -99,7 +111,7 @@ class Mailer
         }
 
         if (!self::smtpConfigured() && function_exists('mail')) {
-            $ok = @mail($to, $subject, $body, $headers);
+            $ok = @mail($to, $subject, $body, $headers, '-f' . self::envelopeFrom());
 
             if ($ok) {
                 return true;
@@ -133,6 +145,22 @@ class Mailer
     private static function from(): string
     {
         return self::sanitizeHeader((string) env_value('MAIL_FROM', 'gallery@localhost'));
+    }
+
+    /**
+     * The ENVELOPE sender (SMTP MAIL FROM / mail() -f).
+     *
+     * It is deliberately not the From: header. Bounces are returned to the
+     * envelope sender, so pointing it at a dedicated mailbox keeps "mailbox
+     * full" and "user unknown" replies out of the admin inbox, where they used
+     * to arrive 147 times. MAIL_BOUNCE is that mailbox; without it we fall
+     * back to MAIL_FROM and behave exactly as before.
+     */
+    private static function envelopeFrom(): string
+    {
+        $bounce = self::sanitizeHeader((string) env_value('MAIL_BOUNCE', ''));
+
+        return $bounce !== '' ? $bounce : self::from();
     }
 
     /**
@@ -306,7 +334,6 @@ class Mailer
         $port = (int) env_value('MAIL_PORT', '587');
         $user = env_value('MAIL_USERNAME', '');
         $pass = env_value('MAIL_PASSWORD', '');
-        $from = self::from();
         $socket = @stream_socket_client(
             'tcp://' . $host . ':' . $port,
             $errno,
@@ -330,7 +357,7 @@ class Mailer
             && self::smtpCommand($socket, 'AUTH LOGIN', 334)
             && self::smtpCommand($socket, base64_encode($user), 334)
             && self::smtpCommand($socket, base64_encode($pass), 235)
-            && self::smtpCommand($socket, 'MAIL FROM:<' . $from . '>', 250)
+            && self::smtpCommand($socket, 'MAIL FROM:<' . self::envelopeFrom() . '>', 250)
             && self::smtpCommand($socket, 'RCPT TO:<' . $to . '>', 250)
             && self::smtpCommand($socket, 'DATA', 354);
 

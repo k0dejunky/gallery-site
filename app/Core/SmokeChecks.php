@@ -6828,6 +6828,73 @@ class SmokeChecks
                 ? $ok('unlock/tip/live/checkout throttled')
                 : $bad('PurchaseController must RateLimiter-allow unlock, tip, unlock-live, tip-live and checkoutToken');
         });
+        $add('smoke.mail.bounce_suppression', 'Smoke · Mail', 'A hard bounce is collected in its own mailbox and the address is suppressed', static function () use ($root, $read, $ok, $bad): array {
+            // 147 "Undelivered Mail Returned to Sender" messages landed in
+            // the admin inbox because member mail used admin@ as its
+            // envelope sender. The envelope is now bounce@, a worker reads
+            // that mailbox, and a permanently failed address is suppressed.
+            $mailer  = (string) $read($root . '/app/Core/Mailer.php');
+            $model   = (string) $read($root . '/app/Models/EmailSuppression.php');
+            $queue   = (string) $read($root . '/app/Models/EmailQueue.php');
+            $worker  = (string) $read($root . '/bin/bounce_worker.php');
+            $cron    = (string) $read($root . '/bin/apply_cron.php');
+            $routes  = (string) $read($root . '/config/routes.php');
+            $ctrl    = (string) $read($root . '/app/Controllers/EmailerController.php');
+            $view    = (string) $read($root . '/views/admin/emailer.php');
+            $env     = (string) $read($root . '/.env.example');
+            $schema  = (string) $read($root . '/schema.sql');
+            $problems = [];
+
+            foreach (['isSuppressed', 'suppress', 'release', 'recent'] as $method) {
+                if (strpos($model, 'function ' . $method . '(') === false) {
+                    $problems[] = 'EmailSuppression::' . $method . '() is missing';
+                }
+            }
+            if (strpos($model, 'protectedAddresses') === false) {
+                $problems[] = 'the site\'s own addresses must never be suppressed';
+            }
+
+            // Envelope sender, not the From header.
+            if (strpos($mailer, 'function envelopeFrom(') === false || strpos($mailer, 'MAIL_BOUNCE') === false) {
+                $problems[] = 'Mailer must use MAIL_BOUNCE as the envelope sender';
+            }
+            if (substr_count($mailer, 'EmailSuppression::isSuppressed(') < 2) {
+                $problems[] = 'both send paths must refuse a suppressed recipient';
+            }
+            if (strpos($queue, 'markSkipped(') === false || strpos($queue, 'EmailSuppression::isSuppressed(') === false) {
+                $problems[] = 'the queue must mark a suppressed row skipped instead of retrying it';
+            }
+
+            if (!is_file($root . '/bin/bounce_worker.php')) {
+                $problems[] = 'bin/bounce_worker.php is missing';
+            }
+            foreach (['Final-Recipient', "str_starts_with(\$status, '5.')", 'EmailSuppression::suppress('] as $needle) {
+                if (strpos($worker, $needle) === false) {
+                    $problems[] = 'the bounce worker must read the DSN and only suppress a permanent failure (' . $needle . ')';
+                }
+            }
+            if (strpos($cron, "gallery-bounces") === false) {
+                $problems[] = 'apply_cron must schedule gallery-bounces';
+            }
+
+            if (strpos($routes, "'/admin/emailer/release-suppression'") === false
+                || strpos($ctrl, 'function releaseSuppression(') === false
+                || strpos($view, 'release-suppression') === false) {
+                $problems[] = 'the admin must be able to release a suppressed address';
+            }
+            if (strpos($env, 'MAIL_BOUNCE=') === false) {
+                $problems[] = '.env.example must document MAIL_BOUNCE';
+            }
+            if (strpos($schema, 'CREATE TABLE IF NOT EXISTS email_suppressions') === false
+                || strpos($schema, "ENUM('queued','sent','failed','skipped')") === false) {
+                $problems[] = 'schema.sql must carry the suppression table and the skipped status';
+            }
+
+            return $problems === []
+                ? $ok('bounce mailbox + suppression + release path')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.mail.alerts_are_deduped_and_cleared', 'Smoke · Mail', 'Admin alerts cannot flood: atomic dedupe, a daily re-nag and a clear on recovery', static function () use ($root, $read, $ok, $bad): array {
             // The admin mailbox held 208 "Backup sync unhealthy" messages
             // (2/day for months), 73 "Disk at 88%" (39 in one day) and two

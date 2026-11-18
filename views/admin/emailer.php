@@ -75,7 +75,8 @@ $cap          = (int) ($config['notification_daily_cap'] ?? 1);
         <p class="muted" style="margin:.25rem 0;">
             <strong><?= number_format((int) $queueCounts['queued']) ?></strong> queued &middot;
             <?= number_format((int) $queueCounts['sent']) ?> sent &middot;
-            <?= number_format((int) $queueCounts['failed']) ?> failed
+            <?= number_format((int) $queueCounts['failed']) ?> failed<?php if ((int) ($queueCounts['skipped'] ?? 0) > 0): ?> &middot;
+            <?= number_format((int) $queueCounts['skipped']) ?> skipped (hard bounce)<?php endif; ?>
         </p>
         <p class="muted" style="margin:.4rem 0;">Delivered by the cron worker every 5 minutes, with retry backoff on a transient SMTP failure.</p>
         <h3 style="margin:.75rem 0 .25rem;">By type</h3>
@@ -212,9 +213,10 @@ $queueBase    = url('/admin/emailer');
                 'autosubmit' => true,
                 'options'    => [
                     ''       => 'All statuses',
-                    'queued' => 'Queued',
-                    'sent'   => 'Sent',
-                    'failed' => 'Failed',
+                    'queued'  => 'Queued',
+                    'sent'    => 'Sent',
+                    'failed'  => 'Failed',
+                    'skipped' => 'Skipped (hard bounce)',
                 ],
             ],
             [
@@ -287,5 +289,49 @@ $queueBase    = url('/admin/emailer');
                 <?php endforeach; ?>
             </tbody>
         </table>
+    <?php endif; ?>
+</div>
+
+<?php // ----- Suppressed addresses ----- ?>
+<div class="stats-panel" id="suppressions">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+        <h2 class="u-m0">Suppressed addresses (<?= number_format((int) ($suppressionCount ?? 0)) ?>)</h2>
+        <span class="muted u-fs-085">A permanent bounce (5.x.x) is not retried. Releasing an address lets it receive mail again.</span>
+    </div>
+    <p class="muted">
+        Member mail goes out with <code>bounce@amethyst2213.com</code> as its envelope sender, so
+        "user unknown" and "mailbox unavailable" replies land in that mailbox instead of the admin inbox.
+        A cron worker reads it and lists every address that failed permanently here.
+    </p>
+    <?php if (empty($suppressions)): ?>
+        <?= admin_empty('send', 'No suppressed addresses', 'An address appears here when its mail hard-bounces (5.x.x).') ?>
+    <?php else: ?>
+        <div class="table-scroll">
+            <table>
+                <thead><tr><th>Address</th><th>Why</th><th>When</th><th></th></tr></thead>
+                <tbody>
+                <?php foreach ($suppressions as $suppressed): ?>
+                    <tr>
+                        <td><code><?= e((string) $suppressed['email']) ?></code></td>
+                        <td>
+                            <?= e((string) $suppressed['reason']) ?>
+                            <?php if (!empty($suppressed['detail'])): ?>
+                                <span class="muted u-fs-08"><?= e((string) $suppressed['detail']) ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="muted"><?= e(tzdate('Y-m-d H:i', (string) $suppressed['created_at'])) ?></td>
+                        <td style="text-align:right;">
+                            <form class="inline" method="post" action="<?= url('/admin/emailer/release-suppression') ?>"
+                                  data-confirm="Let <?= e((string) $suppressed['email']) ?> receive mail again?">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="email" value="<?= e((string) $suppressed['email']) ?>">
+                                <button type="submit" class="btn btn-sm btn-outline">Release</button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
     <?php endif; ?>
 </div>

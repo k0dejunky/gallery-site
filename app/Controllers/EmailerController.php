@@ -2,10 +2,13 @@
 
 namespace App\Controllers;
 
+use App\Core\Auth;
 use App\Core\Controller;
 use App\Core\Mailer;
+use App\Models\AuditLog;
 use App\Models\EmailerConfig;
 use App\Models\EmailQueue;
+use App\Models\EmailSuppression;
 
 /**
  * Admin page for the auto-emailer.
@@ -33,21 +36,52 @@ class EmailerController extends MembershipAdminController
     public function index(): void
     {
         $status = trim((string) ($this->request->query('status') ?? ''));
-        if (!in_array($status, ['queued', 'sent', 'failed'], true)) {
+        if (!in_array($status, ['queued', 'sent', 'failed', 'skipped'], true)) {
             $status = '';
         }
 
         $kind = trim((string) ($this->request->query('kind') ?? ''));
 
         $this->viewAdmin('emailer', [
-            'config'         => EmailerConfig::all(),
-            'queueCounts'    => EmailQueue::statusCounts(),
-            'kindCounts'     => EmailQueue::kindCounts(),
-            'recent'         => EmailQueue::recent(50, $status, $kind),
-            'lifecycleStats' => EmailQueue::lifecycleStats(),
-            'filterStatus'   => $status,
-            'filterKind'     => $kind,
+            'config'           => EmailerConfig::all(),
+            'queueCounts'      => EmailQueue::statusCounts(),
+            'kindCounts'       => EmailQueue::kindCounts(),
+            'recent'           => EmailQueue::recent(50, $status, $kind),
+            'lifecycleStats'   => EmailQueue::lifecycleStats(),
+            'filterStatus'     => $status,
+            'filterKind'       => $kind,
+            'suppressions'     => EmailSuppression::recent(100),
+            'suppressionCount' => EmailSuppression::count(),
         ]);
+    }
+
+    /**
+     * Let a suppressed address receive mail again.
+     *
+     * The suppression list exists because the address hard-bounced (the
+     * mailbox does not exist). A member who fixes their inbox should be able
+     * to hear from the site again, so the operator can release them here.
+     */
+    public function releaseSuppression(): void
+    {
+        $email = EmailSuppression::normalize((string) $this->request->post('email', ''));
+
+        if ($email === '' || !EmailSuppression::release($email)) {
+            $this->flash('error', 'That address is not on the suppression list.');
+            $this->redirect('/admin/emailer#suppressions');
+            return;
+        }
+
+        AuditLog::record(
+            (int) (Auth::user()['id'] ?? 0),
+            'update',
+            'email_suppression',
+            null,
+            'Released suppressed email address ' . $email
+        );
+
+        $this->flash('success', $email . ' can receive mail again.');
+        $this->redirect('/admin/emailer#suppressions');
     }
 
     /**
@@ -56,7 +90,7 @@ class EmailerController extends MembershipAdminController
     public function export(): void
     {
         $status = trim((string) ($this->request->query('status') ?? ''));
-        if (!in_array($status, ['queued', 'sent', 'failed'], true)) {
+        if (!in_array($status, ['queued', 'sent', 'failed', 'skipped'], true)) {
             $status = '';
         }
 

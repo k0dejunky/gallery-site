@@ -574,4 +574,5 @@ return [
     ['POST', '/admin/emailer/test-lifecycle/{kind}', 'EmailerController@testLifecycle', 'membership'],
     ['POST', '/admin/emailer/retry', 'EmailerController@retry', 'membership'],
     ['POST', '/admin/emailer/retry-all', 'EmailerController@retryAll', 'membership'],
+    ['POST', '/admin/emailer/release-suppression', 'EmailerController@releaseSuppression', 'membership'],
 ];

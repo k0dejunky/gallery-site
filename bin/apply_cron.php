@@ -181,6 +181,14 @@ $crond['gallery-restore-drill'] =
 // it. Needs www-data in group adm to read /var/log/apache2.
 $crond['gallery-web-analytics'] =
     "{$waFields[0]} {$waFields[1]} * * * {$php}/bin/aggregate_access_log.php --days=2 >> " . SITE_ROOT . "/storage/logs/web-analytics.log 2>&1\n";
+// Hard-bounce reader (bin/bounce_worker.php): the bounce mailbox is a vmail
+// Maildir (0700), so this runs as root like the AI watchdog. It records the
+// permanently failed addresses in email_suppressions, and the emailer skips
+// them from then on instead of retrying a mailbox that does not exist.
+$bnMin    = $clamp($intOr($json['bounces']['every_minutes'] ?? null, 10), 1, 1440);
+$bnFields = $cronFields($bnMin);
+$crond['gallery-bounces'] =
+    "{$bnFields[0]} {$bnFields[1]} * * * root /usr/bin/php " . SITE_ROOT . "/bin/bounce_worker.php --once >> " . SITE_ROOT . "/storage/logs/bounce.log 2>&1\n";
 $crond['gallery-ai-watchdog'] =
     "* * * * * root /usr/bin/php " . SITE_ROOT . "/bin/keep_ai_alive.php >> " . SITE_ROOT . "/storage/logs/ai-watchdog.log 2>&1\n";
 // The sitemap as a file: the origin root serves it the way it serves

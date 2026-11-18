@@ -1509,6 +1509,74 @@ class TestSuite
             }
         });
 
+        $add('db.bounce_suppression_cycle', 'Database', 'A hard bounce suppresses the address, and releasing it restores delivery', function () {
+            try {
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $email = 'probe.bounce.' . bin2hex(random_bytes(3)) . '@example.invalid';
+
+                    $before = \App\Models\EmailSuppression::isSuppressed($email);
+                    $added  = \App\Models\EmailSuppression::suppress($email, 'hard bounce', 'probe', '550 5.1.1 user unknown');
+                    $after  = \App\Models\EmailSuppression::isSuppressed($email);
+
+                    $listed = false;
+                    foreach (\App\Models\EmailSuppression::recent(50) as $row) {
+                        if (strtolower((string) $row['email']) === $email) {
+                            $listed = true;
+                            break;
+                        }
+                    }
+
+                    // The site's own addresses must never be suppressible: a
+                    // bounce loop on the alert mailbox would silence the alerts.
+                    $admin = (string) env_value('ADMIN_EMAIL', '');
+                    $adminRefused = $admin === '' || \App\Models\EmailSuppression::suppress($admin, 'probe') === false;
+
+                    // A queued row for a suppressed address becomes "skipped",
+                    // which the retry-all button does not touch.
+                    Database::run(
+                        "INSERT INTO email_queue (audience, kind, email, subject, html_body, text_body, status)
+                         VALUES ('notification', 'notification', ?, 'probe', '<p>probe</p>', 'probe', 'queued')",
+                        [$email]
+                    );
+                    $queueId = (int) $pdo->lastInsertId();
+                    $skipped = \App\Models\EmailQueue::markSkipped($queueId, 'suppressed: hard bounce');
+                    $row = Database::run('SELECT status FROM email_queue WHERE id = ?', [$queueId])->fetch();
+
+                    $released = \App\Models\EmailSuppression::release($email);
+                    $gone     = !\App\Models\EmailSuppression::isSuppressed($email);
+
+                    $checks = [
+                        'notBefore'  => $before === false,
+                        'suppressed' => $added === true && $after === true,
+                        'listed'     => $listed,
+                        'adminSafe'  => $adminRefused,
+                        'queueSkip'  => $skipped === true && (string) ($row['status'] ?? '') === 'skipped',
+                        'released'   => $released === true && $gone === true,
+                    ];
+                    $failed = array_keys(array_filter($checks, static fn (bool $v): bool => !$v));
+
+                    return [
+                        'pass'   => $failed === [],
+                        'detail' => $failed === []
+                            ? 'suppressed -> skipped -> released'
+                            : 'failed: ' . implode(', ', $failed),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $e) {
+                return ['pass' => false, 'detail' => $e->getMessage()];
+            }
+        });
+
         $add('db.email_notification_daily_cap', 'Database', 'A member gets at most one notification email per day', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

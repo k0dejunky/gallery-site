@@ -450,10 +450,19 @@ class EmailQueue
      */
     public static function sendDue(int $limit = 25): array
     {
-        $result = ['attempted' => 0, 'sent' => 0, 'failed' => 0];
+        $result = ['attempted' => 0, 'sent' => 0, 'failed' => 0, 'skipped' => 0];
 
         foreach (self::queued($limit) as $row) {
             $result['attempted']++;
+
+            // A hard-bounced address is not retried: three attempts at a
+            // mailbox that does not exist only make more bounces (and more
+            // noise in the bounce mailbox).
+            if (EmailSuppression::isSuppressed((string) $row['email'])) {
+                self::markSkipped((int) $row['id'], 'suppressed: hard bounce');
+                $result['skipped']++;
+                continue;
+            }
 
             $unsubscribe = '#';
             if ($row['user_id'] !== null) {
@@ -488,6 +497,23 @@ class EmailQueue
         }
 
         return $result;
+    }
+
+    /**
+     * Mark a row skipped because its recipient is suppressed.
+     *
+     * "skipped" is deliberately not "failed": the retry-all button only
+     * touches failed rows, so a suppression cannot be undone by accident.
+     */
+    public static function markSkipped(int $id, string $reason): bool
+    {
+        $stmt = Database::run(
+            'UPDATE email_queue SET status = ?, attempts = ?, error = ?
+             WHERE id = ? AND status = ?',
+            ['skipped', self::MAX_ATTEMPTS, mb_substr($reason, 0, 500), $id, 'queued']
+        );
+
+        return $stmt->rowCount() > 0;
     }
 
     /**
@@ -558,7 +584,7 @@ class EmailQueue
     /**
      * Counts by status for the admin summary card.
      *
-     * @return array{queued: int, sent: int, failed: int}
+     * @return array{queued: int, sent: int, failed: int, skipped: int}
      */
     public static function statusCounts(): array
     {
@@ -566,7 +592,7 @@ class EmailQueue
             'SELECT status, COUNT(*) AS c FROM email_queue GROUP BY status'
         )->fetchAll();
 
-        $counts = ['queued' => 0, 'sent' => 0, 'failed' => 0];
+        $counts = ['queued' => 0, 'sent' => 0, 'failed' => 0, 'skipped' => 0];
 
         foreach ($rows as $row) {
             if (isset($counts[$row['status']])) {
@@ -608,7 +634,7 @@ class EmailQueue
         $where  = [];
         $params = [];
 
-        if (in_array($status, ['queued', 'sent', 'failed'], true)) {
+        if (in_array($status, ['queued', 'sent', 'failed', 'skipped'], true)) {
             $where[]  = 'status = ?';
             $params[] = $status;
         }

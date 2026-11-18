@@ -609,7 +609,7 @@ CREATE TABLE IF NOT EXISTS email_queue (
     subject    VARCHAR(255) NOT NULL,
     html_body  MEDIUMTEXT NOT NULL,
     text_body  TEXT NULL,
-    status     ENUM('queued','sent','failed') NOT NULL DEFAULT 'queued',
+    status     ENUM('queued','sent','failed','skipped') NOT NULL DEFAULT 'queued',
     attempts   TINYINT UNSIGNED NOT NULL DEFAULT 0,
     next_attempt_at DATETIME NULL DEFAULT NULL,
     error      VARCHAR(500) NULL,
@@ -622,6 +622,17 @@ CREATE TABLE IF NOT EXISTS email_queue (
     INDEX idx_email_queue_audience (audience),
     INDEX idx_email_queue_kind (kind, created_at),
     CONSTRAINT fk_email_queue_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS email_suppressions (
+    id         INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    email      VARCHAR(255) NOT NULL,
+    reason     VARCHAR(120) NOT NULL DEFAULT 'hard bounce',
+    source     VARCHAR(40) NOT NULL DEFAULT 'dsn',
+    detail     VARCHAR(255) NULL DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_email_suppressions_email (email),
+    KEY idx_email_suppressions_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS subscription_email_log (

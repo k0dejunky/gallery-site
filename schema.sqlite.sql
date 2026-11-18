@@ -440,7 +440,7 @@ CREATE TABLE IF NOT EXISTS email_queue (
     subject    VARCHAR(255) NOT NULL,
     html_body  TEXT NOT NULL,
     text_body  TEXT,
-    status     VARCHAR(10) NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','sent','failed')),
+    status     VARCHAR(10) NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','sent','failed','skipped')),
     attempts   INTEGER NOT NULL DEFAULT 0,
     error      VARCHAR(500),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -449,6 +449,15 @@ CREATE TABLE IF NOT EXISTS email_queue (
 );
 CREATE INDEX IF NOT EXISTS idx_email_queue_status ON email_queue (status);
 CREATE INDEX IF NOT EXISTS idx_email_queue_audience ON email_queue (audience);
+
+CREATE TABLE IF NOT EXISTS email_suppressions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    email      VARCHAR(255) NOT NULL UNIQUE,
+    reason     VARCHAR(120) NOT NULL DEFAULT 'hard bounce',
+    source     VARCHAR(40) NOT NULL DEFAULT 'dsn',
+    detail     VARCHAR(255),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 CREATE TABLE IF NOT EXISTS content_views (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
