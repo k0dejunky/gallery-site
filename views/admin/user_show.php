@@ -165,10 +165,11 @@
 <details>
     <summary class="section-title" style="cursor:pointer;list-style:none;">
         <span style="display:flex;align-items:center;gap:.5rem;">
-            Recent sign-in attempts
+            Recent failed sign-ins
             <small class="muted">(<?= count($logins) ?>)</small>
         </span>
     </summary>
+    <p class="muted" style="margin:.25rem 0 .5rem;font-size:.8rem;">Only failed attempts are recorded here; a successful sign-in clears that email+IP history. The last successful sign-in is on the <b>Last login</b> row above.</p>
     <div class="users-table-wrap"><table class="users-table">
         <thead><tr><th>When</th><th>IP</th></tr></thead>
         <tbody>
@@ -178,7 +179,7 @@
                 <td><code><?= e((string) $attempt['ip']) ?></code></td>
             </tr>
         <?php endforeach; ?>
-        <?php if (!$logins): ?><tr><td colspan="2" class="muted">No recorded attempts.</td></tr><?php endif; ?>
+        <?php if (!$logins): ?><tr><td colspan="2" class="muted">No failed attempts recorded.</td></tr><?php endif; ?>
         </tbody>
     </table></div>
 </details>
@@ -191,17 +192,24 @@
         </span>
     </summary>
     <div class="users-table-wrap"><table class="users-table">
-        <thead><tr><th>When</th><th>Action</th><th>Entity</th><th>Description</th></tr></thead>
+        <thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Entity</th><th>Description</th></tr></thead>
         <tbody>
         <?php foreach ($activity as $entry): ?>
             <tr>
                 <td class="user-date"><?= e(tzdate('Y-m-d H:i', $entry['created_at'])) ?></td>
+                <td>
+                    <?php if (!empty($entry['actor_email'])): ?>
+                        <span class="user-source"><?= e((string) $entry['actor_email']) ?></span>
+                    <?php else: ?>
+                        <span class="muted">—</span>
+                    <?php endif; ?>
+                </td>
                 <td><span class="role-badge"><?= e((string) $entry['action']) ?></span></td>
                 <td><?= e((string) $entry['entity_type']) ?>#<?= (int) $entry['entity_id'] ?></td>
                 <td><?= e((string) $entry['description']) ?></td>
             </tr>
         <?php endforeach; ?>
-        <?php if (!$activity): ?><tr><td colspan="4" class="muted">Nothing recorded yet.</td></tr><?php endif; ?>
+        <?php if (!$activity): ?><tr><td colspan="5" class="muted">Nothing recorded yet for this account.</td></tr><?php endif; ?>
         </tbody>
     </table></div>
 </details>

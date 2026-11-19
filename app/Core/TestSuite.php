@@ -832,6 +832,65 @@ class TestSuite
             }
         });
 
+        $add('db.user_audit_trail_scoped', 'Database', 'The user audit trail shows that account and nobody else', function () {
+            try {
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $alice = self::scratchUserId('probe.audit.alice');
+                    $bob   = self::scratchUserId('probe.audit.bob');
+                    $admin = self::scratchUserId('probe.audit.admin');
+
+                    \App\Models\AuditLog::record($admin, 'update', 'user', $alice, 'Role for alice changed to editor');
+                    \App\Models\AuditLog::record($admin, 'update', 'user_flag', $alice, 'Flag for user #' . $alice . ' set to: vip');
+                    \App\Models\AuditLog::record($admin, 'update', 'user', $bob, 'Suspended account bob');
+                    // Same entity_id, different entity type: this is exactly
+                    // the collision that put an auto-post-queue row on a
+                    // user's page in production (user 383).
+                    \App\Models\AuditLog::record($admin, 'delete', 'auto_post_queue', $alice, 'Dismissed auto-post queue item #' . $alice);
+
+                    $trail = \App\Models\AuditLog::forUser($alice);
+                    $text  = json_encode($trail);
+
+                    $adminEmail = (string) Database::run('SELECT email FROM users WHERE id = ?', [$admin])->fetchColumn();
+                    $actorOk    = false;
+                    foreach ($trail as $row) {
+                        if ((string) ($row['actor_email'] ?? '') === $adminEmail) {
+                            $actorOk = true;
+                            break;
+                        }
+                    }
+
+                    $checks = [
+                        'ownRole'     => strpos($text, 'Role for alice changed to editor') !== false,
+                        'ownFlag'     => strpos($text, 'set to: vip') !== false,
+                        'otherUser'   => strpos($text, 'Suspended account bob') === false,
+                        'idCollision' => strpos($text, 'auto-post queue item') === false,
+                        'count'       => count($trail) === 2,
+                        'actor'       => $actorOk,
+                    ];
+                    $failed = array_keys(array_filter($checks, static fn (bool $v): bool => !$v));
+
+                    return [
+                        'pass'   => $failed === [],
+                        'detail' => $failed === []
+                            ? '2 own rows (role + flag), no other user, no id collision, actor joined'
+                            : 'failed: ' . implode(', ', $failed) . ' ' . json_encode($trail),
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $e) {
+                return ['pass' => false, 'detail' => $e->getMessage()];
+            }
+        });
+
         $add('db.trial_source_recorded', 'Database', 'a trial signup records the trial link it came from', function () {
             try {
                 $pdo = Database::connection();

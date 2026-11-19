@@ -6,6 +6,31 @@ use App\Core\Database;
 
 class AuditLog
 {
+    /**
+     * The entity types that belong to ONE account and store that account's id
+     * in `entity_id`.
+     *
+     * The user page's audit trail is built from this list: it used to filter
+     * on only three of them and, worse, without `entity_id = ?`, so every
+     * user's page showed the newest user-type rows for EVERYBODY (measured on
+     * production: user 383's page showed 24 rows, none about 383).
+     *
+     * `impersonation` stores the impersonated account's id on the "started"
+     * row; its "stopped" row stores the admin's own id, so it lands on the
+     * admin's page where it belongs.
+     */
+    public const USER_SCOPED = [
+        'user',
+        'user_password',
+        'user_sessions',
+        'user_flag',
+        'user_note',
+        'user_email',
+        'user_permissions',
+        'user_two_factor',
+        'impersonation',
+    ];
+
     public static function record(?int $userId, string $action, string $entityType, ?int $entityId, string $description, ?array $before = null, ?array $after = null): int
     {
         Database::run(
@@ -17,6 +42,30 @@ class AuditLog
         );
 
         return (int) Database::connection()->lastInsertId();
+    }
+
+    /**
+     * The audit trail for ONE account, newest first.
+     *
+     * Scoped by `entity_id` on purpose: without it the card showed the whole
+     * site's newest user-type rows. The actor is joined in so the page can say
+     * WHO changed the account, not just what and when (`user_id` is NULL for
+     * cron/system writes, which renders as a dash).
+     */
+    public static function forUser(int $userId, int $limit = 30): array
+    {
+        $limit = max(1, min(100, $limit));
+        $in    = implode(', ', array_fill(0, count(self::USER_SCOPED), '?'));
+
+        return Database::run(
+            "SELECT l.created_at, l.action, l.entity_type, l.entity_id, l.description,
+                    l.user_id AS actor_id, u.email AS actor_email
+             FROM admin_logs l
+             LEFT JOIN users u ON u.id = l.user_id
+             WHERE l.entity_id = ? AND l.entity_type IN ($in)
+             ORDER BY l.id DESC LIMIT $limit",
+            array_merge([$userId], self::USER_SCOPED)
+        )->fetchAll();
     }
 
     public static function recent(int $page = 1, int $perPage = 30): array

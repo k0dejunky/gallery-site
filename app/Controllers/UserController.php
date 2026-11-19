@@ -359,15 +359,10 @@ class UserController extends Controller
             [$id]
         )->fetchAll();
 
-        // Audit trail mentioning this account (role changes, suspensions,
-        // impersonation, password work) plus recent sign-in attempts.
-        $activity = Database::run(
-            'SELECT created_at, action, entity_type, entity_id, description
-             FROM admin_logs
-             WHERE entity_type IN (?, ?, ?) OR description LIKE ?
-             ORDER BY id DESC LIMIT 30',
-            ['user', 'user_password', 'user_sessions', '%"' . str_replace(['%', '_'], ['\%', '\_'], (string) $user['email']) . '"%']
-        )->fetchAll();
+        // The account's OWN audit trail: role changes, suspensions, flag and
+        // note writes, password/2FA work, per-account permission overrides and
+        // impersonation, all scoped by entity_id (see AuditLog::USER_SCOPED).
+        $activity = AuditLog::forUser($id);
 
         $logins = Database::run(
             'SELECT attempted_at AS at, ip FROM login_attempts

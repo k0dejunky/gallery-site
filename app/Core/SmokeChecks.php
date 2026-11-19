@@ -6736,6 +6736,57 @@ class SmokeChecks
                 ? $ok('resume route + button + pause clear + refill')
                 : $bad(implode('; ', $problems));
         });
+        $add('smoke.users.audit_trail_is_scoped', 'Smoke · Users', 'The audit trail on a user page shows that account only, with the acting admin', static function () use ($root, $read, $ok, $bad): array {
+            // The card used to query admin_logs by entity TYPE only, so every
+            // user page showed the newest rows for the whole site (measured:
+            // user 383's page had 24 rows, none about 383).
+            $model = (string) $read($root . '/app/Models/AuditLog.php');
+            $ctrl  = (string) $read($root . '/app/Controllers/UserController.php');
+            $view  = (string) $read($root . '/views/admin/user_show.php');
+            $problems = [];
+
+            if (strpos($model, 'const USER_SCOPED') === false || strpos($model, 'function forUser(') === false) {
+                $problems[] = 'AuditLog needs USER_SCOPED and forUser()';
+            }
+            foreach (["'user'", "'user_password'", "'user_sessions'", "'user_flag'", "'user_note'", "'user_email'", "'user_permissions'", "'user_two_factor'", "'impersonation'"] as $type) {
+                if (strpos($model, $type) === false) {
+                    $problems[] = 'USER_SCOPED must cover ' . $type;
+                }
+            }
+            $at = strpos($model, 'function forUser(');
+            if ($at !== false) {
+                $end  = strpos($model, "\n    }\n", $at);
+                $body = substr($model, $at, ($end === false ? 1200 : $end - $at));
+                if (strpos($body, 'entity_id = ?') === false) {
+                    $problems[] = 'forUser() must scope on entity_id';
+                }
+                if (strpos($body, 'actor_email') === false) {
+                    $problems[] = 'forUser() must join the acting admin';
+                }
+            }
+
+            if (strpos($ctrl, 'AuditLog::forUser(') === false) {
+                $problems[] = 'the user page must use AuditLog::forUser()';
+            }
+            if (strpos($ctrl, 'FROM admin_logs') !== false) {
+                $problems[] = 'the controller must not inline its own admin_logs query';
+            }
+            if (strpos($view, '<th>Admin</th>') === false || strpos($view, 'actor_email') === false) {
+                $problems[] = 'the audit table must show the acting admin';
+            }
+
+            if (strpos($view, 'Recent failed sign-ins') === false) {
+                $problems[] = 'the login card must say it lists FAILED sign-ins';
+            }
+            if (strpos($view, 'Recent sign-in attempts') !== false) {
+                $problems[] = 'the old "Recent sign-in attempts" label overpromises';
+            }
+
+            return $problems === []
+                ? $ok('scoped by entity_id, nine entity types, actor shown, honest sign-in label')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.users.trial_source_documented', 'Smoke · Users', 'A trial signup records and displays the trial link it came from', static function () use ($root, $read, $ok, $bad): array {
             $userModel = (string) $read($root . '/app/Models/User.php');
             $auth      = (string) $read($root . '/app/Controllers/AuthController.php');
