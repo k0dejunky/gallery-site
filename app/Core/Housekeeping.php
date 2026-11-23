@@ -103,6 +103,11 @@ class Housekeeping
             // never silently fills with leftovers.
             $out['temp_files_removed'] = self::step('temp_files', fn () => self::cleanupOrphanedTemp(), $out);
 
+            // The orphan grid caches a 240x180 thumbnail per file in
+            // storage/uploads/orphan-thumbs; the files are regenerable, so a
+            // week is plenty and keeps the folder from growing for ever.
+            $out['orphan_thumbs_pruned'] = self::step('orphan_thumbs', fn () => self::pruneOrphanThumbs($root), $out);
+
             // Alert when media grows unusually fast (a bulk import) so the disk
             // is not discovered full after the fact.
             $out['disk_growth_alerted'] = self::step('disk_growth', fn () => self::alertOnDiskGrowth(), $out);
@@ -398,6 +403,29 @@ class Housekeeping
      * than anything the site reads (the trends chart asks for 7 days, the
      * member monitor for 30).
      */
+    /**
+     * Drop cached orphan-grid thumbnails older than a week.
+     */
+    private static function pruneOrphanThumbs(string $root): int
+    {
+        $dir = $root . '/storage/uploads/orphan-thumbs';
+
+        if (!is_dir($dir)) {
+            return 0;
+        }
+
+        $cutoff  = time() - 7 * 86400;
+        $removed = 0;
+
+        foreach (glob($dir . '/*') ?: [] as $file) {
+            if (is_file($file) && (int) @filemtime($file) < $cutoff && @unlink($file)) {
+                $removed++;
+            }
+        }
+
+        return $removed;
+    }
+
     private static function pruneVisitHistory(): array
     {
         $out = [];

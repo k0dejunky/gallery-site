@@ -679,6 +679,14 @@ class Photo
             }
         }
 
+        // The public SEO sample clip lives in previews/, a subdirectory the
+        // glob above never looks in. Deleting a video used to leave
+        // preview_<stem>.mp4 behind for ever (88 had piled up by November).
+        $preview = video_sample_path((string) $photo['filename']);
+        if ($preview !== '' && is_file($preview)) {
+            @unlink($preview);
+        }
+
         Database::run('DELETE FROM photos WHERE id = ?', [$photoId]);
 
         \App\Core\Cache::bump('media');

@@ -3155,6 +3155,60 @@ class TestSuite
             }
         });
 
+        $add('db.orphan_scan_covers_subdirs', 'Database', 'The orphan scan finds SEO clips and chat files, and delete removes them', function () {
+            $uploads = (string) (config('app.uploads')['dir'] ?? '');
+            if ($uploads === '' || !is_dir($uploads)) {
+                return ['pass' => true, 'detail' => 'no uploads folder on this install'];
+            }
+
+            $token   = bin2hex(random_bytes(4));
+            $preview = $uploads . '/previews/preview_probe-orphan-' . $token . '.mp4';
+            $chat    = $uploads . '/chat/probe-orphan-' . $token . '.txt';
+
+            @mkdir(dirname($preview), 0775, true);
+            @mkdir(dirname($chat), 0775, true);
+            @file_put_contents($preview, 'probe');
+            @file_put_contents($chat, 'probe');
+
+            try {
+                \App\Models\OrphanedUploads::forget();
+                $names = array_column(\App\Models\OrphanedUploads::scan(), 'name');
+
+                $hasPreview = in_array('previews/' . basename($preview), $names, true);
+                $hasChat    = in_array('chat/' . basename($chat), $names, true);
+
+                // The preview endpoint must never resolve outside uploads.
+                $confined = \App\Models\OrphanedUploads::viewPath('../config/app.php') === null
+                    && \App\Models\OrphanedUploads::viewPath('/etc/passwd') === null;
+
+                $removed = \App\Models\OrphanedUploads::delete([
+                    'previews/' . basename($preview),
+                    'chat/' . basename($chat),
+                ]);
+
+                $gone = !is_file($preview) && !is_file($chat);
+
+                $checks = [
+                    'preview'  => $hasPreview,
+                    'chat'     => $hasChat,
+                    'confined' => $confined,
+                    'deleted'  => $removed === 2 && $gone,
+                ];
+                $failed = array_keys(array_filter($checks, static fn (bool $v): bool => !$v));
+
+                return [
+                    'pass'   => $failed === [],
+                    'detail' => $failed === []
+                        ? 'previews/ and chat/ listed and removed; traversal refused'
+                        : 'failed: ' . implode(', ', $failed),
+                ];
+            } finally {
+                @unlink($preview);
+                @unlink($chat);
+                \App\Models\OrphanedUploads::forget();
+            }
+        });
+
         $add('db.related_respects_the_level', 'Database', 'The related and recommended rails only offer galleries the member can open', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

@@ -519,109 +519,14 @@ $canOperate = \App\Core\Auth::can('system_ops');
         <?php endif; ?>
     </div>
 
-    <!-- Pending upload staging folders -->
+    <!-- Uploads -->
     <div class="sys-card">
-        <h2>Pending uploads</h2>
-        <?php if (empty($pendingDirs)): ?>
-            <?= admin_empty('upload', 'No staging folders', 'Nothing to clean.') ?>
-        <?php else: ?>
-            <table>
-                <tr><th>Folder</th><th>Files</th><th>Size</th><th>Age</th><th><span class="adm-sr-only">Actions</span></th></tr>
-                <?php foreach ($pendingDirs as $dir): ?>
-                    <tr>
-                        <td><code><?= e($dir['name']) ?></code></td>
-                        <td><?= (int) $dir['files'] ?></td>
-                        <td><?= number_format($dir['size'] / 1048576, 1) ?> MB</td>
-                        <td><?= (int) $dir['age_h'] ?>h</td>
-                        <td><?php if ($canOperate): ?><form class="inline" method="post" action="<?= url('/admin/system/cleanup/pending') ?>"
-                                  data-confirm="Delete this staging folder?">
-                                <?= csrf_field() ?><input type="hidden" name="dir" value="<?= e($dir['name']) ?>">
-                                <button class="btn btn-sm btn-danger" type="submit">Delete</button></form><?php endif; ?></td>
-                    </tr>
-                <?php endforeach; ?>
-            </table>
-            <?php if ($canOperate): ?><form class="sys-actions" method="post" action="<?= url('/admin/system/cleanup/pending') ?>"
-                  data-confirm="Delete ALL <?= count($pendingDirs) ?> staging folders?">
-                <?= csrf_field() ?><input type="hidden" name="dir" value="all">
-                <button class="btn btn-danger" type="submit">Delete all</button>
-            </form><?php endif; ?>
-        <?php endif; ?>
+        <h2>Uploads</h2>
+        <p class="muted" style="margin:.5rem 0 0;">
+            Abandoned uploads and orphaned files are handled on one page:
+            <a href="<?= url('/admin/abandoned-uploads') ?>">Uploads &amp; Orphans</a>.
+        </p>
     </div>
-
-    <!-- Orphaned files -->
-    <div class="sys-card">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;">
-            <h2 class="u-m0">Orphaned upload files</h2>
-            <?php if (!empty($orphans)): ?>
-                <span class="muted u-fs-085">
-                    <?= number_format((int) $orphanTotal) ?> file<?= (int) $orphanTotal === 1 ? '' : 's' ?> ·
-                    <?= number_format((float) ($orphanBytes ?? 0) / 1048576, 1) ?> MB
-                </span>
-            <?php endif; ?>
-        </div>
-        <?php if (empty($orphans)): ?>
-            <p class="muted" style="margin-top:.5rem;">Every file in storage/uploads belongs to a photo record.</p>
-        <?php else: ?>
-            <p class="muted" style="margin:.5rem 0;">Click a card to view the full file in a new tab.</p>
-            <?php require __DIR__ . '/partials/orphans_grid.php'; ?>
-            <?php if ($canOperate): ?><form class="sys-actions" method="post" action="<?= url('/admin/system/cleanup/orphans') ?>"
-                  data-confirm="Delete all <?= (int) $orphanTotal ?> orphaned files permanently?">
-                <?= csrf_field() ?>
-                <button class="btn btn-danger" type="submit">Delete orphans</button>
-            </form><?php endif; ?>
-        <?php endif; ?>
-    </div>
-
-    <script nonce="<?= csp_nonce() ?>">
-        (function () {
-            var results = document.getElementById('orphan-results');
-            if (!results) return;
-
-            var loading = false;
-
-            function currentPage() {
-                var p = parseInt(new URL(window.location.href).searchParams.get('page') || '1', 10);
-                return isNaN(p) || p < 1 ? 1 : p;
-            }
-
-            function loadPage(page) {
-                if (loading || page < 1) return;
-                loading = true;
-                results.classList.add('is-loading');
-                fetch(results.dataset.url + '?page=' + encodeURIComponent(page))
-                    .then(function (r) { return r.text(); })
-                    .then(function (html) {
-                        var tmp = document.createElement('div');
-                        tmp.innerHTML = html;
-                        var fresh = tmp.querySelector('#orphan-results');
-                        if (fresh) {
-                            results.replaceWith(fresh);
-                            results = fresh;
-                        }
-                        var u = new URL(window.location.href);
-                        if (page > 1) { u.searchParams.set('page', String(page)); }
-                        else { u.searchParams.delete('page'); }
-                        history.pushState({ orphanPage: page }, '', u.toString());
-                        loading = false;
-                    })
-                    .catch(function () {
-                        loading = false;
-                        window.location.href = results.dataset.url.slice(0, -'/orphans/page'.length) + (page > 1 ? '?page=' + page : '');
-                    });
-            }
-
-            document.addEventListener('click', function (e) {
-                var link = e.target && e.target.closest ? e.target.closest('#orphan-results .pagination a[data-page]') : null;
-                if (!link) return;
-                e.preventDefault();
-                loadPage(parseInt(link.getAttribute('data-page'), 10));
-            });
-
-            window.addEventListener('popstate', function () {
-                loadPage(currentPage());
-            });
-        })();
-    </script>
 
     <!-- Backups -->
     <div class="sys-card">

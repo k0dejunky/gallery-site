@@ -1,27 +1,28 @@
 <?php
 /**
- * Remove the files in storage/uploads that no photo points at.
+ * Remove every file under storage/uploads that nothing refers to.
  *
- * A file is written to disk before the photo row is made, so a file the site
- * already holds (the same hash) leaves a copy behind that nothing refers to,
- * and a deleted photo leaves its derivatives behind (Photo::deleteIfOrphan
- * now removes those itself).
+ * "Orphaned" means one of three things, and all three are scanned:
+ *
+ *   root      an original (or a derivative whose source is gone) with no
+ *             photos row,
+ *   previews  an SEO sample clip whose video is gone,
+ *   chat      a chat attachment whose message row is gone.
+ *
+ * The admin page (Uploads & Orphans) uses the SAME scan
+ * (App\Models\OrphanedUploads), so the CLI and the page can never disagree
+ * about what is deletable. Do not reintroduce a local prefix/theme list here:
+ * that is how a --yes run once came within one edit of deleting every video
+ * rendition.
  *
  * Usage: php bin/cleanup_orphan_uploads.php [--dry-run] [--yes] [--limit=N]
- *
- * A file is an orphan when the photo it derives from no longer exists. The
- * derivative prefixes come from media_variant_prefixes() - blur_thumb_,
- * thumb_, web_, poster_ and every configured ladder rung (weblo_, webhi_).
- * This script used to know only web_ and thumb_, so a --yes run would have
- * deleted EVERY video rendition and every blurred teaser. Do not reintroduce
- * a local prefix list.
  */
 declare(strict_types=1);
 
 $root = dirname(__DIR__);
 require $root . '/app/bootstrap.php';
 
-use App\Core\Database;
+use App\Models\OrphanedUploads;
 
 $dryRun = in_array('--dry-run', $argv, true);
 $yes    = in_array('--yes', $argv, true);
@@ -32,53 +33,26 @@ foreach ($argv as $i => $arg) {
     }
 }
 
-$dir = \config('app.uploads')['dir'];
-if (!is_dir($dir)) {
-    fwrite(STDERR, "the uploads folder is not there: {$dir}\n");
-    exit(1);
+$orphans  = OrphanedUploads::scan();
+$bytes    = (int) array_sum(array_column($orphans, 'size'));
+$bySource = [];
+
+foreach ($orphans as $orphan) {
+    $source = (string) ($orphan['source'] ?? 'root');
+    $bySource[$source] = ($bySource[$source] ?? 0) + 1;
 }
 
-$names = [];
-$stems = [];
-foreach (Database::run('SELECT filename FROM photos')->fetchAll() as $row) {
-    $name = (string) $row['filename'];
-    $names[$name] = true;
-    // Derivatives can change the extension (web_<stem>.webp for <stem>.jpg),
-    // so the stem is the reliable second test.
-    $stems[pathinfo($name, PATHINFO_FILENAME)] = true;
+$detail = [];
+foreach ($bySource as $source => $count) {
+    $detail[] = $source . ' ' . $count;
 }
 
-// The site's own title images (uploaded through the theme editor) live in
-// this directory and have no photo row. A --yes run must never delete the
-// logo; unreferenced title-* files are still reported as orphans.
-$themeFiles = \App\Models\Theme::referencedTitleImages();
-
-$orphans = [];
-$bytes   = 0;
-$kept    = 0;
-foreach (scandir($dir) as $entry) {
-    if ($entry === '.' || $entry === '..') {
-        continue;
-    }
-    $path = $dir . '/' . $entry;
-    if (!is_file($path)) {
-        continue;
-    }
-    if (isset($themeFiles[$entry])) {
-        $kept++;
-        continue;
-    }
-    $base = media_derivative_base($entry);
-    if (isset($names[$base]) || isset($stems[pathinfo($base, PATHINFO_FILENAME)])) {
-        $kept++;
-        continue;
-    }
-    $size    = (int) @filesize($path);
-    $bytes  += $size;
-    $orphans[] = $path;
-}
-
-printf("kept %d file(s), %d orphan(s), %.1f GB\n", $kept, count($orphans), $bytes / 1073741824);
+printf(
+    "%d orphan(s), %.1f GB%s\n",
+    count($orphans),
+    $bytes / 1073741824,
+    $detail === [] ? '' : ' (' . implode(', ', $detail) . ')'
+);
 
 if ($dryRun) {
     echo "dry run - nothing was deleted\n";
@@ -90,20 +64,10 @@ if (!$yes && $orphans !== []) {
     exit(0);
 }
 
-$deleted = 0;
-$failed  = 0;
-$done    = 0;
-foreach ($orphans as $path) {
-    if ($limit > 0 && $done >= $limit) {
-        break;
-    }
-    $done++;
-    if (@unlink($path)) {
-        $deleted++;
-    } else {
-        $failed++;
-    }
+$names = array_column($orphans, 'name');
+if ($limit > 0) {
+    $names = array_slice($names, 0, $limit);
 }
 
-printf("deleted %d file(s), %d could not be removed\n", $deleted, $failed);
+printf("deleted %d file(s)\n", OrphanedUploads::delete($names));
 exit(0);

@@ -978,12 +978,47 @@ class ChatMessage
         )->rowCount() > 0;
 
         if ($deleted) {
-            // The attachment file is left alone: it may be shared with
-            // another message (the same upload in another conversation).
+            self::deleteAttachmentIfUnreferenced((string) ($row['attachment_path'] ?? ''));
             \App\Core\Cache::bump('chat');
         }
 
         return $deleted;
+    }
+
+    /**
+     * Remove an attachment file once no message points at it.
+     *
+     * The same upload can be shared (another conversation, a re-send), so the
+     * remaining references are counted first. Before this, a deleted message
+     * left its file behind and only the orphan scan would ever find it.
+     */
+    private static function deleteAttachmentIfUnreferenced(string $path): void
+    {
+        $path = trim($path);
+
+        if ($path === '') {
+            return;
+        }
+
+        $refs = (int) Database::run(
+            'SELECT COUNT(*) FROM chat_messages WHERE attachment_path = ?',
+            [$path]
+        )->fetchColumn();
+
+        if ($refs > 0) {
+            return;
+        }
+
+        $full = dirname(__DIR__, 2) . '/' . ltrim($path, '/');
+        if (is_file($full)) {
+            @unlink($full);
+        }
+
+        $dir  = dirname($full);
+        $base = pathinfo($full, PATHINFO_FILENAME);
+        foreach (glob($dir . '/thumbs/' . $base . '*') ?: [] as $thumb) {
+            @unlink($thumb);
+        }
     }
 
     /**

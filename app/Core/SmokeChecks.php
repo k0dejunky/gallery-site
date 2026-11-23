@@ -364,17 +364,27 @@ class SmokeChecks
             // cleanups delete files. The controller used to need 'logs',
             // which a moderator holds.
             $system = (string) @file_get_contents($root . '/app/Controllers/SystemController.php');
-            foreach (['maintenanceToggle', 'saveAgeGate', 'cleanupPending', 'cleanupOrphans',
-                      'variantsRegenerate', 'dbOptimize', 'aiRebuild', 'backupDelete'] as $action) {
-                $at = strpos($system, 'function ' . $action . '(');
-                if ($at === false) {
-                    $problems[] = $action . '() is missing';
-                    continue;
-                }
-                $next = strpos($system, "\n    public function ", $at + 10);
-                $body = $next === false ? substr($system, $at) : substr($system, $at, $next - $at);
-                if (strpos($body, "requirePermission('system_ops')") === false) {
-                    $problems[] = $action . '() must require the system_ops permission';
+            $admin  = (string) @file_get_contents($root . '/app/Controllers/AdminController.php');
+            // The two upload cleanups moved to AdminController when the
+            // orphan grid and the staging folders joined Uploads & Orphans;
+            // they are still permanent file deletes and still system_ops.
+            $destructive = [
+                'SystemController.php' => [$system, ['maintenanceToggle', 'saveAgeGate',
+                    'variantsRegenerate', 'dbOptimize', 'aiRebuild', 'backupDelete']],
+                'AdminController.php'  => [$admin, ['deleteStaging', 'deleteOrphans']],
+            ];
+            foreach ($destructive as $label => [$src, $actions]) {
+                foreach ($actions as $action) {
+                    $at = strpos($src, 'function ' . $action . '(');
+                    if ($at === false) {
+                        $problems[] = $label . '::' . $action . '() is missing';
+                        continue;
+                    }
+                    $next = strpos($src, "\n    public function ", $at + 10);
+                    $body = $next === false ? substr($src, $at) : substr($src, $at, $next - $at);
+                    if (strpos($body, "requirePermission('system_ops')") === false) {
+                        $problems[] = $label . '::' . $action . '() must require the system_ops permission';
+                    }
                 }
             }
             foreach (['moderator', 'admin', 'editor', 'viewer'] as $role) {
@@ -11190,6 +11200,92 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.uploads.one_page', 'Smoke · Uploads', 'Abandoned and orphaned uploads live on one page', static function () use ($root, $read, $ok, $bad): array {
+            // Two pages and two permission models used to own this: the
+            // System page had the orphan grid + staging folders, the
+            // Abandoned Uploads page had the staged files. They are the same
+            // thing, so they now share /admin/abandoned-uploads.
+            $system    = (string) $read($root . '/views/admin/system.php');
+            $abandoned = (string) $read($root . '/views/admin/abandoned.php');
+            $routes    = (string) $read($root . '/config/routes.php');
+            $nav       = (string) $read($root . '/views/admin/layout.php');
+            $help      = (string) $read($root . '/views/admin/help.php');
+            $search    = (string) $read($root . '/app/Controllers/SearchController.php');
+            $ctrl      = (string) $read($root . '/app/Controllers/AdminController.php');
+            $model     = (string) $read($root . '/app/Models/OrphanedUploads.php');
+            $problems  = [];
+
+            foreach (['orphans_grid', 'cleanup/orphans', 'cleanup/pending'] as $needle) {
+                if (strpos($system, $needle) !== false) {
+                    $problems[] = 'the System page still carries ' . $needle;
+                }
+            }
+            if (strpos($system, '/admin/abandoned-uploads') === false) {
+                $problems[] = 'the System page must point at Uploads & Orphans';
+            }
+
+            if (strpos($abandoned, 'partials/orphans_grid.php') === false
+                || strpos($abandoned, 'staging-delete') === false) {
+                $problems[] = 'Uploads & Orphans must render the orphan grid and the staging folders';
+            }
+
+            foreach ([
+                '/admin/abandoned-uploads/orphans/delete',
+                '/admin/abandoned-uploads/orphans/view',
+                '/admin/abandoned-uploads/orphans/page',
+                '/admin/abandoned-uploads/staging-delete',
+            ] as $route) {
+                if (strpos($routes, "'" . $route . "'") === false) {
+                    $problems[] = 'missing route ' . $route;
+                }
+            }
+            foreach (['cleanup/orphans', 'orphans/view/{file}', 'cleanup/pending'] as $gone) {
+                if (strpos($routes, $gone) !== false) {
+                    $problems[] = 'old route still registered: ' . $gone;
+                }
+            }
+            $literal = strpos($routes, '/admin/abandoned-uploads/orphans/page');
+            $wild    = strpos($routes, '/admin/abandoned-uploads/{session}/{file}');
+            if ($literal === false || $wild === false || $literal > $wild) {
+                $problems[] = 'the literal orphan routes must come before the {session}/{file} wildcard';
+            }
+
+            foreach (['deleteOrphans', 'deleteStaging'] as $method) {
+                $at = strpos($ctrl, 'function ' . $method . '(');
+                if ($at === false) {
+                    $problems[] = 'AdminController::' . $method . '() is missing';
+                    continue;
+                }
+                $end  = strpos($ctrl, "\n    }\n", $at);
+                $body = substr($ctrl, $at, ($end === false ? 1600 : $end - $at));
+                if (strpos($body, "requirePermission('system_ops')") === false) {
+                    $problems[] = $method . '() must stay system_ops only';
+                }
+            }
+
+            if (strpos($nav, "'label' => 'Uploads & Orphans'") === false) {
+                $problems[] = 'the nav label must be Uploads & Orphans';
+            }
+            if (strpos($abandoned, "\$title = 'Uploads & Orphans'") === false) {
+                $problems[] = 'the page title must be Uploads & Orphans';
+            }
+            foreach (['help.php' => $help, 'SearchController.php' => $search] as $label => $src) {
+                if (strpos($src, 'Abandoned Uploads') !== false) {
+                    $problems[] = $label . ' still says Abandoned Uploads';
+                }
+            }
+
+            foreach (['function scan(', 'function delete(', 'function viewPath('] as $needle) {
+                if (strpos($model, $needle) === false) {
+                    $problems[] = 'OrphanedUploads is missing ' . $needle;
+                }
+            }
+
+            return $problems === []
+                ? $ok('one page, four moved routes, deletes still super-admin, renamed everywhere')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.media.orphans_know_every_variant', 'Smoke · Media', 'The orphan report and the cleanup script understand every derivative prefix', static function () use ($root, $read, $ok, $bad): array {
             // Both carried their own prefix list, written before the video
             // ladder existed. The report called 655 renditions of LIVE videos
@@ -11197,7 +11293,7 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             // weblo_/webhi_/poster_ file and every blur_thumb_ teaser.
             $problems = [];
             $helpers  = (string) $read($root . '/app/Core/helpers.php');
-            $system   = (string) $read($root . '/app/Controllers/SystemController.php');
+            $model    = (string) $read($root . '/app/Models/OrphanedUploads.php');
             $cleanup  = (string) $read($root . '/bin/cleanup_orphan_uploads.php');
             $photo    = (string) $read($root . '/app/Models/Photo.php');
 
@@ -11206,13 +11302,11 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                     $problems[] = 'helpers.php is missing ' . $needle;
                 }
             }
-            foreach ([
-                'SystemController.php'             => $system,
-                'cleanup_orphan_uploads.php'       => $cleanup,
-            ] as $label => $src) {
-                if (strpos($src, 'media_derivative_base(') === false) {
-                    $problems[] = $label . ' does not use the shared derivative resolver';
-                }
+            if (strpos($model, 'media_derivative_base(') === false) {
+                $problems[] = 'OrphanedUploads does not use the shared derivative resolver';
+            }
+            if (strpos($cleanup, 'OrphanedUploads::scan()') === false) {
+                $problems[] = 'cleanup_orphan_uploads.php must use the shared scan';
             }
             if (preg_match("/preg_replace\('\/\^\(web_\\|thumb_\)\/'/", $cleanup) === 1) {
                 $problems[] = 'cleanup_orphan_uploads.php is back to a two-prefix list';
@@ -11232,21 +11326,19 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             // the live logo as garbage and the cleanup button deleted it.
             $problems = [];
             $theme    = (string) $read($root . '/app/Models/Theme.php');
-            $system   = (string) $read($root . '/app/Controllers/SystemController.php');
+            $model    = (string) $read($root . '/app/Models/OrphanedUploads.php');
             $cleanup  = (string) $read($root . '/bin/cleanup_orphan_uploads.php');
 
             if (strpos($theme, 'function referencedTitleImages(') === false) {
                 $problems[] = 'Theme::referencedTitleImages() is missing';
             }
-            foreach ([
-                'SystemController.php'       => [$system, 'isset($themeFiles[$file])'],
-                'cleanup_orphan_uploads.php' => [$cleanup, 'isset($themeFiles[$entry])'],
-            ] as $label => [$src, $guard]) {
-                if (strpos($src, 'referencedTitleImages()') === false) {
-                    $problems[] = $label . ' does not keep the referenced title images';
-                } elseif (strpos($src, $guard) === false) {
-                    $problems[] = $label . ' reads the title images but never skips them';
-                }
+            if (strpos($model, 'referencedTitleImages()') === false) {
+                $problems[] = 'OrphanedUploads does not keep the referenced title images';
+            } elseif (strpos($model, 'isset($themeFiles[$file])') === false) {
+                $problems[] = 'OrphanedUploads reads the title images but never skips them';
+            }
+            if (strpos($cleanup, 'OrphanedUploads::scan()') === false) {
+                $problems[] = 'cleanup_orphan_uploads.php must inherit the title-image exemption from the scan';
             }
             if (strpos($theme, "\$collect(self::titleImage(self::SCOPE_ADMIN))") === false) {
                 $problems[] = 'the admin theme title image must count as referenced';

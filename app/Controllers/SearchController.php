@@ -85,7 +85,7 @@ class SearchController extends Controller
         // Admin pages (static list, filtered by the query).
         $pages = [
             ['Dashboard', '/admin'],
-            ['Abandoned Uploads', '/admin/abandoned-uploads'],
+            ['Uploads & Orphans', '/admin/abandoned-uploads'],
             ['Search', '/admin/search'],
             ['Trends', '/admin/trends'],
             ['Web Analytics', '/admin/analytics'],

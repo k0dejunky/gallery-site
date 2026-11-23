@@ -34,7 +34,7 @@ $navGroups = [
         'label' => 'Overview',
         'items' => [
             ['key' => 'nav-dashboard', 'label' => 'Dashboard', 'href' => '/admin', 'icon' => 'grid', 'exact' => true],
-            ['key' => 'nav-abandoned-uploads', 'label' => 'Abandoned Uploads', 'href' => '/admin/abandoned-uploads', 'icon' => 'upload', 'perm' => 'galleries'],
+            ['key' => 'nav-abandoned-uploads', 'label' => 'Uploads & Orphans', 'href' => '/admin/abandoned-uploads', 'icon' => 'upload', 'perm' => 'galleries'],
             ['key' => 'nav-trends', 'label' => 'Trends', 'href' => '/admin/trends', 'icon' => 'trend', 'perm' => 'trends'],
             ['key' => 'nav-traffic', 'label' => 'Traffic', 'href' => '/admin/traffic', 'icon' => 'bars', 'perm' => 'traffic'],
             ['key' => 'nav-analytics', 'label' => 'Web Analytics', 'href' => '/admin/analytics', 'icon' => 'pie', 'perm' => 'analytics'],

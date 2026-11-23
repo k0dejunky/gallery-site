@@ -9,6 +9,7 @@ use App\Core\DiskUsage;
 use App\Models\Category;
 use App\Models\Gallery;
 use App\Models\PageVisit;
+use App\Models\OrphanedUploads;
 use App\Models\Photo;
 use App\Models\Stats;
 
@@ -320,9 +321,24 @@ class AdminController extends Controller
     {
         Auth::requirePermission('dashboard');
 
+        // Everything that lives under storage/uploads and needs a human:
+        // staged files that never became a gallery, whole staging folders,
+        // and files nothing refers to any more (root, SEO clips, chat).
+        $orphans     = OrphanedUploads::scan();
+        $orphanTotal = count($orphans);
+        $perPage     = 12;
+        $pages       = max(1, (int) ceil($orphanTotal / $perPage));
+        $page        = min(max(1, (int) $this->request->query('page', 1)), $pages);
+
         $this->viewAdmin('abandoned', [
-            'uploads' => Photo::abandonedPending(),
-            'galleries' => Gallery::all(['include_secret' => Auth::isSuperAdmin()]),
+            'uploads'     => Photo::abandonedPending(),
+            'galleries'   => Gallery::all(['include_secret' => Auth::isSuperAdmin()]),
+            'pendingDirs' => $this->pendingDirs(),
+            'orphans'     => array_slice($orphans, ($page - 1) * $perPage, $perPage),
+            'orphanTotal' => $orphanTotal,
+            'orphanBytes' => (int) array_sum(array_column($orphans, 'size')),
+            'orphanPage'  => $page,
+            'orphanPages' => $pages,
         ]);
     }
 
@@ -384,6 +400,268 @@ class AdminController extends Controller
             $item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
         }
         @rmdir($dir);
+    }
+
+    /**
+     * Staging folders under uploads/pending (a session that never finished),
+     * with their size and age, for the "Staging folders" section.
+     */
+    private function pendingDirs(): array
+    {
+        $base = config('app.uploads.dir') . '/pending';
+        $out  = [];
+
+        foreach (glob($base . '/*', GLOB_ONLYDIR) ?: [] as $dir) {
+            $size  = 0;
+            $count = 0;
+
+            foreach (new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
+            ) as $file) {
+                $size += $file->getSize();
+                $count++;
+            }
+
+            $out[] = [
+                'name'  => basename($dir),
+                'size'  => $size,
+                'files' => $count,
+                'age_h' => (int) ((time() - (int) filemtime($dir)) / 3600),
+            ];
+        }
+
+        usort($out, fn (array $a, array $b): int => $b['age_h'] <=> $a['age_h']);
+
+        return $out;
+    }
+
+    /**
+     * Delete a whole staging folder (or every one) from uploads/pending.
+     */
+    public function deleteStaging(): void
+    {
+        Auth::requirePermission('system_ops');
+
+        $base   = realpath(config('app.uploads.dir') . '/pending');
+        $token  = (string) $this->request->post('dir', '');
+        $removed = 0;
+
+        if ($base !== false) {
+            if ($token === 'all') {
+                foreach (glob($base . '/*', GLOB_ONLYDIR) ?: [] as $dir) {
+                    self::rrmdir($dir);
+                    $removed++;
+                }
+            } elseif ($token !== '') {
+                $target = realpath($base . '/' . basename($token));
+                if ($target !== false && strncmp($target, $base, strlen($base)) === 0 && is_dir($target)) {
+                    self::rrmdir($target);
+                    $removed++;
+                }
+            }
+        }
+
+        \App\Models\AuditLog::record((int) Auth::user()['id'], 'delete', 'system_pending_uploads', null,
+            'Removed ' . $removed . ' staging folder(s)', null, ['removed' => $removed]);
+        $this->flash('success', 'Removed ' . $removed . ' staging folder(s).');
+        $this->redirect('/admin/abandoned-uploads');
+    }
+
+    /**
+     * Delete one orphaned file, or every one. Super admin only: it is a
+     * permanent file delete.
+     */
+    public function deleteOrphans(): void
+    {
+        Auth::requirePermission('system_ops');
+
+        $single = trim((string) $this->request->post('name', ''));
+        $all    = (string) $this->request->post('all', '') === '1';
+
+        if ($single !== '') {
+            // Distinguish "not an orphan any more" from "could not be
+            // removed" (a permissions problem on the uploads folder), so the
+            // operator is not told the file is fine when it is not.
+            $exists  = OrphanedUploads::viewPath($single) !== null;
+            $removed = $exists ? OrphanedUploads::delete([$single]) : 0;
+
+            if ($removed > 0) {
+                \App\Models\AuditLog::record((int) Auth::user()['id'], 'delete', 'system_orphan_files', null,
+                    'Removed orphaned upload "' . $single . '"', null, ['name' => $single]);
+                $this->flash('success', 'Removed ' . $single . '.');
+            } elseif ($exists) {
+                $this->flash('error', $single . ' could not be removed. Check that the uploads folder is writable by the web server.');
+            } else {
+                $this->flash('error', 'That file is no longer an orphan.');
+            }
+
+            $this->redirect('/admin/abandoned-uploads');
+            return;
+        }
+
+        if (!$all) {
+            $this->flash('error', 'Nothing was selected.');
+            $this->redirect('/admin/abandoned-uploads');
+            return;
+        }
+
+        OrphanedUploads::forget();
+        $names   = array_column(OrphanedUploads::scan(), 'name');
+        $removed = OrphanedUploads::delete($names);
+
+        \App\Models\AuditLog::record((int) Auth::user()['id'], 'delete', 'system_orphan_files', null,
+            'Removed ' . $removed . ' orphaned upload file(s)', null, ['removed' => $removed]);
+        $this->flash('success', 'Removed ' . $removed . ' orphaned file(s).');
+        $this->redirect('/admin/abandoned-uploads');
+    }
+
+    /**
+     * One page of the orphan grid, for the fragment pagination.
+     */
+    public function orphansPage(): void
+    {
+        $orphans   = OrphanedUploads::scan();
+        $total     = count($orphans);
+        $perPage   = 12;
+        $pages     = max(1, (int) ceil($total / $perPage));
+        $page      = min(max(1, (int) $this->request->query('page', 1)), $pages);
+
+        extract([
+            'orphans'     => array_slice($orphans, ($page - 1) * $perPage, $perPage),
+            'orphanPage'  => $page,
+            'orphanPages' => $pages,
+        ]);
+
+        require __DIR__ . '/../../views/admin/partials/orphans_grid.php';
+        exit;
+    }
+
+    /**
+     * Serve an orphaned file (or its thumbnail) for the grid. Only files the
+     * current scan lists can be served, so this cannot read arbitrary uploads.
+     */
+    public function orphanView(): void
+    {
+        Auth::requirePermission('galleries');
+
+        $name = (string) $this->request->query('file', '');
+        $path = OrphanedUploads::viewPath($name);
+
+        if ($path === null) {
+            $this->notFound();
+            return;
+        }
+
+        if ($this->request->query('thumb') === '1') {
+            $this->serveOrphanThumbnail($name, $path);
+            return;
+        }
+
+        $mime = \sniff_mime($path);
+        if ($mime === '') {
+            $mime = mime_for_extension($path);
+        }
+
+        $this->serveOrphanFile($path, basename($name), $mime);
+    }
+
+    /**
+     * Stream an orphaned file with HTTP Range support so browsers can seek in
+     * videos and <video preload="metadata"> fetches only the index instead of
+     * the whole multi-GB file. Single range requests only.
+     */
+    private function serveOrphanFile(string $path, string $name, string $mime): void
+    {
+        $len   = (int) filesize($path);
+        $start = 0;
+        $end   = $len - 1;
+
+        header('Content-Type: ' . $mime);
+        header('Content-Disposition: inline; filename="' . addcslashes($name, '"') . '"');
+        header('Accept-Ranges: bytes');
+
+        $range = (string) ($_SERVER['HTTP_RANGE'] ?? '');
+        if ($range !== '' && preg_match('/^bytes=(\d*)-(\d*)/', $range, $m) === 1) {
+            if ($m[1] === '' && $m[2] !== '') {
+                $start = max(0, $len - (int) $m[2]);
+                $end   = $len - 1;
+            } elseif ($m[1] !== '') {
+                $start = min($len - 1, max(0, (int) $m[1]));
+                $end   = $m[2] !== '' ? min($len - 1, max($start, (int) $m[2])) : $len - 1;
+            }
+
+            header('HTTP/1.1 206 Partial Content');
+            header('Content-Range: bytes ' . $start . '-' . $end . '/' . $len);
+            header('Content-Length: ' . (string) max(0, $end - $start + 1));
+
+            $fh = @fopen($path, 'rb');
+            if ($fh === false) {
+                exit;
+            }
+            fseek($fh, $start);
+            $left = max(0, $end - $start + 1);
+            while ($left > 0 && !feof($fh)) {
+                $chunk = fread($fh, (int) min(262144, $left));
+                if ($chunk === false || $chunk === '') {
+                    break;
+                }
+                echo $chunk;
+                $left -= strlen($chunk);
+                flush();
+            }
+            fclose($fh);
+            exit;
+        }
+
+        header('Content-Length: ' . (string) $len);
+        readfile($path);
+        exit;
+    }
+
+    /** Cached 240x180 thumbnail for the orphan grid. */
+    private function serveOrphanThumbnail(string $name, string $path): void
+    {
+        $dir = config('app.uploads.dir') . '/orphan-thumbs';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+
+        $key = hash('sha1', $name . ':' . (string) filesize($path) . ':' . (string) filemtime($path));
+        $out = $dir . '/' . $key . '.jpg';
+
+        if (!is_file($out)) {
+            $mime = \sniff_mime($path);
+            if (str_starts_with($mime, 'video/')) {
+                create_video_thumbnail($path, $out, 240, 180);
+            } elseif (str_starts_with($mime, 'image/')) {
+                create_thumbnail($path, $out, 240, 180);
+            }
+
+            if (!is_file($out)) {
+                $this->serveOrphanThumbPlaceholder();
+                return;
+            }
+        }
+
+        header('Content-Type: ' . (\sniff_mime($out) ?: 'image/jpeg'));
+        header('Content-Length: ' . (string) filesize($out));
+        readfile($out);
+        exit;
+    }
+
+    /** Tiny dark placeholder served when a thumbnail cannot be generated. */
+    private function serveOrphanThumbPlaceholder(): void
+    {
+        header('Content-Type: image/png');
+        $im = @imagecreatetruecolor(240, 180);
+        if ($im === false) {
+            exit;
+        }
+        $bg = imagecolorallocate($im, 45, 26, 60);
+        imagefilledrectangle($im, 0, 0, 239, 179, $bg);
+        imagepng($im);
+        imagedestroy($im);
+        exit;
     }
 
     /**

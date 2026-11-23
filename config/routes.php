@@ -201,6 +201,13 @@ return [
     ['GET', '/admin/abandoned-uploads', 'AdminController@abandonedUploads', 'galleries'],
     ['POST', '/admin/abandoned-uploads/resume', 'AdminController@resumeAbandoned', 'galleries'],
     ['POST', '/admin/abandoned-uploads/chunks-delete', 'AdminController@deleteAbandonedChunks', 'galleries'],
+    // Uploads & Orphans: the orphan grid, its previews and the staging-folder
+    // cleanup live on this page now. The literals MUST come before the
+    // {session}/{file} wildcards below or the wildcard matches them.
+    ['POST', '/admin/abandoned-uploads/orphans/delete', 'AdminController@deleteOrphans', 'system_ops'],
+    ['GET', '/admin/abandoned-uploads/orphans/view', 'AdminController@orphanView', 'galleries'],
+    ['GET', '/admin/abandoned-uploads/orphans/page', 'AdminController@orphansPage', 'galleries'],
+    ['POST', '/admin/abandoned-uploads/staging-delete', 'AdminController@deleteStaging', 'system_ops'],
     ['GET', '/admin/abandoned-uploads/{session}/{file}', 'AdminController@abandonedFile', 'galleries'],
     ['POST', '/admin/abandoned-uploads/{session}/{file}', 'AdminController@assignAbandoned', 'galleries'],
     ['GET', '/admin/search', 'SearchController@index', 'dashboard'],
@@ -317,10 +324,6 @@ return [
 
     // System maintenance (admin only)
     ['GET', '/admin/system', 'SystemController@index', 'dashboard'],
-    ['POST', '/admin/system/cleanup/pending', 'SystemController@cleanupPending', 'system_ops'],
-    ['POST', '/admin/system/cleanup/orphans', 'SystemController@cleanupOrphans', 'system_ops'],
-    ['GET', '/admin/system/orphans/view/{file}', 'SystemController@orphanView', 'dashboard'],
-    ['GET', '/admin/system/orphans/page', 'SystemController@orphansPage', 'dashboard'],
     ['POST', '/admin/system/backup', 'SystemController@backupCreate', 'system_ops'],
     ['GET', '/admin/system/backups/{file}', 'SystemController@backupDownload', 'dashboard'],
     ['POST', '/admin/system/backups/{file}/delete', 'SystemController@backupDelete', 'system_ops'],
