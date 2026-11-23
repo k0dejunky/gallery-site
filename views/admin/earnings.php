@@ -92,24 +92,26 @@
 
 <section class="adm-section">
     <div class="adm-section-head">
-        <h2>Subscriptions this window</h2>
-        <p><?= count($industrySubs) ? number_format(count($industrySubs)) . ' created' : 'None yet' ?> &middot; member accounts only</p>
+        <h2>Charges this window</h2>
+        <p><?= count($charges) ? number_format(count($charges)) . ' charge' . (count($charges) === 1 ? '' : 's') : 'None yet' ?> &middot; every payment, renewals included</p>
     </div>
     <div class="sys-card">
-    <?php if (empty($industrySubs)): ?>
-        <?= admin_empty('repeat', 'No new subscriptions', 'No paid subscription was created between ' . $from . ' and ' . $to . '.') ?>
+    <?php if (empty($charges)): ?>
+        <?= admin_empty('repeat', 'No charges', 'No membership payment arrived between ' . $from . ' and ' . $to . '.') ?>
     <?php else: ?>
         <table>
-            <thead><tr><th>#</th><th>Plan</th><th class="num">Amount</th><th>Status</th><th>Email</th><th>When</th></tr></thead>
+            <thead><tr><th>#</th><th>Plan</th><th class="num">Amount</th><th>Type</th><th>Gateway</th><th>Email</th><th>When</th></tr></thead>
             <tbody>
-                <?php foreach ($industrySubs as $s): ?>
+                <?php foreach ($charges as $c): ?>
+                    <?php $kindLabel = ['initial' => 'New', 'renewal' => 'Renewal', 'adjustment' => 'Adjustment'][(string) $c['kind']] ?? 'Charge'; ?>
                     <tr>
-                        <td class="muted"><?= (int) $s['id'] ?></td>
-                        <td><?= e((string) $s['plan']) ?></td>
-                        <td class="num"><?php if (\App\Models\Subscription::isTrial($s)): ?><span class="pill pill-soft">Free trial</span><?php else: ?>$<?= number_format((float) $s['amount'], 2) ?><?php endif; ?></td>
-                        <td><?= e((string) $s['status']) ?></td>
-                        <td class="adm-clip"><?= e((string) $s['email']) ?></td>
-                        <td class="muted mg-date"><?= e(tzdate('Y-m-d H:i', (string) $s['created_at'])) ?></td>
+                        <td class="muted"><?= (int) $c['id'] ?></td>
+                        <td><?= e((string) $c['plan']) ?></td>
+                        <td class="num">$<?= number_format((float) $c['amount'], 2) ?></td>
+                        <td><span class="pill <?= (string) $c['kind'] === 'renewal' ? 'pill-info' : 'pill-soft' ?>"><?= e($kindLabel) ?></span></td>
+                        <td class="muted"><?= e(ucfirst((string) ($c['gateway'] ?? '-'))) ?></td>
+                        <td class="adm-clip"><?= e((string) ($c['email'] ?? '-')) ?></td>
+                        <td class="muted mg-date"><?= e(tzdate('Y-m-d H:i', (string) $c['paid_at'])) ?></td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>

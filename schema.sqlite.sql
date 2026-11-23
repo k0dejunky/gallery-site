@@ -285,6 +285,24 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions (user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions (status);
 
+CREATE TABLE IF NOT EXISTS subscription_charges (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    subscription_id INTEGER NOT NULL,
+    user_id         INTEGER NOT NULL,
+    amount          DECIMAL(10,2) NOT NULL DEFAULT 0,
+    currency        VARCHAR(3) NOT NULL DEFAULT 'USD',
+    gateway         VARCHAR(20),
+    reference       VARCHAR(160) NOT NULL,
+    kind            VARCHAR(12) NOT NULL DEFAULT 'initial'
+                    CHECK (kind IN ('initial', 'renewal', 'adjustment')),
+    paid_at         DATETIME NOT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (subscription_id, reference),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_sub_charges_paid_at ON subscription_charges (paid_at);
+CREATE INDEX IF NOT EXISTS idx_sub_charges_user ON subscription_charges (user_id);
+
 CREATE TABLE IF NOT EXISTS sales (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     plan_id           INTEGER NOT NULL,

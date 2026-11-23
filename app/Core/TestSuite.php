@@ -2119,6 +2119,96 @@ class TestSuite
             }
         });
 
+        $add('db.renewal_is_revenue', 'Database', 'a renewal is a charge of its own and moves the month revenue by its price', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix = bin2hex(random_bytes(4));
+                    $userId = self::scratchUserId('charge-' . $suffix);
+                    $price  = 13.37;
+
+                    Database::run(
+                        "INSERT INTO plans (name, slug, price, billing_cycle, description, sort_order, level, active)
+                         VALUES (?, ?, ?, 'monthly', 'probe', 0, 1, 1)",
+                        ['PROBE charge ' . $suffix, 'probe-charge-' . $suffix, $price]
+                    );
+                    $planId = (int) $pdo->lastInsertId();
+
+                    $before = (float) \App\Models\Stats::finance()['mtd_revenue'];
+
+                    Database::run(
+                        "INSERT INTO subscriptions (user_id, plan_id, status, price_paid, access_level, transaction_ref, created_at, updated_at)
+                         VALUES (?, ?, 'pending', ?, 1, ?, NOW(), NOW())",
+                        [$userId, $planId, $price, 'PROBE-' . $suffix]
+                    );
+                    $subId = (int) $pdo->lastInsertId();
+
+                    // approve() is the first payment; the row starts pending
+                    // and carries no gateway id, so the charge is manual:<id>.
+                    \App\Models\Subscription::approve($subId);
+                    $afterInitial = (float) \App\Models\Stats::finance()['mtd_revenue'];
+                    $initialDelta = round($afterInitial - $before, 2);
+
+                    // A renewal only counts for a term that has run out (a
+                    // payment made before then belongs to the current term).
+                    Database::run('UPDATE subscriptions SET expires_at = DATE_SUB(NOW(), INTERVAL 1 DAY) WHERE id = ?', [$subId]);
+                    $renewed = \App\Models\Subscription::renew($subId, 'probe:renewal-' . $suffix, date('Y-m-d H:i:s'));
+                    $afterRenewal = (float) \App\Models\Stats::finance()['mtd_revenue'];
+                    $renewalDelta = round($afterRenewal - $afterInitial, 2);
+
+                    // The same payment id again must not add a second period
+                    // OR a second charge.
+                    $replay      = \App\Models\Subscription::renew($subId, 'probe:renewal-' . $suffix, date('Y-m-d H:i:s'));
+                    $afterReplay = (float) \App\Models\Stats::finance()['mtd_revenue'];
+
+                    $charges = \App\Models\Subscription::chargesFor($subId);
+                    $kinds   = array_column($charges, 'kind');
+                    $sum     = round(array_sum(array_map(
+                        static fn (array $c): float => (float) $c['amount'],
+                        $charges
+                    )), 2);
+
+                    $checks = [
+                        'initial delta'  => $initialDelta === $price,
+                        'renewal delta'  => $renewalDelta === $price,
+                        'renewed'        => $renewed === 'renewed',
+                        'replay'         => $replay === 'duplicate',
+                        'replay no cash' => round($afterReplay - $afterRenewal, 2) === 0.0,
+                        'two charges'    => count($charges) === 2,
+                        'kinds'          => $kinds === ['initial', 'renewal'],
+                        'sum'            => $sum === round($price * 2, 2),
+                    ];
+                    $failed = array_keys(array_filter($checks, static fn (bool $v): bool => !$v));
+
+                    return [
+                        'pass'   => $failed === [],
+                        'detail' => $failed === []
+                            ? 'approve() records the first charge; renew() records the renewal; a replayed payment records nothing'
+                            : 'failed: ' . implode(', ', $failed) . ' ' . json_encode([
+                                'initialDelta' => $initialDelta, 'renewalDelta' => $renewalDelta,
+                                'renewed' => $renewed, 'replay' => $replay,
+                                'kinds' => $kinds, 'sum' => $sum,
+                            ]),
+                    ];
+                } finally {
+                    if ($own && $pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.gift_cycle', 'Database', 'a gift is bought once, issues exactly one code, and that code pays for the recipient membership', function () {
             // Subscription::create() opens its own transaction, so this test
             // cleans up its uniquely-named scratch rows instead of wrapping

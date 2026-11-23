@@ -227,21 +227,28 @@ class Stats
      * the trailing N months, plus current ARPU. Pending placeholder rows
      * (PENDING-… references) never count as revenue.
      */
+    /**
+     * Revenue and churn for the trailing $months calendar months.
+     *
+     * Revenue is summed from the subscription_charges ledger, NOT from the
+     * subscriptions table. A subscription row can only ever carry its FIRST
+     * payment, so a renewal had no row of its own and every report missed it:
+     * on 2026-11-23 November read $5.00 while $25.00 had been collected (a
+     * $20 Platinum renewal on Nov 1 plus a $5 Silver signup on Nov 15).
+     */
     public static function finance(int $months = 6): array
     {
         $since = date('Y-m-01 00:00:00', strtotime('-' . ($months - 1) . ' months'));
 
         $revRows = Database::run(
-            "SELECT DATE_FORMAT(COALESCE(s.starts_at, s.created_at), '%b') AS label,
-                    DATE_FORMAT(COALESCE(s.starts_at, s.created_at), '%Y-%m') AS ym,
-                    SUM(" . Subscription::paidAmountSql() . ") AS revenue,
-                    SUM(CASE WHEN s.transaction_ref LIKE 'TRIAL-%' THEN 0 ELSE 1 END) AS paid
-             FROM subscriptions s
-             JOIN plans p ON p.id = s.plan_id
-             JOIN users u ON u.id = s.user_id
-             WHERE " . Subscription::notPendingSql() . "
+            "SELECT DATE_FORMAT(c.paid_at, '%b') AS label,
+                    DATE_FORMAT(c.paid_at, '%Y-%m') AS ym,
+                    SUM(c.amount) AS revenue,
+                    SUM(c.kind = 'initial') AS paid
+             FROM subscription_charges c
+             JOIN users u ON u.id = c.user_id
+             WHERE c.paid_at >= ?
                AND u.role = 'user'
-               AND COALESCE(s.starts_at, s.created_at) >= ?
              GROUP BY label, ym ORDER BY ym",
             [$since]
         )->fetchAll();
@@ -273,8 +280,8 @@ class Stats
 
         foreach ($revRows as $r) {
             if (isset($rev[$r['ym']])) {
-                $rev[$r['ym']]   = (float) $r['revenue'];
-                $new[$r['ym']]   = (int) $r['paid'];
+                $rev[$r['ym']] = (float) $r['revenue'];
+                $new[$r['ym']] = (int) $r['paid'];
             }
         }
 
@@ -286,13 +293,11 @@ class Stats
 
         // Current month-to-date revenue vs the same point last month.
         $mtd = (float) Database::run(
-            "SELECT COALESCE(SUM(" . Subscription::paidAmountSql() . "), 0)
-             FROM subscriptions s
-             JOIN plans p ON p.id = s.plan_id
-             JOIN users u ON u.id = s.user_id
-             WHERE " . Subscription::notPendingSql() . "
-               AND u.role = 'user'
-               AND COALESCE(s.starts_at, s.created_at) >= ?",
+            "SELECT COALESCE(SUM(c.amount), 0)
+             FROM subscription_charges c
+             JOIN users u ON u.id = c.user_id
+             WHERE c.paid_at >= ?
+               AND u.role = 'user'",
             [date('Y-m-01 00:00:00')]
         )->fetchColumn();
 
@@ -303,13 +308,11 @@ class Stats
             'churn' => array_values($churn),
             'mtd_revenue' => $mtd,
             'total_12mo' => (float) Database::run(
-                "SELECT COALESCE(SUM(" . Subscription::paidAmountSql() . "), 0)
-                 FROM subscriptions s
-                 JOIN plans p ON p.id = s.plan_id
-                 JOIN users u ON u.id = s.user_id
-                 WHERE " . Subscription::notPendingSql() . "
-                   AND u.role = 'user'
-                   AND COALESCE(s.starts_at, s.created_at) >= ?",
+                "SELECT COALESCE(SUM(c.amount), 0)
+                 FROM subscription_charges c
+                 JOIN users u ON u.id = c.user_id
+                 WHERE c.paid_at >= ?
+                   AND u.role = 'user'",
                 [date('Y-m-d 00:00:00', strtotime('-12 months'))]
             )->fetchColumn(),
         ];

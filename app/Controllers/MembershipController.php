@@ -782,6 +782,11 @@ class MembershipController extends Controller
                 $subscriptionId = (int) $db->lastInsertId();
                 Database::run("UPDATE subscriptions SET membership_number = LPAD(CAST(id AS CHAR), 5, '0') WHERE id = ?", [$subscriptionId]);
 
+                // The card charge itself, inside the same transaction as the
+                // subscription row: a rollback can never leave revenue with no
+                // membership behind it (or the reverse).
+                Subscription::recordCharge($subscriptionId, (float) $price, 'braintree', $transactionRef, 'initial');
+
                 // Set expiry based on billing cycle
                 $expires = null;
                 if (($plan['billing_cycle'] ?? '') === 'monthly') {

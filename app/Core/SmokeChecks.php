@@ -204,7 +204,7 @@ class SmokeChecks
         preg_match_all('/CREATE TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+`?([A-Za-z0-9_]+)`?/i', $schema, $m);
         $tables = array_map('strtolower', $m[1]);
 
-        foreach (['users', 'galleries', 'photos', 'subscriptions', 'storage_snapshots', 'support_replies', 'gallery_favorites', 'saved_searches', 'email_queue', 'content_views', 'auto_poster_queue', 'traffic_links', 'traffic_visits', 'page_ip_visits', 'admin_role_permissions', 'admin_user_permissions'] as $must) {
+        foreach (['users', 'galleries', 'photos', 'subscriptions', 'storage_snapshots', 'support_replies', 'gallery_favorites', 'saved_searches', 'email_queue', 'content_views', 'auto_poster_queue', 'traffic_links', 'traffic_visits', 'page_ip_visits', 'admin_role_permissions', 'admin_user_permissions', 'subscription_charges'] as $must) {
             $add("smoke.schema.table.$must", 'Smoke · Schema', "schema.sql has table: $must", static function () use ($must, $tables, $ok, $bad): array {
                 return in_array($must, $tables, true) ? $ok('present') : $bad("schema.sql missing table: $must");
             });
@@ -4073,10 +4073,12 @@ class SmokeChecks
                 $problems[] = 'lifetime revenue must use the shared revenue expression';
             }
 
-            // And the screens have to SAY free.
+            // And the screens have to SAY free. The earnings page is not in
+            // this list any more: it lists the CHARGE ledger now, and a trial
+            // is $0 so it writes no charge row. /admin/subscriptions is where
+            // a trial row is still shown and must still say free.
             foreach ([
                 'admin/subscriptions.php' => $admSubs,
-                'admin/earnings.php'      => $admEarn,
                 'membership/index.php'    => $plans,
                 'membership/my.php'       => $my,
             ] as $name => $src) {
@@ -4084,12 +4086,77 @@ class SmokeChecks
                     $problems[] = $name . ' must label a trial as free';
                 }
             }
+            if (strpos($admEarn, 'Charges this window') === false
+                || strpos($admEarn, 'industrySubs') !== false) {
+                $problems[] = 'the earnings page must list the charge ledger, not subscriptions';
+            }
             if (strpos($export, 's.price_paid AS paid') === false) {
                 $problems[] = 'the subscriptions CSV must export what was actually charged';
             }
 
             return $problems === []
                 ? $ok('trials are labelled and counted as free')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.money.renewals_are_revenue', 'Smoke · Money', 'Revenue is summed from the charge ledger, so a renewal counts', static function () use ($root, $read, $ok, $bad): array {
+            // The System page's revenue card read subscriptions, which only
+            // ever carries a subscription's FIRST payment: sub 41's $20
+            // renewal on 2026-11-01 was invisible and November showed $5.00
+            // against the $25.00 that had been collected.
+            $stats  = (string) $read($root . '/app/Models/Stats.php');
+            $sub    = (string) $read($root . '/app/Models/Subscription.php');
+            $member = (string) $read($root . '/app/Controllers/MembershipController.php');
+            $schema = (string) $read($root . '/schema.sql');
+            $problems = [];
+
+            $at = strpos($stats, 'function finance(');
+            if ($at === false) {
+                $problems[] = 'Stats::finance() is missing';
+            } else {
+                $end  = strpos($stats, "\n    }\n", $at);
+                $body = substr($stats, $at, ($end === false ? 5000 : $end - $at));
+                if (strpos($body, 'subscription_charges') === false) {
+                    $problems[] = 'finance() does not read the charge ledger';
+                }
+                if (strpos($body, 'COALESCE(s.starts_at, s.created_at)') !== false) {
+                    $problems[] = 'finance() is back to dating revenue by the subscription row';
+                }
+            }
+
+            foreach (['function recordCharge(', 'function gatewayFrom(', 'function chargesFor('] as $needle) {
+                if (strpos($sub, $needle) === false) {
+                    $problems[] = 'Subscription is missing ' . $needle;
+                }
+            }
+
+            $renewAt = strpos($sub, 'function renew(');
+            $renewBody = '';
+            if ($renewAt === false) {
+                $problems[] = 'Subscription::renew() is missing';
+            } else {
+                $end = strpos($sub, "\n    }\n", $renewAt);
+                $renewBody = substr($sub, $renewAt, ($end === false ? 8000 : $end - $renewAt));
+            }
+            if (substr_count($renewBody, 'self::recordCharge(') < 2) {
+                $problems[] = 'renew() must record both the first payment and a renewal';
+            }
+            if (strpos($renewBody, 'self::approve($id, false)') === false) {
+                $problems[] = 'renew() must approve without recording a second initial charge';
+            }
+
+            if (strpos($sub, "'DELETE FROM subscription_charges WHERE subscription_id = ?'") === false) {
+                $problems[] = 'Subscription::delete() leaves the charges behind';
+            }
+            if (strpos($member, 'Subscription::recordCharge(') === false) {
+                $problems[] = 'the Braintree checkout does not record its charge';
+            }
+            if (strpos($schema, 'CREATE TABLE IF NOT EXISTS subscription_charges') === false) {
+                $problems[] = 'schema.sql has no subscription_charges table';
+            }
+
+            return $problems === []
+                ? $ok('finance() sums the ledger; approve(), renew() and the card checkout write it; delete() cleans it')
                 : $bad(implode('; ', $problems));
         });
 

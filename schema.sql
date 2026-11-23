@@ -404,6 +404,29 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     FOREIGN KEY (payment_processor_id) REFERENCES payment_processors(id) ON DELETE SET NULL
 );
 
+-- One row per actual charge. Revenue is summed from here, not from the
+-- subscriptions row: a subscription only carries its first payment, so a
+-- renewal used to be invisible to every report (see 104_subscription_charges).
+CREATE TABLE IF NOT EXISTS subscription_charges (
+    id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    subscription_id INT UNSIGNED NOT NULL,
+    user_id         INT UNSIGNED NOT NULL,
+    amount          DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    currency        CHAR(3) NOT NULL DEFAULT 'USD',
+    gateway         VARCHAR(20) NULL DEFAULT NULL,
+    reference       VARCHAR(160) NOT NULL,
+    kind            ENUM('initial', 'renewal', 'adjustment') NOT NULL DEFAULT 'initial',
+    paid_at         DATETIME NOT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_sub_charges_reference (subscription_id, reference),
+    KEY idx_sub_charges_paid_at (paid_at),
+    KEY idx_sub_charges_user (user_id),
+    -- No FK on subscription_id: installations differ on whether
+    -- subscriptions.id is INT or INT UNSIGNED. Subscription::delete() cleans
+    -- the charges up instead.
+    CONSTRAINT fk_sub_charges_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE IF NOT EXISTS trial_links (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     code VARCHAR(24) NOT NULL,

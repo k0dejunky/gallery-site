@@ -35,7 +35,7 @@ class EarningsController extends MembershipAdminController
         // figure, so both cards show the same number.
         $mrr         = $this->mrr();
         $subRevenue  = $mrr;
-        $industrySubs = $this->subscriptionRows($from, $to, 8);
+        $charges     = $this->chargeRows($from, $to, 20);
         $recent      = Purchase::recent(50);
 
         $this->viewAdmin('earnings', [
@@ -45,7 +45,7 @@ class EarningsController extends MembershipAdminController
             'series'      => $series,
             'subRevenue'  => $subRevenue,
             'mrr'         => $mrr,
-            'industrySubs'=> $industrySubs,
+            'charges'     => $charges,
             'recent'      => $recent,
         ]);
     }
@@ -97,19 +97,26 @@ class EarningsController extends MembershipAdminController
         )->fetchColumn();
     }
 
-    private function subscriptionRows(string $from, string $to, int $limit): array
+    /**
+     * The charges recorded in the window, newest first.
+     *
+     * This used to list SUBSCRIPTIONS created in the window, so a renewal -
+     * the money that actually keeps the site running - never appeared. It
+     * reads the subscription_charges ledger now, the same source as the
+     * revenue cards.
+     */
+    private function chargeRows(string $from, string $to, int $limit): array
     {
         return Database::run(
-            "SELECT s.id, s.status, s.transaction_ref,
-                    " . Subscription::paidAmountSql() . " AS amount,
-                    p.name AS plan, u.email, s.created_at
-             FROM subscriptions s
+            "SELECT c.id, c.amount, c.kind, c.gateway, c.paid_at,
+                    p.name AS plan, u.email
+             FROM subscription_charges c
+             JOIN subscriptions s ON s.id = c.subscription_id
              JOIN plans p ON p.id = s.plan_id
-             JOIN users u ON u.id = s.user_id
-             WHERE s.created_at >= ? AND s.created_at < ?
-               AND " . Subscription::notPendingSql() . "
-               AND u.role = 'user' AND u.deleted_at IS NULL
-             ORDER BY s.id DESC LIMIT " . max(1, $limit),
+             LEFT JOIN users u ON u.id = c.user_id
+             WHERE c.paid_at >= ? AND c.paid_at < ?
+             ORDER BY c.paid_at DESC, c.id DESC
+             LIMIT " . max(1, $limit),
             [$from, $to]
         )->fetchAll();
     }

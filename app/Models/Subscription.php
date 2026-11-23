@@ -713,10 +713,10 @@ class Subscription
      *
      * A subscription that is not in an approvable state is left alone.
      */
-    public static function approve(int $id): void
+    public static function approve(int $id, bool $recordCharge = true): void
     {
         $row = Database::run(
-            'SELECT s.*, p.billing_cycle AS billing_cycle
+            'SELECT s.*, p.billing_cycle AS billing_cycle, p.price AS plan_price
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
              WHERE s.id = ? LIMIT 1',
@@ -760,6 +760,29 @@ class Subscription
              WHERE id = ? AND status IN (?, ?)',
             ['active', $expires, $id, 'pending', 'past_due']
         );
+
+        if ($recordCharge) {
+            // The first payment. renew() passes false: it records its own
+            // charge with the gateway's payment id, so a retry after a failed
+            // renewal is a renewal here, not a second initial charge.
+            //
+            // A pending request carries a PENDING- placeholder instead of a
+            // payment id, and a manual grant carries nothing: both are
+            // settled outside the gateway, so the stable key is manual:<id>.
+            $reference = (string) ($row['transaction_ref'] ?? '');
+            if ($reference === '' || str_starts_with($reference, 'PENDING-')) {
+                $reference = 'manual:' . $id;
+            }
+
+            self::recordCharge(
+                $id,
+                self::paidAmount($row, (float) ($row['plan_price'] ?? 0)),
+                self::gatewayFrom($reference),
+                $reference,
+                'initial',
+                (string) (($row['starts_at'] ?? null) ?: ($row['created_at'] ?? ''))
+            );
+        }
     }
 
     /**
@@ -807,7 +830,7 @@ class Subscription
         }
 
         $row = Database::run(
-            'SELECT s.*, p.billing_cycle AS billing_cycle, p.name AS plan_name
+            'SELECT s.*, p.billing_cycle AS billing_cycle, p.name AS plan_name, p.price AS plan_price
              FROM subscriptions s
              JOIN plans p ON p.id = s.plan_id
              WHERE s.id = ? LIMIT 1',
@@ -842,9 +865,23 @@ class Subscription
         $oldTs    = ($oldExpiry !== null && $oldExpiry !== '') ? strtotime((string) $oldExpiry) : 0;
 
         if (in_array($status, self::APPROVABLE, true)) {
-            // The first payment, or a retry after a failed one.
-            self::approve($id);
+            // The first payment, or a retry after a failed one. approve()
+            // must not record the charge itself here: this payment's id is
+            // the idempotency key, and a retry is a renewal, not a second
+            // initial charge.
+            $kind = ((int) ($row['periods_granted'] ?? 0)) > 0 ? 'renewal' : 'initial';
+
+            self::approve($id, false);
             self::recordPayment($id, $paymentKey, $receiptNumber);
+            self::recordCharge(
+                $id,
+                self::paidAmount($row, (float) ($row['plan_price'] ?? 0)),
+                self::gatewayFrom($paymentKey),
+                $paymentKey,
+                $kind,
+                $paidAt
+            );
+
             return 'renewed';
         }
 
@@ -877,6 +914,15 @@ class Subscription
             ['active', $expires, $paymentKey, $id, 'cancelled']
         );
 
+        self::recordCharge(
+            $id,
+            self::paidAmount($row, (float) ($row['plan_price'] ?? 0)),
+            self::gatewayFrom($paymentKey),
+            $paymentKey,
+            'renewal',
+            $paidAt
+        );
+
         return 'renewed';
     }
 
@@ -892,6 +938,102 @@ class Subscription
              WHERE id = ?',
             [$paymentKey, $id]
         );
+    }
+
+    /**
+     * Record one actual charge against a subscription.
+     *
+     * Revenue is summed from this table, not from the subscriptions row: a
+     * subscription can only carry its first payment, so a renewal used to be
+     * invisible to every report (November 2026 read $5.00 against the $25.00
+     * that had actually been collected - a $20 renewal plus a $5 signup).
+     *
+     * Idempotent by (subscription_id, reference): a replayed gateway postback
+     * carries the same payment id and is ignored. A $0 amount (a trial, a
+     * 100% gift code) writes nothing - no money moved.
+     */
+    public static function recordCharge(int $subscriptionId, float $amount, ?string $gateway,
+        string $reference, string $kind = 'initial', string $paidAt = ''): bool
+    {
+        if ($subscriptionId <= 0 || $amount <= 0) {
+            return false;
+        }
+
+        $reference = trim($reference);
+        if ($reference === '') {
+            return false;
+        }
+
+        $row = Database::run('SELECT user_id FROM subscriptions WHERE id = ? LIMIT 1', [$subscriptionId])->fetch();
+        if ($row === false) {
+            return false;
+        }
+
+        $kind   = in_array($kind, ['initial', 'renewal', 'adjustment'], true) ? $kind : 'initial';
+        $paidTs = $paidAt !== '' ? strtotime($paidAt) : false;
+        $paidAt = $paidTs !== false ? date('Y-m-d H:i:s', $paidTs) : date('Y-m-d H:i:s');
+
+        try {
+            Database::run(
+                'INSERT INTO subscription_charges
+                    (subscription_id, user_id, amount, gateway, reference, kind, paid_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [
+                    $subscriptionId,
+                    (int) $row['user_id'],
+                    round($amount, 2),
+                    $gateway !== null && $gateway !== '' ? $gateway : null,
+                    $reference,
+                    $kind,
+                    $paidAt,
+                ]
+            );
+        } catch (\PDOException $e) {
+            // 23000 = the unique key (subscription_id, reference): this exact
+            // payment is already counted, so a replayed webhook is a no-op.
+            if ((string) $e->getCode() === '23000') {
+                return false;
+            }
+            throw $e;
+        }
+
+        return true;
+    }
+
+    /**
+     * 'paypal' | 'braintree' | 'manual', read from a payment id or a
+     * subscription reference.
+     */
+    public static function gatewayFrom(?string $reference): ?string
+    {
+        $ref = strtolower(trim((string) $reference));
+
+        if ($ref === '') {
+            return null;
+        }
+
+        if (str_starts_with($ref, 'paypal') || str_starts_with($ref, 'i-')) {
+            return 'paypal';
+        }
+
+        if (str_starts_with($ref, 'braintree') || str_starts_with($ref, 'bt-')) {
+            return 'braintree';
+        }
+
+        return 'manual';
+    }
+
+    /**
+     * The charges recorded for a subscription, oldest first.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function chargesFor(int $subscriptionId): array
+    {
+        return Database::run(
+            'SELECT * FROM subscription_charges WHERE subscription_id = ? ORDER BY paid_at, id',
+            [$subscriptionId]
+        )->fetchAll();
     }
 
     /**
@@ -1024,6 +1166,10 @@ class Subscription
         // (There is no FK on that column: installations differ on whether
         // subscriptions.id is INT or INT UNSIGNED, so it is cleaned here.)
         Database::run('DELETE FROM refund_requests WHERE subscription_id = ?', [$id]);
+
+        // The charge ledger has no FK on subscription_id either (same
+        // INT/INT UNSIGNED mismatch), so it is cleaned here.
+        Database::run('DELETE FROM subscription_charges WHERE subscription_id = ?', [$id]);
 
         Database::run('DELETE FROM subscriptions WHERE id = ?', [$id]);
     }
