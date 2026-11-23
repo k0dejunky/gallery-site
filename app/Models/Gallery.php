@@ -1940,20 +1940,33 @@ class Gallery
         $level = max((int) $maxLevel, $galleryLevel);
         $levelClause = $level < PHP_INT_MAX ? ' AND ' . self::accessLevelSql('g') . ' <= ' . (int) $level : '';
 
-        return Database::run(
-            'SELECT DISTINCT g.*,
-                    (SELECT COUNT(*) FROM gallery_photo gp WHERE gp.gallery_id = g.id) AS photo_count,
-                    ' . self::videoCountSql() . '
+        // EXISTS, not a join on gallery_category twice: the join produced one
+        // row per (gallery x shared category), which forced DISTINCT and a
+        // temporary table over ~1,250 rows for a 6-row answer. Measured on
+        // production (gallery 169): 280 ms warm / 1.0-1.3 s under load, and
+        // 2.4 ms this way.
+        //
+        // The counts are NOT correlated subqueries here any more either: they
+        // ran once per candidate row (1,258 times, 69,890 photo lookups for a
+        // 6-row answer). attachCounts() does two grouped queries for the rows
+        // that actually survive the LIMIT.
+        $rows = Database::run(
+            'SELECT g.*
              FROM galleries g
-             INNER JOIN gallery_category gc ON gc.gallery_id = g.id
-             INNER JOIN gallery_category gc2
-                     ON gc2.category_id = gc.category_id
-                    AND gc2.gallery_id = ?
              WHERE g.id <> ? AND g.is_secret = 0 AND ' . self::publishedVisibleSql('g') . $levelClause . '
+               AND EXISTS (
+                   SELECT 1 FROM gallery_category gc
+                   WHERE gc.gallery_id = g.id
+                     AND gc.category_id IN (
+                         SELECT category_id FROM gallery_category WHERE gallery_id = ?
+                     )
+               )
              ORDER BY g.views DESC, g.created_at DESC, g.id DESC
              LIMIT ' . max(1, (int) $limit),
             [$galleryId, $galleryId]
         )->fetchAll();
+
+        return self::attachCounts($rows);
     }
 
     /**

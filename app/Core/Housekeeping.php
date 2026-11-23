@@ -418,7 +418,56 @@ class Housekeeping
             'DELETE FROM search_stats WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 YEAR)'
         )->rowCount();
 
+        // Raw analytics sessions are the one analytics table that grows without
+        // bound (~9k rows/day, 580k by late November). The web_stats_* rollups
+        // - the numbers the analytics page actually reports - are kept for
+        // ever; only the per-session detail ages out.
+        $out['web_visits'] = self::pruneWebVisits();
+
         return $out;
+    }
+
+    /**
+     * Drop raw analytics sessions older than the retention window.
+     *
+     * The window is WEB_VISITS_RETENTION_DAYS (default 90, minimum 7). The
+     * daily mysqldump reads this table whole, so an unbounded table slowly
+     * makes the backup slower every month as well.
+     */
+    public static function pruneWebVisits(int $keepDays = 0): int
+    {
+        $keepDays = $keepDays > 0 ? $keepDays : max(7, (int) env_value('WEB_VISITS_RETENTION_DAYS', '90'));
+
+        // Day keys are written in the SITE timezone (the aggregator parses the
+        // Apache timestamps with it), so the cutoff has to be computed there.
+        $cutoff = (new \DateTimeImmutable('now', new \DateTimeZone(site_timezone())))
+            ->modify('-' . $keepDays . ' days')
+            ->format('Y-m-d');
+
+        return self::pruneWebVisitsBefore($cutoff);
+    }
+
+    /**
+     * Delete raw sessions for every day before $cutoffDay.
+     *
+     * A day at a time (chunked inside the day by the aggregator), capped at 30
+     * days per run so a long backlog drains over a few 15-minute ticks instead
+     * of holding the box for a minute. Public so the TestSuite can call it with
+     * a cutoff that only touches its own scratch day.
+     */
+    public static function pruneWebVisitsBefore(string $cutoffDay): int
+    {
+        $days = Database::run(
+            'SELECT DISTINCT day FROM web_visits WHERE day < ? ORDER BY day LIMIT 30',
+            [$cutoffDay]
+        )->fetchAll(\PDO::FETCH_COLUMN);
+
+        $removed = 0;
+        foreach ($days as $day) {
+            $removed += \App\Core\AccessLogAggregator::deleteVisitsForDay((string) $day);
+        }
+
+        return $removed;
     }
 
 

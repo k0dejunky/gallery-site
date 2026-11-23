@@ -10142,6 +10142,52 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             $analyticsFiles,
             static fn (string $rel): bool => !is_file($root . '/' . $rel)
         ));
+        $add('smoke.analytics.visit_retention', 'Smoke · Web analytics', 'Raw sessions age out in chunks; the rollups are kept for ever', static function () use ($root, $read, $ok, $bad): array {
+            // web_visits reached 580k rows with no prune at all, so the daily
+            // mysqldump read the whole table and the hourly re-parse logged a
+            // 1.0-1.5 s DELETE every hour.
+            $house = (string) $read($root . '/app/Core/Housekeeping.php');
+            $agg   = (string) $read($root . '/app/Core/AccessLogAggregator.php');
+            $env   = (string) $read($root . '/.env.example');
+            $problems = [];
+
+            if (strpos($house, 'function pruneWebVisits(') === false
+                || strpos($house, 'function pruneWebVisitsBefore(') === false) {
+                $problems[] = 'Housekeeping must prune raw sessions';
+            }
+            if (strpos($house, 'WEB_VISITS_RETENTION_DAYS') === false) {
+                $problems[] = 'the retention window must be configurable';
+            }
+            $at = strpos($house, 'function pruneVisitHistory(');
+            if ($at !== false) {
+                $end  = strpos($house, "\n    }\n", $at);
+                $body = substr($house, $at, ($end === false ? 2200 : $end - $at));
+                if (strpos($body, 'pruneWebVisits()') === false) {
+                    $problems[] = 'the visit-prune step must call pruneWebVisits()';
+                }
+            }
+
+            if (strpos($agg, 'function deleteVisitsForDay(') === false) {
+                $problems[] = 'AccessLogAggregator::deleteVisitsForDay() is missing';
+            }
+            if (strpos($agg, 'LIMIT ') === false) {
+                $problems[] = 'the per-day delete must be chunked (LIMIT)';
+            }
+            if (preg_match('/Database::run\(\s*\'DELETE FROM web_visits WHERE day = \?\'\s*,/', $agg)) {
+                $problems[] = 'an unchunked DELETE FROM web_visits is back';
+            }
+            if (substr_count($agg, 'deleteVisitsForDay(') < 3) {
+                $problems[] = 'both delete sites must use the chunked helper';
+            }
+            if (strpos($env, 'WEB_VISITS_RETENTION_DAYS') === false) {
+                $problems[] = '.env.example must document the retention window';
+            }
+
+            return $problems === []
+                ? $ok('retention + chunked delete')
+                : $bad(implode('; ', $problems));
+        });
+
         $add('smoke.analytics.files', 'Smoke · Web analytics', 'Analytics files present', static function () use ($missingAnalytics, $ok, $bad): array {
             return $missingAnalytics === []
                 ? $ok('parser, aggregator, model, controller, view, CLI, migration and fixture all present')
@@ -11927,6 +11973,39 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             return $missing === []
                 ? $ok('user.css + admin.css versioned by filemtime')
                 : $bad('stylesheets must use asset_url(): ' . implode(', ', $missing));
+        });
+
+        $add('smoke.gallery.related_query_shape', 'Smoke · Galleries', 'The related rail asks EXISTS and fills the counts in bulk, not per row', static function () use ($root, $read, $ok, $bad): array {
+            // Production: the double join + DISTINCT + two correlated counts
+            // took 1.0-1.3 s for a six-row answer (280 ms warm, 2.4 ms after
+            // the rewrite). This pins the shape so it cannot creep back.
+            $model = (string) $read($root . '/app/Models/Gallery.php');
+            $at    = strpos($model, 'function related(');
+            $problems = [];
+
+            if ($at === false) {
+                $problems[] = 'Gallery::related() is missing';
+            } else {
+                $end  = strpos($model, "\n    }\n", $at);
+                $body = substr($model, $at, ($end === false ? 2600 : $end - $at));
+
+                if (strpos($body, 'EXISTS (') === false) {
+                    $problems[] = 'the related rail must use EXISTS, not a double join + DISTINCT';
+                }
+                if (strpos($body, 'attachCounts($rows)') === false) {
+                    $problems[] = 'the counts must come from attachCounts()';
+                }
+                if (preg_match('/SELECT COUNT\(\*\) FROM gallery_photo gp WHERE gp\.gallery_id = g\.id/', $body)) {
+                    $problems[] = 'a correlated photo-count subquery is back in the rail';
+                }
+                if (preg_match('/SELECT\s+DISTINCT/i', $body)) {
+                    $problems[] = 'SELECT DISTINCT is unnecessary once the join is an EXISTS';
+                }
+            }
+
+            return $problems === []
+                ? $ok('EXISTS + attachCounts()')
+                : $bad(implode('; ', $problems));
         });
 
         $add('smoke.gallery.nsfw_flag', 'Smoke · Galleries', 'A safe-for-work gallery is open at any level; everything else keeps min_level', static function () use ($root, $read, $ok, $bad): array {

@@ -3112,6 +3112,49 @@ class TestSuite
             }
         });
 
+        $add('db.visit_retention_prunes', 'Database', 'Raw analytics sessions age out; the rollups are untouched', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $old    = '2000-01-01';
+                    $recent = date('Y-m-d');
+                    $sql    = "INSERT INTO web_visits
+                               (day, ip, started_at, last_seen, duration_sec, pages, bytes, entry_url, exit_url, referrer, browser, os, device, is_bot)
+                               VALUES (?, '127.0.0.1', NOW(), NOW(), 1, 1, 1, '/probe', '/probe', '', 'probe', '', '', 0)";
+
+                    Database::run($sql, [$old]);
+                    Database::run($sql, [$recent]);
+
+                    // A cutoff one day after the scratch day: only that day
+                    // can be removed, so the test can never prune real history.
+                    $removed = \App\Core\Housekeeping::pruneWebVisitsBefore('2000-01-02');
+
+                    $oldLeft    = (int) Database::run('SELECT COUNT(*) FROM web_visits WHERE day = ?', [$old])->fetchColumn();
+                    $recentLeft = (int) Database::run('SELECT COUNT(*) FROM web_visits WHERE day = ?', [$recent])->fetchColumn();
+
+                    return [
+                        'pass'   => $removed >= 1 && $oldLeft === 0 && $recentLeft >= 1,
+                        'detail' => 'removed=' . $removed . ' old_left=' . $oldLeft . ' recent_left=' . $recentLeft,
+                    ];
+                } finally {
+                    if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $e) {
+                return ['pass' => false, 'detail' => $e->getMessage()];
+            }
+        });
+
         $add('db.related_respects_the_level', 'Database', 'The related and recommended rails only offer galleries the member can open', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
@@ -3160,6 +3203,14 @@ class TestSuite
                     $lockedCount = \App\Models\Gallery::countLocked(0, $catId);
                     $goldCount   = \App\Models\Gallery::countLocked(2, $catId);
 
+                    // The card partial reads photo_count / video_count, which
+                    // used to come from correlated subqueries in the rail's
+                    // own SQL. They must still be on every row now that
+                    // attachCounts() fills them in.
+                    $countsPresent = $goldIds !== []
+                        && array_key_exists('photo_count', $atGold[0])
+                        && array_key_exists('video_count', $atGold[0]);
+
                     // The subject gallery is excluded from its own related
                     // list, so at level 0 the list is empty and at level 2
                     // it holds the locked gallery.
@@ -3167,10 +3218,12 @@ class TestSuite
                         'pass'   => !in_array($lockedId, $freeIds, true)
                             && in_array($lockedId, $goldIds, true)
                             && $lockedCount === 1
-                            && $goldCount === 0,
+                            && $goldCount === 0
+                            && $countsPresent,
                         'detail' => 'level 0 sees ' . count($freeIds) . ' (locked shown: '
                             . (in_array($lockedId, $freeIds, true) ? 'YES' : 'no') . '), level 2 sees ' . count($goldIds)
-                            . ', locked counts ' . $lockedCount . '/' . $goldCount,
+                            . ', locked counts ' . $lockedCount . '/' . $goldCount
+                            . ', counts present: ' . ($countsPresent ? 'yes' : 'NO'),
                     ];
                 } finally {
                     if ($own) {

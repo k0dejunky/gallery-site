@@ -564,7 +564,36 @@ class AccessLogAggregator
         foreach ($tables as $table) {
             Database::run("DELETE FROM {$table} WHERE day = ?", [$day]);
         }
-        Database::run('DELETE FROM web_visits WHERE day = ?', [$day]);
+        self::deleteVisitsForDay($day);
+    }
+
+    /**
+     * Remove one day's raw sessions in bounded chunks.
+     *
+     * A day is ~9k rows across seven secondary indexes, so one DELETE took
+     * 1.0-1.5 s and every hourly re-parse logged a slow query. Chunking keeps
+     * each statement short; the total work is unchanged (inside store()'s
+     * transaction the locks are held until commit either way).
+     */
+    public static function deleteVisitsForDay(string $day, int $chunk = 2500, int $maxChunks = 40): int
+    {
+        $chunk     = max(100, min(20000, $chunk));
+        $maxChunks = max(1, min(200, $maxChunks));
+        $removed   = 0;
+
+        for ($i = 0; $i < $maxChunks; $i++) {
+            $deleted = Database::run(
+                'DELETE FROM web_visits WHERE day = ? LIMIT ' . $chunk,
+                [$day]
+            )->rowCount();
+            $removed += $deleted;
+
+            if ($deleted < $chunk) {
+                break;
+            }
+        }
+
+        return $removed;
     }
 
     private static function insertDaily(string $day, array $s, array $data, array $files): void
@@ -796,7 +825,7 @@ class AccessLogAggregator
 
         try {
             foreach ($days as $day) {
-                Database::run('DELETE FROM web_visits WHERE day = ?', [$day]);
+                self::deleteVisitsForDay($day);
                 self::insertVisits($visitsByDay[$day] ?? []);
                 self::refreshVisitRollupsFor($day);
             }
