@@ -1,5 +1,7 @@
 <?php $title = 'Documentation'; ?>
 
+<p class="muted">The sidebar groups related pages into hubs — <strong>Analytics</strong>, <strong>AI review</strong>, <strong>Design</strong>, <strong>Users</strong>, <strong>Chat</strong>, <strong>Membership</strong>, <strong>Logs</strong> and <strong>Email</strong>. The tab strip at the top of each page switches between the pages in its hub; every page keeps its own URL, so old bookmarks still work.</p>
+
 <h2 class="section-title">Admin roles and permissions</h2>
 <ul>
     <li><strong>Super Admin</strong> — unrestricted access, including role and permission management. Assigned to the <code>fidjiter@gmail.com</code> account; admin communications are sent to the <code>admin@amethyst2213.com</code> mailbox.</li>

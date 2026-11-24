@@ -1,4 +1,5 @@
 <?php $title = 'Live Chat'; ?>
+<?php $sectionHub = 'chat'; require __DIR__ . '/partials/section_tabs.php'; ?>
 
 <?php /* The live chat had NO moderation screen at all: a member's message
        stayed in the replay for everyone to see, and there was nowhere to

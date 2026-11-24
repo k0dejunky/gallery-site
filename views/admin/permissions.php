@@ -9,6 +9,8 @@
  * The super admin column is deliberately absent: that role holds '*' and is
  * not something this screen can narrow.
  */
+$sectionHub = 'users'; require __DIR__ . '/partials/section_tabs.php';
+
 $roles      = $roles ?? [];
 $catalog    = $catalog ?? [];
 $effective  = $effective ?? [];

@@ -1,4 +1,5 @@
 <?php $title = 'Traffic Links'; ?>
+<?php $sectionHub = 'analytics'; require __DIR__ . '/partials/section_tabs.php'; ?>
 
 <script nonce="<?= csp_nonce() ?>">
 function trafficCopy(el) {

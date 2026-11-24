@@ -1,5 +1,6 @@
 <?php
 $title = 'Manage Users';
+$sectionHub = 'users'; require __DIR__ . '/partials/section_tabs.php';
 // Shared listing styles (users-table, badges, hero) live in /assets/admin-shared.css.
 // The list itself is the shared admin component: app/Core/AdminTable.php.
 use App\Core\AdminTable;

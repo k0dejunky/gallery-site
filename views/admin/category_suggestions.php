@@ -1,4 +1,5 @@
 <?php $title = 'AI category suggestions'; ?>
+<?php $sectionHub = 'ai'; require __DIR__ . '/partials/section_tabs.php'; ?>
 
 <p class="muted">
     The AI reviews a gallery's media and proposes categories here. Nothing is applied automatically —

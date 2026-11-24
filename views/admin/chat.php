@@ -14,6 +14,7 @@
  * now at the bottom where they belong.
  */
 $title = 'Chat Admin';
+$sectionHub = 'chat'; require __DIR__ . '/partials/section_tabs.php';
 
 $aiOn       = !empty($state['ai_enabled']);
 $operatorIsOnline = !empty($operatorOnline);

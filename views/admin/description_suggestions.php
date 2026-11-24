@@ -1,4 +1,5 @@
 <?php $title = 'AI gallery descriptions'; ?>
+<?php $sectionHub = 'ai'; require __DIR__ . '/partials/section_tabs.php'; ?>
 
 <p class="muted">
     The AI reads a gallery's media and writes a short description for galleries that have none.

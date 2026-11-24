@@ -1,5 +1,6 @@
 <?php
 $title = 'Emailer';
+$sectionHub = 'email'; require __DIR__ . '/partials/section_tabs.php';
 $config = $config ?? [];
 
 // What each mail actually is, and whether it is still gated by a switch.

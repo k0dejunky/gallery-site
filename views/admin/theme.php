@@ -1,4 +1,5 @@
 <?php $title = 'Theme'; ?>
+<?php $sectionHub = 'design'; require __DIR__ . '/partials/section_tabs.php'; ?>
 <?php
 $scope = $scope ?? 'site';
 $pinkKeys = ['pink-100', 'pink-200', 'pink-300', 'pink-400'];

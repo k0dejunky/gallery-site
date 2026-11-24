@@ -12,6 +12,7 @@
  * once, when it is created.
  */
 $title = 'Operator app';
+$sectionHub = 'chat'; require __DIR__ . '/partials/section_tabs.php';
 ?>
 
 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem;">

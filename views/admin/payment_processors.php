@@ -1,5 +1,6 @@
 <?php
 $title = 'Payment Processors';
+$sectionHub = 'membership'; require __DIR__ . '/partials/section_tabs.php';
 
 // Absolute base used to show admins the postback URL to register with billers.
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';

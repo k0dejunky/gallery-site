@@ -1,4 +1,5 @@
 <?php $title = 'Earnings'; ?>
+<?php $sectionHub = 'membership'; require __DIR__ . '/partials/section_tabs.php'; ?>
 
 <?php // This view still carried its own <style> block built from MEMBER theme
       // variables (--card-bg, --purple-800), which do not exist inside the admin

@@ -1,4 +1,5 @@
 <?php $title = 'Web Analytics'; ?>
+<?php $sectionHub = 'analytics'; require __DIR__ . '/partials/section_tabs.php'; ?>
 
 <?php
 use App\Core\Charts;

@@ -1,4 +1,5 @@
 <?php $title = 'Trends'; ?>
+<?php $sectionHub = 'analytics'; require __DIR__ . '/partials/section_tabs.php'; ?>
 
 <?php
 $isAllTime = $currentPeriod === 'all';

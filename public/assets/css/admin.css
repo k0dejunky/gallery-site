@@ -3625,3 +3625,11 @@ th.adm-inline-pending {
 .attention-err { border-color: var(--adm-err-border, #fecaca); background: var(--adm-err-bg, #fef2f2); color: var(--adm-err, #b91c1c); }
 .attention-warn { border-color: var(--adm-warn-border, #fde68a); background: var(--adm-warn-bg, #fffbeb); color: var(--adm-warn, #b45309); }
 .attention-info { border-color: var(--adm-border, #e2e5ee); }
+
+/* Admin hub tabs (App\Core\AdminSections). One sidebar entry per hub; every
+   page in it keeps its own route and this strip switches between them. */
+.adm-tabs{display:flex;flex-wrap:wrap;gap:.3rem;margin:0 0 1rem;padding:.3rem;background:var(--adm-surface-2,#f7f8fc);border:1px solid var(--adm-border,#e2e5ee);border-radius:10px}
+.adm-tab{display:inline-flex;align-items:center;padding:.4rem .85rem;border-radius:7px;font-size:.85rem;font-weight:600;line-height:1.4;color:var(--adm-text-dim,#5c6478);text-decoration:none;white-space:nowrap}
+.adm-tab:hover{background:var(--adm-surface,#fff);color:var(--adm-text,#1e2330)}
+.adm-tab.active{background:var(--adm-accent,#d946ef);color:#0a0210}
+@media (max-width:640px){.adm-tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}.adm-tab{flex:0 0 auto}}

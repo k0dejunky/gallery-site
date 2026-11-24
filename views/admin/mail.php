@@ -1,4 +1,5 @@
 <?php $title = 'Email'; ?>
+<?php $sectionHub = 'email'; require __DIR__ . '/partials/section_tabs.php'; ?>
 
 <?php // The view carried a private <style> block built from member tokens
       // (--pink-300, --border-radius, --table-border), so the mailbox banner

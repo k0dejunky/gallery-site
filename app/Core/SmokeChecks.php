@@ -328,9 +328,15 @@ class SmokeChecks
             if (strpos($mail, "requirePermission('mail_admin')") === false) {
                 $problems[] = 'the mail controller must require the mail_admin permission';
             }
-            if (strpos($nav, "'/admin/mail', 'icon' => 'inbox', 'perm' => 'mail_admin'") === false
-                && strpos($nav, "'perm' => 'mail_admin'") === false) {
-                $problems[] = 'the admin nav must hide the Email page from a non super admin';
+            $mailTab = null;
+            foreach (\App\Core\AdminSections::hubs()['email']['tabs'] ?? [] as $tab) {
+                if (($tab['href'] ?? '') === '/admin/mail') {
+                    $mailTab = $tab;
+                    break;
+                }
+            }
+            if ($mailTab === null || ($mailTab['perm'] ?? '') !== 'mail_admin') {
+                $problems[] = 'the Email hub must hide the Mailboxes tab from a non super admin';
             }
             // The super-admin-only permissions must be in no other role.
             foreach (['moderator', 'admin', 'editor', 'viewer'] as $role) {
@@ -537,8 +543,15 @@ class SmokeChecks
                     $problems[] = "views/admin/$view.php is missing";
                 }
             }
-            if (strpos($nav, "'key' => 'nav-roles'") === false || strpos($nav, "'perm' => 'manage_roles'") === false) {
-                $problems[] = 'the admin nav must link Access & roles behind manage_roles';
+            $rolesTab = null;
+            foreach (\App\Core\AdminSections::hubs()['users']['tabs'] ?? [] as $tab) {
+                if (($tab['href'] ?? '') === '/admin/roles') {
+                    $rolesTab = $tab;
+                    break;
+                }
+            }
+            if ($rolesTab === null || ($rolesTab['perm'] ?? '') !== 'manage_roles') {
+                $problems[] = 'the Users hub must carry an Access & roles tab behind manage_roles';
             }
             // The matrix view must not offer the locked ones as tickable.
             $matrix = (string) @file_get_contents($root . '/views/admin/permissions.php');
@@ -652,34 +665,46 @@ class SmokeChecks
                 : $bad(implode('; ', $problems));
         });
 
-        $add('smoke.auth.nav_declares_the_gate_it_links_to', 'Smoke · Auth', 'Every admin sidebar link declares the permission its target enforces', static function () use ($root, $ok, $bad): array {
+        $add('smoke.auth.nav_declares_the_gate_it_links_to', 'Smoke · Auth', 'Every admin sidebar link and hub tab declares the permission its target enforces', static function () use ($root, $ok, $bad): array {
             // The sidebar used to render 18 links whose routes were gated on a
             // permission the item never declared, so a moderator saw "Gallery
             // Management", "Auto Poster" and "Logs" and was bounced off every
-            // one. The nav must name the gate, including pages where the route
-            // and the controller ask for DIFFERENT permissions (System needs
-            // `dashboard` from the route and `logs` from its constructor).
-            $routes  = include $root . '/config/routes.php';
-            $layout  = (string) @file_get_contents($root . '/views/admin/layout.php');
+            // one. The nav (and every hub tab) must name the gate, including
+            // pages where the route and the controller ask for DIFFERENT
+            // permissions (System needs `dashboard` from the route and `logs`
+            // from its constructor).
+            $routes   = include $root . '/config/routes.php';
+            $sections = \App\Core\AdminSections::hubs();
+            $nav      = \App\Core\AdminSections::nav();
             $problems = [];
 
-            preg_match_all(
-                "/\\['key' => 'nav-([a-z-]+)', 'label' => '([^']+)', 'href' => '([^']+)'(?:, 'icon' => '[a-z]+')?(?:, 'perm' => (\\[[^\\]]*\\]|'([a-z_]+)'))?/",
-                $layout,
-                $matches,
-                PREG_SET_ORDER
-            );
-
-            if (count($matches) < 30) {
-                $problems[] = 'only parsed ' . count($matches) . ' nav items from views/admin/layout.php';
+            // One row per real link: a plain sidebar item, or a hub tab.
+            $links = [];
+            foreach ($nav as $group) {
+                foreach ($group['items'] as $item) {
+                    if (isset($item['hub'])) {
+                        continue; // covered by its tabs below
+                    }
+                    $links[] = ['label' => $item['label'], 'href' => $item['href'], 'perm' => $item['perm'] ?? []];
+                }
+            }
+            foreach ($sections as $hub) {
+                foreach ($hub['tabs'] as $tab) {
+                    $links[] = [
+                        'label' => $hub['label'] . ' / ' . $tab['label'],
+                        'href'  => $tab['href'],
+                        'perm'  => $tab['perm'],
+                    ];
+                }
             }
 
-            foreach ($matches as $item) {
-                $href    = $item[3];
-                $navPerms = [];
-                if (!empty($item[4]) && preg_match_all("/'([a-z_]+)'/", $item[4], $pm)) {
-                    $navPerms = $pm[1];
-                }
+            if (count($links) < 30) {
+                $problems[] = 'only parsed ' . count($links) . ' nav links from AdminSections';
+            }
+
+            foreach ($links as $item) {
+                $href     = $item['href'];
+                $navPerms = array_values(array_unique((array) $item['perm']));
 
                 $routePerm = null;
                 $handler   = null;
@@ -692,8 +717,7 @@ class SmokeChecks
                 }
 
                 if ($handler === null) {
-                    // A nav link with no matching GET route is a dead link.
-                    $problems[] = $item[1] . ' (' . $href . ') has no GET route';
+                    $problems[] = $item['label'] . ' (' . $href . ') has no GET route';
                     continue;
                 }
 
@@ -723,17 +747,40 @@ class SmokeChecks
 
                 $required = array_values(array_unique(array_filter([$routePerm, $ctorPerm])));
                 sort($required);
-                $declared = $navPerms;
-                sort($declared);
+                sort($navPerms);
 
-                if ($required !== $declared) {
-                    $problems[] = $item[1] . ' declares [' . implode(',', $declared)
+                if ($required !== $navPerms) {
+                    $problems[] = $item['label'] . ' declares [' . implode(',', $navPerms)
                         . '] but its target needs [' . implode(',', $required) . ']';
                 }
             }
 
+            // A hub is visible on the OR of its tabs; that list must be the
+            // union, or the sidebar hides a hub the admin could open.
+            foreach ($nav as $group) {
+                foreach ($group['items'] as $item) {
+                    if (!isset($item['hub'])) {
+                        continue;
+                    }
+                    $tabs  = $sections[$item['hub']]['tabs'] ?? [];
+                    $union = [];
+                    foreach ($tabs as $tab) {
+                        foreach ((array) $tab['perm'] as $permission) {
+                            $union[$permission] = true;
+                        }
+                    }
+                    $declared = array_values(array_unique($item['perm_any'] ?? []));
+                    $expected = array_keys($union);
+                    sort($declared);
+                    sort($expected);
+                    if ($declared !== $expected) {
+                        $problems[] = $item['label'] . ' perm_any is not the union of its tabs';
+                    }
+                }
+            }
+
             return $problems === []
-                ? $ok(count($matches) . ' sidebar links each declare the gate their target enforces')
+                ? $ok(count($links) . ' links (sidebar + hub tabs) each declare the gate their target enforces')
                 : $bad(implode('; ', $problems));
         });
 
@@ -939,19 +986,26 @@ class SmokeChecks
             return $ok('welcome card is centred clear of the header; tour.js versioned');
         });
 
-        $add('smoke.admin.nav_icons', 'Smoke · Admin UI', 'Every admin nav entry has an icon that exists in Icon', static function () use ($adminLayout, $adminIconSrc, $root, $ok, $bad): array {
+        $add('smoke.admin.nav_icons', 'Smoke · Admin UI', 'Every admin nav entry has an icon that exists in Icon', static function () use ($adminLayout, $ok, $bad): array {
             if (!class_exists(\App\Core\Icon::class)) {
                 return $bad('App\Core\Icon must exist');
             }
-            // The sidebar is a PHP array; parse the icon names out of the entries.
-            if (!preg_match_all("/'key'\s*=>\s*'(nav-[a-z0-9-]+)'.*?'icon'\s*=>\s*'([a-z0-9-]+)'/", $adminLayout, $m, PREG_SET_ORDER)) {
-                return $bad('admin layout must declare nav entries as key + icon pairs');
-            }
+
+            $nav     = \App\Core\AdminSections::nav();
             $missing = [];
-            foreach ($m as $entry) {
-                if (!\App\Core\Icon::has($entry[2])) {
-                    $missing[] = $entry[1] . ' -> ' . $entry[2];
+            $count   = 0;
+
+            foreach ($nav as $group) {
+                foreach ($group['items'] as $item) {
+                    $count++;
+                    if (!\App\Core\Icon::has((string) ($item['icon'] ?? ''))) {
+                        $missing[] = $item['key'] . ' -> ' . ($item['icon'] ?? '(none)');
+                    }
                 }
+            }
+
+            if ($count < 18) {
+                return $bad('the sidebar must declare at least 18 entries, found ' . $count);
             }
             if ($missing !== []) {
                 return $bad('nav entries with an unknown icon: ' . implode(', ', $missing));
@@ -960,7 +1014,8 @@ class SmokeChecks
                 || strpos($adminLayout, 'aria-label="Admin sections"') === false) {
                 return $bad('the sidebar <nav> must carry an accessible name');
             }
-            return $ok(count($m) . ' nav entries, all icons resolve');
+
+            return $ok($count . ' nav entries, all icons resolve');
         });
 
         $add('smoke.admin.table_scrollers', 'Smoke · Admin UI', 'Admin tables are wrapped in the shared scroller, not an ad-hoc overflow div', static function () use ($root, $ok, $bad): array {
@@ -7295,14 +7350,23 @@ class SmokeChecks
             return strpos($authCore, "'traffic'") !== false ? $ok('permission declared') : $bad('Auth::PERMISSIONS must declare the traffic permission');
         });
         $add('smoke.traffic.nav', 'Smoke · Traffic', 'Admin nav links to the Traffic page', static function () use ($adminLayout, $ok, $bad): array {
-            // The sidebar is data (see $navGroups); a gated entry is one that
-            // declares a 'perm' the renderer checks with Auth::can().
-            return strpos($adminLayout, "'key' => 'nav-traffic'") !== false
-                && strpos($adminLayout, "'perm' => 'traffic'") !== false
+            // The Analytics hub carries the traffic links; the sidebar still
+            // renders every entry behind the permission it declares.
+            $tab = null;
+            foreach (\App\Core\AdminSections::hubs()['analytics']['tabs'] ?? [] as $candidate) {
+                if (($candidate['href'] ?? '') === '/admin/traffic') {
+                    $tab = $candidate;
+                    break;
+                }
+            }
+
+            return $tab !== null
+                && ($tab['perm'] ?? '') === 'traffic'
                 && strpos($adminLayout, 'Auth::can($item[') !== false
-                ? $ok('nav item present and gated')
-                : $bad('admin layout must render a permission-gated Traffic nav item');
+                ? $ok('Analytics / Links tab present and gated')
+                : $bad('AdminSections must carry a gated Traffic tab and the sidebar must render the gate');
         });
+
         $add('smoke.traffic.controller', 'Smoke · Traffic', 'TrafficController guards with requirePermission', static function () use ($trafficCtrl, $ok, $bad): array {
             return strpos($trafficCtrl, "Auth::requirePermission('traffic')") !== false ? $ok('guard present') : $bad('TrafficController must require the traffic permission');
         });
@@ -9320,13 +9384,20 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 ? $ok('membership gate')
                 : $bad('EmailerController must require the membership permission');
         });
-        $add('smoke.email.nav', 'Smoke · Emailer', 'Admin sidebar links Emailer behind membership', static function () use ($adminLayout2, $ok, $bad): array {
-            return strpos($adminLayout2, "'key' => 'nav-emailer'") !== false
-                && strpos($adminLayout2, "'href' => '/admin/emailer'") !== false
-                && strpos($adminLayout2, "'perm' => 'membership'") !== false
-                ? $ok('nav item gated')
-                : $bad('views/admin/layout.php must link the Emailer page behind the membership permission');
+        $add('smoke.email.nav', 'Smoke · Emailer', 'Admin sidebar links Emailer behind membership', static function () use ($ok, $bad): array {
+            $tab = null;
+            foreach (\App\Core\AdminSections::hubs()['email']['tabs'] ?? [] as $candidate) {
+                if (($candidate['href'] ?? '') === '/admin/emailer') {
+                    $tab = $candidate;
+                    break;
+                }
+            }
+
+            return $tab !== null && ($tab['perm'] ?? '') === 'membership'
+                ? $ok('Email / Site mail tab present and gated')
+                : $bad('AdminSections must link the Emailer page behind the membership permission');
         });
+
         $add('smoke.email.admin_view', 'Smoke · Emailer', 'Admin emailer view lists the mail types + switches + queue, no schedule', static function () use ($ecv, $ok, $bad): array {
             $listsTypes = strpos($ecv, "Today's new gallery") !== false
                 && strpos($ecv, 'New chat reply') !== false
@@ -9493,12 +9564,19 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 ? $ok('routes + permission gate present')
                 : $bad('routes.php must register /admin/category-suggestions[+/accept|/dismiss|/backfill] gated by the categories permission');
         });
-        $add('smoke.categorizer.ui', 'Smoke · Categorizer', 'manage-page chips + review page + sidebar link', static function () use ($czView, $czManage, $adminLayout2, $ok, $bad): array {
+        $add('smoke.categorizer.ui', 'Smoke · Categorizer', 'manage-page chips + review page + AI review tab', static function () use ($czView, $czManage, $ok, $bad): array {
+            $tabOk = false;
+            foreach (\App\Core\AdminSections::hubs()['ai']['tabs'] ?? [] as $tab) {
+                if (($tab['href'] ?? '') === '/admin/category-suggestions') {
+                    $tabOk = true;
+                }
+            }
+
             return strpos($czManage, 'AI Suggestions') !== false
                 && strpos($czView, 'accept-all') !== false
-                && strpos($adminLayout2, '/admin/category-suggestions') !== false
-                ? $ok('manage chips, review view and nav link present')
-                : $bad('manage.php must show AI suggestion chips, category_suggestions.php the review list, and admin layout.php the nav link');
+                && $tabOk
+                ? $ok('manage chips, review view and AI review tab present')
+                : $bad('manage.php must show AI suggestion chips, category_suggestions.php the review list, and AdminSections the AI review tab');
         });
         $add('smoke.categorizer.chunked_prompt', 'Smoke · Categorizer', 'batches of candidates, exhaustive selection, no per-run cap', static function () use ($czSvc, $ok, $bad): array {
             $chunked = strpos($czSvc, 'CHUNK_SIZE') !== false
@@ -9550,17 +9628,25 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 ? $ok('worker + cron + upload hook + watchdog lock wired')
                 : $bad('bin/describe_worker.php must flock with --once, apply_cron.php must install gallery-describer, MediaUploader::commit must use enqueueIfEmpty, and keep_ai_alive.php must skip probes while describer.lock is held');
         });
-        $add('smoke.descriptions.routes_ui', 'Smoke · Describer', 'review routes + permission gate + review view + nav link + manage block', static function () use ($routesSrc, $dsCtrl, $dsView, $adminLayout2, $czManage, $ok, $bad): array {
+        $add('smoke.descriptions.routes_ui', 'Smoke · Describer', 'review routes + permission gate + review view + AI review tab + manage block', static function () use ($routesSrc, $dsCtrl, $dsView, $czManage, $ok, $bad): array {
             $routesOk = strpos($routesSrc, "'/admin/description-suggestions'") !== false
                 && strpos($routesSrc, '/admin/description-suggestions/accept') !== false
                 && strpos($routesSrc, '/admin/description-suggestions/backfill') !== false;
+
+            $tabOk = false;
+            foreach (\App\Core\AdminSections::hubs()['ai']['tabs'] ?? [] as $tab) {
+                if (($tab['href'] ?? '') === '/admin/description-suggestions') {
+                    $tabOk = true;
+                }
+            }
+
             return $routesOk
                 && strpos($dsCtrl, "Auth::requirePermission('galleries')") !== false
                 && strpos($dsView, 'description-suggestions/accept') !== false
-                && strpos($adminLayout2, '/admin/description-suggestions') !== false
+                && $tabOk
                 && strpos($czManage, 'AI Description') !== false
-                ? $ok('routes, gate, view, nav and manage block present')
-                : $bad('routes.php must register /admin/description-suggestions[+/accept|/dismiss|/backfill] gated by the galleries permission; the review view, admin nav and manage page block must render');
+                ? $ok('routes, gate, view, AI review tab and manage block present')
+                : $bad('routes.php must register /admin/description-suggestions[+/accept|/dismiss|/backfill] gated by the galleries permission; the review view, AdminSections tab and manage page block must render');
         });
         $add('smoke.descriptions.prompt', 'Smoke · Describer', 'single-call prompt: JSON description, length + tone rules, tolerant parse', static function () use ($dsAdvisor, $ok, $bad): array {
             $json = strpos($dsAdvisor, '{"description": "..."}') !== false;
@@ -10179,10 +10265,19 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 ? $ok('routes present')
                 : $bad('test suite routes (page / run POST / status GET) must be registered');
         });
-        $add('smoke.suite.nav', 'Smoke · Test Suite', 'Admin sidebar links the Test suite page', static function () use ($adminLayout, $ok, $bad): array {
-            return strpos($adminLayout, "Test suite") !== false && strpos($adminLayout, '/admin/test-suite') !== false
+        $add('smoke.suite.nav', 'Smoke · Test Suite', 'Admin sidebar links the Test suite page', static function () use ($ok, $bad): array {
+            $found = false;
+            foreach (\App\Core\AdminSections::nav() as $group) {
+                foreach ($group['items'] as $item) {
+                    if (($item['href'] ?? '') === '/admin/test-suite') {
+                        $found = true;
+                    }
+                }
+            }
+
+            return $found
                 ? $ok('nav item present')
-                : $bad('admin layout sidebar must link the Test suite nav item');
+                : $bad('AdminSections must link the Test suite page');
         });
         $tsCore = $read("$root/app/Core/TestSuite.php");
         $add('smoke.suite.core', 'Smoke · Test Suite', 'TestSuite core exposes tests()/grouped()/run()/writeRun()', static function () use ($tsCore, $ok, $bad): array {
@@ -11300,7 +11395,7 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             $system    = (string) $read($root . '/views/admin/system.php');
             $abandoned = (string) $read($root . '/views/admin/abandoned.php');
             $routes    = (string) $read($root . '/config/routes.php');
-            $nav       = (string) $read($root . '/views/admin/layout.php');
+            $nav       = (string) $read($root . '/app/Core/AdminSections.php');
             $help      = (string) $read($root . '/views/admin/help.php');
             $search    = (string) $read($root . '/app/Controllers/SearchController.php');
             $ctrl      = (string) $read($root . '/app/Controllers/AdminController.php');
@@ -12836,6 +12931,76 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
 
             return $problems === []
                 ? $ok('paginate, inCategories, withoutCategory, byTag and recommended all carry the content filter')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.admin.nav_hubs', 'Smoke · Admin UI', 'The sidebar groups related pages into hubs with one tab strip', static function () use ($root, $ok, $bad): array {
+            $sections = \App\Core\AdminSections::hubs();
+            $nav      = \App\Core\AdminSections::nav();
+            $routes   = include $root . '/config/routes.php';
+            $paths    = array_map(static fn (array $r): string => (string) ($r[1] ?? ''), $routes);
+            $problems = [];
+            $entries  = 0;
+
+            foreach ($nav as $group) {
+                foreach ($group['items'] as $item) {
+                    $entries++;
+
+                    if (!isset($item['hub'])) {
+                        continue;
+                    }
+
+                    $hubKey = (string) $item['hub'];
+                    $hub    = $sections[$hubKey] ?? null;
+                    if ($hub === null) {
+                        $problems[] = 'hub ' . $hubKey . ' has no definition';
+                        continue;
+                    }
+
+                    $tabs = $hub['tabs'] ?? [];
+                    if (count($tabs) < 2) {
+                        $problems[] = 'hub ' . $hubKey . ' has fewer than two tabs';
+                    }
+                    if (!in_array($item['href'], array_column($tabs, 'href'), true)) {
+                        $problems[] = 'hub ' . $hubKey . ' links outside its own tabs';
+                    }
+
+                    $union = [];
+                    foreach ($tabs as $tab) {
+                        foreach ((array) ($tab['perm'] ?? []) as $permission) {
+                            $union[$permission] = true;
+                        }
+                    }
+                    $declared = array_values(array_unique($item['perm_any'] ?? []));
+                    $expected = array_keys($union);
+                    sort($declared);
+                    sort($expected);
+                    if ($declared !== $expected) {
+                        $problems[] = 'hub ' . $hubKey . ' perm_any is not the union of its tabs';
+                    }
+                }
+            }
+
+            foreach ($sections as $hubKey => $hub) {
+                foreach ($hub['tabs'] as $tab) {
+                    if (!in_array($tab['href'], $paths, true)) {
+                        $problems[] = 'hub ' . $hubKey . ' tab ' . $tab['href'] . ' has no GET route';
+                    }
+                }
+            }
+
+            if (count($sections) !== 8) {
+                $problems[] = 'expected 8 hubs, found ' . count($sections);
+            }
+            if ($entries > 22) {
+                $problems[] = 'the sidebar still carries ' . $entries . ' entries (expected 22 or fewer)';
+            }
+            if (!is_file($root . '/views/admin/partials/section_tabs.php')) {
+                $problems[] = 'views/admin/partials/section_tabs.php is missing';
+            }
+
+            return $problems === []
+                ? $ok(count($sections) . ' hubs, ' . $entries . ' sidebar entries, every tab has a route')
                 : $bad(implode('; ', $problems));
         });
 

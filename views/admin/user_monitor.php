@@ -1,4 +1,5 @@
 <?php $title = 'User Monitor'; ?>
+<?php $sectionHub = 'logs'; require __DIR__ . '/partials/section_tabs.php'; ?>
 
 <?php if (!empty($lastSeen)): ?>
     <h2>Active Users</h2>

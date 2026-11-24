@@ -1,4 +1,5 @@
 <?php $title = 'Plans'; ?>
+<?php $sectionHub = 'membership'; require __DIR__ . '/partials/section_tabs.php'; ?>
 
 <h2>Plans</h2>
 <?php if (empty($plans)): ?>

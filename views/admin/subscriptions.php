@@ -1,4 +1,5 @@
 <?php $title = 'Subscriptions'; ?>
+<?php $sectionHub = 'membership'; require __DIR__ . '/partials/section_tabs.php'; ?>
 
 <?php if (!empty($reconciliation)): ?>
 <h2>Needs Attention — Pending Biller Signups</h2>

@@ -1,4 +1,5 @@
 <?php $title = 'Error Logs'; ?>
+<?php $sectionHub = 'logs'; require __DIR__ . '/partials/section_tabs.php'; ?>
 <div class="card">
     <div class="table-responsive">
         <table>

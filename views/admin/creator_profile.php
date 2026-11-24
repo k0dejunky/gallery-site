@@ -1,4 +1,5 @@
 <?php $title = 'Creator profile'; ?>
+<?php $sectionHub = 'design'; require __DIR__ . '/partials/section_tabs.php'; ?>
 
 <p class="muted">This is the public creator profile shown at <a href="<?= url('/creator') ?>" target="_blank" rel="noopener">/creator</a>.</p>
 

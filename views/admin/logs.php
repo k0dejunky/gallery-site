@@ -1,4 +1,5 @@
 <?php $title = 'Admin Logs'; ?>
+<?php $sectionHub = 'logs'; require __DIR__ . '/partials/section_tabs.php'; ?>
 
 <?php if (!empty($pendingSubs)): ?>
 <section class="adm-section">
