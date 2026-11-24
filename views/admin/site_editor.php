@@ -1,5 +1,10 @@
 <?php $title = 'Site Editor'; ?>
 <div id="se-root" style="display:flex;height:calc(100vh - 40px);gap:0;overflow:hidden;margin:-1rem -1.5rem;">
+  <div id="se-mobile-bar">
+    <button type="button" id="se-mobile-tools" aria-label="Open editor tools">Tools</button>
+    <button type="button" id="se-mobile-templates" aria-label="Open templates">Templates</button>
+    <button type="button" id="se-mobile-back" aria-label="Back to admin">Back</button>
+  </div>
   <!-- Left Panel -->
   <div id="se-left-panel" style="width:220px;flex-shrink:0;background:#1e1e1e;color:#ccc;display:flex;flex-direction:column;border-right:1px solid #333;">
     <div id="se-left-head" style="padding:8px 12px;background:#252526;border-bottom:1px solid #333;font-weight:700;font-size:13px;display:flex;justify-content:space-between;align-items:center;">
@@ -769,8 +774,10 @@ function makePanelDraggable(panel,handle){
     document.addEventListener('pointermove',move);document.addEventListener('pointerup',up);
   });
 }
+if(window.innerWidth>900){
 makePanelDraggable(document.getElementById('se-left-panel'),document.getElementById('se-left-head'));
 makePanelDraggable(document.getElementById('se-right-panel'),document.getElementById('se-right-head'));
+}
 
 /* ── Add element ── */
 document.getElementById('se-btn-add').addEventListener('click',function(){
@@ -1012,5 +1019,37 @@ iframe.addEventListener('load',function(){
 });
 
 renderTemplates();renderChanges();
+})();
+</script>
+<script nonce="<?= csp_nonce() ?>">
+/* Phone drawers: the desktop layout put a 220px and a 240px panel on a 390px
+   screen, so they overlapped and covered the preview. The bar toggles one
+   panel at a time over the full-screen iframe. */
+(function () {
+  var root = document.getElementById('se-root');
+  if (!root) return;
+  var tools = document.getElementById('se-mobile-tools');
+  var templates = document.getElementById('se-mobile-templates');
+  var back = document.getElementById('se-mobile-back');
+
+  function closeAll() { root.classList.remove('se-show-tools', 'se-show-templates'); }
+
+  if (tools) {
+    tools.addEventListener('click', function () {
+      var open = root.classList.contains('se-show-tools');
+      closeAll();
+      if (!open) root.classList.add('se-show-tools');
+    });
+  }
+  if (templates) {
+    templates.addEventListener('click', function () {
+      var open = root.classList.contains('se-show-templates');
+      closeAll();
+      if (!open) root.classList.add('se-show-templates');
+    });
+  }
+  if (back) {
+    back.addEventListener('click', function () { window.location.href = '<?= url('/admin') ?>'; });
+  }
 })();
 </script>

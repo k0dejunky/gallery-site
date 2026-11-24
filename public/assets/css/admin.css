@@ -2881,11 +2881,11 @@ body.admin-theme {
 
 /* ---------- Site Editor ------------------------------------------------- */
 .page-site-editor #se-root{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;margin:0!important;z-index:100000;background:#111;overflow:hidden!important}
-.page-site-editor #se-root>div:nth-child(1),
-.page-site-editor #se-root>div:nth-child(3){position:absolute!important;top:12px;bottom:12px;z-index:100002;box-shadow:0 8px 30px rgba(0,0,0,.45)}
-.page-site-editor #se-root>div:nth-child(1){left:12px}
-.page-site-editor #se-root>div:nth-child(3){right:12px}
-.page-site-editor #se-root>div:nth-child(2){position:absolute!important;inset:0!important;width:auto!important;z-index:100001}
+.page-site-editor #se-left-panel,
+.page-site-editor #se-right-panel{position:absolute!important;top:12px;bottom:12px;z-index:100002;box-shadow:0 8px 30px rgba(0,0,0,.45)}
+.page-site-editor #se-left-panel{left:12px}
+.page-site-editor #se-right-panel{right:12px}
+.page-site-editor #se-frame-wrap{position:absolute!important;inset:0!important;width:auto!important;z-index:100001}
 .page-site-editor #se-left-head,
 .page-site-editor #se-right-head{cursor:move;user-select:none}
 .page-site-editor #se-back{background:#7040a0;border:1px solid #8c5dc0;color:#fff;border-radius:3px;padding:4px 8px;font-size:10px;cursor:pointer}
@@ -3633,3 +3633,20 @@ th.adm-inline-pending {
 .adm-tab:hover{background:var(--adm-surface,#fff);color:var(--adm-text,#1e2330)}
 .adm-tab.active{background:var(--adm-accent,#d946ef);color:#0a0210}
 @media (max-width:640px){.adm-tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}.adm-tab{flex:0 0 auto}}
+
+/* Phone: the site editor's two panels are drawers over a full-screen preview.
+   The desktop layout put a 220px and a 240px panel on a 390px screen, so they
+   overlapped and covered the site - the editor looked broken. #se-mobile-bar
+   toggles one drawer at a time. */
+#se-mobile-bar{display:none}
+@media (max-width:900px){
+    #se-mobile-bar{display:flex;gap:6px;align-items:center;position:absolute;top:0;left:0;right:0;height:44px;padding:0 8px;background:#252526;border-bottom:1px solid #333;z-index:100003}
+    #se-mobile-bar button{background:#2a2a2a;border:1px solid #444;color:#ccc;border-radius:4px;padding:6px 10px;font-size:12px;cursor:pointer}
+    #se-mobile-bar button:active{background:#5b8af5;color:#fff;border-color:#4a7ae8}
+    #se-mobile-bar #se-mobile-back{margin-left:auto}
+    .page-site-editor #se-left-panel,
+    .page-site-editor #se-right-panel{display:none!important;position:absolute!important;top:44px!important;bottom:0!important;width:min(320px,88vw)!important;z-index:100004!important;box-shadow:0 8px 30px rgba(0,0,0,.45)}
+    .page-site-editor #se-root.se-show-tools #se-left-panel{display:flex!important;left:0!important;right:auto!important}
+    .page-site-editor #se-root.se-show-templates #se-right-panel{display:flex!important;right:0!important;left:auto!important}
+    .page-site-editor #se-frame-wrap{top:44px!important}
+}
