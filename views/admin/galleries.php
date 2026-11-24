@@ -347,8 +347,8 @@ $filterLevelKey = $filterLevel === null ? 'all' : (string) $filterLevel;
                             <?php else: ?>
                                 <span class="pill pill-ok" title="Safe for work — visible to everyone">SFW</span>
                             <?php endif; ?>
-                            <?php if ((int) ($gallery['is_ai'] ?? 0) === 1): ?>
-                                <span class="pill pill-info" title="AI-generated set">AI</span>
+                            <?php if ((int) ($gallery['is_fanart'] ?? 0) === 1): ?>
+                                <span class="pill pill-info" title="Fan-art set">Fan art</span>
                             <?php endif; ?>
                             <?php if ((int) ($gallery['is_xxx'] ?? 0) === 1): ?>
                                 <span class="pill pill-err" title="Explicit set (always adult)">XXX</span>

@@ -21,6 +21,8 @@ return [
     ['GET', '/feed.xml', 'StaticPageController@feed'],
     ['GET', '/search/suggest', 'GalleryController@suggest'],
     ['GET', '/galleries', 'GalleryController@index'],
+    // The Fan Art section: only galleries the owner flagged as fan art.
+    ['GET', '/fan-art', 'GalleryController@fanArt'],
     ['GET', '/images', 'GalleryController@indexType'],
     ['GET', '/videos', 'GalleryController@indexType'],
     ['GET', '/galleries/category/{slug}', 'GalleryController@category'],

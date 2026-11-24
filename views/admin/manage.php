@@ -26,7 +26,7 @@
         <strong class="type-switch-label"><?= ($gallery['type'] ?? 'images') === 'videos' ? 'Video Gallery' : 'Image Gallery' ?></strong>
     </label>
     <?php $manageNsfw = (int) ($gallery['is_nsfw'] ?? 1) === 1; ?>
-    <?php $manageAi = (int) ($gallery['is_ai'] ?? 0) === 1; ?>
+    <?php $manageFanart = (int) ($gallery['is_fanart'] ?? 0) === 1; ?>
     <?php $manageXxx = (int) ($gallery['is_xxx'] ?? 0) === 1; ?>
     <p class="muted" style="margin-top: var(--spacing-sm);">
         <label>Content rating</label><br>
@@ -45,9 +45,9 @@
     <p class="muted" style="margin-top: var(--spacing-sm);">
         <label>Content flags</label><br>
         <label class="chip">
-            <input type="hidden" name="is_ai" value="0">
-            <input type="checkbox" name="is_ai" value="1" <?= $manageAi ? 'checked' : '' ?>>
-            AI generated
+            <input type="hidden" name="is_fanart" value="0">
+            <input type="checkbox" name="is_fanart" value="1" <?= $manageFanart ? 'checked' : '' ?>>
+            Fan art
         </label>
         <label class="chip">
             <input type="hidden" name="is_xxx" value="0">

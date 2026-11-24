@@ -746,6 +746,25 @@ class SmokeChecks
             // should not depend on the migration runner.
             $schema = (string) @file_get_contents($root . '/schema.sql');
             $files  = glob($root . '/database/migrations/*.sql') ?: [];
+
+            // A later migration can RENAME a column an earlier one added
+            // (105 renamed galleries.is_ai to is_fanart). Follow the rename
+            // chain, or this check reports the old name for ever.
+            $renamed = [];
+            foreach ($files as $file) {
+                $src = (string) @file_get_contents($file);
+                if (preg_match_all('/\bCHANGE\s+(?:COLUMN\s+)?`?(\w+)`?\s+`?(\w+)`?/i', $src, $cm) !== false) {
+                    foreach ($cm[1] as $i => $old) {
+                        $renamed[$old] = $cm[2][$i];
+                    }
+                }
+                if (preg_match_all('/\bRENAME\s+COLUMN\s+`?(\w+)`?\s+TO\s+`?(\w+)`?/i', $src, $rm) !== false) {
+                    foreach ($rm[1] as $i => $old) {
+                        $renamed[$old] = $rm[2][$i];
+                    }
+                }
+            }
+
             $missing = [];
             foreach ($files as $file) {
                 $src = (string) @file_get_contents($file);
@@ -754,6 +773,12 @@ class SmokeChecks
                     continue;
                 }
                 foreach ($m[1] as $col) {
+                    // Follow the rename chain to the name the schema carries.
+                    $seen = [];
+                    while (isset($renamed[$col]) && !isset($seen[$col])) {
+                        $seen[$col] = true;
+                        $col = $renamed[$col];
+                    }
                     if (preg_match('/\b' . preg_quote($col, '/') . '\b/', $schema) === 1) {
                         continue;
                     }
@@ -12633,41 +12658,48 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad(implode('; ', $problems));
         });
 
-        $add('smoke.gallery.content_flags', 'Smoke · Galleries', 'The AI and XXX labels are stored, editable, forced-consistent with the rating and shown', static function () use ($root, $read, $ok, $bad): array {
-            $gallery  = (string) $read($root . '/app/Models/Gallery.php');
-            $gc       = (string) $read($root . '/app/Controllers/GalleryController.php');
-            $list     = (string) $read($root . '/views/admin/galleries.php');
-            $card     = (string) $read($root . '/views/partials/gallery_card.php');
-            $show     = (string) $read($root . '/views/gallery/show.php');
-            $export   = (string) $read($root . '/app/Controllers/ExportController.php');
-            $schema   = (string) $read($root . '/schema.sql');
-            $sqlite   = (string) $read($root . '/schema.sqlite.sql');
+        $add('smoke.gallery.content_flags', 'Smoke · Galleries', 'The fan-art and XXX labels are stored, editable, forced-consistent with the rating and shown', static function () use ($root, $read, $ok, $bad): array {
+            $gallery   = (string) $read($root . '/app/Models/Gallery.php');
+            $gc        = (string) $read($root . '/app/Controllers/GalleryController.php');
+            $list      = (string) $read($root . '/views/admin/galleries.php');
+            $card      = (string) $read($root . '/views/partials/gallery_card.php');
+            $show      = (string) $read($root . '/views/gallery/show.php');
+            $export    = (string) $read($root . '/app/Controllers/ExportController.php');
+            $schema    = (string) $read($root . '/schema.sql');
+            $sqlite    = (string) $read($root . '/schema.sqlite.sql');
             $migration = (string) $read($root . '/database/migrations/093_gallery_flags.sql');
-            $problems = [];
+            $rename    = (string) $read($root . '/database/migrations/105_rename_ai_flag_to_fanart.sql');
+            $problems  = [];
 
-            // 1. The columns exist, born "not claimed".
+            // 1. The columns exist, born "not claimed". 093 added is_ai and
+            //    105 renamed it; the live name is is_fanart.
             foreach ([$schema, $sqlite] as $i => $src) {
                 $file = $i === 0 ? 'schema.sql' : 'schema.sqlite.sql';
-                if (strpos($src, 'is_ai') === false || strpos($src, 'is_xxx') === false) {
-                    $problems[] = $file . ' must carry galleries.is_ai and galleries.is_xxx';
+                if (strpos($src, 'is_fanart') === false || strpos($src, 'is_xxx') === false) {
+                    $problems[] = $file . ' must carry galleries.is_fanart and galleries.is_xxx';
+                }
+                if (strpos($src, 'is_ai') !== false) {
+                    $problems[] = $file . ' still carries the old is_ai column';
                 }
             }
             if (strpos($migration, 'ADD COLUMN is_ai') === false
-                || strpos($migration, 'ADD COLUMN is_xxx') === false
-                || substr_count($migration, 'DEFAULT 0') < 2) {
-                $problems[] = 'migration 093 must add is_ai and is_xxx NOT NULL DEFAULT 0 (existing galleries are unflagged)';
+                || strpos($migration, 'ADD COLUMN is_xxx') === false) {
+                $problems[] = 'migration 093 must add is_ai and is_xxx (its historical shape)';
+            }
+            if (strpos($rename, 'CHANGE COLUMN is_ai is_fanart') === false) {
+                $problems[] = 'migration 105 must rename is_ai to is_fanart';
             }
 
             // 2. The model writes them on create and only touches them on
             //    update when the caller passed a value.
-            if (strpos($gallery, 'bool $isAi = false, bool $isXxx = false') === false) {
-                $problems[] = 'Gallery::create() must take isAi/isXxx, defaulting to false';
+            if (strpos($gallery, 'bool $isFanart = false, bool $isXxx = false') === false) {
+                $problems[] = 'Gallery::create() must take isFanart/isXxx, defaulting to false';
             }
-            if (strpos($gallery, 'is_nsfw, is_ai, is_xxx') === false) {
-                $problems[] = 'Gallery::create() must INSERT is_ai and is_xxx';
+            if (strpos($gallery, 'is_nsfw, is_fanart, is_xxx') === false) {
+                $problems[] = 'Gallery::create() must INSERT is_fanart and is_xxx';
             }
-            if (strpos($gallery, '?bool $isAi = null, ?bool $isXxx = null') === false) {
-                $problems[] = 'Gallery::update() must take isAi/isXxx, null meaning leave alone';
+            if (strpos($gallery, '?bool $isFanart = null, ?bool $isXxx = null') === false) {
+                $problems[] = 'Gallery::update() must take isFanart/isXxx, null meaning leave alone';
             }
             if (substr_count($gallery, 'if ($isXxx === true)') < 1 || strpos($gallery, '$isNsfw = true;') === false) {
                 $problems[] = 'the model must force is_nsfw on when is_xxx is set, so the two can never disagree';
@@ -12677,7 +12709,7 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             //    and an unticked box posts an explicit 0.
             foreach (['create', 'edit', 'manage'] as $form) {
                 $src = (string) $read($root . '/views/admin/' . $form . '.php');
-                foreach (['is_ai', 'is_xxx'] as $flag) {
+                foreach (['is_fanart', 'is_xxx'] as $flag) {
                     $hidden = 'type="hidden" name="' . $flag . '" value="0"';
                     $box    = 'name="' . $flag . '" value="1"';
                     $h      = strpos($src, $hidden);
@@ -12695,10 +12727,10 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             }
 
             // 4. The controller reads them, and an explicit set is always adult.
-            if (strpos($gc, "post('is_ai')") === false || strpos($gc, "post('is_xxx')") === false) {
-                $problems[] = 'store() must read is_ai and is_xxx';
+            if (strpos($gc, "post('is_fanart')") === false || strpos($gc, "post('is_xxx')") === false) {
+                $problems[] = 'store() must read is_fanart and is_xxx';
             }
-            if (strpos($gc, "post('is_ai', null)") === false || strpos($gc, "post('is_xxx', null)") === false) {
+            if (strpos($gc, "post('is_fanart', null)") === false || strpos($gc, "post('is_xxx', null)") === false) {
                 $problems[] = 'update() must leave the labels alone when the form did not post them';
             }
             if (substr_count($gc, '$isNsfw = true;') < 3) {
@@ -12706,21 +12738,58 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
             }
 
             // 5. Visible in the console and on the site, and in the export.
-            if (strpos($list, "is_ai") === false || strpos($list, "is_xxx") === false) {
-                $problems[] = 'the gallery list must show the AI and XXX pills';
+            if (strpos($list, 'is_fanart') === false || strpos($list, 'is_xxx') === false) {
+                $problems[] = 'the gallery list must show the fan-art and XXX pills';
             }
-            if (strpos($card, 'card-badge-ai') === false || strpos($card, '$isAi') === false) {
-                $problems[] = 'the public card must carry the AI badge';
+            if (strpos($card, 'card-badge-fanart') === false || strpos($card, '$isFanart') === false) {
+                $problems[] = 'the public card must carry the fan-art badge';
             }
-            if (strpos($show, 'AI generated') === false) {
-                $problems[] = 'the gallery page must say when a set is AI generated';
+            if (strpos($show, 'Fan art') === false) {
+                $problems[] = 'the gallery page must say when a set is fan art';
             }
-            if (strpos($export, 'g.is_ai, g.is_xxx') === false) {
-                $problems[] = 'the CSV export must carry is_ai and is_xxx';
+            if (strpos($export, 'g.is_fanart, g.is_xxx') === false) {
+                $problems[] = 'the CSV export must carry is_fanart and is_xxx';
             }
 
             return $problems === []
                 ? $ok('stored, editable on all three forms, forced-consistent, shown and exported')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.fanart.section', 'Smoke · Galleries', 'The Fan Art section lists only galleries flagged as fan art', static function () use ($root, $read, $ok, $bad): array {
+            $routes  = (string) $read($root . '/config/routes.php');
+            $model   = (string) $read($root . '/app/Models/Gallery.php');
+            $ctrl    = (string) $read($root . '/app/Controllers/GalleryController.php');
+            $view    = (string) $read($root . '/views/gallery/fan_art.php');
+            $layout  = (string) $read($root . '/views/layout.php');
+            $sitemap = (string) $read($root . '/app/Core/Sitemap.php');
+            $problems = [];
+
+            if (strpos($routes, "'/fan-art', 'GalleryController@fanArt'") === false) {
+                $problems[] = 'the /fan-art route is missing';
+            }
+            if (strpos($model, "\$filters['fanart']") === false || strpos($model, "'g.is_fanart = 1'") === false) {
+                $problems[] = 'Gallery::paginate() must filter on is_fanart when asked';
+            }
+            if (strpos($ctrl, 'function fanArt(') === false
+                || strpos($ctrl, "'fanart'") === false
+                || strpos($ctrl, "'include_gated' => true") === false) {
+                $problems[] = 'fanArt() must request the fanart filter and keep gated sets as teasers';
+            }
+            foreach (['gallery_card.php', 'partials/pagination.php', 'Fan Art'] as $needle) {
+                if (strpos($view, $needle) === false) {
+                    $problems[] = 'the view is missing ' . $needle;
+                }
+            }
+            if (substr_count($layout, "'label' => 'Fan Art'") < 2 || strpos($layout, "url('/fan-art')") === false) {
+                $problems[] = 'the guest rail, the member rail and the top nav must link to Fan Art';
+            }
+            if (strpos($sitemap, "'/fan-art'") === false) {
+                $problems[] = 'the sitemap must list /fan-art';
+            }
+
+            return $problems === []
+                ? $ok('route, filter, view, both rails, the top nav and the sitemap')
                 : $bad(implode('; ', $problems));
         });
 

@@ -42,6 +42,56 @@ class GalleryController extends Controller
     }
 
     /**
+     * The Fan Art section: every published gallery the owner flagged as fan
+     * art, in one paginated grid. It carries the same Type / Content / Sort
+     * chips as the catalogue and the same card gate: a paid set is shown
+     * BLURRED with its lock rather than hidden, and a secret gallery stays
+     * out of the listing entirely.
+     */
+    public function fanArt(): void
+    {
+        $page = max(1, (int) $this->request->query('page', 1));
+
+        $type = (string) $this->request->query('type', '');
+        $type = in_array($type, ['images', 'videos'], true) ? $type : '';
+
+        $content = (string) $this->request->query('content', '');
+        $content = in_array($content, ['sfw', 'nsfw'], true) ? $content : '';
+
+        $sort = (string) $this->request->query('sort', '');
+        $sort = in_array($sort, ['views', 'title'], true) ? $sort : '';
+
+        $filters = [
+            'fanart'        => 1,
+            'max_level'     => PHP_INT_MAX,
+            'include_gated' => true,
+            'type'          => $type,
+            'content'       => $content,
+            'sort'          => $sort,
+        ];
+
+        $paginator = Gallery::paginate($page, 24, $filters);
+
+        $user = Auth::user();
+        $ids  = array_map('intval', array_column($paginator['items'], 'id'));
+
+        $this->view('gallery/fan_art', [
+            'title'         => 'Fan Art',
+            'paginator'     => $paginator,
+            'type'          => $type,
+            'contentFilter' => $content,
+            'sort'          => $sort,
+            'currentUser'   => $user,
+            'hasActive'     => $user !== null ? Auth::hasActiveSubscription() : false,
+            'viewedIds'     => $user !== null ? Gallery::viewedByIds((int) $user['id'], $ids) : [],
+            'favoriteGalleryIds' => ($user !== null && Auth::hasActiveSubscription())
+                ? Gallery::favoriteIds((int) $user['id'], $ids) : [],
+            'cardCovers'    => Gallery::preloadCards($paginator['items']),
+            'listingReturnTo' => safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/fan-art'),
+        ]);
+    }
+
+    /**
      * AJAX fragment for the player's in-page browser: every video across the
      * visible video galleries, shown individually (not grouped by gallery).
      * No layout — raw HTML for fetch() to insert. Supports ?q= search and
@@ -860,13 +910,13 @@ class GalleryController extends Controller
             // The content rating: anything but an explicit 0 is ADULT, so an
             // old CSV (or a typo) can never open a gallery by accident.
             $isNsfw   = (string) ($row['is_nsfw'] ?? '1') !== '0';
-            $isAi     = (string) ($row['is_ai'] ?? '0') === '1';
+            $isFanart = (string) ($row['is_fanart'] ?? '0') === '1';
             $isXxx    = (string) ($row['is_xxx'] ?? '0') === '1';
             // An explicit set is always adult, whatever the rating column says.
             if ($isXxx) {
                 $isNsfw = true;
             }
-            $labelText = trim(($isAi ? 'AI' : '') . ($isXxx ? ' XXX' : ''));
+            $labelText = trim(($isFanart ? 'Fan art' : '') . ($isXxx ? ' XXX' : ''));
             $publishedAt = Gallery::normalizePublishAt($row['published_at'] ?? null);
 
             $categoryIds = [];
@@ -893,7 +943,7 @@ class GalleryController extends Controller
             }
 
             try {
-                $galleryId = Gallery::create($title, (string) ($row['description'] ?? ''), $type, $minLevel, $publishedAt, $isSecret, false, $isNsfw, $isAi, $isXxx);
+                $galleryId = Gallery::create($title, (string) ($row['description'] ?? ''), $type, $minLevel, $publishedAt, $isSecret, false, $isNsfw, $isFanart, $isXxx);
                 Gallery::setCategories($galleryId, $categoryIds);
                 $created++;
             } catch (\Throwable $e) {
@@ -954,9 +1004,9 @@ class GalleryController extends Controller
                 // ADULT, so an old CSV can never open a gallery by accident.
                 'is_nsfw'     => (string) ($cols[7] ?? '1'),
                 // Optional 9th/10th: the content labels. Absent means
-                // "not claimed", so an old CSV never labels a gallery AI or
-                // explicit on its behalf.
-                'is_ai'       => (string) ($cols[8] ?? '0'),
+                // "not claimed", so an old CSV never labels a gallery fan art
+                // or explicit on its behalf.
+                'is_fanart'   => (string) ($cols[8] ?? '0'),
                 'is_xxx'      => (string) ($cols[9] ?? '0'),
             ];
         }
@@ -1007,7 +1057,7 @@ class GalleryController extends Controller
         // Content labels: the owner's own tracking, not a safety gate. A form
         // without the controls (a script, an import) creates an unflagged
         // gallery rather than guessing.
-        $isAi        = $this->request->post('is_ai') === '1';
+        $isFanart    = $this->request->post('is_fanart') === '1';
         $isXxx       = $this->request->post('is_xxx') === '1';
         // An explicit set is always adult; the two flags must never disagree.
         if ($isXxx) {
@@ -1048,7 +1098,7 @@ class GalleryController extends Controller
             $publishedAt = Gallery::normalizePublishAt($publishAtRaw);
         }
 
-        $galleryId = Gallery::create($title, $description, $type, $minLevel, $publishedAt, $isSecret, $isTest, $isNsfw, $isAi, $isXxx);
+        $galleryId = Gallery::create($title, $description, $type, $minLevel, $publishedAt, $isSecret, $isTest, $isNsfw, $isFanart, $isXxx);
         Gallery::setCategories($galleryId, $categoryIds);
         if ($isSecret) {
             Gallery::setAllowedUsers($galleryId, $allowedUsers);
@@ -1060,7 +1110,7 @@ class GalleryController extends Controller
             'title' => $title, 'description' => $description, 'type' => $type,
             'min_level' => $minLevel,
             'is_nsfw' => $isNsfw,
-            'is_ai' => $isAi,
+            'is_fanart' => $isFanart,
             'is_xxx' => $isXxx,
             'categories' => array_map('intval', $categoryIds),
             'photos' => $count,
@@ -1834,8 +1884,8 @@ class GalleryController extends Controller
         // The same "only when the form carried the control" rule for the two
         // content labels. An explicit set forces the adult rating, so a form
         // that posts is_xxx=1 and is_nsfw=0 still stores an adult gallery.
-        $isAiRaw     = $this->request->post('is_ai', null);
-        $isAi        = $isAiRaw === null ? null : ((string) $isAiRaw === '1');
+        $isFanartRaw = $this->request->post('is_fanart', null);
+        $isFanart    = $isFanartRaw === null ? null : ((string) $isFanartRaw === '1');
         $isXxxRaw    = $this->request->post('is_xxx', null);
         $isXxx       = $isXxxRaw === null ? null : ((string) $isXxxRaw === '1');
         if ($isXxx === true) {
@@ -1873,7 +1923,7 @@ if ($publishAtRaw !== '') {
             $this->redirect('/admin/galleries/' . $id . '/edit');
         }
 
-        Gallery::update($id, $title, $description, $type, $minLevel, $publishedAt, $isSecret, $isTest, $isNsfw, $isAi, $isXxx);
+        Gallery::update($id, $title, $description, $type, $minLevel, $publishedAt, $isSecret, $isTest, $isNsfw, $isFanart, $isXxx);
         Gallery::setCategories($id, $categoryIds);
 
         // What the editor just did to the categories is the strongest lesson
@@ -1913,7 +1963,7 @@ if ($publishAtRaw !== '') {
             'title' => $title, 'description' => $description, 'type' => $type,
             'min_level' => $minLevel,
             'is_nsfw' => $isNsfw ?? ((int) ($gallery['is_nsfw'] ?? 1) === 1),
-            'is_ai' => $isAi ?? ((int) ($gallery['is_ai'] ?? 0) === 1),
+            'is_fanart' => $isFanart ?? ((int) ($gallery['is_fanart'] ?? 0) === 1),
             'is_xxx' => $isXxx ?? ((int) ($gallery['is_xxx'] ?? 0) === 1),
             'categories' => array_map('intval', $categoryIds),
             'published_at' => $publishedAt,
@@ -1926,7 +1976,7 @@ if ($publishAtRaw !== '') {
             'type' => $gallery['type'] ?? 'images',
             'min_level' => (int) ($gallery['min_level'] ?? 0),
             'is_nsfw' => (int) ($gallery['is_nsfw'] ?? 1) === 1,
-            'is_ai' => (int) ($gallery['is_ai'] ?? 0) === 1,
+            'is_fanart' => (int) ($gallery['is_fanart'] ?? 0) === 1,
             'is_xxx' => (int) ($gallery['is_xxx'] ?? 0) === 1,
             'categories' => $beforeCategories,
             'published_at' => $gallery['published_at'] ?? null,

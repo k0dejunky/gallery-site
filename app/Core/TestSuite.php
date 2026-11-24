@@ -1767,7 +1767,7 @@ class TestSuite
             }
         });
 
-        $add('db.gallery_content_flags', 'Database', 'the AI / XXX labels round-trip, an explicit set is always adult, and a form that omits them leaves them alone', function () {
+        $add('db.gallery_content_flags', 'Database', 'the fan-art / XXX labels round-trip, an explicit set is always adult, and a form that omits them leaves them alone', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
                     return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
@@ -1782,15 +1782,15 @@ class TestSuite
                 try {
                     $suffix = bin2hex(random_bytes(3));
                     $flags = static function (int $id): array {
-                        $row = Database::run('SELECT is_nsfw, is_ai, is_xxx FROM galleries WHERE id = ?', [$id])->fetch(\PDO::FETCH_ASSOC);
+                        $row = Database::run('SELECT is_nsfw, is_fanart, is_xxx FROM galleries WHERE id = ?', [$id])->fetch(\PDO::FETCH_ASSOC);
                         return [
-                            'nsfw' => (int) ($row['is_nsfw'] ?? -1),
-                            'ai'   => (int) ($row['is_ai'] ?? -1),
-                            'xxx'  => (int) ($row['is_xxx'] ?? -1),
+                            'nsfw'   => (int) ($row['is_nsfw'] ?? -1),
+                            'fanart' => (int) ($row['is_fanart'] ?? -1),
+                            'xxx'    => (int) ($row['is_xxx'] ?? -1),
                         ];
                     };
 
-                    // A plain gallery is neither AI nor XXX.
+                    // A plain gallery is neither fan art nor XXX.
                     $plain = \App\Models\Gallery::create('PROBE plain ' . $suffix, 'scratch');
                     $p = $flags($plain);
 
@@ -1799,9 +1799,9 @@ class TestSuite
                     $explicit = \App\Models\Gallery::create('PROBE explicit ' . $suffix, 'scratch', 'images', 0, null, false, true, false, true, true);
                     $e = $flags($explicit);
 
-                    // create() with is_xxx=0 but is_ai=1 keeps the two apart.
-                    $aiOnly = \App\Models\Gallery::create('PROBE ai ' . $suffix, 'scratch', 'images', 0, null, false, true, false, true, false);
-                    $a = $flags($aiOnly);
+                    // create() with is_xxx=0 but is_fanart=1 keeps the two apart.
+                    $fanartOnly = \App\Models\Gallery::create('PROBE fanart ' . $suffix, 'scratch', 'images', 0, null, false, true, false, true, false);
+                    $a = $flags($fanartOnly);
 
                     // update(): null leaves a flag alone.
                     \App\Models\Gallery::update($plain, 'PROBE plain ' . $suffix, 'scratch', 'images', 0, null, null, null, null, true, null);
@@ -1815,22 +1815,90 @@ class TestSuite
                     \App\Models\Gallery::update($plain, 'PROBE plain ' . $suffix, 'scratch', 'images', 0, null, null, null, false, false, false);
                     $u3 = $flags($plain);
 
-                    $ok = $p === ['nsfw' => 1, 'ai' => 0, 'xxx' => 0]
-                        && $e === ['nsfw' => 1, 'ai' => 1, 'xxx' => 1]
-                        && $a === ['nsfw' => 0, 'ai' => 1, 'xxx' => 0]
-                        && $u1 === ['nsfw' => 1, 'ai' => 1, 'xxx' => 0]
-                        && $u2 === ['nsfw' => 1, 'ai' => 1, 'xxx' => 1]
-                        && $u3 === ['nsfw' => 0, 'ai' => 0, 'xxx' => 0];
+                    $ok = $p === ['nsfw' => 1, 'fanart' => 0, 'xxx' => 0]
+                        && $e === ['nsfw' => 1, 'fanart' => 1, 'xxx' => 1]
+                        && $a === ['nsfw' => 0, 'fanart' => 1, 'xxx' => 0]
+                        && $u1 === ['nsfw' => 1, 'fanart' => 1, 'xxx' => 0]
+                        && $u2 === ['nsfw' => 1, 'fanart' => 1, 'xxx' => 1]
+                        && $u3 === ['nsfw' => 0, 'fanart' => 0, 'xxx' => 0];
 
                     return [
                         'pass'   => $ok,
                         'detail' => $ok
                             ? 'labels round-trip; is_xxx forces is_nsfw; an omitted flag is left alone'
-                            : 'plain=' . json_encode($p) . ' explicit=' . json_encode($e) . ' aiOnly=' . json_encode($a)
-                                . ' updateAi=' . json_encode($u1) . ' updateXxx=' . json_encode($u2) . ' cleared=' . json_encode($u3),
+                            : 'plain=' . json_encode($p) . ' explicit=' . json_encode($e) . ' fanartOnly=' . json_encode($a)
+                                . ' updateFanart=' . json_encode($u1) . ' updateXxx=' . json_encode($u2) . ' cleared=' . json_encode($u3),
                     ];
                 } finally {
                     if ($own) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
+        $add('db.fanart_lists_only_fanart', 'Database', 'the Fan Art listing returns only galleries flagged as fan art', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix = bin2hex(random_bytes(4));
+
+                    // A scratch category gives the listing a unique filter
+                    // that is NOT fulltext: InnoDB's fulltext index does not
+                    // see uncommitted rows, so a ?q= probe inside a
+                    // transaction would always come back empty.
+                    Database::run(
+                        'INSERT INTO categories (name, slug) VALUES (?, ?)',
+                        ['PROBE FANART ' . $suffix, 'probe-fanart-' . $suffix]
+                    );
+                    $catId = (int) $pdo->lastInsertId();
+
+                    // Two published galleries in it: one flagged, one not.
+                    $flagged = \App\Models\Gallery::create('PROBE fanart flagged ' . $suffix, 'scratch', 'images', 0, date('Y-m-d H:i:s'), false, true, false, true, false);
+                    $plain   = \App\Models\Gallery::create('PROBE fanart plain ' . $suffix, 'scratch', 'images', 0, date('Y-m-d H:i:s'), false, true, false, false, false);
+                    \App\Models\Gallery::setCategories($flagged, [$catId]);
+                    \App\Models\Gallery::setCategories($plain, [$catId]);
+
+                    $only = \App\Models\Gallery::paginate(1, 50, [
+                        'fanart'    => 1,
+                        'category'  => $catId,
+                        'max_level' => PHP_INT_MAX,
+                    ]);
+                    $ids = array_map('intval', array_column($only['items'], 'id'));
+
+                    $all = \App\Models\Gallery::paginate(1, 50, [
+                        'category'  => $catId,
+                        'max_level' => PHP_INT_MAX,
+                    ]);
+                    $allIds = array_map('intval', array_column($all['items'], 'id'));
+
+                    $checks = [
+                        'flagged listed'  => in_array($flagged, $ids, true),
+                        'plain excluded'  => !in_array($plain, $ids, true),
+                        'both unfiltered' => in_array($flagged, $allIds, true) && in_array($plain, $allIds, true),
+                        'total is one'    => (int) $only['total'] === 1,
+                    ];
+                    $failed = array_keys(array_filter($checks, static fn (bool $v): bool => !$v));
+
+                    return [
+                        'pass'   => $failed === [],
+                        'detail' => $failed === []
+                            ? 'the fanart filter returns the flagged gallery and excludes the plain one'
+                            : 'failed: ' . implode(', ', $failed) . ' ids=' . json_encode($ids) . ' all=' . json_encode($allIds),
+                    ];
+                } finally {
+                    if ($own && $pdo->inTransaction()) {
                         $pdo->rollBack();
                     }
                 }

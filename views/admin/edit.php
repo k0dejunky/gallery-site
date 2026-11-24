@@ -37,7 +37,7 @@
         <?php endif; ?>
     </p>
     <?php $editNsfw = (int) ($gallery['is_nsfw'] ?? 1) === 1; ?>
-    <?php $editAi = (int) ($gallery['is_ai'] ?? 0) === 1; ?>
+    <?php $editFanart = (int) ($gallery['is_fanart'] ?? 0) === 1; ?>
     <?php $editXxx = (int) ($gallery['is_xxx'] ?? 0) === 1; ?>
     <p>
         <label>Content rating</label><br>
@@ -57,9 +57,9 @@
     <p>
         <label>Content flags</label><br>
         <label class="chip">
-            <input type="hidden" name="is_ai" value="0">
-            <input type="checkbox" name="is_ai" value="1" <?= $editAi ? 'checked' : '' ?>>
-            AI generated
+            <input type="hidden" name="is_fanart" value="0">
+            <input type="checkbox" name="is_fanart" value="1" <?= $editFanart ? 'checked' : '' ?>>
+            Fan art
         </label>
         <label class="chip">
             <input type="hidden" name="is_xxx" value="0">

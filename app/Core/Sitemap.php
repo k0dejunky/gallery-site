@@ -32,7 +32,7 @@ final class Sitemap
 {
     /** The static pages that belong in the map. */
     private const STATIC_PATHS = [
-        '/', '/galleries', '/creator', '/about', '/terms', '/privacy',
+        '/', '/galleries', '/fan-art', '/creator', '/about', '/terms', '/privacy',
         '/2257', '/dmca', '/report-abuse', '/membership',
     ];
 

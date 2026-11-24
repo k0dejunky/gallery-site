@@ -66,9 +66,9 @@
                         instead of leaving a stale one. */ ?>
                     <div class="type-switch-row" style="margin-top:.55rem;">
                         <label class="chip">
-                            <input type="hidden" name="is_ai" value="0">
-                            <input type="checkbox" name="is_ai" value="1">
-                            AI generated
+                            <input type="hidden" name="is_fanart" value="0">
+                            <input type="checkbox" name="is_fanart" value="1">
+                            Fan art
                         </label>
                         <label class="chip">
                             <input type="hidden" name="is_xxx" value="0">
@@ -76,7 +76,7 @@
                             XXX &mdash; explicit
                         </label>
                     </div>
-                    <span class="muted">A safe gallery is open to everyone regardless of the membership level below. An adult gallery follows the level (Level 0 is the free public tier; the other levels are members only). <strong>AI generated</strong> marks a set made with an image model. <strong>XXX</strong> marks an explicit set and always forces the adult rating.</span>
+                    <span class="muted">A safe gallery is open to everyone regardless of the membership level below. An adult gallery follows the level (Level 0 is the free public tier; the other levels are members only). <strong>Fan art</strong> marks a set as fan art (AI-generated or fan-made); it appears in the Fan Art section. <strong>XXX</strong> marks an explicit set and always forces the adult rating.</span>
                 </div>
 
                 <div class="field">

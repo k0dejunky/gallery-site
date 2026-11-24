@@ -418,6 +418,11 @@ class Gallery
             $where[] = $filters['content'] === 'sfw' ? 'g.is_nsfw = 0' : 'g.is_nsfw = 1';
         }
 
+        // The Fan Art section: only the sets the owner flagged as fan art.
+        if (!empty($filters['fanart'])) {
+            $where[] = 'g.is_fanart = 1';
+        }
+
         $orderBy = 'g.created_at DESC';
         if (!empty($filters['sort'])) {
             match ($filters['sort']) {
@@ -873,13 +878,13 @@ class Gallery
      * script, the video editor) must never publish adult-unvetted content as
      * safe. The owner flips it on the gallery form.
      *
-     * $isAi / $isXxx are content labels the owner sets by hand. They default
+     * $isFanart / $isXxx are content labels the owner sets by hand. They default
      * to FALSE so an import or a script creates an unflagged gallery rather
      * than guessing. An explicit set is always adult: is_xxx is a stricter
      * label than is_nsfw, so setting it forces is_nsfw on and the two can
      * never disagree.
      */
-    public static function create(string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, bool $isSecret = false, bool $isTest = false, bool $isNsfw = true, bool $isAi = false, bool $isXxx = false): int
+    public static function create(string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, bool $isSecret = false, bool $isTest = false, bool $isNsfw = true, bool $isFanart = false, bool $isXxx = false): int
     {
         $type = $type === 'videos' ? 'videos' : 'images';
 
@@ -889,8 +894,8 @@ class Gallery
         }
 
         Database::run(
-            'INSERT INTO galleries (title, description, type, min_level, is_nsfw, is_ai, is_xxx, is_secret, is_test, published_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-            [$title, $description, $type, $minLevel, $isNsfw ? 1 : 0, $isAi ? 1 : 0, $isXxx ? 1 : 0, $isSecret ? 1 : 0, $isTest ? 1 : 0, $publishedAt]
+            'INSERT INTO galleries (title, description, type, min_level, is_nsfw, is_fanart, is_xxx, is_secret, is_test, published_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+            [$title, $description, $type, $minLevel, $isNsfw ? 1 : 0, $isFanart ? 1 : 0, $isXxx ? 1 : 0, $isSecret ? 1 : 0, $isTest ? 1 : 0, $publishedAt]
         );
 
         \App\Core\Cache::bump('gallery');
@@ -903,14 +908,14 @@ class Gallery
     /**
      * Update a gallery's title, description and type.
      *
-     * $isSecret, $isTest, $isNsfw, $isAi and $isXxx are applied only when
+     * $isSecret, $isTest, $isNsfw, $isFanart and $isXxx are applied only when
      * given; passing null leaves that flag alone, so a form that only posts
      * one of them cannot wipe the other.
      *
      * An explicit set is always adult: when $isXxx is true, is_nsfw is forced
      * on in the same statement so the two flags can never disagree.
      */
-    public static function update(int $id, string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, ?bool $isSecret = null, ?bool $isTest = null, ?bool $isNsfw = null, ?bool $isAi = null, ?bool $isXxx = null): void
+    public static function update(int $id, string $title, string $description, string $type = 'images', int $minLevel = 0, ?string $publishedAt = null, ?bool $isSecret = null, ?bool $isTest = null, ?bool $isNsfw = null, ?bool $isFanart = null, ?bool $isXxx = null): void
     {
         $type = $type === 'videos' ? 'videos' : 'images';
 
@@ -933,9 +938,9 @@ class Gallery
             $sets[]   = 'is_nsfw = ?';
             $values[] = $isNsfw ? 1 : 0;
         }
-        if ($isAi !== null) {
-            $sets[]   = 'is_ai = ?';
-            $values[] = $isAi ? 1 : 0;
+        if ($isFanart !== null) {
+            $sets[]   = 'is_fanart = ?';
+            $values[] = $isFanart ? 1 : 0;
         }
         if ($isXxx !== null) {
             $sets[]   = 'is_xxx = ?';

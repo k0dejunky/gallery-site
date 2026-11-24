@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS galleries (
     type         VARCHAR(10) NOT NULL DEFAULT 'images',
     min_level    INT UNSIGNED NOT NULL DEFAULT 0,
     is_nsfw      TINYINT(1) NOT NULL DEFAULT 1,
-    is_ai        TINYINT(1) NOT NULL DEFAULT 0,
+    is_fanart    TINYINT(1) NOT NULL DEFAULT 0,
     is_xxx       TINYINT(1) NOT NULL DEFAULT 0,
     is_secret    TINYINT(1) NOT NULL DEFAULT 0,
     is_test      TINYINT(1) NOT NULL DEFAULT 0,

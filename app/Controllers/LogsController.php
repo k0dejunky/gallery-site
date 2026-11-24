@@ -420,7 +420,7 @@ class LogsController extends Controller
                         // row carries them (rows written before 093 do not).
                         null,
                         isset($before['is_nsfw']) ? !empty($before['is_nsfw']) : null,
-                        isset($before['is_ai']) ? !empty($before['is_ai']) : null,
+                        isset($before['is_fanart']) ? !empty($before['is_fanart']) : (isset($before['is_ai']) ? !empty($before['is_ai']) : null),
                         isset($before['is_xxx']) ? !empty($before['is_xxx']) : null
                     );
                     if (isset($before['categories'])) {

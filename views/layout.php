@@ -285,6 +285,7 @@ if (!empty($_SESSION['impersonator_id'])) {
                           // gallery, the creator page or the membership panel. ?>
                     <a class="btn btn-sm btn-outline" href="<?= url('/galleries') ?>">Galleries</a>
                     <a class="btn btn-sm btn-outline" href="<?= url('/galleries?type=videos') ?>">Videos</a>
+                    <a class="btn btn-sm btn-outline" href="<?= url('/fan-art') ?>">Fan Art</a>
                     <a class="btn btn-sm btn-outline" href="<?= url('/membership') ?>">Membership</a>
                     <?php if (!$isLoginPage): ?>
                         <a class="btn btn-sm" href="<?= url('/login') ?>">Login</a>
@@ -379,6 +380,8 @@ if (!empty($_SESSION['impersonator_id'])) {
                      'active' => $currentType === 'videos'],
                     ['key' => 'pub-sfw', 'label' => 'Safe for work', 'href' => '/galleries?content=sfw', 'icon' => 'sparkle',
                      'active' => $currentContent === 'sfw'],
+                    ['key' => 'pub-fanart', 'label' => 'Fan Art', 'href' => '/fan-art', 'icon' => 'sparkle',
+                     'active' => strpos($currentPath, url('/fan-art')) === 0],
                     ['key' => 'pub-membership', 'label' => 'Membership', 'href' => '/membership', 'icon' => 'card',
                      'active' => strpos($currentPath, url('/membership')) === 0],
                 ],
@@ -414,6 +417,8 @@ if (!empty($_SESSION['impersonator_id'])) {
                      'active' => strpos($currentPath, url('/galleries')) === 0 && $currentType === 'videos'],
                     ['key' => 'pub-sfw', 'label' => 'Safe for work', 'href' => '/galleries?content=sfw', 'icon' => 'sparkle',
                      'active' => $currentContent === 'sfw'],
+                    ['key' => 'pub-fanart', 'label' => 'Fan Art', 'href' => '/fan-art', 'icon' => 'sparkle',
+                     'active' => strpos($currentPath, url('/fan-art')) === 0],
                     ['key' => 'pub-favorites', 'label' => 'Favorites', 'href' => '/favorites', 'icon' => 'heart',
                      'active' => strpos($currentPath, url('/favorites')) === 0,
                      'gate' => ($user !== null && !\App\Core\Auth::hasActiveSubscription()) ? 'Silver' : ''],
