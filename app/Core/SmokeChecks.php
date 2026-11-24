@@ -6245,8 +6245,8 @@ class SmokeChecks
             if (strpos($controller, 'Gallery::related($id, 6, Auth::effectiveLevel())') === false) {
                 $problems[] = 'the related rail must use the member\'s level';
             }
-            if (strpos($controller, 'recommended((int) $user[\'id\'], $viewedIds, 6, $maxLevel)') === false) {
-                $problems[] = 'the recommendations must use the member\'s level';
+            if (strpos($controller, 'recommended((int) $user[\'id\'], $viewedIds, 6, $maxLevel, $content)') === false) {
+                $problems[] = 'the recommendations must use the member\'s level and the content filter';
             }
             if (strpos($card, 'card-lock') === false) {
                 $problems[] = 'a locked gallery must say so on the card';
@@ -12790,6 +12790,52 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
 
             return $problems === []
                 ? $ok('route, filter, view, both rails, the top nav and the sitemap')
+                : $bad(implode('; ', $problems));
+        });
+
+        $add('smoke.gallery.sfw_filter_reaches_every_strip', 'Smoke · Galleries', 'The safe-for-work filter follows every listing and strip, including recommendations', static function () use ($root, $read, $ok, $bad): array {
+            $model = (string) $read($root . '/app/Models/Gallery.php');
+            $ctrl  = (string) $read($root . '/app/Controllers/GalleryController.php');
+            $problems = [];
+
+            // The paginator, the catalogue sections and the tag page each
+            // apply the content filter...
+            foreach (['inCategories', 'withoutCategory', 'byTag', 'paginate'] as $method) {
+                $at = strpos($model, 'function ' . $method . '(');
+                if ($at === false) {
+                    $problems[] = 'Gallery::' . $method . '() is missing';
+                    continue;
+                }
+                $end  = strpos($model, "\n    }\n", $at);
+                $body = substr($model, $at, ($end === false ? 3500 : $end - $at));
+                if (strpos($body, 'is_nsfw') === false) {
+                    $problems[] = $method . '() does not apply the content filter';
+                }
+            }
+
+            // ...and the recommendation strip used to be the one that did
+            // not: a member with ?content=sfw still got adult sets above the
+            // catalogue.
+            $at = strpos($model, 'function recommended(');
+            if ($at === false) {
+                $problems[] = 'Gallery::recommended() is missing';
+            } else {
+                $end  = strpos($model, "\n    }\n", $at);
+                $body = substr($model, $at, ($end === false ? 4500 : $end - $at));
+                if (strpos($body, "string \$content = ''") === false) {
+                    $problems[] = 'recommended() must take a content filter';
+                }
+                if (strpos($body, 'inCategories($catIds') === false || strpos($body, '$content') === false) {
+                    $problems[] = 'recommended() must pass the content filter to inCategories()';
+                }
+            }
+
+            if (strpos($ctrl, "Gallery::recommended((int) \$user['id'], \$viewedIds, 6, \$maxLevel, \$content)") === false) {
+                $problems[] = 'the catalogue must pass its content filter to recommended()';
+            }
+
+            return $problems === []
+                ? $ok('paginate, inCategories, withoutCategory, byTag and recommended all carry the content filter')
                 : $bad(implode('; ', $problems));
         });
 

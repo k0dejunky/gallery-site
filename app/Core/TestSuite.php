@@ -1907,6 +1907,68 @@ class TestSuite
             }
         });
 
+        $add('db.recommended_respects_the_content_filter', 'Database', 'the recommendation strip follows ?content=sfw', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                $pdo = Database::connection();
+                $own = !$pdo->inTransaction();
+                if ($own) {
+                    $pdo->beginTransaction();
+                }
+
+                try {
+                    $suffix = bin2hex(random_bytes(4));
+                    $userId = self::scratchUserId('rec-' . $suffix);
+
+                    Database::run(
+                        'INSERT INTO categories (name, slug) VALUES (?, ?)',
+                        ['PROBE REC ' . $suffix, 'probe-rec-' . $suffix]
+                    );
+                    $catId = (int) $pdo->lastInsertId();
+                    \App\Models\FavoriteCategory::add($userId, $catId);
+
+                    // Both galleries are in the member's favourite category:
+                    // one adult, one safe.
+                    $adult = \App\Models\Gallery::create('PROBE rec adult ' . $suffix, 'scratch', 'images', 0, null, false, true, true, false, false);
+                    $safe  = \App\Models\Gallery::create('PROBE rec safe ' . $suffix, 'scratch', 'images', 0, null, false, true, false, false, false);
+                    \App\Models\Gallery::setCategories($adult, [$catId]);
+                    \App\Models\Gallery::setCategories($safe, [$catId]);
+
+                    $ids = static fn (array $rows): array => array_map(static fn (array $g): int => (int) $g['id'], $rows);
+
+                    $sfw  = $ids(\App\Models\Gallery::recommended($userId, [], 10, PHP_INT_MAX, 'sfw'));
+                    $nsfw = $ids(\App\Models\Gallery::recommended($userId, [], 10, PHP_INT_MAX, 'nsfw'));
+                    $all  = $ids(\App\Models\Gallery::recommended($userId, [], 10, PHP_INT_MAX));
+
+                    $checks = [
+                        'sfw hides adult'    => !in_array($adult, $sfw, true),
+                        'sfw keeps safe'     => in_array($safe, $sfw, true),
+                        'nsfw hides safe'    => !in_array($safe, $nsfw, true),
+                        'nsfw keeps adult'   => in_array($adult, $nsfw, true),
+                        'no filter has both' => in_array($adult, $all, true) && in_array($safe, $all, true),
+                    ];
+                    $failed = array_keys(array_filter($checks, static fn (bool $v): bool => !$v));
+
+                    return [
+                        'pass'   => $failed === [],
+                        'detail' => $failed === []
+                            ? 'recommended() follows the content filter both ways'
+                            : 'failed: ' . implode(', ', $failed)
+                                . ' sfw=' . json_encode($sfw) . ' nsfw=' . json_encode($nsfw) . ' all=' . json_encode($all),
+                    ];
+                } finally {
+                    if ($own && $pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.refund_request_cycle', 'Database', 'a member can see every charge, ask for a refund of one, withdraw it, and only the owner or an admin can decide it', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

@@ -1796,7 +1796,7 @@ class Gallery
      * galleries, excluding anything they have already viewed, favourited, or
      * that is already on the current page. Returns up to $limit with covers.
      */
-    public static function recommended(int $userId, array $excludeIds = [], int $limit = 6, int $maxLevel = PHP_INT_MAX): array
+    public static function recommended(int $userId, array $excludeIds = [], int $limit = 6, int $maxLevel = PHP_INT_MAX, string $content = ''): array
     {
         if ($userId <= 0 || $limit <= 0) {
             return [];
@@ -1820,8 +1820,10 @@ class Gallery
         }
 
         // The member's own level: recommending a gallery they cannot open
-        // is an upsell that ends in a wall.
-        $byCat = self::inCategories($catIds, '', $maxLevel, $userId);
+        // is an upsell that ends in a wall. The content filter follows the
+        // page: a visitor who asked for safe-for-work must not get an adult
+        // set in the recommendation row above the catalogue.
+        $byCat = self::inCategories($catIds, '', $maxLevel, $userId, $content);
         $cand = [];
         foreach ($byCat as $galleries) {
             foreach ($galleries as $g) {

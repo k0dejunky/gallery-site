@@ -552,7 +552,7 @@ class GalleryController extends Controller
             'recentlyViewed' => $recentlyViewed,
             'favoriteGalleryIds' => $favoriteGalleryIds,
             'favoriteGalleries' => $favoriteGalleries,
-            'recommended'  => $user !== null ? \App\Models\Gallery::recommended((int) $user['id'], $viewedIds, 6, $maxLevel) : [],
+            'recommended'  => $user !== null ? \App\Models\Gallery::recommended((int) $user['id'], $viewedIds, 6, $maxLevel, $content) : [],
             // Two more strips above the catalogue: what is new, and what is
             // being looked at this week. The trending one is filtered by the
             // member's level, so it never advertises a locked gallery.
