@@ -2880,7 +2880,7 @@ body.admin-theme {
     }
 
 /* ---------- Site Editor ------------------------------------------------- */
-.page-site-editor #se-root{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;margin:0!important;z-index:100000;background:#111;overflow:hidden!important}
+.page-site-editor #se-root{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;max-width:none!important;padding:0!important;margin:0!important;z-index:100000;background:#111;overflow:hidden!important}
 .page-site-editor #se-left-panel,
 .page-site-editor #se-right-panel{position:absolute!important;top:12px;bottom:12px;z-index:100002;box-shadow:0 8px 30px rgba(0,0,0,.45)}
 .page-site-editor #se-left-panel{left:12px}
