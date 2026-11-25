@@ -423,8 +423,11 @@ class Gallery
             $where[] = 'g.is_fanart = 1';
         }
 
-        $orderBy = 'g.created_at DESC';
+        $orderBy     = 'g.created_at DESC';
+        $orderParams = [];
+
         if (!empty($filters['sort'])) {
+            // An explicit sort wins over relevance: the visitor asked for it.
             match ($filters['sort']) {
                 'views' => $orderBy = 'g.unique_views DESC, g.views DESC',
                 'title' => $orderBy = 'g.title ASC',
@@ -432,6 +435,31 @@ class Gallery
             };
             // A unique tiebreak, or a CSV import (many galleries with the
             // same created_at second) makes rows skip between pages.
+        } elseif (!empty($filters['q'])) {
+            // A search ranks by HOW WELL the gallery matches, not by when it
+            // was created: an exact title, then a title that starts with the
+            // term, then a title that contains it, then a description or
+            // category match. Without this the newest gallery that mentioned
+            // the word anywhere outranked the one named after it.
+            $q          = (string) $filters['q'];
+            $like       = '%' . $q . '%';
+            $likePrefix = $q . '%';
+            $ft         = self::fulltextQuery($q);
+
+            $orderBy = 'CASE
+                WHEN g.title = ? THEN 0
+                WHEN g.title LIKE ? THEN 1
+                WHEN g.title LIKE ? THEN 2
+                ELSE 3
+            END';
+            $orderParams = [$q, $likePrefix, $like];
+
+            if ($ft !== '') {
+                $orderBy .= ', MATCH(g.title, g.description) AGAINST (? IN BOOLEAN MODE) DESC';
+                $orderParams[] = $ft;
+            }
+
+            $orderBy .= ', g.created_at DESC';
         }
 
         $where[] = self::publishedVisibleSql('g');
@@ -443,7 +471,7 @@ class Gallery
             'gallery',
             $key,
             \App\Models\ServerOptimizations::cacheTtl('listing'),
-            static function () use ($whereSql, $params, $orderBy, $page, $perPage): string {
+            static function () use ($whereSql, $params, $orderBy, $orderParams, $page, $perPage): string {
                 $total = (int) Database::run(
                     'SELECT COUNT(*) FROM galleries g' . $whereSql,
                     $params
@@ -462,7 +490,7 @@ class Gallery
                     . $whereSql . '
                      ORDER BY ' . $orderBy . ', g.id DESC
                      LIMIT ' . (int) $perPage . ' OFFSET ' . (int) $offset,
-                    $params
+                    array_merge($params, $orderParams)
                 )->fetchAll();
 
                 $items = self::attachCounts($items);

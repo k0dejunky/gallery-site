@@ -49,7 +49,7 @@ $browseChipUrls = [];
 foreach ([
     'type'    => ['', 'images', 'videos'],
     'content' => ['', 'sfw', 'nsfw'],
-    'sort'    => ['', 'views', 'title'],
+    'sort'    => ['', 'newest', 'views', 'title'],
 ] as $key => $values) {
     foreach ($values as $value) {
         $p = $browseState;
@@ -104,10 +104,18 @@ $listingReturnTo = safe_return_to($_SERVER['REQUEST_URI'] ?? '') ?? url('/galler
     </div>
 </div>
 
+<?php
+// A search is ranked by relevance by default; "Newest" is then an explicit
+// choice (sort=newest). The catalogue has no relevance to offer, so its
+// default chip stays Newest.
+$sortOptions = $q !== ''
+    ? ['' => 'Best match', 'newest' => 'Newest', 'views' => 'Most viewed', 'title' => 'A–Z']
+    : ['' => 'Newest', 'views' => 'Most viewed', 'title' => 'A–Z'];
+?>
 <div class="filter-bar">
     <p class="filter-bar-label">Sort</p>
     <div class="chips" style="margin:0">
-        <?php foreach (['' => 'Newest', 'views' => 'Most Viewed', 'title' => 'A–Z'] as $val => $label): ?>
+        <?php foreach ($sortOptions as $val => $label): ?>
             <a class="chip <?= ($sort ?? '') === $val ? 'active' : '' ?>" href="<?= e($browseChipUrls['sort'][$val]) ?>"<?= ($sort ?? '') === $val ? ' aria-current="page"' : '' ?>><?= e($label) ?></a>
         <?php endforeach; ?>
     </div>

@@ -2306,15 +2306,17 @@ if ($publishAtRaw !== '') {
         }
         $q = mb_substr($q, 0, 60);
         $like = '%' . $q . '%';
+        $likePrefix = $q . '%';
 
         // Secret galleries are never suggested: their titles are not public.
+        // Exact and prefix title matches come first; the rest stay newest.
         $galleries = Database::run(
             'SELECT g.id, g.title FROM galleries g
              WHERE g.is_secret = 0 AND ' . Gallery::publishedVisibleSql('g') . '
                AND g.title LIKE ?
-             ORDER BY g.created_at DESC, g.id DESC
+             ORDER BY (g.title = ?) DESC, (g.title LIKE ?) DESC, g.created_at DESC, g.id DESC
              LIMIT 5',
-            [$like]
+            [$like, $q, $likePrefix]
         )->fetchAll();
 
         $covers = $galleries === [] ? [] : Gallery::firstPhotos(array_map(

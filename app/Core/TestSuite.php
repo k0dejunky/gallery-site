@@ -1969,6 +1969,52 @@ class TestSuite
             }
         });
 
+        $add('db.search_ranks_title_first', 'Database', 'an exact title outranks a newer prefix match in a search', function () {
+            try {
+                if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+                    return ['pass' => true, 'detail' => 'sqlite driver: nothing to prove'];
+                }
+
+                // A two-character query takes the LIKE path, not the fulltext
+                // one, so this test does not depend on InnoDB's asynchronous
+                // fulltext cache. The exact title is created FIRST (older);
+                // the prefix match is newer, so the old created_at DESC order
+                // would put the prefix first - the ranking has to override it.
+                $token = 'Zq';
+                $ids   = [];
+
+                try {
+                    $ids[] = $exact  = \App\Models\Gallery::create($token, 'scratch', 'images', 0, null, false, true, false, false, false);
+                    $ids[] = $prefix = \App\Models\Gallery::create($token . ' extra', 'scratch', 'images', 0, null, false, true, false, false, false);
+
+                    $page  = \App\Models\Gallery::paginate(1, 10, [
+                        'q'         => $token,
+                        'max_level' => PHP_INT_MAX,
+                        'include_gated' => true,
+                    ]);
+                    $order = array_map(static fn (array $g): int => (int) $g['id'], $page['items']);
+
+                    $posExact  = array_search($exact, $order, true);
+                    $posPrefix = array_search($prefix, $order, true);
+                    $ok = $posExact !== false && $posPrefix !== false && $posExact < $posPrefix;
+
+                    return [
+                        'pass'   => $ok,
+                        'detail' => $ok
+                            ? 'the exact title (older) comes before the newer prefix match'
+                            : 'exact=' . var_export($posExact, true) . ' prefix=' . var_export($posPrefix, true)
+                                . ' order=' . json_encode($order),
+                    ];
+                } finally {
+                    \App\Core\Database::run('DELETE FROM galleries WHERE id IN (' . implode(',', array_map('intval', $ids)) . ')');
+                    \App\Core\Cache::bump('gallery');
+                    \App\Core\PageCache::invalidate();
+                }
+            } catch (\Throwable $ex) {
+                return ['pass' => false, 'detail' => $ex->getMessage()];
+            }
+        });
+
         $add('db.refund_request_cycle', 'Database', 'a member can see every charge, ask for a refund of one, withdraw it, and only the owner or an admin can decide it', function () {
             try {
                 if (Database::connection()->getAttribute(\PDO::ATTR_DRIVER_NAME) !== 'mysql') {

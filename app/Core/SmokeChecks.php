@@ -13004,6 +13004,32 @@ $add('smoke.ap.wall_promotion', 'Smoke · Auto Poster', 'Successful recommendati
                 : $bad(implode('; ', $problems));
         });
 
+        $add('smoke.search.title_matches_rank_first', 'Smoke · Search', 'A search ranks an exact title first, then a prefix, then a contains', static function () use ($root, $read, $ok, $bad): array {
+            $model = (string) $read($root . '/app/Models/Gallery.php');
+            $ctrl  = (string) $read($root . '/app/Controllers/GalleryController.php');
+            $view  = (string) $read($root . '/views/gallery/index.php');
+            $problems = [];
+
+            foreach (['WHEN g.title = ? THEN 0', 'WHEN g.title LIKE ? THEN 1', 'WHEN g.title LIKE ? THEN 2'] as $needle) {
+                if (strpos($model, $needle) === false) {
+                    $problems[] = 'Gallery::paginate() must rank ' . $needle;
+                }
+            }
+            if (strpos($model, 'array_merge($params, $orderParams)') === false) {
+                $problems[] = 'the relevance ORDER BY parameters must reach the SELECT, not the COUNT';
+            }
+            if (strpos($ctrl, 'ORDER BY (g.title = ?) DESC, (g.title LIKE ?) DESC') === false) {
+                $problems[] = 'the type-ahead must put exact and prefix title matches first';
+            }
+            if (strpos($view, "'Best match'") === false) {
+                $problems[] = 'a search must offer Best match as its default sort';
+            }
+
+            return $problems === []
+                ? $ok('relevance ordering in the listing, the type-ahead and the sort chips')
+                : $bad(implode('; ', $problems));
+        });
+
         $cache = $tests;
 
         return $cache;
